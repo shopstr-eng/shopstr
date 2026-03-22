@@ -757,6 +757,7 @@ function MilkMarket({ props }: { props: AppProps }) {
         productEvents={productContext.productEvents}
         shopEvents={shopContext.shopData}
         profileData={profileContext.profileData}
+        ssrOgMeta={pageProps?.ogMeta || null}
       />
       <StructuredData />
       <RelaysContext.Provider value={relaysContext}>

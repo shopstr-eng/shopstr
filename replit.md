@@ -15,6 +15,7 @@ Preferred communication style: Simple, everyday language.
 - **State Management**: React Context API for various domains (products, profiles, shops, chats, reviews, follows, relays, media, wallet, communities).
 - **Data Persistence**: Local storage for user preferences and authentication, service worker for caching.
 - **Routing**: Middleware-based URL rewriting, dynamic routing, protected routes for authenticated operations. Friendly URL slugs for listings (title-based) and profiles (name-based) with collision handling via pubkey disambiguation. naddr/npub inputs still resolve but redirect to friendly slugs. URL slug utilities in `utils/url-slugs.ts`.
+- **SSR OpenGraph Meta Tags**: Product (`/listing/`), shop (`/shop/`, `/shop/.../`), marketplace seller (`/marketplace/`), and community (`/communities/`) pages use `getServerSideProps` to fetch entity data from the PostgreSQL cache and render `og:title`, `og:description`, `og:image`, and Twitter Card meta tags server-side. This ensures social media crawlers (which don't execute JS) see personalized link previews. Single-entity DB query functions in `utils/db/db-service.ts`. SSR OG data flows from `getServerSideProps` → `pageProps.ogMeta` → `DynamicHead` component (via `_app.tsx`). Shared OG type/defaults in `components/og-head.tsx`.
 
 ## Backend Architecture
 

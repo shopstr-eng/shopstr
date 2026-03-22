@@ -30,6 +30,87 @@ import {
 } from "../../components/utility-components/modals/event-modals";
 import { findProductBySlug, getListingSlug } from "@/utils/url-slugs";
 import StorefrontThemeWrapper from "@/components/storefront/storefront-theme-wrapper";
+import { GetServerSideProps } from "next";
+import { OgMetaProps, DEFAULT_OG } from "@/components/og-head";
+import {
+  fetchProductByIdFromDb,
+  fetchProductByDTagAndPubkey,
+  fetchProductByTitleSlug,
+} from "@/utils/db/db-service";
+
+type ListingPageProps = {
+  ogMeta: OgMetaProps;
+};
+
+function eventToOgMeta(
+  event: import("@/utils/types/types").NostrEvent,
+  urlPath: string
+): OgMetaProps {
+  const productData = parseTags(event);
+  if (productData) {
+    return {
+      title: productData.title || "Milk Market Listing",
+      description:
+        productData.summary || "Check out this product on Milk Market!",
+      image: productData.images?.[0] || "/milk-market.png",
+      url: urlPath,
+    };
+  }
+  return {
+    ...DEFAULT_OG,
+    title: "Milk Market Listing",
+    description: "Check out this listing on Milk Market!",
+    url: urlPath,
+  };
+}
+
+const LISTING_FALLBACK: OgMetaProps = {
+  ...DEFAULT_OG,
+  title: "Milk Market Listing",
+  description: "Check out this listing on Milk Market!",
+};
+
+export const getServerSideProps: GetServerSideProps<ListingPageProps> = async (
+  context
+) => {
+  const { productId } = context.query;
+  const identifier = Array.isArray(productId) ? productId[0] : productId;
+
+  if (!identifier) {
+    return { props: { ogMeta: LISTING_FALLBACK } };
+  }
+
+  const urlPath = `/listing/${identifier}`;
+
+  try {
+    if (identifier.startsWith("naddr1")) {
+      try {
+        const decoded = nip19.decode(identifier);
+        if (decoded.type === "naddr") {
+          const event = await fetchProductByDTagAndPubkey(
+            decoded.data.identifier,
+            decoded.data.pubkey
+          );
+          if (event)
+            return { props: { ogMeta: eventToOgMeta(event, urlPath) } };
+        }
+      } catch {}
+      return { props: { ogMeta: { ...LISTING_FALLBACK, url: urlPath } } };
+    }
+
+    const eventById = await fetchProductByIdFromDb(identifier);
+    if (eventById)
+      return { props: { ogMeta: eventToOgMeta(eventById, urlPath) } };
+
+    const eventBySlug = await fetchProductByTitleSlug(identifier);
+    if (eventBySlug)
+      return { props: { ogMeta: eventToOgMeta(eventBySlug, urlPath) } };
+  } catch (error) {
+    console.error("SSR OG fetch error for listing:", error);
+  }
+
+  return { props: { ogMeta: { ...LISTING_FALLBACK, url: urlPath } } };
+};
 
 const Listing = () => {
   const router = useRouter();

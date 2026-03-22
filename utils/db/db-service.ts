@@ -966,6 +966,325 @@ export async function fetchAllProductsFromDb(): Promise<NostrEvent[]> {
   return fetchCachedEvents(30402);
 }
 
+export async function fetchProductByIdFromDb(
+  identifier: string
+): Promise<NostrEvent | null> {
+  const dbPool = getDbPool();
+  let client;
+  try {
+    client = await dbPool.connect();
+    const result = await client.query(
+      `SELECT id, pubkey, created_at, kind, tags, content, sig FROM product_events
+       WHERE id = $1
+          OR EXISTS (SELECT 1 FROM jsonb_array_elements(tags) elem WHERE elem->>0 = 'd' AND elem->>1 = $1)
+       ORDER BY created_at DESC LIMIT 1`,
+      [identifier]
+    );
+    if (result.rows.length > 0) {
+      const row = result.rows[0];
+      return {
+        id: row.id,
+        pubkey: row.pubkey,
+        created_at: row.created_at,
+        kind: row.kind,
+        tags: row.tags,
+        content: row.content,
+        sig: row.sig,
+      };
+    }
+    return null;
+  } catch (error) {
+    console.error("Failed to fetch product by id from database:", error);
+    return null;
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function fetchProductByDTagAndPubkey(
+  dTag: string,
+  pubkey: string
+): Promise<NostrEvent | null> {
+  const dbPool = getDbPool();
+  let client;
+  try {
+    client = await dbPool.connect();
+    const result = await client.query(
+      `SELECT id, pubkey, created_at, kind, tags, content, sig FROM product_events
+       WHERE pubkey = $1
+         AND EXISTS (SELECT 1 FROM jsonb_array_elements(tags) elem WHERE elem->>0 = 'd' AND elem->>1 = $2)
+       ORDER BY created_at DESC LIMIT 1`,
+      [pubkey, dTag]
+    );
+    if (result.rows.length > 0) {
+      const row = result.rows[0];
+      return {
+        id: row.id,
+        pubkey: row.pubkey,
+        created_at: row.created_at,
+        kind: row.kind,
+        tags: row.tags,
+        content: row.content,
+        sig: row.sig,
+      };
+    }
+    return null;
+  } catch (error) {
+    console.error("Failed to fetch product by d-tag and pubkey:", error);
+    return null;
+  } finally {
+    if (client) client.release();
+  }
+}
+
+const SQL_SLUG_EXPR = (field: string) => `
+  regexp_replace(
+    regexp_replace(
+      regexp_replace(
+        regexp_replace(
+          trim(COALESCE(${field}, '')),
+          '[#?&/\\\\%=+<>{}|^~\\[\\]\`@!\\$*()\"'';:,]', '', 'g'
+        ),
+        '\\s+', '-', 'g'
+      ),
+      '-+', '-', 'g'
+    ),
+    '^-|-$', '', 'g'
+  )`;
+
+const SQL_TITLE_EXTRACT = `(SELECT elem->>1 FROM jsonb_array_elements(pe.tags) elem WHERE elem->>0 = 'title' LIMIT 1)`;
+
+export async function fetchProductByTitleSlug(
+  slug: string
+): Promise<NostrEvent | null> {
+  const dbPool = getDbPool();
+  let client;
+  try {
+    client = await dbPool.connect();
+
+    const pubkeySuffixMatch = slug.match(/^(.+)-([a-f0-9]{8})$/);
+
+    let result;
+    if (pubkeySuffixMatch) {
+      const baseSlug = pubkeySuffixMatch[1] as string;
+      const pubkeyPrefix = pubkeySuffixMatch[2] as string;
+      result = await client.query(
+        `SELECT pe.id, pe.pubkey, pe.created_at, pe.kind, pe.tags, pe.content, pe.sig
+         FROM product_events pe
+         WHERE ${SQL_SLUG_EXPR(SQL_TITLE_EXTRACT)} = $1
+           AND pe.pubkey LIKE $2
+         ORDER BY pe.created_at DESC
+         LIMIT 1`,
+        [baseSlug, pubkeyPrefix + "%"]
+      );
+    } else {
+      result = await client.query(
+        `SELECT pe.id, pe.pubkey, pe.created_at, pe.kind, pe.tags, pe.content, pe.sig
+         FROM product_events pe
+         WHERE ${SQL_SLUG_EXPR(SQL_TITLE_EXTRACT)} = $1
+         ORDER BY pe.created_at DESC
+         LIMIT 1`,
+        [slug]
+      );
+    }
+
+    if (result.rows.length > 0) {
+      const row = result.rows[0];
+      return {
+        id: row.id,
+        pubkey: row.pubkey,
+        created_at: row.created_at,
+        kind: row.kind,
+        tags: row.tags,
+        content: row.content,
+        sig: row.sig,
+      };
+    }
+    return null;
+  } catch (error) {
+    console.error("Failed to fetch product by title slug:", error);
+    return null;
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function fetchProfilePubkeyByNameSlug(
+  slug: string
+): Promise<string | null> {
+  const dbPool = getDbPool();
+  let client;
+  try {
+    client = await dbPool.connect();
+
+    const nameField = `(pe.content::jsonb->>'name')`;
+    const pubkeySuffixMatch = slug.match(/^(.+)-([a-f0-9]{8})$/);
+
+    let result;
+    if (pubkeySuffixMatch) {
+      const baseSlug = pubkeySuffixMatch[1] as string;
+      const pubkeyPrefix = pubkeySuffixMatch[2] as string;
+      result = await client.query(
+        `SELECT DISTINCT ON (pe.pubkey) pe.pubkey
+         FROM profile_events pe
+         WHERE pe.kind = 0
+           AND ${SQL_SLUG_EXPR(nameField)} = $1
+           AND pe.pubkey LIKE $2
+         ORDER BY pe.pubkey, pe.created_at DESC
+         LIMIT 1`,
+        [baseSlug, pubkeyPrefix + "%"]
+      );
+    } else {
+      result = await client.query(
+        `SELECT DISTINCT ON (pe.pubkey) pe.pubkey
+         FROM profile_events pe
+         WHERE pe.kind = 0
+           AND ${SQL_SLUG_EXPR(nameField)} = $1
+         ORDER BY pe.pubkey, pe.created_at DESC
+         LIMIT 1`,
+        [slug]
+      );
+    }
+
+    if (result.rows.length > 0) {
+      return result.rows[0].pubkey;
+    }
+    return null;
+  } catch (error) {
+    console.error("Failed to fetch profile pubkey by name slug:", error);
+    return null;
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function fetchShopProfileByPubkeyFromDb(
+  pubkey: string
+): Promise<NostrEvent | null> {
+  const dbPool = getDbPool();
+  let client;
+  try {
+    client = await dbPool.connect();
+    const result = await client.query(
+      `SELECT id, pubkey, created_at, kind, tags, content, sig FROM profile_events
+       WHERE pubkey = $1 AND kind = 30019
+       ORDER BY created_at DESC LIMIT 1`,
+      [pubkey]
+    );
+    if (result.rows.length > 0) {
+      const row = result.rows[0];
+      return {
+        id: row.id,
+        pubkey: row.pubkey,
+        created_at: row.created_at,
+        kind: row.kind,
+        tags: row.tags,
+        content: row.content,
+        sig: row.sig,
+      };
+    }
+    return null;
+  } catch (error) {
+    console.error("Failed to fetch shop profile from database:", error);
+    return null;
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function fetchShopPubkeyBySlug(
+  slug: string
+): Promise<string | null> {
+  const dbPool = getDbPool();
+  let client;
+  try {
+    client = await dbPool.connect();
+    const result = await client.query(
+      "SELECT pubkey FROM shop_slugs WHERE slug = $1",
+      [slug.toLowerCase()]
+    );
+    if (result.rows.length > 0) {
+      return result.rows[0].pubkey;
+    }
+    return null;
+  } catch (error) {
+    console.error("Failed to fetch shop pubkey by slug:", error);
+    return null;
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function fetchCommunityByPubkeyAndIdentifier(
+  pubkey: string,
+  identifier: string
+): Promise<NostrEvent | null> {
+  const dbPool = getDbPool();
+  let client;
+  try {
+    client = await dbPool.connect();
+    const result = await client.query(
+      `SELECT id, pubkey, created_at, kind, tags, content, sig FROM community_events
+       WHERE pubkey = $1 AND kind = 34550
+         AND EXISTS (SELECT 1 FROM jsonb_array_elements(tags) elem WHERE elem->>0 = 'd' AND elem->>1 = $2)
+       ORDER BY created_at DESC LIMIT 1`,
+      [pubkey, identifier]
+    );
+    if (result.rows.length > 0) {
+      const row = result.rows[0];
+      return {
+        id: row.id,
+        pubkey: row.pubkey,
+        created_at: row.created_at,
+        kind: row.kind,
+        tags: row.tags,
+        content: row.content,
+        sig: row.sig,
+      };
+    }
+    return null;
+  } catch (error) {
+    console.error("Failed to fetch community from database:", error);
+    return null;
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function fetchProfileByPubkeyFromDb(
+  pubkey: string
+): Promise<NostrEvent | null> {
+  const dbPool = getDbPool();
+  let client;
+  try {
+    client = await dbPool.connect();
+    const result = await client.query(
+      `SELECT id, pubkey, created_at, kind, tags, content, sig FROM profile_events
+       WHERE pubkey = $1 AND kind = 0
+       ORDER BY created_at DESC LIMIT 1`,
+      [pubkey]
+    );
+    if (result.rows.length > 0) {
+      const row = result.rows[0];
+      return {
+        id: row.id,
+        pubkey: row.pubkey,
+        created_at: row.created_at,
+        kind: row.kind,
+        tags: row.tags,
+        content: row.content,
+        sig: row.sig,
+      };
+    }
+    return null;
+  } catch (error) {
+    console.error("Failed to fetch profile from database:", error);
+    return null;
+  } finally {
+    if (client) client.release();
+  }
+}
+
 // Fetch all reviews from database
 export async function fetchAllReviewsFromDb(): Promise<NostrEvent[]> {
   return fetchCachedEvents(31555);
