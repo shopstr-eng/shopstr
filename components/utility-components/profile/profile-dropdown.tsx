@@ -41,13 +41,11 @@ export const ProfileWithDropdown = ({
   baseClassname,
   nameClassname = "block",
   dropDownKeys,
-  bg,
 }: {
   baseClassname?: string;
   nameClassname?: string;
   pubkey: string;
   dropDownKeys: DropDownKeys[];
-  bg?: string;
 }) => {
   const [pfp, setPfp] = useState("");
   const [displayName, setDisplayName] = useState("");

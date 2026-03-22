@@ -283,7 +283,6 @@ export default function StorefrontThemeWrapper({
                       "logout",
                     ]}
                     nameClassname="lg:block text-white"
-                    bg="dark"
                   />
                 ) : (
                   <button
@@ -333,7 +332,6 @@ export default function StorefrontThemeWrapper({
                       "logout",
                     ]}
                     nameClassname="text-white"
-                    bg="dark"
                   />
                 </div>
               ) : (

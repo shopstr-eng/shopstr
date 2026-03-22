@@ -459,7 +459,6 @@ export default function StorefrontLayout({
                       "logout",
                     ]}
                     nameClassname="lg:block text-white"
-                    bg="dark"
                   />
                 ) : (
                   <button
@@ -545,7 +544,6 @@ export default function StorefrontLayout({
                       "logout",
                     ]}
                     nameClassname="text-white"
-                    bg="dark"
                   />
                 </div>
               ) : (

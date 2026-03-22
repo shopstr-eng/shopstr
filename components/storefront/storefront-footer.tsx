@@ -1,8 +1,4 @@
-import {
-  StorefrontColorScheme,
-  StorefrontFooter,
-  StorefrontPolicies,
-} from "@/utils/types/types";
+import { StorefrontColorScheme, StorefrontFooter } from "@/utils/types/types";
 import {
   POLICY_LABELS,
   POLICY_KEYS,

@@ -113,7 +113,6 @@ export default function Component() {
   }>(Object.fromEntries(products.map((product) => [product.id, false])));
   const [isBeingPaid, setIsBeingPaid] = useState(false);
   const [sfSellerPubkey, setSfSellerPubkey] = useState("");
-  const [sfShopSlug, setSfShopSlug] = useState("");
   const [excludedItemCount, setExcludedItemCount] = useState(0);
 
   const [invoiceIsPaid, setInvoiceIsPaid] = useState(false);
@@ -179,8 +178,6 @@ export default function Component() {
   useEffect(() => {
     const stored = sessionStorage.getItem("sf_seller_pubkey");
     if (stored) setSfSellerPubkey(stored);
-    const storedSlug = sessionStorage.getItem("sf_shop_slug");
-    if (storedSlug) setSfShopSlug(storedSlug);
   }, []);
 
   useEffect(() => {
