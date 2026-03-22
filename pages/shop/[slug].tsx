@@ -1,3 +1,5 @@
+/* eslint-disable @next/next/no-img-element */
+
 import { useEffect, useState, useContext } from "react";
 import { useRouter } from "next/router";
 import { ShopMapContext } from "@/utils/context/context";
@@ -14,16 +16,21 @@ export default function ShopPage() {
 
   useEffect(() => {
     if (!slug || typeof slug !== "string") return;
+    if (shopPubkey) return;
 
     const lookupBySlug = async () => {
-      for (const [pubkey, shop] of shopMapContext.shopData.entries()) {
-        if (shop?.content?.storefront?.shopSlug === slug) {
-          setShopPubkey(pubkey);
-          setIsLoading(false);
-          return;
+      // 1. Check in-memory shop map first (instant if already loaded)
+      if (!shopMapContext.isLoading) {
+        for (const [pubkey, shop] of shopMapContext.shopData.entries()) {
+          if (shop?.content?.storefront?.shopSlug === slug) {
+            setShopPubkey(pubkey);
+            setIsLoading(false);
+            return;
+          }
         }
       }
 
+      // 2. Always hit the DB API regardless of context loading state
       try {
         const res = await fetch(
           `/api/storefront/lookup?slug=${encodeURIComponent(slug)}`
@@ -38,6 +45,10 @@ export default function ShopPage() {
         }
       } catch {}
 
+      // 3. If context is still loading, wait — effect will re-run when it resolves
+      if (shopMapContext.isLoading) return;
+
+      // 4. Fall back to generated-slug name matching
       for (const [pubkey, shop] of shopMapContext.shopData.entries()) {
         const shopName = shop?.content?.name;
         if (shopName) {
@@ -58,12 +69,10 @@ export default function ShopPage() {
       setIsLoading(false);
     };
 
-    if (!shopMapContext.isLoading) {
-      lookupBySlug();
-    }
-  }, [slug, shopMapContext.shopData, shopMapContext.isLoading]);
+    lookupBySlug();
+  }, [slug, shopMapContext.shopData, shopMapContext.isLoading, shopPubkey]);
 
-  if (isLoading || shopMapContext.isLoading) {
+  if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center pt-20">
         <ShopstrSpinner />
@@ -88,5 +97,10 @@ export default function ShopPage() {
     );
   }
 
-  return <StorefrontLayout shopPubkey={shopPubkey} />;
+  return (
+    <StorefrontLayout
+      shopPubkey={shopPubkey}
+      initialSlug={typeof slug === "string" ? slug : undefined}
+    />
+  );
 }

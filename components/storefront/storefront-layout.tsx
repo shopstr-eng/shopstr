@@ -53,11 +53,13 @@ const DEFAULT_COLORS: StorefrontColorScheme = {
 interface StorefrontLayoutProps {
   shopPubkey: string;
   currentPage?: string;
+  initialSlug?: string;
 }
 
 export default function StorefrontLayout({
   shopPubkey,
   currentPage,
+  initialSlug,
 }: StorefrontLayoutProps) {
   const shopMapContext = useContext(ShopMapContext);
   const productContext = useContext(ProductContext);
@@ -112,7 +114,7 @@ export default function StorefrontLayout({
     };
   }, [colors]);
 
-  const shopSlug = storefront.shopSlug || "";
+  const shopSlug = storefront.shopSlug || initialSlug || "";
 
   useEffect(() => {
     if (shopPubkey) {
