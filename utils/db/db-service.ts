@@ -1697,6 +1697,13 @@ export async function savePopupEmailCapture(
   let client;
   try {
     client = await dbPool.connect();
+    const params: any[] = [
+      sellerPubkey,
+      email.toLowerCase(),
+      phone || null,
+      discountCode,
+      discountPercentage,
+    ];
     const result = await client.query(
       `INSERT INTO popup_email_captures (seller_pubkey, email, phone, discount_code, discount_percentage)
        VALUES ($1, $2, $3, $4, $5)
@@ -1705,13 +1712,7 @@ export async function savePopupEmailCapture(
          discount_code = EXCLUDED.discount_code,
          discount_percentage = EXCLUDED.discount_percentage
        RETURNING (xmax = 0) AS is_new`,
-      [
-        sellerPubkey,
-        email.toLowerCase(),
-        phone || null,
-        discountCode,
-        discountPercentage,
-      ]
+      params
     );
     return { isNew: result.rows[0]?.is_new ?? true };
   } catch (error) {
