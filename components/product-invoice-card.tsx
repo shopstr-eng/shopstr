@@ -1625,6 +1625,16 @@ export default function ProductInvoiceCard({
               );
               setPaymentConfirmed(true);
               setQrCodeUrl(null);
+              if (discountCode && productData.pubkey) {
+                fetch("/api/db/discount-code-used", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    code: discountCode,
+                    pubkey: productData.pubkey,
+                  }),
+                }).catch(() => {});
+              }
               setInvoiceIsPaid(true);
               break;
             }
@@ -2953,6 +2963,17 @@ export default function ProductInvoiceCard({
         3,
         subInfo
       );
+    }
+
+    if (discountCode && productData.pubkey) {
+      fetch("/api/db/discount-code-used", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code: discountCode,
+          pubkey: productData.pubkey,
+        }),
+      }).catch(() => {});
     }
 
     setInvoiceIsPaid(true);

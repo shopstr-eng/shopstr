@@ -2305,6 +2305,17 @@ export default function CartInvoiceCard({
     clearPurchasedFromCart();
     setPaymentConfirmed(true);
     setOrderConfirmed(true);
+    if (discountCodes) {
+      Object.entries(discountCodes).forEach(([pubkey, code]) => {
+        if (code) {
+          fetch("/api/db/discount-code-used", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ code, pubkey }),
+          }).catch(() => {});
+        }
+      });
+    }
     if (setInvoiceIsPaid) {
       setInvoiceIsPaid(true);
     }
@@ -2705,6 +2716,17 @@ export default function CartInvoiceCard({
       clearPurchasedFromCart();
       setPaymentConfirmed(true);
       setOrderConfirmed(true);
+      if (discountCodes) {
+        Object.entries(discountCodes).forEach(([pubkey, code]) => {
+          if (code) {
+            fetch("/api/db/discount-code-used", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ code, pubkey }),
+            }).catch(() => {});
+          }
+        });
+      }
       if (setInvoiceIsPaid) {
         setInvoiceIsPaid(true);
       }
@@ -2791,6 +2813,17 @@ export default function CartInvoiceCard({
               await sendTokens(wallet, proofs, data);
               clearPurchasedFromCart();
               setPaymentConfirmed(true);
+              if (discountCodes) {
+                Object.entries(discountCodes).forEach(([pubkey, code]) => {
+                  if (code) {
+                    fetch("/api/db/discount-code-used", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ code, pubkey }),
+                    }).catch(() => {});
+                  }
+                });
+              }
               if (setInvoiceIsPaid) {
                 setInvoiceIsPaid(true);
               }

@@ -38,6 +38,7 @@ import StorefrontWallet from "./storefront-wallet";
 import StorefrontMyListings from "./storefront-my-listings";
 import StorefrontOrderConfirmation from "./storefront-order-confirmation";
 import StorefrontPolicyPage from "./storefront-policy-page";
+import StorefrontEmailPopupComponent from "./storefront-email-popup";
 import { POLICY_SLUGS, getDefaultPolicies } from "@/utils/storefront-policies";
 import { StorefrontPolicies } from "@/utils/types/types";
 
@@ -692,6 +693,15 @@ export default function StorefrontLayout({
         />
       </div>
       <SignInModal isOpen={isOpen} onClose={onClose} />
+      {storefront.emailPopup?.enabled &&
+        storefront.emailPopup.discountPercentage > 0 && (
+          <StorefrontEmailPopupComponent
+            config={storefront.emailPopup}
+            colors={colors}
+            shopPubkey={shopPubkey}
+            shopName={shopName}
+          />
+        )}
     </>
   );
 }

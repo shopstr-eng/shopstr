@@ -12,13 +12,20 @@ export default async function handler(
 ) {
   if (req.method === "POST") {
     try {
-      const { code, pubkey, discountPercentage, expiration } = req.body;
+      const { code, pubkey, discountPercentage, expiration, maxUses } =
+        req.body;
 
       if (!code || !pubkey || !discountPercentage) {
         return res.status(400).json({ error: "Missing required fields" });
       }
 
-      await addDiscountCode(code, pubkey, discountPercentage, expiration);
+      await addDiscountCode(
+        code,
+        pubkey,
+        discountPercentage,
+        expiration,
+        maxUses
+      );
       res.status(200).json({ success: true });
     } catch (error) {
       console.error("Failed to add discount code:", error);

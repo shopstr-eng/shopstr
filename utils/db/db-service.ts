@@ -1538,7 +1538,8 @@ export async function addDiscountCode(
   code: string,
   pubkey: string,
   discountPercentage: number,
-  expiration?: number
+  expiration?: number,
+  maxUses?: number
 ): Promise<void> {
   const dbPool = getDbPool();
   let client;
@@ -1546,12 +1547,19 @@ export async function addDiscountCode(
   try {
     client = await dbPool.connect();
     const query = {
-      text: `INSERT INTO discount_codes (code, pubkey, discount_percentage, expiration)
-             VALUES ($1, $2, $3, $4)
+      text: `INSERT INTO discount_codes (code, pubkey, discount_percentage, expiration, max_uses)
+             VALUES ($1, $2, $3, $4, $5)
              ON CONFLICT (code, pubkey) DO UPDATE SET
                discount_percentage = EXCLUDED.discount_percentage,
-               expiration = EXCLUDED.expiration`,
-      values: [code, pubkey, discountPercentage, expiration || null] as any[],
+               expiration = EXCLUDED.expiration,
+               max_uses = EXCLUDED.max_uses`,
+      values: [
+        code,
+        pubkey,
+        discountPercentage,
+        expiration || null,
+        maxUses ?? null,
+      ] as any[],
     };
     await client.query(query);
   } catch (error) {
@@ -1570,6 +1578,8 @@ export async function getDiscountCodesByPubkey(pubkey: string): Promise<
     code: string;
     discount_percentage: number;
     expiration: number | null;
+    max_uses: number | null;
+    times_used: number;
   }>
 > {
   const dbPool = getDbPool();
@@ -1578,7 +1588,7 @@ export async function getDiscountCodesByPubkey(pubkey: string): Promise<
   try {
     client = await dbPool.connect();
     const result = await client.query(
-      `SELECT code, discount_percentage, expiration FROM discount_codes WHERE pubkey = $1 ORDER BY created_at DESC`,
+      `SELECT code, discount_percentage, expiration, max_uses, times_used FROM discount_codes WHERE pubkey = $1 ORDER BY created_at DESC`,
       [pubkey]
     );
     return result.rows;
@@ -1603,7 +1613,7 @@ export async function validateDiscountCode(
   try {
     client = await dbPool.connect();
     const result = await client.query(
-      `SELECT discount_percentage, expiration FROM discount_codes WHERE code = $1 AND pubkey = $2`,
+      `SELECT discount_percentage, expiration, max_uses, times_used FROM discount_codes WHERE code = $1 AND pubkey = $2`,
       [code, pubkey]
     );
 
@@ -1611,10 +1621,14 @@ export async function validateDiscountCode(
       return { valid: false };
     }
 
-    const { discount_percentage, expiration } = result.rows[0];
+    const { discount_percentage, expiration, max_uses, times_used } =
+      result.rows[0];
 
-    // Check if code is expired
     if (expiration && Date.now() / 1000 > expiration) {
+      return { valid: false };
+    }
+
+    if (max_uses !== null && times_used >= max_uses) {
       return { valid: false };
     }
 
@@ -1626,6 +1640,25 @@ export async function validateDiscountCode(
     if (client) {
       client.release();
     }
+  }
+}
+
+export async function markDiscountCodeUsed(
+  code: string,
+  pubkey: string
+): Promise<void> {
+  const dbPool = getDbPool();
+  let client;
+  try {
+    client = await dbPool.connect();
+    await client.query(
+      `UPDATE discount_codes SET times_used = times_used + 1 WHERE code = $1 AND pubkey = $2`,
+      [code, pubkey]
+    );
+  } catch (error) {
+    console.error("Failed to mark discount code used:", error);
+  } finally {
+    if (client) client.release();
   }
 }
 
@@ -1650,6 +1683,63 @@ export async function deleteDiscountCode(
     if (client) {
       client.release();
     }
+  }
+}
+
+export async function savePopupEmailCapture(
+  sellerPubkey: string,
+  email: string,
+  phone: string | null,
+  discountCode: string,
+  discountPercentage: number
+): Promise<{ isNew: boolean }> {
+  const dbPool = getDbPool();
+  let client;
+  try {
+    client = await dbPool.connect();
+    const result = await client.query(
+      `INSERT INTO popup_email_captures (seller_pubkey, email, phone, discount_code, discount_percentage)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (seller_pubkey, email) DO UPDATE SET
+         phone = COALESCE(EXCLUDED.phone, popup_email_captures.phone),
+         discount_code = EXCLUDED.discount_code,
+         discount_percentage = EXCLUDED.discount_percentage
+       RETURNING (xmax = 0) AS is_new`,
+      [
+        sellerPubkey,
+        email.toLowerCase(),
+        phone || null,
+        discountCode,
+        discountPercentage,
+      ]
+    );
+    return { isNew: result.rows[0]?.is_new ?? true };
+  } catch (error) {
+    console.error("Failed to save popup email capture:", error);
+    throw error;
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function getPopupEmailCapture(
+  sellerPubkey: string,
+  email: string
+): Promise<{ discount_code: string; discount_percentage: number } | null> {
+  const dbPool = getDbPool();
+  let client;
+  try {
+    client = await dbPool.connect();
+    const result = await client.query(
+      `SELECT discount_code, discount_percentage FROM popup_email_captures WHERE seller_pubkey = $1 AND email = $2`,
+      [sellerPubkey, email.toLowerCase()]
+    );
+    return result.rows.length > 0 ? result.rows[0] : null;
+  } catch (error) {
+    console.error("Failed to get popup email capture:", error);
+    return null;
+  } finally {
+    if (client) client.release();
   }
 }
 

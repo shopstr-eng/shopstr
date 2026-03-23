@@ -36,6 +36,7 @@ import {
   StorefrontPage,
   StorefrontFooter,
   StorefrontNavLink,
+  StorefrontEmailPopup,
 } from "@/utils/types/types";
 import SectionEditor from "./storefront/section-editor";
 import FooterEditor from "./storefront/footer-editor";
@@ -237,6 +238,10 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
   const [navLinks, setNavLinks] = useState<StorefrontNavLink[]>([]);
   const [showCommunityPage, setShowCommunityPage] = useState(false);
   const [showWalletPage, setShowWalletPage] = useState(false);
+  const [emailPopup, setEmailPopup] = useState<StorefrontEmailPopup>({
+    enabled: false,
+    discountPercentage: 10,
+  });
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
   const { signer, pubkey: userPubkey } = useContext(SignerContext);
@@ -306,6 +311,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
         if (sf.navLinks) setNavLinks(sf.navLinks);
         if (sf.showCommunityPage) setShowCommunityPage(sf.showCommunityPage);
         if (sf.showWalletPage) setShowWalletPage(sf.showWalletPage);
+        if (sf.emailPopup) setEmailPopup({ ...emailPopup, ...sf.emailPopup });
       }
     }
     setIsFetchingShop(false);
@@ -433,6 +439,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
         navLinks: navLinks.length > 0 ? navLinks : undefined,
         showCommunityPage: showCommunityPage || undefined,
         showWalletPage: showWalletPage || undefined,
+        emailPopup: emailPopup.enabled ? emailPopup : undefined,
       };
       transformedData.storefront = storefrontConfig;
     }
@@ -1206,6 +1213,193 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                       ecash payments. A &quot;Wallet&quot; link will be added to
                       your storefront navigation bar.
                     </p>
+                  </div>
+
+                  <div className="mb-6 rounded-lg border-2 border-gray-200 p-4">
+                    <label className="mb-2 flex items-center gap-3 text-base font-bold text-black">
+                      <input
+                        type="checkbox"
+                        checked={emailPopup.enabled}
+                        onChange={(e) =>
+                          setEmailPopup({
+                            ...emailPopup,
+                            enabled: e.target.checked,
+                          })
+                        }
+                        className="h-4 w-4 rounded border-gray-300"
+                      />
+                      Email Capture Popup
+                    </label>
+                    <p className="mb-3 ml-7 text-sm text-gray-500">
+                      Show a popup to new visitors offering a discount code in
+                      exchange for their email address (and optionally phone
+                      number). The discount code is auto-generated and emailed
+                      to the buyer.
+                    </p>
+
+                    {emailPopup.enabled && (
+                      <div className="ml-7 space-y-4 border-t border-gray-100 pt-4">
+                        <div>
+                          <label className="mb-1 block text-sm font-semibold text-black">
+                            Discount Percentage
+                          </label>
+                          <div className="flex items-center gap-2">
+                            <Input
+                              type="number"
+                              min={1}
+                              max={100}
+                              classNames={{
+                                inputWrapper:
+                                  "border-3 border-black rounded-lg bg-white shadow-none hover:bg-white data-[hover=true]:bg-white group-data-[focus=true]:border-4 group-data-[focus=true]:border-black w-24",
+                                input: "text-base",
+                              }}
+                              variant="bordered"
+                              value={String(emailPopup.discountPercentage)}
+                              onChange={(e) =>
+                                setEmailPopup({
+                                  ...emailPopup,
+                                  discountPercentage: Math.min(
+                                    100,
+                                    Math.max(1, parseInt(e.target.value) || 1)
+                                  ),
+                                })
+                              }
+                            />
+                            <span className="text-sm font-medium text-gray-600">
+                              % off
+                            </span>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="mb-1 block text-sm font-semibold text-black">
+                            Headline (optional)
+                          </label>
+                          <Input
+                            classNames={{
+                              inputWrapper:
+                                "border-3 border-black rounded-lg bg-white shadow-none hover:bg-white data-[hover=true]:bg-white group-data-[focus=true]:border-4 group-data-[focus=true]:border-black",
+                              input: "text-base",
+                            }}
+                            variant="bordered"
+                            fullWidth
+                            placeholder={`Get ${emailPopup.discountPercentage}% Off Your First Order`}
+                            value={emailPopup.headline || ""}
+                            onChange={(e) =>
+                              setEmailPopup({
+                                ...emailPopup,
+                                headline: e.target.value || undefined,
+                              })
+                            }
+                          />
+                        </div>
+
+                        <div>
+                          <label className="mb-1 block text-sm font-semibold text-black">
+                            Subtext (optional)
+                          </label>
+                          <Input
+                            classNames={{
+                              inputWrapper:
+                                "border-3 border-black rounded-lg bg-white shadow-none hover:bg-white data-[hover=true]:bg-white group-data-[focus=true]:border-4 group-data-[focus=true]:border-black",
+                              input: "text-base",
+                            }}
+                            variant="bordered"
+                            fullWidth
+                            placeholder="Sign up to receive an exclusive discount code."
+                            value={emailPopup.subtext || ""}
+                            onChange={(e) =>
+                              setEmailPopup({
+                                ...emailPopup,
+                                subtext: e.target.value || undefined,
+                              })
+                            }
+                          />
+                        </div>
+
+                        <div>
+                          <label className="mb-1 block text-sm font-semibold text-black">
+                            Button Text (optional)
+                          </label>
+                          <Input
+                            classNames={{
+                              inputWrapper:
+                                "border-3 border-black rounded-lg bg-white shadow-none hover:bg-white data-[hover=true]:bg-white group-data-[focus=true]:border-4 group-data-[focus=true]:border-black",
+                              input: "text-base",
+                            }}
+                            variant="bordered"
+                            fullWidth
+                            placeholder="Get My Discount"
+                            value={emailPopup.buttonText || ""}
+                            onChange={(e) =>
+                              setEmailPopup({
+                                ...emailPopup,
+                                buttonText: e.target.value || undefined,
+                              })
+                            }
+                          />
+                        </div>
+
+                        <div>
+                          <label className="mb-1 block text-sm font-semibold text-black">
+                            Success Message (optional)
+                          </label>
+                          <Input
+                            classNames={{
+                              inputWrapper:
+                                "border-3 border-black rounded-lg bg-white shadow-none hover:bg-white data-[hover=true]:bg-white group-data-[focus=true]:border-4 group-data-[focus=true]:border-black",
+                              input: "text-base",
+                            }}
+                            variant="bordered"
+                            fullWidth
+                            placeholder="Check your email for your discount code!"
+                            value={emailPopup.successMessage || ""}
+                            onChange={(e) =>
+                              setEmailPopup({
+                                ...emailPopup,
+                                successMessage: e.target.value || undefined,
+                              })
+                            }
+                          />
+                        </div>
+
+                        <div className="flex flex-col gap-2">
+                          <label className="flex items-center gap-3 text-sm font-semibold text-black">
+                            <input
+                              type="checkbox"
+                              checked={emailPopup.collectPhone || false}
+                              onChange={(e) =>
+                                setEmailPopup({
+                                  ...emailPopup,
+                                  collectPhone: e.target.checked,
+                                  requirePhone: e.target.checked
+                                    ? emailPopup.requirePhone
+                                    : false,
+                                })
+                              }
+                              className="h-4 w-4 rounded border-gray-300"
+                            />
+                            Collect phone number
+                          </label>
+                          {emailPopup.collectPhone && (
+                            <label className="ml-7 flex items-center gap-3 text-sm text-gray-600">
+                              <input
+                                type="checkbox"
+                                checked={emailPopup.requirePhone || false}
+                                onChange={(e) =>
+                                  setEmailPopup({
+                                    ...emailPopup,
+                                    requirePhone: e.target.checked,
+                                  })
+                                }
+                                className="h-4 w-4 rounded border-gray-300"
+                              />
+                              Make phone number required
+                            </label>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div className="mb-6">

@@ -607,3 +607,41 @@ export function inquiryNotificationEmail(params: {
     html: baseTemplate("New Inquiry", body),
   };
 }
+
+export function popupDiscountEmail(params: {
+  discountCode: string;
+  discountPercentage: number;
+  shopName: string;
+}): { subject: string; html: string } {
+  const body = `
+    <h2 style="margin:0 0 16px;color:#111827;font-size:20px;">Welcome! Here's your discount code</h2>
+    <p style="margin:0 0 24px;color:#374151;font-size:15px;line-height:1.6;">
+      Thanks for signing up! Use the code below to get <strong>${
+        params.discountPercentage
+      }% off</strong> your next order at <strong>${esc(
+        params.shopName
+      )}</strong>.
+    </p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+      <tr>
+        <td align="center">
+          <div style="display:inline-block;background-color:#f0fdf4;border:2px dashed #22c55e;border-radius:8px;padding:16px 32px;">
+            <p style="margin:0 0 4px;color:#6b7280;font-size:12px;text-transform:uppercase;letter-spacing:0.1em;">Your Discount Code</p>
+            <p style="margin:0;color:#111827;font-size:24px;font-weight:700;font-family:monospace;letter-spacing:0.05em;">${esc(
+              params.discountCode
+            )}</p>
+          </div>
+        </td>
+      </tr>
+    </table>
+    <p style="margin:0;color:#6b7280;font-size:13px;line-height:1.5;">
+      Enter this code at checkout to apply your discount. This code expires in 90 days.
+    </p>`;
+
+  return {
+    subject: `Your ${params.discountPercentage}% Off Discount Code from ${esc(
+      params.shopName
+    )}`,
+    html: baseTemplate("Your Discount Code", body),
+  };
+}
