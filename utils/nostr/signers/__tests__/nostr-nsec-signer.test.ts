@@ -153,7 +153,12 @@ describe("NostrNSecSigner", () => {
 
   it("sign()", async () => {
     const s = new NostrNSecSigner({ encryptedPrivKey: encrypted }, mockCH);
-    const ev = await s.sign({ kind: 1, content: "hey", tags: [] });
+    const ev = await s.sign({
+      kind: 1,
+      content: "hey",
+      tags: [],
+      created_at: Math.floor(Date.now() / 1000),
+    });
     expect(ev.sig).toBe("sig");
     expect(nostrTools.finalizeEvent).toHaveBeenCalledWith(
       expect.objectContaining({ content: "hey" }),
