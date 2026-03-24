@@ -475,6 +475,7 @@ export async function sendGiftWrappedMessageEvent(
     const { trackFailedRelayPublish } = await import("@/utils/db/db-client");
     await trackFailedRelayPublish(
       giftWrappedMessageEvent.id,
+      giftWrappedMessageEvent,
       allWriteRelays
     ).catch(console.error);
   }
@@ -1006,9 +1007,11 @@ export async function finalizeAndSendNostrEvent(
         error
       );
       const { trackFailedRelayPublish } = await import("@/utils/db/db-client");
-      await trackFailedRelayPublish(signedEvent.id, allWriteRelays).catch(
-        console.error
-      );
+      await trackFailedRelayPublish(
+        signedEvent.id,
+        signedEvent,
+        allWriteRelays
+      ).catch(console.error);
     }
 
     // return the signed event to caller so we know generated IDs
@@ -1035,7 +1038,17 @@ export async function blossomUploadImages(
     throw new Error("Only images are supported");
 
   const arrayBuffer = await image.arrayBuffer();
-  const wordArray = CryptoJS.lib.WordArray.create(arrayBuffer);
+  const uint8Array = new Uint8Array(arrayBuffer);
+  const words: number[] = [];
+  for (let i = 0; i < uint8Array.length; i += 4) {
+    words.push(
+      ((uint8Array[i] || 0) << 24) |
+        ((uint8Array[i + 1] || 0) << 16) |
+        ((uint8Array[i + 2] || 0) << 8) |
+        (uint8Array[i + 3] || 0)
+    );
+  }
+  const wordArray = CryptoJS.lib.WordArray.create(words, uint8Array.length);
   const hash = CryptoJS.SHA256(wordArray).toString(CryptoJS.enc.Hex);
 
   const event = {
@@ -1059,10 +1072,33 @@ export async function blossomUploadImages(
     CryptoJS.enc.Utf8.parse(JSON.stringify(signedEvent))
   )}`;
 
+  const validServers = servers
+    .map((s) => {
+      let server = (s || "").trim();
+      if (!server) return null;
+      if (!server.match(/^https?:\/\//i)) {
+        server = `https://${server}`;
+      }
+      try {
+        new URL(server);
+        return server;
+      } catch {
+        return null;
+      }
+    })
+    .filter((s): s is string => s !== null);
+
+  if (validServers.length === 0) {
+    throw new Error(
+      "No valid Blossom servers configured. Please check your media server settings."
+    );
+  }
+
   let tags: string[][] = [];
   let responseUrl: string = "";
-  for (let i = 0; i < servers.length; i++) {
-    const server = servers[i];
+  for (let i = 0; i < validServers.length; i++) {
+    const server = validServers[i];
+
     if (i == 0) {
       const url = new URL("/upload", server);
 
@@ -1076,7 +1112,7 @@ export async function blossomUploadImages(
       });
 
       if (!res.ok) {
-        const errBody = await res.text().catch(() => "");
+        const errBody = await res.text().catch(() => "Unknown server error");
         throw new Error(
           `Blossom server returned ${res.status}: ${errBody || res.statusText}`
         );

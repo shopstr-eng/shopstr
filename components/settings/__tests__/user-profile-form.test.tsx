@@ -172,30 +172,6 @@ describe("UserProfileForm", () => {
     expect(newProfileImage).toHaveAttribute("src", "https://new.image/url");
   });
 
-  test("handles fiat payment option changes correctly", async () => {
-    const user = userEvent.setup();
-    renderWithProviders(<UserProfileForm />);
-    await screen.findByLabelText("Display name");
-
-    const venmoCheckbox = screen.getByLabelText("Venmo");
-
-    await user.click(venmoCheckbox);
-    expect(venmoCheckbox).toBeChecked();
-    const venmoInput = await screen.findByPlaceholderText(
-      "Enter your Venmo username/tag"
-    );
-    expect(venmoInput).toBeInTheDocument();
-
-    await user.type(venmoInput, "my-venmo-tag");
-    expect(venmoInput).toHaveValue("my-venmo-tag");
-
-    await user.click(venmoCheckbox);
-    expect(venmoCheckbox).not.toBeChecked();
-    expect(
-      screen.queryByPlaceholderText("Enter your Venmo username/tag")
-    ).not.toBeInTheDocument();
-  });
-
   test("updates payment preference and shopstr donation", async () => {
     mockCreateNostrProfileEvent.mockResolvedValue({});
     const user = userEvent.setup();

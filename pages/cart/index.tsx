@@ -1,6 +1,6 @@
 /* eslint-disable @next/next/no-img-element */
 
-import React, { useEffect, useState } from "react";
+import { useEffect, useState, useContext } from "react";
 import { useRouter } from "next/router";
 import {
   Button,
@@ -16,6 +16,7 @@ import {
   ShoppingBagIcon,
   CheckCircleIcon,
   XCircleIcon,
+  TruckIcon,
 } from "@heroicons/react/24/outline";
 import {
   SHOPSTRBUTTONCLASSNAMES,
@@ -25,6 +26,8 @@ import { ProductData } from "@/utils/parsers/product-parser-functions";
 import CartInvoiceCard from "../../components/cart-invoice-card";
 import { fiat } from "@getalby/lightning-tools";
 import currencySelection from "../../public/currencySelection.json";
+import { ShopMapContext, ProfileMapContext } from "@/utils/context/context";
+import { nip19 } from "nostr-tools";
 
 interface QuantitySelectorProps {
   value: number;
@@ -76,6 +79,9 @@ function QuantitySelector({
 }
 
 export default function Component() {
+  const shopContext = useContext(ShopMapContext);
+  const profileContext = useContext(ProfileMapContext);
+
   const [products, setProducts] = useState<ProductData[]>([]);
   const [satPrices, setSatPrices] = useState<{ [key: string]: number | null }>(
     {}
@@ -132,6 +138,37 @@ export default function Component() {
     },
     {} as { [pubkey: string]: ProductData[] }
   );
+
+  const getSellerName = (pubkey: string): string => {
+    const shopProfile = shopContext.shopData.get(pubkey);
+    if (shopProfile?.content?.name) return shopProfile.content.name;
+    const profile = profileContext.profileData.get(pubkey);
+    if (profile?.content?.name) return profile.content.name;
+    return nip19.npubEncode(pubkey).slice(0, 12) + "...";
+  };
+
+  const getSellerNpub = (pubkey: string): string => {
+    return nip19.npubEncode(pubkey);
+  };
+
+  const getSellerSubtotalInCurrency = (sellerPubkey: string): number => {
+    const sellerProducts = productsBySeller[sellerPubkey] || [];
+    let total = 0;
+    for (const product of sellerProducts) {
+      const basePrice =
+        product.bulkPrice !== undefined
+          ? product.bulkPrice
+          : product.volumePrice !== undefined
+            ? product.volumePrice
+            : product.price;
+      const qty = quantities[product.id] || 1;
+      const discount = appliedDiscounts[product.pubkey] || 0;
+      const discountedPrice =
+        discount > 0 ? basePrice * (1 - discount / 100) : basePrice;
+      total += discountedPrice * qty;
+    }
+    return total;
+  };
 
   const router = useRouter();
 
@@ -573,6 +610,78 @@ export default function Component() {
                             </p>
                           )}
                         </div>
+                        {(() => {
+                          const shopProfile =
+                            shopContext.shopData.get(sellerPubkey);
+                          const threshold =
+                            shopProfile?.content?.freeShippingThreshold;
+                          const thresholdCurrency =
+                            shopProfile?.content?.freeShippingCurrency || "USD";
+                          if (!threshold || threshold <= 0) return null;
+                          const sellerSubtotal =
+                            getSellerSubtotalInCurrency(sellerPubkey);
+                          const progress = Math.min(
+                            (sellerSubtotal / threshold) * 100,
+                            100
+                          );
+                          const remaining = Math.max(
+                            threshold - sellerSubtotal,
+                            0
+                          );
+                          const isFreeShipping = sellerSubtotal >= threshold;
+                          const sellerName = getSellerName(sellerPubkey);
+                          return (
+                            <div className="rounded-lg border border-gray-300 bg-light-fg p-4 shadow-sm dark:border-gray-700 dark:bg-dark-fg">
+                              <div className="mb-2 flex items-center gap-2">
+                                <TruckIcon className="h-5 w-5 text-shopstr-purple dark:text-shopstr-yellow" />
+                                {isFreeShipping ? (
+                                  <p className="text-sm font-bold text-green-600 dark:text-green-400">
+                                    Free shipping from {sellerName}!
+                                  </p>
+                                ) : (
+                                  <p className="text-sm font-bold text-light-text dark:text-dark-text">
+                                    You&apos;re {remaining.toFixed(2)}{" "}
+                                    {thresholdCurrency} away from free shipping
+                                    from {sellerName}!
+                                  </p>
+                                )}
+                              </div>
+                              <div className="h-3 w-full overflow-hidden rounded-full border border-gray-300 bg-gray-200 dark:border-gray-600 dark:bg-gray-700">
+                                <div
+                                  className={`h-full rounded-full duration-500 transition-all ${
+                                    isFreeShipping
+                                      ? "bg-green-500"
+                                      : "bg-shopstr-purple dark:bg-shopstr-yellow"
+                                  }`}
+                                  style={{ width: `${progress}%` }}
+                                />
+                              </div>
+                              <div className="mt-2 flex items-center justify-between">
+                                <p className="text-xs text-gray-500 dark:text-gray-400">
+                                  {sellerSubtotal.toFixed(2)} /{" "}
+                                  {threshold.toFixed(2)} {thresholdCurrency}
+                                </p>
+                                {!isFreeShipping && (
+                                  <Button
+                                    size="sm"
+                                    className={
+                                      SHOPSTRBUTTONCLASSNAMES + " text-xs"
+                                    }
+                                    onClick={() =>
+                                      router.push(
+                                        `/marketplace/${getSellerNpub(
+                                          sellerPubkey
+                                        )}`
+                                      )
+                                    }
+                                  >
+                                    Shop More from {sellerName}
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </div>
                     )
                   )}
@@ -625,6 +734,7 @@ export default function Component() {
                 subtotalCost={subtotal}
                 appliedDiscounts={appliedDiscounts}
                 discountCodes={discountCodes}
+                shopProfiles={shopContext.shopData}
                 onBackToCart={toggleCheckout}
                 setInvoiceIsPaid={setInvoiceIsPaid}
                 setInvoiceGenerationFailed={setInvoiceGenerationFailed}
@@ -645,7 +755,7 @@ export default function Component() {
             onClose={() => {
               setInvoiceIsPaid(false);
               setCashuPaymentSent(false);
-              router.push("/orders");
+              router.push("/order-summary");
             }}
             classNames={{
               body: "py-6 ",

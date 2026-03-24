@@ -71,7 +71,11 @@ const renderWithProviders = (
         value={{ signer: {} as any, pubkey: mockUserPubkey }}
       >
         <ShopMapContext.Provider
-          value={{ shopData, updateShopData: mockUpdateShopData }}
+          value={{
+            shopData,
+            isLoading: false,
+            updateShopData: mockUpdateShopData,
+          }}
         >
           {component}
         </ShopMapContext.Provider>

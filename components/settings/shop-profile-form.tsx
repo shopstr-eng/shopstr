@@ -1,7 +1,14 @@
-import React, { useEffect, useState, useContext } from "react";
+import { useEffect, useState, useContext } from "react";
 import { useRouter } from "next/router";
 import { useForm, Controller } from "react-hook-form";
-import { Button, Textarea, Input, Image } from "@nextui-org/react";
+import {
+  Button,
+  Textarea,
+  Input,
+  Image,
+  Select,
+  SelectItem,
+} from "@nextui-org/react";
 
 import { ShopMapContext } from "@/utils/context/context";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
@@ -12,16 +19,23 @@ import {
 import { createNostrShopEvent } from "@/utils/nostr/nostr-helper-functions";
 import { FileUploaderButton } from "@/components/utility-components/file-uploader";
 import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
+import currencySelection from "@/public/currencySelection.json";
 
 interface ShopProfileFormProps {
   isOnboarding?: boolean;
 }
+
+const CURRENCY_OPTIONS = Object.keys(currencySelection);
 
 const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
   const router = useRouter();
   const { nostr } = useContext(NostrContext);
   const [isUploadingShopProfile, setIsUploadingShopProfile] = useState(false);
   const [isFetchingShop, setIsFetchingShop] = useState(false);
+  const [freeShippingThreshold, setFreeShippingThreshold] =
+    useState<string>("");
+  const [freeShippingCurrency, setFreeShippingCurrency] =
+    useState<string>("USD");
 
   const { signer, pubkey: userPubkey } = useContext(SignerContext);
 
@@ -54,13 +68,25 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
         banner: shop.content.ui.banner,
       };
       reset(mappedContent);
+      if (
+        shop.content.freeShippingThreshold !== undefined &&
+        shop.content.freeShippingThreshold > 0
+      ) {
+        setFreeShippingThreshold(String(shop.content.freeShippingThreshold));
+      }
+      if (shop.content.freeShippingCurrency) {
+        setFreeShippingCurrency(shop.content.freeShippingCurrency);
+      }
     }
     setIsFetchingShop(false);
   }, [shopContext, userPubkey, reset]);
 
   const onSubmit = async (data: { [x: string]: string }) => {
     setIsUploadingShopProfile(true);
-    const transformedData = {
+    const thresholdValue = freeShippingThreshold
+      ? parseFloat(freeShippingThreshold)
+      : undefined;
+    const transformedData: any = {
       name: data.name || "",
       about: data.about || "",
       ui: {
@@ -71,6 +97,10 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
       },
       merchants: [userPubkey!],
     };
+    if (thresholdValue && thresholdValue > 0) {
+      transformedData.freeShippingThreshold = thresholdValue;
+      transformedData.freeShippingCurrency = freeShippingCurrency;
+    }
     await createNostrShopEvent(
       nostr!,
       signer!,
@@ -210,6 +240,56 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
             );
           }}
         />
+
+        <div className="pb-4">
+          <label className="mb-2 block text-lg text-light-text dark:text-dark-text">
+            Free Shipping Threshold
+          </label>
+          <p className="mb-3 text-sm text-gray-500 dark:text-gray-400">
+            Set a minimum order amount to offer free shipping. When a
+            buyer&apos;s order total from your shop reaches this amount,
+            shipping costs will be waived.
+          </p>
+          <div className="flex gap-3">
+            <div className="flex-1">
+              <Input
+                className="text-light-text dark:text-dark-text"
+                variant="bordered"
+                fullWidth={true}
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="e.g. 50.00"
+                value={freeShippingThreshold}
+                onChange={(e) => setFreeShippingThreshold(e.target.value)}
+              />
+            </div>
+            <div className="w-32">
+              <Select
+                variant="bordered"
+                selectedKeys={[freeShippingCurrency]}
+                onChange={(e) => {
+                  if (e.target.value) setFreeShippingCurrency(e.target.value);
+                }}
+                aria-label="Currency"
+                className="text-light-text dark:text-dark-text"
+              >
+                {CURRENCY_OPTIONS.map((currency) => (
+                  <SelectItem key={currency} value={currency}>
+                    {currency}
+                  </SelectItem>
+                ))}
+              </Select>
+            </div>
+          </div>
+          {freeShippingThreshold && parseFloat(freeShippingThreshold) > 0 && (
+            <p className="mt-2 text-sm text-green-600 dark:text-green-400">
+              Buyers will get free shipping on orders of{" "}
+              {parseFloat(freeShippingThreshold).toFixed(2)}{" "}
+              {freeShippingCurrency} or more from your shop.
+            </p>
+          )}
+        </div>
 
         <Button
           className={`mb-10 w-full ${SHOPSTRBUTTONCLASSNAMES}`}

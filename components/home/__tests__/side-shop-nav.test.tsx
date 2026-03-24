@@ -1,4 +1,3 @@
-import React from "react";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import SideShopNav from "../side-shop-nav";
@@ -28,7 +27,7 @@ jest.mock("../../sign-in/SignInModal", () => {
 const renderComponent = ({
   isLoggedIn = false,
   isEditingShop = false,
-  categories = [],
+  categories = [] as string[],
   aboutText = "",
 }) => {
   const MOCK_VALID_PUBKEY = "a1".repeat(32);
@@ -53,9 +52,15 @@ const renderComponent = ({
 
   render(
     <SignerContext.Provider
-      value={{ isLoggedIn, pubkey: isLoggedIn ? "user-pubkey" : null }}
+      value={{ isLoggedIn, pubkey: isLoggedIn ? "user-pubkey" : undefined }}
     >
-      <ShopMapContext.Provider value={{ shopData: mockShopData }}>
+      <ShopMapContext.Provider
+        value={{
+          shopData: mockShopData,
+          isLoading: false,
+          updateShopData: jest.fn(),
+        }}
+      >
         <SideShopNav
           focusedPubkey={MOCK_VALID_PUBKEY}
           categories={categories}

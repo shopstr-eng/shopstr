@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import useNavigation from "@/components/hooks/use-navigation";
 import { Button, Image, useDisclosure } from "@nextui-org/react";
 import { Bars4Icon } from "@heroicons/react/24/outline";
@@ -187,7 +187,7 @@ const TopNav = ({
               width={40}
             />
             <span
-              className={`ml-2 text-xl md:flex ${
+              className={`ml-2 text-xl md:hidden lg:flex ${
                 isHomeActive ? "font-bold" : ""
               }`}
             >

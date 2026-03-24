@@ -1,4 +1,3 @@
-import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
@@ -56,17 +55,32 @@ jest.mock("@heroicons/react/24/outline", () => ({
 import MyListingsPage from "../my-listings";
 
 const loggedInUser = { pubkey: "user-pubkey-123" };
-const loggedOutUser = { pubkey: null };
+const loggedOutUser = { pubkey: undefined };
 const shopProfile: ShopProfile = {
+  pubkey: loggedInUser.pubkey,
   content: {
-    ui: { banner: "http://example.com/banner.jpg" },
+    name: "Test Shop",
     about: "This is the test shop about section.",
+    ui: {
+      picture: "",
+      banner: "http://example.com/banner.jpg",
+      theme: "",
+      darkMode: false,
+    },
+    merchants: [],
   },
+  created_at: 0,
 };
 const mockShopDataContextWithProfile = {
   shopData: new Map([[loggedInUser.pubkey, shopProfile]]),
+  isLoading: false,
+  updateShopData: jest.fn(),
 };
-const mockShopDataContextEmpty = { shopData: new Map() };
+const mockShopDataContextEmpty = {
+  shopData: new Map(),
+  isLoading: false,
+  updateShopData: jest.fn(),
+};
 
 const renderComponent = (signerContextValue: any, shopContextValue: any) => {
   return render(
@@ -99,13 +113,13 @@ describe("MyListingsPage", () => {
     });
 
     test('opens sign-in modal when trying to "Add Listing"', () => {
-      fireEvent.click(screen.getAllByText("Add Listing")[0]);
+      fireEvent.click(screen.getAllByText("Add Listing")[0]!);
       expect(mockOnOpen).toHaveBeenCalledTimes(1);
       expect(mockRouterPush).not.toHaveBeenCalled();
     });
 
     test('opens sign-in modal when trying to "Edit Shop"', () => {
-      fireEvent.click(screen.getAllByText("Edit Shop")[0]);
+      fireEvent.click(screen.getAllByText("Edit Shop")[0]!);
       expect(mockOnOpen).toHaveBeenCalledTimes(1);
       expect(mockRouterPush).not.toHaveBeenCalled();
     });
@@ -113,7 +127,7 @@ describe("MyListingsPage", () => {
     test('opens sign-in modal when trying to view "Orders"', () => {
       const desktopOrdersButton = screen.getAllByRole("button", {
         name: "Orders",
-      })[0];
+      })[0]!;
       fireEvent.click(desktopOrdersButton);
       expect(mockOnOpen).toHaveBeenCalledTimes(1);
       expect(mockRouterPush).not.toHaveBeenCalled();
@@ -133,7 +147,7 @@ describe("MyListingsPage", () => {
           shopProfile.content.ui.banner
         );
 
-        fireEvent.click(screen.getAllByRole("button", { name: "About" })[0]);
+        fireEvent.click(screen.getAllByRole("button", { name: "About" })[0]!);
         expect(
           screen.getByRole("heading", { name: /about/i, level: 2 })
         ).toBeInTheDocument();
@@ -156,7 +170,7 @@ describe("MyListingsPage", () => {
       });
 
       test('shows "Nothing here" message in About section', () => {
-        fireEvent.click(screen.getAllByRole("button", { name: "About" })[0]);
+        fireEvent.click(screen.getAllByRole("button", { name: "About" })[0]!);
         expect(screen.getByText("Nothing here . . . yet!")).toBeInTheDocument();
         expect(
           screen.getByText("Set up your shop in settings!")
@@ -167,13 +181,13 @@ describe("MyListingsPage", () => {
     test("navigates correctly when clicking action buttons", () => {
       renderComponent(loggedInUser, mockShopDataContextEmpty);
 
-      fireEvent.click(screen.getAllByText("Add Listing")[0]);
+      fireEvent.click(screen.getAllByText("Add Listing")[0]!);
       expect(mockRouterPush).toHaveBeenCalledWith("?addNewListing");
 
-      fireEvent.click(screen.getAllByText("Edit Shop")[0]);
+      fireEvent.click(screen.getAllByText("Edit Shop")[0]!);
       expect(mockRouterPush).toHaveBeenCalledWith("settings/shop-profile");
 
-      fireEvent.click(screen.getAllByRole("button", { name: "Orders" })[0]);
+      fireEvent.click(screen.getAllByRole("button", { name: "Orders" })[0]!);
       expect(mockRouterPush).toHaveBeenCalledWith("/orders");
     });
   });
@@ -189,7 +203,7 @@ describe("MyListingsPage", () => {
         screen.queryByText(shopProfile.content.about)
       ).not.toBeInTheDocument();
 
-      fireEvent.click(screen.getAllByRole("button", { name: "About" })[0]);
+      fireEvent.click(screen.getAllByRole("button", { name: "About" })[0]!);
       expect(
         screen.queryByTestId("display-products-mock")
       ).not.toBeInTheDocument();
@@ -198,7 +212,7 @@ describe("MyListingsPage", () => {
       ).toBeInTheDocument();
       expect(screen.getByText(shopProfile.content.about)).toBeInTheDocument();
 
-      fireEvent.click(screen.getAllByRole("button", { name: "Listings" })[0]);
+      fireEvent.click(screen.getAllByRole("button", { name: "Listings" })[0]!);
       expect(screen.getByTestId("display-products-mock")).toBeInTheDocument();
       expect(
         screen.queryByText(shopProfile.content.about)
@@ -207,7 +221,7 @@ describe("MyListingsPage", () => {
 
     test("mobile menu opens and closes on click", () => {
       const menuButton = screen
-        .getAllByTestId("bars3-icon-mock")[0]
+        .getAllByTestId("bars3-icon-mock")[0]!
         .closest("button");
       expect(menuButton).toBeInTheDocument();
 
@@ -231,7 +245,7 @@ describe("MyListingsPage", () => {
 
     test("mobile menu closes on outside click", () => {
       const menuButton = screen
-        .getAllByTestId("bars3-icon-mock")[0]
+        .getAllByTestId("bars3-icon-mock")[0]!
         .closest("button");
       fireEvent.click(menuButton!);
       expect(

@@ -1,4 +1,3 @@
-import React from "react";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import MarketplacePage from "../marketplace";
@@ -10,6 +9,13 @@ import {
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import { nip19 } from "nostr-tools";
 import { useRouter } from "next/router";
+
+jest.mock("@/utils/url-slugs", () => ({
+  getListingSlug: jest.fn(),
+  getProfileSlug: jest.fn(() => "mock-profile"),
+  findPubkeyByProfileSlug: jest.fn(),
+  isNpub: jest.fn(() => true),
+}));
 
 jest.mock(
   "../../display-products",
@@ -91,16 +97,31 @@ const renderComponent = ({
 
   render(
     <SignerContext.Provider
-      value={{ isLoggedIn, pubkey: isLoggedIn ? "user-pubkey" : null }}
+      value={{ isLoggedIn, pubkey: isLoggedIn ? "user-pubkey" : undefined }}
     >
-      <ShopMapContext.Provider value={{ shopData: mockShopData }}>
+      <ShopMapContext.Provider
+        value={{
+          shopData: mockShopData,
+          isLoading: false,
+          updateShopData: jest.fn(),
+        }}
+      >
         <ReviewsContext.Provider
           value={{
             merchantReviewsData: new Map(),
             productReviewsData: new Map(),
+            isLoading: false,
+            updateMerchantReviewsData: jest.fn(),
+            updateProductReviewsData: jest.fn(),
           }}
         >
-          <FollowsContext.Provider value={{ followList: [], isLoading: false }}>
+          <FollowsContext.Provider
+            value={{
+              followList: [],
+              firstDegreeFollowsLength: 0,
+              isLoading: false,
+            }}
+          >
             <MarketplacePage
               focusedPubkey={focusedPubkey}
               setFocusedPubkey={setFocusedPubkey}
@@ -144,9 +165,11 @@ describe("MarketplacePage Component", () => {
 
   it("calls setFocusedPubkey when npub appears in URL", () => {
     const { setFocusedPubkey, setSelectedSection } = renderComponent({
-      routerQuery: { npub: ["npub-test"] },
+      routerQuery: { npub: ["npub1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq"] },
     });
-    expect(nip19.decode).toHaveBeenCalledWith("npub-test");
+    expect(nip19.decode).toHaveBeenCalledWith(
+      "npub1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq"
+    );
     expect(setFocusedPubkey).toHaveBeenCalledWith("decoded-pubkey");
     expect(setSelectedSection).toHaveBeenCalledWith("shop");
   });

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useContext } from "react";
+import { useEffect, useState, useContext } from "react";
 import CryptoJS from "crypto-js";
 import { useRouter } from "next/router";
 import { useForm, Controller } from "react-hook-form";
@@ -1609,10 +1609,7 @@ export default function ProductForm({
                 {profileContext.profileData.get(pubkey)?.content
                   ?.payment_preference === "lightning"
                   ? "Lightning"
-                  : profileContext.profileData.get(pubkey)?.content
-                        ?.payment_preference === "fiat"
-                    ? "Fiat"
-                    : "Cashu"}
+                  : "Cashu"}
                 . You can modify this in your{" "}
                 <span
                   className="cursor-pointer underline hover:text-purple-500 dark:hover:text-yellow-500"

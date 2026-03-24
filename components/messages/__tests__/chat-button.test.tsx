@@ -1,9 +1,8 @@
-import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
 import "@testing-library/jest-dom";
 
 import ChatButton from "../chat-button";
-import { ChatObject, DecryptedMessage } from "../../../utils/types/types";
+import { ChatObject, NostrMessageEvent } from "../../../utils/types/types";
 
 jest.mock("@/components/utility-components/profile/profile-avatar", () => ({
   ProfileAvatar: ({
@@ -49,6 +48,7 @@ describe("ChatButton Component", () => {
         tags: [],
         content: "Hello there!",
         sig: "sig1",
+        read: true,
       },
       {
         id: "2",
@@ -58,8 +58,9 @@ describe("ChatButton Component", () => {
         tags: [],
         content: "This is the last message.",
         sig: "sig2",
+        read: true,
       },
-    ] as DecryptedMessage[],
+    ] as NostrMessageEvent[],
     unreadCount: 0,
   };
 

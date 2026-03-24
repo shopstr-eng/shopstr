@@ -15,8 +15,6 @@ export async function retryFailedRelayPublishes(
       return;
     }
 
-    console.log(`Retrying ${failedPublishes.length} failed relay publishes...`);
-
     for (const { eventId, relays, event, retryCount } of failedPublishes) {
       try {
         // Exponential backoff delay based on retry count
@@ -38,7 +36,6 @@ export async function retryFailedRelayPublishes(
 
         // Success - clear the failed publish record
         await clearFailedRelayPublish(eventId);
-        console.log(`Successfully republished event ${eventId}`);
       } catch (error) {
         // Still failed - increment retry count
         console.warn(`Retry failed for event ${eventId}:`, error);

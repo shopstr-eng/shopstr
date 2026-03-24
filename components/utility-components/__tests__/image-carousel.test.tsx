@@ -1,4 +1,3 @@
-import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import ImageCarousel from "../image-carousel";
@@ -37,7 +36,7 @@ jest.mock("@/utils/STATIC-VARIABLES", () => ({
   PREVNEXTBUTTONSTYLES: "mock-button-styles",
 }));
 
-const MockCarousel = Carousel as jest.Mock;
+const MockCarousel = Carousel as unknown as jest.Mock;
 
 describe("ImageCarousel", () => {
   beforeEach(() => {

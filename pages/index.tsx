@@ -1,4 +1,5 @@
-import { Button, Image } from "@nextui-org/react";
+import { Button, Image, useDisclosure } from "@nextui-org/react";
+import SignInModal from "@/components/sign-in/SignInModal";
 import {
   ArrowUpRightIcon,
   UserGroupIcon,
@@ -23,6 +24,7 @@ import { NostrEvent } from "@/utils/types/types";
 
 export default function Landing() {
   const router = useRouter();
+  const { isOpen, onOpen, onClose } = useDisclosure();
   const productEventContext = useContext(ProductContext);
 
   const [parsedProducts, setParsedProducts] = useState<ProductData[]>([]);
@@ -65,19 +67,36 @@ export default function Landing() {
           />
           <div className="absolute -inset-4 -z-10 rounded-full bg-gradient-to-r from-shopstr-purple/20 to-shopstr-yellow/20 opacity-70 blur-xl dark:from-shopstr-yellow/20 dark:to-shopstr-purple/20"></div>
         </div>
-        <h1 className="mb-4 bg-gradient-to-r from-shopstr-purple to-shopstr-purple/80 bg-clip-text text-5xl font-bold text-shopstr-purple text-transparent dark:from-shopstr-yellow dark:to-shopstr-yellow/80 dark:text-shopstr-yellow md:text-6xl lg:text-7xl">
-          Shopstr
+        <h1 className="mb-4 bg-gradient-to-r from-shopstr-purple to-shopstr-purple/80 bg-clip-text text-4xl font-bold text-shopstr-purple text-transparent dark:from-shopstr-yellow dark:to-shopstr-yellow/80 dark:text-shopstr-yellow md:text-5xl lg:text-6xl">
+          Sell anything. Get paid in Bitcoin.
+          <br className="hidden sm:block" /> No bans, no fees, no middlemen.
         </h1>
-        <p className="mb-10 max-w-2xl text-xl font-light leading-relaxed text-light-text dark:text-dark-text">
-          Buy and sell anything, anywhere, anytime
+        <p className="mb-3 max-w-2xl text-xl font-light leading-relaxed text-light-text dark:text-dark-text">
+          Traditional marketplaces freeze accounts, take cuts, and demand ID.
+          Shopstr gives the power back to you.
         </p>
-        <Button
-          className={`${SHOPSTRBUTTONCLASSNAMES} flex items-center gap-2 px-10 py-7 text-lg shadow-lg duration-300 transition-all hover:shadow-xl md:px-12 md:text-xl`}
-          onClick={() => router.push("/marketplace")}
-          startContent={<ShoppingCartIcon className="mr-2 h-6 w-6" />}
-        >
-          Start Shopping
-        </Button>
+        <p className="mb-8 text-sm font-semibold uppercase tracking-wide text-shopstr-purple dark:text-shopstr-yellow">
+          No account suspension possible · Your keys, your shop
+        </p>
+        <div className="flex flex-col items-center gap-4 sm:flex-row">
+          <Button
+            className={`${SHOPSTRBUTTONCLASSNAMES} flex items-center gap-2 px-10 py-7 text-lg shadow-lg duration-300 transition-all hover:shadow-xl md:px-12 md:text-xl`}
+            onClick={() => router.push("/marketplace")}
+            startContent={<ShoppingCartIcon className="mr-2 h-6 w-6" />}
+          >
+            Start Shopping
+          </Button>
+          <button
+            onClick={onOpen}
+            className="flex items-center gap-1.5 text-lg font-medium text-shopstr-purple underline-offset-4 hover:underline dark:text-shopstr-yellow"
+          >
+            Start Selling
+            <ArrowUpRightIcon className="h-5 w-5" />
+          </button>
+        </div>
+        <p className="mt-6 text-sm text-light-text/50 dark:text-dark-text/50">
+          Free to use · No KYC · Self-custodial payments · Open source
+        </p>
       </section>
       {/* Product Carousel */}
       <section className="w-full overflow-hidden bg-light-fg/80 py-12 backdrop-blur-sm dark:bg-dark-fg/80">
@@ -126,13 +145,21 @@ export default function Landing() {
 
       {/* Features Grid */}
       <section className="container mx-auto px-4 py-24">
-        <h2 className="mb-16 text-center text-3xl font-bold text-light-text dark:text-dark-text md:text-4xl">
-          Why Choose{" "}
-          <span className="text-shopstr-purple dark:text-shopstr-yellow">
-            Shopstr
-          </span>
-          ?
-        </h2>
+        <div className="mb-16 text-center">
+          <p className="mb-3 text-sm font-semibold uppercase tracking-widest text-shopstr-purple dark:text-shopstr-yellow">
+            The Problem
+          </p>
+          <h2 className="mb-6 text-3xl font-bold text-light-text dark:text-dark-text md:text-4xl">
+            Your shop got suspended. Your funds got frozen.{" "}
+            <span className="text-shopstr-purple dark:text-shopstr-yellow">
+              You paid 15% fees on every sale.
+            </span>
+          </h2>
+          <p className="mx-auto max-w-2xl text-lg text-light-text/80 dark:text-dark-text/80">
+            Shopstr was built because this kept happening. Here is what is
+            different.
+          </p>
+        </div>
         <div className="grid gap-6 sm:gap-8 md:grid-cols-2 lg:grid-cols-3 lg:gap-10">
           {/* Feature 1 */}
           <div className="group rounded-xl border border-transparent bg-light-fg p-6 shadow-lg duration-300 transition-all hover:border-shopstr-purple/20 hover:shadow-xl dark:bg-dark-fg dark:hover:border-shopstr-yellow/20 md:p-8">
@@ -140,13 +167,14 @@ export default function Landing() {
               <div className="rounded-full bg-shopstr-purple/10 p-3 dark:bg-shopstr-yellow/10">
                 <ShieldCheckIcon className="h-8 w-8 text-shopstr-purple dark:text-shopstr-yellow" />
               </div>
-              <h3 className="mt-3 text-xl font-semibold text-shopstr-purple duration-300 transition-transform group-hover:translate-x-1 dark:text-shopstr-yellow md:text-2xl">
-                Permissionless Commerce
+              <h3 className="mt-3 text-center text-xl font-semibold text-shopstr-purple duration-300 transition-transform group-hover:translate-x-1 dark:text-shopstr-yellow md:text-2xl">
+                <span className="block">No Account</span>
+                <span className="block">Suspensions</span>
               </h3>
             </div>
             <p className="text-center leading-relaxed text-light-text dark:text-dark-text">
-              Built on{" "}
-              <Link href="https://njump.me" passHref legacyBehavior>
+              Your shop cannot be banned, frozen, or deplatformed. Built on{" "}
+              <Link href="https://nostr.com" passHref legacyBehavior>
                 <a
                   target="_blank"
                   rel="noopener noreferrer"
@@ -154,9 +182,8 @@ export default function Landing() {
                 >
                   Nostr
                 </a>
-              </Link>{" "}
-              to buy and sell without restrictions or central authority. Your
-              keys, your shop.
+              </Link>
+              , you hold your store keys — no company can take them from you.
             </p>
           </div>
 
@@ -166,12 +193,13 @@ export default function Landing() {
               <div className="rounded-full bg-shopstr-purple/10 p-3 dark:bg-shopstr-yellow/10">
                 <BoltIcon className="h-8 w-8 text-shopstr-purple dark:text-shopstr-yellow" />
               </div>
-              <h3 className="mt-3 text-xl font-semibold text-shopstr-purple duration-300 transition-transform group-hover:translate-x-1 dark:text-shopstr-yellow md:text-2xl">
-                Bitcoin Native
+              <h3 className="mt-3 text-center text-xl font-semibold text-shopstr-purple duration-300 transition-transform group-hover:translate-x-1 dark:text-shopstr-yellow md:text-2xl">
+                <span className="block">Get Paid</span>
+                <span className="block">Instantly</span>
               </h3>
             </div>
             <p className="text-center leading-relaxed text-light-text dark:text-dark-text">
-              Secure transactions using{" "}
+              Bitcoin settles in under a second via{" "}
               <Link href="https://lightning.network" passHref legacyBehavior>
                 <a
                   target="_blank"
@@ -181,7 +209,7 @@ export default function Landing() {
                   Lightning
                 </a>
               </Link>{" "}
-              and{" "}
+              or{" "}
               <Link href="https://cashu.space" passHref legacyBehavior>
                 <a
                   target="_blank"
@@ -191,7 +219,8 @@ export default function Landing() {
                   Cashu
                 </a>
               </Link>
-              . Fast, low-fee payments.
+              . No waiting periods, no chargebacks, no payment processor
+              approval.
             </p>
           </div>
 
@@ -201,25 +230,167 @@ export default function Landing() {
               <div className="rounded-full bg-shopstr-purple/10 p-3 dark:bg-shopstr-yellow/10">
                 <UserCircleIcon className="h-8 w-8 text-shopstr-purple dark:text-shopstr-yellow" />
               </div>
-              <h3 className="mt-3 text-xl font-semibold text-shopstr-purple duration-300 transition-transform group-hover:translate-x-1 dark:text-shopstr-yellow md:text-2xl">
-                Privacy First
+              <h3 className="mt-3 text-center text-xl font-semibold text-shopstr-purple duration-300 transition-transform group-hover:translate-x-1 dark:text-shopstr-yellow md:text-2xl">
+                <span className="block">Your Business</span>
+                <span className="block">is Private</span>
               </h3>
             </div>
             <p className="text-center leading-relaxed text-light-text dark:text-dark-text">
-              No purchases or sales are viewable by any third party. Your data
-              is encrypted and stored on your selected{" "}
+              No transaction surveillance. No third party watches your sales.
+              Your data is encrypted and stored on{" "}
               <Link href="https://nostr.how/en/relays" passHref legacyBehavior>
                 <a
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-shopstr-purple underline decoration-dotted hover:decoration-solid dark:text-shopstr-yellow"
                 >
-                  relays
+                  relays you choose
                 </a>
               </Link>
               .
             </p>
           </div>
+        </div>
+      </section>
+
+      {/* About Shopstr — GEO Content */}
+      <section className="container mx-auto px-4 py-20">
+        <div className="mx-auto max-w-4xl">
+          <h2 className="mb-8 text-center text-3xl font-bold text-light-text dark:text-dark-text md:text-4xl">
+            About{" "}
+            <span className="text-shopstr-purple dark:text-shopstr-yellow">
+              Shopstr
+            </span>
+          </h2>
+          <div className="space-y-6 text-lg leading-relaxed text-light-text dark:text-dark-text">
+            <p>
+              Shopstr is a marketplace built on{" "}
+              <Link href="https://nostr.com" passHref legacyBehavior>
+                <a
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-shopstr-purple underline decoration-dotted hover:decoration-solid dark:text-shopstr-yellow"
+                >
+                  Nostr
+                </a>
+              </Link>{" "}
+              — an open protocol that no company controls. You do not need an
+              account, ID, or anyone's permission to buy or sell. Your listings
+              live on a decentralized network and cannot be taken down.
+            </p>
+            <p>
+              Buyers pay with Bitcoin via the{" "}
+              <Link href="https://lightning.network" passHref legacyBehavior>
+                <a
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-shopstr-purple underline decoration-dotted hover:decoration-solid dark:text-shopstr-yellow"
+                >
+                  Lightning Network
+                </a>
+              </Link>{" "}
+              or{" "}
+              <Link href="https://cashu.space" passHref legacyBehavior>
+                <a
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-shopstr-purple underline decoration-dotted hover:decoration-solid dark:text-shopstr-yellow"
+                >
+                  Cashu
+                </a>
+              </Link>
+              . Money goes directly from buyer to seller — no platform holds
+              your funds, no chargeback is possible, and no mandatory fee is
+              taken. Shopstr is{" "}
+              <Link
+                href="https://github.com/shopstr-eng/shopstr"
+                passHref
+                legacyBehavior
+              >
+                <a
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-shopstr-purple underline decoration-dotted hover:decoration-solid dark:text-shopstr-yellow"
+                >
+                  fully open source
+                </a>
+              </Link>
+              .
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* Statistics Block */}
+      <section className="w-full bg-light-fg/60 px-4 py-16 dark:bg-dark-fg/60">
+        <div className="container mx-auto">
+          <h2 className="mb-10 text-center text-2xl font-bold text-light-text dark:text-dark-text md:text-3xl">
+            Shopstr by the{" "}
+            <span className="text-shopstr-purple dark:text-shopstr-yellow">
+              Numbers
+            </span>
+          </h2>
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-xl bg-light-fg p-6 text-center shadow-md dark:bg-dark-fg">
+              <p className="text-3xl font-bold text-shopstr-purple dark:text-shopstr-yellow">
+                5,500+
+              </p>
+              <p className="mt-2 text-sm text-light-text dark:text-dark-text">
+                Active listings on Shopstr right now
+              </p>
+            </div>
+            <div className="rounded-xl bg-light-fg p-6 text-center shadow-md dark:bg-dark-fg">
+              <p className="text-3xl font-bold text-shopstr-purple dark:text-shopstr-yellow">
+                900+
+              </p>
+              <p className="mt-2 text-sm text-light-text dark:text-dark-text">
+                Sellers with active shops on Shopstr
+              </p>
+            </div>
+            <div className="rounded-xl bg-light-fg p-6 text-center shadow-md dark:bg-dark-fg">
+              <p className="text-3xl font-bold text-shopstr-purple dark:text-shopstr-yellow">
+                13M+ sats
+              </p>
+              <p className="mt-2 text-sm text-light-text dark:text-dark-text">
+                Total sales volume on the platform
+              </p>
+            </div>
+            <div className="rounded-xl bg-light-fg p-6 text-center shadow-md dark:bg-dark-fg">
+              <p className="text-3xl font-bold text-shopstr-purple dark:text-shopstr-yellow">
+                $0 Fees
+              </p>
+              <p className="mt-2 text-sm text-light-text dark:text-dark-text">
+                No mandatory platform fees — sellers may optionally set a
+                donation rate to support the site at their discretion.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Trust Signals */}
+      <section className="container mx-auto px-4 py-10">
+        <div className="mx-auto flex flex-wrap items-center justify-center gap-6 text-sm font-medium text-light-text/60 dark:text-dark-text/60 md:gap-10">
+          <span className="flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-shopstr-purple dark:bg-shopstr-yellow"></span>
+            Open source &amp; auditable
+          </span>
+          <span className="flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-shopstr-purple dark:bg-shopstr-yellow"></span>
+            Self-custodial payments
+          </span>
+          <span className="flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-shopstr-purple dark:bg-shopstr-yellow"></span>
+            No KYC or identity verification
+          </span>
+          <span className="flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-shopstr-purple dark:bg-shopstr-yellow"></span>
+            Decentralized · no central server
+          </span>
+          <span className="flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-shopstr-purple dark:bg-shopstr-yellow"></span>
+            No mandatory platform fees
+          </span>
         </div>
       </section>
 
@@ -243,17 +414,19 @@ export default function Landing() {
                 </p>
                 <div className="relative overflow-hidden rounded-xl shadow-lg duration-300 transition-all hover:shadow-xl">
                   <Image
-                    alt="Step 1"
+                    alt="Sign in to Shopstr using Nostr cryptographic keys — dark mode"
                     src="/sign-in-step-dark.png"
                     width={250}
                     height={180}
+                    loading="lazy"
                     className="mx-auto hidden rounded-xl dark:flex"
                   />
                   <Image
-                    alt="Step 1"
+                    alt="Sign in to Shopstr using Nostr cryptographic keys — light mode"
                     src="/sign-in-step-light.png"
                     width={250}
                     height={180}
+                    loading="lazy"
                     className="mx-auto flex rounded-xl dark:hidden"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent opacity-0 duration-300 transition-opacity group-hover:opacity-100"></div>
@@ -270,17 +443,19 @@ export default function Landing() {
                 </p>
                 <div className="relative mt-6 overflow-hidden rounded-xl shadow-lg duration-300 transition-all hover:shadow-xl">
                   <Image
-                    alt="Step 2"
+                    alt="Set up your Shopstr seller profile on Nostr — dark mode"
                     src="/profile-step-dark.png"
                     width={250}
                     height={180}
+                    loading="lazy"
                     className="mx-auto hidden rounded-xl dark:flex"
                   />
                   <Image
-                    alt="Step 2"
+                    alt="Set up your Shopstr seller profile on Nostr — light mode"
                     src="/profile-step-light.png"
                     width={250}
                     height={180}
+                    loading="lazy"
                     className="mx-auto flex rounded-xl dark:hidden"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent opacity-0 duration-300 transition-opacity group-hover:opacity-100"></div>
@@ -297,17 +472,19 @@ export default function Landing() {
                 </p>
                 <div className="relative mt-6 overflow-hidden rounded-xl shadow-lg duration-300 transition-all hover:shadow-xl">
                   <Image
-                    alt="Step 3"
+                    alt="Create and publish a Bitcoin product listing on Shopstr — dark mode"
                     src="/listing-step-dark.png"
                     width={250}
                     height={180}
+                    loading="lazy"
                     className="mx-auto hidden rounded-xl dark:flex"
                   />
                   <Image
-                    alt="Step 3"
+                    alt="Create and publish a Bitcoin product listing on Shopstr — light mode"
                     src="/listing-step-light.png"
                     width={250}
                     height={180}
+                    loading="lazy"
                     className="mx-auto flex rounded-xl dark:hidden"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent opacity-0 duration-300 transition-opacity group-hover:opacity-100"></div>
@@ -324,17 +501,19 @@ export default function Landing() {
                 </p>
                 <div className="relative  mt-6 overflow-hidden rounded-xl shadow-lg duration-300 transition-all hover:shadow-xl">
                   <Image
-                    alt="Step 4"
+                    alt="Complete a Bitcoin Lightning Network payment on Shopstr — dark mode"
                     src="/payment-step-dark.png"
                     width={250}
                     height={180}
+                    loading="lazy"
                     className="mx-auto hidden rounded-xl dark:flex"
                   />
                   <Image
-                    alt="Step 4"
+                    alt="Complete a Bitcoin Lightning Network payment on Shopstr — light mode"
                     src="/payment-step-light.png"
                     width={250}
                     height={180}
+                    loading="lazy"
                     className="mx-auto flex rounded-xl dark:hidden"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent opacity-0 duration-300 transition-opacity group-hover:opacity-100"></div>
@@ -345,52 +524,115 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* Mini-FAQ */}
+      <section className="container mx-auto px-4 py-16">
+        <div className="mx-auto max-w-4xl">
+          <h2 className="mb-10 text-center text-2xl font-bold text-light-text dark:text-dark-text md:text-3xl">
+            Quick Answers
+          </h2>
+          <div className="grid gap-6 sm:grid-cols-2">
+            {[
+              {
+                q: "Do I need Bitcoin to get started?",
+                a: "Bitcoin is required to make purchases. No external wallet is needed — Shopstr has a built-in wallet ready to use. You can also send funds to an external wallet any time.",
+              },
+              {
+                q: "Can my shop get banned or suspended?",
+                a: "No. Shopstr runs on Nostr, a decentralized protocol. No single company controls your listings or your keys — there is nothing to ban.",
+              },
+              {
+                q: "How do I actually get paid?",
+                a: "Payment goes directly from the buyer to you via Lightning or Cashu. It is instant, final, and self-custodial — no platform holds your money.",
+              },
+              {
+                q: "Is it really free to use?",
+                a: "Yes — no mandatory platform fees. Sellers may optionally set a donation rate to support Shopstr, but it is never required.",
+              },
+            ].map(({ q, a }, i) => (
+              <div
+                key={i}
+                className="rounded-xl bg-light-fg p-6 shadow-sm dark:bg-dark-fg"
+              >
+                <p className="mb-2 font-semibold text-light-text dark:text-dark-text">
+                  {q}
+                </p>
+                <p className="leading-relaxed text-light-text/75 dark:text-dark-text/75">
+                  {a}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* Call to Action */}
       <section className="container mx-auto flex flex-col items-center justify-center px-4 py-24 text-center">
         <div className="max-w-4xl rounded-2xl bg-gradient-to-r from-shopstr-purple/5 to-shopstr-purple/10 p-12 shadow-lg dark:from-shopstr-yellow/5 dark:to-shopstr-yellow/10">
-          <h2 className="mb-8 text-3xl font-bold text-light-text dark:text-dark-text md:text-4xl">
-            Ready to be a part of the{" "}
+          <h2 className="mb-4 text-3xl font-bold text-light-text dark:text-dark-text md:text-4xl">
+            Start selling in minutes.{" "}
             <span className="text-shopstr-purple dark:text-shopstr-yellow">
-              free market
+              No account required.
             </span>
-            ?
           </h2>
+          <p className="mb-8 max-w-xl text-lg text-light-text/80 dark:text-dark-text/80">
+            Join buyers and sellers already trading on a marketplace that can
+            never be taken away from them.
+          </p>
           <Button
             className={`${SHOPSTRBUTTONCLASSNAMES} px-10 py-7 text-lg shadow-lg duration-300 transition-all hover:shadow-xl md:px-12 md:text-xl`}
             onClick={() => router.push("/marketplace")}
             startContent={<UserGroupIcon className="mr-2 h-6 w-6" />}
           >
-            Join Now
+            Enter the Marketplace
           </Button>
+          <p className="mt-6 text-sm text-light-text/50 dark:text-dark-text/50">
+            Free to use · No KYC · Payments settle in seconds
+          </p>
         </div>
       </section>
+
+      <SignInModal isOpen={isOpen} onClose={onClose} />
 
       {/* Footer */}
       <footer className="w-full bg-light-fg px-4 py-8 dark:bg-dark-fg">
         <div className="container mx-auto">
           <div className="mb-6 flex flex-col items-center justify-between md:flex-row">
-            <div className="mb-4 flex items-center gap-8 md:mb-0">
-              <button
-                onClick={() => router.push("/faq")}
+            <nav className="mb-4 flex flex-wrap items-center gap-6 md:mb-0">
+              <Link
+                href="/about"
+                className="flex items-center gap-1 text-light-text transition-colors hover:text-shopstr-purple dark:text-dark-text dark:hover:text-shopstr-yellow"
+              >
+                About
+                <ArrowUpRightIcon className="h-3 w-3" />
+              </Link>
+              <Link
+                href="/contact"
+                className="flex items-center gap-1 text-light-text transition-colors hover:text-shopstr-purple dark:text-dark-text dark:hover:text-shopstr-yellow"
+              >
+                Contact
+                <ArrowUpRightIcon className="h-3 w-3" />
+              </Link>
+              <Link
+                href="/faq"
                 className="flex items-center gap-1 text-light-text transition-colors hover:text-shopstr-purple dark:text-dark-text dark:hover:text-shopstr-yellow"
               >
                 FAQ
                 <ArrowUpRightIcon className="h-3 w-3" />
-              </button>
-              <button
-                onClick={() => router.push("/terms")}
+              </Link>
+              <Link
+                href="/terms"
                 className="flex items-center gap-1 text-light-text transition-colors hover:text-shopstr-purple dark:text-dark-text dark:hover:text-shopstr-yellow"
               >
                 Terms
                 <ArrowUpRightIcon className="h-3 w-3" />
-              </button>
-              <button
-                onClick={() => router.push("/privacy")}
+              </Link>
+              <Link
+                href="/privacy"
                 className="flex items-center gap-1 text-light-text transition-colors hover:text-shopstr-purple dark:text-dark-text dark:hover:text-shopstr-yellow"
               >
                 Privacy
                 <ArrowUpRightIcon className="h-3 w-3" />
-              </button>
+              </Link>
               <div className="flex h-auto items-center gap-6">
                 <a
                   href="https://github.com/shopstr-eng/shopstr"
@@ -456,9 +698,9 @@ export default function Landing() {
                   />
                 </a>
               </div>
-            </div>
+            </nav>
             <p className="text-light-text dark:text-dark-text">
-              © 2025 Shopstr Market Inc.
+              © 2025 Shopstr Markets Inc.
             </p>
           </div>
         </div>

@@ -1,7 +1,15 @@
-import React from "react";
-import { Accordion, AccordionItem } from "@nextui-org/react";
+import { useState } from "react";
+import Link from "next/link";
+import { ArrowLeftIcon, ChevronDownIcon } from "@heroicons/react/24/outline";
 
 export default function Tos() {
+  const [openItems, setOpenItems] = useState<number[]>([]);
+
+  const toggle = (i: number) =>
+    setOpenItems((prev) =>
+      prev.includes(i) ? prev.filter((x) => x !== i) : [...prev, i]
+    );
+
   const tosContent = [
     {
       title: "1. Platform Nature",
@@ -63,6 +71,14 @@ export default function Tos() {
   return (
     <div className="flex min-h-screen flex-col bg-light-bg pt-24 dark:bg-dark-bg md:pb-20">
       <div className="container mx-auto max-w-6xl px-4">
+        <div className="mb-6 flex justify-end">
+          <Link href="/" passHref legacyBehavior>
+            <a className="inline-flex items-center gap-1.5 rounded-lg border border-shopstr-purple/30 px-3 py-1.5 text-sm font-medium text-shopstr-purple transition-colors hover:bg-shopstr-purple/10 dark:border-shopstr-yellow/30 dark:text-shopstr-yellow dark:hover:bg-shopstr-yellow/10">
+              <ArrowLeftIcon className="h-4 w-4" />
+              Back to Home
+            </a>
+          </Link>
+        </div>
         <h1 className="mb-8 text-center text-3xl font-bold text-light-text dark:text-dark-text">
           Terms of Service
         </h1>
@@ -75,33 +91,39 @@ export default function Tos() {
           Last updated: 2025-04-25
         </div>
 
-        <Accordion
-          selectionMode="multiple"
-          className="mb-6 px-0"
-          variant="bordered"
-        >
-          {tosContent.map((section, sectionIndex) => (
-            <AccordionItem
-              key={sectionIndex}
-              title={
+        <div className="mb-6 overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700">
+          {tosContent.map((section, i) => (
+            <div
+              key={i}
+              className={
+                i < tosContent.length - 1
+                  ? "border-b border-gray-200 dark:border-gray-700"
+                  : ""
+              }
+            >
+              <button
+                onClick={() => toggle(i)}
+                className="flex w-full items-center justify-between px-5 py-4 text-left transition-colors hover:bg-gray-50 dark:hover:bg-gray-900/50"
+              >
                 <span className="font-medium text-light-text dark:text-dark-text">
                   {section.title}
                 </span>
-              }
-              classNames={{
-                base: "group",
-                title: "text-md",
-                trigger:
-                  "py-5 px-3 data-[hover=true]:bg-gray-50 dark:data-[hover=true]:bg-gray-900/50 transition-all rounded-lg",
-                content: "py-2 px-3 text-light-text/90 dark:text-dark-text/90",
-              }}
-            >
-              <p className="leading-relaxed text-light-text dark:text-dark-text">
-                {section.content}
-              </p>
-            </AccordionItem>
+                <ChevronDownIcon
+                  className={`ml-4 h-5 w-5 flex-shrink-0 text-light-text/60 duration-200 transition-transform dark:text-dark-text/60 ${
+                    openItems.includes(i) ? "rotate-180" : ""
+                  }`}
+                />
+              </button>
+              {openItems.includes(i) && (
+                <div className="px-5 pb-5 pt-1">
+                  <p className="leading-relaxed text-light-text/90 dark:text-dark-text/90">
+                    {section.content}
+                  </p>
+                </div>
+              )}
+            </div>
           ))}
-        </Accordion>
+        </div>
       </div>
     </div>
   );

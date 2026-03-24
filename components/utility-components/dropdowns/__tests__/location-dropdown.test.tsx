@@ -1,4 +1,3 @@
-import React from "react";
 import { render, screen } from "@testing-library/react";
 import LocationDropdown, { locationAvatar } from "../location-dropdown";
 import locations from "../../../../public/locationSelection.json";
@@ -27,7 +26,7 @@ jest.mock("@nextui-org/react", () => ({
 
 describe("locationAvatar()", () => {
   it("renders an <Avatar> for a valid country", () => {
-    const { country, iso3166 } = locations.countries[0];
+    const { country, iso3166 } = locations.countries[0]!;
     render(locationAvatar(country));
     const avatar = screen.getByTestId("avatar");
     expect(avatar).toHaveAttribute(
@@ -38,7 +37,7 @@ describe("locationAvatar()", () => {
   });
 
   it("renders an <Avatar> for a valid state", () => {
-    const { state, iso3166 } = locations.states[0];
+    const { state, iso3166 } = locations.states[0]!;
     render(locationAvatar(state));
     const avatar = screen.getByTestId("avatar");
     expect(avatar).toHaveAttribute(
@@ -56,8 +55,8 @@ describe("locationAvatar()", () => {
 });
 
 describe("<LocationDropdown />", () => {
-  const someCountry = locations.countries[1].country;
-  const someCountryIso = locations.countries[1].iso3166;
+  const someCountry = locations.countries[1]!.country;
+  const someCountryIso = locations.countries[1]!.iso3166;
 
   beforeEach(() => {
     render(<LocationDropdown value={someCountry} />);

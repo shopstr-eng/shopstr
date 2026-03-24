@@ -1,4 +1,4 @@
-import React, { useContext, useState, useEffect, useMemo } from "react";
+import { useContext, useState, useEffect, useMemo, useRef } from "react";
 import {
   CashuWalletContext,
   ChatsContext,
@@ -59,6 +59,7 @@ import {
   ShippingFormData,
   ContactFormData,
   CombinedFormData,
+  ShopProfile,
 } from "@/utils/types/types";
 import { Controller } from "react-hook-form";
 
@@ -70,6 +71,7 @@ export default function CartInvoiceCard({
   subtotalCost,
   appliedDiscounts = {},
   discountCodes = {},
+  shopProfiles,
   onBackToCart,
   setInvoiceIsPaid,
   setInvoiceGenerationFailed,
@@ -83,6 +85,7 @@ export default function CartInvoiceCard({
   subtotalCost: number;
   appliedDiscounts?: { [key: string]: number };
   discountCodes?: { [key: string]: string };
+  shopProfiles?: Map<string, ShopProfile>;
   onBackToCart?: () => void;
   setInvoiceIsPaid?: (invoiceIsPaid: boolean) => void;
   setInvoiceGenerationFailed?: (invoiceGenerationFailed: boolean) => void;
@@ -90,7 +93,12 @@ export default function CartInvoiceCard({
   setCashuPaymentFailed?: (cashuPaymentFailed: boolean) => void;
 }) {
   const { mints, tokens, history } = getLocalStorageData();
-  const { isLoggedIn, signer } = useContext(SignerContext);
+  const {
+    isLoggedIn,
+    pubkey: userPubkey,
+    npub: userNPub,
+    signer,
+  } = useContext(SignerContext);
 
   // Check if there are tokens available for Cashu payment
   const hasTokensAvailable = tokens && tokens.length > 0;
@@ -108,6 +116,80 @@ export default function CartInvoiceCard({
 
   const [orderConfirmed, setOrderConfirmed] = useState(false);
 
+  const pendingOrderRef = useRef<{
+    orderId: string;
+    productTitle: string;
+    amount: string;
+    currency: string;
+    paymentMethod: string;
+    sellerPubkey: string;
+    shippingAddress?: string;
+    pickupLocation?: string;
+    selectedSize?: string;
+    selectedVolume?: string;
+    selectedBulkOption?: string;
+  } | null>(null);
+
+  useEffect(() => {
+    if (paymentConfirmed && pendingOrderRef.current) {
+      try {
+        const cartItems = products.map((p: any) => ({
+          title: p.title || p.productName,
+          image: p.images?.[0] || "",
+          amount: String(totalCostsInSats[p.id] || 0),
+          currency: "sats",
+          quantity: quantities[p.id] || 1,
+          shipping: shippingTypes[p.id] || "",
+          pickupLocation: selectedPickupLocations[p.id] || undefined,
+          selectedSize: p.selectedSize || undefined,
+          selectedVolume: p.selectedVolume || undefined,
+          selectedBulkOption: p.selectedBulkOption
+            ? String(p.selectedBulkOption)
+            : undefined,
+        }));
+        const anyFreeShipping = Object.values(sellerFreeShippingStatus).some(
+          (s) => s.qualifies
+        );
+        let originalShipping = 0;
+        if (anyFreeShipping) {
+          const sellersSeen = new Set<string>();
+          products.forEach((p) => {
+            if (sellersSeen.has(p.pubkey)) return;
+            sellersSeen.add(p.pubkey);
+            if (sellerFreeShippingStatus[p.pubkey]?.qualifies) {
+              const { highestShippingCost } = getConsolidatedShippingForSeller(
+                p.pubkey
+              );
+              originalShipping += highestShippingCost;
+            }
+          });
+        }
+        sessionStorage.setItem(
+          "orderSummary",
+          JSON.stringify({
+            productTitle: pendingOrderRef.current.productTitle,
+            productImage: products[0]?.images?.[0] || "",
+            amount: String(totalCost),
+            subtotal: String(subtotalCost),
+            currency: pendingOrderRef.current.currency,
+            paymentMethod: pendingOrderRef.current.paymentMethod,
+            orderId: pendingOrderRef.current.orderId,
+            shippingAddress: pendingOrderRef.current.shippingAddress,
+            sellerPubkey: pendingOrderRef.current.sellerPubkey,
+            isCart: true,
+            cartItems,
+            freeShippingApplied: anyFreeShipping,
+            originalShippingCost: anyFreeShipping
+              ? String(originalShipping)
+              : undefined,
+          })
+        );
+      } catch {}
+
+      pendingOrderRef.current = null;
+    }
+  }, [paymentConfirmed]);
+
   const walletContext = useContext(CashuWalletContext);
 
   const { isOpen, onOpen, onClose } = useDisclosure();
@@ -116,6 +198,73 @@ export default function CartInvoiceCard({
     "shipping" | "contact" | "combined" | null
   >(null);
   const [showOrderTypeSelection, setShowOrderTypeSelection] = useState(true);
+
+  const sellerFreeShippingStatus = useMemo(() => {
+    const statusMap: {
+      [pubkey: string]: {
+        qualifies: boolean;
+        threshold: number;
+        currency: string;
+        sellerSubtotal: number;
+        sellerName: string;
+      };
+    } = {};
+    const productsBySeller: { [pubkey: string]: ProductData[] } = {};
+    products.forEach((p) => {
+      if (!productsBySeller[p.pubkey]) productsBySeller[p.pubkey] = [];
+      productsBySeller[p.pubkey]!.push(p);
+    });
+
+    Object.entries(productsBySeller).forEach(([pubkey, sellerProducts]) => {
+      const profile = shopProfiles?.get(pubkey);
+      if (
+        !profile?.content?.freeShippingThreshold ||
+        profile.content.freeShippingThreshold <= 0
+      )
+        return;
+      let sellerSubtotal = 0;
+      sellerProducts.forEach((product) => {
+        const discount = appliedDiscounts[pubkey] || 0;
+        const basePrice =
+          product.bulkPrice !== undefined
+            ? product.bulkPrice
+            : product.volumePrice !== undefined
+              ? product.volumePrice
+              : product.price;
+        const qty = quantities[product.id] || 1;
+        const discountedPrice =
+          discount > 0 ? basePrice * (1 - discount / 100) : basePrice;
+        sellerSubtotal += discountedPrice * qty;
+      });
+      statusMap[pubkey] = {
+        qualifies: sellerSubtotal >= profile.content.freeShippingThreshold,
+        threshold: profile.content.freeShippingThreshold,
+        currency: profile.content.freeShippingCurrency || "USD",
+        sellerSubtotal,
+        sellerName: profile.content.name || pubkey.substring(0, 8),
+      };
+    });
+    return statusMap;
+  }, [products, quantities, appliedDiscounts, shopProfiles]);
+
+  const getConsolidatedShippingForSeller = (
+    sellerPubkey: string
+  ): {
+    highestShippingProduct: ProductData | null;
+    highestShippingCost: number;
+  } => {
+    const sellerProducts = products.filter((p) => p.pubkey === sellerPubkey);
+    let highestShippingCost = 0;
+    let highestShippingProduct: ProductData | null = null;
+    sellerProducts.forEach((product) => {
+      const cost = product.shippingCost || 0;
+      if (cost > highestShippingCost) {
+        highestShippingCost = cost;
+        highestShippingProduct = product;
+      }
+    });
+    return { highestShippingProduct, highestShippingCost };
+  };
 
   const sendInquiryDM = async (sellerPubkey: string, productTitle: string) => {
     if (!signer || !nostr) return;
@@ -207,7 +356,7 @@ export default function CartInvoiceCard({
   const [failureText, setFailureText] = useState("");
 
   const [isFormValid, setIsFormValid] = useState(false);
-  const [freePickupPreference, setFreePickupPreference] = useState<
+  const [shippingPickupPreference, setShippingPickupPreference] = useState<
     "shipping" | "contact"
   >("shipping");
   const [showFreePickupSelection, setShowFreePickupSelection] = useState(false);
@@ -230,13 +379,16 @@ export default function CartInvoiceCard({
     return Array.from(new Set(Object.values(shippingTypes)));
   }, [shippingTypes]);
 
-  const hasFreePickupProducts = useMemo(() => {
-    return Object.values(shippingTypes).includes("Free/Pickup");
+  const hasShippingPickupProducts = useMemo(() => {
+    return (
+      Object.values(shippingTypes).includes("Free/Pickup") ||
+      Object.values(shippingTypes).includes("Added Cost/Pickup")
+    );
   }, [shippingTypes]);
 
-  const hasMixedShippingWithFreePickup = useMemo(() => {
-    return uniqueShippingTypes.length > 1 && hasFreePickupProducts;
-  }, [uniqueShippingTypes, hasFreePickupProducts]);
+  const hasMixedShippingWithPickup = useMemo(() => {
+    return uniqueShippingTypes.length > 1 && hasShippingPickupProducts;
+  }, [uniqueShippingTypes, hasShippingPickupProducts]);
 
   const [requiredInfo, setRequiredInfo] = useState("");
 
@@ -296,7 +448,7 @@ export default function CartInvoiceCard({
     const pickupLocationValid = productsWithPickupLocations.every((product) => {
       const shouldCheckPickup =
         formType === "contact" ||
-        (formType === "combined" && freePickupPreference === "contact");
+        (formType === "combined" && shippingPickupPreference === "contact");
 
       if (shouldCheckPickup) {
         return watchedValues[`pickupLocation_${product.id}`]?.trim();
@@ -336,7 +488,7 @@ export default function CartInvoiceCard({
     formType,
     requiredInfo,
     productsWithPickupLocations,
-    freePickupPreference,
+    shippingPickupPreference,
   ]);
 
   const generateNewKeys = async () => {
@@ -373,7 +525,8 @@ export default function CartInvoiceCard({
     address?: string,
     pickup?: string,
     donationAmountValue?: number,
-    donationPercentageValue?: number
+    donationPercentageValue?: number,
+    retryCount: number = 3
   ) => {
     const newKeys = await generateNewKeys();
     if (!newKeys) {
@@ -382,26 +535,48 @@ export default function CartInvoiceCard({
       return;
     }
 
-    return await sendPaymentAndContactMessageWithKeys(
-      pubkeyToReceiveMessage,
-      message,
-      product,
-      isPayment,
-      isReceipt,
-      isDonation,
-      orderId,
-      paymentType,
-      paymentReference,
-      paymentProof,
-      messageAmount,
-      productQuantity,
-      newKeys,
-      contact,
-      address,
-      pickup,
-      donationAmountValue,
-      donationPercentageValue
-    );
+    for (let attempt = 0; attempt < retryCount; attempt++) {
+      try {
+        await sendPaymentAndContactMessageWithKeys(
+          pubkeyToReceiveMessage,
+          message,
+          product,
+          isPayment,
+          isReceipt,
+          isDonation,
+          orderId,
+          paymentType,
+          paymentReference,
+          paymentProof,
+          messageAmount,
+          productQuantity,
+          newKeys,
+          contact,
+          address,
+          pickup,
+          donationAmountValue,
+          donationPercentageValue
+        );
+        // If we get here, the message was sent successfully
+        return;
+      } catch (error) {
+        console.warn(
+          `Attempt ${attempt + 1} failed for message sending:`,
+          error
+        );
+
+        if (attempt === retryCount - 1) {
+          // This was the last attempt, log the error but don't throw
+          console.error("Failed to send message after all retries:", error);
+          return; // Continue with the flow instead of breaking it
+        }
+
+        // Wait before retrying (exponential backoff)
+        await new Promise((resolve) =>
+          setTimeout(resolve, Math.pow(2, attempt) * 1000)
+        );
+      }
+    }
   };
 
   const sendPaymentAndContactMessageWithKeys = async (
@@ -435,18 +610,15 @@ export default function CartInvoiceCard({
       return;
     }
 
-    if (!isLoggedIn) {
-      setFailureText("User is not logged in!");
-      setShowFailureModal(true);
-      return;
-    }
-
     const decodedRandomPubkeyForSender = nip19.decode(keys.senderNpub);
     const decodedRandomPrivkeyForSender = nip19.decode(keys.senderNsec);
     const decodedRandomPubkeyForReceiver = nip19.decode(keys.receiverNpub);
     const decodedRandomPrivkeyForReceiver = nip19.decode(keys.receiverNsec);
 
-    const buyerPubkey = await signer?.getPubKey?.();
+    let buyerPubkey = await signer?.getPubKey?.();
+    if (!buyerPubkey) {
+      buyerPubkey = decodedRandomPubkeyForSender.data as string;
+    }
 
     let messageSubject = "";
     let messageOptions: any = {};
@@ -522,7 +694,7 @@ export default function CartInvoiceCard({
       messageOptions
     );
     const sealedEvent = await constructMessageSeal(
-      signer!,
+      signer || ({} as any),
       giftWrappedMessageEvent,
       decodedRandomPubkeyForSender.data as string,
       pubkeyToReceiveMessage,
@@ -644,6 +816,42 @@ export default function CartInvoiceCard({
         };
       }
 
+      const addressTag =
+        paymentData.shippingName && paymentData.shippingAddress
+          ? `${paymentData.shippingName}, ${paymentData.shippingAddress}, ${
+              paymentData.shippingCity || ""
+            }, ${paymentData.shippingState || ""}, ${
+              paymentData.shippingPostalCode || ""
+            }, ${paymentData.shippingCountry || ""}`
+          : undefined;
+      const productTitles = products
+        .map((p: any) => {
+          const parts = [p.title || p.productName];
+          if (p.selectedSize) parts.push(`Size: ${p.selectedSize}`);
+          if (p.selectedVolume) parts.push(`Volume: ${p.selectedVolume}`);
+          if (p.selectedBulkOption)
+            parts.push(`Bundle: ${p.selectedBulkOption} units`);
+          const qty = quantities[p.id];
+          if (qty && qty > 1) parts.push(`Qty: ${qty}`);
+          return parts.join(" - ");
+        })
+        .join("; ");
+      const pickupSummary = products
+        .map((p: any) => selectedPickupLocations[p.id])
+        .filter(Boolean)
+        .join(", ");
+
+      pendingOrderRef.current = {
+        orderId: "",
+        productTitle: productTitles,
+        amount: String(price),
+        currency: "sats",
+        paymentMethod: paymentType || "lightning",
+        sellerPubkey: products[0]?.pubkey || "",
+        shippingAddress: addressTag,
+        pickupLocation: pickupSummary || undefined,
+      };
+
       if (paymentType === "cashu") {
         await handleCashuPayment(price, paymentData);
       } else if (paymentType === "nwc") {
@@ -657,18 +865,28 @@ export default function CartInvoiceCard({
     }
   };
 
-  const handleOrderTypeSelection = (selectedOrderType: string) => {
+  const handleOrderTypeSelection = async (selectedOrderType: string) => {
     setShowOrderTypeSelection(false);
 
     if (selectedOrderType === "shipping") {
       setFormType("shipping");
-      // Calculate total with shipping
       let shippingTotal = 0;
-      products.forEach((product) => {
-        const shippingCost = product.shippingCost || 0;
+      const updatedTotalCostsInSats: { [productId: string]: number } = {};
+
+      for (const product of products) {
+        if (sellerFreeShippingStatus[product.pubkey]?.qualifies) {
+          updatedTotalCostsInSats[product.id] =
+            totalCostsInSats[product.id] || 0;
+          continue;
+        }
+        const shippingCostInSats = await convertShippingToSats(product);
         const quantity = quantities[product.id] || 1;
-        shippingTotal += Math.ceil(shippingCost * quantity);
-      });
+        const productShippingCost = Math.ceil(shippingCostInSats * quantity);
+        shippingTotal += productShippingCost;
+        updatedTotalCostsInSats[product.id] =
+          (totalCostsInSats[product.id] || 0) + productShippingCost;
+      }
+
       setTotalCost(subtotalCost + shippingTotal);
     } else if (selectedOrderType === "contact") {
       setFormType("contact");
@@ -676,23 +894,37 @@ export default function CartInvoiceCard({
       setTotalCost(subtotalCost);
     } else if (selectedOrderType === "combined") {
       setFormType("combined");
-      // Show Free/Pickup preference selection if we have mixed shipping with Free/Pickup
-      if (hasMixedShippingWithFreePickup) {
+      if (hasMixedShippingWithPickup) {
         setShowFreePickupSelection(true);
       } else {
-        // Calculate shipping for combined non-Free/Pickup items
         let shippingTotal = 0;
-        products.forEach((product) => {
+        const updatedTotalCostsInSats: { [productId: string]: number } = {};
+
+        for (const product of products) {
+          if (sellerFreeShippingStatus[product.pubkey]?.qualifies) {
+            updatedTotalCostsInSats[product.id] =
+              totalCostsInSats[product.id] || 0;
+            continue;
+          }
           const productShippingType = shippingTypes[product.id];
           if (
             productShippingType === "Added Cost" ||
             productShippingType === "Free"
           ) {
-            const shippingCost = product.shippingCost || 0;
+            const shippingCostInSats = await convertShippingToSats(product);
             const quantity = quantities[product.id] || 1;
-            shippingTotal += Math.ceil(shippingCost * quantity);
+            const productShippingCost = Math.ceil(
+              shippingCostInSats * quantity
+            );
+            shippingTotal += productShippingCost;
+            updatedTotalCostsInSats[product.id] =
+              (totalCostsInSats[product.id] || 0) + productShippingCost;
+          } else {
+            updatedTotalCostsInSats[product.id] =
+              totalCostsInSats[product.id] || 0;
           }
-        });
+        }
+
         setTotalCost(subtotalCost + shippingTotal);
       }
     }
@@ -915,8 +1147,6 @@ export default function CartInvoiceCard({
     proofs: Proof[],
     data: any
   ) => {
-    const userPubkey = await signer?.getPubKey?.();
-    const userNPub = userPubkey ? nip19.npubEncode(userPubkey) : undefined;
     let remainingProofs = proofs;
 
     // Construct address tag early so it can be passed to all messages
@@ -972,6 +1202,10 @@ export default function CartInvoiceCard({
       }
 
       const orderId = uuidv4();
+
+      if (pendingOrderRef.current && !pendingOrderRef.current.orderId) {
+        pendingOrderRef.current.orderId = orderId;
+      }
 
       // Generate keys once per order to ensure consistent sender pubkey
       const orderKeys = await generateNewKeys();
@@ -1155,25 +1389,25 @@ export default function CartInvoiceCard({
             if (quantities[product.id] && quantities[product.id]! > 1) {
               paymentMessage =
                 "You have received a payment from " +
-                userNPub +
+                (userNPub || "a guest buyer") +
                 " for " +
                 quantities[product.id] +
                 " of your " +
                 title +
                 " listing" +
                 productDetails +
-                " on Shopstr! Check your Lightning address (" +
+                " on milk.market! Check your Lightning address (" +
                 lnurl +
                 ") for your sats.";
             } else {
               paymentMessage =
                 "You have received a payment from " +
-                userNPub +
+                (userNPub || "a guest buyer") +
                 " for your " +
                 title +
                 " listing" +
                 productDetails +
-                " on Shopstr! Check your Lightning address (" +
+                " on milk.market! Check your Lightning address (" +
                 lnurl +
                 ") for your sats.";
             }
@@ -1202,6 +1436,9 @@ export default function CartInvoiceCard({
             );
 
             if (changeAmount >= 1 && changeProofs && changeProofs.length > 0) {
+              // Add delay between messages to prevent browser throttling
+              await new Promise((resolve) => setTimeout(resolve, 500));
+
               const encodedChange = getEncodedToken({
                 mint: mints[0]!,
                 proofs: changeProofs,
@@ -1279,24 +1516,24 @@ export default function CartInvoiceCard({
               if (quantities[product.id] && quantities[product.id]! > 1) {
                 paymentMessage =
                   "This is a Cashu token payment from " +
-                  userNPub +
+                  (userNPub || "a guest buyer") +
                   " for " +
                   quantities[product.id] +
                   " of your " +
                   title +
                   " listing" +
                   productDetails +
-                  " on Shopstr: " +
+                  " on milk.market: " +
                   unusedToken;
               } else {
                 paymentMessage =
                   "This is a Cashu token payment from " +
-                  userNPub +
+                  (userNPub || "a guest buyer") +
                   " for your " +
                   title +
                   " listing" +
                   productDetails +
-                  " on Shopstr: " +
+                  " on milk.market: " +
                   unusedToken;
               }
               await sendPaymentAndContactMessageWithKeys(
@@ -1361,24 +1598,24 @@ export default function CartInvoiceCard({
           if (quantities[product.id] && quantities[product.id]! > 1) {
             paymentMessage =
               "This is a Cashu token payment from " +
-              userNPub +
+              (userNPub || "a guest buyer") +
               " for " +
               quantities[product.id] +
               " of your " +
               title +
               " listing" +
               productDetails +
-              " on Shopstr: " +
+              " on milk.market: " +
               sellerToken;
           } else {
             paymentMessage =
               "This is a Cashu token payment from " +
-              userNPub +
+              (userNPub || "a guest buyer") +
               " for your " +
               title +
               " listing" +
               productDetails +
-              " on Shopstr: " +
+              " on milk.market: " +
               sellerToken;
           }
           await sendPaymentAndContactMessageWithKeys(
@@ -1424,6 +1661,9 @@ export default function CartInvoiceCard({
 
       // Step 3: Send additional info message
       if (required && required !== "" && data.additionalInfo) {
+        // Add delay before additional info message
+        await new Promise((resolve) => setTimeout(resolve, 500));
+
         const additionalMessage =
           "Additional customer information: " + data.additionalInfo;
         try {
@@ -1459,16 +1699,18 @@ export default function CartInvoiceCard({
         formType === "shipping" ||
         (formType === "combined" &&
           (productShippingType !== "Free/Pickup" ||
-            (productShippingType === "Free/Pickup" &&
-              freePickupPreference === "shipping")));
+            ((productShippingType === "Free/Pickup" ||
+              productShippingType === "Added Cost/Pickup") &&
+              shippingPickupPreference === "shipping")));
 
       const shouldUseContact =
         formType === "contact" ||
         (formType === "combined" &&
           (productShippingType === "N/A" ||
             productShippingType === "Pickup" ||
-            (productShippingType === "Free/Pickup" &&
-              freePickupPreference === "contact")));
+            ((productShippingType === "Free/Pickup" ||
+              productShippingType === "Added Cost/Pickup") &&
+              shippingPickupPreference === "contact")));
 
       if (
         shouldUseShipping &&
@@ -1483,7 +1725,8 @@ export default function CartInvoiceCard({
         if (
           productShippingType === "Added Cost" ||
           productShippingType === "Free" ||
-          productShippingType === "Free/Pickup"
+          productShippingType === "Free/Pickup" ||
+          productShippingType === "Added Cost/Pickup"
         ) {
           let productDetails = "";
           if (product.selectedSize) {
@@ -1588,6 +1831,10 @@ export default function CartInvoiceCard({
               " was processed successfully! If applicable, you should be receiving delivery information from " +
               nip19.npubEncode(product.pubkey) +
               " as soon as they review your order.";
+
+            // Add delay between messages
+            await new Promise((resolve) => setTimeout(resolve, 500));
+
             await sendPaymentAndContactMessageWithKeys(
               userPubkey,
               receiptMessage,
@@ -1614,7 +1861,8 @@ export default function CartInvoiceCard({
         shouldUseContact &&
         (productShippingType === "N/A" ||
           productShippingType === "Pickup" ||
-          productShippingType === "Free/Pickup")
+          productShippingType === "Free/Pickup" ||
+          productShippingType === "Added Cost/Pickup")
       ) {
         await sendInquiryDM(pubkey, title);
 
@@ -1658,6 +1906,10 @@ export default function CartInvoiceCard({
             " was processed successfully! If applicable, you should be receiving delivery information from " +
             nip19.npubEncode(product.pubkey) +
             " as soon as they review your order.";
+
+          // Add delay between messages
+          await new Promise((resolve) => setTimeout(resolve, 500));
+
           await sendPaymentAndContactMessageWithKeys(
             userPubkey,
             receiptMessage,
@@ -1679,7 +1931,7 @@ export default function CartInvoiceCard({
             donationPercentage
           );
         }
-      } else if (userPubkey) {
+      } else {
         // Step 5: Always send final receipt message
         let productDetails = "";
         if (product.selectedSize) {
@@ -1722,7 +1974,7 @@ export default function CartInvoiceCard({
           nip19.npubEncode(product.pubkey) +
           ".";
         await sendPaymentAndContactMessageWithKeys(
-          userPubkey,
+          userPubkey!,
           receiptMessage,
           product,
           false,
@@ -1751,6 +2003,36 @@ export default function CartInvoiceCard({
     setTimeout(() => {
       setCopiedToClipboard(false);
     }, 2100);
+  };
+
+  const convertShippingToSats = async (
+    product: ProductData
+  ): Promise<number> => {
+    const shippingCost = product.shippingCost || 0;
+
+    if (
+      product.currency.toLowerCase() === "sats" ||
+      product.currency.toLowerCase() === "sat"
+    ) {
+      return shippingCost;
+    }
+
+    if (product.currency.toLowerCase() === "btc") {
+      return shippingCost * 100000000;
+    }
+
+    try {
+      const currencyData = {
+        amount: shippingCost,
+        currency: product.currency,
+      };
+      const { fiat } = await import("@getalby/lightning-tools");
+      const numSats = await fiat.getSatoshiValue(currencyData);
+      return Math.round(numSats);
+    } catch (err) {
+      console.error("Error converting shipping cost to sats:", err);
+      return 0;
+    }
   };
 
   const formattedTotalCost = formatWithCommas(totalCost, "sats");
@@ -1842,6 +2124,7 @@ export default function CartInvoiceCard({
       );
       localStorage.setItem("cart", JSON.stringify([]));
       setOrderConfirmed(true);
+      setPaymentConfirmed(true);
       if (setCashuPaymentSent) {
         setCashuPaymentSent(true);
       }
@@ -1957,128 +2240,134 @@ export default function CartInvoiceCard({
               )}
             />
 
-            <Controller
-              name="City"
-              control={formControl}
-              rules={{
-                required: "A city is required.",
-                maxLength: {
-                  value: 50,
-                  message: "This input exceed maxLength of 50.",
-                },
-              }}
-              render={({
-                field: { onChange, onBlur, value },
-                fieldState: { error },
-              }) => (
-                <Input
-                  variant="bordered"
-                  fullWidth={true}
-                  label={
-                    <span>
-                      City <span className="text-red-500">*</span>
-                    </span>
-                  }
-                  labelPlacement="inside"
-                  isInvalid={!!error}
-                  errorMessage={error?.message}
-                  onChange={onChange}
-                  onBlur={onBlur}
-                  value={value || ""}
-                />
-              )}
-            />
+            {/* Two-column layout for City and State/Province */}
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <Controller
+                name="City"
+                control={formControl}
+                rules={{
+                  required: "A city is required.",
+                  maxLength: {
+                    value: 50,
+                    message: "This input exceed maxLength of 50.",
+                  },
+                }}
+                render={({
+                  field: { onChange, onBlur, value },
+                  fieldState: { error },
+                }) => (
+                  <Input
+                    variant="bordered"
+                    fullWidth={true}
+                    label={
+                      <span>
+                        City <span className="text-red-500">*</span>
+                      </span>
+                    }
+                    labelPlacement="inside"
+                    isInvalid={!!error}
+                    errorMessage={error?.message}
+                    onChange={onChange}
+                    onBlur={onBlur}
+                    value={value || ""}
+                  />
+                )}
+              />
 
-            <Controller
-              name="State/Province"
-              control={formControl}
-              rules={{ required: "A state/province is required." }}
-              render={({
-                field: { onChange, onBlur, value },
-                fieldState: { error },
-              }) => (
-                <Input
-                  variant="bordered"
-                  fullWidth={true}
-                  label={
-                    <span>
-                      State/Province <span className="text-red-500">*</span>
-                    </span>
-                  }
-                  labelPlacement="inside"
-                  isInvalid={!!error}
-                  errorMessage={error?.message}
-                  onChange={onChange}
-                  onBlur={onBlur}
-                  value={value || ""}
-                />
-              )}
-            />
+              <Controller
+                name="State/Province"
+                control={formControl}
+                rules={{ required: "A state/province is required." }}
+                render={({
+                  field: { onChange, onBlur, value },
+                  fieldState: { error },
+                }) => (
+                  <Input
+                    variant="bordered"
+                    fullWidth={true}
+                    label={
+                      <span>
+                        State/Province <span className="text-red-500">*</span>
+                      </span>
+                    }
+                    labelPlacement="inside"
+                    isInvalid={!!error}
+                    errorMessage={error?.message}
+                    onChange={onChange}
+                    onBlur={onBlur}
+                    value={value || ""}
+                  />
+                )}
+              />
+            </div>
 
-            <Controller
-              name="Postal Code"
-              control={formControl}
-              rules={{
-                required: "A postal code is required.",
-                maxLength: {
-                  value: 50,
-                  message: "This input exceed maxLength of 50.",
-                },
-              }}
-              render={({
-                field: { onChange, onBlur, value },
-                fieldState: { error },
-              }) => (
-                <Input
-                  variant="bordered"
-                  fullWidth={true}
-                  label={
-                    <span>
-                      Postal code <span className="text-red-500">*</span>
-                    </span>
-                  }
-                  labelPlacement="inside"
-                  isInvalid={!!error}
-                  errorMessage={error?.message}
-                  onChange={onChange}
-                  onBlur={onBlur}
-                  value={value || ""}
-                />
-              )}
-            />
+            {/* Two-column layout for Postal Code and Country */}
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <Controller
+                name="Postal Code"
+                control={formControl}
+                rules={{
+                  required: "A postal code is required.",
+                  maxLength: {
+                    value: 50,
+                    message: "This input exceed maxLength of 50.",
+                  },
+                }}
+                render={({
+                  field: { onChange, onBlur, value },
+                  fieldState: { error },
+                }) => (
+                  <Input
+                    variant="bordered"
+                    fullWidth={true}
+                    label={
+                      <span>
+                        Postal code <span className="text-red-500">*</span>
+                      </span>
+                    }
+                    labelPlacement="inside"
+                    isInvalid={!!error}
+                    errorMessage={error?.message}
+                    onChange={onChange}
+                    onBlur={onBlur}
+                    value={value || ""}
+                  />
+                )}
+              />
 
-            <Controller
-              name="Country"
-              control={formControl}
-              rules={{ required: "A country is required." }}
-              render={({
-                field: { onChange, onBlur, value },
-                fieldState: { error },
-              }) => (
-                <CountryDropdown
-                  variant="bordered"
-                  aria-label="Select Country"
-                  label={
-                    <span>
-                      Country <span className="text-red-500">*</span>
-                    </span>
-                  }
-                  labelPlacement="inside"
-                  isInvalid={!!error}
-                  errorMessage={error?.message}
-                  onChange={onChange}
-                  onBlur={onBlur}
-                  value={value || ""}
-                />
-              )}
-            />
+              <Controller
+                name="Country"
+                control={formControl}
+                rules={{ required: "A country is required." }}
+                render={({
+                  field: { onChange, onBlur, value },
+                  fieldState: { error },
+                }) => (
+                  <CountryDropdown
+                    variant="bordered"
+                    aria-label="Select Country"
+                    label={
+                      <span>
+                        Country <span className="text-red-500">*</span>
+                      </span>
+                    }
+                    labelPlacement="inside"
+                    isInvalid={!!error}
+                    errorMessage={error?.message}
+                    onChange={onChange}
+                    onBlur={onBlur}
+                    value={value || ""}
+                  />
+                )}
+              />
+            </div>
           </>
         )}
 
         {/* Pickup location selectors for products with pickup locations */}
         {productsWithPickupLocations.length > 0 &&
           formType === "combined" &&
-          freePickupPreference === "contact" && (
+          shippingPickupPreference === "contact" && (
             <div className="space-y-4">
               <h4 className="font-medium text-gray-700 dark:text-gray-300">
                 Select Pickup Locations
@@ -2187,7 +2476,7 @@ export default function CartInvoiceCard({
                         </p>
                       )}
                       {product.selectedBulkOption && (
-                        <p className="mb-1 text-gray-600 dark:text-gray-400">
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
                           Bundle: {product.selectedBulkOption} units
                         </p>
                       )}
@@ -2269,17 +2558,20 @@ export default function CartInvoiceCard({
                               </div>
                             </>
                           )}
-                          {product.shippingCost! > 0 && (
-                            <div className="flex justify-between text-sm">
-                              <span className="ml-2">Shipping cost:</span>
-                              <span>
-                                {formatWithCommas(
-                                  product.shippingCost!,
-                                  product.currency
-                                )}
-                              </span>
-                            </div>
-                          )}
+                          {product.shippingCost! > 0 &&
+                            ((formType === "combined" &&
+                              shippingPickupPreference === "shipping") ||
+                              formType === "shipping") && (
+                              <div className="flex justify-between text-sm">
+                                <span className="ml-2">Shipping cost:</span>
+                                <span>
+                                  {formatWithCommas(
+                                    product.shippingCost!,
+                                    product.currency
+                                  )}
+                                </span>
+                              </div>
+                            )}
                         </div>
                       );
                     })}
@@ -2405,7 +2697,7 @@ export default function CartInvoiceCard({
                       </p>
                     )}
                     {product.selectedBulkOption && (
-                      <p className="mb-1 text-gray-600 dark:text-gray-400">
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
                         Bundle: {product.selectedBulkOption} units
                       </p>
                     )}
@@ -2446,7 +2738,7 @@ export default function CartInvoiceCard({
                         (productShippingType === "Added Cost" ||
                           productShippingType === "Free" ||
                           (productShippingType === "Free/Pickup" &&
-                            freePickupPreference === "shipping")));
+                            shippingPickupPreference === "shipping")));
 
                     return (
                       <div
@@ -2512,18 +2804,22 @@ export default function CartInvoiceCard({
                             </div>
                           </>
                         )}
-                        {shouldShowShipping && product.shippingCost! > 0 && (
-                          <div className="flex justify-between text-sm">
-                            <span className="ml-2">Shipping cost:</span>
-                            <span>
-                              {formatWithCommas(
-                                product.shippingCost! *
-                                  (quantities[product.id] || 1),
-                                product.currency
-                              )}
-                            </span>
-                          </div>
-                        )}
+                        {shouldShowShipping &&
+                          product.shippingCost! > 0 &&
+                          ((formType === "combined" &&
+                            shippingPickupPreference === "shipping") ||
+                            formType === "shipping") && (
+                            <div className="flex justify-between text-sm">
+                              <span className="ml-2">Shipping cost:</span>
+                              <span>
+                                {formatWithCommas(
+                                  product.shippingCost! *
+                                    (quantities[product.id] || 1),
+                                  product.currency
+                                )}
+                              </span>
+                            </div>
+                          )}
                       </div>
                     );
                   })}
@@ -2564,14 +2860,15 @@ export default function CartInvoiceCard({
                     >
                       <div className="font-medium">Mixed delivery</div>
                       <div className="text-sm text-gray-500 dark:text-gray-400">
-                        {hasFreePickupProducts
+                        {hasShippingPickupProducts
                           ? "Products require different delivery methods (includes flexible shipping/pickup options)"
                           : "Products require different delivery methods"}
                       </div>
                     </button>
                   </>
                 ) : uniqueShippingTypes.length === 1 &&
-                  uniqueShippingTypes[0] === "Free/Pickup" ? (
+                  (uniqueShippingTypes[0] === "Free/Pickup" ||
+                    uniqueShippingTypes[0] === "Added Cost/Pickup") ? (
                   <>
                     {/* All products have Free/Pickup - show shipping and contact options */}
                     <button
@@ -2625,35 +2922,55 @@ export default function CartInvoiceCard({
           {showFreePickupSelection && (
             <>
               <h2 className="mb-6 text-2xl font-bold">
-                Free/Pickup Products Preference
+                Shipping/Pickup Products Preference
               </h2>
               <p className="mb-4 text-gray-600 dark:text-gray-400">
-                Some products offer both free shipping and pickup options. How
-                would you like to handle these products?
+                Some products offer both shipping and pickup options. How would
+                you like to handle these products?
               </p>
               <div className="mb-6 space-y-4">
                 <button
-                  onClick={() => {
-                    setFreePickupPreference("shipping");
+                  onClick={async () => {
+                    setShippingPickupPreference("shipping");
                     setShowFreePickupSelection(false);
-                    // Calculate total with all applicable shipping
+                    // Calculate total with all applicable shipping in sats
                     let shippingTotal = 0;
-                    products.forEach((product) => {
+                    const updatedTotalCostsInSats: {
+                      [productId: string]: number;
+                    } = {};
+
+                    for (const product of products) {
+                      if (sellerFreeShippingStatus[product.pubkey]?.qualifies) {
+                        updatedTotalCostsInSats[product.id] =
+                          totalCostsInSats[product.id] || 0;
+                        continue;
+                      }
                       const productShippingType = shippingTypes[product.id];
                       if (
                         productShippingType === "Added Cost" ||
                         productShippingType === "Free" ||
                         productShippingType === "Free/Pickup"
                       ) {
-                        const shippingCost = product.shippingCost || 0;
+                        const shippingCostInSats =
+                          await convertShippingToSats(product);
                         const quantity = quantities[product.id] || 1;
-                        shippingTotal += Math.ceil(shippingCost * quantity);
+                        const productShippingCost = Math.ceil(
+                          shippingCostInSats * quantity
+                        );
+                        shippingTotal += productShippingCost;
+                        updatedTotalCostsInSats[product.id] =
+                          (totalCostsInSats[product.id] || 0) +
+                          productShippingCost;
+                      } else {
+                        updatedTotalCostsInSats[product.id] =
+                          totalCostsInSats[product.id] || 0;
                       }
-                    });
+                    }
+
                     setTotalCost(subtotalCost + shippingTotal);
                   }}
                   className={`w-full rounded-lg border p-4 text-left hover:bg-gray-50 dark:hover:bg-gray-600 ${
-                    freePickupPreference === "shipping"
+                    shippingPickupPreference === "shipping"
                       ? "border-shopstr-purple bg-purple-50 dark:border-shopstr-yellow dark:bg-yellow-50"
                       : "border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-700"
                   }`}
@@ -2664,26 +2981,45 @@ export default function CartInvoiceCard({
                   </div>
                 </button>
                 <button
-                  onClick={() => {
-                    setFreePickupPreference("contact");
+                  onClick={async () => {
+                    setShippingPickupPreference("contact");
                     setShowFreePickupSelection(false);
-                    // Calculate shipping for non-Free/Pickup items only
                     let shippingTotal = 0;
-                    products.forEach((product) => {
+                    const updatedTotalCostsInSats: {
+                      [productId: string]: number;
+                    } = {};
+
+                    for (const product of products) {
+                      if (sellerFreeShippingStatus[product.pubkey]?.qualifies) {
+                        updatedTotalCostsInSats[product.id] =
+                          totalCostsInSats[product.id] || 0;
+                        continue;
+                      }
                       const productShippingType = shippingTypes[product.id];
                       if (
                         productShippingType === "Added Cost" ||
                         productShippingType === "Free"
                       ) {
-                        const shippingCost = product.shippingCost || 0;
+                        const shippingCostInSats =
+                          await convertShippingToSats(product);
                         const quantity = quantities[product.id] || 1;
-                        shippingTotal += Math.ceil(shippingCost * quantity);
+                        const productShippingCost = Math.ceil(
+                          shippingCostInSats * quantity
+                        );
+                        shippingTotal += productShippingCost;
+                        updatedTotalCostsInSats[product.id] =
+                          (totalCostsInSats[product.id] || 0) +
+                          productShippingCost;
+                      } else {
+                        updatedTotalCostsInSats[product.id] =
+                          totalCostsInSats[product.id] || 0;
                       }
-                    });
+                    }
+
                     setTotalCost(subtotalCost + shippingTotal);
                   }}
                   className={`w-full rounded-lg border p-4 text-left hover:bg-gray-50 dark:hover:bg-gray-600 ${
-                    freePickupPreference === "contact"
+                    shippingPickupPreference === "contact"
                       ? "border-shopstr-purple bg-purple-50 dark:border-shopstr-yellow dark:bg-yellow-50"
                       : "border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-700"
                   }`}
@@ -2697,7 +3033,7 @@ export default function CartInvoiceCard({
 
               {/* Show pickup location selection for products with pickup locations */}
               {productsWithPickupLocations.length > 0 &&
-                freePickupPreference === "contact" && (
+                shippingPickupPreference === "contact" && (
                   <div className="space-y-6">
                     <h3 className="text-lg font-semibold">
                       Select Pickup Locations
