@@ -54,6 +54,7 @@ const baseMessageEvent: NostrMessageEvent = {
   tags: [],
   content: "Hello world",
   sig: "",
+  read: true,
 };
 
 /**
@@ -62,7 +63,9 @@ const baseMessageEvent: NostrMessageEvent = {
  *  - the mocked setter functions
  */
 const renderComponent = (
-  props: Partial<React.ComponentProps<typeof ChatMessage>>
+  props: Omit<Partial<React.ComponentProps<typeof ChatMessage>>, "messageEvent"> & {
+    messageEvent?: Partial<NostrMessageEvent>;
+  }
 ) => {
   const mockSetters = {
     setBuyerPubkey: jest.fn(),
@@ -74,13 +77,15 @@ const renderComponent = (
   const messageEvent = { ...baseMessageEvent, ...props.messageEvent };
 
   const renderResult = render(
-    <SignerContext.Provider value={{ pubkey: mockUserPubkey, signer: null }}>
+    <SignerContext.Provider
+      value={{ pubkey: mockUserPubkey, signer: undefined }}
+    >
       <ChatMessage
         index={0}
         currentChatPubkey={mockChatPartnerPubkey}
         {...mockSetters}
         {...props}
-        messageEvent={messageEvent}
+        messageEvent={messageEvent as NostrMessageEvent}
       />
     </SignerContext.Provider>
   );

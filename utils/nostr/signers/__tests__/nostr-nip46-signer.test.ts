@@ -21,7 +21,7 @@ jest.mock("nostr-tools", () => ({
   },
 }));
 jest.mock("@/utils/nostr/nostr-manager");
-const NostrManagerMock = NostrManager as jest.Mock;
+const NostrManagerMock = NostrManager as unknown as jest.Mock;
 jest.mock("@/utils/timeout");
 const newPromiseWithTimeoutMock = newPromiseWithTimeout as jest.Mock;
 jest.mock("uuid");
@@ -45,7 +45,7 @@ describe("NostrNIP46Signer", () => {
     jest.clearAllMocks();
 
     mockNostrManagerInstance = {
-      subscribe: jest.fn((filters, callbacks) => {
+      subscribe: jest.fn((_filters, callbacks) => {
         onEventCallback = callbacks.onevent;
       }),
       publish: jest.fn().mockResolvedValue(undefined),

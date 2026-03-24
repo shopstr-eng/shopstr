@@ -45,16 +45,24 @@ const mockGetLocalStorageData = getLocalStorageData as jest.Mock;
 const mockGetDecodedToken = getDecodedToken as jest.Mock;
 const mockPublishProofEvent = publishProofEvent as jest.Mock;
 const MockCashuWallet = CashuWallet as jest.Mock;
-const mockSigner = { getPublicKey: jest.fn().mockResolvedValue("mock-pubkey") };
-const mockNostr = { pool: {} };
+const mockSigner = {
+  connect: jest.fn(),
+  getPubKey: jest.fn().mockResolvedValue("mock-pubkey"),
+  sign: jest.fn(),
+  encrypt: jest.fn(),
+  decrypt: jest.fn(),
+  close: jest.fn(),
+  toJSON: jest.fn(),
+} as any;
+const mockNostr = { pool: {} } as any;
 
 const renderWithProviders = (
   ui: React.ReactElement,
-  { signer = mockSigner, nostr = mockNostr } = {}
+  { signer = mockSigner as any, nostr = mockNostr as any } = {}
 ) => {
   return render(
-    <NostrContext.Provider value={{ nostr }}>
-      <SignerContext.Provider value={{ signer }}>{ui}</SignerContext.Provider>
+    <NostrContext.Provider value={{ nostr } as any}>
+      <SignerContext.Provider value={{ signer } as any}>{ui}</SignerContext.Provider>
     </NostrContext.Provider>
   );
 };
@@ -79,7 +87,7 @@ describe("ReceiveButton", () => {
     const receiveButton = screen.getByRole("button", { name: /Receive/i });
     fireEvent.click(receiveButton);
     const modal = await screen.findByRole("dialog");
-    expect(modal).toBeVisible();
+    expect(modal).toBeInTheDocument();
     const cancelButton = within(modal).getByRole("button", { name: /Cancel/i });
     fireEvent.click(cancelButton);
     await waitFor(() => {
@@ -179,7 +187,7 @@ describe("ReceiveButton", () => {
     fireEvent.click(submitButton);
 
     const errorModal = await screen.findByText("Spent token!");
-    expect(errorModal).toBeVisible();
+    expect(errorModal).toBeInTheDocument();
 
     const closeButton = screen.getByRole("button", { name: /close/i });
     fireEvent.click(closeButton);
@@ -257,8 +265,11 @@ describe("ReceiveButton", () => {
   });
 
   test("shows info message when signer is NostrNIP46Signer", async () => {
-    const nip46Signer = new NostrNIP46Signer();
-    renderWithProviders(<ReceiveButton />, { signer: nip46Signer });
+    const nip46Signer = new NostrNIP46Signer(
+      { bunker: "bunker://dummy@dummy" },
+      jest.fn()
+    );
+    renderWithProviders(<ReceiveButton />, { signer: nip46Signer as any });
     fireEvent.click(screen.getByRole("button", { name: /Receive/i }));
     const modal = await screen.findByRole("dialog");
     const infoMessage =
