@@ -2049,31 +2049,38 @@ export default function ProductInvoiceCard({
 
       // Send beef donation if applicable
       if (beefDonationToken && beefDonationProofs && beefDonationAmount > 0) {
-        const beefInitNpub =
-          "npub1a8z76w04h64dqpxwpgjhx0arrkzupzal68vzu00n8ybe2lsv6dcsxn2m4c"; // Placeholder npub
-        const beefDonationMessage =
-          "Beef Initiative donation (" +
-          beefDonationPercentage +
-          "%) from purchase of " +
-          productData.title +
-          " by " +
-          userNPub +
-          " on milk.market: " +
-          beefDonationToken;
+        const beefInitNpub = process.env.NEXT_PUBLIC_BEEF_INITIATIVE_NPUB || "";
+        let beefInitHex = "";
+        try {
+          beefInitHex = nip19.decode(beefInitNpub).data as string;
+        } catch {
+          console.error("Invalid NEXT_PUBLIC_BEEF_INITIATIVE_NPUB");
+        }
+        if (beefInitHex) {
+          const beefDonationMessage =
+            "Beef Initiative donation (" +
+            beefDonationPercentage +
+            "%) from purchase of " +
+            productData.title +
+            " by " +
+            userNPub +
+            " on milk.market: " +
+            beefDonationToken;
 
-        await sendPaymentAndContactMessage(
-          beefInitNpub,
-          beefDonationMessage,
-          true,
-          false,
-          false,
-          false,
-          orderId + "_beef",
-          "ecash",
-          mints[0],
-          JSON.stringify(beefDonationProofs),
-          beefDonationAmount
-        );
+          await sendPaymentAndContactMessage(
+            beefInitHex,
+            beefDonationMessage,
+            true,
+            false,
+            false,
+            false,
+            orderId + "_beef",
+            "ecash",
+            mints[0],
+            JSON.stringify(beefDonationProofs),
+            beefDonationAmount
+          );
+        }
       }
     }
 
