@@ -876,42 +876,6 @@ export default function ProductForm({
                 )}
 
               <Controller
-                name="Restrictions"
-                control={control}
-                render={({
-                  field: { onChange, onBlur, value },
-                  fieldState: { error },
-                }) => {
-                  const isErrored = error !== undefined;
-                  const errorMessage: string = error?.message
-                    ? error.message
-                    : "";
-                  return (
-                    <div className="mb-4">
-                      <label className="mb-2 block text-base font-semibold text-black">
-                        Restrictions (optional)
-                      </label>
-                      <Input
-                        classNames={{
-                          input: "text-base !text-black",
-                          inputWrapper:
-                            "border-2 border-black rounded-md shadow-none h-14 !bg-white data-[hover=true]:!bg-white data-[focus=true]:!bg-white data-[invalid=true]:!bg-white",
-                        }}
-                        variant="flat"
-                        placeholder="US shipping only, signature required, no P.O. box delivery, etc."
-                        fullWidth={true}
-                        isInvalid={isErrored}
-                        errorMessage={errorMessage}
-                        onChange={onChange}
-                        onBlur={onBlur}
-                        value={value}
-                      />
-                    </div>
-                  );
-                }}
-              />
-
-              <Controller
                 name="Location"
                 control={control}
                 rules={{
