@@ -136,6 +136,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
           <FileUploaderButton
             className={`absolute bottom-5 right-5 z-20 border-2 border-white bg-shopstr-purple shadow-md ${SHOPSTRBUTTONCLASSNAMES}`}
             imgCallbackOnUpload={(imgUrl) => setValue("banner", imgUrl)}
+            allowUrlInput
           >
             Upload Banner
           </FileUploaderButton>
@@ -147,6 +148,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                 isIconOnly={true}
                 className={`absolute bottom-[-0.5rem] right-[-0.5rem] z-20 ${SHOPSTRBUTTONCLASSNAMES}`}
                 imgCallbackOnUpload={(imgUrl) => setValue("picture", imgUrl)}
+                allowUrlInput
               />
               {watchPicture ? (
                 <Image
