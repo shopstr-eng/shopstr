@@ -362,7 +362,6 @@ export default function Component() {
       const prices: { [key: string]: number | null } = {};
       const shipping: { [key: string]: number } = {};
       const totals: { [key: string]: number } = {};
-      const beefDonationAmounts: { [key: string]: number } = {};
       let subtotalAmount = 0;
       let nativeSubtotal = 0;
 
@@ -415,18 +414,6 @@ export default function Component() {
 
           if (discount > 0) {
             discountedPrice = Math.ceil(priceSats * (1 - discount / 100));
-          }
-
-          // Calculate beef donation if applicable
-          const beefDonationPercentage =
-            product.beefinit_donation_percentage || 0;
-          if (beefDonationPercentage > 0) {
-            const totalProductPrice =
-              discountedPrice * (quantities[product.id] || 1);
-            const beefAmount = Math.ceil(
-              (totalProductPrice * beefDonationPercentage) / 100
-            );
-            beefDonationAmounts[product.id] = beefAmount;
           }
 
           if (discountedPrice !== null || shippingSatPrice !== null) {
@@ -493,7 +480,6 @@ export default function Component() {
       setSubtotalNative(Math.round(nativeSubtotal * 100) / 100);
       setCartCurrency(originalCurrency);
       setTotalCostsInSats(totals);
-      setBeefDonations(beefDonationAmounts);
     };
 
     fetchSatPrices();
@@ -1177,7 +1163,6 @@ export default function Component() {
                 subtotalCost={subtotal}
                 appliedDiscounts={appliedDiscounts}
                 discountCodes={discountCodes}
-                beefDonations={beefDonations}
                 shopProfiles={shopContext.shopData}
                 onBackToCart={toggleCheckout}
                 setInvoiceIsPaid={setInvoiceIsPaid}

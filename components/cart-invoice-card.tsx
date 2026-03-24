@@ -75,7 +75,6 @@ export default function CartInvoiceCard({
   subtotalCost,
   appliedDiscounts = {},
   discountCodes = {},
-  beefDonations,
   shopProfiles,
   onBackToCart,
   setInvoiceIsPaid,
@@ -91,7 +90,6 @@ export default function CartInvoiceCard({
   subtotalCost: number;
   appliedDiscounts?: { [key: string]: number };
   discountCodes?: { [key: string]: string };
-  beefDonations: { [productId: string]: number };
   shopProfiles?: Map<string, ShopProfile>;
   onBackToCart?: () => void;
   setInvoiceIsPaid?: (invoiceIsPaid: boolean) => void;
@@ -2812,7 +2810,7 @@ export default function CartInvoiceCard({
           try {
             const proofs = await wallet.mintProofs(convertedPrice, hash);
             if (proofs && proofs.length > 0) {
-              await sendTokens(wallet, proofs, data, beefDonations);
+              await sendTokens(wallet, proofs, data);
               clearPurchasedFromCart();
               setPaymentConfirmed(true);
               if (discountCodes) {
@@ -2908,8 +2906,7 @@ export default function CartInvoiceCard({
   const sendTokens = async (
     wallet: CashuWallet,
     proofs: Proof[],
-    data: any,
-    beefDonations: { [productId: string]: number }
+    data: any
   ) => {
     let remainingProofs = proofs;
 
@@ -2941,23 +2938,21 @@ export default function CartInvoiceCard({
       const tokenAmount = totalCostsInSats[pubkey];
       let sellerToken;
       let donationToken;
+      let beefDonationToken;
       const sellerProfile = profileContext.profileData.get(pubkey);
       const donationPercentage =
         sellerProfile?.content?.shopstr_donation || 2.1;
-      const beefDonationPercentage = product.tags?.find(
-        (tag) => tag.name === "beefinit_donation_percentage"
-      )?.value;
+      const beefDonationPercentage = product.beefinit_donation_percentage || 0;
 
-      let donationAmount = 0;
-      if (beefDonationPercentage) {
-        donationAmount = Math.ceil(
-          (tokenAmount! * parseFloat(beefDonationPercentage)) / 100
-        );
-      } else if (donationPercentage) {
-        donationAmount = Math.ceil((tokenAmount! * donationPercentage) / 100);
-      }
+      const donationAmount = Math.ceil(
+        (tokenAmount! * donationPercentage) / 100
+      );
+      const beefDonationAmount =
+        beefDonationPercentage > 0
+          ? Math.ceil((tokenAmount! * beefDonationPercentage) / 100)
+          : 0;
 
-      const sellerAmount = tokenAmount! - donationAmount;
+      const sellerAmount = tokenAmount! - donationAmount - beefDonationAmount;
       let sellerProofs: Proof[] = [];
 
       let shippingData = data; // Assume data contains shipping info
@@ -3087,6 +3082,21 @@ export default function CartInvoiceCard({
           }
         );
         donationToken = getEncodedToken({
+          mint: mints[0]!,
+          proofs: send,
+        });
+        remainingProofs = keep;
+      }
+
+      if (beefDonationAmount > 0) {
+        const { keep, send } = await wallet.send(
+          beefDonationAmount,
+          remainingProofs,
+          {
+            includeFees: true,
+          }
+        );
+        beefDonationToken = getEncodedToken({
           mint: mints[0]!,
           proofs: send,
         });
@@ -3229,7 +3239,7 @@ export default function CartInvoiceCard({
               });
               const changeMessage = "Overpaid fee change: " + encodedChange;
               try {
-                await sendPaymentAndContactMessageKeys(
+                await sendPaymentAndContactMessageWithKeys(
                   pubkey,
                   changeMessage,
                   product,
@@ -3328,7 +3338,7 @@ export default function CartInvoiceCard({
                   " on Milk Market: " +
                   unusedToken;
               }
-              await sendPaymentAndContactMessageKeys(
+              await sendPaymentAndContactMessageWithKeys(
                 pubkey,
                 paymentMessage,
                 product,
@@ -3418,7 +3428,7 @@ export default function CartInvoiceCard({
               " on Milk Market: " +
               sellerToken;
           }
-          await sendPaymentAndContactMessageKeys(
+          await sendPaymentAndContactMessageWithKeys(
             pubkey,
             paymentMessage,
             product,
@@ -3461,6 +3471,40 @@ export default function CartInvoiceCard({
           await new Promise((resolve) => setTimeout(resolve, 500));
         } catch (error) {
           console.error("Failed to send donation message:", error);
+        }
+      }
+
+      // Step 2.5: Send beef donation if applicable
+      if (beefDonationToken && beefDonationAmount > 0) {
+        const beefInitNpub =
+          "npub1a8z76w04h64dqpxwpgjhx0arrkzupzal68vzu00n8ybe2lsv6dcsxn2m4c";
+        let beefInitHex: string;
+        try {
+          beefInitHex = nip19.decode(beefInitNpub).data as string;
+        } catch {
+          beefInitHex = beefInitNpub;
+        }
+        const beefDonationMessage =
+          "Beef Initiative donation (" +
+          beefDonationPercentage +
+          "%) from purchase of " +
+          title +
+          " by " +
+          (userNPub || "a guest buyer") +
+          " on milk.market: " +
+          beefDonationToken;
+        try {
+          await sendPaymentAndContactMessage(
+            beefInitHex,
+            beefDonationMessage,
+            product,
+            false,
+            false,
+            true
+          );
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        } catch (error) {
+          console.error("Failed to send beef donation message:", error);
         }
       }
 
@@ -4076,7 +4120,7 @@ export default function CartInvoiceCard({
             .map((event) => event.id),
         ]),
       ];
-      await sendTokens(wallet, send, data, beefDonations);
+      await sendTokens(wallet, send, data);
       const changeProofs = keep;
       const remainingProofs = tokens.filter(
         (p: Proof) =>
@@ -4554,13 +4598,12 @@ export default function CartInvoiceCard({
                           : basePrice;
 
                       // Calculate beef donation for this product
-                      const beefDonationPercentage = product.tags?.find(
-                        (tag) => tag.name === "beefinit_donation_percentage"
-                      )?.value;
+                      const beefDonationPercentage =
+                        product.beefinit_donation_percentage || 0;
                       let beefDonationAmount = 0;
-                      if (beefDonationPercentage) {
+                      if (beefDonationPercentage > 0) {
                         beefDonationAmount = Math.ceil(
-                          (basePrice * parseFloat(beefDonationPercentage)) / 100
+                          (basePrice * beefDonationPercentage) / 100
                         );
                       }
 
@@ -4571,12 +4614,6 @@ export default function CartInvoiceCard({
                       const milkMarketDonationAmount = Math.ceil(
                         (basePrice * milkMarketDonationPercentage) / 100
                       );
-
-                      const finalProductCost =
-                        basePrice -
-                        (discount > 0 ? (basePrice * discount) / 100 : 0) -
-                        beefDonationAmount -
-                        milkMarketDonationAmount;
 
                       return (
                         <div
@@ -5041,13 +5078,12 @@ export default function CartInvoiceCard({
                         : basePrice;
 
                     // Calculate beef donation for this product
-                    const beefDonationPercentage = product.tags?.find(
-                      (tag) => tag.name === "beefinit_donation_percentage"
-                    )?.value;
+                    const beefDonationPercentage =
+                      product.beefinit_donation_percentage || 0;
                     let beefDonationAmount = 0;
-                    if (beefDonationPercentage) {
+                    if (beefDonationPercentage > 0) {
                       beefDonationAmount = Math.ceil(
-                        (basePrice * parseFloat(beefDonationPercentage)) / 100
+                        (basePrice * beefDonationPercentage) / 100
                       );
                     }
 
@@ -5058,12 +5094,6 @@ export default function CartInvoiceCard({
                     const milkMarketDonationAmount = Math.ceil(
                       (basePrice * milkMarketDonationPercentage) / 100
                     );
-
-                    const finalProductCost =
-                      basePrice -
-                      (discount > 0 ? (basePrice * discount) / 100 : 0) -
-                      beefDonationAmount -
-                      milkMarketDonationAmount;
 
                     return (
                       <div
@@ -5158,8 +5188,7 @@ export default function CartInvoiceCard({
                             </span>
                           </div>
                         )}
-                        {shouldShowShipping &&
-                          product.shippingCost! > 0 &&
+                        {product.shippingCost! > 0 &&
                           ((formType === "combined" &&
                             shippingPickupPreference === "shipping") ||
                             formType === "shipping") && (

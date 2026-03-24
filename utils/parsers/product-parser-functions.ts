@@ -206,6 +206,7 @@ export const parseTags = (productEvent: NostrEvent) => {
         break;
       case "beefinit_donation_percentage":
         parsedData.beefinit_donation_percentage = Number(values[0]);
+        break;
       case "subscription":
         if (values[0] === "true") {
           parsedData.subscriptionEnabled = true;
