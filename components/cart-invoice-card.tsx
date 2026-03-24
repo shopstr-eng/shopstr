@@ -4695,21 +4695,6 @@ export default function CartInvoiceCard({
                               </span>
                             </div>
                           )}
-
-                          {product.shippingCost! > 0 &&
-                            ((formType === "combined" &&
-                              shippingPickupPreference === "shipping") ||
-                              formType === "shipping") && (
-                              <div className="flex justify-between text-sm">
-                                <span className="ml-2">Shipping cost:</span>
-                                <span>
-                                  {formatWithCommas(
-                                    product.shippingCost!,
-                                    product.currency
-                                  )}
-                                </span>
-                              </div>
-                            )}
                           {subscriptionSelections[product.id]?.enabled &&
                             product.subscriptionDiscount &&
                             product.subscriptionDiscount > 0 && (
@@ -5188,21 +5173,6 @@ export default function CartInvoiceCard({
                             </span>
                           </div>
                         )}
-                        {product.shippingCost! > 0 &&
-                          ((formType === "combined" &&
-                            shippingPickupPreference === "shipping") ||
-                            formType === "shipping") && (
-                            <div className="flex justify-between text-sm">
-                              <span className="ml-2">Shipping cost:</span>
-                              <span>
-                                {formatWithCommas(
-                                  product.shippingCost! *
-                                    (quantities[product.id] || 1),
-                                  product.currency
-                                )}
-                              </span>
-                            </div>
-                          )}
                         {subscriptionSelections[product.id]?.enabled &&
                           product.subscriptionDiscount &&
                           product.subscriptionDiscount > 0 && (
