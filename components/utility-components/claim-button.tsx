@@ -23,7 +23,6 @@ import {
   constructMessageGiftWrap,
   sendGiftWrappedMessageEvent,
 } from "@/utils/nostr/nostr-helper-functions";
-import { addChatMessagesToCache } from "@/utils/nostr/cache-service";
 import {
   BLACKBUTTONCLASSNAMES,
   WHITEBUTTONCLASSNAMES,
@@ -91,45 +90,55 @@ export default function ClaimButton({ token }: { token: string }) {
   }, []);
 
   useEffect(() => {
-    const decodedToken = getDecodedToken(token);
-    const mint = decodedToken.mint;
-    setTokenMint(mint);
-    const proofs = decodedToken.proofs;
-    setProofs(proofs);
-    const newWallet = new CashuWallet(new CashuMint(mint));
-    setWallet(newWallet);
-    const totalAmount =
-      Array.isArray(proofs) && proofs.length > 0
-        ? proofs.reduce((acc, current: Proof) => acc + current.amount, 0)
-        : 0;
+    try {
+      const decodedToken = getDecodedToken(token);
+      const mint = decodedToken.mint;
+      setTokenMint(mint);
+      const proofs = decodedToken.proofs;
+      setProofs(proofs);
+      const newWallet = new CashuWallet(new CashuMint(mint));
+      setWallet(newWallet);
+      const totalAmount =
+        Array.isArray(proofs) && proofs.length > 0
+          ? proofs.reduce((acc, current: Proof) => acc + current.amount, 0)
+          : 0;
 
-    setTokenAmount(totalAmount);
-    setFormattedTokenAmount(formatWithCommas(totalAmount, "sats"));
+      setTokenAmount(totalAmount);
+      setFormattedTokenAmount(formatWithCommas(totalAmount, "sats"));
+    } catch (error) {
+      console.error("Error decoding token:", error);
+      setIsInvalidToken(true);
+    }
   }, [token]);
 
-  useEffect(() => {
-    setIsRedeemed(false);
-    const checkProofsSpent = async () => {
-      try {
-        if (proofs.length > 0) {
-          const proofsStates = await wallet?.checkProofsStates(proofs);
-          if (proofsStates) {
-            const spentYs = new Set(
-              proofsStates
-                .filter((state) => state.state === "SPENT")
-                .map((state) => state.Y)
-            );
-            if (spentYs.size > 0) {
-              setIsRedeemed(true);
-            }
+  const checkProofsSpent = async () => {
+    try {
+      if (proofs.length > 0 && wallet) {
+        const proofsStates = await wallet.checkProofsStates(proofs);
+        if (proofsStates) {
+          const spentYs = new Set(
+            proofsStates
+              .filter((state) => state.state === "SPENT")
+              .map((state) => state.Y)
+          );
+          if (spentYs.size > 0) {
+            setIsRedeemed(true);
+            return true;
           }
         }
-      } catch (error) {
-        console.error(error);
       }
-    };
-    checkProofsSpent();
-  }, [proofs, wallet]);
+    } catch (error) {
+      console.error("Error checking proof states:", error);
+    }
+    return false;
+  };
+
+  const handleClaimButtonClick = async () => {
+    const alreadySpent = await checkProofsSpent();
+    if (!alreadySpent) {
+      setOpenClaimTypeModal(true);
+    }
+  };
 
   useEffect(() => {
     const sellerProfileMap = profileContext.profileData;
@@ -293,9 +302,6 @@ export default function ClaimButton({ token }: { token: string }) {
               },
               true
             );
-            addChatMessagesToCache([
-              { ...giftWrappedMessageEvent, sig: "", read: false },
-            ]);
           }
           setIsPaid(true);
           setOpenRedemptionModal(true);
@@ -323,9 +329,13 @@ export default function ClaimButton({ token }: { token: string }) {
   return (
     <div>
       <Button
-        className={buttonClassName + " mt-2 w-[20%]"}
-        onClick={() => setOpenClaimTypeModal(true)}
-        isDisabled={isRedeemed}
+        className={
+          isRedeemed || isInvalidToken
+            ? "mt-2 min-w-fit cursor-not-allowed bg-gray-400 text-gray-600 opacity-60"
+            : buttonClassName + " mt-2 min-w-fit"
+        }
+        onClick={handleClaimButtonClick}
+        isDisabled={isRedeemed || isInvalidToken}
       >
         {isRedeeming ? (
           <>
@@ -338,6 +348,8 @@ export default function ClaimButton({ token }: { token: string }) {
               }}
             />
           </>
+        ) : isInvalidToken ? (
+          <>Invalid Token</>
         ) : isRedeemed ? (
           <>Claimed: {formattedTokenAmount}</>
         ) : (

@@ -3,6 +3,10 @@
   "version": "0.10.3",
   "type": "module",
   "private": true,
+  "engines": {
+    "node": ">=18.17.0",
+    "npm": ">=9.6.7"
+  },
   "scripts": {
     "dev": "next dev -p 5000",
     "build": "next build",
@@ -16,22 +20,29 @@
   "dependencies": {
     "@braintree/sanitize-url": "7.1.0",
     "@cashu/cashu-ts": "2.1.0",
+    "@ducanh2912/next-pwa": "10.2.9",
     "@getalby/lightning-tools": "5.0.1",
     "@getalby/sdk": "5.1.2",
     "@heroicons/react": "2.1.1",
+    "@modelcontextprotocol/sdk": "1.27.1",
     "@nextui-org/react": "2.2.9",
+    "@sendgrid/mail": "8.1.6",
+    "@stripe/react-stripe-js": "5.6.0",
+    "@stripe/stripe-js": "8.8.0",
     "@types/formidable": "3.4.5",
     "@types/pg": "8.15.4",
+    "@typescript-eslint/eslint-plugin": "8.56.1",
+    "@typescript-eslint/parser": "8.56.1",
     "autoprefixer": "10.4.14",
+    "chart.js": "4.5.1",
     "crypto-js": "4.2.0",
     "dexie": "3.2.4",
     "dexie-react-hooks": "1.1.7",
-    "eslint": "8.38.0",
+    "eslint": "8.57.0",
     "eslint-config-next": "13.3.0",
     "formidable": "3.5.4",
     "framer-motion": "10.16.4",
-    "next": "14.2.32",
-    "next-pwa": "5.6.0",
+    "next": "16.1.7",
     "next-themes": "0.2.1",
     "nostr-tools": "2.7.1",
     "pdf-lib": "1.17.1",
@@ -39,12 +50,14 @@
     "postcss": "8.4.31",
     "qrcode": "1.5.3",
     "react": "18.2.0",
+    "react-chartjs-2": "5.3.1",
     "react-dom": "18.2.0",
     "react-hook-form": "7.47.0",
     "react-responsive-carousel": "3.2.23",
     "stripe": "19.0.0",
     "tailwindcss": "3.3.1",
-    "uuid": "9.0.0"
+    "uuid": "9.0.0",
+    "ws": "8.19.0"
   },
   "devDependencies": {
     "@testing-library/dom": "10.4.0",
@@ -59,23 +72,20 @@
     "@types/react": "18.2.22",
     "@types/react-dom": "18.0.11",
     "@types/uuid": "9.0.4",
-    "@typescript-eslint/eslint-plugin": "6.21.0",
-    "@typescript-eslint/parser": "6.21.0",
     "babel-jest": "30.0.4",
     "eslint-config-prettier": "9.1.0",
     "jest": "29.7.0",
-    "jest-environment-jsdom": "29.7.0",
+    "jest-environment-jsdom": "30.2.0",
     "prettier": "3.1.0",
     "prettier-plugin-tailwindcss": "0.5.7",
     "typescript": "5.2.2"
   },
+  "overrides": {
+    "serialize-javascript": "7.0.4"
+  },
   "resolutions": {
     "@types/react": "18.2.22",
     "@types/react-dom": "18.0.11"
-  },
-  "engines": {
-    "node": ">=18.17.0",
-    "npm": ">=9.6.7"
   },
   "browserslist": {
     "production": [

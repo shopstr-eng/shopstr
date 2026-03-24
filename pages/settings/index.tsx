@@ -6,6 +6,8 @@ import {
   UserGroupIcon,
   ArrowRightStartOnRectangleIcon,
   BanknotesIcon,
+  KeyIcon,
+  EnvelopeIcon,
 } from "@heroicons/react/24/outline";
 import { LogOut } from "@/utils/nostr/nostr-helper-functions";
 
@@ -53,16 +55,32 @@ const SettingsPage = () => {
       iconBg: "bg-slate-600",
       route: "/settings/nwc",
     },
+    {
+      id: "email-flows",
+      title: "Email Flows",
+      description: "Create automated email sequences for your customers",
+      icon: EnvelopeIcon,
+      iconBg: "bg-slate-600",
+      route: "/settings/email-flows",
+    },
+    {
+      id: "api-keys",
+      title: "API Keys",
+      description: "Manage API keys for MCP and AI agent access",
+      icon: KeyIcon,
+      iconBg: "bg-slate-600",
+      route: "/settings/api-keys",
+    },
   ];
 
   return (
     <div className="flex min-h-screen flex-col bg-white pb-20 pt-24">
       <div className="mx-auto w-full px-4 lg:w-1/2 xl:w-2/5">
-        <h1 className="mb-6 text-4xl font-bold">Settings</h1>
+        <h1 className="mb-6 text-4xl font-bold text-black">Settings</h1>
 
         {/* Account Section */}
         <div className="mb-10">
-          <h2 className="mb-3 text-xl font-bold">Account</h2>
+          <h2 className="mb-3 text-xl font-bold text-black">Account</h2>
           <div className="space-y-3">
             {settingsItems.map((item) => {
               const IconComponent = item.icon;
@@ -70,19 +88,17 @@ const SettingsPage = () => {
                 <button
                   key={item.id}
                   onClick={() => router.push(item.route)}
-                  className="group w-full transform cursor-pointer rounded-xl border-3 border-black bg-primary-blue p-4 transition-transform hover:-translate-y-0.5 active:translate-y-0.5"
+                  className="group w-full transform cursor-pointer rounded-md border-2 border-black bg-white p-4 shadow-neo transition-transform hover:-translate-y-0.5 hover:bg-primary-yellow active:translate-y-0.5"
                 >
                   <div className="flex items-center gap-3">
-                    <div
-                      className={`${item.iconBg} rounded-lg border-2 border-black/20 p-2.5`}
-                    >
+                    <div className="rounded-md border-2 border-black bg-primary-blue p-2.5">
                       <IconComponent className="h-5 w-5 text-white" />
                     </div>
                     <div className="flex-1 text-left">
-                      <h3 className="text-base font-bold text-white group-hover:text-gray-100">
+                      <h3 className="text-base font-bold text-black">
                         {item.title}
                       </h3>
-                      <p className="text-sm text-gray-300 group-hover:text-gray-200">
+                      <p className="text-sm text-gray-600">
                         {item.description}
                       </p>
                     </div>
@@ -95,25 +111,21 @@ const SettingsPage = () => {
 
         {/* Log out Section */}
         <div>
-          <h2 className="mb-3 text-xl font-bold">Log out</h2>
+          <h2 className="mb-3 text-xl font-bold text-black">Log out</h2>
           <button
             onClick={() => {
               LogOut();
               router.push("/marketplace");
             }}
-            className="group w-full transform cursor-pointer rounded-xl border-3 border-black bg-primary-blue p-4 transition-transform hover:-translate-y-0.5 active:translate-y-0.5"
+            className="group w-full transform cursor-pointer rounded-md border-2 border-black bg-white p-4 shadow-neo transition-transform hover:-translate-y-0.5 hover:bg-red-100 active:translate-y-0.5"
           >
             <div className="flex items-center gap-3">
-              <div className="rounded-lg border-2 border-black/20 bg-red-400 p-2.5">
+              <div className="rounded-md border-2 border-black bg-red-500 p-2.5">
                 <ArrowRightStartOnRectangleIcon className="h-5 w-5 text-white" />
               </div>
               <div className="flex-1 text-left">
-                <h3 className="text-base font-bold text-white group-hover:text-gray-100">
-                  Log out
-                </h3>
-                <p className="text-sm text-gray-300 group-hover:text-gray-200">
-                  Log out of Milk Market
-                </p>
+                <h3 className="text-base font-bold text-black">Log out</h3>
+                <p className="text-sm text-gray-600">Log out of Milk Market</p>
               </div>
             </div>
           </button>

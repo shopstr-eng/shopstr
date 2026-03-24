@@ -60,7 +60,13 @@ describe("DynamicHead", () => {
 
   test("should render default meta tags for a generic page", async () => {
     mockUseRouter.mockReturnValue({ pathname: "/", query: {} });
-    render(<DynamicHead productEvents={[]} shopEvents={new Map()} />);
+    render(
+      <DynamicHead
+        productEvents={[]}
+        shopEvents={new Map()}
+        profileData={new Map()}
+      />
+    );
     await waitFor(() => {
       expect(document.title).toBe("Milk Market");
     });
@@ -88,7 +94,13 @@ describe("DynamicHead", () => {
         query: { npub: [shopNpub] },
       });
       mockNip19.npubEncode.mockReturnValue(shopNpub);
-      render(<DynamicHead productEvents={[]} shopEvents={shopEvents} />);
+      render(
+        <DynamicHead
+          productEvents={[]}
+          shopEvents={shopEvents}
+          profileData={new Map()}
+        />
+      );
       await waitFor(() => expect(document.title).toBe("Nostr Goods Shop"));
     });
 
@@ -98,7 +110,13 @@ describe("DynamicHead", () => {
         pathname: `/marketplace/${shopNpub}`,
         query: { npub: [shopNpub] },
       });
-      render(<DynamicHead productEvents={[]} shopEvents={new Map()} />);
+      render(
+        <DynamicHead
+          productEvents={[]}
+          shopEvents={new Map()}
+          profileData={new Map()}
+        />
+      );
       await waitFor(() => expect(document.title).toBe("Milk Market Shop"));
     });
 
@@ -106,8 +124,14 @@ describe("DynamicHead", () => {
       mockUseRouter.mockReturnValue({
         pathname: `/marketplace/npub`,
         query: {},
-      }); // No npub in query
-      render(<DynamicHead productEvents={[]} shopEvents={new Map()} />);
+      });
+      render(
+        <DynamicHead
+          productEvents={[]}
+          shopEvents={new Map()}
+          profileData={new Map()}
+        />
+      );
       await waitFor(() => expect(document.title).toBe("Milk Market Shop"));
       expect(getMetaContent("og:url")).toBe(
         `${mockOrigin}/marketplace/undefined`
@@ -131,7 +155,13 @@ describe("DynamicHead", () => {
         query: { npub: [shopNpub] },
       });
       mockNip19.npubEncode.mockReturnValue(shopNpub);
-      render(<DynamicHead productEvents={[]} shopEvents={shopEvents} />);
+      render(
+        <DynamicHead
+          productEvents={[]}
+          shopEvents={shopEvents}
+          profileData={new Map()}
+        />
+      );
       await waitFor(() =>
         expect(getMetaContent("og:image")).toBe("/milk-market.png")
       );
@@ -157,7 +187,11 @@ describe("DynamicHead", () => {
       mockNip19.naddrEncode.mockReturnValue(naddr);
       mockParseTags.mockReturnValue({ title: "Found By ID" });
       render(
-        <DynamicHead productEvents={[productEvent]} shopEvents={new Map()} />
+        <DynamicHead
+          productEvents={[productEvent]}
+          shopEvents={new Map()}
+          profileData={new Map()}
+        />
       );
       await waitFor(() => expect(document.title).toBe("Found By ID"));
     });
@@ -171,7 +205,11 @@ describe("DynamicHead", () => {
       mockNip19.naddrEncode.mockReturnValue(naddr);
       mockParseTags.mockReturnValue({ summary: "Only summary exists." });
       render(
-        <DynamicHead productEvents={[productEvent]} shopEvents={new Map()} />
+        <DynamicHead
+          productEvents={[productEvent]}
+          shopEvents={new Map()}
+          profileData={new Map()}
+        />
       );
       await waitFor(() => expect(document.title).toBe("Milk Market Listing"));
       expect(getMetaContent("og:image")).toBe("/milk-market.png");
@@ -186,7 +224,11 @@ describe("DynamicHead", () => {
       mockNip19.naddrEncode.mockReturnValue(naddr);
       mockParseTags.mockReturnValue(null);
       render(
-        <DynamicHead productEvents={[productEvent]} shopEvents={new Map()} />
+        <DynamicHead
+          productEvents={[productEvent]}
+          shopEvents={new Map()}
+          profileData={new Map()}
+        />
       );
       await waitFor(() => expect(document.title).toBe("Milk Market Listing"));
     });

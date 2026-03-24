@@ -1,12 +1,12 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import Stripe from "stripe";
 import { fiat } from "@getalby/lightning-tools";
+import { getStripeConnectAccount } from "@/utils/db/db-service";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
   apiVersion: "2025-09-30.clover",
 });
 
-// Convert satoshis to USD using Getalby Lightning Tools
 const satsToUSD = async (sats: number): Promise<number> => {
   try {
     const usdAmount = await fiat.getFiatValue({
@@ -16,7 +16,6 @@ const satsToUSD = async (sats: number): Promise<number> => {
     return usdAmount;
   } catch (error) {
     console.error("Error converting sats to USD:", error);
-    // Fallback to approximate rate if conversion fails
     const btcPrice = 100000;
     return (sats / 100000000) * btcPrice;
   }
@@ -41,72 +40,116 @@ export default async function handler(
       metadata,
     } = req.body;
 
-    // Convert amount to USD cents
     let amountInCents: number;
     const currencyLower = currency.toLowerCase();
 
     if (currencyLower === "sats" || currencyLower === "sat") {
-      // Convert sats to USD
       const usdAmount = await satsToUSD(amount);
       amountInCents = Math.round(usdAmount * 100);
     } else if (currencyLower === "btc") {
-      // Convert BTC to sats, then to USD
       const sats = amount * 100000000;
       const usdAmount = await satsToUSD(sats);
       amountInCents = Math.round(usdAmount * 100);
     } else if (currencyLower === "usd") {
-      // Already in USD, just convert to cents
       amountInCents = Math.round(amount * 100);
     } else {
-      // For other fiat currencies, amount is already in that currency
-      // Stripe will handle the conversion, just convert to cents
       amountInCents = Math.round(amount * 100);
     }
 
-    // Create or retrieve customer
-    let customer;
-    if (customerEmail) {
-      const existingCustomers = await stripe.customers.list({
-        email: customerEmail,
-        limit: 1,
-      });
+    const sellerPubkey = metadata?.sellerPubkey;
+    let connectedAccountId: string | null = null;
 
-      if (existingCustomers.data.length > 0) {
-        customer = existingCustomers.data[0];
-      } else {
-        customer = await stripe.customers.create({
-          email: customerEmail,
-          ...(shippingInfo && {
-            shipping: {
-              name: shippingInfo.name,
-              address: {
-                line1: shippingInfo.address,
-                line2: shippingInfo.unit || undefined,
-                city: shippingInfo.city,
-                state: shippingInfo.state,
-                postal_code: shippingInfo.postalCode,
-                country: shippingInfo.country,
-              },
-            },
-          }),
-        });
+    if (sellerPubkey) {
+      const isPlatformAccount =
+        sellerPubkey === process.env.NEXT_PUBLIC_MILK_MARKET_PK;
+
+      if (!isPlatformAccount) {
+        const connectAccount = await getStripeConnectAccount(sellerPubkey);
+        if (connectAccount && connectAccount.charges_enabled) {
+          connectedAccountId = connectAccount.stripe_account_id;
+        }
       }
     }
 
-    // Create invoice
-    const invoice = await stripe.invoices.create({
-      customer: customer?.id,
-      collection_method: "send_invoice",
-      days_until_due: 1,
-      metadata: {
-        ...metadata,
-        originalAmount: amount.toString(),
-        originalCurrency: currency,
-      },
-    });
+    let customer;
+    if (customerEmail) {
+      if (connectedAccountId) {
+        const existingCustomers = await stripe.customers.list(
+          { email: customerEmail, limit: 1 },
+          { stripeAccount: connectedAccountId }
+        );
 
-    // Add invoice item
-    // Always use USD for Stripe invoices since we convert everything to USD
+        if (existingCustomers.data.length > 0) {
+          customer = existingCustomers.data[0];
+        } else {
+          customer = await stripe.customers.create(
+            {
+              email: customerEmail,
+              ...(shippingInfo && {
+                shipping: {
+                  name: shippingInfo.name,
+                  address: {
+                    line1: shippingInfo.address,
+                    line2: shippingInfo.unit || undefined,
+                    city: shippingInfo.city,
+                    state: shippingInfo.state,
+                    postal_code: shippingInfo.postalCode,
+                    country: shippingInfo.country,
+                  },
+                },
+              }),
+            },
+            { stripeAccount: connectedAccountId }
+          );
+        }
+      } else {
+        const existingCustomers = await stripe.customers.list({
+          email: customerEmail,
+          limit: 1,
+        });
+
+        if (existingCustomers.data.length > 0) {
+          customer = existingCustomers.data[0];
+        } else {
+          customer = await stripe.customers.create({
+            email: customerEmail,
+            ...(shippingInfo && {
+              shipping: {
+                name: shippingInfo.name,
+                address: {
+                  line1: shippingInfo.address,
+                  line2: shippingInfo.unit || undefined,
+                  city: shippingInfo.city,
+                  state: shippingInfo.state,
+                  postal_code: shippingInfo.postalCode,
+                  country: shippingInfo.country,
+                },
+              },
+            }),
+          });
+        }
+      }
+    }
+
+    const stripeOptions = connectedAccountId
+      ? { stripeAccount: connectedAccountId }
+      : undefined;
+
+    const invoice = await stripe.invoices.create(
+      {
+        customer: customer?.id,
+        collection_method: "send_invoice",
+        days_until_due: 1,
+        metadata: {
+          ...metadata,
+          originalAmount: amount.toString(),
+          originalCurrency: currency,
+          ...(connectedAccountId && { connectedAccountId }),
+        },
+      },
+      stripeOptions
+    );
+
     const invoiceItemParams: any = {
       invoice: invoice.id,
       amount: amountInCents,
@@ -120,16 +163,20 @@ export default async function handler(
       invoiceItemParams.customer = customer.id;
     }
 
-    await stripe.invoiceItems.create(invoiceItemParams);
+    await stripe.invoiceItems.create(invoiceItemParams, stripeOptions);
 
-    // Finalize and send invoice
-    const finalizedInvoice = await stripe.invoices.finalizeInvoice(invoice.id);
-    await stripe.invoices.sendInvoice(invoice.id);
+    const finalizedInvoice = await stripe.invoices.finalizeInvoice(
+      invoice.id,
+      undefined,
+      stripeOptions
+    );
+    await stripe.invoices.sendInvoice(invoice.id, stripeOptions);
 
     return res.status(200).json({
       success: true,
       invoiceId: finalizedInvoice.id,
       invoiceUrl: finalizedInvoice.hosted_invoice_url,
+      connectedAccountId: connectedAccountId || undefined,
     });
   } catch (error) {
     console.error("Stripe invoice creation error:", error);

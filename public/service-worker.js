@@ -7,48 +7,31 @@ const STATIC_ASSETS = [
   "/milk-market.png",
 ];
 
-// Install event - cache static assets
-self.addEventListener("install", (event) => {
-  event.waitUntil(
-    caches
-      .open(CACHE_NAME)
-      .then((cache) => {
-        return cache.addAll(STATIC_ASSETS);
-      })
-      .then(() => self.skipWaiting())
-  );
-});
+  // Used for `eval` and `importScripts` where we can't get script URL by other means.
+  // In both cases, it's safe to use a global var because those functions are synchronous.
+  let nextDefineUri;
 
-// Activate event - clean up old caches
-self.addEventListener("activate", (event) => {
-  event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cache) => {
-          if (cache !== CACHE_NAME) {
-            return caches.delete(cache);
+  const singleRequire = (uri, parentUri) => {
+    uri = new URL(uri + ".js", parentUri).href;
+    return registry[uri] || (
+      
+        new Promise(resolve => {
+          if ("document" in self) {
+            const script = document.createElement("script");
+            script.src = uri;
+            script.onload = resolve;
+            document.head.appendChild(script);
+          } else {
+            nextDefineUri = uri;
+            importScripts(uri);
+            resolve();
           }
         })
-      );
-    })
-  );
-  return self.clients.claim();
-});
-
-// Intercept fetch requests
-self.addEventListener("fetch", (event) => {
-  // Skip _next resources to avoid caching development resources
-  if (event.request.url.includes("/_next/")) {
-    return;
-  }
-
-  // Cache strategy - network first, fallback to cache
-  event.respondWith(
-    fetch(event.request)
-      .then((response) => {
-        // Check if we received a valid response
-        if (!response || response.status !== 200 || response.type !== "basic") {
-          return response;
+      
+      .then(() => {
+        let promise = registry[uri];
+        if (!promise) {
+          throw new Error(`Module ${uri} didn’t register its module`);
         }
 
         // Clone the response
@@ -83,36 +66,58 @@ self.addEventListener("push", function (event) {
         },
       })
     );
-  } catch (error) {
-    console.error("Error processing push notification:", error);
-  }
-});
+  };
 
-// Notification click handler
-self.addEventListener("notificationclick", function (event) {
-  event.notification.close();
+  self.define = (depsNames, factory) => {
+    const uri = nextDefineUri || ("document" in self ? document.currentScript.src : "") || location.href;
+    if (registry[uri]) {
+      // Module is already loading or loaded.
+      return;
+    }
+    let exports = {};
+    const require = depUri => singleRequire(depUri, uri);
+    const specialDeps = {
+      module: { uri },
+      exports,
+      require
+    };
+    registry[uri] = Promise.all(depsNames.map(
+      depName => specialDeps[depName] || require(depName)
+    )).then(deps => {
+      factory(...deps);
+      return exports;
+    });
+  };
+}
+define(['./workbox-e43f5367'], (function (workbox) { 'use strict';
 
-  event.waitUntil(
-    clients
-      .matchAll({ type: "window", includeUncontrolled: true })
-      .then(function (clientList) {
-        if (clientList.length > 0) {
-          let client = clientList[0];
-          for (let i = 0; i < clientList.length; i++) {
-            if (clientList[i].focused) {
-              client = clientList[i];
-            }
-          }
-          if (event.notification.data?.url) {
-            return client.navigate(event.notification.data.url);
-          }
-          return client.focus();
+  importScripts();
+  self.skipWaiting();
+  workbox.clientsClaim();
+  workbox.registerRoute("/", new workbox.NetworkFirst({
+    "cacheName": "start-url",
+    plugins: [{
+      cacheWillUpdate: async ({
+        request,
+        response,
+        event,
+        state
+      }) => {
+        if (response && response.type === 'opaqueredirect') {
+          return new Response(response.body, {
+            status: 200,
+            statusText: 'OK',
+            headers: response.headers
+          });
         }
+        return response;
+      }
+    }]
+  }), 'GET');
+  workbox.registerRoute(/.*/i, new workbox.NetworkOnly({
+    "cacheName": "dev",
+    plugins: []
+  }), 'GET');
 
-        if (event.notification.data?.url) {
-          return clients.openWindow(event.notification.data.url);
-        }
-        return clients.openWindow("/");
-      })
-  );
-});
+}));
+//# sourceMappingURL=service-worker.js.map

@@ -33,7 +33,6 @@ import {
   generateKeys,
   getLocalStorageData,
 } from "../../utils/nostr/nostr-helper-functions";
-import { addChatMessagesToCache } from "@/utils/nostr/cache-service";
 import { viewEncryptedAgreement } from "@/utils/encryption/agreement-viewer";
 import { encryptFileWithNip44 } from "@/utils/encryption/file-encryption";
 import FailureModal from "../utility-components/failure-modal";
@@ -117,7 +116,8 @@ const ChatMessage = ({
     setCanReview?.(
       subject === "order-info" ||
         subject === "order-receipt" ||
-        subject === "shipping-info"
+        subject === "shipping-info" ||
+        subject === "zapsnag-order"
     );
     setProductAddress?.(productAddress as string);
     setOrderId?.(orderId as string);
@@ -134,6 +134,16 @@ const ChatMessage = ({
   const contentBeforeCashu = cashuPrefix
     ? messageEvent.content.split(cashuPrefix)[0]
     : messageEvent.content;
+
+  let orderData = null;
+  try {
+    if (messageEvent.content.trim().startsWith("{")) {
+      const parsed = JSON.parse(messageEvent.content);
+      if (parsed.type === "zapsnag_order" && parsed.shipping) {
+        orderData = parsed;
+      }
+    }
+  } catch (e) {}
 
   const handleCopyToken = (token: string) => {
     navigator.clipboard.writeText(token);
@@ -333,9 +343,6 @@ const ChatMessage = ({
         },
         true
       );
-      addChatMessagesToCache([
-        { ...giftWrappedMessageEvent, sig: "", read: false },
-      ]);
 
       setShowPdfModal(false);
       setCurrentPdfUrl("");
@@ -654,19 +661,35 @@ const ChatMessage = ({
                   )}
                 </div>
               </>
+            ) : orderData ? (
+              <div className="flex flex-col gap-2 border-l-4 border-yellow-600 pl-3">
+                <span className="text-sm font-bold uppercase opacity-70">
+                  ⚡ Zapsnag Order
+                </span>
+                <div className="font-semibold">{orderData.shipping.name}</div>
+                <div className="text-sm">{orderData.shipping.address}</div>
+                <div className="text-sm">
+                  {orderData.shipping.city}, {orderData.shipping.state}{" "}
+                  {orderData.shipping.zip}
+                </div>
+                <div className="text-sm">{orderData.shipping.country}</div>
+                <div className="mt-1 text-xs opacity-50">
+                  Order ID: {orderData.orderId.slice(0, 8)}...
+                </div>
+              </div>
             ) : (
               renderMessageContent(messageEvent.content)
             )}
           </div>
-          <div className="m-1"></div>
-          <span
-            className={`text-xs opacity-60 ${
-              isUserMessage ? "text-right" : "text-left"
-            }`}
-          >
-            {timeSinceMessageDisplayText(messageEvent.created_at).dateTime}
-          </span>
         </div>
+        <div className="m-1"></div>
+        <span
+          className={`text-xs opacity-60 ${
+            isUserMessage ? "text-right" : "text-left"
+          }`}
+        >
+          {timeSinceMessageDisplayText(messageEvent.created_at).dateTime}
+        </span>
       </div>
 
       {/* PDF Signing Modal */}

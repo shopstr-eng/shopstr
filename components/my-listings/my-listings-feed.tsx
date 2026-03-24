@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useContext, useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
+import type React from "react";
 import MyListingsPage from "./my-listings";
 import ProductForm from "../product-form";
 import { useRouter } from "next/router";

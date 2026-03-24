@@ -1,4 +1,3 @@
-import React from "react";
 import { useRouter } from "next/router";
 import { Card, CardBody, Button, Image } from "@nextui-org/react";
 import { ArrowLeftEndOnRectangleIcon } from "@heroicons/react/24/outline";
@@ -9,7 +8,7 @@ const OnboardingShopProfile = () => {
   const router = useRouter();
 
   const handleFinish = () => {
-    router.push("/marketplace");
+    router.push("/onboarding/stripe-connect");
   };
 
   return (

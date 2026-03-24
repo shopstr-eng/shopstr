@@ -1,19 +1,23 @@
 import { useContext, useRef, useState } from "react";
-import { Button, Input, Progress } from "@nextui-org/react";
+import type React from "react";
+import { Button, Progress } from "@nextui-org/react";
 import {
   blossomUpload,
   getLocalStorageData,
 } from "@/utils/nostr/nostr-helper-functions";
-import FailureModal from "./failure-modal";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import { AnimatePresence, motion } from "framer-motion";
-import { PhotoIcon, ArrowUpTrayIcon } from "@heroicons/react/24/outline";
-// Import your primary button style
+import {
+  PhotoIcon,
+  ArrowUpTrayIcon,
+  XCircleIcon,
+  XMarkIcon,
+} from "@heroicons/react/24/outline";
 import { PRIMARYBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 
-// Maximum file size in bytes (100MB)
-const MAX_FILE_SIZE = 100 * 1024 * 1024;
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const MAX_STRIP_SIZE = 25 * 1024 * 1024;
+const COMPRESSION_THRESHOLD = 20 * 1024 * 1024;
 
 export const FileUploaderButton = ({
   disabled,
@@ -46,62 +50,164 @@ export const FileUploaderButton = ({
   const { signer, isLoggedIn } = useContext(SignerContext);
   const { blossomServers } = getLocalStorageData() || {};
 
-  // Create base64 preview for UI
-  const getBase64 = (file: File): Promise<string> =>
-    new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
+  const getPreviewUrl = (file: File): string => URL.createObjectURL(file);
 
-  // Strip metadata from image
+  const MAX_CANVAS_DIMENSION = 4096;
+
   const stripImageMetadata = async (imageFile: File): Promise<File> => {
-    return new Promise((resolve, reject) => {
-      const img = new window.Image();
-      const url = URL.createObjectURL(imageFile);
+    try {
+      const bitmap = await createImageBitmap(imageFile);
 
-      img.onload = () => {
-        const canvas = document.createElement("canvas");
-        canvas.width = img.width;
-        canvas.height = img.height;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) {
-          URL.revokeObjectURL(url);
-          reject(new Error("Failed to get canvas context"));
-          return;
-        }
-        ctx.drawImage(img, 0, 0);
-        canvas.toBlob((blob) => {
-          if (!blob) {
-            URL.revokeObjectURL(url);
-            reject(new Error("Failed to create blob"));
-            return;
-          }
-          const strippedFile = new File([blob], imageFile.name, {
-            type: imageFile.type,
-            lastModified: Date.now(),
-          });
-          URL.revokeObjectURL(url);
-          resolve(strippedFile);
-        }, imageFile.type);
-      };
+      let targetWidth = bitmap.width;
+      let targetHeight = bitmap.height;
 
-      img.onerror = () => {
-        URL.revokeObjectURL(url);
-        reject(new Error("Failed to load image"));
-      };
+      if (
+        targetWidth > MAX_CANVAS_DIMENSION ||
+        targetHeight > MAX_CANVAS_DIMENSION
+      ) {
+        const scale = Math.min(
+          MAX_CANVAS_DIMENSION / targetWidth,
+          MAX_CANVAS_DIMENSION / targetHeight
+        );
+        targetWidth = Math.round(targetWidth * scale);
+        targetHeight = Math.round(targetHeight * scale);
+      }
 
-      img.src = url;
-    });
+      const canvas = document.createElement("canvas");
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        bitmap.close();
+        throw new Error("Failed to get canvas context");
+      }
+
+      ctx.drawImage(bitmap, 0, 0, targetWidth, targetHeight);
+      bitmap.close();
+
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob(
+          (b) => {
+            if (!b) {
+              reject(new Error("Failed to create blob"));
+              return;
+            }
+            resolve(b);
+          },
+          imageFile.type,
+          0.92
+        );
+      });
+
+      canvas.width = 0;
+      canvas.height = 0;
+
+      const outputType = blob.type || imageFile.type;
+
+      return new File([blob], imageFile.name, {
+        type: outputType,
+        lastModified: Date.now(),
+      });
+    } catch (e) {
+      console.error("Metadata stripping failed, using original file:", e);
+      return imageFile;
+    }
   };
 
-  // Main upload logic
+  const compressImage = async (imageFile: File): Promise<File> => {
+    try {
+      const bitmap = await createImageBitmap(imageFile);
+
+      let targetWidth = bitmap.width;
+      let targetHeight = bitmap.height;
+
+      if (
+        targetWidth > MAX_CANVAS_DIMENSION ||
+        targetHeight > MAX_CANVAS_DIMENSION
+      ) {
+        const scale = Math.min(
+          MAX_CANVAS_DIMENSION / targetWidth,
+          MAX_CANVAS_DIMENSION / targetHeight
+        );
+        targetWidth = Math.round(targetWidth * scale);
+        targetHeight = Math.round(targetHeight * scale);
+      }
+
+      const isPng = imageFile.type === "image/png";
+      const outputType = isPng ? "image/jpeg" : imageFile.type;
+      const outputName = isPng
+        ? imageFile.name.replace(/\.png$/i, ".jpg")
+        : imageFile.name;
+
+      const qualitySteps = [0.85, 0.75, 0.65, 0.5, 0.4, 0.3];
+      const scaleSteps = [1.0, 0.85, 0.7, 0.5, 0.35];
+
+      let lastBlob: Blob | null = null;
+
+      for (const scale of scaleSteps) {
+        const w = Math.round(targetWidth * scale);
+        const h = Math.round(targetHeight * scale);
+
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) continue;
+
+        if (isPng) {
+          ctx.fillStyle = "#FFFFFF";
+          ctx.fillRect(0, 0, w, h);
+        }
+
+        ctx.drawImage(bitmap, 0, 0, w, h);
+
+        for (const quality of qualitySteps) {
+          const blob = await new Promise<Blob>((resolve, reject) => {
+            canvas.toBlob(
+              (b) =>
+                b ? resolve(b) : reject(new Error("Failed to create blob")),
+              outputType,
+              quality
+            );
+          });
+
+          lastBlob = blob;
+
+          if (blob.size <= COMPRESSION_THRESHOLD) {
+            bitmap.close();
+            return new File([blob], outputName, {
+              type: outputType,
+              lastModified: Date.now(),
+            });
+          }
+        }
+      }
+
+      bitmap.close();
+
+      if (lastBlob && lastBlob.size < imageFile.size) {
+        return new File([lastBlob], outputName, {
+          type: outputType,
+          lastModified: Date.now(),
+        });
+      }
+
+      return imageFile;
+    } catch (e) {
+      console.error("Image compression failed, using original file:", e);
+      return imageFile;
+    }
+  };
+
+  const revokePreviewUrls = (urls: { src: string }[]) => {
+    urls.forEach((p) => URL.revokeObjectURL(p.src));
+  };
+
   const uploadImages = async (files: FileList) => {
+    let previewsList: { src: string; name: string; size: number }[] = [];
     try {
       const imageFiles = Array.from(files);
 
-      // Strict MIME type check
       if (
         imageFiles.some(
           (imgFile) =>
@@ -112,38 +218,35 @@ export const FileUploaderButton = ({
         throw new Error("Only JPEG, PNG, or WebP images are supported!");
       }
 
-      // File size check
-      if (imageFiles.some((imgFile) => imgFile.size > MAX_FILE_SIZE)) {
-        throw new Error(
-          `Each image must be smaller than ${MAX_FILE_SIZE / (1024 * 1024)} MB`
-        );
-      }
-
       setProgress(0);
 
-      // Show base64 previews
-      const previewsList = await Promise.all(
-        imageFiles.map(async (file) => {
-          const base64 = await getBase64(file);
-          return { src: base64, name: file.name, size: file.size };
-        })
-      );
+      previewsList = imageFiles.map((file) => ({
+        src: getPreviewUrl(file),
+        name: file.name,
+        size: file.size,
+      }));
       setPreviews(previewsList);
 
-      // Stage 1: Stripping metadata (30%)
-      const strippedImageFiles = await Promise.all(
-        imageFiles.map(async (imageFile, idx) => {
-          const stripped = await stripImageMetadata(imageFile);
-          setProgress(Math.round(((idx + 1) / imageFiles.length) * 30));
-          return stripped;
-        })
-      );
+      const processedImageFiles: File[] = [];
+      for (let idx = 0; idx < imageFiles.length; idx++) {
+        const imageFile = imageFiles[idx]!;
+        let processed: File;
+        if (imageFile.size > MAX_STRIP_SIZE) {
+          processed = imageFile;
+        } else {
+          processed = await stripImageMetadata(imageFile);
+        }
+        if (processed.size > COMPRESSION_THRESHOLD) {
+          processed = await compressImage(processed);
+        }
+        processedImageFiles.push(processed);
+        setProgress(Math.round(((idx + 1) / imageFiles.length) * 30));
+      }
 
-      // Stage 2: Uploading to servers (30% to 100%)
       let responses: any[] = [];
       if (isLoggedIn) {
         responses = await Promise.all(
-          strippedImageFiles.map(async (imageFile, idx) => {
+          processedImageFiles.map(async (imageFile, idx) => {
             const tags = await blossomUpload(
               imageFile,
               true,
@@ -153,7 +256,7 @@ export const FileUploaderButton = ({
                 : ["https://cdn.nostrcheck.me"]
             );
             setProgress(
-              30 + Math.round(((idx + 1) / strippedImageFiles.length) * 70)
+              30 + Math.round(((idx + 1) / processedImageFiles.length) * 70)
             );
             return tags;
           })
@@ -174,7 +277,9 @@ export const FileUploaderButton = ({
         .filter((url) => url !== null);
 
       setTimeout(() => {
-        setProgress(null); // Reset progress after a short delay for better UX
+        setProgress(null);
+        revokePreviewUrls(previewsList);
+        setPreviews([]);
       }, 500);
 
       if (imageUrls && imageUrls.length > 0) {
@@ -188,6 +293,8 @@ export const FileUploaderButton = ({
       }
     } catch (e) {
       setProgress(null);
+      revokePreviewUrls(previewsList);
+      setPreviews([]);
       setFailureText(
         e instanceof Error
           ? e.message
@@ -203,8 +310,8 @@ export const FileUploaderButton = ({
     hiddenFileInput.current?.click();
   };
 
-  const handleChange = async (e: React.FormEvent<HTMLInputElement>) => {
-    const files = e.currentTarget.files;
+  const handleChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
     setLoading(true);
     if (files) {
       const uploadedImages = await uploadImages(files);
@@ -327,12 +434,12 @@ export const FileUploaderButton = ({
           </Button>
         )}
 
-        <Input
+        <input
           type="file"
           accept={ALLOWED_TYPES.join(",")}
           multiple
           ref={hiddenFileInput}
-          onInput={handleChange}
+          onChange={handleChange}
           className="hidden"
         />
 
@@ -385,14 +492,31 @@ export const FileUploaderButton = ({
         )}
       </AnimatePresence>
 
-      <FailureModal
-        bodyText={failureText}
-        isOpen={showFailureModal}
-        onClose={() => {
-          setShowFailureModal(false);
-          setFailureText("");
-        }}
-      />
+      <AnimatePresence>
+        {showFailureModal && failureText && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="flex items-center gap-2 rounded-lg border border-red-300 bg-red-50 p-3 dark:border-red-700 dark:bg-red-900/30"
+          >
+            <XCircleIcon className="h-5 w-5 flex-shrink-0 text-red-500" />
+            <span className="flex-1 text-sm text-red-700 dark:text-red-300">
+              {failureText}
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setShowFailureModal(false);
+                setFailureText("");
+              }}
+              className="flex-shrink-0 rounded-full p-0.5 text-red-500 hover:bg-red-100 dark:hover:bg-red-800/50"
+            >
+              <XMarkIcon className="h-4 w-4" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

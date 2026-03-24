@@ -34,12 +34,19 @@ export type ProductData = {
   volumePrice?: number;
   selectedWeight?: string;
   weightPrice?: number;
+  bulkPrices?: Map<number, number>;
+  selectedBulkOption?: number;
+  bulkPrice?: number;
   required?: string;
   restrictions?: string;
   pickupLocations?: string[];
   herdshareAgreement?: string;
   expiration?: number;
   beefinit_donation_percentage?: number;
+  subscriptionEnabled?: boolean;
+  subscriptionDiscount?: number;
+  subscriptionFrequency?: string[];
+  rawEvent?: NostrEvent;
 };
 
 export const parseTags = (productEvent: NostrEvent) => {
@@ -56,6 +63,7 @@ export const parseTags = (productEvent: NostrEvent) => {
     price: 0,
     currency: "",
     totalCost: 0,
+    rawEvent: productEvent,
   };
   parsedData.pubkey = productEvent.pubkey;
   parsedData.id = productEvent.id;
@@ -165,6 +173,14 @@ export const parseTags = (productEvent: NostrEvent) => {
           }
         }
         break;
+      case "bulk":
+        if (!parsedData.bulkPrices) {
+          parsedData.bulkPrices = new Map<number, number>();
+        }
+        if (values[0] && values[1]) {
+          parsedData.bulkPrices.set(parseInt(values[0]), parseFloat(values[1]));
+        }
+        break;
       case "condition":
         parsedData.condition = values[0];
         break;
@@ -190,6 +206,16 @@ export const parseTags = (productEvent: NostrEvent) => {
         break;
       case "beefinit_donation_percentage":
         parsedData.beefinit_donation_percentage = Number(values[0]);
+      case "subscription":
+        if (values[0] === "true") {
+          parsedData.subscriptionEnabled = true;
+        }
+        break;
+      case "subscription_discount":
+        parsedData.subscriptionDiscount = Number(values[0]);
+        break;
+      case "subscription_frequency":
+        parsedData.subscriptionFrequency = values;
         break;
       default:
         return;

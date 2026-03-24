@@ -1,4 +1,3 @@
-import React from "react";
 import { Carousel } from "react-responsive-carousel";
 import "react-responsive-carousel/lib/styles/carousel.min.css";
 import { ChevronLeftIcon, ChevronRightIcon } from "@heroicons/react/24/outline";
@@ -33,7 +32,8 @@ export default function ImageCarousel({
           <Image
             src="/no-image-placeholder.png"
             className={imageClass}
-            alt="No image placeholder"
+            alt="No product image available - dairy listing placeholder"
+            loading="lazy"
           />
         </div>,
       ];
@@ -45,7 +45,8 @@ export default function ImageCarousel({
           src={image}
           srcSet={buildSrcSet(image)}
           className={imageClass}
-          alt={image || `Product image ${index + 1}`}
+          alt={`Product image ${index + 1} - farm-fresh dairy listing`}
+          loading="lazy"
           radius="none" // radius="none" is fine, imageClass controls it
           style={{
             width: "100%",

@@ -21,7 +21,7 @@ import {
 import { webln } from "@getalby/sdk";
 import { formatWithCommas } from "@/components/utility-components/display-monetary-info";
 
-const WalletSettingsPage = () => {
+const NWCSettingsPage = () => {
   const [nwcString, setNwcString] = useState("");
   const [walletInfo, setWalletInfo] = useState<any>(null);
   const [balance, setBalance] = useState<number | null>(null);
@@ -163,19 +163,22 @@ const WalletSettingsPage = () => {
             className="mb-4"
             classNames={{
               label: "text-black",
-              input: "text-black",
+              input: "!text-black",
+              inputWrapper:
+                "rounded-md border-2 border-black bg-white shadow-neo data-[hover=true]:bg-white data-[focus=true]:bg-white group-data-[focus=true]:bg-white",
+              innerWrapper: "text-black",
             }}
           />
 
           {error && (
-            <div className="mb-4 flex items-center rounded border border-red-400 bg-red-100 p-3 text-red-700">
+            <div className="mb-4 flex items-center rounded-md border-2 border-black bg-red-100 p-3 text-red-700 shadow-neo">
               <ExclamationCircleIcon className="mr-2 h-5 w-5" />
               <span className="text-sm">{error}</span>
             </div>
           )}
 
           {isSaved && !error && (
-            <div className="mb-4 flex items-center rounded border border-green-400 bg-green-100 p-3 text-green-700">
+            <div className="mb-4 flex items-center rounded-md border-2 border-black bg-green-100 p-3 text-green-700 shadow-neo">
               <CheckCircleIcon className="mr-2 h-5 w-5" />
               <span className="text-sm">Wallet connected successfully!</span>
             </div>
@@ -207,8 +210,8 @@ const WalletSettingsPage = () => {
           </div>
 
           {walletInfo && (
-            <Card className="mt-6 bg-white">
-              <CardHeader>
+            <Card className="mt-6 rounded-md border-2 border-black bg-white shadow-neo">
+              <CardHeader className="border-b-2 border-black">
                 <WalletIcon className="mr-2 h-5 w-5 text-black" />
                 <h3 className="font-bold text-black">
                   Connected Wallet: {walletInfo.alias || "Unknown"}
@@ -222,11 +225,11 @@ const WalletSettingsPage = () => {
                 ) : walletInfo.methods.includes("get_balance") ? (
                   <Spinner size="sm" />
                 ) : (
-                  <p className="text-sm text-gray-500">
+                  <p className="text-sm text-gray-600">
                     Balance: Not available
                   </p>
                 )}
-                <p className="mt-2 text-sm text-gray-500">
+                <p className="mt-2 text-sm text-gray-600">
                   Supports: {walletInfo.methods.join(", ")}
                 </p>
               </CardBody>
@@ -238,4 +241,4 @@ const WalletSettingsPage = () => {
   );
 };
 
-export default WalletSettingsPage;
+export default NWCSettingsPage;

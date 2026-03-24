@@ -1,5 +1,8 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { getDbPool } from "@/utils/db/db-service";
+import {
+  ensureFailedRelayPublishesTable,
+  getDbPool,
+} from "@/utils/db/db-service";
 
 export default async function handler(
   req: NextApiRequest,
@@ -20,6 +23,7 @@ export default async function handler(
     }
 
     client = await dbPool.connect();
+    await ensureFailedRelayPublishesTable(client);
 
     if (incrementRetry) {
       // Increment retry count

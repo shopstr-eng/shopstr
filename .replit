@@ -1,13 +1,13 @@
 run = "npm run dev"
-modules = ["nodejs-18:v20-20231025-d04a94d", "postgresql-16"]
+modules = ["nodejs-20", "python-3.11", "postgresql-16"]
 
 [nix]
 channel = "stable-22_11"
 
 [deployment]
-run = ["npm", "start"]
 deploymentTarget = "autoscale"
 build = ["npm", "run", "build"]
+run = ["npm", "run", "start"]
 
 [[ports]]
 localPort = 3000
@@ -23,15 +23,6 @@ externalPort = 5000
 
 [workflows]
 runButton = "Project"
-
-[[workflows.workflow]]
-name = "Run"
-author = 20519411
-mode = "sequential"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "npm run dev"
 
 [[workflows.workflow]]
 name = "Project"
@@ -56,3 +47,8 @@ outputType = "webview"
 
 [agent]
 expertMode = true
+integrations = ["sendgrid:1.0.0"]
+
+[userenv]
+
+[userenv.shared]

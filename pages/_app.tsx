@@ -55,6 +55,7 @@ import {
 import { Proof } from "@cashu/cashu-ts";
 import TopNav from "@/components/nav-top";
 import DynamicHead from "../components/dynamic-meta-head";
+import StructuredData from "../components/structured-data";
 import {
   NostrContextProvider,
   SignerContextProvider,
@@ -189,10 +190,16 @@ function MilkMarket({ props }: { props: AppProps }) {
 
   const [chatsMap, setChatMap] = useState(new Map());
   const [isChatLoading, setIsChatLoading] = useState(true);
+  const [newOrderIds, setNewOrderIds] = useState<Set<string>>(new Set());
+
   const addNewlyCreatedMessageEvent = useCallback(
     async (messageEvent: NostrMessageEvent, sent?: boolean) => {
       const pubkey = await signer?.getPubKey();
       const newChatsMap = new Map(chatsMap);
+      const eventWithReadStatus = {
+        ...messageEvent,
+        read: sent ? true : false,
+      };
       let chatArray;
       if (messageEvent.pubkey === pubkey) {
         const recipientPubkey = messageEvent.tags.find(
@@ -201,18 +208,18 @@ function MilkMarket({ props }: { props: AppProps }) {
         if (recipientPubkey) {
           chatArray = newChatsMap.get(recipientPubkey) || [];
           if (sent) {
-            chatArray.push(messageEvent);
+            chatArray.push(eventWithReadStatus);
           } else {
-            chatArray = [messageEvent, ...chatArray];
+            chatArray = [eventWithReadStatus, ...chatArray];
           }
           newChatsMap.set(recipientPubkey, chatArray);
         }
       } else {
         chatArray = newChatsMap.get(messageEvent.pubkey) || [];
         if (sent) {
-          chatArray.push(messageEvent);
+          chatArray.push(eventWithReadStatus);
         } else {
-          chatArray = [messageEvent, ...chatArray];
+          chatArray = [eventWithReadStatus, ...chatArray];
         }
         newChatsMap.set(messageEvent.pubkey, chatArray);
       }
@@ -221,6 +228,52 @@ function MilkMarket({ props }: { props: AppProps }) {
     },
     [chatsMap, signer]
   );
+
+  const markAllMessagesAsRead = useCallback(async (): Promise<string[]> => {
+    const unreadMessageIds: string[] = [];
+    const wrappedEventIds: string[] = [];
+
+    for (const [_, messages] of chatsMap) {
+      for (const message of messages as NostrMessageEvent[]) {
+        if (!message.read) {
+          unreadMessageIds.push(message.id);
+          if (message.wrappedEventId) {
+            wrappedEventIds.push(message.wrappedEventId);
+          }
+        }
+      }
+    }
+
+    if (unreadMessageIds.length > 0) {
+      try {
+        const idsForDb =
+          wrappedEventIds.length > 0 ? wrappedEventIds : unreadMessageIds;
+        await fetch("/api/db/mark-messages-read", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ messageIds: idsForDb }),
+        });
+
+        setNewOrderIds(new Set(unreadMessageIds));
+
+        const newChatsMap = new Map(chatsMap);
+        for (const [pubkey, messages] of newChatsMap) {
+          const updatedMessages = (messages as NostrMessageEvent[]).map(
+            (msg) => ({
+              ...msg,
+              read: true,
+            })
+          );
+          newChatsMap.set(pubkey, updatedMessages);
+        }
+        setChatMap(newChatsMap);
+      } catch (error) {
+        console.error("Failed to mark messages as read:", error);
+      }
+    }
+
+    return unreadMessageIds;
+  }, [chatsMap]);
 
   const [followsContext, setFollowsContext] = useState<FollowsContextInterface>(
     {
@@ -703,7 +756,10 @@ function MilkMarket({ props }: { props: AppProps }) {
       <DynamicHead
         productEvents={productContext.productEvents}
         shopEvents={shopContext.shopData}
+        profileData={profileContext.profileData}
+        ssrOgMeta={pageProps?.ogMeta || null}
       />
+      <StructuredData />
       <RelaysContext.Provider value={relaysContext}>
         <BlossomContext.Provider value={blossomContext}>
           <CashuWalletContext.Provider value={cashuWalletContext}>
@@ -720,6 +776,8 @@ function MilkMarket({ props }: { props: AppProps }) {
                               isLoading: isChatLoading,
                               addNewlyCreatedMessageEvent:
                                 addNewlyCreatedMessageEvent,
+                              markAllMessagesAsRead: markAllMessagesAsRead,
+                              newOrderIds: newOrderIds,
                             } as ChatsContextInterface
                           }
                         >
@@ -727,7 +785,9 @@ function MilkMarket({ props }: { props: AppProps }) {
                             router.pathname !== "/producers" &&
                             router.pathname !== "/faq" &&
                             router.pathname !== "/terms" &&
-                            router.pathname !== "/privacy" && (
+                            router.pathname !== "/privacy" &&
+                            router.pathname !== "/about" &&
+                            router.pathname !== "/contact" && (
                               <TopNav
                                 setFocusedPubkey={setFocusedPubkey}
                                 setSelectedSection={setSelectedSection}

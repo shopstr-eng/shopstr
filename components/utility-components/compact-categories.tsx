@@ -1,9 +1,9 @@
-import React from "react";
+import { useState } from "react";
 import { CATEGORIES } from "@/utils/STATIC-VARIABLES";
 import { Chip, Tooltip } from "@nextui-org/react";
 
 const CompactCategories = ({ categories }: { categories: string[] }) => {
-  const [isOpen, setIsOpen] = React.useState(false);
+  const [isOpen, setIsOpen] = useState(false);
 
   // Define the neobrutalist chip style
   const CHIP_CLASSES =

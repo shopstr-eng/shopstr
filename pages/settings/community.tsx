@@ -1,6 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 
-import React, { useContext, useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
+import type React from "react";
 import {
   Button,
   Modal,

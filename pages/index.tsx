@@ -1,8 +1,13 @@
 import { useState, useContext, useEffect } from "react";
+import type React from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
 import { Image } from "@nextui-org/react";
-import { Bars3Icon, XMarkIcon } from "@heroicons/react/24/outline";
+import {
+  Bars3Icon,
+  XMarkIcon,
+  ChevronDownIcon,
+} from "@heroicons/react/24/outline";
 import {
   BLACKBUTTONCLASSNAMES,
   PRIMARYBUTTONCLASSNAMES,
@@ -10,7 +15,31 @@ import {
 } from "@/utils/STATIC-VARIABLES";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 
-// YouTube Carousel Component
+function FAQItem({ question, answer }: { question: string; answer: string }) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <div className="border-b-2 border-black last:border-b-0">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex w-full items-center justify-between py-4 text-left font-bold transition-colors hover:text-zinc-600"
+      >
+        <span>{question}</span>
+        <ChevronDownIcon
+          className={`h-5 w-5 transition-transform ${
+            isOpen ? "rotate-180" : ""
+          }`}
+        />
+      </button>
+      {isOpen && (
+        <div className="pb-4 text-zinc-600">
+          <p>{answer}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function YouTubeCarousel() {
   const [videos, setVideos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -55,7 +84,6 @@ function YouTubeCarousel() {
   return (
     <div className="relative max-w-[84vw] overflow-hidden">
       <div className="animate-scroll flex gap-6 will-change-transform">
-        {/* Duplicate videos for seamless loop */}
         {[...videos, ...videos].map((video, index) => (
           <a
             key={`${video.id}-${index}`}
@@ -170,7 +198,6 @@ export default function StandaloneLanding() {
   const isValidContact =
     contactType === "email" ? isValidEmail(contact) : isValidNostrPub(contact);
 
-  // Component for Plus Pattern Background
   const PlusPattern = () => (
     <div className="pointer-events-none absolute inset-0 opacity-[0.03]">
       <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
@@ -197,45 +224,31 @@ export default function StandaloneLanding() {
 
   return (
     <div className="w-full overflow-x-hidden bg-white font-sans text-black">
-      {/* ================================================================================= */}
-      {/* Navigation Section */}
-      {/* ================================================================================= */}
+      {/* Navigation */}
       <nav className="relative z-20 mx-auto flex max-w-7xl items-center justify-between p-4 md:p-6">
         <div className="flex items-center space-x-2">
           <Image
             src="/milk-market.png"
-            alt="Milk Market"
+            alt="Milk Market logo - farm-fresh dairy marketplace"
             width={32}
             height={32}
             className="h-8 w-8"
+            loading="eager"
           />
           <span className="text-xl font-bold">Milk Market</span>
         </div>
 
-        {/* Desktop Navigation */}
         <div className="hidden md:flex md:items-center md:space-x-4">
           <Link href="/producers" className="w-auto">
             <button className={WHITEBUTTONCLASSNAMES}>Sell Your Dairy</button>
           </Link>
-          <button
-            onClick={() => {
-              const signupSection = document.getElementById("signup");
-              if (signupSection) {
-                signupSection.scrollIntoView({ behavior: "smooth" });
-              }
-            }}
-            className={BLACKBUTTONCLASSNAMES}
-          >
-            Get Updates
-          </button>
           <Link href="/marketplace" className="w-auto">
             <button className={PRIMARYBUTTONCLASSNAMES}>
-              Browse Milk Market
+              Browse Marketplace
             </button>
           </Link>
         </div>
 
-        {/* Mobile Navigation */}
         <div className="relative md:hidden">
           <button
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -257,24 +270,12 @@ export default function StandaloneLanding() {
                   Sell Your Dairy
                 </button>
               </Link>
-              <button
-                className={BLACKBUTTONCLASSNAMES}
-                onClick={() => {
-                  const signupSection = document.getElementById("signup");
-                  if (signupSection) {
-                    signupSection.scrollIntoView({ behavior: "smooth" });
-                  }
-                  setIsMobileMenuOpen(false);
-                }}
-              >
-                Get Updates
-              </button>
               <Link href="/marketplace" className="block">
                 <button
                   className={PRIMARYBUTTONCLASSNAMES}
                   onClick={() => setIsMobileMenuOpen(false)}
                 >
-                  Browse Milk Market
+                  Browse Marketplace
                 </button>
               </Link>
             </div>
@@ -282,414 +283,390 @@ export default function StandaloneLanding() {
         </div>
       </nav>
 
-      {/* ================================================================================= */}
-      {/* Hero Section */}
-      {/* ================================================================================= */}
-      <section className="relative z-10 overflow-hidden border-b-2 border-black bg-grid-pattern px-4 pb-12 pt-12 sm:px-6 lg:px-8">
-        {/* Plus Pattern Background */}
+      {/* Hero Section - Optimized with single CTA and outcome-first headline */}
+      <section className="relative z-10 overflow-hidden border-b-2 border-black bg-grid-pattern px-4 pb-16 pt-12 sm:px-6 lg:px-8">
         <PlusPattern />
 
-        {/* Floating Milk Cartons */}
-        <div className="animate-float-slow pointer-events-none absolute left-[15%] top-[10%] opacity-[0.06]">
+        {/* Background Milk Cartons */}
+        <div className="pointer-events-none absolute left-[10%] top-[15%] opacity-[0.06]">
           <Image
             src="/milk-carton.png"
-            alt="Milk Carton"
+            alt=""
             width={80}
             height={80}
             className="h-20 w-20"
+            loading="lazy"
           />
         </div>
-        <div className="animate-float-medium pointer-events-none absolute right-[20%] top-[25%] opacity-[0.04]">
+        <div className="pointer-events-none absolute right-[12%] top-[20%] opacity-[0.05]">
           <Image
             src="/milk-carton.png"
-            alt="Milk Carton"
-            width={120}
-            height={120}
-            className="h-30 w-30"
-          />
-        </div>
-        <div className="animate-float-fast pointer-events-none absolute bottom-[15%] left-[10%] opacity-[0.08]">
-          <Image
-            src="/milk-carton.png"
-            alt="Milk Carton"
+            alt=""
             width={100}
             height={100}
             className="h-25 w-25"
+            loading="lazy"
           />
         </div>
-        <div className="animate-float-slow pointer-events-none absolute bottom-[20%] right-[12%] opacity-[0.05]">
+        <div className="pointer-events-none absolute bottom-[20%] left-[8%] opacity-[0.07]">
           <Image
             src="/milk-carton.png"
-            alt="Milk Carton"
+            alt=""
             width={90}
             height={90}
             className="h-22 w-22"
+            loading="lazy"
+          />
+        </div>
+        <div className="pointer-events-none absolute bottom-[15%] right-[15%] opacity-[0.05]">
+          <Image
+            src="/milk-carton.png"
+            alt=""
+            width={70}
+            height={70}
+            className="h-18 w-18"
+            loading="lazy"
           />
         </div>
 
-        <div className="relative z-10 mx-auto max-w-5xl text-center">
-          <div className="mb-6 flex justify-center space-x-4">
-            <span className="text-4xl">🐄</span>
-            <span className="text-4xl">🐐</span>
-            <span className="text-4xl">🥛</span>
-            <span className="text-4xl">🚜</span>
-          </div>
-
+        <div className="relative z-10 mx-auto max-w-4xl text-center">
           <h1 className="mb-6 text-4xl font-black leading-tight md:text-6xl">
-            Raw Dairy Direct from <br />
+            Farm-Fresh Dairy <br />
             <span className="relative inline-block">
               <span className="relative z-10 inline-block rounded-lg border-[3px] border-black bg-black px-4 py-2 text-white">
-                Local Farmers
+                Direct to Your Door
               </span>
               <span className="absolute bottom-[-5px] right-[-5px] z-0 h-full w-full rounded-lg border-[3px] border-black bg-primary-yellow"></span>
             </span>
           </h1>
 
-          <p className="mx-auto mb-8 max-w-2xl text-base text-zinc-600">
-            Connect with trusted local dairy farmers and access farm-fresh, raw
-            milk and dairy products. Our marketplace, built with sovereignty and
-            community in mind, ensures secure transactions while directly
-            supporting farmers in your area.
+          <p className="mx-auto mb-4 max-w-xl text-lg text-zinc-600">
+            Find local farmers selling raw milk, cheese, and dairy products. Pay
+            directly. Pick up fresh or have delivered.
           </p>
 
-          <div className="flex flex-wrap items-center justify-center gap-4">
-            <Link href="/marketplace">
-              <button
-                className={`${PRIMARYBUTTONCLASSNAMES} flex items-center gap-2`}
-              >
-                Discover Local Dairy 🥛
-              </button>
-            </Link>
-            <Link href="/producers">
-              <button
-                className={`${WHITEBUTTONCLASSNAMES} flex items-center gap-2`}
-              >
-                Start Selling Today 🚜
-              </button>
-            </Link>
-            <button
-              onClick={() => {
-                const signupSection = document.getElementById("signup");
-                if (signupSection) {
-                  signupSection.scrollIntoView({ behavior: "smooth" });
-                }
-              }}
-              className={`${BLACKBUTTONCLASSNAMES} flex items-center gap-2`}
-            >
-              Stay Milky 📨
+          <div className="mb-8 flex flex-wrap items-center justify-center gap-4 text-sm text-zinc-500">
+            <span className="flex items-center gap-1">
+              <span className="text-green-500">&#10003;</span> Local farms near
+              you
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="text-green-500">&#10003;</span> No mandatory fees
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="text-green-500">&#10003;</span> Direct payments
+            </span>
+          </div>
+
+          <Link href="/marketplace">
+            <button className={`${PRIMARYBUTTONCLASSNAMES} px-8 py-4 text-lg`}>
+              Find Local Dairy Near You
             </button>
-            <Link href="/faq">
-              <button
-                className={`${WHITEBUTTONCLASSNAMES} flex items-center gap-2`}
-              >
-                Learn More 🙋
-              </button>
+          </Link>
+
+          <p className="mt-4 text-sm text-zinc-500">
+            Are you a farmer?{" "}
+            <Link
+              href="/producers"
+              className="font-bold underline hover:text-black"
+            >
+              Start selling today
             </Link>
+          </p>
+        </div>
+      </section>
+
+      {/* Social Proof / Trust Bar */}
+      <section className="border-b-2 border-black bg-zinc-100 py-6">
+        <div className="mx-auto flex max-w-4xl flex-wrap items-center justify-center gap-8 px-4 text-center">
+          <div>
+            <span className="block text-2xl font-black">2+</span>
+            <span className="text-sm text-zinc-600">Local Farms</span>
+          </div>
+          <div>
+            <span className="block text-2xl font-black">10+</span>
+            <span className="text-sm text-zinc-600">Products Listed</span>
+          </div>
+          <div>
+            <span className="block text-2xl font-black">0%</span>
+            <span className="text-sm text-zinc-600">Mandatory Fees</span>
+          </div>
+          <div>
+            <span className="block text-2xl font-black">100%</span>
+            <span className="text-sm text-zinc-600">Direct to Farmer</span>
           </div>
         </div>
       </section>
 
-      {/* ================================================================================= */}
-      {/* Why Choose Us Section */}
-      {/* ================================================================================= */}
-      <section className="relative z-10 border-b-2 border-black bg-zinc-50 py-20">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="mb-16 text-center">
-            <h2 className="mb-4 text-4xl font-black md:text-5xl">
-              Why Choose Milk Market for Raw Dairy?
+      {/* Problem -> Transformation Section */}
+      <section className="relative z-10 border-b-2 border-black bg-white py-16">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+          <div className="grid gap-12 lg:grid-cols-2">
+            <div className="rounded-lg border-2 border-red-200 bg-red-50 p-8">
+              <h3 className="mb-4 text-xl font-black text-red-700">
+                The Problem
+              </h3>
+              <ul className="space-y-3 text-zinc-700">
+                <li className="flex items-start gap-2">
+                  <span className="text-red-500">&#10007;</span>
+                  Grocery store dairy is weeks old and highly processed
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-red-500">&#10007;</span>
+                  Hard to find local farmers who sell raw dairy
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-red-500">&#10007;</span>
+                  Middlemen take a cut and raise prices
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-red-500">&#10007;</span>
+                  No easy way to pay farmers directly
+                </li>
+              </ul>
+            </div>
+
+            <div className="rounded-lg border-2 border-green-200 bg-green-50 p-8">
+              <h3 className="mb-4 text-xl font-black text-green-700">
+                With Milk Market
+              </h3>
+              <ul className="space-y-3 text-zinc-700">
+                <li className="flex items-start gap-2">
+                  <span className="text-green-500">&#10003;</span>
+                  Get dairy straight from the farm, days fresh
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-green-500">&#10003;</span>
+                  Browse local farms by location in seconds
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-green-500">&#10003;</span>
+                  No mandatory fees &mdash; farmers can optionally donate to
+                  support the site
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-green-500">&#10003;</span>
+                  Pay with Bitcoin, cash, or digital methods
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* How It Works - Simplified */}
+      <section
+        id="how-it-works"
+        className="relative z-10 overflow-hidden border-b-2 border-black bg-grid-pattern py-16"
+      >
+        <PlusPattern />
+
+        {/* Background Milk Cartons */}
+        <div className="pointer-events-none absolute left-[8%] top-[12%] opacity-[0.06]">
+          <Image
+            src="/milk-carton.png"
+            alt=""
+            width={95}
+            height={95}
+            className="h-24 w-24"
+            loading="lazy"
+          />
+        </div>
+        <div className="pointer-events-none absolute bottom-[15%] right-[10%] opacity-[0.05]">
+          <Image
+            src="/milk-carton.png"
+            alt=""
+            width={85}
+            height={85}
+            className="h-21 w-21"
+            loading="lazy"
+          />
+        </div>
+
+        <div className="relative z-10 mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
+          <div className="mb-12 text-center">
+            <h2 className="mb-4 text-3xl font-black md:text-4xl">
+              How It Works
             </h2>
             <p className="text-lg text-zinc-600">
-              Connecting consumers with trusted dairy producers
+              Three simple steps to farm-fresh dairy
             </p>
           </div>
 
           <div className="grid gap-8 md:grid-cols-3">
-            <div className="cursor-pointer rounded-lg border-2 border-black bg-white p-8 text-center shadow-neo transition-all hover:-translate-y-1 active:translate-y-0 active:shadow-none">
-              <span className="mb-4 block text-4xl">🚜</span>
-              <h3 className="mb-4 text-xl font-bold">Direct from Farm</h3>
+            <div className="rounded-lg border-2 border-black bg-white p-6 text-center shadow-neo">
+              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-black text-xl font-bold text-white">
+                1
+              </div>
+              <h3 className="mb-2 text-xl font-bold">Browse Local Farms</h3>
               <p className="text-zinc-600">
-                Skip the grocery store and get farm-fresh raw milk, cheese, and
-                dairy products directly from local farmers. Support farmers
-                while enjoying the freshest dairy available in your area.
+                Search by location to find dairy farmers near you
               </p>
             </div>
-            <div className="cursor-pointer rounded-lg border-2 border-black bg-white p-8 text-center shadow-neo transition-all hover:-translate-y-1 active:translate-y-0 active:shadow-none">
-              <span className="mb-4 block text-4xl">🤝</span>
-              <h3 className="mb-4 text-xl font-bold">Peer-to-Peer Payments</h3>
+
+            <div className="rounded-lg border-2 border-black bg-white p-6 text-center shadow-neo">
+              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-black text-xl font-bold text-white">
+                2
+              </div>
+              <h3 className="mb-2 text-xl font-bold">Choose Your Dairy</h3>
               <p className="text-zinc-600">
-                Pay your farmer directly and securely with Bitcoin, cash, or
-                other digital cash methods. Our permissionless platform ensures
-                your transactions are private and secure without intermediaries,
-                with fees at your control.
+                Select raw milk, cheese, butter, and more from their listings
               </p>
             </div>
-            <div className="cursor-pointer rounded-lg border-2 border-black bg-white p-8 text-center shadow-neo transition-all hover:-translate-y-1 active:translate-y-0 active:shadow-none">
-              <span className="mb-4 block text-4xl">🫂</span>
-              <h3 className="mb-4 text-xl font-bold">Community Focused</h3>
+
+            <div className="rounded-lg border-2 border-black bg-white p-6 text-center shadow-neo">
+              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-black text-xl font-bold text-white">
+                3
+              </div>
+              <h3 className="mb-2 text-xl font-bold">Pay & Pick Up</h3>
               <p className="text-zinc-600">
-                Build relationships with local dairy farmers and support your
-                community&apos;s agricultural economy. Access farm-fresh
-                products while contributing to sustainable local food systems.
+                Pay the farmer directly and arrange pickup or delivery
               </p>
             </div>
+          </div>
+
+          <div className="mt-10 text-center">
+            <Link href="/marketplace">
+              <button className={PRIMARYBUTTONCLASSNAMES}>
+                Start Browsing
+              </button>
+            </Link>
           </div>
         </div>
       </section>
 
-      {/* ================================================================================= */}
-      {/* How It Works Section */}
-      {/* ================================================================================= */}
-      <section
-        id="how-it-works"
-        className="relative z-10 overflow-hidden bg-grid-pattern py-20"
-        style={{ borderBottom: "2px solid black" }}
-      >
-        {/* Plus Pattern Background */}
-        <PlusPattern />
-
-        {/* Floating Milk Cartons */}
-        <div className="animate-float-fast pointer-events-none absolute left-[8%] top-[12%] opacity-[0.07]">
-          <Image
-            src="/milk-carton.png"
-            alt="Milk Carton"
-            width={110}
-            height={110}
-            className="h-28 w-28"
-          />
-        </div>
-        <div className="animate-float-medium pointer-events-none absolute right-[15%] top-[35%] opacity-[0.05]">
-          <Image
-            src="/milk-carton.png"
-            alt="Milk Carton"
-            width={95}
-            height={95}
-            className="h-24 w-24"
-          />
-        </div>
-        <div className="animate-float-slow pointer-events-none absolute bottom-[10%] left-[18%] opacity-[0.06]">
-          <Image
-            src="/milk-carton.png"
-            alt="Milk Carton"
-            width={105}
-            height={105}
-            className="h-26 w-26"
-          />
-        </div>
-        <div className="animate-float-fast pointer-events-none absolute bottom-[25%] right-[8%] opacity-[0.08]">
-          <Image
-            src="/milk-carton.png"
-            alt="Milk Carton"
-            width={85}
-            height={85}
-            className="h-21 w-21"
-          />
-        </div>
-
-        <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="mb-16 text-center">
-            <h2 className="mb-4 text-4xl font-black md:text-5xl">
-              How Milk Market Works
+      {/* Why Choose Us - With Real Numbers */}
+      <section className="relative z-10 border-b-2 border-black bg-zinc-50 py-16">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+          <div className="mb-12 text-center">
+            <h2 className="mb-4 text-3xl font-black md:text-4xl">
+              Why Farmers and Buyers Choose Us
             </h2>
-            <p className="text-lg text-zinc-600">
-              Simple steps to get farm-fresh raw dairy
+            <p className="mx-auto max-w-2xl text-zinc-600">
+              Direct food sales from farms reached{" "}
+              <a
+                href="https://www.ers.usda.gov/data-products/charts-of-note/chart-detail?chartId=108821"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-bold text-blue-700 underline"
+              >
+                $17.5 billion in 2022
+              </a>
+              , up 25% since 2017 according to the USDA Census of Agriculture
+              &mdash; reflecting surging demand for fresh, traceable food sold
+              direct from local farms.
             </p>
           </div>
 
-          <div className="grid gap-16 lg:grid-cols-2">
-            {/* Producers */}
-            <div>
-              <div className="mb-8 flex items-center">
-                <span className="mr-4 text-3xl">🚜</span>
-                <h3 className="text-3xl font-black">Producers</h3>
-              </div>
-
-              <div className="space-y-8">
-                <div className="flex items-start space-x-4">
-                  <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-black font-bold text-white">
-                    1
-                  </div>
-                  <div>
-                    <h4 className="mb-2 text-xl font-bold">List Your Milk</h4>
-                    <p className="text-zinc-600">
-                      Add products to the marketplace with a few clicks
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-start space-x-4">
-                  <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-black font-bold text-white">
-                    2
-                  </div>
-                  <div>
-                    <h4 className="mb-2 text-xl font-bold">Set Terms</h4>
-                    <p className="text-zinc-600">
-                      Define price, delivery type, and preferred payment methods
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-start space-x-4">
-                  <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-black font-bold text-white">
-                    3
-                  </div>
-                  <div>
-                    <h4 className="mb-2 text-xl font-bold">
-                      Grow Your Business
-                    </h4>
-                    <p className="text-zinc-600">
-                      Leverage our online community to expand your customer base
-                    </p>
-                  </div>
-                </div>
-              </div>
+          <div className="grid gap-8 md:grid-cols-3">
+            <div className="rounded-lg border-2 border-black bg-white p-8 text-center shadow-neo">
+              <span className="mb-4 block text-4xl">0%</span>
+              <h3 className="mb-2 text-xl font-bold">No Mandatory Fees</h3>
+              <p className="text-zinc-600">
+                We never take a mandatory cut. Farmers can choose to set an
+                optional donation rate to support the platform, but it&apos;s
+                always their choice.
+              </p>
             </div>
-
-            {/* Drinkers */}
-            <div>
-              <div className="mb-8 flex items-center">
-                <span className="mr-4 text-3xl">🥛</span>
-                <h3 className="text-3xl font-black">Drinkers</h3>
-              </div>
-
-              <div className="space-y-8">
-                <div className="flex items-start space-x-4">
-                  <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-black font-bold text-white">
-                    1
-                  </div>
-                  <div>
-                    <h4 className="mb-2 text-xl font-bold">
-                      Local-first Connections
-                    </h4>
-                    <p className="text-zinc-600">
-                      Find and support farmers in your city, state, and country
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-start space-x-4">
-                  <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-black font-bold text-white">
-                    2
-                  </div>
-                  <div>
-                    <h4 className="mb-2 text-xl font-bold">Secure Checkout</h4>
-                    <p className="text-zinc-600">
-                      Choose Bitcoin, cash, or other digital cash options
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-start space-x-4">
-                  <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-black font-bold text-white">
-                    3
-                  </div>
-                  <div>
-                    <h4 className="mb-2 text-xl font-bold">
-                      From Farm to Table
-                    </h4>
-                    <p className="text-zinc-600">
-                      Schedule pickups and deliveries directly with producers
-                    </p>
-                  </div>
-                </div>
-              </div>
+            <div className="rounded-lg border-2 border-black bg-white p-8 text-center shadow-neo">
+              <span className="mb-4 block text-4xl">100%</span>
+              <h3 className="mb-2 text-xl font-bold">Private & Secure</h3>
+              <p className="text-zinc-600">
+                Your data stays encrypted. No tracking, no selling your info.
+              </p>
             </div>
+            <div className="rounded-lg border-2 border-black bg-white p-8 text-center shadow-neo">
+              <span className="mb-4 block text-4xl">24/7</span>
+              <h3 className="mb-2 text-xl font-bold">Always Available</h3>
+              <p className="text-zinc-600">
+                Browse farms and products anytime. Connect when it works for
+                you.
+              </p>
+            </div>
+          </div>
+
+          <blockquote className="mx-auto mt-10 max-w-3xl rounded-lg border-2 border-black bg-white p-6 text-center shadow-neo">
+            <p className="mb-3 text-lg italic text-zinc-700">
+              &ldquo;The shorter the chain between raw food and fork, the
+              fresher it is and the more transparent the system is.&rdquo;
+            </p>
+            <cite className="text-sm font-bold not-italic text-black">
+              &mdash; Joel Salatin,{" "}
+              <span className="font-normal italic">
+                Everything I Want To Do Is Illegal
+              </span>
+            </cite>
+          </blockquote>
+        </div>
+      </section>
+
+      {/* FAQ Section - Objection Handling */}
+      <section className="relative z-10 border-b-2 border-black bg-white py-16">
+        <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
+          <div className="mb-10 text-center">
+            <h2 className="mb-4 text-3xl font-black md:text-4xl">
+              Common Questions
+            </h2>
+          </div>
+
+          <div className="rounded-lg border-2 border-black bg-white p-6 shadow-neo">
+            <FAQItem
+              question="Is raw milk legal in my state?"
+              answer="Raw milk laws vary by state. Some states allow retail sales, others permit farm sales only, and some restrict it entirely. Check your local regulations. Milk Market simply connects buyers with local farmers - you arrange the transaction directly."
+            />
+            <FAQItem
+              question="How do I pay the farmer?"
+              answer="You pay the farmer directly using whatever method you both agree on - Bitcoin, cash, or other digital payment methods. There are no mandatory platform fees. Farmers may choose to set an optional donation rate to help support the site, but that's entirely up to them."
+            />
+            <FAQItem
+              question="Is my information private?"
+              answer="Yes. All your data is encrypted and private. We never share user data with third parties or regulators. Our platform is built on Nostr, a decentralized protocol that prioritizes privacy."
+            />
+            <FAQItem
+              question="How fresh is the dairy?"
+              answer="That depends on the farmer you choose. Most farms offer dairy that's just days old - far fresher than the weeks-old products you'd find at a grocery store. You can ask your farmer directly about their freshness and handling practices."
+            />
+            <FAQItem
+              question="I'm a farmer. How do I list my products?"
+              answer="It's free and takes just a few minutes. Click 'Sell Your Dairy' in the navigation, create your profile, and start adding products. You set your own prices, delivery options, and payment methods."
+            />
           </div>
         </div>
       </section>
 
-      {/* ================================================================================= */}
-      {/* Explore Section */}
-      {/* ================================================================================= */}
-      <section className="relative z-10 border-b-2 border-black bg-zinc-50 py-20">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="text-center">
-            <h2 className="mb-8 text-4xl font-black">Explore Milk Market</h2>
-            <div className="grid grid-cols-2 gap-6 md:grid-cols-4">
-              <Link
-                href="/marketplace"
-                className="group block rounded-lg border-2 border-black bg-white p-6 shadow-neo transition-transform hover:-translate-y-1"
-              >
-                <span className="mb-2 block text-4xl">🥛</span>
-                <span className="block font-bold">Browse Products</span>
-              </Link>
-              <Link
-                href="/producers"
-                className="group block rounded-lg border-2 border-black bg-white p-6 shadow-neo transition-transform hover:-translate-y-1"
-              >
-                <span className="mb-2 block text-4xl">🚜</span>
-                <span className="block font-bold">Start Selling</span>
-              </Link>
-              <Link
-                href="/communities"
-                className="group block rounded-lg border-2 border-black bg-white p-6 shadow-neo transition-transform hover:-translate-y-1"
-              >
-                <span className="mb-2 block text-4xl">🫂</span>
-                <span className="block font-bold">View Communities</span>
-              </Link>
-              <Link
-                href="/faq"
-                className="group block rounded-lg border-2 border-black bg-white p-6 shadow-neo transition-transform hover:-translate-y-1"
-              >
-                <span className="mb-2 block text-4xl">❓</span>
-                <span className="block font-bold">FAQ</span>
-              </Link>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ================================================================================= */}
       {/* YouTube Videos Section */}
-      {/* ================================================================================= */}
-      <section className="relative z-10 overflow-hidden border-b-2 border-black bg-grid-pattern py-20">
-        {/* Plus Pattern Background */}
+      <section className="relative z-10 overflow-hidden border-b-2 border-black bg-grid-pattern py-16">
         <PlusPattern />
 
-        {/* Floating Milk Cartons */}
-        <div className="animate-float-medium pointer-events-none absolute left-[12%] top-[18%] opacity-[0.06]">
+        {/* Background Milk Cartons */}
+        <div className="pointer-events-none absolute left-[12%] top-[18%] opacity-[0.06]">
           <Image
             src="/milk-carton.png"
-            alt="Milk Carton"
+            alt=""
             width={90}
             height={90}
             className="h-22 w-22"
+            loading="lazy"
           />
         </div>
-        <div className="animate-float-slow pointer-events-none absolute right-[10%] top-[8%] opacity-[0.05]">
+        <div className="pointer-events-none absolute bottom-[20%] right-[8%] opacity-[0.05]">
           <Image
             src="/milk-carton.png"
-            alt="Milk Carton"
-            width={115}
-            height={115}
-            className="h-29 w-29"
-          />
-        </div>
-        <div className="animate-float-fast pointer-events-none absolute bottom-[12%] left-[22%] opacity-[0.07]">
-          <Image
-            src="/milk-carton.png"
-            alt="Milk Carton"
-            width={100}
-            height={100}
-            className="h-25 w-25"
-          />
-        </div>
-        <div className="animate-float-medium pointer-events-none absolute bottom-[30%] right-[18%] opacity-[0.04]">
-          <Image
-            src="/milk-carton.png"
-            alt="Milk Carton"
-            width={95}
-            height={95}
-            className="h-24 w-24"
+            alt=""
+            width={80}
+            height={80}
+            className="h-20 w-20"
+            loading="lazy"
           />
         </div>
 
         <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="mb-16 text-center">
-            <h2 className="mb-4 text-4xl font-black md:text-5xl">
+          <div className="mb-12 text-center">
+            <h2 className="mb-4 text-3xl font-black md:text-4xl">
               Latest from Our Channel
             </h2>
             <p className="text-lg text-zinc-600">
-              Keep up with our latest videos and content
+              Stories from the raw dairy community
             </p>
           </div>
 
@@ -702,167 +679,25 @@ export default function StandaloneLanding() {
               href="https://www.youtube.com/@milkmarketmedia"
               target="_blank"
               rel="noopener noreferrer"
-              className={`${PRIMARYBUTTONCLASSNAMES} inline-flex items-center gap-2`}
+              className={`${WHITEBUTTONCLASSNAMES} inline-flex items-center gap-2`}
             >
               Visit Our Channel
-              <span className="text-xl">📺</span>
             </a>
           </div>
         </div>
       </section>
 
-      {/* ================================================================================= */}
-      {/* Benefits Section */}
-      {/* ================================================================================= */}
-      <section className="relative z-10 border-b-2 border-black bg-zinc-50 py-20">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="mb-16 text-center">
-            <h2 className="mb-4 text-4xl font-black md:text-5xl">
-              Benefits of Local Raw Dairy
-            </h2>
-            <p className="text-lg text-zinc-600">
-              Superior nutrition and community impact
-            </p>
-          </div>
-
-          <div className="mx-auto max-w-6xl">
-            <div className="grid gap-8 lg:grid-cols-2">
-              <div className="cursor-pointer rounded-lg border-2 border-black bg-white p-8 shadow-neo transition-all hover:-translate-y-1 active:translate-y-0 active:shadow-none">
-                <h3 className="mb-4 text-2xl font-bold">
-                  Nutritional Excellence
-                </h3>
-                <p className="mb-6 text-zinc-600">
-                  Farm-fresh, minimally processed dairy from grass-fed animals
-                  provides superior nutrition. Raw milk contains beneficial
-                  enzymes, probiotics, and vitamins that are often lost in
-                  commercial processing.
-                </p>
-                <ul className="space-y-3 text-zinc-600">
-                  <li className="flex items-start">
-                    <span className="mr-2 text-green-500">✓</span>
-                    Higher vitamin and mineral content
-                  </li>
-                  <li className="flex items-start">
-                    <span className="mr-2 text-green-500">✓</span>
-                    Natural probiotics for gut health
-                  </li>
-                  <li className="flex items-start">
-                    <span className="mr-2 text-green-500">✓</span>
-                    No artificial additives or preservatives
-                  </li>
-                  <li className="flex items-start">
-                    <span className="mr-2 text-green-500">✓</span>
-                    Better digestibility for many people
-                  </li>
-                </ul>
-              </div>
-
-              <div className="cursor-pointer rounded-lg border-2 border-black bg-white p-8 shadow-neo transition-all hover:-translate-y-1 active:translate-y-0 active:shadow-none">
-                <h3 className="mb-4 text-2xl font-bold">Community Impact</h3>
-                <p className="mb-6 text-zinc-600">
-                  Supporting local dairy farmers promotes sustainable farming
-                  practices and strengthens our food systems. Small-scale farms
-                  often use regenerative agriculture methods that benefit soil
-                  health and biodiversity.
-                </p>
-                <ul className="space-y-3 text-zinc-600">
-                  <li className="flex items-start">
-                    <span className="mr-2 text-green-500">✓</span>
-                    Resilient and direct supply chains
-                  </li>
-                  <li className="flex items-start">
-                    <span className="mr-2 text-green-500">✓</span>
-                    Support for sustainable farming practices
-                  </li>
-                  <li className="flex items-start">
-                    <span className="mr-2 text-green-500">✓</span>
-                    Preservation of agricultural land
-                  </li>
-                  <li className="flex items-start">
-                    <span className="mr-2 text-green-500">✓</span>
-                    Strengthening local food security
-                  </li>
-                </ul>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ================================================================================= */}
-      {/* CTA Section */}
-      {/* ================================================================================= */}
-      <section className="relative z-10 bg-black py-20 text-white">
-        <div className="mx-auto max-w-7xl px-4 text-center sm:px-6 lg:px-8">
-          <h2 className="mb-6 text-4xl font-black md:text-5xl">
-            Start Supporting Local Dairy Farmers Today
-          </h2>
-          <p className="mx-auto mb-8 max-w-2xl text-lg text-zinc-300">
-            Join the Milk Market community, be a part of the &ldquo;FREE
-            MILK&rdquo; movement, and connect with local farmers for farm-fresh,
-            sustainable raw dairy products.
-          </p>
-          <Link href="/marketplace">
-            <button className={PRIMARYBUTTONCLASSNAMES}>FREE MILK NOW!</button>
-          </Link>
-        </div>
-      </section>
-
-      {/* ================================================================================= */}
       {/* Signup Form Section */}
-      {/* ================================================================================= */}
       <section
         id="signup"
-        className="relative z-10 overflow-hidden border-b-2 border-black bg-grid-pattern py-20"
+        className="relative z-10 overflow-hidden border-b-2 border-black bg-zinc-50 py-16"
       >
-        {/* Plus Pattern Background */}
-        <PlusPattern />
-
-        {/* Floating Milk Cartons */}
-        <div className="animate-float-slow pointer-events-none absolute left-[10%] top-[15%] opacity-[0.08]">
-          <Image
-            src="/milk-carton.png"
-            alt="Milk Carton"
-            width={105}
-            height={105}
-            className="h-26 w-26"
-          />
-        </div>
-        <div className="animate-float-fast pointer-events-none absolute right-[12%] top-[20%] opacity-[0.05]">
-          <Image
-            src="/milk-carton.png"
-            alt="Milk Carton"
-            width={85}
-            height={85}
-            className="h-21 w-21"
-          />
-        </div>
-        <div className="animate-float-medium pointer-events-none absolute bottom-[18%] left-[15%] opacity-[0.06]">
-          <Image
-            src="/milk-carton.png"
-            alt="Milk Carton"
-            width={110}
-            height={110}
-            className="h-28 w-28"
-          />
-        </div>
-        <div className="animate-float-slow pointer-events-none absolute bottom-[10%] right-[20%] opacity-[0.07]">
-          <Image
-            src="/milk-carton.png"
-            alt="Milk Carton"
-            width={95}
-            height={95}
-            className="h-24 w-24"
-          />
-        </div>
-
         <div className="relative z-10 mx-auto max-w-2xl px-4 text-center sm:px-6 lg:px-8">
-          <h2 className="mb-6 text-4xl font-black md:text-5xl">
-            Stay Updated on Farms, Food, and Freedom
+          <h2 className="mb-4 text-3xl font-black md:text-4xl">
+            Stay in the Loop
           </h2>
           <p className="mb-8 text-lg text-zinc-600">
-            Be in the know on new product listings, community events, and the
-            rearchitecting of our broken food system
+            Get updates on new farms, products, and the raw dairy movement
           </p>
 
           <div className="rounded-lg border-2 border-black bg-white p-8 text-left shadow-neo">
@@ -924,7 +759,7 @@ export default function StandaloneLanding() {
                 disabled={!isValidContact || isSubmitting}
                 className={`${BLACKBUTTONCLASSNAMES} w-full`}
               >
-                {isSubmitting ? "Submitting..." : "Submit"}
+                {isSubmitting ? "Submitting..." : "Get Updates"}
               </button>
             </form>
 
@@ -937,152 +772,91 @@ export default function StandaloneLanding() {
                 }`}
               >
                 <p className="flex items-center space-x-2">
-                  <span>{submitMessage.type === "success" ? "✅" : "❌"}</span>
+                  <span>
+                    {submitMessage.type === "success" ? "&#10003;" : "&#10007;"}
+                  </span>
                   <span>{submitMessage.text}</span>
                 </p>
               </div>
             )}
 
-            <div className="mt-6 text-sm text-zinc-500">
-              <p className="flex items-center justify-center space-x-1">
-                <span>🔒</span>
-                <span>
-                  Your contact info stays private and will never be shared
-                </span>
-              </p>
+            <div className="mt-6 text-center text-sm text-zinc-500">
+              <p>Your contact info stays private and will never be shared</p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* ================================================================================= */}
-      {/* Get In Touch Section */}
-      {/* ================================================================================= */}
-      <section className="relative z-10 w-full border-b-2 border-black bg-zinc-50 py-20">
-        <div className="mx-auto max-w-7xl px-4 text-center sm:px-6 lg:px-8">
-          <h2 className="mb-8 text-4xl font-black md:text-5xl">Get In Touch</h2>
-          <div className="mx-auto max-w-2xl rounded-lg border-2 border-black bg-white p-8 shadow-neo">
-            <p className="mb-6 text-center text-lg text-zinc-700">
-              Have questions about Milk Market? Reach out to us:
-            </p>
-            <div className="space-y-4 text-left">
-              <div className="flex items-center space-x-3">
-                <span className="text-2xl">📧</span>
-                <a
-                  href="mailto:freemilk@milk.market"
-                  className="break-all font-medium text-black underline"
-                >
-                  Email: freemilk@milk.market
-                </a>
-              </div>
-              <div className="flex items-center space-x-3">
-                <span className="text-2xl">⚡️</span>
-                <a
-                  href="https://njump.me/milkmarket@milk.market"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="break-all font-medium text-black underline"
-                >
-                  Nostr: milkmarket@milk.market
-                </a>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ================================================================================= */}
       {/* Final CTA Section */}
-      {/* ================================================================================= */}
-      <section className="relative z-10 bg-black py-20 text-white">
-        <div className="mx-auto max-w-7xl px-4 text-center sm:px-6 lg:px-8">
-          <h2 className="mb-6 text-4xl font-black md:text-5xl">
-            Ready to Support Local Farmers?
+      <section className="relative z-10 bg-black py-16 text-white">
+        <div className="mx-auto max-w-4xl px-4 text-center sm:px-6 lg:px-8">
+          <h2 className="mb-6 text-3xl font-black md:text-4xl">
+            Ready to Get Farm-Fresh Dairy?
           </h2>
           <p className="mx-auto mb-8 max-w-2xl text-lg text-zinc-300">
-            Join those connecting with local dairy producers for farm-fresh,
-            sustainable nutrition!
+            Join the movement connecting people with local dairy farmers
           </p>
           <Link href="/marketplace">
-            <button
-              className={`${PRIMARYBUTTONCLASSNAMES} mx-auto flex items-center gap-2`}
-            >
-              Find Local Dairies 💡
+            <button className={`${PRIMARYBUTTONCLASSNAMES} px-8 py-4 text-lg`}>
+              Find Local Dairy Now
             </button>
           </Link>
         </div>
       </section>
 
-      {/* ================================================================================= */}
       {/* Footer */}
-      {/* ================================================================================= */}
-      <footer className="relative z-10 bg-gray-900 py-16 text-white">
+      <footer className="relative z-10 bg-gray-900 py-12 text-white">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          {/* Trust Signals */}
-          <div className="mb-12 grid gap-8 text-center md:grid-cols-3">
+          <div className="mb-8 grid gap-6 text-center md:grid-cols-3">
             <div>
-              <h4 className="mb-2 text-lg font-bold">🛡️ Private</h4>
-              <p className="text-zinc-400">
-                All Information is Encrypted and Private
+              <h4 className="mb-2 font-bold">Private</h4>
+              <p className="text-sm text-zinc-400">
+                All data encrypted and secure
               </p>
             </div>
             <div>
-              <h4 className="mb-2 text-lg font-bold">⛔️ Permissionless</h4>
-              <p className="text-zinc-400">
-                No Central Server Can Shut Us Down
+              <h4 className="mb-2 font-bold">Permissionless</h4>
+              <p className="text-sm text-zinc-400">
+                No central authority controls the platform
               </p>
             </div>
             <div>
-              <h4 className="mb-2 text-lg font-bold">🤝 Peer to Peer</h4>
-              <p className="text-zinc-400">
-                Purchase Directly From Your Local Farmer
+              <h4 className="mb-2 font-bold">Peer to Peer</h4>
+              <p className="text-sm text-zinc-400">
+                Deal directly with farmers
               </p>
             </div>
           </div>
 
-          {/* Anti-Censorship Pledge */}
-          <div className="mx-auto mb-12 max-w-4xl rounded-lg border-2 border-primary-yellow bg-zinc-900 p-8">
-            <h3 className="mb-6 text-center text-2xl font-bold">
-              Anti-Censorship Pledge
-            </h3>
-            <p className="mb-4 text-lg font-bold">We Will Never:</p>
-            <ul className="space-y-2 text-zinc-300">
-              <li className="flex items-start">
-                <span className="mr-2 text-red-400">✗</span>
-                Share user data with regulators
-              </li>
-              <li className="flex items-start">
-                <span className="mr-2 text-red-400">✗</span>
-                Remove listings that deal with dairy
-              </li>
-              <li className="flex items-start">
-                <span className="mr-2 text-red-400">✗</span>
-                Freeze funds, transactions, or communications
-              </li>
-            </ul>
-          </div>
-
-          {/* Final Message & Links */}
           <div className="border-t border-zinc-700 pt-8 text-center">
             <div className="mb-6 flex items-center justify-center space-x-2">
               <Image
                 src="/milk-market.png"
-                alt="Milk Market"
+                alt="Milk Market logo - decentralized dairy marketplace"
+                width={32}
+                height={32}
                 className="h-8 w-8"
+                loading="lazy"
               />
               <span className="text-xl font-bold">Milk Market</span>
             </div>
-            <p className="mb-6 text-2xl font-bold">
+            <p className="mb-6 text-lg font-bold">
               The Milk Revolution Won&apos;t Be Pasteurized. Join Us.
             </p>
-            <div className="mb-6 flex items-center justify-center gap-6">
-              <Link href="/faq" className="font-bold hover:underline">
+            <div className="mb-6 flex flex-wrap items-center justify-center gap-6">
+              <Link href="/about" className="text-sm hover:underline">
+                About Us
+              </Link>
+              <Link href="/contact" className="text-sm hover:underline">
+                Contact
+              </Link>
+              <Link href="/faq" className="text-sm hover:underline">
                 FAQ
               </Link>
-              <Link href="/terms" className="font-bold hover:underline">
+              <Link href="/terms" className="text-sm hover:underline">
                 Terms
               </Link>
-              <Link href="/privacy" className="font-bold hover:underline">
+              <Link href="/privacy" className="text-sm hover:underline">
                 Privacy
               </Link>
             </div>
@@ -1095,18 +869,11 @@ export default function StandaloneLanding() {
               >
                 <Image
                   src="/github-mark-white.png"
-                  alt="GitHub"
+                  alt="Milk Market open source code on GitHub"
                   width={24}
                   height={24}
+                  loading="lazy"
                 />
-              </a>
-              <a
-                href="https://x.com/milkmarketmedia"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="transition-transform hover:scale-110"
-              >
-                <Image src="/x-logo-white.png" alt="X" width={24} height={24} />
               </a>
               <a
                 href="https://njump.me/milkmarket@milk.market"
@@ -1116,9 +883,24 @@ export default function StandaloneLanding() {
               >
                 <Image
                   src="/nostr-icon-white-transparent-256x256.png"
-                  alt="Nostr"
+                  alt="Milk Market on Nostr decentralized network"
                   width={32}
                   height={32}
+                  loading="lazy"
+                />
+              </a>
+              <a
+                href="https://x.com/milkmarketmedia"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="transition-transform hover:scale-110"
+              >
+                <Image
+                  src="/x-logo-white.png"
+                  alt="Follow Milk Market on X (Twitter)"
+                  width={24}
+                  height={24}
+                  loading="lazy"
                 />
               </a>
               <a
@@ -1129,9 +911,10 @@ export default function StandaloneLanding() {
               >
                 <Image
                   src="/youtube-icon.png"
-                  alt="YouTube"
+                  alt="Milk Market YouTube channel - dairy farming videos"
                   width={24}
                   height={24}
+                  loading="lazy"
                 />
               </a>
               <a
@@ -1142,9 +925,10 @@ export default function StandaloneLanding() {
               >
                 <Image
                   src="/instagram-icon.png"
-                  alt="Instagram"
+                  alt="Milk Market on Instagram"
                   width={24}
                   height={24}
+                  loading="lazy"
                 />
               </a>
               <a
@@ -1155,13 +939,17 @@ export default function StandaloneLanding() {
               >
                 <Image
                   src="/tiktok-icon.png"
-                  alt="TikTok"
+                  alt="Milk Market on TikTok"
                   width={24}
                   height={24}
+                  loading="lazy"
                 />
               </a>
             </div>
-            <p className="text-zinc-500">© 2025 Milk Market LLC</p>
+            <p className="text-sm text-zinc-500">
+              &copy; {new Date().getFullYear()} Milk Market LLC. All rights
+              reserved.
+            </p>
           </div>
         </div>
       </footer>

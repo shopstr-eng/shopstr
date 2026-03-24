@@ -97,6 +97,8 @@ export interface ChatsContextInterface {
     messageEvent: NostrMessageEvent,
     sent?: boolean
   ) => void;
+  markAllMessagesAsRead: () => Promise<string[]>;
+  newOrderIds: Set<string>;
 }
 
 export const ChatsContext = createContext({
@@ -106,6 +108,8 @@ export const ChatsContext = createContext({
     _messageEvent: NostrMessageEvent,
     _sent?: boolean
   ) => {},
+  markAllMessagesAsRead: async () => [] as string[],
+  newOrderIds: new Set<string>(),
 } as ChatsContextInterface);
 
 export interface FollowsContextInterface {

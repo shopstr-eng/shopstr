@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /settings/
+Disallow: /onboarding/
+Disallow: /auth/
+Disallow: /my-listings/
+Disallow: /wallet/
+
+Sitemap: https://milk.market/sitemap.xml

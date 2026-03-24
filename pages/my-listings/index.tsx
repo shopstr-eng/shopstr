@@ -1,4 +1,3 @@
-import React from "react";
 import MyListingsFeed from "@/components/my-listings/my-listings-feed";
 
 export default function ShopView() {

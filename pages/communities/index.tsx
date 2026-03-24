@@ -1,4 +1,4 @@
-import React, { useContext, useState, useMemo } from "react";
+import { useContext, useState, useMemo } from "react";
 import { CommunityContext } from "@/utils/context/context";
 import CommunityCard from "@/components/communities/CommunityCard";
 import { Input, Divider } from "@nextui-org/react";

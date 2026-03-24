@@ -81,9 +81,38 @@ npm ci
 npm run dev
 ```
 
+### 3. Database Setup
+
+This application requires a PostgreSQL database. You can run it locally using Docker Compose:
+
+1. Start PostgreSQL:
+
+   ```bash
+   docker-compose up -d
+   ```
+
+2. Create a `.env` file in the root directory with the following:
+
+   ```
+   DATABASE_URL=postgresql://milkmarket:milkmarket@localhost:5432/milkmarket
+   ```
+
+3. The database tables will be automatically created on first connection.
+
+4. To stop the database:
+
+   ```bash
+   docker-compose down
+   ```
+
+5. To remove all data and start fresh:
+   ```bash
+   docker-compose down -v
+   ```
+
 The application will be available at `http://localhost:3000`
 
-### 3. Verify Installation
+### 4. Verify Installation
 
 - Open your browser to `http://localhost:3000`
 - Check that the application loads without errors

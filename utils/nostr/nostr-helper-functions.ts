@@ -19,7 +19,6 @@ import { ProductData } from "@/utils/parsers/product-parser-functions";
 import { Proof } from "@cashu/cashu-ts";
 import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
-import { removeProductFromCache } from "@/utils/nostr/cache-service";
 import {
   cacheEventToDatabase,
   deleteEventsFromDatabase,
@@ -59,7 +58,6 @@ export async function deleteEvent(
   );
 
   await finalizeAndSendNostrEvent(signer, nostr, deletionEvent);
-  await removeProductFromCache(event_ids_to_delete);
 
   // Delete from database via API
   deleteEventsFromDatabase(event_ids_to_delete).catch((error) =>
@@ -250,6 +248,7 @@ export async function constructGiftWrappedEvent(
     paymentReference?: string;
     paymentProof?: string;
     orderAmount?: number;
+    orderCurrency?: string;
     status?: string;
     productData?: ProductData;
     quantity?: number;
@@ -258,6 +257,21 @@ export async function constructGiftWrappedEvent(
     carrier?: string;
     eta?: number;
     isOrder?: boolean;
+    contact?: string;
+    address?: string;
+    pickup?: string;
+    buyerPubkey?: string;
+    donationAmount?: number;
+    donationPercentage?: number;
+    selectedSize?: string;
+    selectedVolume?: string;
+    selectedWeight?: string;
+    selectedBulkOption?: number;
+    subscriptionInfo?: {
+      enabled: boolean;
+      frequency: string;
+      stripeSubscriptionId?: string;
+    };
   } = {}
 ): Promise<GiftWrappedMessageEvent> {
   const { relays } = getLocalStorageData();
@@ -269,6 +283,7 @@ export async function constructGiftWrappedEvent(
     paymentReference,
     paymentProof,
     orderAmount,
+    orderCurrency,
     status,
     productData,
     quantity,
@@ -277,6 +292,17 @@ export async function constructGiftWrappedEvent(
     carrier,
     eta,
     isOrder,
+    contact,
+    address,
+    pickup,
+    buyerPubkey,
+    donationAmount,
+    donationPercentage,
+    selectedSize,
+    selectedVolume,
+    selectedWeight,
+    selectedBulkOption,
+    subscriptionInfo,
   } = options;
 
   const tags = [
@@ -288,14 +314,50 @@ export async function constructGiftWrappedEvent(
   if (isOrder) {
     tags.push(["order", orderId ? orderId : uuidv4()]);
 
+    if (buyerPubkey) tags.push(["b", buyerPubkey]);
     if (type) tags.push(["type", type.toString()]);
     if (orderAmount) tags.push(["amount", orderAmount.toString()]);
-    if (paymentType && paymentReference && paymentProof)
-      tags.push(["payment", paymentType, paymentReference, paymentProof]);
+    if (orderCurrency) tags.push(["currency", orderCurrency]);
+    // Add payment tag with format: ["payment", paymentType, paymentReference, paymentProof?]
+    // For order-payment: ["payment", type, destination/token]
+    // For order-receipt: ["payment", type, reference, proof]
+    if (paymentType && paymentReference) {
+      if (paymentProof) {
+        tags.push(["payment", paymentType, paymentReference, paymentProof]);
+      } else {
+        tags.push(["payment", paymentType, paymentReference]);
+      }
+    }
     if (status) tags.push(["status", status]);
     if (tracking) tags.push(["tracking", tracking]);
     if (carrier) tags.push(["carrier", carrier]);
     if (eta) tags.push(["eta", eta.toString()]);
+    if (contact) tags.push(["contact", contact]);
+    if (address) tags.push(["address", address]);
+    if (pickup) tags.push(["pickup", pickup]);
+    if (selectedSize) tags.push(["size", selectedSize]);
+    if (selectedVolume) tags.push(["volume", selectedVolume]);
+    if (selectedWeight) tags.push(["weight", selectedWeight]);
+    if (selectedBulkOption) tags.push(["bulk", selectedBulkOption.toString()]);
+    if (
+      donationAmount &&
+      donationAmount > 0 &&
+      donationPercentage !== undefined
+    ) {
+      tags.push([
+        "donation_amount",
+        donationAmount.toString(),
+        donationPercentage.toString(),
+      ]);
+    }
+    if (subscriptionInfo && subscriptionInfo.enabled) {
+      tags.push([
+        "subscription",
+        "yes",
+        subscriptionInfo.frequency,
+        subscriptionInfo.stripeSubscriptionId || "",
+      ]);
+    }
 
     // Handle product information for orders
     if (productData || productAddress) {
@@ -433,6 +495,7 @@ export async function sendGiftWrappedMessageEvent(
     const { trackFailedRelayPublish } = await import("@/utils/db/db-client");
     await trackFailedRelayPublish(
       giftWrappedMessageEvent.id,
+      giftWrappedMessageEvent,
       allWriteRelays
     ).catch(console.error);
   }
@@ -964,9 +1027,11 @@ export async function finalizeAndSendNostrEvent(
         error
       );
       const { trackFailedRelayPublish } = await import("@/utils/db/db-client");
-      await trackFailedRelayPublish(signedEvent.id, allWriteRelays).catch(
-        console.error
-      );
+      await trackFailedRelayPublish(
+        signedEvent.id,
+        signedEvent,
+        allWriteRelays
+      ).catch(console.error);
     }
 
     // return the signed event to caller so we know generated IDs
@@ -999,7 +1064,17 @@ export async function blossomUpload(
   }
 
   const arrayBuffer = await fileUpload.arrayBuffer();
-  const wordArray = CryptoJS.lib.WordArray.create(arrayBuffer);
+  const uint8Array = new Uint8Array(arrayBuffer);
+  const words: number[] = [];
+  for (let i = 0; i < uint8Array.length; i += 4) {
+    words.push(
+      ((uint8Array[i] || 0) << 24) |
+        ((uint8Array[i + 1] || 0) << 16) |
+        ((uint8Array[i + 2] || 0) << 8) |
+        (uint8Array[i + 3] || 0)
+    );
+  }
+  const wordArray = CryptoJS.lib.WordArray.create(words, uint8Array.length);
   const hash = CryptoJS.SHA256(wordArray).toString(CryptoJS.enc.Hex);
 
   const event = {
@@ -1023,21 +1098,51 @@ export async function blossomUpload(
     CryptoJS.enc.Utf8.parse(JSON.stringify(signedEvent))
   )}`;
 
+  const validServers = servers
+    .map((s) => {
+      let server = (s || "").trim();
+      if (!server) return null;
+      if (!server.match(/^https?:\/\//i)) {
+        server = `https://${server}`;
+      }
+      try {
+        new URL(server);
+        return server;
+      } catch {
+        return null;
+      }
+    })
+    .filter((s): s is string => s !== null);
+
+  if (validServers.length === 0) {
+    throw new Error(
+      "No valid Blossom servers configured. Please check your media server settings."
+    );
+  }
+
   let tags: string[][] = [];
   let responseUrl: string = "";
-  for (let i = 0; i < servers.length; i++) {
-    const server = servers[i];
+  for (let i = 0; i < validServers.length; i++) {
+    const server = validServers[i];
+
     if (i == 0) {
       const url = new URL("/upload", server);
 
-      const response = await fetch(url, {
+      const res = await fetch(url, {
         method: "PUT",
         body: fileUpload,
         headers: {
           authorization,
           "content-type": fileUpload.type,
         },
-      }).then((res) => res.json());
+      });
+
+      if (!res.ok) {
+        const errorText = await res.text().catch(() => "Unknown server error");
+        throw new Error(`Upload failed (${res.status}): ${errorText}`);
+      }
+
+      const response = await res.json();
 
       responseUrl = response.url;
 

@@ -22,7 +22,7 @@ A global, permissionless marketplace for food freedom.
 - [ ] NIP-50: Search Capability
 - [x] NIP-51: Lists
 - [ ] NIP-56: Reporting
-- [ ] NIP-57: Lightning Zaps
+- [x] NIP-57: Lightning Zaps
 - [ ] NIP-58: Badges
 - [x] NIP-60: Cashu Wallet
 - [ ] NIP-61: Nutzaps

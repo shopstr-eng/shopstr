@@ -1,10 +1,12 @@
-import React, {
+import {
+  Fragment,
   useContext,
   useEffect,
   useState,
   useCallback,
   useMemo,
 } from "react";
+import type { FC } from "react";
 import { Community, CommunityPost, NostrEvent } from "@/utils/types/types";
 import {
   NostrContext,
@@ -118,7 +120,7 @@ const RenderContent = ({
   );
 };
 
-const CommunityFeed: React.FC<CommunityFeedProps> = ({ community }) => {
+const CommunityFeed: FC<CommunityFeedProps> = ({ community }) => {
   const { nostr } = useContext(NostrContext);
   const { signer, pubkey } = useContext(SignerContext);
   const [approvedPosts, setApprovedPosts] = useState<CommunityPost[]>([]);
@@ -330,7 +332,7 @@ const CommunityFeed: React.FC<CommunityFeedProps> = ({ community }) => {
       ) : (
         <div className="space-y-6">
           {topLevelPosts.map((post: CommunityPost) => (
-            <React.Fragment key={post.id}>
+            <Fragment key={post.id}>
               <Card className="rounded-lg border-4 border-black bg-primary-blue shadow-neo">
                 <CardBody className="p-6">
                   <div className="mb-4 flex items-center justify-between">
@@ -507,7 +509,7 @@ const CommunityFeed: React.FC<CommunityFeedProps> = ({ community }) => {
                     ))}
                 </div>
               )}
-            </React.Fragment>
+            </Fragment>
           ))}
         </div>
       )}

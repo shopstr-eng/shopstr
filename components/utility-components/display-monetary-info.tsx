@@ -1,4 +1,3 @@
-import React from "react";
 import { ShippingOptionsType } from "@/utils/STATIC-VARIABLES";
 
 type ProductMonetaryInfo = {
@@ -49,16 +48,25 @@ export default function CompactPriceDisplay({
 
 export function DisplayCheckoutCost({
   monetaryInfo,
+  satsEstimate,
 }: {
   monetaryInfo: ProductMonetaryInfo;
+  satsEstimate?: number | null;
 }) {
   const { shippingType, price, currency } = monetaryInfo;
 
   const formattedPrice = formatWithCommas(price, currency);
+  const isSats =
+    currency.toLowerCase() === "sats" || currency.toLowerCase() === "sat";
 
   return (
     <div className="rounded-md border-2 border-black bg-white p-4 shadow-neo">
       <p className="text-2xl font-bold text-black">{formattedPrice}</p>
+      {!isSats && satsEstimate != null && (
+        <p className="mt-1 text-sm text-gray-500">
+          ≈ {formatWithCommas(satsEstimate, "sats")}
+        </p>
+      )}
       {shippingType && (
         <p className="mt-1 text-sm font-semibold text-blue-600">
           Shipping: {shippingType}

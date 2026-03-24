@@ -1,21 +1,39 @@
 /* eslint-disable @next/next/no-img-element */
 
-import React, { useContext, useEffect, useState, useRef } from "react";
-import { nip19 } from "nostr-tools";
-import { ProductData } from "@/utils/parsers/product-parser-functions";
+import { useContext, useEffect, useRef, useState } from "react";
+import { Event, nip19 } from "nostr-tools";
+import parseTags, {
+  ProductData,
+} from "@/utils/parsers/product-parser-functions";
+import { getListingSlug } from "@/utils/url-slugs";
 import { ProfileWithDropdown } from "./profile/profile-dropdown";
 import { DisplayCheckoutCost } from "./display-monetary-info";
 import ProductInvoiceCard from "../product-invoice-card";
 import { useRouter } from "next/router";
-import { Button, Chip, Input, useDisclosure } from "@nextui-org/react";
+import {
+  Button,
+  Chip,
+  Input,
+  useDisclosure,
+  Dropdown,
+  DropdownTrigger,
+  DropdownMenu,
+  DropdownItem,
+} from "@nextui-org/react";
 import { locationAvatar } from "./dropdowns/location-dropdown";
 import {
   FaceFrownIcon,
   FaceSmileIcon,
   ArrowLongDownIcon,
   ArrowLongUpIcon,
+  EllipsisVerticalIcon,
 } from "@heroicons/react/24/outline";
-import { ReviewsContext } from "@/utils/context/context";
+import {
+  ReviewsContext,
+  ProductContext,
+  ShopMapContext,
+} from "@/utils/context/context";
+import FreeShippingNotification from "../free-shipping-notification";
 import FailureModal from "../utility-components/failure-modal";
 import SuccessModal from "../utility-components/success-modal";
 import SignInModal from "../sign-in/SignInModal";
@@ -24,6 +42,10 @@ import { SignerContext } from "@/components/utility-components/nostr-context-pro
 import VolumeSelector from "./volume-selector";
 import WeightSelector from "./weight-selector";
 import { BLUEBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import BulkSelector from "./bulk-selector";
+import ZapsnagButton from "@/components/ZapsnagButton";
+import { RawEventModal, EventIdModal } from "./modals/event-modals";
+import SubscriptionPricingCards from "./subscription-pricing-cards";
 
 const SUMMARY_CHARACTER_LIMIT = 200;
 
@@ -35,6 +57,7 @@ export default function CheckoutCard({
   setInvoiceGenerationFailed,
   setCashuPaymentSent,
   setCashuPaymentFailed,
+  rawEvent,
 }: {
   productData: ProductData;
   setFiatOrderIsPlaced: (fiatOrderIsPlaced: boolean) => void;
@@ -43,9 +66,16 @@ export default function CheckoutCard({
   setInvoiceGenerationFailed: (invoiceGenerationFailed: boolean) => void;
   setCashuPaymentSent: (cashuPaymentSent: boolean) => void;
   setCashuPaymentFailed: (cashuPaymentFailed: boolean) => void;
+  rawEvent?: Event;
 }) {
   const { pubkey: userPubkey, isLoggedIn } = useContext(SignerContext);
+  const productEventContext = useContext(ProductContext);
+  const shopMapContext = useContext(ShopMapContext);
   const { isOpen, onOpen, onClose } = useDisclosure();
+  const [showFreeShippingNotification, setShowFreeShippingNotification] =
+    useState(false);
+  const [showRawEventModal, setShowRawEventModal] = useState(false);
+  const [showEventIdModal, setShowEventIdModal] = useState(false);
 
   const router = useRouter();
 
@@ -74,10 +104,26 @@ export default function CheckoutCard({
   const [cart, setCart] = useState<ProductData[]>([]);
   const [selectedVolume, setSelectedVolume] = useState<string>("");
   const [selectedWeight, setSelectedWeight] = useState<string>("");
+  const [selectedBulkOption, setSelectedBulkOption] = useState<string>("1");
   const [currentPrice, setCurrentPrice] = useState(productData.price);
   const [discountCode, setDiscountCode] = useState("");
   const [appliedDiscount, setAppliedDiscount] = useState<number>(0);
   const [discountError, setDiscountError] = useState("");
+  const [satsEstimate, setSatsEstimate] = useState<number | null>(null);
+
+  const hasSubscription = !!(
+    productData.subscriptionEnabled &&
+    productData.subscriptionDiscount &&
+    productData.subscriptionFrequency &&
+    productData.subscriptionFrequency.length > 0
+  );
+  const [isSubscriptionSelected, setIsSubscriptionSelected] =
+    useState(hasSubscription);
+  const [selectedFrequency, setSelectedFrequency] = useState<string>(
+    hasSubscription && productData.subscriptionFrequency?.[0]
+      ? productData.subscriptionFrequency[0]
+      : ""
+  );
 
   const reviewsContext = useContext(ReviewsContext);
 
@@ -85,13 +131,29 @@ export default function CheckoutCard({
 
   const hasVolumes = productData.volumes && productData.volumes.length > 0;
   const hasWeights = productData.weights && productData.weights.length > 0;
+  const hasBulkPrices =
+    productData.bulkPrices && productData.bulkPrices.size > 0;
 
   const isExpired = productData.expiration
     ? Date.now() / 1000 > productData.expiration
     : false;
 
+  const isZapsnag =
+    productData.d === "zapsnag" || productData.categories?.includes("zapsnag");
+
   useEffect(() => {
-    if (selectedVolume && productData.volumePrices) {
+    if (
+      selectedBulkOption &&
+      selectedBulkOption !== "1" &&
+      productData.bulkPrices
+    ) {
+      const bulkPrice = productData.bulkPrices.get(
+        parseInt(selectedBulkOption)
+      );
+      if (bulkPrice !== undefined) {
+        setCurrentPrice(bulkPrice);
+      }
+    } else if (selectedVolume && productData.volumePrices) {
       const volumePrice = productData.volumePrices.get(selectedVolume);
       if (volumePrice !== undefined) {
         setCurrentPrice(volumePrice);
@@ -110,6 +172,8 @@ export default function CheckoutCard({
     productData.volumePrices,
     selectedWeight,
     productData.weightPrices,
+    selectedBulkOption,
+    productData.bulkPrices,
   ]);
 
   const toggleExpand = () => {
@@ -229,84 +293,97 @@ export default function CheckoutCard({
   }, [reviewsContext, merchantReview, productData.pubkey]);
 
   const toggleBuyNow = () => {
-    if (isLoggedIn) {
-      setIsBeingPaid(!isBeingPaid);
-    } else {
-      onOpen();
-    }
+    setIsBeingPaid(!isBeingPaid);
   };
 
   const handleAddToCart = () => {
-    if (isLoggedIn) {
-      if (
-        !currencySelection.hasOwnProperty(productData.currency.toUpperCase()) ||
-        productData.totalCost < 1
-      ) {
-        setFailureText(
-          "The price and/or currency set for this listing was invalid."
+    if (
+      !currencySelection.hasOwnProperty(productData.currency.toUpperCase()) ||
+      productData.totalCost < 1
+    ) {
+      setFailureText(
+        "The price and/or currency set for this listing was invalid."
+      );
+      setShowFailureModal(true);
+      return;
+    }
+    let updatedCart = [];
+    const productToAdd = { ...productData };
+
+    if (selectedSize) {
+      productToAdd.selectedSize = selectedSize;
+    }
+    if (selectedVolume) {
+      productToAdd.selectedVolume = selectedVolume;
+      if (productData.volumePrices) {
+        const volumePrice = productData.volumePrices.get(selectedVolume);
+        if (volumePrice !== undefined) {
+          productToAdd.volumePrice = volumePrice;
+        }
+      }
+    }
+    if (selectedWeight) {
+      productToAdd.selectedWeight = selectedWeight;
+      if (productData.weightPrices) {
+        const weightPrice = productData.weightPrices.get(selectedWeight);
+        if (weightPrice !== undefined) {
+          productToAdd.weightPrice = weightPrice;
+        }
+      }
+    }
+    if (selectedBulkOption && selectedBulkOption !== "1") {
+      productToAdd.selectedBulkOption = parseInt(selectedBulkOption);
+      if (productData.bulkPrices) {
+        const bulkPrice = productData.bulkPrices.get(
+          parseInt(selectedBulkOption)
         );
-        setShowFailureModal(true);
-        return;
-      }
-      let updatedCart = [];
-      const productToAdd = { ...productData };
-
-      if (selectedSize) {
-        productToAdd.selectedSize = selectedSize;
-      }
-      if (selectedVolume) {
-        productToAdd.selectedVolume = selectedVolume;
-        if (productData.volumePrices) {
-          const volumePrice = productData.volumePrices.get(selectedVolume);
-          if (volumePrice !== undefined) {
-            productToAdd.volumePrice = volumePrice;
-          }
+        if (bulkPrice !== undefined) {
+          productToAdd.bulkPrice = bulkPrice;
         }
       }
-      if (selectedWeight) {
-        productToAdd.selectedWeight = selectedWeight;
-        if (productData.weightPrices) {
-          const weightPrice = productData.weightPrices.get(selectedWeight);
-          if (weightPrice !== undefined) {
-            productToAdd.weightPrice = weightPrice;
-          }
-        }
-      }
+    }
 
-      updatedCart = [...cart, productToAdd];
-      setCart(updatedCart);
-      localStorage.setItem("cart", JSON.stringify(updatedCart));
+    updatedCart = [...cart, productToAdd];
+    setCart(updatedCart);
+    localStorage.setItem("cart", JSON.stringify(updatedCart));
 
-      // Store discount code if applied
-      if (appliedDiscount > 0 && discountCode) {
-        const storedDiscounts = localStorage.getItem("cartDiscounts");
-        const discounts = storedDiscounts ? JSON.parse(storedDiscounts) : {};
-        discounts[productData.pubkey] = {
-          code: discountCode,
-          percentage: appliedDiscount,
-        };
-        localStorage.setItem("cartDiscounts", JSON.stringify(discounts));
-      }
-    } else {
-      onOpen();
+    if (appliedDiscount > 0 && discountCode) {
+      const storedDiscounts = localStorage.getItem("cartDiscounts");
+      const discounts = storedDiscounts ? JSON.parse(storedDiscounts) : {};
+      discounts[productData.pubkey] = {
+        code: discountCode,
+        percentage: appliedDiscount,
+      };
+      localStorage.setItem("cartDiscounts", JSON.stringify(discounts));
+    }
+
+    const sellerShop = shopMapContext.shopData.get(productData.pubkey);
+    if (
+      sellerShop &&
+      sellerShop.content.freeShippingThreshold &&
+      sellerShop.content.freeShippingThreshold > 0
+    ) {
+      setShowFreeShippingNotification(true);
     }
   };
 
   const handleShare = async () => {
-    const naddr = nip19.naddrEncode({
-      identifier: productData.d as string,
-      pubkey: productData.pubkey,
-      kind: 30402,
-    });
+    const allParsed = productEventContext.productEvents
+      .filter((e: Event) => e.kind !== 1)
+      .map((e: Event) => parseTags(e))
+      .filter((p: ProductData | undefined): p is ProductData => !!p);
+
+    const slug = getListingSlug(productData, allParsed);
+    const listingPath = slug || productData.id;
     const shareData = {
       title: productData.title,
-      url: `${window.location.origin}/listing/${naddr}`,
+      url: `${window.location.origin}/listing/${listingPath}`,
     };
     if (navigator.share) {
       await navigator.share(shareData);
     } else {
       navigator.clipboard.writeText(
-        `${window.location.origin}/listing/${naddr}`
+        `${window.location.origin}/listing/${listingPath}`
       );
       setShowSuccessModal(true);
     }
@@ -388,6 +465,30 @@ export default function CheckoutCard({
     );
   };
 
+  const isSatsCurrency =
+    productData.currency.toLowerCase() === "sats" ||
+    productData.currency.toLowerCase() === "sat";
+
+  useEffect(() => {
+    if (isSatsCurrency) {
+      setSatsEstimate(null);
+      return;
+    }
+    const fetchSatsEstimate = async () => {
+      try {
+        const { fiat } = await import("@getalby/lightning-tools");
+        const numSats = await fiat.getSatoshiValue({
+          amount: currentPrice,
+          currency: productData.currency,
+        });
+        setSatsEstimate(Math.round(numSats));
+      } catch {
+        setSatsEstimate(null);
+      }
+    };
+    fetchSatsEstimate();
+  }, [currentPrice, productData.currency, isSatsCurrency]);
+
   // Calculate discounted price with proper rounding
   const discountAmount =
     appliedDiscount > 0
@@ -397,13 +498,26 @@ export default function CheckoutCard({
   const discountedPrice =
     appliedDiscount > 0 ? currentPrice - discountAmount : currentPrice;
 
-  const discountedTotal = discountedPrice + (productData.shippingCost ?? 0);
+  const subscriptionDiscountAmount =
+    hasSubscription &&
+    isSubscriptionSelected &&
+    productData.subscriptionDiscount
+      ? Math.ceil(
+          ((currentPrice * productData.subscriptionDiscount) / 100) * 100
+        ) / 100
+      : 0;
 
-  // Create updated product data with selected volume price and discount
+  const effectivePrice =
+    isSubscriptionSelected && subscriptionDiscountAmount > 0
+      ? discountedPrice - subscriptionDiscountAmount
+      : discountedPrice;
+
+  const effectiveTotal = effectivePrice + (productData.shippingCost ?? 0);
+
   const updatedProductData = {
     ...productData,
-    price: discountedPrice,
-    totalCost: discountedTotal,
+    price: effectivePrice,
+    totalCost: effectiveTotal,
     originalPrice: currentPrice,
     discountPercentage: appliedDiscount,
     weightPrice:
@@ -413,6 +527,14 @@ export default function CheckoutCard({
     volumePrice:
       selectedVolume && productData.volumePrices
         ? productData.volumePrices.get(selectedVolume)
+        : undefined,
+    selectedBulkOption:
+      selectedBulkOption && selectedBulkOption !== "1"
+        ? parseInt(selectedBulkOption)
+        : undefined,
+    bulkPrice:
+      selectedBulkOption && selectedBulkOption !== "1" && productData.bulkPrices
+        ? productData.bulkPrices.get(parseInt(selectedBulkOption))
         : undefined,
   };
 
@@ -523,14 +645,44 @@ export default function CheckoutCard({
                 </div>
 
                 {/* Product Title */}
-                <h1 className="text-3xl font-bold text-black">
-                  {productData.title}
-                  {isExpired && (
-                    <Chip color="warning" variant="flat" className="ml-2">
-                      Outdated
-                    </Chip>
+                <div className="mt-4 flex w-full items-start justify-between">
+                  <h2 className="text-left text-2xl font-bold text-black">
+                    {productData.title}
+                    {isExpired && (
+                      <Chip color="warning" variant="flat" className="ml-2">
+                        Outdated
+                      </Chip>
+                    )}
+                  </h2>
+                  {rawEvent && (
+                    <Dropdown>
+                      <DropdownTrigger>
+                        <Button
+                          isIconOnly
+                          variant="light"
+                          size="sm"
+                          className="min-w-8 h-8"
+                        >
+                          <EllipsisVerticalIcon className="h-6 w-6 text-gray-500" />
+                        </Button>
+                      </DropdownTrigger>
+                      <DropdownMenu aria-label="Event Actions">
+                        <DropdownItem
+                          key="view-raw"
+                          onPress={() => setShowRawEventModal(true)}
+                        >
+                          View Raw Event
+                        </DropdownItem>
+                        <DropdownItem
+                          key="view-id"
+                          onPress={() => setShowEventIdModal(true)}
+                        >
+                          View Event ID
+                        </DropdownItem>
+                      </DropdownMenu>
+                    </Dropdown>
                   )}
-                </h1>
+                </div>
 
                 {/* Description */}
                 <div>
@@ -604,127 +756,171 @@ export default function CheckoutCard({
                 {/* Size Grid */}
                 {hasSizes && renderSizeGrid()}
 
-                {/* Price Display */}
-                <div className="mt-2">
-                  <DisplayCheckoutCost monetaryInfo={updatedProductData} />
-                </div>
-
-                {productData.pubkey !== userPubkey && (
-                  <div className="mt-4 space-y-2">
-                    <div className="flex gap-2">
-                      <Input
-                        label="Discount Code"
-                        placeholder="Enter code"
-                        value={discountCode}
-                        onChange={(e) =>
-                          setDiscountCode(e.target.value.toUpperCase())
-                        }
-                        className="flex-1 text-white"
-                        disabled={appliedDiscount > 0}
-                        isInvalid={!!discountError}
-                        errorMessage={discountError}
-                      />
-                      {appliedDiscount > 0 ? (
-                        <Button color="warning" onClick={handleRemoveDiscount}>
-                          Remove
-                        </Button>
-                      ) : (
-                        <Button
-                          className={BLUEBUTTONCLASSNAMES}
-                          onClick={handleApplyDiscount}
-                        >
-                          Apply
-                        </Button>
-                      )}
-                    </div>
-                    {appliedDiscount > 0 && (
-                      <p className="text-sm text-green-600">
-                        {appliedDiscount}% discount applied! You save{" "}
-                        {currentPrice - discountedPrice} {productData.currency}
+                {hasBulkPrices && (
+                  <BulkSelector
+                    bulkPrices={productData.bulkPrices!}
+                    basePrice={productData.price}
+                    currency={productData.currency}
+                    selectedBulkOption={selectedBulkOption}
+                    onBulkChange={setSelectedBulkOption}
+                  />
+                )}
+                {hasSubscription && (
+                  <div className="mt-4">
+                    <SubscriptionPricingCards
+                      basePrice={currentPrice}
+                      currency={productData.currency}
+                      discountPercent={productData.subscriptionDiscount!}
+                      frequencies={productData.subscriptionFrequency!}
+                      selectedFrequency={selectedFrequency}
+                      onFrequencyChange={setSelectedFrequency}
+                      isSubscription={isSubscriptionSelected}
+                      onSelectionChange={setIsSubscriptionSelected}
+                    />
+                  </div>
+                )}
+                {!hasSubscription && (
+                  <div className="mt-4">
+                    <DisplayCheckoutCost
+                      monetaryInfo={updatedProductData}
+                      satsEstimate={satsEstimate}
+                    />
+                    {selectedBulkOption && selectedBulkOption !== "1" && (
+                      <p className="mt-1 text-sm text-black">
+                        Bundle: {selectedBulkOption} units
                       </p>
                     )}
                   </div>
                 )}
 
-                {/* Location Chip */}
-                <div className="flex items-center gap-2">
-                  <Chip
-                    startContent={locationAvatar(productData.location)}
-                    className="rounded-full border-2 border-black bg-white px-3 py-1 font-bold shadow-neo"
-                  >
-                    <span className="text-black">
-                      📍 {productData.location}
-                    </span>
-                  </Chip>
-                </div>
+                {isZapsnag ? (
+                  <div className="mt-4">
+                    <ZapsnagButton product={productData} />
+                  </div>
+                ) : (
+                  <>
+                    {productData.pubkey !== userPubkey && (
+                      <div className="mt-4 space-y-2">
+                        <div className="flex gap-2">
+                          <Input
+                            label="Discount Code"
+                            placeholder="Enter code"
+                            value={discountCode}
+                            onChange={(e) =>
+                              setDiscountCode(e.target.value.toUpperCase())
+                            }
+                            className="flex-1 text-white"
+                            disabled={appliedDiscount > 0}
+                            isInvalid={!!discountError}
+                            errorMessage={discountError}
+                          />
+                          {appliedDiscount > 0 ? (
+                            <Button
+                              color="warning"
+                              onClick={handleRemoveDiscount}
+                            >
+                              Remove
+                            </Button>
+                          ) : (
+                            <Button
+                              className={BLUEBUTTONCLASSNAMES}
+                              onClick={handleApplyDiscount}
+                            >
+                              Apply
+                            </Button>
+                          )}
+                        </div>
+                        {appliedDiscount > 0 && (
+                          <p className="text-sm text-green-600">
+                            {appliedDiscount}% discount applied! You save{" "}
+                            {currentPrice - discountedPrice}{" "}
+                            {productData.currency}
+                          </p>
+                        )}
+                      </div>
+                    )}
 
-                {/* Action Buttons */}
-                <div className="flex flex-wrap gap-3">
-                  {productData.status !== "sold" ? (
-                    <>
-                      {/* Buy Now - Solid Yellow */}
+                    {/* Location Chip */}
+                    <div className="flex items-center gap-2">
+                      <Chip
+                        startContent={locationAvatar(productData.location)}
+                        className="rounded-full border-2 border-black bg-white px-3 py-1 font-bold shadow-neo"
+                      >
+                        <span className="text-black">
+                          📍 {productData.location}
+                        </span>
+                      </Chip>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex flex-wrap gap-3">
+                      {productData.status !== "sold" ? (
+                        <>
+                          {/* Buy Now - Solid Yellow */}
+                          <Button
+                            className={`rounded-md border-2 border-black bg-primary-yellow px-6 py-2 font-bold text-black shadow-neo transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
+                              (hasSizes && !selectedSize) ||
+                              (hasVolumes && !selectedVolume) ||
+                              (hasWeights && !selectedWeight)
+                                ? "cursor-not-allowed opacity-50"
+                                : ""
+                            }`}
+                            onClick={toggleBuyNow}
+                            disabled={
+                              (hasSizes && !selectedSize) ||
+                              (hasVolumes && !selectedVolume) ||
+                              (hasWeights && !selectedWeight) ||
+                              isExpired
+                            }
+                            size="lg"
+                          >
+                            Buy Now
+                          </Button>
+
+                          {/* Add To Cart - Light Blue */}
+                          <Button
+                            className={`rounded-md border-2 border-black bg-blue-100 px-6 py-2 font-bold text-black shadow-neo transition-transform hover:-translate-y-0.5 hover:bg-blue-200 active:translate-y-0.5 ${
+                              isAdded ||
+                              (hasSizes && !selectedSize) ||
+                              (hasVolumes && !selectedVolume) ||
+                              (hasWeights && !selectedWeight)
+                                ? "cursor-not-allowed opacity-50"
+                                : ""
+                            }`}
+                            onClick={handleAddToCart}
+                            disabled={
+                              isAdded ||
+                              (hasSizes && !selectedSize) ||
+                              (hasVolumes && !selectedVolume) ||
+                              (hasWeights && !selectedWeight) ||
+                              isExpired
+                            }
+                            size="lg"
+                          >
+                            Add To Cart
+                          </Button>
+                        </>
+                      ) : (
+                        <Button
+                          className="cursor-not-allowed rounded-md border-2 border-black bg-gray-300 px-6 py-2 font-bold text-gray-600 opacity-50 shadow-neo"
+                          disabled
+                          size="lg"
+                        >
+                          Sold Out
+                        </Button>
+                      )}
+
+                      {/* Share - Light Blue */}
                       <Button
-                        className={`rounded-md border-2 border-black bg-primary-yellow px-6 py-2 font-bold text-black shadow-neo transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
-                          (hasSizes && !selectedSize) ||
-                          (hasVolumes && !selectedVolume) ||
-                          (hasWeights && !selectedWeight)
-                            ? "cursor-not-allowed opacity-50"
-                            : ""
-                        }`}
-                        onClick={toggleBuyNow}
-                        disabled={
-                          (hasSizes && !selectedSize) ||
-                          (hasVolumes && !selectedVolume) ||
-                          (hasWeights && !selectedWeight) ||
-                          isExpired
-                        }
+                        className="rounded-md border-2 border-black bg-blue-100 px-6 py-2 font-bold text-black shadow-neo transition-transform hover:-translate-y-0.5 hover:bg-blue-200 active:translate-y-0.5"
+                        onClick={handleShare}
                         size="lg"
                       >
-                        Buy Now
+                        Share
                       </Button>
-
-                      {/* Add To Cart - Light Blue */}
-                      <Button
-                        className={`rounded-md border-2 border-black bg-blue-100 px-6 py-2 font-bold text-black shadow-neo transition-transform hover:-translate-y-0.5 hover:bg-blue-200 active:translate-y-0.5 ${
-                          isAdded ||
-                          (hasSizes && !selectedSize) ||
-                          (hasVolumes && !selectedVolume) ||
-                          (hasWeights && !selectedWeight)
-                            ? "cursor-not-allowed opacity-50"
-                            : ""
-                        }`}
-                        onClick={handleAddToCart}
-                        disabled={
-                          isAdded ||
-                          (hasSizes && !selectedSize) ||
-                          (hasVolumes && !selectedVolume) ||
-                          (hasWeights && !selectedWeight) ||
-                          isExpired
-                        }
-                        size="lg"
-                      >
-                        Add To Cart
-                      </Button>
-                    </>
-                  ) : (
-                    <Button
-                      className="cursor-not-allowed rounded-md border-2 border-black bg-gray-300 px-6 py-2 font-bold text-gray-600 opacity-50 shadow-neo"
-                      disabled
-                      size="lg"
-                    >
-                      Sold Out
-                    </Button>
-                  )}
-
-                  {/* Share - Light Blue */}
-                  <Button
-                    className="rounded-md border-2 border-black bg-blue-100 px-6 py-2 font-bold text-black shadow-neo transition-transform hover:-translate-y-0.5 hover:bg-blue-200 active:translate-y-0.5"
-                    onClick={handleShare}
-                    size="lg"
-                  >
-                    Share
-                  </Button>
-                </div>
+                    </div>
+                  </>
+                )}
 
                 {/* Contact Seller */}
                 {productData.pubkey !== userPubkey && (
@@ -845,11 +1041,25 @@ export default function CheckoutCard({
               selectedSize={selectedSize}
               selectedVolume={selectedVolume}
               selectedWeight={selectedWeight}
+              selectedBulkOption={
+                selectedBulkOption ? parseInt(selectedBulkOption) : undefined
+              }
               discountCode={appliedDiscount > 0 ? discountCode : undefined}
               discountPercentage={
                 appliedDiscount > 0 ? appliedDiscount : undefined
               }
               originalPrice={currentPrice}
+              isSubscription={hasSubscription && isSubscriptionSelected}
+              subscriptionFrequency={
+                hasSubscription && isSubscriptionSelected
+                  ? selectedFrequency
+                  : undefined
+              }
+              subscriptionDiscount={
+                hasSubscription && isSubscriptionSelected
+                  ? productData.subscriptionDiscount
+                  : undefined
+              }
             />
           </div>
         )}
@@ -863,6 +1073,22 @@ export default function CheckoutCard({
           bodyText="Listing URL copied to clipboard!"
           isOpen={showSuccessModal}
           onClose={() => setShowSuccessModal(false)}
+        />
+        <RawEventModal
+          isOpen={showRawEventModal}
+          onClose={() => setShowRawEventModal(false)}
+          rawEvent={rawEvent}
+        />
+        <EventIdModal
+          isOpen={showEventIdModal}
+          onClose={() => setShowEventIdModal(false)}
+          rawEvent={rawEvent}
+        />
+        <FreeShippingNotification
+          isVisible={showFreeShippingNotification}
+          onClose={() => setShowFreeShippingNotification(false)}
+          shopData={shopMapContext.shopData}
+          cart={cart}
         />
       </div>
     </div>

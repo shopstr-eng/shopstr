@@ -106,3 +106,7 @@ body {
 .animate-scroll:hover {
   animation-play-state: paused;
 }
+
+body.sf-active [data-main-nav] {
+  display: none !important;
+}

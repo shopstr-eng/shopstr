@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Modal,
   ModalContent,
@@ -10,6 +10,7 @@ import {
 } from "@nextui-org/react";
 import { PRIMARYBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { useRouter } from "next/router";
+import MilkMarketSpinner from "@/components/utility-components/mm-spinner";
 
 export default function PassphraseChallengeModal({
   actionOnSubmit,
@@ -28,19 +29,34 @@ export default function PassphraseChallengeModal({
 }) {
   const [remindToggled, setRemindToggled] = useState(false);
   const [passphraseInput, setPassphraseInput] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
   const isButtonDisabled = useMemo(() => {
     return passphraseInput.trim().length === 0;
   }, [passphraseInput]);
   const router = useRouter();
+
+  useEffect(() => {
+    if (!isOpen) {
+      setIsLoading(false);
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (error) {
+      setIsLoading(false);
+    }
+  }, [error]);
   const passphraseInputRef = useRef<HTMLInputElement>(null);
 
   const onSubmit = () => {
     if (isButtonDisabled && passphraseInputRef.current) {
       passphraseInputRef.current.focus();
     } else if (!isButtonDisabled) {
-      setIsOpen(false);
+      setIsLoading(true);
       if (actionOnSubmit) {
-        actionOnSubmit(passphraseInput, remindToggled);
+        setTimeout(() => {
+          actionOnSubmit(passphraseInput, remindToggled);
+        }, 0);
       }
     }
   };
@@ -120,6 +136,7 @@ export default function PassphraseChallengeModal({
           <Button
             className="rounded-md border-2 border-black bg-red-500 px-4 py-2 font-bold text-white shadow-neo transition-transform hover:-translate-y-0.5 active:translate-y-0.5"
             onClick={onCancel}
+            isDisabled={isLoading}
           >
             Cancel
           </Button>
@@ -128,9 +145,15 @@ export default function PassphraseChallengeModal({
             className={PRIMARYBUTTONCLASSNAMES}
             type="submit"
             onClick={onSubmit}
-            isDisabled={isButtonDisabled}
+            isDisabled={isButtonDisabled || isLoading}
           >
-            Submit
+            {isLoading ? (
+              <div className="flex items-center justify-center">
+                <MilkMarketSpinner />
+              </div>
+            ) : (
+              "Submit"
+            )}
           </Button>
         </ModalFooter>
       </ModalContent>

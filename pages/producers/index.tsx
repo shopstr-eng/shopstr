@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/router";
 import Head from "next/head";
 import {
@@ -112,8 +112,9 @@ const ProducerGuidePage = () => {
       answer: (
         <>
           Milk Market supports Bitcoin payments through Lightning Network and
-          Cashu tokens. You can also arrange cash payments directly with
-          customers during pickup or delivery and other payment options like{" "}
+          Cashu tokens, as well as credit and debit card payments via Stripe.
+          You can also arrange cash payments directly with customers during
+          pickup or delivery and other payment options like{" "}
           <a
             href="https://cash.app/bitcoin"
             target="_blank"
@@ -178,8 +179,8 @@ const ProducerGuidePage = () => {
       question: "How do I process payments?",
       answer: (
         <>
-          If accepting Bitcoin payments, you can redeem them through the chat
-          interface and directly to the site wallet. With the wallet, you can
+          If accepting Bitcoin payments, you can redeem them through the orders
+          dashboard and directly to the site wallet. With the wallet, you can
           save your payments or send money to another wallet like{" "}
           <a
             href="https://cash.app/bitcoin"
@@ -236,7 +237,7 @@ const ProducerGuidePage = () => {
           content="width=device-width, initial-scale=1, maximum-scale=1"
         />
         <title>
-          Producer Guide - Milk Market | Start Selling Raw Dairy Products
+          Producer Guide - Milk Market | Start Selling Farm-Fresh Dairy Products
         </title>
         <meta
           name="description"
@@ -249,7 +250,7 @@ const ProducerGuidePage = () => {
         <meta property="og:type" content="website" />
         <meta
           property="og:title"
-          content="Producer Guide - Milk Market | Start Selling Raw Dairy Products"
+          content="Producer Guide - Milk Market | Start Selling Farm-Fresh Dairy Products"
         />
         <meta
           property="og:description"
@@ -261,7 +262,7 @@ const ProducerGuidePage = () => {
         <meta property="twitter:url" content="https://milk.market/producers" />
         <meta
           name="twitter:title"
-          content="Producer Guide - Milk Market | Start Selling Raw Dairy Products"
+          content="Producer Guide - Milk Market | Start Selling Farm-Fresh Dairy Products"
         />
         <meta
           name="twitter:description"
@@ -270,7 +271,7 @@ const ProducerGuidePage = () => {
         <meta name="twitter:image" content="/milk-market.png" />
         <meta
           name="keywords"
-          content="milk market producer guide, sell raw dairy, bitcoin payments, nostr marketplace, dairy producer, farm to consumer, direct sales, raw milk sales"
+          content="milk market producer guide, sell raw dairy, sell farm-fresh dairy, bitcoin payments, nostr marketplace, dairy producer, farm to consumer, direct sales, raw milk sales"
         />
       </Head>
       <div className="min-h-screen bg-white">
@@ -444,16 +445,24 @@ const ProducerGuidePage = () => {
                   {[
                     {
                       src: "/sign-in-modal.png",
-                      alt: "Sign In Modal",
+                      alt: "Milk Market sign-in modal for new producer account creation",
                       step: "1.1",
                     },
-                    { src: "/keys-page.png", alt: "Keys Page", step: "1.2" },
+                    {
+                      src: "/keys-page.png",
+                      alt: "Nostr key management page for secure producer authentication",
+                      step: "1.2",
+                    },
                     {
                       src: "/profile-page.png",
-                      alt: "Profile Page",
+                      alt: "Producer profile setup page with farm details and payment preferences",
                       step: "1.3",
                     },
-                    { src: "/shop-page.png", alt: "Shop Page", step: "1.4" },
+                    {
+                      src: "/shop-page.png",
+                      alt: "Customizable farm shop page for displaying dairy products",
+                      step: "1.4",
+                    },
                   ].map((image, idx) => (
                     <div
                       key={idx}
@@ -530,22 +539,22 @@ const ProducerGuidePage = () => {
                   {[
                     {
                       src: "/listing-password-modal.png",
-                      alt: "Listing Password Modal",
+                      alt: "Listing passphrase verification for trusted dairy producers",
                       step: "2.1",
                     },
                     {
                       src: "/product-details-form.png",
-                      alt: "Product Details Form",
+                      alt: "Product listing form for raw milk, cheese, and dairy with pricing options",
                       step: "2.2",
                     },
                     {
                       src: "/pickup-and-volume-details.png",
-                      alt: "Pickup and Volume Details",
+                      alt: "Pickup location and volume pricing configuration for farm products",
                       step: "2.3",
                     },
                     {
                       src: "/list-product-with-passphrase.png",
-                      alt: "List Product with Passphrase",
+                      alt: "Publishing a new dairy product listing to the Milk Market marketplace",
                       step: "2.4",
                     },
                   ].map((image, idx) => (
@@ -621,22 +630,22 @@ const ProducerGuidePage = () => {
                   {[
                     {
                       src: "/fiat-order-chat.png",
-                      alt: "Fiat Order Chat",
+                      alt: "Encrypted chat interface for processing fiat dairy orders",
                       step: "3.1",
                     },
                     {
                       src: "/bitcoin-order-chat.png",
-                      alt: "Bitcoin Order Chat",
+                      alt: "Bitcoin Lightning payment order chat with dairy customer",
                       step: "3.2",
                     },
                     {
                       src: "/bitcoin-payment-redemption-modal.png",
-                      alt: "Bitcoin Payment Redemption Modal",
+                      alt: "Redeeming Bitcoin Cashu payment from dairy product sale",
                       step: "3.3",
                     },
                     {
                       src: "/wallet-page.png",
-                      alt: "Wallet Page",
+                      alt: "Milk Market wallet showing Bitcoin and Cashu balance for dairy sales",
                       step: "3.4",
                     },
                   ].map((image, idx) => (

@@ -14,13 +14,17 @@ export default async function handler(
   }
 
   try {
-    const { invoiceId } = req.body;
+    const { invoiceId, connectedAccountId } = req.body;
 
     if (!invoiceId) {
       return res.status(400).json({ error: "Invoice ID is required" });
     }
 
-    const invoice = await stripe.invoices.retrieve(invoiceId);
+    const stripeOptions = connectedAccountId
+      ? { stripeAccount: connectedAccountId }
+      : undefined;
+
+    const invoice = await stripe.invoices.retrieve(invoiceId, stripeOptions);
 
     return res.status(200).json({
       paid: invoice.status === "paid",

@@ -1,4 +1,3 @@
-import React from "react";
 import { Breadcrumbs, BreadcrumbItem, Divider } from "@nextui-org/react";
 import { useRouter } from "next/router";
 
@@ -8,6 +7,9 @@ const pathMap: { [key: string]: string } = {
   preferences: "Preferences",
   "shop-profile": "Shop Profile",
   community: "Community Management",
+  nwc: "Nostr Wallet Connect",
+  "api-keys": "API Keys",
+  "email-flows": "Email Flows",
 };
 
 export const SettingsBreadCrumbs = () => {

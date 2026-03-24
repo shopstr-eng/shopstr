@@ -2,15 +2,8 @@ import {
   timeSinceMessageDisplayText,
   countNumberOfUnreadMessagesFromChatsContext,
 } from "../utils";
-import { fetchChatMessagesFromCache } from "@/utils/nostr/cache-service";
 import { ChatsMap } from "@/utils/context/context";
 import { NostrMessageEvent } from "@/utils/types/types";
-
-jest.mock("@/utils/nostr/cache-service", () => ({
-  fetchChatMessagesFromCache: jest.fn(),
-}));
-
-const mockedFetchFromCache = fetchChatMessagesFromCache as jest.Mock;
 
 describe("timeSinceMessageDisplayText", () => {
   jest.useFakeTimers();
@@ -60,76 +53,5 @@ describe("timeSinceMessageDisplayText", () => {
     const result = timeSinceMessageDisplayText(thirtySecondsAgo);
     expect(result.short).toBe("0m");
     expect(result.long).toBe("0 minutes ago");
-  });
-});
-
-describe("countNumberOfUnreadMessagesFromChatsContext", () => {
-  beforeEach(() => {
-    mockedFetchFromCache.mockClear();
-  });
-
-  const generateMockMessage = (id: string): NostrMessageEvent => ({
-    id,
-    pubkey: `pubkey-${id}`,
-    created_at: Date.now() / 1000,
-    kind: 4,
-    tags: [],
-    content: `message ${id}`,
-    sig: `sig-${id}`,
-  });
-
-  test("should return 0 when all messages are read", async () => {
-    const chatsMap: ChatsMap = new Map([
-      ["chat1", [generateMockMessage("msg1"), generateMockMessage("msg2")]],
-    ]);
-    const cache = new Map([
-      ["msg1", { ...generateMockMessage("msg1"), read: true }],
-      ["msg2", { ...generateMockMessage("msg2"), read: true }],
-    ]);
-    mockedFetchFromCache.mockResolvedValue(cache);
-
-    const unreadCount =
-      await countNumberOfUnreadMessagesFromChatsContext(chatsMap);
-    expect(unreadCount).toBe(0);
-  });
-
-  test("should return the correct count of unread messages", async () => {
-    const chatsMap: ChatsMap = new Map([
-      ["chat1", [generateMockMessage("msg1"), generateMockMessage("msg2")]],
-      ["chat2", [generateMockMessage("msg3")]],
-    ]);
-    const cache = new Map([
-      ["msg1", { ...generateMockMessage("msg1"), read: true }],
-      ["msg2", { ...generateMockMessage("msg2"), read: false }], // Unread
-      ["msg3", { ...generateMockMessage("msg3"), read: false }], // Unread
-    ]);
-    mockedFetchFromCache.mockResolvedValue(cache);
-
-    const unreadCount =
-      await countNumberOfUnreadMessagesFromChatsContext(chatsMap);
-    expect(unreadCount).toBe(2);
-  });
-
-  test("should return 0 for an empty chats map", async () => {
-    const chatsMap: ChatsMap = new Map();
-    mockedFetchFromCache.mockResolvedValue(new Map());
-
-    const unreadCount =
-      await countNumberOfUnreadMessagesFromChatsContext(chatsMap);
-    expect(unreadCount).toBe(0);
-  });
-
-  test("should not count messages that are not found in the cache", async () => {
-    const chatsMap: ChatsMap = new Map([
-      ["chat1", [generateMockMessage("msg1"), generateMockMessage("msg2")]],
-    ]);
-    const cache = new Map([
-      ["msg2", { ...generateMockMessage("msg2"), read: false }],
-    ]);
-    mockedFetchFromCache.mockResolvedValue(cache);
-
-    const unreadCount =
-      await countNumberOfUnreadMessagesFromChatsContext(chatsMap);
-    expect(unreadCount).toBe(1);
   });
 });

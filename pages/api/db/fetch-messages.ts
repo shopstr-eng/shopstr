@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { fetchCachedEvents } from "@/utils/db/db-service";
+import { fetchAllMessagesFromDb } from "@/utils/db/db-service";
 
 export default async function handler(
   req: NextApiRequest,
@@ -15,7 +15,7 @@ export default async function handler(
       return res.status(400).json({ error: "Invalid pubkey parameter" });
     }
 
-    const messages = await fetchCachedEvents(1059, { pubkey });
+    const messages = await fetchAllMessagesFromDb(pubkey);
     res.status(200).json(messages);
   } catch (error) {
     console.error("Failed to fetch messages from database:", error);
