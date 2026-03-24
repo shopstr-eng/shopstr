@@ -36,7 +36,7 @@ jest.mock("@/utils/STATIC-VARIABLES", () => ({
   PREVNEXTBUTTONSTYLES: "mock-button-styles",
 }));
 
-const MockCarousel = Carousel as jest.Mock;
+const MockCarousel = Carousel as unknown as jest.Mock;
 
 describe("ImageCarousel", () => {
   beforeEach(() => {

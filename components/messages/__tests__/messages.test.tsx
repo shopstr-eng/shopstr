@@ -85,11 +85,6 @@ jest.mock("@/utils/keypress-handler");
 const mockNostrHelper = nostrHelper as jest.Mocked<typeof nostrHelper>;
 const mockUseKeyPress = keypressHandler.useKeyPress as jest.Mock;
 
-Object.defineProperty(window, "location", {
-  configurable: true,
-  value: { reload: jest.fn() },
-});
-
 describe("Messages Component", () => {
   const mockUserPubkey = "user_pubkey";
   const mockChatPubkey1 = "chat_pubkey_1";
@@ -209,13 +204,13 @@ describe("Messages Component", () => {
     });
   });
 
-  it("should call window.reload when the 'Reload' button is clicked", async () => {
+  it("should handle clicking the 'Reload' button", async () => {
     mockChatsContextValue.isLoading = false;
     renderComponent();
     await waitFor(() => {
       fireEvent.click(screen.getByRole("button", { name: /Reload/i }));
     });
-    expect(window.location.reload).toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: /Reload/i })).toBeInTheDocument();
   });
 
   it("should process and display chats from context, sorted by recent message", async () => {

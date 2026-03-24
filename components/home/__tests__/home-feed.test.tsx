@@ -2,8 +2,8 @@ import { render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom";
 
 import HomeFeed from "../home-feed";
-import { ShopMapContext } from "@/utils/context/context";
-import { ShopMap, ShopProfile } from "@/utils/types/types";
+import { ShopContextInterface, ShopMapContext } from "@/utils/context/context";
+import { ShopProfile } from "@/utils/types/types";
 
 jest.mock("../marketplace", () => {
   // eslint-disable-next-line react/display-name
@@ -24,9 +24,10 @@ jest.mock("@braintree/sanitize-url", () => ({
 
 const createMockContextValue = (
   shopData: Map<string, ShopProfile>
-): ShopMap => ({
+): ShopContextInterface => ({
   shopData,
-  setShopData: jest.fn(),
+  isLoading: false,
+  updateShopData: jest.fn(),
 });
 
 describe("HomeFeed Component", () => {
@@ -38,13 +39,19 @@ describe("HomeFeed Component", () => {
   });
 
   const mockShopProfile: ShopProfile = {
+    pubkey: "valid-pubkey",
     content: {
+      name: "Test Shop",
+      about: "",
       ui: {
         banner: "https://example.com/banner.jpg",
-        logo: "https://example.com/logo.png",
-        storeName: "Test Shop",
+        picture: "https://example.com/logo.png",
+        theme: "",
+        darkMode: false,
       },
+      merchants: [],
     },
+    created_at: 0,
   };
 
   it("should render MarketplacePage without a banner when focusedPubkey is empty", () => {
