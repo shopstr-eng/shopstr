@@ -2954,6 +2954,7 @@ export default function CartInvoiceCard({
 
       const sellerAmount = tokenAmount! - donationAmount - beefDonationAmount;
       let sellerProofs: Proof[] = [];
+      let beefDonationProofs: Proof[] = [];
 
       let shippingData = data; // Assume data contains shipping info
       if (formType === "shipping") {
@@ -3096,6 +3097,7 @@ export default function CartInvoiceCard({
             includeFees: true,
           }
         );
+        beefDonationProofs = send;
         beefDonationToken = getEncodedToken({
           mint: mints[0]!,
           proofs: send,
@@ -3484,27 +3486,74 @@ export default function CartInvoiceCard({
           console.error("Invalid NEXT_PUBLIC_BEEF_INITIATIVE_NPUB");
         }
         if (beefInitHex) {
-          const beefDonationMessage =
-            "Beef Initiative donation (" +
-            beefDonationPercentage +
-            "%) from purchase of " +
-            title +
-            " by " +
-            (userNPub || "a guest buyer") +
-            " on milk.market: " +
-            beefDonationToken;
-          try {
-            await sendPaymentAndContactMessage(
-              beefInitHex,
-              beefDonationMessage,
-              product,
-              false,
-              false,
-              true
-            );
-            await new Promise((resolve) => setTimeout(resolve, 500));
-          } catch (error) {
-            console.error("Failed to send beef donation message:", error);
+          let beefPaidViaLightning = false;
+          const beefProfile = profileContext.profileData.get(beefInitHex);
+          const beefLnAddress = beefProfile?.content?.lud16 || "";
+
+          if (
+            beefLnAddress &&
+            beefLnAddress !== "" &&
+            beefDonationProofs.length > 0
+          ) {
+            try {
+              const beefLnAmount = Math.floor(beefDonationAmount * 0.98 - 2);
+              if (beefLnAmount > 0) {
+                const ln = new LightningAddress(beefLnAddress);
+                await wallet.loadMint();
+                await ln.fetch();
+                const invoice = await ln.requestInvoice({
+                  satoshi: beefLnAmount,
+                });
+                const meltQuote = await wallet.createMeltQuote(
+                  invoice.paymentRequest
+                );
+                if (meltQuote) {
+                  const meltQuoteTotal =
+                    meltQuote.amount + meltQuote.fee_reserve;
+                  const { keep, send } = await wallet.send(
+                    meltQuoteTotal,
+                    beefDonationProofs,
+                    {
+                      includeFees: true,
+                    }
+                  );
+                  const meltResponse = await wallet.meltProofs(meltQuote, send);
+                  if (meltResponse.quote) {
+                    beefPaidViaLightning = true;
+                  }
+                }
+              }
+            } catch (error) {
+              console.error(
+                "Failed to pay beef donation via Lightning, falling back to ecash:",
+                error
+              );
+            }
+          }
+
+          if (!beefPaidViaLightning) {
+            const beefDonationMessage =
+              "Beef Initiative donation (" +
+              beefDonationPercentage +
+              "%) from purchase of " +
+              title +
+              " by " +
+              (userNPub || "a guest buyer") +
+              " on milk.market: " +
+              beefDonationToken;
+            try {
+              await sendPaymentAndContactMessage(
+                beefInitHex,
+                beefDonationMessage,
+                product,
+                false,
+                false,
+                true
+              );
+              await new Promise((resolve) => setTimeout(resolve, 500));
+            } catch (error) {
+              console.error("Failed to send beef donation message:", error);
+            }
           }
         }
       }
