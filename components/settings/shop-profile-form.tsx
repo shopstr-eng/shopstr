@@ -1,4 +1,4 @@
-import { useEffect, useState, useContext } from "react";
+import { useEffect, useRef, useState, useContext, useCallback } from "react";
 import { useRouter } from "next/router";
 import { useForm, Controller } from "react-hook-form";
 import {
@@ -237,30 +237,30 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
   const watchPicture = watch("picture");
   const defaultImage = "/shopstr-2000x2000.png";
 
-  useEffect(() => {
-    setIsFetchingShop(true);
-    const shopMap = shopContext.shopData;
-    const shop = shopMap.has(userPubkey!)
-      ? shopMap.get(userPubkey!)
-      : undefined;
-    if (shop) {
+  // Tracks whether relay-context data has been applied so DB pre-load doesn't
+  // override more authoritative data that arrived later.
+  const contextLoadedRef = useRef(false);
+
+  const applyShopConfig = useCallback(
+    (config: any) => {
+      if (!config) return;
       reset({
-        name: shop.content.name,
-        about: shop.content.about,
-        picture: shop.content.ui.picture,
-        banner: shop.content.ui.banner,
+        name: config.name || "",
+        about: config.about || "",
+        picture: config.ui?.picture || "",
+        banner: config.ui?.banner || "",
       });
       if (
-        shop.content.freeShippingThreshold !== undefined &&
-        shop.content.freeShippingThreshold > 0
+        config.freeShippingThreshold !== undefined &&
+        config.freeShippingThreshold > 0
       ) {
-        setFreeShippingThreshold(String(shop.content.freeShippingThreshold));
+        setFreeShippingThreshold(String(config.freeShippingThreshold));
       }
-      if (shop.content.freeShippingCurrency) {
-        setFreeShippingCurrency(shop.content.freeShippingCurrency);
+      if (config.freeShippingCurrency) {
+        setFreeShippingCurrency(config.freeShippingCurrency);
       }
-      if (shop.content.storefront) {
-        const sf = shop.content.storefront;
+      if (config.storefront) {
+        const sf = config.storefront;
         if (sf.colorScheme) setColors({ ...DEFAULT_COLORS, ...sf.colorScheme });
         if (sf.shopSlug) {
           setShopSlug(sf.shopSlug);
@@ -278,22 +278,48 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
         if (sf.showWalletPage) setShowWalletPage(sf.showWalletPage);
         if (sf.contactEmail) setContactEmail(sf.contactEmail);
       }
-    }
-    setIsFetchingShop(false);
+    },
+    [reset]
+  );
 
-    if (userPubkey) {
-      fetch(
-        `/api/storefront/custom-domain?pubkey=${encodeURIComponent(userPubkey)}`
-      )
-        .then((r) => r.json())
-        .then((data) => {
-          if (data?.domain) {
-            setCustomDomain(data.domain);
-          }
-        })
-        .catch(() => {});
-    }
-  }, [shopContext, userPubkey, reset]);
+  // ── Fast path: seed the form immediately from the DB on mount ──────────────
+  useEffect(() => {
+    if (!userPubkey) return;
+    if (contextLoadedRef.current) return; // relay already loaded — skip DB fetch
+    setIsFetchingShop(true);
+    fetch(`/api/storefront/lookup?pubkey=${encodeURIComponent(userPubkey)}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (contextLoadedRef.current) return; // relay beat us to it
+        if (data?.shopConfig) applyShopConfig(data.shopConfig);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!contextLoadedRef.current) setIsFetchingShop(false);
+      });
+
+    fetch(
+      `/api/storefront/custom-domain?pubkey=${encodeURIComponent(userPubkey)}`
+    )
+      .then((r) => r.json())
+      .then((data) => {
+        if (data?.domain) setCustomDomain(data.domain);
+      })
+      .catch(() => {});
+  }, [userPubkey, applyShopConfig]);
+
+  // ── Slow path: override with authoritative relay-context data when ready ───
+  useEffect(() => {
+    const shopMap = shopContext.shopData;
+    const shop = shopMap.has(userPubkey!)
+      ? shopMap.get(userPubkey!)
+      : undefined;
+    if (!shop) return;
+    contextLoadedRef.current = true;
+    setIsFetchingShop(true);
+    applyShopConfig(shop.content);
+    setIsFetchingShop(false);
+  }, [shopContext, userPubkey, applyShopConfig]);
 
   const onSubmit = async (data: { [x: string]: string }) => {
     setIsUploadingShopProfile(true);
@@ -1325,15 +1351,6 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
               </p>
             </div>
 
-            <Button
-              className={`w-full ${SHOPSTRBUTTONCLASSNAMES}`}
-              onPress={saveStorefront}
-              isDisabled={isSavingStorefront}
-              isLoading={isSavingStorefront}
-            >
-              Save Storefront Settings
-            </Button>
-
             {/* Remove Storefront */}
             {shopSlug && (
               <div className="pt-2">
@@ -1349,6 +1366,15 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                 </p>
               </div>
             )}
+
+            <Button
+              className={`w-full ${SHOPSTRBUTTONCLASSNAMES}`}
+              onPress={saveStorefront}
+              isDisabled={isSavingStorefront}
+              isLoading={isSavingStorefront}
+            >
+              Save Storefront Settings
+            </Button>
           </div>
         </>
       )}

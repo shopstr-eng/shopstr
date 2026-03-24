@@ -50,16 +50,28 @@ const DEFAULT_COLORS: StorefrontColorScheme = {
   text: "#212121",
 };
 
+function getNavTextColor(hexColor: string): string {
+  const hex = hexColor.replace("#", "");
+  if (hex.length !== 6) return "#ffffff";
+  const r = parseInt(hex.substring(0, 2), 16);
+  const g = parseInt(hex.substring(2, 4), 16);
+  const b = parseInt(hex.substring(4, 6), 16);
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance > 0.5 ? "#212121" : "#ffffff";
+}
+
 interface StorefrontLayoutProps {
   shopPubkey: string;
   currentPage?: string;
   initialSlug?: string;
+  initialShopConfig?: Record<string, unknown> | null;
 }
 
 export default function StorefrontLayout({
   shopPubkey,
   currentPage,
   initialSlug,
+  initialShopConfig,
 }: StorefrontLayoutProps) {
   const shopMapContext = useContext(ShopMapContext);
   const productContext = useContext(ProductContext);
@@ -76,6 +88,20 @@ export default function StorefrontLayout({
   const [cartQuantity, setCartQuantity] = useState(0);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  // Seed colors immediately from the fast DB lookup result
+  useEffect(() => {
+    if (!initialShopConfig) return;
+    const sf = (initialShopConfig as Record<string, unknown>).storefront as
+      | StorefrontConfig
+      | undefined;
+    if (!sf) return;
+    setStorefront(sf);
+    if (sf.colorScheme) {
+      setColors({ ...DEFAULT_COLORS, ...sf.colorScheme });
+    }
+  }, [initialShopConfig]);
+
+  // Override with full context data once the relay fetch completes
   useEffect(() => {
     if (shopPubkey && shopMapContext.shopData.has(shopPubkey)) {
       const shopData = shopMapContext.shopData.get(shopPubkey);
@@ -115,6 +141,7 @@ export default function StorefrontLayout({
   }, [colors]);
 
   const shopSlug = storefront.shopSlug || initialSlug || "";
+  const navTextColor = getNavTextColor(colors.secondary);
 
   useEffect(() => {
     if (shopPubkey) {
@@ -381,7 +408,7 @@ export default function StorefrontLayout({
               )}
               <span
                 className="font-heading text-lg font-bold"
-                style={{ color: colors.background }}
+                style={{ color: navTextColor }}
               >
                 {shopName}
               </span>
@@ -395,7 +422,7 @@ export default function StorefrontLayout({
                     ? link.href === currentPage
                     : link.href === "" || link.href === "/";
                   const linkStyle = {
-                    color: isActive ? colors.primary : colors.background + "CC",
+                    color: isActive ? colors.primary : navTextColor + "CC",
                   };
                   const linkClass =
                     "rounded-md px-3 py-2 text-sm font-medium transition-colors";
@@ -435,7 +462,7 @@ export default function StorefrontLayout({
               <button
                 onClick={() => router.push("/cart")}
                 className="relative rounded-md p-2 transition-colors"
-                style={{ color: colors.background }}
+                style={{ color: navTextColor }}
               >
                 <ShoppingCartIcon className="h-5 w-5" />
                 {cartQuantity > 0 && (
@@ -481,7 +508,7 @@ export default function StorefrontLayout({
               <button
                 className="flex h-8 w-8 items-center justify-center rounded md:hidden"
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                style={{ color: colors.background }}
+                style={{ color: navTextColor }}
               >
                 {mobileMenuOpen ? (
                   <XMarkIcon className="h-6 w-6" />
@@ -504,7 +531,7 @@ export default function StorefrontLayout({
                 defaultNavLinks.map((link, idx) => {
                   const href = resolveNavHref(link);
                   const mobileClass = "block px-6 py-3 text-sm font-medium";
-                  const mobileStyle = { color: colors.background + "CC" };
+                  const mobileStyle = { color: navTextColor + "CC" };
                   if (isExternalNavHref(href)) {
                     return (
                       <a
@@ -557,7 +584,7 @@ export default function StorefrontLayout({
                     setMobileMenuOpen(false);
                   }}
                   className="block w-full px-6 py-3 text-left text-sm font-medium"
-                  style={{ color: colors.background + "CC" }}
+                  style={{ color: navTextColor + "CC" }}
                 >
                   Sign In
                 </button>

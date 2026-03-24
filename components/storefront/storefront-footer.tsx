@@ -26,6 +26,16 @@ const SOCIAL_ICONS: Record<string, string> = {
   other: "🔗",
 };
 
+function getNavTextColor(hexColor: string): string {
+  const hex = hexColor.replace("#", "");
+  if (hex.length !== 6) return "#ffffff";
+  const r = parseInt(hex.substring(0, 2), 16);
+  const g = parseInt(hex.substring(2, 4), 16);
+  const b = parseInt(hex.substring(4, 6), 16);
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance > 0.5 ? "#212121" : "#ffffff";
+}
+
 export default function StorefrontFooterComponent({
   footer,
   colors,
@@ -44,13 +54,15 @@ export default function StorefrontFooterComponent({
     return policy && policy.enabled;
   });
 
+  const footerTextColor = getNavTextColor(colors.secondary);
+
   return (
     <footer
       className="border-t px-4 py-12 md:px-6"
       style={{
         backgroundColor: colors.secondary,
         borderColor: colors.primary + "22",
-        color: colors.background,
+        color: footerTextColor,
       }}
     >
       <div className="mx-auto max-w-6xl">
@@ -75,7 +87,7 @@ export default function StorefrontFooterComponent({
                     key={idx}
                     href={href}
                     className="font-body text-sm opacity-60 transition-opacity hover:opacity-100"
-                    style={{ color: colors.background }}
+                    style={{ color: footerTextColor }}
                   >
                     {link.label}
                   </Link>
@@ -109,14 +121,14 @@ export default function StorefrontFooterComponent({
         {enabledPolicies.length > 0 && (
           <div
             className="mt-8 flex flex-wrap justify-center gap-x-6 gap-y-2 border-t pt-6"
-            style={{ borderColor: colors.background + "11" }}
+            style={{ borderColor: footerTextColor + "11" }}
           >
             {enabledPolicies.map((key) => (
               <Link
                 key={key}
                 href={`/shop/${shopSlug}/${POLICY_SLUGS[key]}`}
                 className="font-body text-xs opacity-40 transition-opacity hover:opacity-80"
-                style={{ color: colors.background }}
+                style={{ color: footerTextColor }}
               >
                 {POLICY_LABELS[key]}
               </Link>
@@ -132,7 +144,7 @@ export default function StorefrontFooterComponent({
             style={
               enabledPolicies.length > 0
                 ? {}
-                : { borderColor: colors.background + "11" }
+                : { borderColor: footerTextColor + "11" }
             }
           >
             Powered by{" "}

@@ -11,6 +11,10 @@ export default function ShopPage() {
   const { slug } = router.query;
   const shopMapContext = useContext(ShopMapContext);
   const [shopPubkey, setShopPubkey] = useState<string>("");
+  const [initialShopConfig, setInitialShopConfig] = useState<Record<
+    string,
+    unknown
+  > | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
@@ -39,6 +43,7 @@ export default function ShopPage() {
           const data = await res.json();
           if (data.pubkey) {
             setShopPubkey(data.pubkey);
+            if (data.shopConfig) setInitialShopConfig(data.shopConfig);
             setIsLoading(false);
             return;
           }
@@ -101,6 +106,7 @@ export default function ShopPage() {
     <StorefrontLayout
       shopPubkey={shopPubkey}
       initialSlug={typeof slug === "string" ? slug : undefined}
+      initialShopConfig={initialShopConfig}
     />
   );
 }

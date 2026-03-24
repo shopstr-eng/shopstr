@@ -74,6 +74,16 @@ const PLACEHOLDER_FAQS = [
 
 const DEFAULT_NAV_LINKS = ["Shop", "About", "Contact"];
 
+function getNavTextColor(hexColor: string): string {
+  const hex = hexColor.replace("#", "");
+  if (hex.length !== 6) return "#ffffff";
+  const r = parseInt(hex.substring(0, 2), 16);
+  const g = parseInt(hex.substring(2, 4), 16);
+  const b = parseInt(hex.substring(4, 6), 16);
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance > 0.5 ? "#212121" : "#ffffff";
+}
+
 function Stars({ count }: { count: number }) {
   return <span className="text-yellow-400">{"★".repeat(count)}</span>;
 }
@@ -440,6 +450,7 @@ export default function StorefrontPreviewModal({
   const text = colors.text || "#212121";
   const secondary = colors.secondary || "#212121";
   const accent = colors.accent || "#a655f7";
+  const navTextColor = getNavTextColor(secondary);
 
   const colorSet = { primary, accent, text, background: bg, secondary };
 
@@ -540,8 +551,11 @@ export default function StorefrontPreviewModal({
                 </div>
               )}
               <span
-                className="text-base font-bold text-white"
-                style={{ fontFamily: fontHeading || "inherit" }}
+                className="text-base font-bold"
+                style={{
+                  color: navTextColor,
+                  fontFamily: fontHeading || "inherit",
+                }}
               >
                 {displayShopName}
               </span>
@@ -549,7 +563,8 @@ export default function StorefrontPreviewModal({
                 {displayNavLinks.map((label, i) => (
                   <span
                     key={i}
-                    className="cursor-pointer text-xs font-medium text-white/80 hover:text-white"
+                    className="cursor-pointer text-xs font-medium"
+                    style={{ color: navTextColor + "CC" }}
                   >
                     {label}
                   </span>
@@ -805,7 +820,7 @@ export default function StorefrontPreviewModal({
             {/* Footer */}
             <div
               className="px-8 py-5"
-              style={{ backgroundColor: secondary, color: "#fff" }}
+              style={{ backgroundColor: secondary, color: navTextColor }}
             >
               <div className="flex flex-col items-center gap-1 text-center">
                 <span className="text-sm font-bold">{displayShopName}</span>
