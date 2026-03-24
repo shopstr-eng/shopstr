@@ -33,7 +33,7 @@ describe("parseTags", () => {
         ["location", "Online"],
       ],
     };
-    const result = parseTags(event);
+    const result = parseTags(event)!;
 
     expect(result.id).toBe("test-id");
     expect(result.pubkey).toBe("test-pubkey");
@@ -53,7 +53,7 @@ describe("parseTags", () => {
         ["t", "nostr"],
       ],
     };
-    const result = parseTags(event);
+    const result = parseTags(event)!;
 
     expect(result.images).toEqual(["url1.jpg", "url2.jpg"]);
     expect(result.categories).toEqual(["electronics", "nostr"]);
@@ -61,7 +61,7 @@ describe("parseTags", () => {
 
   it("should parse the price tag into a number and currency string", () => {
     const event = { ...baseEvent, tags: [["price", "19.99", "USD"]] };
-    const result = parseTags(event);
+    const result = parseTags(event)!;
 
     expect(result.price).toBe(19.99);
     expect(result.currency).toBe("USD");
@@ -72,7 +72,7 @@ describe("parseTags", () => {
       ...baseEvent,
       tags: [["shipping", "Added Cost", "10", "USD"]],
     };
-    const result = parseTags(event);
+    const result = parseTags(event)!;
 
     expect(result.shippingType).toBe("Added Cost");
     expect(result.shippingCost).toBe(10);
@@ -80,7 +80,7 @@ describe("parseTags", () => {
 
   it("should parse the legacy 2-value shipping tag", () => {
     const event = { ...baseEvent, tags: [["shipping", "5", "USD"]] };
-    const result = parseTags(event);
+    const result = parseTags(event)!;
 
     expect(result.shippingType).toBe("Added Cost");
     expect(result.shippingCost).toBe(5);
@@ -88,7 +88,7 @@ describe("parseTags", () => {
 
   it("should parse the simple 1-value shipping tag", () => {
     const event = { ...baseEvent, tags: [["shipping", "Free"]] };
-    const result = parseTags(event);
+    const result = parseTags(event)!;
 
     expect(result.shippingType).toBe("Free");
     expect(result.shippingCost).toBe(0);
@@ -96,16 +96,16 @@ describe("parseTags", () => {
 
   it("should parse various content-warning tags as true", () => {
     const event1 = { ...baseEvent, tags: [["content-warning"]] };
-    expect(parseTags(event1).contentWarning).toBe(true);
+    expect(parseTags(event1)!.contentWarning).toBe(true);
 
     const event2 = { ...baseEvent, tags: [["L", "content-warning"]] };
-    expect(parseTags(event2).contentWarning).toBe(true);
+    expect(parseTags(event2)!.contentWarning).toBe(true);
 
     const event3 = {
       ...baseEvent,
       tags: [["l", "some-label", "content-warning"]],
     };
-    expect(parseTags(event3).contentWarning).toBe(true);
+    expect(parseTags(event3)!.contentWarning).toBe(true);
   });
 
   it("should parse size tags into sizes array and quantities map", () => {
@@ -116,12 +116,12 @@ describe("parseTags", () => {
         ["size", "M", "5"],
       ],
     };
-    const result = parseTags(event);
+    const result = parseTags(event)!;
 
     expect(result.sizes).toEqual(["S", "M"]);
     expect(result.sizeQuantities).toBeInstanceOf(Map);
-    expect(result.sizeQuantities.get("S")).toBe(10);
-    expect(result.sizeQuantities.get("M")).toBe(5);
+    expect(result.sizeQuantities!.get("S")).toBe(10);
+    expect(result.sizeQuantities!.get("M")).toBe(5);
   });
 
   it("should parse volume tags into volumes array and prices map", () => {
@@ -132,22 +132,22 @@ describe("parseTags", () => {
         ["volume", "500g", "40"],
       ],
     };
-    const result = parseTags(event);
+    const result = parseTags(event)!;
 
     expect(result.volumes).toEqual(["100g", "500g"]);
     expect(result.volumePrices).toBeInstanceOf(Map);
-    expect(result.volumePrices.get("100g")).toBe(10);
-    expect(result.volumePrices.get("500g")).toBe(40);
+    expect(result.volumePrices!.get("100g")).toBe(10);
+    expect(result.volumePrices!.get("500g")).toBe(40);
   });
 
   it("should return undefined if tags array is missing", () => {
-    const event = { ...baseEvent, tags: undefined };
+    const event = { ...baseEvent, tags: undefined } as unknown as NostrEvent;
     expect(parseTags(event)).toBeUndefined();
   });
 
   it("should call calculateTotalCost with the parsed data and assign its return value", () => {
     const event = { ...baseEvent, tags: [["price", "50", "USD"]] };
-    const result = parseTags(event);
+    const result = parseTags(event)!;
 
     expect(mockedCalculateTotalCost).toHaveBeenCalledTimes(1);
     expect(mockedCalculateTotalCost).toHaveBeenCalledWith(
@@ -168,7 +168,7 @@ describe("parseTags", () => {
         ["unknown_tag", "some_value"],
       ],
     };
-    const result = parseTags(event);
+    const result = parseTags(event)!;
 
     expect(result.title).toBe("My Product");
     expect(result).not.toHaveProperty("unknown_tag");
@@ -176,10 +176,10 @@ describe("parseTags", () => {
 
   it("should handle a volume tag without a price", () => {
     const event = { ...baseEvent, tags: [["volume", "100g"]] };
-    const result = parseTags(event);
+    const result = parseTags(event)!;
 
     expect(result.volumes).toEqual(["100g"]);
-    expect(result.volumePrices.get("100g")).toBeUndefined();
+    expect(result.volumePrices!.get("100g")).toBeUndefined();
   });
 
   it("should ignore L/l tags that are not for content-warning", () => {
@@ -190,7 +190,7 @@ describe("parseTags", () => {
         ["l", "another-label", "not-a-warning"],
       ],
     };
-    const result = parseTags(event);
+    const result = parseTags(event)!;
 
     expect(result.contentWarning).toBeFalsy();
   });

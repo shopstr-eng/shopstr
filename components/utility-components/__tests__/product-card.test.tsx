@@ -37,6 +37,7 @@ jest.mock("../dropdowns/location-dropdown", () => ({
 }));
 
 jest.mock("@nextui-org/react", () => ({
+  ...jest.requireActual("@nextui-org/react"),
   Chip: ({ children, startContent }: any) => (
     <div>
       {startContent}
@@ -57,9 +58,9 @@ const mockProductData: ProductData = {
   currency: "SATS",
   shippingType: "Free",
   status: "active",
-  created_at: 0,
-  content: "",
-  tags: [],
+  createdAt: 0,
+  publishedAt: "",
+  totalCost: 1000,
 };
 
 const renderWithContext = (
@@ -100,7 +101,10 @@ describe("ProductCard", () => {
         />
       );
       fireEvent.click(screen.getByTestId("image-carousel").parentElement!);
-      expect(mockOnClick).toHaveBeenCalledWith(mockProductData);
+      expect(mockOnClick).toHaveBeenCalledWith(
+        mockProductData,
+        expect.any(Object)
+      );
     });
 
     it('shows "shop_profile" dropdown key for the owner', () => {

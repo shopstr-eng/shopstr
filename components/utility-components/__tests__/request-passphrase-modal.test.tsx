@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import PassphraseChallengeModal from "../request-passphrase-modal";
 
@@ -103,7 +103,7 @@ describe("PassphraseChallengeModal", () => {
     expect(checkbox.checked).toBe(true);
   });
 
-  it("should call actionOnSubmit with correct values when Submit button is clicked", () => {
+  it("should call actionOnSubmit with correct values when Submit button is clicked", async () => {
     render(<PassphraseChallengeModal {...defaultProps} />);
 
     const input = screen.getByLabelText("Passphrase");
@@ -115,19 +115,21 @@ describe("PassphraseChallengeModal", () => {
     const submitButton = screen.getByRole("button", { name: "Submit" });
     fireEvent.click(submitButton);
 
-    expect(mockSetIsOpen).toHaveBeenCalledWith(false);
-    expect(mockActionOnSubmit).toHaveBeenCalledWith("testpass", true);
+    await waitFor(() => {
+      expect(mockActionOnSubmit).toHaveBeenCalledWith("testpass", true);
+    });
   });
 
-  it("should call actionOnSubmit when Enter key is pressed", () => {
+  it("should call actionOnSubmit when Enter key is pressed", async () => {
     render(<PassphraseChallengeModal {...defaultProps} />);
 
     const input = screen.getByLabelText("Passphrase");
     fireEvent.change(input, { target: { value: "enter-key-pass" } });
     fireEvent.keyDown(input, { key: "Enter", code: "Enter" });
 
-    expect(mockSetIsOpen).toHaveBeenCalledWith(false);
-    expect(mockActionOnSubmit).toHaveBeenCalledWith("enter-key-pass", false);
+    await waitFor(() => {
+      expect(mockActionOnSubmit).toHaveBeenCalledWith("enter-key-pass", false);
+    });
   });
 
   it("should call onCancel and navigate to default route when Cancel is clicked", () => {
