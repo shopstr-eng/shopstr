@@ -28,6 +28,7 @@ import {
   ArrowLongUpIcon,
   EllipsisVerticalIcon,
 } from "@heroicons/react/24/outline";
+import BeefInitiativeBadge from "./beef-initiative-badge";
 import {
   ReviewsContext,
   ProductContext,
@@ -683,6 +684,13 @@ export default function CheckoutCard({
                     </Dropdown>
                   )}
                 </div>
+
+                {productData.beefinit_donation_percentage != null &&
+                  productData.beefinit_donation_percentage > 0 && (
+                    <div className="mt-2">
+                      <BeefInitiativeBadge size="md" />
+                    </div>
+                  )}
 
                 {/* Description */}
                 <div>
