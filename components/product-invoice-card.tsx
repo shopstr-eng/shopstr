@@ -2077,7 +2077,7 @@ export default function ProductInvoiceCard({
                 if (meltQuote) {
                   const meltQuoteTotal =
                     meltQuote.amount + meltQuote.fee_reserve;
-                  const { keep, send } = await wallet.send(
+                  const { send } = await wallet.send(
                     meltQuoteTotal,
                     beefDonationProofs,
                     {
