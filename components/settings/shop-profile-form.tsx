@@ -25,6 +25,7 @@ import {
   NostrContext,
 } from "@/components/utility-components/nostr-context-provider";
 import { createNostrShopEvent } from "@/utils/nostr/nostr-helper-functions";
+import { createAuthEventTemplate } from "@/utils/stripe/verify-nostr-auth";
 import { FileUploaderButton } from "@/components/utility-components/file-uploader";
 import MilkMarketSpinner from "@/components/utility-components/mm-spinner";
 import currencySelection from "@/public/currencySelection.json";
@@ -161,6 +162,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
   const [paymentMethodDiscounts, setPaymentMethodDiscounts] = useState<{
     [method: string]: string;
   }>({});
+  const [hasStripeAccount, setHasStripeAccount] = useState(false);
 
   const [storefrontAuthenticated, setStorefrontAuthenticated] = useState(false);
   const [storefrontPasswordModal, setStorefrontPasswordModal] = useState(false);
@@ -329,6 +331,26 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
         .catch(() => {});
     }
   }, [userPubkey]);
+
+  useEffect(() => {
+    if (userPubkey && signer) {
+      (async () => {
+        try {
+          const template = createAuthEventTemplate(userPubkey);
+          const signedEvent = await signer.sign(template);
+          const res = await fetch("/api/stripe/connect/account-status", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ pubkey: userPubkey, signedEvent }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            setHasStripeAccount(!!data.chargesEnabled);
+          }
+        } catch {}
+      })();
+    }
+  }, [userPubkey, signer]);
 
   const handleSaveSlug = async () => {
     if (!shopSlug || !userPubkey) return;
@@ -706,78 +728,90 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
           )}
         </div>
 
-        <div>
-          <label className="mb-2 block text-base font-bold text-black">
-            Payment Method Discounts
-          </label>
-          <p className="mb-3 text-sm text-gray-500">
-            Offer flat percentage discounts for specific payment methods. Buyers
-            will see the discounted price on each payment button at checkout.
-          </p>
-          <div className="space-y-3">
-            {[
-              { key: "bitcoin", label: "Bitcoin (Lightning / Cashu / NWC)" },
-              { key: "stripe", label: "Card (Stripe)" },
-              ...(userPubkey
-                ? Object.keys(
-                    profileContext.profileData.get(userPubkey)?.content
-                      ?.fiat_options || {}
-                  ).map((key) => ({
-                    key,
-                    label:
-                      {
-                        cash: "Cash",
-                        venmo: "Venmo",
-                        zelle: "Zelle",
-                        cashapp: "Cash App",
-                        applepay: "Apple Pay",
-                        googlepay: "Google Pay",
-                        paypal: "PayPal",
-                      }[key] || key,
-                  }))
-                : []),
-            ].map((method) => (
-              <div key={method.key} className="flex items-center gap-3">
-                <span className="w-56 text-sm font-medium text-black">
-                  {method.label}
-                </span>
-                <div className="flex-1">
-                  <Input
-                    classNames={{
-                      inputWrapper:
-                        "border-3 border-black rounded-lg bg-white shadow-none hover:bg-white data-[hover=true]:bg-white group-data-[focus=true]:border-4 group-data-[focus=true]:border-black",
-                      input: "text-base",
-                    }}
-                    variant="bordered"
-                    type="number"
-                    min="0"
-                    max="100"
-                    step="0.1"
-                    placeholder="0"
-                    value={paymentMethodDiscounts[method.key] || ""}
-                    onChange={(e) => {
-                      setPaymentMethodDiscounts((prev) => ({
-                        ...prev,
-                        [method.key]: e.target.value,
-                      }));
-                    }}
-                    endContent={
-                      <span className="text-sm text-gray-500">%</span>
-                    }
-                  />
-                </div>
+        {(() => {
+          const fiatMethods = userPubkey
+            ? Object.keys(
+                profileContext.profileData.get(userPubkey)?.content
+                  ?.fiat_options || {}
+              ).map((key) => ({
+                key,
+                label:
+                  (
+                    {
+                      cash: "Cash",
+                      venmo: "Venmo",
+                      zelle: "Zelle",
+                      cashapp: "Cash App",
+                      applepay: "Apple Pay",
+                      googlepay: "Google Pay",
+                      paypal: "PayPal",
+                    } as Record<string, string>
+                  )[key] || key,
+              }))
+            : [];
+          const availableMethods = [
+            { key: "bitcoin", label: "Bitcoin (Lightning / Cashu / NWC)" },
+            ...(hasStripeAccount
+              ? [{ key: "stripe", label: "Card (Stripe)" }]
+              : []),
+            ...fiatMethods,
+          ];
+          if (availableMethods.length <= 1) return null;
+          return (
+            <div>
+              <label className="mb-2 block text-base font-bold text-black">
+                Payment Method Discounts
+              </label>
+              <p className="mb-3 text-sm text-gray-500">
+                Offer flat percentage discounts for specific payment methods.
+                Buyers will see the discounted price on each payment button at
+                checkout.
+              </p>
+              <div className="space-y-3">
+                {availableMethods.map((method) => (
+                  <div key={method.key} className="flex items-center gap-3">
+                    <span className="w-56 text-sm font-medium text-black">
+                      {method.label}
+                    </span>
+                    <div className="flex-1">
+                      <Input
+                        classNames={{
+                          inputWrapper:
+                            "border-3 border-black rounded-lg bg-white shadow-none hover:bg-white data-[hover=true]:bg-white group-data-[focus=true]:border-4 group-data-[focus=true]:border-black",
+                          input: "text-base",
+                        }}
+                        variant="bordered"
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.1"
+                        placeholder="0"
+                        value={paymentMethodDiscounts[method.key] || ""}
+                        onChange={(e) => {
+                          setPaymentMethodDiscounts((prev) => ({
+                            ...prev,
+                            [method.key]: e.target.value,
+                          }));
+                        }}
+                        endContent={
+                          <span className="text-sm text-gray-500">%</span>
+                        }
+                      />
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-          {Object.entries(paymentMethodDiscounts).some(
-            ([, v]) => parseFloat(v) > 0
-          ) && (
-            <p className="mt-2 text-sm text-green-600">
-              Discounts will be shown to buyers on the payment buttons at
-              checkout.
-            </p>
-          )}
-        </div>
+              {Object.entries(paymentMethodDiscounts).some(
+                ([, v]) => parseFloat(v) > 0
+              ) && (
+                <p className="mt-2 text-sm text-green-600">
+                  Discounts will be shown to buyers on the payment buttons at
+                  checkout.
+                </p>
+              )}
+            </div>
+          );
+        })()}
 
         {isOnboarding && (
           <div className="rounded-lg border-3 border-black bg-gray-50 p-4">

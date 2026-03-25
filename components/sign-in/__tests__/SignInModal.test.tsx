@@ -74,7 +74,7 @@ describe("SignInModal", () => {
 
   it("redirects to keys on Sign Up", async () => {
     const { user, push } = renderModal();
-      const btn = screen.getAllByRole("button", { name: /sign up/i })[0]!;
+    const btn = screen.getAllByRole("button", { name: /sign up/i })[0]!;
     await user.click(btn);
     await waitFor(() =>
       expect(push).toHaveBeenCalledWith("/onboarding/new-account")

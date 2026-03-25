@@ -42,6 +42,7 @@ export type ProductData = {
   pickupLocations?: string[];
   herdshareAgreement?: string;
   expiration?: number;
+  beefinit_donation_percentage?: number;
   subscriptionEnabled?: boolean;
   subscriptionDiscount?: number;
   subscriptionFrequency?: string[];
@@ -202,6 +203,9 @@ export const parseTags = (productEvent: NostrEvent) => {
         break;
       case "valid_until":
         parsedData.expiration = Number(values[0]);
+        break;
+      case "beefinit_donation_percentage":
+        parsedData.beefinit_donation_percentage = Number(values[0]);
         break;
       case "subscription":
         if (values[0] === "true") {
