@@ -7,6 +7,11 @@ export default function CustomDomainPage() {
   const router = useRouter();
   const { domain } = router.query;
   const [shopPubkey, setShopPubkey] = useState<string>("");
+  const [initialShopConfig, setInitialShopConfig] = useState<Record<
+    string,
+    unknown
+  > | null>(null);
+  const [initialCreatedAt, setInitialCreatedAt] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
@@ -22,6 +27,8 @@ export default function CustomDomainPage() {
           const data = await res.json();
           if (data.pubkey) {
             setShopPubkey(data.pubkey);
+            if (data.shopConfig) setInitialShopConfig(data.shopConfig);
+            if (data.createdAt) setInitialCreatedAt(Number(data.createdAt));
             setIsLoading(false);
             return;
           }
@@ -59,5 +66,11 @@ export default function CustomDomainPage() {
     );
   }
 
-  return <StorefrontLayout shopPubkey={shopPubkey} />;
+  return (
+    <StorefrontLayout
+      shopPubkey={shopPubkey}
+      initialShopConfig={initialShopConfig}
+      initialCreatedAt={initialCreatedAt}
+    />
+  );
 }

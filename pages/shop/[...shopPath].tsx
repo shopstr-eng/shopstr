@@ -1,4 +1,4 @@
-import { useEffect, useState, useContext } from "react";
+import { useEffect, useRef, useState, useContext } from "react";
 import { useRouter } from "next/router";
 import { ShopMapContext } from "@/utils/context/context";
 import StorefrontLayout from "@/components/storefront/storefront-layout";
@@ -9,25 +9,36 @@ export default function ShopSubPage() {
   const { shopPath } = router.query;
   const shopMapContext = useContext(ShopMapContext);
   const [shopPubkey, setShopPubkey] = useState<string>("");
+  const [initialShopConfig, setInitialShopConfig] = useState<Record<
+    string,
+    unknown
+  > | null>(null);
+  const [initialCreatedAt, setInitialCreatedAt] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const resolvedRef = useRef(false);
 
   const pathParts = Array.isArray(shopPath) ? shopPath : [];
   const slug = pathParts[0] || "";
   const subPage = pathParts[1] || "";
 
   useEffect(() => {
-    if (!slug) return;
+    if (!slug || resolvedRef.current) return;
 
     const lookupBySlug = async () => {
-      for (const [pubkey, shop] of shopMapContext.shopData.entries()) {
-        if (shop?.content?.storefront?.shopSlug === slug) {
-          setShopPubkey(pubkey);
-          setIsLoading(false);
-          return;
+      // 1. Check in-memory map immediately (instant if relay already loaded)
+      if (!shopMapContext.isLoading) {
+        for (const [pubkey, shop] of shopMapContext.shopData.entries()) {
+          if (shop?.content?.storefront?.shopSlug === slug) {
+            resolvedRef.current = true;
+            setShopPubkey(pubkey);
+            setIsLoading(false);
+            return;
+          }
         }
       }
 
+      // 2. Always hit the DB — fast path, doesn't wait for relay
       try {
         const res = await fetch(
           `/api/storefront/lookup?slug=${encodeURIComponent(slug)}`
@@ -35,13 +46,20 @@ export default function ShopSubPage() {
         if (res.ok) {
           const data = await res.json();
           if (data.pubkey) {
+            resolvedRef.current = true;
             setShopPubkey(data.pubkey);
+            if (data.shopConfig) setInitialShopConfig(data.shopConfig);
+            if (data.createdAt) setInitialCreatedAt(Number(data.createdAt));
             setIsLoading(false);
             return;
           }
         }
       } catch {}
 
+      // 3. If relay is still loading, wait — effect re-runs when it settles
+      if (shopMapContext.isLoading) return;
+
+      // 4. Fall back to generated-slug name matching
       for (const [pubkey, shop] of shopMapContext.shopData.entries()) {
         const shopName = shop?.content?.name;
         if (shopName) {
@@ -51,6 +69,7 @@ export default function ShopSubPage() {
             .replace(/-+/g, "-")
             .replace(/^-|-$/g, "");
           if (generatedSlug === slug) {
+            resolvedRef.current = true;
             setShopPubkey(pubkey);
             setIsLoading(false);
             return;
@@ -62,12 +81,10 @@ export default function ShopSubPage() {
       setIsLoading(false);
     };
 
-    if (!shopMapContext.isLoading) {
-      lookupBySlug();
-    }
+    lookupBySlug();
   }, [slug, shopMapContext.shopData, shopMapContext.isLoading]);
 
-  if (isLoading || shopMapContext.isLoading) {
+  if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center pt-20">
         <ShopstrSpinner />
@@ -90,5 +107,13 @@ export default function ShopSubPage() {
     );
   }
 
-  return <StorefrontLayout shopPubkey={shopPubkey} currentPage={subPage} />;
+  return (
+    <StorefrontLayout
+      shopPubkey={shopPubkey}
+      currentPage={subPage}
+      initialSlug={slug}
+      initialShopConfig={initialShopConfig}
+      initialCreatedAt={initialCreatedAt}
+    />
+  );
 }

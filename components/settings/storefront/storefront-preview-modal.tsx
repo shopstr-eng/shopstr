@@ -13,6 +13,7 @@ import {
   StorefrontFooter,
   StorefrontNavLink,
 } from "@/utils/types/types";
+import { getNavTextColor } from "@/utils/storefront-colors";
 
 interface StorefrontPreviewModalProps {
   isOpen: boolean;
@@ -74,16 +75,6 @@ const PLACEHOLDER_FAQS = [
 
 const DEFAULT_NAV_LINKS = ["Shop", "About", "Contact"];
 
-function getNavTextColor(hexColor: string): string {
-  const hex = hexColor.replace("#", "");
-  if (hex.length !== 6) return "#ffffff";
-  const r = parseInt(hex.substring(0, 2), 16);
-  const g = parseInt(hex.substring(2, 4), 16);
-  const b = parseInt(hex.substring(4, 6), 16);
-  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-  return luminance > 0.5 ? "#212121" : "#ffffff";
-}
-
 function Stars({ count }: { count: number }) {
   return <span className="text-yellow-400">{"★".repeat(count)}</span>;
 }
@@ -117,6 +108,9 @@ function SectionPreview({
     color: colors.text,
     fontFamily: fontHeading || "inherit",
   };
+  const navColorOnPrimary = getNavTextColor(colors.primary);
+  const navColorOnAccent = getNavTextColor(colors.accent);
+  const navColorOnSecondary = getNavTextColor(colors.secondary);
 
   const PlaceholderBadge = () =>
     isPlaceholder ? (
@@ -242,7 +236,10 @@ function SectionPreview({
     return (
       <div
         className="flex min-h-[160px] flex-col items-center justify-center px-6 py-10 text-center"
-        style={{ backgroundColor: colors.secondary, color: "#fff" }}
+        style={{
+          backgroundColor: colors.secondary,
+          color: navColorOnSecondary,
+        }}
       >
         <PlaceholderBadge />
         <h2
@@ -286,8 +283,11 @@ function SectionPreview({
               >
                 {product.tag && (
                   <span
-                    className="absolute right-2 top-2 rounded-full px-1.5 py-0.5 text-[10px] font-bold text-white"
-                    style={{ backgroundColor: colors.accent }}
+                    className="absolute right-2 top-2 rounded-full px-1.5 py-0.5 text-[10px] font-bold"
+                    style={{
+                      backgroundColor: colors.accent,
+                      color: navColorOnAccent,
+                    }}
                   >
                     {product.tag}
                   </span>
@@ -312,8 +312,11 @@ function SectionPreview({
                     {product.price}
                   </span>
                   <button
-                    className="rounded px-2 py-0.5 text-[10px] font-bold text-white"
-                    style={{ backgroundColor: colors.primary }}
+                    className="rounded px-2 py-0.5 text-[10px] font-bold"
+                    style={{
+                      backgroundColor: colors.primary,
+                      color: navColorOnPrimary,
+                    }}
                   >
                     Buy
                   </button>
@@ -379,8 +382,8 @@ function SectionPreview({
           {body || "Have a question? We'd love to hear from you."}
         </p>
         <button
-          className="rounded-lg px-5 py-2 text-sm font-bold text-white"
-          style={{ backgroundColor: colors.primary }}
+          className="rounded-lg px-5 py-2 text-sm font-bold"
+          style={{ backgroundColor: colors.primary, color: navColorOnPrimary }}
         >
           Send a Message
         </button>
@@ -405,6 +408,47 @@ function SectionPreview({
         >
           {displayBody}
         </p>
+      </div>
+    );
+  }
+
+  if (type === "image") {
+    return (
+      <div className="px-2 py-6">
+        <PlaceholderBadge />
+        {section.image ? (
+          <img
+            src={section.image}
+            alt={section.caption || ""}
+            className={`rounded-lg object-cover ${
+              section.fullWidth ? "w-full" : "mx-auto max-w-lg"
+            }`}
+            style={{
+              maxHeight: "240px",
+              width: section.fullWidth ? "100%" : undefined,
+            }}
+          />
+        ) : (
+          <div
+            className="flex h-40 w-full items-center justify-center rounded-lg"
+            style={{ backgroundColor: colors.primary + "18" }}
+          >
+            <span
+              className="text-xs opacity-40"
+              style={{ color: colors.primary }}
+            >
+              Image
+            </span>
+          </div>
+        )}
+        {section.caption && (
+          <p
+            className="mt-2 text-center text-xs opacity-60"
+            style={{ color: colors.text }}
+          >
+            {section.caption}
+          </p>
+        )}
       </div>
     );
   }
@@ -451,6 +495,8 @@ export default function StorefrontPreviewModal({
   const secondary = colors.secondary || "#212121";
   const accent = colors.accent || "#a655f7";
   const navTextColor = getNavTextColor(secondary);
+  const primaryTextColor = getNavTextColor(primary);
+  const accentTextColor = getNavTextColor(accent);
 
   const colorSet = { primary, accent, text, background: bg, secondary };
 
@@ -544,8 +590,8 @@ export default function StorefrontPreviewModal({
                 />
               ) : (
                 <div
-                  className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
-                  style={{ backgroundColor: primary }}
+                  className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold"
+                  style={{ backgroundColor: primary, color: primaryTextColor }}
                 >
                   {initials}
                 </div>
@@ -594,7 +640,10 @@ export default function StorefrontPreviewModal({
                       }}
                     />
                   )}
-                  <div className="relative z-10 px-8 py-12 text-center text-white">
+                  <div
+                    className="relative z-10 px-8 py-12 text-center"
+                    style={{ color: primaryTextColor }}
+                  >
                     <h1
                       className="mb-3 text-4xl font-bold"
                       style={{ fontFamily: fontHeading || "inherit" }}
@@ -603,8 +652,11 @@ export default function StorefrontPreviewModal({
                     </h1>
                     <p className="mb-6 text-lg opacity-90">{displayAbout}</p>
                     <button
-                      className="rounded-lg px-6 py-2.5 text-sm font-bold text-white"
-                      style={{ backgroundColor: accent }}
+                      className="rounded-lg px-6 py-2.5 text-sm font-bold"
+                      style={{
+                        backgroundColor: accent,
+                        color: accentTextColor,
+                      }}
                     >
                       Shop Now
                     </button>
@@ -670,8 +722,11 @@ export default function StorefrontPreviewModal({
                       />
                     ) : (
                       <div
-                        className="flex h-14 w-14 items-center justify-center rounded-full text-lg font-bold text-white"
-                        style={{ backgroundColor: primary }}
+                        className="flex h-14 w-14 items-center justify-center rounded-full text-lg font-bold"
+                        style={{
+                          backgroundColor: primary,
+                          color: primaryTextColor,
+                        }}
                       >
                         {initials}
                       </div>
@@ -778,8 +833,11 @@ export default function StorefrontPreviewModal({
                       >
                         {product.tag && (
                           <span
-                            className="absolute right-2 top-2 rounded-full px-1.5 py-0.5 text-[10px] font-bold text-white"
-                            style={{ backgroundColor: accent }}
+                            className="absolute right-2 top-2 rounded-full px-1.5 py-0.5 text-[10px] font-bold"
+                            style={{
+                              backgroundColor: accent,
+                              color: accentTextColor,
+                            }}
                           >
                             {product.tag}
                           </span>
@@ -804,8 +862,11 @@ export default function StorefrontPreviewModal({
                             {product.price}
                           </span>
                           <button
-                            className="rounded px-2 py-0.5 text-[10px] font-bold text-white"
-                            style={{ backgroundColor: primary }}
+                            className="rounded px-2 py-0.5 text-[10px] font-bold"
+                            style={{
+                              backgroundColor: primary,
+                              color: primaryTextColor,
+                            }}
                           >
                             Buy
                           </button>

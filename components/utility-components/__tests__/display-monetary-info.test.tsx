@@ -24,7 +24,9 @@ describe("CompactPriceDisplay", () => {
       shippingCost: 50,
     };
     render(<CompactPriceDisplay monetaryInfo={monetaryInfo} />);
-    expect(screen.getByText(/1k\s+USD\s+\+\s+50\s+USD\s+Shipping/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/1k\s+USD\s+\+\s+50\s+USD\s+Shipping/i)
+    ).toBeInTheDocument();
   });
 
   it('displays "Free Shipping" correctly', () => {
@@ -34,7 +36,9 @@ describe("CompactPriceDisplay", () => {
       shippingType: "Free",
     };
     render(<CompactPriceDisplay monetaryInfo={monetaryInfo} />);
-    expect(screen.getByText(/2k\s+SATS\s+-\s+Free\s+Shipping/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/2k\s+SATS\s+-\s+Free\s+Shipping/i)
+    ).toBeInTheDocument();
   });
 
   it('displays "Pickup Only" correctly', () => {

@@ -430,7 +430,6 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
       setShopSlug("");
       setSlugInput("");
       setCustomDomain("");
-      setDomainInfo(null);
       setColors(DEFAULT_COLORS);
       setProductLayout("grid");
       setLandingPageStyle("hero");
@@ -490,19 +489,26 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
     const shop = shopMap.has(userPubkey!)
       ? shopMap.get(userPubkey!)
       : undefined;
+    const formName = watch("name");
+    const formAbout = watch("about");
+    const formPicture = watch("picture");
+    const formBanner = watch("banner");
     const transformedData: any = {
-      name: shop?.content?.name || "",
-      about: shop?.content?.about || "",
-      ui: shop?.content?.ui || {
-        picture: "",
-        banner: "",
-        theme: "",
-        darkMode: false,
+      name: formName || shop?.content?.name || "",
+      about: formAbout || shop?.content?.about || "",
+      ui: {
+        picture: formPicture || shop?.content?.ui?.picture || "",
+        banner: formBanner || shop?.content?.ui?.banner || "",
+        theme: shop?.content?.ui?.theme || "",
+        darkMode: shop?.content?.ui?.darkMode || false,
       },
       merchants: [userPubkey!],
       storefront: newSf,
     };
-    if (shop?.content?.freeShippingThreshold) {
+    if (freeShippingThreshold && parseFloat(freeShippingThreshold) > 0) {
+      transformedData.freeShippingThreshold = parseFloat(freeShippingThreshold);
+      transformedData.freeShippingCurrency = freeShippingCurrency;
+    } else if (shop?.content?.freeShippingThreshold) {
       transformedData.freeShippingThreshold =
         shop.content.freeShippingThreshold;
       transformedData.freeShippingCurrency = shop.content.freeShippingCurrency;
@@ -1305,6 +1311,16 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                 </code>
                 ) for your storefront? We can help set that up for you.
               </p>
+              {customDomain && (
+                <div className="mb-3 flex items-center gap-2 rounded-lg border border-green-300 bg-green-50 px-3 py-2 dark:border-green-700 dark:bg-green-950/30">
+                  <span className="text-xs font-medium text-green-700 dark:text-green-400">
+                    Active custom domain:
+                  </span>
+                  <code className="text-xs font-bold text-green-800 dark:text-green-300">
+                    {customDomain}
+                  </code>
+                </div>
+              )}
               <button
                 type="button"
                 onClick={() =>
@@ -1314,7 +1330,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                 }
                 className="inline-block rounded-lg border-3 border-black bg-white px-4 py-2 text-sm font-bold text-black hover:bg-gray-100 dark:border-gray-500 dark:bg-dark-fg dark:text-dark-text dark:hover:bg-dark-bg"
               >
-                Contact Us
+                {customDomain ? "Contact Us to Change Domain" : "Contact Us"}
               </button>
             </div>
 

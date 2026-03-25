@@ -1,5 +1,6 @@
 import { StorefrontColorScheme } from "@/utils/types/types";
 import { sanitizeUrl } from "@braintree/sanitize-url";
+import { getNavTextColor } from "@/utils/storefront-colors";
 
 interface StorefrontHeroProps {
   shopName: string;
@@ -20,6 +21,9 @@ export default function StorefrontHero({
   productCount,
   reviewCount,
 }: StorefrontHeroProps) {
+  // Text sits on the secondary-colored hero background — use luminance-based contrast.
+  const heroTextColor = getNavTextColor(colors.secondary);
+
   return (
     <div
       className="relative overflow-hidden"
@@ -53,7 +57,7 @@ export default function StorefrontHero({
 
         <h1
           className="text-4xl font-bold md:text-5xl"
-          style={{ color: colors.text }}
+          style={{ color: heroTextColor }}
         >
           {shopName}
         </h1>
@@ -61,7 +65,7 @@ export default function StorefrontHero({
         {shopAbout && (
           <p
             className="mt-4 max-w-xl text-lg"
-            style={{ color: colors.text + "CC" }}
+            style={{ color: heroTextColor + "CC" }}
           >
             {shopAbout}
           </p>
@@ -69,7 +73,7 @@ export default function StorefrontHero({
 
         <div
           className="mt-6 flex items-center gap-6 text-sm"
-          style={{ color: colors.text + "99" }}
+          style={{ color: heroTextColor + "99" }}
         >
           <span className="flex items-center gap-1">
             <span

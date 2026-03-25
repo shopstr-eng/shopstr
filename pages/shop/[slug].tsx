@@ -15,6 +15,7 @@ export default function ShopPage() {
     string,
     unknown
   > | null>(null);
+  const [initialCreatedAt, setInitialCreatedAt] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
@@ -44,6 +45,7 @@ export default function ShopPage() {
           if (data.pubkey) {
             setShopPubkey(data.pubkey);
             if (data.shopConfig) setInitialShopConfig(data.shopConfig);
+            if (data.createdAt) setInitialCreatedAt(Number(data.createdAt));
             setIsLoading(false);
             return;
           }
@@ -107,6 +109,7 @@ export default function ShopPage() {
       shopPubkey={shopPubkey}
       initialSlug={typeof slug === "string" ? slug : undefined}
       initialShopConfig={initialShopConfig}
+      initialCreatedAt={initialCreatedAt}
     />
   );
 }

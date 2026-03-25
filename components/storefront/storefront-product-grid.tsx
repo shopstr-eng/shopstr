@@ -4,6 +4,7 @@ import ProductCard from "@/components/utility-components/product-card";
 import { getListingSlug } from "@/utils/url-slugs";
 import { useState } from "react";
 import { Pagination } from "@nextui-org/react";
+import { getNavTextColor } from "@/utils/storefront-colors";
 
 interface StorefrontProductGridProps {
   products: ProductData[];
@@ -124,7 +125,11 @@ export default function StorefrontProductGrid({
             onChange={setCurrentPage}
             showControls
             classNames={{
-              cursor: "text-white font-bold",
+              cursor: `font-bold ${
+                getNavTextColor(colors.accent) === "#1a1a1a"
+                  ? "text-gray-900"
+                  : "text-white"
+              }`,
             }}
             style={{
               // @ts-ignore

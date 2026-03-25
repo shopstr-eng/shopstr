@@ -1,5 +1,6 @@
 import { StorefrontSection, StorefrontColorScheme } from "@/utils/types/types";
 import { sanitizeUrl } from "@braintree/sanitize-url";
+import { getNavTextColor } from "@/utils/storefront-colors";
 
 interface SectionHeroProps {
   section: StorefrontSection;
@@ -14,7 +15,13 @@ export default function SectionHero({
   shopName,
   shopPicture,
 }: SectionHeroProps) {
-  const overlayOpacity = section.overlayOpacity ?? 0.6;
+  // overlayOpacity is stored as an integer 0–90 (percent) by the section editor.
+  // Convert to 0.0–0.9 decimal for CSS. Default 60 → 0.60 overlay = 40% image visible.
+  const rawOpacity = section.overlayOpacity ?? 60;
+  const overlayOpacity = Math.min(Math.max(rawOpacity, 0), 90) / 100;
+
+  // Text sits on the secondary-colored background — use luminance-based contrast color.
+  const heroTextColor = getNavTextColor(colors.secondary);
 
   return (
     <div
@@ -54,7 +61,7 @@ export default function SectionHero({
 
         <h1
           className="font-heading text-4xl font-bold md:text-5xl"
-          style={{ color: colors.background }}
+          style={{ color: heroTextColor }}
         >
           {section.heading || shopName}
         </h1>
@@ -62,7 +69,7 @@ export default function SectionHero({
         {section.subheading && (
           <p
             className="font-body mt-4 max-w-xl text-lg"
-            style={{ color: colors.background + "CC" }}
+            style={{ color: heroTextColor + "CC" }}
           >
             {section.subheading}
           </p>

@@ -1,4 +1,4 @@
-import { useContext, useEffect, useState, useMemo } from "react";
+import { useContext, useEffect, useRef, useState, useMemo } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
 import { useDisclosure } from "@nextui-org/react";
@@ -26,6 +26,7 @@ import {
   StorefrontPolicies,
 } from "@/utils/types/types";
 import { POLICY_SLUGS, getDefaultPolicies } from "@/utils/storefront-policies";
+import { getNavTextColor } from "@/utils/storefront-colors";
 import { nip19 } from "nostr-tools";
 import { sanitizeUrl } from "@braintree/sanitize-url";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
@@ -50,21 +51,12 @@ const DEFAULT_COLORS: StorefrontColorScheme = {
   text: "#212121",
 };
 
-function getNavTextColor(hexColor: string): string {
-  const hex = hexColor.replace("#", "");
-  if (hex.length !== 6) return "#ffffff";
-  const r = parseInt(hex.substring(0, 2), 16);
-  const g = parseInt(hex.substring(2, 4), 16);
-  const b = parseInt(hex.substring(4, 6), 16);
-  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-  return luminance > 0.5 ? "#212121" : "#ffffff";
-}
-
 interface StorefrontLayoutProps {
   shopPubkey: string;
   currentPage?: string;
   initialSlug?: string;
   initialShopConfig?: Record<string, unknown> | null;
+  initialCreatedAt?: number;
 }
 
 export default function StorefrontLayout({
@@ -72,6 +64,7 @@ export default function StorefrontLayout({
   currentPage,
   initialSlug,
   initialShopConfig,
+  initialCreatedAt = 0,
 }: StorefrontLayoutProps) {
   const shopMapContext = useContext(ShopMapContext);
   const productContext = useContext(ProductContext);
@@ -88,24 +81,42 @@ export default function StorefrontLayout({
   const [cartQuantity, setCartQuantity] = useState(0);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  // Seed colors immediately from the fast DB lookup result
+  // Track the created_at of the DB-seeded config so the relay override
+  // cannot replace it with a stale older event.
+  const dbCreatedAtRef = useRef<number>(initialCreatedAt);
+
+  // Seed colors, storefront config, and basic shop info immediately from the
+  // fast DB lookup result — no relay wait needed.
   useEffect(() => {
     if (!initialShopConfig) return;
-    const sf = (initialShopConfig as Record<string, unknown>).storefront as
-      | StorefrontConfig
-      | undefined;
-    if (!sf) return;
-    setStorefront(sf);
-    if (sf.colorScheme) {
-      setColors({ ...DEFAULT_COLORS, ...sf.colorScheme });
+    const cfg = initialShopConfig as Record<string, unknown>;
+    const sf = cfg.storefront as StorefrontConfig | undefined;
+    if (sf) {
+      setStorefront(sf);
+      if (sf.colorScheme) {
+        setColors({ ...DEFAULT_COLORS, ...sf.colorScheme });
+      }
     }
-  }, [initialShopConfig]);
+    // Also hydrate the shop state so name/about/picture render before relay loads
+    setShop({
+      pubkey: shopPubkey,
+      content: cfg as any,
+      created_at: initialCreatedAt || 0,
+    });
+    // Record the DB event timestamp so we can guard the relay override below
+    dbCreatedAtRef.current = initialCreatedAt || 0;
+  }, [initialShopConfig, initialCreatedAt, shopPubkey]);
 
-  // Override with full context data once the relay fetch completes
+  // Override with full context data once the relay fetch completes —
+  // but only when the relay event is at least as recent as the DB row we
+  // already applied (prevents an older relay event from clobbering newer
+  // colors that were just saved).
   useEffect(() => {
     if (shopPubkey && shopMapContext.shopData.has(shopPubkey)) {
       const shopData = shopMapContext.shopData.get(shopPubkey);
       if (shopData) {
+        // Only override if relay data is as fresh or fresher than the DB seed
+        if (shopData.created_at < dbCreatedAtRef.current) return;
         setShop(shopData);
         if (shopData.content.storefront) {
           setStorefront(shopData.content.storefront);
@@ -239,15 +250,17 @@ export default function StorefrontLayout({
     }
   }, [shopPubkey]);
 
-  const contactNavLink: StorefrontNavLink | null = storefront.contactEmail
-    ? { label: "Contact", href: `mailto:${storefront.contactEmail}` }
-    : sellerNpub
-      ? {
-          label: "Contact",
-          href: `orders?pk=${sellerNpub}&isInquiry=true`,
-          isPage: true,
-        }
-      : null;
+  const contactNavLink: StorefrontNavLink | null = useMemo(() => {
+    if (storefront.contactEmail)
+      return { label: "Contact", href: `mailto:${storefront.contactEmail}` };
+    if (sellerNpub)
+      return {
+        label: "Contact",
+        href: `orders?pk=${sellerNpub}&isInquiry=true`,
+        isPage: true,
+      };
+    return null;
+  }, [storefront.contactEmail, sellerNpub]);
 
   const sellerCommunity = useMemo(() => {
     if (!showCommunity || !shopPubkey) return null;
@@ -320,6 +333,7 @@ export default function StorefrontLayout({
     "--sf-accent": colors.accent,
     "--sf-bg": colors.background,
     "--sf-text": colors.text,
+    "--sf-nav-text": navTextColor,
   } as React.CSSProperties;
 
   const fontStyles = {
@@ -358,6 +372,7 @@ export default function StorefrontLayout({
     body.sf-active [data-overlay-container] .border-primary-yellow { border-color: var(--sf-primary) !important; }
     body.sf-active [data-overlay-container] .font-heading { font-family: var(--font-heading, inherit); }
     body.sf-active [data-overlay-container] .font-body { font-family: var(--font-body, inherit); }
+    body.sf-active nav .text-light-text { color: var(--sf-nav-text) !important; }
   `;
 
   return (
@@ -489,7 +504,7 @@ export default function StorefrontLayout({
                       "settings",
                       "logout",
                     ]}
-                    nameClassname="lg:block text-white"
+                    nameClassname="lg:block"
                   />
                 ) : (
                   <button
@@ -574,7 +589,7 @@ export default function StorefrontLayout({
                       "settings",
                       "logout",
                     ]}
-                    nameClassname="text-white"
+                    nameClassname=""
                   />
                 </div>
               ) : (

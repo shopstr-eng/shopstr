@@ -17,6 +17,7 @@ import {
   StorefrontFooter,
 } from "@/utils/types/types";
 import StorefrontFooterComponent from "./storefront-footer";
+import { getNavTextColor } from "@/utils/storefront-colors";
 
 const DEFAULT_COLORS: StorefrontColorScheme = {
   primary: "#a438ba",
@@ -153,6 +154,8 @@ export default function StorefrontThemeWrapper({
     return `https://fonts.googleapis.com/css2?${families}&display=swap`;
   }, [fontHeading, fontBody]);
 
+  const navTextColor = getNavTextColor(colors.secondary);
+
   const defaultFooter: StorefrontFooter = hasFooter
     ? storefront!.footer!
     : { showPoweredBy: true };
@@ -169,6 +172,7 @@ export default function StorefrontThemeWrapper({
     "--sf-accent": colors.accent,
     "--sf-bg": colors.background,
     "--sf-text": colors.text,
+    "--sf-nav-text": navTextColor,
   } as React.CSSProperties;
 
   const fontStyles = {
@@ -202,6 +206,7 @@ export default function StorefrontThemeWrapper({
     body.sf-active [data-overlay-container] .border-primary-yellow { border-color: var(--sf-primary) !important; }
     body.sf-active [data-overlay-container] .font-heading { font-family: var(--font-heading, inherit); }
     body.sf-active [data-overlay-container] .font-body { font-family: var(--font-body, inherit); }
+    body.sf-active nav .text-light-text { color: var(--sf-nav-text) !important; }
   `;
 
   return (
@@ -247,7 +252,7 @@ export default function StorefrontThemeWrapper({
               )}
               <span
                 className="font-heading text-lg font-bold"
-                style={{ color: colors.background }}
+                style={{ color: navTextColor }}
               >
                 {shopName}
               </span>
@@ -257,7 +262,7 @@ export default function StorefrontThemeWrapper({
               <button
                 onClick={() => router.push("/cart")}
                 className="relative rounded-md p-2 transition-colors"
-                style={{ color: colors.background }}
+                style={{ color: navTextColor }}
               >
                 <ShoppingCartIcon className="h-5 w-5" />
                 {cartQuantity > 0 && (
@@ -284,7 +289,7 @@ export default function StorefrontThemeWrapper({
                       "settings",
                       "logout",
                     ]}
-                    nameClassname="lg:block text-white"
+                    nameClassname="lg:block"
                   />
                 ) : (
                   <button
@@ -303,7 +308,7 @@ export default function StorefrontThemeWrapper({
               <button
                 className="flex h-8 w-8 items-center justify-center rounded md:hidden"
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                style={{ color: colors.background }}
+                style={{ color: navTextColor }}
               >
                 {mobileMenuOpen ? (
                   <XMarkIcon className="h-6 w-6" />
@@ -333,7 +338,7 @@ export default function StorefrontThemeWrapper({
                       "settings",
                       "logout",
                     ]}
-                    nameClassname="text-white"
+                    nameClassname=""
                   />
                 </div>
               ) : (
@@ -343,7 +348,7 @@ export default function StorefrontThemeWrapper({
                     setMobileMenuOpen(false);
                   }}
                   className="block w-full px-6 py-3 text-left text-sm font-medium"
-                  style={{ color: colors.background + "CC" }}
+                  style={{ color: navTextColor + "CC" }}
                 >
                   Sign In
                 </button>
@@ -353,7 +358,7 @@ export default function StorefrontThemeWrapper({
                   <a
                     href={homeHref}
                     className="block px-6 py-3 text-sm font-medium"
-                    style={{ color: colors.background + "CC" }}
+                    style={{ color: navTextColor + "CC" }}
                     onClick={() => setMobileMenuOpen(false)}
                   >
                     Back to Shop
@@ -361,7 +366,7 @@ export default function StorefrontThemeWrapper({
                   <a
                     href={`/shop/${shopSlug}/orders`}
                     className="block px-6 py-3 text-sm font-medium"
-                    style={{ color: colors.background + "CC" }}
+                    style={{ color: navTextColor + "CC" }}
                     onClick={() => setMobileMenuOpen(false)}
                   >
                     Orders

@@ -63,7 +63,10 @@ const baseMessageEvent: NostrMessageEvent = {
  *  - the mocked setter functions
  */
 const renderComponent = (
-  props: Omit<Partial<React.ComponentProps<typeof ChatMessage>>, "messageEvent"> & {
+  props: Omit<
+    Partial<React.ComponentProps<typeof ChatMessage>>,
+    "messageEvent"
+  > & {
     messageEvent?: Partial<NostrMessageEvent>;
   }
 ) => {
