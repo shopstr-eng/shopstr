@@ -23,6 +23,7 @@ import { ProductData } from "@/utils/parsers/product-parser-functions";
 import { ProfileWithDropdown } from "./profile/profile-dropdown";
 import { useRouter } from "next/router";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
+import BeefInitiativeBadge from "./beef-initiative-badge";
 
 export default function ProductCard({
   productData,
@@ -178,6 +179,13 @@ export default function ProductCard({
             </Dropdown>
           )}
         </div>
+
+        {productData.beefinit_donation_percentage != null &&
+          productData.beefinit_donation_percentage > 0 && (
+            <div>
+              <BeefInitiativeBadge size="sm" />
+            </div>
+          )}
 
         {/* Location and Price - with proper spacing */}
         {router.pathname !== "/" && (

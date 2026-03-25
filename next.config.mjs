@@ -61,6 +61,14 @@ const nextConfig = {
     "@milk-market/api-client",
   ],
   turbopack: {},
+  async rewrites() {
+    return [
+      {
+        source: "/sitemap.xml",
+        destination: "/api/sitemap.xml",
+      },
+    ];
+  },
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "www.google.com" },

@@ -13,6 +13,7 @@ import {
   findPubkeyByProfileSlug,
   getProfileSlug,
 } from "@/utils/url-slugs";
+import { OgMetaProps, DEFAULT_OG } from "@/components/og-head";
 
 type MetaTagsType = {
   title: string;
@@ -20,6 +21,14 @@ type MetaTagsType = {
   image: string;
   url: string;
 };
+
+const BASE_URL = "https://milk.market";
+
+function ensureAbsoluteUrl(url: string, base: string): string {
+  if (!url) return "";
+  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+  return `${base}${url.startsWith("/") ? "" : "/"}${url}`;
+}
 
 const getMetaTags = (
   windowOrigin: string,
@@ -30,10 +39,9 @@ const getMetaTags = (
   profileData: Map<string, ProfileData>
 ): MetaTagsType => {
   const defaultTags = {
-    title: "Milk Market - Farm-Fresh Dairy Direct from Local Farmers",
-    description:
-      "Buy farm-fresh, raw milk and dairy products direct from local farmers. Connecting consumers to trusted dairy producers with sovereignty and community in mind.",
-    image: "/milk-market.png",
+    title: DEFAULT_OG.title,
+    description: DEFAULT_OG.description,
+    image: ensureAbsoluteUrl("/milk-market.png", BASE_URL),
     url: `${windowOrigin}`,
   };
 
@@ -82,7 +90,10 @@ const getMetaTags = (
         title: productData.title || "Milk Market Listing",
         description:
           productData.summary || "Check out this product on Milk Market!",
-        image: productData.images?.[0] || "/milk-market.png",
+        image: ensureAbsoluteUrl(
+          productData.images?.[0] || "/milk-market.png",
+          BASE_URL
+        ),
         url: `${windowOrigin}/listing/${slug || productId}`,
       };
     }
@@ -113,7 +124,10 @@ const getMetaTags = (
         title: `${shopInfo.content.name} Shop` || "Milk Market Shop",
         description:
           shopInfo.content.about || "Check out this shop on Milk Market!",
-        image: shopInfo.content.ui.picture || "/milk-market.png",
+        image: ensureAbsoluteUrl(
+          shopInfo.content.ui.picture || "/milk-market.png",
+          BASE_URL
+        ),
         url: `${windowOrigin}/marketplace/${profileSlug}`,
       };
     }
@@ -131,10 +145,12 @@ const DynamicHead = ({
   productEvents,
   shopEvents,
   profileData,
+  ssrOgMeta,
 }: {
   productEvents: NostrEvent[];
   shopEvents: Map<string, ShopProfile>;
   profileData: Map<string, ProfileData>;
+  ssrOgMeta?: OgMetaProps | null;
 }) => {
   const router = useRouter();
   const [origin, setOrigin] = useState("");
@@ -143,14 +159,23 @@ const DynamicHead = ({
     setOrigin(window.location.origin);
   }, []);
 
-  const metaTags = getMetaTags(
-    origin ? origin : "https://milk.market",
-    router.pathname,
-    router.query,
-    productEvents,
-    shopEvents,
-    profileData
-  );
+  const effectiveOrigin = origin || BASE_URL;
+
+  const metaTags = ssrOgMeta
+    ? {
+        title: ssrOgMeta.title,
+        description: ssrOgMeta.description,
+        image: ensureAbsoluteUrl(ssrOgMeta.image, effectiveOrigin),
+        url: ensureAbsoluteUrl(ssrOgMeta.url, effectiveOrigin),
+      }
+    : getMetaTags(
+        effectiveOrigin,
+        router.pathname,
+        router.query,
+        productEvents,
+        shopEvents,
+        profileData
+      );
 
   return (
     <Head>
@@ -169,7 +194,7 @@ const DynamicHead = ({
       <meta property="og:description" content={metaTags.description} />
       <meta property="og:image" content={metaTags.image} />
       <meta name="twitter:card" content="summary_large_image" />
-      <meta property="twitter:domain" content={origin} />
+      <meta property="twitter:domain" content={origin || "milk.market"} />
       <meta property="twitter:url" content={metaTags.url} />
       <meta name="twitter:title" content={metaTags.title} />
       <meta name="twitter:description" content={metaTags.description} />

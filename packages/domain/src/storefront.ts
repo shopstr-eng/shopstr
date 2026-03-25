@@ -125,6 +125,17 @@ export interface StorefrontPage {
   sections: StorefrontSection[];
 }
 
+export interface StorefrontEmailPopup {
+  enabled: boolean;
+  discountPercentage: number;
+  headline?: string;
+  subtext?: string;
+  collectPhone?: boolean;
+  requirePhone?: boolean;
+  buttonText?: string;
+  successMessage?: string;
+}
+
 export interface StorefrontConfig {
   colorScheme?: StorefrontColorScheme;
   productLayout?: "grid" | "list" | "featured";
@@ -139,4 +150,5 @@ export interface StorefrontConfig {
   navLinks?: StorefrontNavLink[];
   showCommunityPage?: boolean;
   showWalletPage?: boolean;
+  emailPopup?: StorefrontEmailPopup;
 }

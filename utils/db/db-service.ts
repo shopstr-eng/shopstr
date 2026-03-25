@@ -966,6 +966,325 @@ export async function fetchAllProductsFromDb(): Promise<NostrEvent[]> {
   return fetchCachedEvents(30402);
 }
 
+export async function fetchProductByIdFromDb(
+  identifier: string
+): Promise<NostrEvent | null> {
+  const dbPool = getDbPool();
+  let client;
+  try {
+    client = await dbPool.connect();
+    const result = await client.query(
+      `SELECT id, pubkey, created_at, kind, tags, content, sig FROM product_events
+       WHERE id = $1
+          OR EXISTS (SELECT 1 FROM jsonb_array_elements(tags) elem WHERE elem->>0 = 'd' AND elem->>1 = $1)
+       ORDER BY created_at DESC LIMIT 1`,
+      [identifier]
+    );
+    if (result.rows.length > 0) {
+      const row = result.rows[0];
+      return {
+        id: row.id,
+        pubkey: row.pubkey,
+        created_at: row.created_at,
+        kind: row.kind,
+        tags: row.tags,
+        content: row.content,
+        sig: row.sig,
+      };
+    }
+    return null;
+  } catch (error) {
+    console.error("Failed to fetch product by id from database:", error);
+    return null;
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function fetchProductByDTagAndPubkey(
+  dTag: string,
+  pubkey: string
+): Promise<NostrEvent | null> {
+  const dbPool = getDbPool();
+  let client;
+  try {
+    client = await dbPool.connect();
+    const result = await client.query(
+      `SELECT id, pubkey, created_at, kind, tags, content, sig FROM product_events
+       WHERE pubkey = $1
+         AND EXISTS (SELECT 1 FROM jsonb_array_elements(tags) elem WHERE elem->>0 = 'd' AND elem->>1 = $2)
+       ORDER BY created_at DESC LIMIT 1`,
+      [pubkey, dTag]
+    );
+    if (result.rows.length > 0) {
+      const row = result.rows[0];
+      return {
+        id: row.id,
+        pubkey: row.pubkey,
+        created_at: row.created_at,
+        kind: row.kind,
+        tags: row.tags,
+        content: row.content,
+        sig: row.sig,
+      };
+    }
+    return null;
+  } catch (error) {
+    console.error("Failed to fetch product by d-tag and pubkey:", error);
+    return null;
+  } finally {
+    if (client) client.release();
+  }
+}
+
+const SQL_SLUG_EXPR = (field: string) => `
+  regexp_replace(
+    regexp_replace(
+      regexp_replace(
+        regexp_replace(
+          trim(COALESCE(${field}, '')),
+          '[#?&/\\\\%=+<>{}|^~\\[\\]\`@!\\$*()\"'';:,]', '', 'g'
+        ),
+        '\\s+', '-', 'g'
+      ),
+      '-+', '-', 'g'
+    ),
+    '^-|-$', '', 'g'
+  )`;
+
+const SQL_TITLE_EXTRACT = `(SELECT elem->>1 FROM jsonb_array_elements(pe.tags) elem WHERE elem->>0 = 'title' LIMIT 1)`;
+
+export async function fetchProductByTitleSlug(
+  slug: string
+): Promise<NostrEvent | null> {
+  const dbPool = getDbPool();
+  let client;
+  try {
+    client = await dbPool.connect();
+
+    const pubkeySuffixMatch = slug.match(/^(.+)-([a-f0-9]{8})$/);
+
+    let result;
+    if (pubkeySuffixMatch) {
+      const baseSlug = pubkeySuffixMatch[1] as string;
+      const pubkeyPrefix = pubkeySuffixMatch[2] as string;
+      result = await client.query(
+        `SELECT pe.id, pe.pubkey, pe.created_at, pe.kind, pe.tags, pe.content, pe.sig
+         FROM product_events pe
+         WHERE ${SQL_SLUG_EXPR(SQL_TITLE_EXTRACT)} = $1
+           AND pe.pubkey LIKE $2
+         ORDER BY pe.created_at DESC
+         LIMIT 1`,
+        [baseSlug, pubkeyPrefix + "%"]
+      );
+    } else {
+      result = await client.query(
+        `SELECT pe.id, pe.pubkey, pe.created_at, pe.kind, pe.tags, pe.content, pe.sig
+         FROM product_events pe
+         WHERE ${SQL_SLUG_EXPR(SQL_TITLE_EXTRACT)} = $1
+         ORDER BY pe.created_at DESC
+         LIMIT 1`,
+        [slug]
+      );
+    }
+
+    if (result.rows.length > 0) {
+      const row = result.rows[0];
+      return {
+        id: row.id,
+        pubkey: row.pubkey,
+        created_at: row.created_at,
+        kind: row.kind,
+        tags: row.tags,
+        content: row.content,
+        sig: row.sig,
+      };
+    }
+    return null;
+  } catch (error) {
+    console.error("Failed to fetch product by title slug:", error);
+    return null;
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function fetchProfilePubkeyByNameSlug(
+  slug: string
+): Promise<string | null> {
+  const dbPool = getDbPool();
+  let client;
+  try {
+    client = await dbPool.connect();
+
+    const nameField = `(pe.content::jsonb->>'name')`;
+    const pubkeySuffixMatch = slug.match(/^(.+)-([a-f0-9]{8})$/);
+
+    let result;
+    if (pubkeySuffixMatch) {
+      const baseSlug = pubkeySuffixMatch[1] as string;
+      const pubkeyPrefix = pubkeySuffixMatch[2] as string;
+      result = await client.query(
+        `SELECT DISTINCT ON (pe.pubkey) pe.pubkey
+         FROM profile_events pe
+         WHERE pe.kind = 0
+           AND ${SQL_SLUG_EXPR(nameField)} = $1
+           AND pe.pubkey LIKE $2
+         ORDER BY pe.pubkey, pe.created_at DESC
+         LIMIT 1`,
+        [baseSlug, pubkeyPrefix + "%"]
+      );
+    } else {
+      result = await client.query(
+        `SELECT DISTINCT ON (pe.pubkey) pe.pubkey
+         FROM profile_events pe
+         WHERE pe.kind = 0
+           AND ${SQL_SLUG_EXPR(nameField)} = $1
+         ORDER BY pe.pubkey, pe.created_at DESC
+         LIMIT 1`,
+        [slug]
+      );
+    }
+
+    if (result.rows.length > 0) {
+      return result.rows[0].pubkey;
+    }
+    return null;
+  } catch (error) {
+    console.error("Failed to fetch profile pubkey by name slug:", error);
+    return null;
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function fetchShopProfileByPubkeyFromDb(
+  pubkey: string
+): Promise<NostrEvent | null> {
+  const dbPool = getDbPool();
+  let client;
+  try {
+    client = await dbPool.connect();
+    const result = await client.query(
+      `SELECT id, pubkey, created_at, kind, tags, content, sig FROM profile_events
+       WHERE pubkey = $1 AND kind = 30019
+       ORDER BY created_at DESC LIMIT 1`,
+      [pubkey]
+    );
+    if (result.rows.length > 0) {
+      const row = result.rows[0];
+      return {
+        id: row.id,
+        pubkey: row.pubkey,
+        created_at: row.created_at,
+        kind: row.kind,
+        tags: row.tags,
+        content: row.content,
+        sig: row.sig,
+      };
+    }
+    return null;
+  } catch (error) {
+    console.error("Failed to fetch shop profile from database:", error);
+    return null;
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function fetchShopPubkeyBySlug(
+  slug: string
+): Promise<string | null> {
+  const dbPool = getDbPool();
+  let client;
+  try {
+    client = await dbPool.connect();
+    const result = await client.query(
+      "SELECT pubkey FROM shop_slugs WHERE slug = $1",
+      [slug.toLowerCase()]
+    );
+    if (result.rows.length > 0) {
+      return result.rows[0].pubkey;
+    }
+    return null;
+  } catch (error) {
+    console.error("Failed to fetch shop pubkey by slug:", error);
+    return null;
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function fetchCommunityByPubkeyAndIdentifier(
+  pubkey: string,
+  identifier: string
+): Promise<NostrEvent | null> {
+  const dbPool = getDbPool();
+  let client;
+  try {
+    client = await dbPool.connect();
+    const result = await client.query(
+      `SELECT id, pubkey, created_at, kind, tags, content, sig FROM community_events
+       WHERE pubkey = $1 AND kind = 34550
+         AND EXISTS (SELECT 1 FROM jsonb_array_elements(tags) elem WHERE elem->>0 = 'd' AND elem->>1 = $2)
+       ORDER BY created_at DESC LIMIT 1`,
+      [pubkey, identifier]
+    );
+    if (result.rows.length > 0) {
+      const row = result.rows[0];
+      return {
+        id: row.id,
+        pubkey: row.pubkey,
+        created_at: row.created_at,
+        kind: row.kind,
+        tags: row.tags,
+        content: row.content,
+        sig: row.sig,
+      };
+    }
+    return null;
+  } catch (error) {
+    console.error("Failed to fetch community from database:", error);
+    return null;
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function fetchProfileByPubkeyFromDb(
+  pubkey: string
+): Promise<NostrEvent | null> {
+  const dbPool = getDbPool();
+  let client;
+  try {
+    client = await dbPool.connect();
+    const result = await client.query(
+      `SELECT id, pubkey, created_at, kind, tags, content, sig FROM profile_events
+       WHERE pubkey = $1 AND kind = 0
+       ORDER BY created_at DESC LIMIT 1`,
+      [pubkey]
+    );
+    if (result.rows.length > 0) {
+      const row = result.rows[0];
+      return {
+        id: row.id,
+        pubkey: row.pubkey,
+        created_at: row.created_at,
+        kind: row.kind,
+        tags: row.tags,
+        content: row.content,
+        sig: row.sig,
+      };
+    }
+    return null;
+  } catch (error) {
+    console.error("Failed to fetch profile from database:", error);
+    return null;
+  } finally {
+    if (client) client.release();
+  }
+}
+
 // Fetch all reviews from database
 export async function fetchAllReviewsFromDb(): Promise<NostrEvent[]> {
   return fetchCachedEvents(31555);
@@ -1219,7 +1538,8 @@ export async function addDiscountCode(
   code: string,
   pubkey: string,
   discountPercentage: number,
-  expiration?: number
+  expiration?: number,
+  maxUses?: number
 ): Promise<void> {
   const dbPool = getDbPool();
   let client;
@@ -1227,12 +1547,19 @@ export async function addDiscountCode(
   try {
     client = await dbPool.connect();
     const query = {
-      text: `INSERT INTO discount_codes (code, pubkey, discount_percentage, expiration)
-             VALUES ($1, $2, $3, $4)
+      text: `INSERT INTO discount_codes (code, pubkey, discount_percentage, expiration, max_uses)
+             VALUES ($1, $2, $3, $4, $5)
              ON CONFLICT (code, pubkey) DO UPDATE SET
                discount_percentage = EXCLUDED.discount_percentage,
-               expiration = EXCLUDED.expiration`,
-      values: [code, pubkey, discountPercentage, expiration || null] as any[],
+               expiration = EXCLUDED.expiration,
+               max_uses = EXCLUDED.max_uses`,
+      values: [
+        code,
+        pubkey,
+        discountPercentage,
+        expiration || null,
+        maxUses ?? null,
+      ] as any[],
     };
     await client.query(query);
   } catch (error) {
@@ -1251,6 +1578,8 @@ export async function getDiscountCodesByPubkey(pubkey: string): Promise<
     code: string;
     discount_percentage: number;
     expiration: number | null;
+    max_uses: number | null;
+    times_used: number;
   }>
 > {
   const dbPool = getDbPool();
@@ -1259,7 +1588,7 @@ export async function getDiscountCodesByPubkey(pubkey: string): Promise<
   try {
     client = await dbPool.connect();
     const result = await client.query(
-      `SELECT code, discount_percentage, expiration FROM discount_codes WHERE pubkey = $1 ORDER BY created_at DESC`,
+      `SELECT code, discount_percentage, expiration, max_uses, times_used FROM discount_codes WHERE pubkey = $1 ORDER BY created_at DESC`,
       [pubkey]
     );
     return result.rows;
@@ -1284,7 +1613,7 @@ export async function validateDiscountCode(
   try {
     client = await dbPool.connect();
     const result = await client.query(
-      `SELECT discount_percentage, expiration FROM discount_codes WHERE code = $1 AND pubkey = $2`,
+      `SELECT discount_percentage, expiration, max_uses, times_used FROM discount_codes WHERE code = $1 AND pubkey = $2`,
       [code, pubkey]
     );
 
@@ -1292,10 +1621,14 @@ export async function validateDiscountCode(
       return { valid: false };
     }
 
-    const { discount_percentage, expiration } = result.rows[0];
+    const { discount_percentage, expiration, max_uses, times_used } =
+      result.rows[0];
 
-    // Check if code is expired
     if (expiration && Date.now() / 1000 > expiration) {
+      return { valid: false };
+    }
+
+    if (max_uses !== null && times_used >= max_uses) {
       return { valid: false };
     }
 
@@ -1307,6 +1640,25 @@ export async function validateDiscountCode(
     if (client) {
       client.release();
     }
+  }
+}
+
+export async function markDiscountCodeUsed(
+  code: string,
+  pubkey: string
+): Promise<void> {
+  const dbPool = getDbPool();
+  let client;
+  try {
+    client = await dbPool.connect();
+    await client.query(
+      `UPDATE discount_codes SET times_used = times_used + 1 WHERE code = $1 AND pubkey = $2`,
+      [code, pubkey]
+    );
+  } catch (error) {
+    console.error("Failed to mark discount code used:", error);
+  } finally {
+    if (client) client.release();
   }
 }
 
@@ -1331,6 +1683,64 @@ export async function deleteDiscountCode(
     if (client) {
       client.release();
     }
+  }
+}
+
+export async function savePopupEmailCapture(
+  sellerPubkey: string,
+  email: string,
+  phone: string | null,
+  discountCode: string,
+  discountPercentage: number
+): Promise<{ isNew: boolean }> {
+  const dbPool = getDbPool();
+  let client;
+  try {
+    client = await dbPool.connect();
+    const params: any[] = [
+      sellerPubkey,
+      email.toLowerCase(),
+      phone || null,
+      discountCode,
+      discountPercentage,
+    ];
+    const result = await client.query(
+      `INSERT INTO popup_email_captures (seller_pubkey, email, phone, discount_code, discount_percentage)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (seller_pubkey, email) DO UPDATE SET
+         phone = COALESCE(EXCLUDED.phone, popup_email_captures.phone),
+         discount_code = EXCLUDED.discount_code,
+         discount_percentage = EXCLUDED.discount_percentage
+       RETURNING (xmax = 0) AS is_new`,
+      params
+    );
+    return { isNew: result.rows[0]?.is_new ?? true };
+  } catch (error) {
+    console.error("Failed to save popup email capture:", error);
+    throw error;
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function getPopupEmailCapture(
+  sellerPubkey: string,
+  email: string
+): Promise<{ discount_code: string; discount_percentage: number } | null> {
+  const dbPool = getDbPool();
+  let client;
+  try {
+    client = await dbPool.connect();
+    const result = await client.query(
+      `SELECT discount_code, discount_percentage FROM popup_email_captures WHERE seller_pubkey = $1 AND email = $2`,
+      [sellerPubkey, email.toLowerCase()]
+    );
+    return result.rows.length > 0 ? result.rows[0] : null;
+  } catch (error) {
+    console.error("Failed to get popup email capture:", error);
+    return null;
+  } finally {
+    if (client) client.release();
   }
 }
 

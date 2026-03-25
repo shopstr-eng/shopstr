@@ -79,15 +79,15 @@ const mockWalletContext = {
 const renderWithProviders = (
   ui: React.ReactElement,
   {
-    signer = mockSigner,
-    nostr = mockNostr,
+    signer = mockSigner as any,
+    nostr = mockNostr as any,
     walletContext = mockWalletContext,
   } = {}
 ) => {
   return render(
-    <NostrContext.Provider value={{ nostr }}>
-      <SignerContext.Provider value={{ signer }}>
-        <CashuWalletContext.Provider value={walletContext}>
+    <NostrContext.Provider value={{ nostr } as any}>
+      <SignerContext.Provider value={{ signer } as any}>
+        <CashuWalletContext.Provider value={walletContext as any}>
           {ui}
         </CashuWalletContext.Provider>
       </SignerContext.Provider>

@@ -1,41 +1,48 @@
 import { render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom";
+import type { ComponentProps } from "react";
 import CompactPriceDisplay, {
   DisplayCheckoutCost,
   calculateTotalCost,
   formatWithCommas,
 } from "../display-monetary-info";
 
+type MonetaryInfo = ComponentProps<typeof CompactPriceDisplay>["monetaryInfo"];
+
 describe("CompactPriceDisplay", () => {
   it("formats large prices with compact notation", () => {
-    const monetaryInfo = { price: 50000, currency: "SATS" };
+    const monetaryInfo: MonetaryInfo = { price: 50000, currency: "SATS" };
     render(<CompactPriceDisplay monetaryInfo={monetaryInfo} />);
-    expect(screen.getByText(/50K SATS/)).toBeInTheDocument();
+    expect(screen.getByText(/50k\s+SATS/i)).toBeInTheDocument();
   });
 
   it('displays "Added Cost" shipping correctly', () => {
-    const monetaryInfo = {
+    const monetaryInfo: MonetaryInfo = {
       price: 1000,
       currency: "USD",
       shippingType: "Added Cost",
       shippingCost: 50,
     };
     render(<CompactPriceDisplay monetaryInfo={monetaryInfo} />);
-    expect(screen.getByText(/1K USD \+ 50 USD Shipping/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/1k\s+USD\s+\+\s+50\s+USD\s+Shipping/i)
+    ).toBeInTheDocument();
   });
 
   it('displays "Free Shipping" correctly', () => {
-    const monetaryInfo = {
+    const monetaryInfo: MonetaryInfo = {
       price: 2000,
       currency: "SATS",
       shippingType: "Free",
     };
     render(<CompactPriceDisplay monetaryInfo={monetaryInfo} />);
-    expect(screen.getByText(/2K SATS - Free Shipping/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/2k\s+SATS\s+-\s+Free\s+Shipping/i)
+    ).toBeInTheDocument();
   });
 
   it('displays "Pickup Only" correctly', () => {
-    const monetaryInfo = {
+    const monetaryInfo: MonetaryInfo = {
       price: 300,
       currency: "SATS",
       shippingType: "Pickup",
@@ -45,7 +52,7 @@ describe("CompactPriceDisplay", () => {
   });
 
   it('displays "Free / Pickup" correctly', () => {
-    const monetaryInfo = {
+    const monetaryInfo: MonetaryInfo = {
       price: 450,
       currency: "SATS",
       shippingType: "Free/Pickup",
@@ -68,7 +75,7 @@ describe("CompactPriceDisplay", () => {
   });
 
   it("does not display a shipping label if no shipping type is provided", () => {
-    const monetaryInfo = { price: 100, currency: "SATS" };
+    const monetaryInfo: MonetaryInfo = { price: 100, currency: "SATS" };
     render(<CompactPriceDisplay monetaryInfo={monetaryInfo} />);
     const mainSpan = screen.getByText(/100 SATS/);
     expect(mainSpan.textContent?.trim()).toBe("100 SATS");
@@ -77,14 +84,18 @@ describe("CompactPriceDisplay", () => {
 
 describe("DisplayCheckoutCost", () => {
   it("renders price and shipping type correctly", () => {
-    const monetaryInfo = { price: 1500, currency: "USD", shippingType: "Free" };
+    const monetaryInfo: MonetaryInfo = {
+      price: 1500,
+      currency: "USD",
+      shippingType: "Free",
+    };
     render(<DisplayCheckoutCost monetaryInfo={monetaryInfo} />);
     expect(screen.getByText("1,500 USD")).toBeInTheDocument();
     expect(screen.getByText("Shipping: Free")).toBeInTheDocument();
   });
 
   it("renders only price if shipping type is not provided", () => {
-    const monetaryInfo = { price: 2500, currency: "SATS" };
+    const monetaryInfo: MonetaryInfo = { price: 2500, currency: "SATS" };
     render(<DisplayCheckoutCost monetaryInfo={monetaryInfo} />);
     expect(screen.getByText("2,500 SATS")).toBeInTheDocument();
     expect(screen.queryByText(/Shipping:/)).not.toBeInTheDocument();

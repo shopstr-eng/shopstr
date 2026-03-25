@@ -1625,6 +1625,16 @@ export default function ProductInvoiceCard({
               );
               setPaymentConfirmed(true);
               setQrCodeUrl(null);
+              if (discountCode && productData.pubkey) {
+                fetch("/api/db/discount-code-used", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    code: discountCode,
+                    pubkey: productData.pubkey,
+                  }),
+                }).catch(() => {});
+              }
               setInvoiceIsPaid(true);
               break;
             }
@@ -1707,11 +1717,22 @@ export default function ProductInvoiceCard({
     let remainingProofs = proofs;
     let sellerToken;
     let donationToken;
+    let beefDonationToken;
     const sellerProfile = profileContext.profileData.get(productData.pubkey);
     const donationPercentage = sellerProfile?.content?.shopstr_donation || 2.1;
     const donationAmount = Math.ceil((totalPrice * donationPercentage) / 100);
-    const sellerAmount = totalPrice - donationAmount;
+
+    // Calculate beef donation if applicable
+    const beefDonationPercentage =
+      productData.beefinit_donation_percentage || 0;
+    const beefDonationAmount =
+      beefDonationPercentage > 0
+        ? Math.ceil((totalPrice * beefDonationPercentage) / 100)
+        : 0;
+
+    const sellerAmount = totalPrice - donationAmount - beefDonationAmount;
     let sellerProofs: Proof[] = [];
+    let beefDonationProofs: Proof[] = [];
 
     if (sellerAmount > 0) {
       const { keep, send } = await wallet.send(sellerAmount, remainingProofs, {
@@ -1734,6 +1755,22 @@ export default function ProductInvoiceCard({
         }
       );
       donationToken = getEncodedToken({
+        mint: mints[0]!,
+        proofs: send,
+      });
+      remainingProofs = keep;
+    }
+
+    if (beefDonationAmount > 0) {
+      const { keep, send } = await wallet.send(
+        beefDonationAmount,
+        remainingProofs,
+        {
+          includeFees: true,
+        }
+      );
+      beefDonationProofs = send;
+      beefDonationToken = getEncodedToken({
         mint: mints[0]!,
         proofs: send,
       });
@@ -2008,6 +2045,85 @@ export default function ProductInvoiceCard({
           donationAmount,
           donationPercentage
         );
+      }
+
+      // Send beef donation if applicable
+      if (beefDonationToken && beefDonationProofs && beefDonationAmount > 0) {
+        const beefInitNpub = process.env.NEXT_PUBLIC_BEEF_INITIATIVE_NPUB || "";
+        let beefInitHex = "";
+        try {
+          beefInitHex = nip19.decode(beefInitNpub).data as string;
+        } catch {
+          console.error("Invalid NEXT_PUBLIC_BEEF_INITIATIVE_NPUB");
+        }
+        if (beefInitHex) {
+          let beefPaidViaLightning = false;
+          const beefProfile = profileContext.profileData.get(beefInitHex);
+          const beefLnAddress = beefProfile?.content?.lud16 || "";
+
+          if (beefLnAddress && beefLnAddress !== "") {
+            try {
+              const beefLnAmount = Math.floor(beefDonationAmount * 0.98 - 2);
+              if (beefLnAmount > 0) {
+                const ln = new LightningAddress(beefLnAddress);
+                await wallet.loadMint();
+                await ln.fetch();
+                const invoice = await ln.requestInvoice({
+                  satoshi: beefLnAmount,
+                });
+                const meltQuote = await wallet.createMeltQuote(
+                  invoice.paymentRequest
+                );
+                if (meltQuote) {
+                  const meltQuoteTotal =
+                    meltQuote.amount + meltQuote.fee_reserve;
+                  const { send } = await wallet.send(
+                    meltQuoteTotal,
+                    beefDonationProofs,
+                    {
+                      includeFees: true,
+                    }
+                  );
+                  const meltResponse = await wallet.meltProofs(meltQuote, send);
+                  if (meltResponse.quote) {
+                    beefPaidViaLightning = true;
+                  }
+                }
+              }
+            } catch (error) {
+              console.error(
+                "Failed to pay beef donation via Lightning, falling back to ecash:",
+                error
+              );
+            }
+          }
+
+          if (!beefPaidViaLightning) {
+            const beefDonationMessage =
+              "Beef Initiative donation (" +
+              beefDonationPercentage +
+              "%) from purchase of " +
+              productData.title +
+              " by " +
+              userNPub +
+              " on milk.market: " +
+              beefDonationToken;
+
+            await sendPaymentAndContactMessage(
+              beefInitHex,
+              beefDonationMessage,
+              true,
+              false,
+              false,
+              false,
+              orderId + "_beef",
+              "ecash",
+              mints[0],
+              JSON.stringify(beefDonationProofs),
+              beefDonationAmount
+            );
+          }
+        }
       }
     }
 
@@ -2953,6 +3069,17 @@ export default function ProductInvoiceCard({
         3,
         subInfo
       );
+    }
+
+    if (discountCode && productData.pubkey) {
+      fetch("/api/db/discount-code-used", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code: discountCode,
+          pubkey: productData.pubkey,
+        }),
+      }).catch(() => {});
     }
 
     setInvoiceIsPaid(true);

@@ -118,6 +118,8 @@ CREATE TABLE IF NOT EXISTS discount_codes (
     pubkey TEXT NOT NULL,
     discount_percentage DECIMAL(5,2) NOT NULL CHECK (discount_percentage > 0 AND discount_percentage <= 100),
     expiration BIGINT,
+    max_uses INTEGER DEFAULT NULL,
+    times_used INTEGER DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(code, pubkey)
 );
@@ -367,3 +369,18 @@ CREATE TABLE IF NOT EXISTS custom_domains (
 
 CREATE INDEX IF NOT EXISTS idx_custom_domains_domain ON custom_domains(domain);
 CREATE INDEX IF NOT EXISTS idx_custom_domains_pubkey ON custom_domains(pubkey);
+
+-- Email popup captures for storefront discount popups
+CREATE TABLE IF NOT EXISTS popup_email_captures (
+    id SERIAL PRIMARY KEY,
+    seller_pubkey TEXT NOT NULL,
+    email TEXT NOT NULL,
+    phone TEXT,
+    discount_code TEXT NOT NULL,
+    discount_percentage DECIMAL(5,2) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(seller_pubkey, email)
+);
+
+CREATE INDEX IF NOT EXISTS idx_popup_email_captures_seller ON popup_email_captures(seller_pubkey);
+CREATE INDEX IF NOT EXISTS idx_popup_email_captures_email ON popup_email_captures(email);

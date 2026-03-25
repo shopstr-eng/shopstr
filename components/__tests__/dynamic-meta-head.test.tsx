@@ -45,15 +45,6 @@ describe("DynamicHead", () => {
     return element?.getAttribute("content");
   };
 
-  beforeAll(() => {
-    Object.defineProperty(window, "location", {
-      value: {
-        origin: mockOrigin,
-      },
-      writable: true,
-    });
-  });
-
   beforeEach(() => {
     jest.clearAllMocks();
   });
@@ -84,8 +75,15 @@ describe("DynamicHead", () => {
             content: {
               name: "Nostr Goods",
               about: "The best goods on Nostr.",
-              ui: { picture: "https://shop.com/logo.png" },
+              ui: {
+                picture: "https://shop.com/logo.png",
+                banner: "",
+                theme: "",
+                darkMode: false,
+              },
+              merchants: [],
             },
+            created_at: 0,
           } as ShopProfile,
         ],
       ]);
@@ -146,7 +144,13 @@ describe("DynamicHead", () => {
           shopPubkey,
           {
             pubkey: shopPubkey,
-            content: { name: "Test Shop", ui: { picture: null } },
+            content: {
+              name: "Test Shop",
+              about: "",
+              ui: { picture: "", banner: "", theme: "", darkMode: false },
+              merchants: [],
+            },
+            created_at: 0,
           } as ShopProfile,
         ],
       ]);

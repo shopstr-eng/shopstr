@@ -9,6 +9,7 @@ export type {
   StorefrontColorScheme,
   StorefrontComparisonColumn,
   StorefrontConfig,
+  StorefrontEmailPopup,
   StorefrontFaqItem,
   StorefrontFooter,
   StorefrontIngredientItem,
@@ -63,7 +64,6 @@ export interface CommunityPost extends NostrEvent {
   approvalEventId?: string;
   approvedBy?: string;
 }
-
 export interface ShopProfile {
   pubkey: string;
   content: {

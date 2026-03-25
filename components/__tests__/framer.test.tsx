@@ -35,16 +35,16 @@ beforeAll(() => {
 
 describe("Framer.Tabs", () => {
   const mockTabs: Tab[] = [
-    { label: "Tab 1" },
-    { label: "Tab 2" },
-    { label: "Tab 3" },
+    { label: "Tab 1", id: "tab-1", children: <div /> },
+    { label: "Tab 2", id: "tab-2", children: <div /> },
+    { label: "Tab 3", id: "tab-3", children: <div /> },
   ];
 
   const mockSetSelectedTab = jest.fn();
 
   beforeEach(() => {
     mockSetSelectedTab.mockClear();
-    (motion.div as jest.Mock).mockClear();
+    (motion.div as unknown as jest.Mock).mockClear();
     jest.clearAllMocks();
   });
 
@@ -116,7 +116,7 @@ describe("Framer.Tabs", () => {
     );
 
     await waitFor(() => {
-      const motionDiv = motion.div as jest.Mock;
+      const motionDiv = motion.div as unknown as jest.Mock;
       expect(motionDiv).toHaveBeenCalled();
     });
   });

@@ -15,6 +15,7 @@ jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
 }));
 jest.spyOn(NostrNSecSigner, "getEncryptedNSEC").mockReturnValue({
   encryptedPrivKey: "encrypted-key",
+  passphrase: "password123",
   pubkey: "test-pubkey",
 });
 
@@ -32,8 +33,14 @@ const mockRelays = {
 const mockNewSigner = jest.fn();
 const mockSignerCtx = {
   newSigner: mockNewSigner,
-  signer: null,
+  signer: undefined,
   setSigner: jest.fn(),
+};
+
+const mockParsedBunkerToken = {
+  remotePubkey: "remote-pubkey",
+  relays: ["wss://relay.damus.io"],
+  secret: "secret",
 };
 
 function renderModal(open = true) {
@@ -67,7 +74,7 @@ describe("SignInModal", () => {
 
   it("redirects to keys on Sign Up", async () => {
     const { user, push } = renderModal();
-    const btn = screen.getAllByRole("button", { name: /sign up/i })[0];
+    const btn = screen.getAllByRole("button", { name: /sign up/i })[0]!;
     await user.click(btn);
     await waitFor(() =>
       expect(push).toHaveBeenCalledWith("/onboarding/new-account")
@@ -105,7 +112,7 @@ describe("SignInModal", () => {
 
   describe("Bunker Sign-in", () => {
     it("validates the token on input", async () => {
-      helpers.parseBunkerToken.mockReturnValue(false);
+      helpers.parseBunkerToken.mockReturnValue(null);
       const { user } = renderModal();
       await user.click(screen.getByTestId("bunker-open-btn"));
 
@@ -117,7 +124,7 @@ describe("SignInModal", () => {
     });
 
     it("succeeds and navigates to user-profile", async () => {
-      helpers.parseBunkerToken.mockReturnValue(true);
+      helpers.parseBunkerToken.mockReturnValue(mockParsedBunkerToken);
       const signer = {
         connect: jest.fn().mockResolvedValue(undefined),
         getPubKey: jest.fn().mockResolvedValue("pk"),
@@ -138,7 +145,7 @@ describe("SignInModal", () => {
     });
 
     it("shows a failure modal on connection error", async () => {
-      helpers.parseBunkerToken.mockReturnValue(true);
+      helpers.parseBunkerToken.mockReturnValue(mockParsedBunkerToken);
       const signer = { connect: jest.fn().mockRejectedValue(new Error()) };
       mockNewSigner.mockReturnValue(signer);
 

@@ -8,6 +8,7 @@ import {
   fetchAllProfilesFromDb,
   getStripeConnectAccount,
   validateDiscountCode,
+  markDiscountCodeUsed,
 } from "@/utils/db/db-service";
 import { recordRequest } from "@/utils/mcp/metrics";
 import {
@@ -268,6 +269,7 @@ async function handleCreateOrder(
       if (discountResult.valid && discountResult.discount_percentage) {
         discountPercentage = discountResult.discount_percentage;
         subtotal = subtotal * (1 - discountPercentage / 100);
+        await markDiscountCodeUsed(discountCode, product.pubkey);
       }
     }
 

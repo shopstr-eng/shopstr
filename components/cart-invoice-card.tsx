@@ -2305,6 +2305,17 @@ export default function CartInvoiceCard({
     clearPurchasedFromCart();
     setPaymentConfirmed(true);
     setOrderConfirmed(true);
+    if (discountCodes) {
+      Object.entries(discountCodes).forEach(([pubkey, code]) => {
+        if (code) {
+          fetch("/api/db/discount-code-used", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ code, pubkey }),
+          }).catch(() => {});
+        }
+      });
+    }
     if (setInvoiceIsPaid) {
       setInvoiceIsPaid(true);
     }
@@ -2705,6 +2716,17 @@ export default function CartInvoiceCard({
       clearPurchasedFromCart();
       setPaymentConfirmed(true);
       setOrderConfirmed(true);
+      if (discountCodes) {
+        Object.entries(discountCodes).forEach(([pubkey, code]) => {
+          if (code) {
+            fetch("/api/db/discount-code-used", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ code, pubkey }),
+            }).catch(() => {});
+          }
+        });
+      }
       if (setInvoiceIsPaid) {
         setInvoiceIsPaid(true);
       }
@@ -2791,6 +2813,17 @@ export default function CartInvoiceCard({
               await sendTokens(wallet, proofs, data);
               clearPurchasedFromCart();
               setPaymentConfirmed(true);
+              if (discountCodes) {
+                Object.entries(discountCodes).forEach(([pubkey, code]) => {
+                  if (code) {
+                    fetch("/api/db/discount-code-used", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ code, pubkey }),
+                    }).catch(() => {});
+                  }
+                });
+              }
               if (setInvoiceIsPaid) {
                 setInvoiceIsPaid(true);
               }
@@ -2905,14 +2938,23 @@ export default function CartInvoiceCard({
       const tokenAmount = totalCostsInSats[pubkey];
       let sellerToken;
       let donationToken;
+      let beefDonationToken;
       const sellerProfile = profileContext.profileData.get(pubkey);
       const donationPercentage =
         sellerProfile?.content?.shopstr_donation || 2.1;
+      const beefDonationPercentage = product.beefinit_donation_percentage || 0;
+
       const donationAmount = Math.ceil(
         (tokenAmount! * donationPercentage) / 100
       );
-      const sellerAmount = tokenAmount! - donationAmount;
+      const beefDonationAmount =
+        beefDonationPercentage > 0
+          ? Math.ceil((tokenAmount! * beefDonationPercentage) / 100)
+          : 0;
+
+      const sellerAmount = tokenAmount! - donationAmount - beefDonationAmount;
       let sellerProofs: Proof[] = [];
+      let beefDonationProofs: Proof[] = [];
 
       let shippingData = data; // Assume data contains shipping info
       if (formType === "shipping") {
@@ -3041,6 +3083,22 @@ export default function CartInvoiceCard({
           }
         );
         donationToken = getEncodedToken({
+          mint: mints[0]!,
+          proofs: send,
+        });
+        remainingProofs = keep;
+      }
+
+      if (beefDonationAmount > 0) {
+        const { keep, send } = await wallet.send(
+          beefDonationAmount,
+          remainingProofs,
+          {
+            includeFees: true,
+          }
+        );
+        beefDonationProofs = send;
+        beefDonationToken = getEncodedToken({
           mint: mints[0]!,
           proofs: send,
         });
@@ -3415,6 +3473,88 @@ export default function CartInvoiceCard({
           await new Promise((resolve) => setTimeout(resolve, 500));
         } catch (error) {
           console.error("Failed to send donation message:", error);
+        }
+      }
+
+      // Step 2.5: Send beef donation if applicable
+      if (beefDonationToken && beefDonationAmount > 0) {
+        const beefInitNpub = process.env.NEXT_PUBLIC_BEEF_INITIATIVE_NPUB || "";
+        let beefInitHex = "";
+        try {
+          beefInitHex = nip19.decode(beefInitNpub).data as string;
+        } catch {
+          console.error("Invalid NEXT_PUBLIC_BEEF_INITIATIVE_NPUB");
+        }
+        if (beefInitHex) {
+          let beefPaidViaLightning = false;
+          const beefProfile = profileContext.profileData.get(beefInitHex);
+          const beefLnAddress = beefProfile?.content?.lud16 || "";
+
+          if (
+            beefLnAddress &&
+            beefLnAddress !== "" &&
+            beefDonationProofs.length > 0
+          ) {
+            try {
+              const beefLnAmount = Math.floor(beefDonationAmount * 0.98 - 2);
+              if (beefLnAmount > 0) {
+                const ln = new LightningAddress(beefLnAddress);
+                await wallet.loadMint();
+                await ln.fetch();
+                const invoice = await ln.requestInvoice({
+                  satoshi: beefLnAmount,
+                });
+                const meltQuote = await wallet.createMeltQuote(
+                  invoice.paymentRequest
+                );
+                if (meltQuote) {
+                  const meltQuoteTotal =
+                    meltQuote.amount + meltQuote.fee_reserve;
+                  const { send } = await wallet.send(
+                    meltQuoteTotal,
+                    beefDonationProofs,
+                    {
+                      includeFees: true,
+                    }
+                  );
+                  const meltResponse = await wallet.meltProofs(meltQuote, send);
+                  if (meltResponse.quote) {
+                    beefPaidViaLightning = true;
+                  }
+                }
+              }
+            } catch (error) {
+              console.error(
+                "Failed to pay beef donation via Lightning, falling back to ecash:",
+                error
+              );
+            }
+          }
+
+          if (!beefPaidViaLightning) {
+            const beefDonationMessage =
+              "Beef Initiative donation (" +
+              beefDonationPercentage +
+              "%) from purchase of " +
+              title +
+              " by " +
+              (userNPub || "a guest buyer") +
+              " on milk.market: " +
+              beefDonationToken;
+            try {
+              await sendPaymentAndContactMessage(
+                beefInitHex,
+                beefDonationMessage,
+                product,
+                false,
+                false,
+                true
+              );
+              await new Promise((resolve) => setTimeout(resolve, 500));
+            } catch (error) {
+              console.error("Failed to send beef donation message:", error);
+            }
+          }
         }
       }
 
@@ -4507,6 +4647,24 @@ export default function CartInvoiceCard({
                           ? basePrice * (1 - discount / 100)
                           : basePrice;
 
+                      // Calculate beef donation for this product
+                      const beefDonationPercentage =
+                        product.beefinit_donation_percentage || 0;
+                      let beefDonationAmount = 0;
+                      if (beefDonationPercentage > 0) {
+                        beefDonationAmount = Math.ceil(
+                          (basePrice * beefDonationPercentage) / 100
+                        );
+                      }
+
+                      // Calculate milk market donation for this product
+                      const milkMarketDonationPercentage =
+                        profileContext.profileData.get(product.pubkey)?.content
+                          ?.shopstr_donation || 0;
+                      const milkMarketDonationAmount = Math.ceil(
+                        (basePrice * milkMarketDonationPercentage) / 100
+                      );
+
                       return (
                         <div
                           key={product.id}
@@ -4557,6 +4715,35 @@ export default function CartInvoiceCard({
                                 </span>
                               </div>
                             </>
+                          )}
+                          {beefDonationAmount > 0 && (
+                            <div className="flex justify-between text-sm text-red-600">
+                              <span className="ml-2">
+                                Beef Donation ({beefDonationPercentage}%):
+                              </span>
+                              <span>
+                                -
+                                {formatWithCommas(
+                                  beefDonationAmount,
+                                  product.currency
+                                )}
+                              </span>
+                            </div>
+                          )}
+                          {milkMarketDonationAmount > 0 && (
+                            <div className="flex justify-between text-sm text-orange-600">
+                              <span className="ml-2">
+                                Milk Market Donation (
+                                {milkMarketDonationPercentage}%):
+                              </span>
+                              <span>
+                                -
+                                {formatWithCommas(
+                                  milkMarketDonationAmount,
+                                  product.currency
+                                )}
+                              </span>
+                            </div>
                           )}
                           {subscriptionSelections[product.id]?.enabled &&
                             product.subscriptionDiscount &&
@@ -4925,6 +5112,24 @@ export default function CartInvoiceCard({
                         ? basePrice * (1 - discount / 100)
                         : basePrice;
 
+                    // Calculate beef donation for this product
+                    const beefDonationPercentage =
+                      product.beefinit_donation_percentage || 0;
+                    let beefDonationAmount = 0;
+                    if (beefDonationPercentage > 0) {
+                      beefDonationAmount = Math.ceil(
+                        (basePrice * beefDonationPercentage) / 100
+                      );
+                    }
+
+                    // Calculate milk market donation for this product
+                    const milkMarketDonationPercentage =
+                      profileContext.profileData.get(product.pubkey)?.content
+                        ?.shopstr_donation || 0;
+                    const milkMarketDonationAmount = Math.ceil(
+                      (basePrice * milkMarketDonationPercentage) / 100
+                    );
+
                     return (
                       <div
                         key={product.id}
@@ -4988,6 +5193,35 @@ export default function CartInvoiceCard({
                               </span>
                             </div>
                           </>
+                        )}
+                        {beefDonationAmount > 0 && (
+                          <div className="flex justify-between text-sm text-red-600">
+                            <span className="ml-2">
+                              Beef Donation ({beefDonationPercentage}%):
+                            </span>
+                            <span>
+                              -
+                              {formatWithCommas(
+                                beefDonationAmount,
+                                product.currency
+                              )}
+                            </span>
+                          </div>
+                        )}
+                        {milkMarketDonationAmount > 0 && (
+                          <div className="flex justify-between text-sm text-orange-600">
+                            <span className="ml-2">
+                              Milk Market Donation (
+                              {milkMarketDonationPercentage}%):
+                            </span>
+                            <span>
+                              -
+                              {formatWithCommas(
+                                milkMarketDonationAmount,
+                                product.currency
+                              )}
+                            </span>
+                          </div>
                         )}
                         {subscriptionSelections[product.id]?.enabled &&
                           product.subscriptionDiscount &&

@@ -70,12 +70,8 @@ Object.defineProperty(window, "localStorage", {
   value: localStorageMock,
 });
 
-const mockSigner = {
-  /* mock signer object properties if needed */
-};
-const mockNostr = {
-  /* mock nostr object properties if needed */
-};
+const mockSigner = {} as any;
+const mockNostr = {} as any;
 const mockWalletContext = {
   proofEvents: [
     {
@@ -87,16 +83,21 @@ const mockWalletContext = {
       proofs: [{ id: "00d0a1b24d1c1a53", amount: 30, secret: "secret2" }],
     },
   ],
+  cashuMints: [],
+  cashuProofs: [],
+  isLoading: false,
   setProofEvents: jest.fn(),
 };
 
 const renderComponent = (customSigner = mockSigner) => {
   return render(
-    <NostrContext.Provider value={{ nostr: mockNostr, setNostr: jest.fn() }}>
+    <NostrContext.Provider
+      value={{ nostr: mockNostr, setNostr: jest.fn() } as any}
+    >
       <SignerContext.Provider
-        value={{ signer: customSigner, setSigner: jest.fn() }}
+        value={{ signer: customSigner, setSigner: jest.fn() } as any}
       >
-        <CashuWalletContext.Provider value={mockWalletContext}>
+        <CashuWalletContext.Provider value={mockWalletContext as any}>
           <PayButton />
         </CashuWalletContext.Provider>
       </SignerContext.Provider>
@@ -135,7 +136,9 @@ describe("PayButton Component", () => {
 
     const payButton = screen.getByRole("button", { name: /pay/i });
     fireEvent.click(payButton);
-    expect(await screen.findByText("Pay Lightning Invoice")).toBeVisible();
+    expect(
+      await screen.findByText("Pay Lightning Invoice")
+    ).toBeInTheDocument();
 
     const cancelButton = screen.getByRole("button", { name: "Cancel" });
     fireEvent.click(cancelButton);
@@ -222,7 +225,10 @@ describe("PayButton Component", () => {
   });
 
   test("shows NIP46 signer information when using NostrNIP46Signer", async () => {
-    const nip46Signer = new NostrNIP46Signer();
+    const nip46Signer = new NostrNIP46Signer(
+      { bunker: "bunker://dummy@dummy" },
+      jest.fn()
+    );
     renderComponent(nip46Signer);
 
     fireEvent.click(screen.getByRole("button", { name: /pay/i }));

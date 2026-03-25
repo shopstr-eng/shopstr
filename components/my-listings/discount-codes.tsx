@@ -16,6 +16,8 @@ interface DiscountCode {
   code: string;
   discount_percentage: number;
   expiration: number | null;
+  max_uses: number | null;
+  times_used: number;
 }
 
 export default function DiscountCodes() {
@@ -24,6 +26,7 @@ export default function DiscountCodes() {
   const [newCode, setNewCode] = useState("");
   const [newDiscount, setNewDiscount] = useState("");
   const [newExpiration, setNewExpiration] = useState("");
+  const [newMaxUses, setNewMaxUses] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -65,6 +68,8 @@ export default function DiscountCodes() {
         ? Math.floor(new Date(newExpiration).getTime() / 1000)
         : undefined;
 
+      const maxUses = newMaxUses ? parseInt(newMaxUses, 10) : undefined;
+
       const response = await fetch("/api/db/discount-codes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -73,6 +78,7 @@ export default function DiscountCodes() {
           pubkey,
           discountPercentage: discount,
           expiration,
+          maxUses,
         }),
       });
 
@@ -80,6 +86,7 @@ export default function DiscountCodes() {
         setNewCode("");
         setNewDiscount("");
         setNewExpiration("");
+        setNewMaxUses("");
         await fetchCodes();
       } else {
         alert("Failed to add discount code");
@@ -163,6 +170,17 @@ export default function DiscountCodes() {
             min={new Date().toISOString().slice(0, 16)}
             className="text-white"
           />
+          <Input
+            type="number"
+            label="Usage Limit (Optional)"
+            placeholder="Leave empty for unlimited"
+            min="1"
+            step="1"
+            value={newMaxUses}
+            onChange={(e) => setNewMaxUses(e.target.value)}
+            description="Max number of times this code can be used. Leave empty for unlimited uses."
+            className="text-white"
+          />
           <Button
             className={BLUEBUTTONCLASSNAMES}
             onClick={handleAddCode}
@@ -201,9 +219,21 @@ export default function DiscountCodes() {
                           Expired
                         </Chip>
                       )}
+                      {code.max_uses !== null &&
+                        code.times_used >= code.max_uses && (
+                          <Chip color="danger" size="sm">
+                            Fully Used
+                          </Chip>
+                        )}
                     </div>
                     <p className="text-sm text-black">
                       {code.discount_percentage}% off
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      Used: {code.times_used}
+                      {code.max_uses !== null
+                        ? ` / ${code.max_uses}`
+                        : " (unlimited)"}
                     </p>
                     {code.expiration && (
                       <p className="text-xs text-gray-500">

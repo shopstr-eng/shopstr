@@ -82,9 +82,13 @@ const renderWithProviders = (
   const { profileData = new Map(), isLoggedIn = false } = options;
   return render(
     <ProfileMapContext.Provider
-      value={{ profileData, setProfileData: jest.fn() }}
+      value={{
+        profileData,
+        isLoading: false,
+        updateProfileData: jest.fn(),
+      }}
     >
-      <SignerContext.Provider value={{ isLoggedIn, setIsLoggedIn: jest.fn() }}>
+      <SignerContext.Provider value={{ isLoggedIn }}>
         {ui}
       </SignerContext.Provider>
     </ProfileMapContext.Provider>

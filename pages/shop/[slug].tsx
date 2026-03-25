@@ -3,6 +3,61 @@ import { useRouter } from "next/router";
 import { ShopMapContext } from "@/utils/context/context";
 import StorefrontLayout from "@/components/storefront/storefront-layout";
 import MilkMarketSpinner from "@/components/utility-components/mm-spinner";
+import { GetServerSideProps } from "next";
+import { OgMetaProps, DEFAULT_OG } from "@/components/og-head";
+import {
+  fetchShopPubkeyBySlug,
+  fetchShopProfileByPubkeyFromDb,
+} from "@/utils/db/db-service";
+
+type ShopPageProps = {
+  ogMeta: OgMetaProps;
+};
+
+export const getServerSideProps: GetServerSideProps<ShopPageProps> = async (
+  context
+) => {
+  const { slug } = context.query;
+  const shopSlug = typeof slug === "string" ? slug : "";
+
+  if (!shopSlug) {
+    return { props: { ogMeta: DEFAULT_OG } };
+  }
+
+  try {
+    const pubkey = await fetchShopPubkeyBySlug(shopSlug);
+    if (pubkey) {
+      const shopEvent = await fetchShopProfileByPubkeyFromDb(pubkey);
+      if (shopEvent) {
+        const content = JSON.parse(shopEvent.content);
+        return {
+          props: {
+            ogMeta: {
+              title: content.name ? `${content.name} Shop` : "Milk Market Shop",
+              description:
+                content.about || "Check out this shop on Milk Market!",
+              image: content.ui?.picture || "/milk-market.png",
+              url: `/shop/${shopSlug}`,
+            },
+          },
+        };
+      }
+    }
+  } catch (error) {
+    console.error("SSR OG fetch error for shop:", error);
+  }
+
+  return {
+    props: {
+      ogMeta: {
+        ...DEFAULT_OG,
+        title: "Milk Market Shop",
+        description: "Check out this shop on Milk Market!",
+        url: `/shop/${shopSlug}`,
+      },
+    },
+  };
+};
 
 export default function ShopPage() {
   const router = useRouter();

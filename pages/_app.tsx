@@ -55,6 +55,7 @@ import {
 import { Proof } from "@cashu/cashu-ts";
 import TopNav from "@/components/nav-top";
 import DynamicHead from "../components/dynamic-meta-head";
+import StructuredData from "../components/structured-data";
 import {
   NostrContextProvider,
   SignerContextProvider,
@@ -756,7 +757,9 @@ function MilkMarket({ props }: { props: AppProps }) {
         productEvents={productContext.productEvents}
         shopEvents={shopContext.shopData}
         profileData={profileContext.profileData}
+        ssrOgMeta={pageProps?.ogMeta || null}
       />
+      <StructuredData />
       <RelaysContext.Provider value={relaysContext}>
         <BlossomContext.Provider value={blossomContext}>
           <CashuWalletContext.Provider value={cashuWalletContext}>
@@ -782,7 +785,9 @@ function MilkMarket({ props }: { props: AppProps }) {
                             router.pathname !== "/producers" &&
                             router.pathname !== "/faq" &&
                             router.pathname !== "/terms" &&
-                            router.pathname !== "/privacy" && (
+                            router.pathname !== "/privacy" &&
+                            router.pathname !== "/about" &&
+                            router.pathname !== "/contact" && (
                               <TopNav
                                 setFocusedPubkey={setFocusedPubkey}
                                 setSelectedSection={setSelectedSection}
