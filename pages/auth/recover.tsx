@@ -9,7 +9,6 @@ import {
   ShieldCheckIcon,
   EnvelopeIcon,
   KeyIcon,
-  LockClosedIcon,
   CheckCircleIcon,
 } from "@heroicons/react/24/outline";
 
