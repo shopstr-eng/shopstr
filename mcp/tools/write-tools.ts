@@ -1136,7 +1136,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         const eventTemplate: EventTemplate = {
           kind: 5,
           content: params.reason || "Deletion request",
-          tags: params.eventIds.map((id) => ["e", id]),
+          tags: params.eventIds.map((id: string) => ["e", id]),
           created_at: Math.floor(Date.now() / 1000),
         };
 
@@ -2290,7 +2290,10 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
       if (!signer) return noSignerError();
 
       try {
-        const tags: string[][] = params.servers.map((s) => ["server", s]);
+        const tags: string[][] = params.servers.map((s: string) => [
+          "server",
+          s,
+        ]);
 
         const eventTemplate: EventTemplate = {
           kind: 10063,
@@ -2695,7 +2698,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
       try {
         const pubkey = signer.getPubKey();
-        const mintTags = params.mints.map((m) => ["mint", m]);
+        const mintTags = params.mints.map((m: string) => ["mint", m]);
         const encryptedContent = signer.encrypt(
           pubkey,
           JSON.stringify(mintTags)
