@@ -5,6 +5,7 @@ import {
   fetchAllProfilesFromDb,
   fetchCachedEvents,
   validateDiscountCode,
+  getDbPool,
 } from "@/utils/db/db-service";
 import { NostrEvent } from "@/utils/types/types";
 
@@ -61,6 +62,24 @@ function parseProductEvent(event: NostrEvent) {
   const shippingCost =
     shippingTag && shippingTag[2] ? Number(shippingTag[2]) : 0;
 
+  const sizes = tags
+    .filter((t) => t[0] === "size" && t[1])
+    .map((t) => ({ size: t[1]!, quantity: t[2] ? Number(t[2]) : undefined }));
+
+  const volumes = tags
+    .filter((t) => t[0] === "volume" && t[1])
+    .map((t) => ({ volume: t[1]!, price: t[2] ? Number(t[2]) : undefined }));
+
+  const weights = tags
+    .filter((t) => t[0] === "weight" && t[1])
+    .map((t) => ({ weight: t[1]!, price: t[2] ? Number(t[2]) : undefined }));
+
+  const bulk = tags
+    .filter((t) => t[0] === "bulk" && t[1] && t[2])
+    .map((t) => ({ units: Number(t[1]), price: Number(t[2]) }));
+
+  const pickupLocations = getAllTagValues(tags, "pickup_location");
+
   return {
     id: event.id,
     pubkey: event.pubkey,
@@ -79,8 +98,24 @@ function parseProductEvent(event: NostrEvent) {
       : undefined,
     condition: getTagValue(tags, "condition"),
     status: getTagValue(tags, "status"),
+    sizes: sizes.length > 0 ? sizes : undefined,
+    volumes: volumes.length > 0 ? volumes : undefined,
+    weights: weights.length > 0 ? weights : undefined,
+    bulk: bulk.length > 0 ? bulk : undefined,
+    pickupLocations: pickupLocations.length > 0 ? pickupLocations : undefined,
+    requiredCustomerInfo: getTagValue(tags, "required_customer_info"),
     createdAt: event.created_at,
     pricing: buildPricingBlock(price, currency, shippingType, shippingCost),
+    subscription: {
+      enabled: getTagValue(tags, "subscription") === "true",
+      discount: getTagValue(tags, "subscription_discount")
+        ? Number(getTagValue(tags, "subscription_discount"))
+        : undefined,
+      frequencies: (() => {
+        const freqTag = tags.find((t) => t[0] === "subscription_frequency");
+        return freqTag ? freqTag.slice(1) : [];
+      })(),
+    },
   };
 }
 
@@ -92,7 +127,7 @@ function parseProfileEvent(event: NostrEvent) {
     content = {};
   }
 
-  return {
+  const base: Record<string, any> = {
     pubkey: event.pubkey,
     kind: event.kind,
     name: content.name || "",
@@ -103,6 +138,29 @@ function parseProfileEvent(event: NostrEvent) {
     nip05: content.nip05 || "",
     createdAt: event.created_at,
   };
+
+  if (event.kind === 0) {
+    if (content.website) base.website = content.website;
+    if (content.fiat_options) base.fiat_options = content.fiat_options;
+    if (content.payment_preference)
+      base.payment_preference = content.payment_preference;
+  }
+
+  if (event.kind === 30019) {
+    if (content.paymentMethodDiscounts)
+      base.paymentMethodDiscounts = content.paymentMethodDiscounts;
+    if (content.freeShippingThreshold !== undefined)
+      base.freeShippingThreshold = content.freeShippingThreshold;
+    if (content.freeShippingCurrency)
+      base.freeShippingCurrency = content.freeShippingCurrency;
+    if (content.storefront) {
+      base.storefront = content.storefront;
+      if (content.storefront.shopSlug)
+        base.storefrontUrl = `/shop/${content.storefront.shopSlug}`;
+    }
+  }
+
+  return base;
 }
 
 function parseReviewEvent(event: NostrEvent) {
@@ -567,6 +625,191 @@ export function registerReadTools(server: McpServer) {
           },
         ],
       };
+    }
+  );
+
+  server.tool(
+    "get_storefront",
+    "Look up a seller's storefront by shop slug or pubkey. Returns storefront configuration, products, and shop profile for rendering a seller's standalone shop page.",
+    {
+      slug: z
+        .string()
+        .optional()
+        .describe(
+          "Shop URL slug (e.g. 'fresh-farm' for shopstr.market/shop/fresh-farm)"
+        ),
+      pubkey: z
+        .string()
+        .optional()
+        .describe("Seller's public key (hex). Use if slug is not known."),
+    },
+    async ({ slug, pubkey }) => {
+      const startTime = Date.now();
+
+      if (!slug && !pubkey) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify({
+                error: "Either slug or pubkey is required",
+                _meta: {
+                  responseTimeMs: Date.now() - startTime,
+                  dataSource: "cached_db",
+                },
+              }),
+            },
+          ],
+          isError: true,
+        };
+      }
+
+      try {
+        let resolvedPubkey = pubkey;
+
+        if (slug && !pubkey) {
+          const dbPool = getDbPool();
+          const slugResult = await dbPool.query(
+            "SELECT pubkey FROM shop_slugs WHERE slug = $1",
+            [slug.toLowerCase()]
+          );
+          if (slugResult.rows.length === 0) {
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: JSON.stringify({
+                    error: `Shop with slug '${slug}' not found`,
+                    _meta: {
+                      responseTimeMs: Date.now() - startTime,
+                      dataSource: "cached_db",
+                    },
+                  }),
+                },
+              ],
+              isError: true,
+            };
+          }
+          resolvedPubkey = slugResult.rows[0].pubkey;
+        }
+
+        const [profileEvents, productEvents] = await Promise.all([
+          fetchAllProfilesFromDb(),
+          fetchAllProductsFromDb(),
+        ]);
+
+        const shopProfile = profileEvents
+          .filter((e) => e.kind === 30019 && e.pubkey === resolvedPubkey)
+          .map(parseProfileEvent)[0];
+
+        const userProfile = profileEvents
+          .filter((e) => e.kind === 0 && e.pubkey === resolvedPubkey)
+          .map(parseProfileEvent)[0];
+
+        if (!shopProfile && !userProfile) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify({
+                  error: "Seller not found",
+                  _meta: {
+                    responseTimeMs: Date.now() - startTime,
+                    dataSource: "cached_db",
+                  },
+                }),
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        const products = productEvents
+          .filter((e) => e.pubkey === resolvedPubkey)
+          .map(parseProductEvent);
+
+        const productsWithPricing = products.map((p) => ({
+          ...p,
+          pricing: buildPricingBlock(
+            p.price,
+            p.currency,
+            p.shippingType,
+            p.shippingCost,
+            1,
+            ["lightning", "cashu"]
+          ),
+        }));
+
+        const storefront = (shopProfile as any)?.storefront || {};
+
+        let customDomain = null;
+        try {
+          const dbPool = getDbPool();
+          const domainResult = await dbPool.query(
+            "SELECT domain, verified FROM custom_domains WHERE pubkey = $1",
+            [resolvedPubkey!]
+          );
+          if (domainResult.rows.length > 0) {
+            customDomain = {
+              domain: domainResult.rows[0].domain,
+              verified: domainResult.rows[0].verified,
+            };
+          }
+        } catch {}
+
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify(
+                {
+                  pubkey: resolvedPubkey,
+                  shopProfile: shopProfile || null,
+                  userProfile: userProfile || null,
+                  storefront: {
+                    ...storefront,
+                    storefrontUrl: storefront.shopSlug
+                      ? `/shop/${storefront.shopSlug}`
+                      : null,
+                    customDomain,
+                  },
+                  products: {
+                    count: productsWithPricing.length,
+                    items: productsWithPricing,
+                  },
+                  paymentInfo: {
+                    acceptedPaymentMethods: ["lightning", "cashu"],
+                  },
+                  _meta: {
+                    responseTimeMs: Date.now() - startTime,
+                    dataSource: "cached_db",
+                  },
+                },
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify({
+                error: "Failed to fetch storefront",
+                details:
+                  error instanceof Error ? error.message : "Unknown error",
+                _meta: {
+                  responseTimeMs: Date.now() - startTime,
+                  dataSource: "cached_db",
+                },
+              }),
+            },
+          ],
+          isError: true,
+        };
+      }
     }
   );
 }

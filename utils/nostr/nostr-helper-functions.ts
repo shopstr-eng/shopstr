@@ -169,7 +169,7 @@ export async function PostListing(
   const origin =
     window && typeof window !== undefined
       ? window.location.origin
-      : "https://shopstr.store";
+      : "https://shopstr.market";
 
   const handlerEvent: EventTemplate = {
     kind: 31990,

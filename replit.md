@@ -48,6 +48,7 @@ Preferred communication style: Simple, everyday language.
 - **Pickup Location Selection**: Option for customers to select pickup locations for orders.
 - **Order Status Persistence**: Database storage and API for tracking and updating order statuses.
 - **Unread/Read Indicator System**: Visual indicators for unread messages and new orders, with persistence.
+- **SSR OpenGraph Meta Tags**: Product (`/listing/`), shop (`/shop/`, `/shop/.../`), marketplace seller (`/marketplace/`), and community (`/communities/`) pages use `getServerSideProps` to fetch entity data from the PostgreSQL cache and render `og:title`, `og:description`, `og:image`, and Twitter Card meta tags server-side. This ensures social media crawlers (which don't execute JS) see personalized link previews. Single-entity DB query functions in `utils/db/db-service.ts` (`fetchProductByIdFromDb`, `fetchProductByDTagAndPubkey`, `fetchProductByTitleSlug`, `fetchShopProfileByPubkeyFromDb`, `fetchProfilePubkeyByNameSlug`, `fetchShopPubkeyBySlug`, `fetchCommunityByPubkeyAndIdentifier`). SSR OG data flows from `getServerSideProps` → `pageProps.ogMeta` → `DynamicHead` component (via `_app.tsx`). Shared OG type/defaults in `components/og-head.tsx`.
 - **Free Shipping Threshold**: Merchants can set a minimum order amount (with currency) in their shop profile settings. When a buyer's cart subtotal from a seller meets or exceeds the threshold, shipping costs for that seller's items are waived. Features include: shop profile form fields (`freeShippingThreshold`, `freeShippingCurrency` in `ShopProfile` type), a slide-in notification on add-to-cart (`components/free-shipping-notification.tsx` using Framer Motion), per-seller progress bars on the cart page, automatic shipping cost waiver in `cart-invoice-card.tsx` for all order types (shipping/combined/pickup selection), and strikethrough original shipping cost with "Free" badge on the order summary page.
 
 ### MCP Server (AI Agent Integration)
@@ -85,6 +86,7 @@ The platform exposes a Model Context Protocol (MCP) server enabling AI agents to
 - `get_reviews` — Get reviews for a product or seller
 - `check_discount_code` — Validate a discount code
 - `get_payment_methods` — Get available Bitcoin payment methods for a seller
+- `get_storefront` — Look up a seller's storefront by slug or pubkey; returns storefront config, products, and custom domain info
 
 **Purchase Tools (requires read_write or full_access):**
 
@@ -97,8 +99,9 @@ The platform exposes a Model Context Protocol (MCP) server enabling AI agents to
 
 **Write Tools (requires full_access + stored nsec):**
 
-- `set_user_profile` — Create/update Nostr user profile (kind 0)
-- `set_shop_profile` — Create/update shop profile (kind 30019)
+- `set_user_profile` — Create/update Nostr user profile (kind 0) including `fiat_options` and `payment_preference`
+- `set_shop_profile` — Create/update shop profile (kind 30019) with full storefront config (colors, layout, fonts, sections, pages, footer, nav, slug)
+- `register_shop_slug` — Register, update, or delete the seller's shop URL slug in the DB
 - `create_product_listing` — Publish product listing (kind 30402) with full tag support including sizes, volumes, bulk/bundle pricing, pickup locations, and expiration
 - `update_product_listing` — Update existing listing by d-tag, supports all fields including sizes, volumes, bulk pricing, pickup locations, and expiration
 - `delete_listing` — Delete events (kind 5)
@@ -148,6 +151,85 @@ API keys are created via the `/settings/api-keys` UI page, the `/api/mcp/api-key
 ### Order Address Change
 
 Buyers can change the shipping address for their orders from the Orders Dashboard. The address column shows a "Change Address" link for purchases (non-sale orders) that have an address. Clicking it opens the `AddressChangeModal` (`components/utility-components/address-change-modal.tsx`), which sends a gift-wrapped Nostr DM to the seller with the new address and updates the local order state.
+
+### Subdomain Shop / Storefront System
+
+Sellers can configure branded storefronts accessible at `/shop/[slug]` URLs. The system allows full customization of the buyer's shopping experience.
+
+#### Architecture
+
+- **Storefront Routes**: `pages/shop/[slug].tsx` (shop home), `pages/shop/[...shopPath].tsx` (sub-pages: orders, wallet, community, custom pages)
+- **Storefront Layout**: `components/storefront/storefront-layout.tsx` — Full-featured storefront with navbar, hero, product grid, sections, and footer. Applies CSS variables for theming and adds `sf-active` class to body to hide the global Shopstr nav.
+- **Theme Wrapper**: `components/storefront/storefront-theme-wrapper.tsx` — Wraps existing pages (like `/listing`) when visited from a storefront context. Uses `sessionStorage` key `sf_seller_pubkey` to detect the active storefront.
+- **Proxy/Middleware**: `proxy.ts` — Extended with subdomain routing: `*.shopstr.market` subdomains rewrite to `/shop/[subdomain]`.
+
+#### Storefront Config (stored in ShopProfile.content.storefront)
+
+- `colorScheme` — Custom colors (primary, secondary, accent, background, text)
+- `productLayout` — `grid` | `list` | `featured`
+- `landingPageStyle` — `hero` | `classic` | `minimal`
+- `shopSlug` — URL slug (registered via `/api/storefront/register-slug`)
+- `customDomain` — Custom domain (configured via `/api/storefront/custom-domain`)
+- `fontHeading` / `fontBody` — Google Fonts selection
+- `sections` — Ordered list of landing page sections
+- `pages` — Custom pages with own sections
+- `footer` — Footer config (text, social links, nav links, Powered by Shopstr)
+- `navLinks` — Custom navigation links
+- `showCommunityPage` / `showWalletPage` — Toggle pages
+
+#### Section Types
+
+12 section types in `components/storefront/sections/`: `hero`, `about`, `story`, `products`, `testimonials`, `faq`, `ingredients`, `comparison`, `text`, `image`, `contact`, `reviews`. Rendered by `components/storefront/section-renderer.tsx`.
+
+#### Helper Components
+
+- `storefront-hero.tsx` — Full-width hero with banner, picture, and CTA
+- `storefront-footer.tsx` — Customizable footer with social links, "Powered by Shopstr"
+- `storefront-product-grid.tsx` — Paginated product grid/list/featured layout
+- `storefront-community.tsx` — Community feed for the shop's NIP-72 community
+- `storefront-wallet.tsx` — Embedded Cashu wallet page
+- `storefront-orders.tsx` — Embedded orders page (dynamic import)
+- `storefront-my-listings.tsx` — Seller's own listings (visible to shop owner)
+- `storefront-order-confirmation.tsx` — Post-purchase confirmation with upsells
+- `section-renderer.tsx` — Dispatches to correct section component by type
+
+#### API Routes
+
+- `GET /api/storefront/lookup?slug=` — Look up pubkey by shop slug
+- `POST /api/storefront/register-slug` — Register/update a shop slug
+- `POST /api/storefront/custom-domain` — Register custom domain + return DNS instructions
+- `GET/DELETE /api/storefront/custom-domain?pubkey=` — Get or remove custom domain
+
+#### Database Tables
+
+- `shop_slugs` — Maps pubkey → slug (one per seller, unique constraint on slug)
+- `custom_domains` — Maps pubkey → custom domain (verified flag)
+
+#### Settings UI
+
+Shop profile settings (`/settings/shop-profile`) now uses `ShopProfileForm` component from `components/settings/shop-profile-form.tsx` with two tabs:
+
+1. **Basic Info** — Name, about, banner, picture, free shipping threshold
+2. **Storefront** — Shop URL slug, landing page style, product layout, color scheme (with 7 presets), typography, navigation links, homepage sections builder, custom pages, community/wallet toggles, footer editor, custom domain, preview modal, remove storefront
+
+Storefront editor sub-components (in `components/settings/storefront/`):
+
+- `section-editor.tsx` — Accordion-style editor for all 12 section types with type-specific fields
+- `footer-editor.tsx` — Footer text, social links, nav links, "Powered by Shopstr" toggle
+- `page-editor.tsx` — Custom page management with slug auto-generation
+- `storefront-preview-modal.tsx` — Approximate live preview modal with all color/font/layout settings
+
+#### Cart Page Storefront Integration
+
+`pages/cart/index.tsx` wrapped in `StorefrontThemeWrapper` — reads `sf_seller_pubkey` from sessionStorage, filters cart items to only show the active storefront seller's items, shows a banner if other sellers' items were excluded, and wraps the full page with the storefront nav/footer.
+
+#### Custom Domain Page
+
+`pages/shop/_custom-domain.tsx` — Shopstr-branded landing page for custom domains; looks up shop by domain via `/api/storefront/lookup?domain=`, shows `ShopstrSpinner` while loading, falls back to "Visit Shopstr" link if domain not found.
+
+#### Profile Dropdown
+
+`components/utility-components/profile/profile-dropdown.tsx` updated to add `storefront` key (GlobeAltIcon) that links to the seller's storefront if configured, with neo-brutalist styling.
 
 ## External Dependencies
 

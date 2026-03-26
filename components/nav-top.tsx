@@ -172,7 +172,10 @@ const TopNav = ({
   );
 
   return (
-    <div className="fixed top-0 z-50 w-full border-b border-zinc-200 bg-light-fg shadow-lg dark:border-zinc-800 dark:bg-dark-fg">
+    <div
+      data-main-nav
+      className="fixed top-0 z-50 w-full border-b border-zinc-200 bg-light-fg shadow-lg dark:border-zinc-800 dark:bg-dark-fg"
+    >
       <div className="flex items-center py-2 pr-4">
         <div className="flex flex-shrink-0 items-center">
           <Button

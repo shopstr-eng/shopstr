@@ -6,6 +6,66 @@ import { Community } from "@/utils/types/types";
 import { Spinner } from "@nextui-org/react";
 import CommunityFeed from "@/components/communities/CommunityFeed";
 import { sanitizeUrl } from "@braintree/sanitize-url";
+import { GetServerSideProps } from "next";
+import { OgMetaProps, DEFAULT_OG } from "@/components/og-head";
+import { fetchCommunityByPubkeyAndIdentifier } from "@/utils/db/db-service";
+import { parseCommunityEvent } from "@/utils/parsers/community-parser-functions";
+
+type CommunityPageProps = {
+  ogMeta: OgMetaProps;
+};
+
+export const getServerSideProps: GetServerSideProps<
+  CommunityPageProps
+> = async (context) => {
+  const { naddr } = context.query;
+  const naddrStr = typeof naddr === "string" ? naddr : "";
+
+  if (!naddrStr) {
+    return { props: { ogMeta: DEFAULT_OG } };
+  }
+
+  try {
+    const decoded = nip19.decode(naddrStr);
+    if (decoded.type === "naddr") {
+      const { pubkey, identifier } = decoded.data;
+      const event = await fetchCommunityByPubkeyAndIdentifier(
+        pubkey,
+        identifier
+      );
+      if (event) {
+        const community = parseCommunityEvent(event);
+        if (community) {
+          return {
+            props: {
+              ogMeta: {
+                title: community.name || "Shopstr Community",
+                description:
+                  community.description ||
+                  "Check out this community on Shopstr!",
+                image: community.image || "/shopstr-2000x2000.png",
+                url: `/communities/${naddrStr}`,
+              },
+            },
+          };
+        }
+      }
+    }
+  } catch (error) {
+    console.error("SSR OG fetch error for community:", error);
+  }
+
+  return {
+    props: {
+      ogMeta: {
+        ...DEFAULT_OG,
+        title: "Shopstr Community",
+        description: "Check out this community on Shopstr!",
+        url: `/communities/${naddrStr}`,
+      },
+    },
+  };
+};
 
 const SingleCommunityPage = () => {
   const router = useRouter();
@@ -20,7 +80,6 @@ const SingleCommunityPage = () => {
         const decoded = nip19.decode(naddr);
         if (decoded.type === "naddr") {
           const { pubkey, identifier } = decoded.data;
-          // Find the community by pubkey and d-tag
           for (const c of communities.values()) {
             if (c.pubkey === pubkey && c.d === identifier) {
               setCommunity(c);
@@ -57,7 +116,6 @@ const SingleCommunityPage = () => {
   return (
     <div className="flex min-h-screen flex-col bg-light-bg pt-20 dark:bg-dark-bg">
       <div className="container mx-auto max-w-3xl px-4">
-        {/* Community Header */}
         <div
           className="relative mb-8 h-48 w-full rounded-lg bg-cover bg-center dark:bg-dark-fg"
           style={{ backgroundImage: `url(${sanitizeUrl(community.image)})` }}
@@ -71,7 +129,6 @@ const SingleCommunityPage = () => {
           {community.description}
         </p>
 
-        {/* Community Feed */}
         <div className="mt-8">
           <CommunityFeed community={community} />
         </div>

@@ -28,8 +28,22 @@ export default function Landing() {
   const productEventContext = useContext(ProductContext);
 
   const [parsedProducts, setParsedProducts] = useState<ProductData[]>([]);
+  const [listingCount, setListingCount] = useState<number | null>(null);
+  const [sellerCount, setSellerCount] = useState<number | null>(null);
 
   const signerContext = useContext(SignerContext);
+
+  useEffect(() => {
+    fetch("/api/db/marketplace-stats")
+      .then((r) => r.json())
+      .then((data) => {
+        if (typeof data.listingCount === "number")
+          setListingCount(data.listingCount);
+        if (typeof data.sellerCount === "number")
+          setSellerCount(data.sellerCount);
+      })
+      .catch(() => {});
+  }, []);
   useEffect(() => {
     if (router.pathname === "/" && signerContext.isLoggedIn) {
       router.push("/marketplace");
@@ -55,7 +69,7 @@ export default function Landing() {
   return (
     <div className="min-h-screen w-full bg-light-bg bg-gradient-to-b from-light-bg to-light-fg dark:bg-dark-bg dark:from-dark-bg dark:to-dark-fg">
       {/* Hero Section */}
-      <div className="bg-pattern-grid absolute inset-0 opacity-5"></div>
+      <div className="bg-pattern-grid pointer-events-none absolute inset-0 opacity-5"></div>
       <section className="container mx-auto flex flex-col items-center justify-center px-4 pb-24 pt-28 text-center">
         <div className="relative mb-8">
           <Image
@@ -333,7 +347,7 @@ export default function Landing() {
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
             <div className="rounded-xl bg-light-fg p-6 text-center shadow-md dark:bg-dark-fg">
               <p className="text-3xl font-bold text-shopstr-purple dark:text-shopstr-yellow">
-                5,500+
+                {listingCount === null ? "…" : listingCount.toLocaleString()}
               </p>
               <p className="mt-2 text-sm text-light-text dark:text-dark-text">
                 Active listings on Shopstr right now
@@ -341,7 +355,7 @@ export default function Landing() {
             </div>
             <div className="rounded-xl bg-light-fg p-6 text-center shadow-md dark:bg-dark-fg">
               <p className="text-3xl font-bold text-shopstr-purple dark:text-shopstr-yellow">
-                900+
+                {sellerCount === null ? "…" : sellerCount.toLocaleString()}
               </p>
               <p className="mt-2 text-sm text-light-text dark:text-dark-text">
                 Sellers with active shops on Shopstr
@@ -673,27 +687,6 @@ export default function Landing() {
                     alt="Nostr"
                     width={32}
                     height={32}
-                    className="hidden dark:block"
-                  />
-                </a>
-                <a
-                  href="https://x.com/shopstrmarkets"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="transition-transform hover:scale-110"
-                >
-                  <Image
-                    src="/x-logo-black.png"
-                    alt="X"
-                    width={24}
-                    height={24}
-                    className="block dark:hidden"
-                  />
-                  <Image
-                    src="/x-logo-white.png"
-                    alt="X"
-                    width={24}
-                    height={24}
                     className="hidden dark:block"
                   />
                 </a>

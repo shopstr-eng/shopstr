@@ -62,7 +62,9 @@ const renderWithProviders = (
 ) => {
   return render(
     <NostrContext.Provider value={{ nostr } as any}>
-      <SignerContext.Provider value={{ signer } as any}>{ui}</SignerContext.Provider>
+      <SignerContext.Provider value={{ signer } as any}>
+        {ui}
+      </SignerContext.Provider>
     </NostrContext.Provider>
   );
 };

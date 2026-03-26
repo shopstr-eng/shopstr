@@ -1,5 +1,5 @@
 import { LogOut } from "@/utils/nostr/nostr-helper-functions";
-import { ProfileMapContext } from "@/utils/context/context";
+import { ProfileMapContext, ShopMapContext } from "@/utils/context/context";
 import {
   Dropdown,
   DropdownItem,
@@ -19,6 +19,7 @@ import {
   CheckIcon,
   ClipboardIcon,
   Cog6ToothIcon,
+  GlobeAltIcon,
   UserIcon,
 } from "@heroicons/react/24/outline";
 import { useRouter } from "next/router";
@@ -28,6 +29,7 @@ import SignInModal from "../../sign-in/SignInModal";
 type DropDownKeys =
   | "shop"
   | "shop_profile"
+  | "storefront"
   | "inquiry"
   | "settings"
   | "user_profile"
@@ -50,10 +52,12 @@ export const ProfileWithDropdown = ({
   const [isNPubCopied, setIsNPubCopied] = useState(false);
   const [isNip05Verified, setIsNip05Verified] = useState(false);
   const profileContext = useContext(ProfileMapContext);
+  const shopMapContext = useContext(ShopMapContext);
   const npub = pubkey ? nip19.npubEncode(pubkey) : "";
   const router = useRouter();
   const { isLoggedIn } = useContext(SignerContext);
   const { isOpen, onOpen, onClose } = useDisclosure();
+
   useEffect(() => {
     const profileMap = profileContext.profileData;
     const profile = profileMap.has(pubkey) ? profileMap.get(pubkey) : undefined;
@@ -86,6 +90,23 @@ export const ProfileWithDropdown = ({
         router.push(`/marketplace/${slug}`);
       },
       label: "Visit Seller",
+    },
+    storefront: {
+      key: "storefront",
+      color: "default",
+      className: "text-light-text dark:text-dark-text",
+      startContent: <GlobeAltIcon className={"h-5 w-5"} />,
+      onClick: () => {
+        const shopData = shopMapContext.shopData.get(pubkey);
+        const shopSlug = shopData?.content?.storefront?.shopSlug;
+        if (shopSlug) {
+          router.push(`/shop/${shopSlug}`);
+        } else {
+          const slug = getProfileSlug(pubkey, profileContext.profileData);
+          router.push(`/marketplace/${slug}`);
+        }
+      },
+      label: "Visit Storefront",
     },
     shop_profile: {
       key: "shop_profile",
@@ -138,12 +159,7 @@ export const ProfileWithDropdown = ({
       key: "logout",
       color: "danger",
       className: "text-light-text dark:text-dark-text",
-      startContent: (
-        <ArrowRightStartOnRectangleIcon
-          className={"text-color-red-900 " + "h-5 w-5"}
-          color="red"
-        />
-      ),
+      startContent: <ArrowRightStartOnRectangleIcon className={"h-5 w-5"} />,
       onClick: () => {
         LogOut();
         router.push("/marketplace");
@@ -155,7 +171,7 @@ export const ProfileWithDropdown = ({
       color: "default",
       className: "text-light-text dark:text-dark-text",
       startContent: isNPubCopied ? (
-        <CheckIcon className="h-5 w-5" />
+        <CheckIcon className="h-5 w-5 text-shopstr-purple dark:text-shopstr-yellow" />
       ) : (
         <ClipboardIcon className="h-5 w-5" />
       ),
@@ -167,7 +183,7 @@ export const ProfileWithDropdown = ({
           setIsNPubCopied(false);
         }, 2100);
       },
-      label: "Copy npub",
+      label: isNPubCopied ? "Copied!" : "Copy npub",
     },
   };
 

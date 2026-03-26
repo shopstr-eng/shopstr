@@ -61,7 +61,9 @@ jest.mock("@/components/utility-components/failure-modal", () => ({
 
 jest.mock("@heroicons/react/24/outline", () => ({
   BanknotesIcon: () => <div data-testid="banknotes-icon" />,
-  ClipboardIcon: (props: any) => <svg data-testid="clipboard-icon" {...props} />,
+  ClipboardIcon: (props: any) => (
+    <svg data-testid="clipboard-icon" {...props} />
+  ),
   CheckIcon: () => <div data-testid="check-icon" />,
   InformationCircleIcon: () => <div data-testid="info-icon" />,
 }));
@@ -85,7 +87,9 @@ const renderComponent = (customSigner = mockSigner) => {
     <SignerContext.Provider
       value={{ signer: customSigner as any, setSigner: jest.fn() } as any}
     >
-      <NostrContext.Provider value={{ nostr: mockNostr as any, setNostr: jest.fn() } as any}>
+      <NostrContext.Provider
+        value={{ nostr: mockNostr as any, setNostr: jest.fn() } as any}
+      >
         <MintButton />
       </NostrContext.Provider>
     </SignerContext.Provider>
@@ -185,9 +189,7 @@ describe("MintButton Component", () => {
     fireEvent.change(screen.getByLabelText(/Token amount in sats/i), {
       target: { value: satsToMint },
     });
-    fireEvent.click(
-      screen.getByRole("button", { name: /Mint/i })
-    );
+    fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
 
     await waitFor(() => {
       expect(mockCreateMintQuote).toHaveBeenCalledWith(satsToMint);
@@ -215,9 +217,7 @@ describe("MintButton Component", () => {
     fireEvent.change(screen.getByLabelText(/Token amount in sats/i), {
       target: { value: satsToMint },
     });
-    fireEvent.click(
-      screen.getByRole("button", { name: /Mint/i })
-    );
+    fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
 
     await waitFor(
       () => {
@@ -252,9 +252,7 @@ describe("MintButton Component", () => {
     fireEvent.change(screen.getByLabelText(/Token amount in sats/i), {
       target: { value: satsToMint },
     });
-    fireEvent.click(
-      screen.getByRole("button", { name: /Mint/i })
-    );
+    fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
 
     expect(await screen.findByText("Lightning Invoice")).toBeVisible();
 
@@ -294,9 +292,7 @@ describe("MintButton Component", () => {
     fireEvent.change(screen.getByLabelText(/Token amount in sats/i), {
       target: { value: "10" },
     });
-    fireEvent.click(
-      screen.getByRole("button", { name: /Mint/i })
-    );
+    fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
 
     const clipboardIcon = await screen.findByTestId("clipboard-icon");
     fireEvent.click(clipboardIcon);
@@ -328,9 +324,7 @@ describe("MintButton Component", () => {
     fireEvent.change(screen.getByLabelText(/Token amount in sats/i), {
       target: { value: satsToMint },
     });
-    fireEvent.click(
-      screen.getByRole("button", { name: /Mint/i })
-    );
+    fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
 
     await waitFor(() => {
       expect(console.error).toHaveBeenCalledWith("ERROR", expect.any(Error));
@@ -361,9 +355,7 @@ describe("MintButton Component", () => {
     fireEvent.change(screen.getByLabelText(/Token amount in sats/i), {
       target: { value: satsToMint },
     });
-    fireEvent.click(
-      screen.getByRole("button", { name: /Mint/i })
-    );
+    fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
 
     await waitFor(() => {
       expect(mockWebLN.enable).toHaveBeenCalled();
@@ -391,9 +383,7 @@ describe("MintButton Component", () => {
     fireEvent.change(screen.getByLabelText(/Token amount in sats/i), {
       target: { value: satsToMint },
     });
-    fireEvent.click(
-      screen.getByRole("button", { name: /Mint/i })
-    );
+    fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
 
     await waitFor(() => {
       expect(console.error).toHaveBeenCalledWith(expect.any(Error));
@@ -420,9 +410,7 @@ describe("MintButton Component", () => {
     fireEvent.change(screen.getByLabelText(/Token amount in sats/i), {
       target: { value: satsToMint },
     });
-    fireEvent.click(
-      screen.getByRole("button", { name: /Mint/i })
-    );
+    fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
 
     await waitFor(() => {
       expect(mockWebLN.enable).toHaveBeenCalled();
@@ -452,9 +440,7 @@ describe("MintButton Component", () => {
     fireEvent.change(screen.getByLabelText(/Token amount in sats/i), {
       target: { value: satsToMint },
     });
-    fireEvent.click(
-      screen.getByRole("button", { name: /Mint/i })
-    );
+    fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
 
     await waitFor(() => {
       expect(console.error).toHaveBeenCalledWith(expect.any(Error));
@@ -482,9 +468,7 @@ describe("MintButton Component", () => {
     fireEvent.change(screen.getByLabelText(/Token amount in sats/i), {
       target: { value: satsToMint },
     });
-    fireEvent.click(
-      screen.getByRole("button", { name: /Mint/i })
-    );
+    fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
 
     await waitFor(() => {
       expect(console.error).toHaveBeenCalledWith(expect.any(Error));
@@ -508,9 +492,7 @@ describe("MintButton Component", () => {
     fireEvent.change(screen.getByLabelText(/Token amount in sats/i), {
       target: { value: satsToMint },
     });
-    fireEvent.click(
-      screen.getByRole("button", { name: /Mint/i })
-    );
+    fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
 
     await waitFor(() => {
       expect(screen.getByText("Payment confirmed!")).toBeVisible();
@@ -545,9 +527,7 @@ describe("MintButton Component", () => {
     fireEvent.change(screen.getByLabelText(/Token amount in sats/i), {
       target: { value: satsToMint },
     });
-    fireEvent.click(
-      screen.getByRole("button", { name: /Mint/i })
-    );
+    fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
 
     await waitFor(() => {
       expect(screen.getByText("Payment confirmed!")).toBeVisible();
@@ -580,9 +560,7 @@ describe("MintButton Component", () => {
     fireEvent.change(screen.getByLabelText(/Token amount in sats/i), {
       target: { value: satsToMint },
     });
-    fireEvent.click(
-      screen.getByRole("button", { name: /Mint/i })
-    );
+    fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
 
     await waitFor(() => {
       expect(screen.getByTestId("failure-modal")).toBeVisible();
@@ -624,9 +602,7 @@ describe("MintButton Component", () => {
     fireEvent.change(screen.getByLabelText(/Token amount in sats/i), {
       target: { value: satsToMint },
     });
-    fireEvent.click(
-      screen.getByRole("button", { name: /Mint/i })
-    );
+    fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
 
     expect(await screen.findByText("Lightning Invoice")).toBeVisible();
 

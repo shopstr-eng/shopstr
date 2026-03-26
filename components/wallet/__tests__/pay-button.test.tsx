@@ -136,7 +136,9 @@ describe("PayButton Component", () => {
 
     const payButton = screen.getByRole("button", { name: /pay/i });
     fireEvent.click(payButton);
-    expect(await screen.findByText("Pay Lightning Invoice")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Pay Lightning Invoice")
+    ).toBeInTheDocument();
 
     const cancelButton = screen.getByRole("button", { name: "Cancel" });
     fireEvent.click(cancelButton);

@@ -1396,7 +1396,7 @@ export default function CartInvoiceCard({
                 title +
                 " listing" +
                 productDetails +
-                " on milk.market! Check your Lightning address (" +
+                " on shopstr.market! Check your Lightning address (" +
                 lnurl +
                 ") for your sats.";
             } else {
@@ -1407,7 +1407,7 @@ export default function CartInvoiceCard({
                 title +
                 " listing" +
                 productDetails +
-                " on milk.market! Check your Lightning address (" +
+                " on shopstr.market! Check your Lightning address (" +
                 lnurl +
                 ") for your sats.";
             }
@@ -1523,7 +1523,7 @@ export default function CartInvoiceCard({
                   title +
                   " listing" +
                   productDetails +
-                  " on milk.market: " +
+                  " on shopstr.market: " +
                   unusedToken;
               } else {
                 paymentMessage =
@@ -1533,7 +1533,7 @@ export default function CartInvoiceCard({
                   title +
                   " listing" +
                   productDetails +
-                  " on milk.market: " +
+                  " on shopstr.market: " +
                   unusedToken;
               }
               await sendPaymentAndContactMessageWithKeys(
@@ -1605,7 +1605,7 @@ export default function CartInvoiceCard({
               title +
               " listing" +
               productDetails +
-              " on milk.market: " +
+              " on shopstr.market: " +
               sellerToken;
           } else {
             paymentMessage =
@@ -1615,7 +1615,7 @@ export default function CartInvoiceCard({
               title +
               " listing" +
               productDetails +
-              " on milk.market: " +
+              " on shopstr.market: " +
               sellerToken;
           }
           await sendPaymentAndContactMessageWithKeys(

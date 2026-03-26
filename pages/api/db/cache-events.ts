@@ -2,6 +2,14 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { cacheEvents } from "@/utils/db/db-service";
 import { NostrEvent } from "@/utils/types/types";
 
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: "4mb",
+    },
+  },
+};
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse

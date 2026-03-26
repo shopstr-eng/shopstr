@@ -1,6 +1,4 @@
-import {
-  timeSinceMessageDisplayText,
-} from "../utils";
+import { timeSinceMessageDisplayText } from "../utils";
 
 describe("timeSinceMessageDisplayText", () => {
   jest.useFakeTimers();
