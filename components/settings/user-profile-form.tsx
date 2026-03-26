@@ -8,6 +8,7 @@ import {
   Image,
   Select,
   SelectItem,
+  Tooltip,
 } from "@nextui-org/react";
 import { ProfileMapContext } from "@/utils/context/context";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
@@ -15,6 +16,7 @@ import {
   SignerContext,
   NostrContext,
 } from "@/components/utility-components/nostr-context-provider";
+import { NostrNSecSigner } from "@/utils/nostr/signers/nostr-nsec-signer";
 import { createNostrProfileEvent } from "@/utils/nostr/nostr-helper-functions";
 import { FileUploaderButton } from "@/components/utility-components/file-uploader";
 import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
@@ -28,8 +30,19 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
   const { nostr } = useContext(NostrContext);
   const [isUploadingProfile, setIsUploadingProfile] = useState(false);
   const [isFetchingProfile, setIsFetchingProfile] = useState(false);
+  const [isNPubCopied, setIsNPubCopied] = useState(false);
+  const [isNSecCopied, setIsNSecCopied] = useState(false);
+  const [isNSecVisible, setIsNSecVisible] = useState(false);
+  const [isNcryptsecCopied, setIsNcryptsecCopied] = useState(false);
+  const [isNcryptsecVisible, setIsNcryptsecVisible] = useState(false);
+  const [userNcryptsec, setUserNcryptsec] = useState("");
+  const [userNSec, setUserNSec] = useState("");
 
-  const { signer, pubkey: userPubkey } = useContext(SignerContext);
+  const {
+    signer,
+    pubkey: userPubkey,
+    npub: userNPub,
+  } = useContext(SignerContext);
 
   const profileContext = useContext(ProfileMapContext);
   const { handleSubmit, control, reset, watch, setValue } = useForm({
@@ -38,10 +51,10 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
       picture: "",
       display_name: "",
       name: "",
-      nip05: "", // Nostr address
+      nip05: "",
       about: "",
       website: "",
-      lud16: "", // Lightning address
+      lud16: "",
       payment_preference: "ecash",
       shopstr_donation: 2.1,
     },
@@ -64,7 +77,23 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
       reset(profile.content);
     }
     setIsFetchingProfile(false);
-  }, [profileContext, userPubkey, reset]);
+
+    if (signer instanceof NostrNSecSigner) {
+      const nsecSigner = signer as NostrNSecSigner;
+      nsecSigner._getNSec().then(
+        (nsec) => {
+          setUserNSec(nsec);
+        },
+        (err: unknown) => {
+          console.error(err);
+        }
+      );
+      const encKey = nsecSigner.getEncryptedPrivKey();
+      if (encKey && encKey.startsWith("ncryptsec")) {
+        setUserNcryptsec(encKey);
+      }
+    }
+  }, [profileContext, userPubkey, signer, reset]);
 
   const onSubmit = async (data: { [x: string]: string }) => {
     if (!userPubkey) throw new Error("pubkey is undefined");
@@ -129,6 +158,133 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
           </div>
         </div>
       </div>
+
+      {/* NPub Display */}
+      {!isOnboarding && userNPub && (
+        <div className="border-light-border dark:border-dark-border mb-4 flex items-center justify-between gap-2 overflow-hidden rounded-lg border p-3">
+          <p className="break-all font-mono text-sm font-medium text-light-text dark:text-dark-text">
+            {userNPub}
+          </p>
+          <Tooltip
+            content={isNPubCopied ? "Copied!" : "Copy npub"}
+            closeDelay={100}
+          >
+            <Button
+              isIconOnly
+              variant="light"
+              className="h-6 w-6 min-w-0 flex-shrink-0 p-0"
+              onClick={() => {
+                navigator.clipboard.writeText(userNPub);
+                setIsNPubCopied(true);
+                setTimeout(() => setIsNPubCopied(false), 2000);
+              }}
+            >
+              {isNPubCopied ? "✅" : "📋"}
+            </Button>
+          </Tooltip>
+        </div>
+      )}
+
+      {/* NSec Display */}
+      {!isOnboarding && userNSec ? (
+        <div className="border-light-border dark:border-dark-border mb-4 flex items-center justify-between gap-2 overflow-hidden rounded-lg border p-3">
+          <p className="break-all font-mono text-sm font-medium text-light-text dark:text-dark-text">
+            {isNSecVisible
+              ? userNSec
+              : "•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••"}
+          </p>
+          <div className="flex flex-shrink-0 gap-2">
+            <Tooltip
+              content={isNSecVisible ? "Hide nsec" : "Show nsec"}
+              closeDelay={100}
+            >
+              <Button
+                isIconOnly
+                variant="light"
+                className="h-6 w-6 min-w-0 p-0"
+                onClick={() => setIsNSecVisible(!isNSecVisible)}
+              >
+                {isNSecVisible ? "🙈" : "👁️"}
+              </Button>
+            </Tooltip>
+            <Tooltip
+              content={isNSecCopied ? "Copied!" : "Copy nsec"}
+              closeDelay={100}
+            >
+              <Button
+                isIconOnly
+                variant="light"
+                className="h-6 w-6 min-w-0 p-0"
+                onClick={() => {
+                  navigator.clipboard.writeText(userNSec);
+                  setIsNSecCopied(true);
+                  setTimeout(() => setIsNSecCopied(false), 2000);
+                }}
+              >
+                {isNSecCopied ? "✅" : "📋"}
+              </Button>
+            </Tooltip>
+          </div>
+        </div>
+      ) : !isOnboarding ? (
+        <div className="mb-4" />
+      ) : null}
+
+      {/* NCryptsec Display */}
+      {!isOnboarding && userNcryptsec ? (
+        <div className="border-light-border dark:border-dark-border mb-4 flex items-center justify-between gap-2 overflow-hidden rounded-lg border p-3">
+          <div className="min-w-0 flex-1">
+            <p className="mb-1 text-xs font-bold text-gray-500">ncryptsec</p>
+            <p className="break-all font-mono text-sm font-medium text-light-text dark:text-dark-text">
+              {isNcryptsecVisible
+                ? userNcryptsec
+                : "•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••"}
+            </p>
+          </div>
+          <div className="flex flex-shrink-0 gap-2">
+            <Tooltip
+              content={isNcryptsecVisible ? "Hide ncryptsec" : "Show ncryptsec"}
+              closeDelay={100}
+            >
+              <Button
+                isIconOnly
+                variant="light"
+                className="h-6 w-6 min-w-0 p-0"
+                onClick={() => setIsNcryptsecVisible(!isNcryptsecVisible)}
+              >
+                {isNcryptsecVisible ? "🙈" : "👁️"}
+              </Button>
+            </Tooltip>
+            <Tooltip
+              content={isNcryptsecCopied ? "Copied!" : "Copy ncryptsec"}
+              closeDelay={100}
+            >
+              <Button
+                isIconOnly
+                variant="light"
+                className="h-6 w-6 min-w-0 p-0"
+                onClick={() => {
+                  navigator.clipboard.writeText(userNcryptsec);
+                  setIsNcryptsecCopied(true);
+                  setTimeout(() => setIsNcryptsecCopied(false), 2000);
+                }}
+              >
+                {isNcryptsecCopied ? "✅" : "📋"}
+              </Button>
+            </Tooltip>
+          </div>
+        </div>
+      ) : !isOnboarding ? (
+        <div className="mb-4" />
+      ) : null}
+
+      {!isOnboarding && userNcryptsec && (
+        <p className="mb-4 text-xs text-gray-500">
+          Your ncryptsec is your nsec in encrypted form. It is safer to use your
+          ncryptsec instead of your nsec to sign in across devices, as it cannot
+          be used without your passphrase.
+        </p>
+      )}
 
       <form onSubmit={handleSubmit(onSubmit as any)}>
         <Controller
