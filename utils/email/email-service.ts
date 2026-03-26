@@ -9,11 +9,12 @@ import {
   subscriptionCancellationEmail,
   returnRequestEmail,
   inquiryNotificationEmail,
+  accountRecoveryEmail,
   OrderEmailParams,
   SubscriptionEmailParams,
 } from "./email-templates";
 
-async function sendEmail(
+export async function sendEmail(
   to: string,
   subject: string,
   html: string,
@@ -127,6 +128,14 @@ export async function sendInquiryNotification(
     senderHasEmail: params.senderHasEmail,
   });
   return sendEmail(recipientEmail, subject, html, params.senderEmail);
+}
+
+export async function sendRecoveryEmail(
+  recipientEmail: string,
+  recoveryLink: string
+): Promise<boolean> {
+  const { subject, html } = accountRecoveryEmail({ recoveryLink });
+  return sendEmail(recipientEmail, subject, html);
 }
 
 export async function sendReturnRequestToSeller(

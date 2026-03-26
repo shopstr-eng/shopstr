@@ -9,6 +9,7 @@ import { ApiKeyRecord, getAgentSigner } from "@/utils/mcp/auth";
 import { EventTemplate } from "nostr-tools";
 import {
   cacheEvent,
+  fetchAllProfilesFromDb,
   getSubscriptionsBySellerPubkey,
   createEmailFlow,
   getEmailFlows,
@@ -22,6 +23,11 @@ import {
   getFlowEnrollments,
   getDbPool,
 } from "@/utils/db/db-service";
+import dns from "dns";
+import { promisify } from "util";
+
+const resolveCname = promisify(dns.resolveCname);
+const resolve4 = promisify(dns.resolve4);
 import { getDefaultFlowSteps } from "@/utils/email/flow-email-templates";
 import { v4 as uuidv4 } from "uuid";
 import { registerTool } from "./register-tool";
@@ -106,7 +112,8 @@ async function getSigner(apiKey: ApiKeyRecord): Promise<McpNostrSigner | null> {
 export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
   const baseUrl = `http://localhost:${process.env.PORT || 5000}`;
 
-  registerTool(server,
+  registerTool(
+    server,
     "set_user_profile",
     "Create or update your Nostr user profile (kind 0). Sets metadata like name, about, picture, lightning address, etc.",
     {
@@ -181,7 +188,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  registerTool(server,
+  registerTool(
+    server,
     "set_shop_profile",
     "Create or update your shop profile (kind 30019). Sets shop metadata like name, about, picture, banner, and settings.",
     {
@@ -513,7 +521,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  registerTool(server,
+  registerTool(
+    server,
     "register_shop_slug",
     "Register, update, or delete your shop's URL slug for the storefront. The slug becomes part of your shop URL (e.g. milk.market/shop/your-slug). Slug must be lowercase alphanumeric with hyphens, 3-50 characters. Reserved words (shop, admin, api, etc.) are not allowed. To delete, set action to 'delete'.",
     {
@@ -643,7 +652,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  registerTool(server,
+  registerTool(
+    server,
     "create_product_listing",
     "Publish a new product listing (kind 30402) to the marketplace. Creates a classified listing with title, description, price, images, categories, shipping options, and more.",
     {
@@ -916,7 +926,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  registerTool(server,
+  registerTool(
+    server,
     "update_product_listing",
     "Update an existing product listing by publishing a new event with the same d-tag. All fields are optional — only provided fields will be included.",
     {
@@ -1118,7 +1129,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  registerTool(server,
+  registerTool(
+    server,
     "delete_listing",
     "Delete a product listing or any Nostr event by publishing a deletion event (kind 5).",
     {
@@ -1158,7 +1170,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  registerTool(server,
+  registerTool(
+    server,
     "publish_review",
     "Publish a review (kind 31555) for a product or seller. Includes content text and ratings.",
     {
@@ -1252,7 +1265,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  registerTool(server,
+  registerTool(
+    server,
     "create_community_post",
     "Create a post in a Nostr community (kind 1111). Supports top-level posts and replies.",
     {
@@ -1329,7 +1343,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  registerTool(server,
+  registerTool(
+    server,
     "send_direct_message",
     "Send an encrypted direct message using NIP-17 gift wrap (kind 1059/13/14). Supports plain messages, listing inquiries, and order-related messages.",
     {
@@ -1544,7 +1559,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  registerTool(server,
+  registerTool(
+    server,
     "update_order_address",
     "Update the shipping address for an existing order. Sends an encrypted address change request to the seller via NIP-17 gift-wrapped DM and updates the order record.",
     {
@@ -1696,7 +1712,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  registerTool(server,
+  registerTool(
+    server,
     "send_shipping_update",
     "Send a shipping update to a buyer via encrypted NIP-17 gift-wrapped DM. Includes tracking number, carrier, and estimated delivery time. Also updates the order status to 'shipped' in the database.",
     {
@@ -1868,7 +1885,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  registerTool(server,
+  registerTool(
+    server,
     "update_order_status",
     "Update the status of an order and optionally notify the buyer via encrypted DM. Sellers can confirm, ship, or complete orders. Buyers can cancel orders.",
     {
@@ -2037,7 +2055,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  registerTool(server,
+  registerTool(
+    server,
     "list_messages",
     "Fetch and decrypt your incoming messages (NIP-17 gift-wrapped DMs). Returns decrypted message content, sender, subject, and read status. Use to check inquiries, order messages, address changes, and other DMs.",
     {
@@ -2161,7 +2180,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  registerTool(server,
+  registerTool(
+    server,
     "mark_messages_read",
     "Mark specific messages as read by their event IDs.",
     {
@@ -2204,7 +2224,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  registerTool(server,
+  registerTool(
+    server,
     "set_relay_list",
     "Publish your relay list (kind 10002, NIP-65). Configures which relays you read from and write to.",
     {
@@ -2266,7 +2287,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  registerTool(server,
+  registerTool(
+    server,
     "set_blossom_servers",
     "Publish your Blossom media server list (kind 10063). Configures which servers to use for media uploads.",
     {
@@ -2279,7 +2301,10 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
       if (!signer) return noSignerError();
 
       try {
-        const tags: string[][] = params.servers.map((s: string) => ["server", s]);
+        const tags: string[][] = params.servers.map((s: string) => [
+          "server",
+          s,
+        ]);
 
         const eventTemplate: EventTemplate = {
           kind: 10063,
@@ -2309,7 +2334,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  registerTool(server,
+  registerTool(
+    server,
     "upload_media",
     "Upload media to a Blossom server. Creates a signed authorization event (kind 24242) and uploads the file. Returns the URL of the uploaded media.",
     {
@@ -2335,9 +2361,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         const fileBuffer = Buffer.from(params.fileBase64, "base64");
         const fileBytes = Uint8Array.from(fileBuffer);
         const { createHash: cryptoCreateHash } = await import("crypto");
-        const hash = cryptoCreateHash("sha256")
-          .update(fileBytes)
-          .digest("hex");
+        const hash = cryptoCreateHash("sha256").update(fileBytes).digest("hex");
 
         const authEvent: EventTemplate = {
           kind: 24242,
@@ -2406,7 +2430,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  registerTool(server,
+  registerTool(
+    server,
     "create_discount_code",
     "Create a discount code for your shop. Codes are percentage-based and can have optional expiration dates.",
     {
@@ -2461,7 +2486,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  registerTool(server,
+  registerTool(
+    server,
     "delete_discount_code",
     "Delete one of your discount codes.",
     {
@@ -2499,7 +2525,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  registerTool(server,
+  registerTool(
+    server,
     "list_discount_codes",
     "List your shop's discount codes.",
     {},
@@ -2532,7 +2559,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  registerTool(server,
+  registerTool(
+    server,
     "get_cashu_balance",
     "Check your Cashu wallet balance by querying stored proof events.",
     {
@@ -2594,7 +2622,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  registerTool(server,
+  registerTool(
+    server,
     "receive_cashu_tokens",
     "Receive Cashu tokens and store them as a proof event (kind 7375). Publishes the encrypted proof event to your Nostr relays.",
     {
@@ -2662,7 +2691,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  registerTool(server,
+  registerTool(
+    server,
     "set_cashu_mints",
     "Configure your Cashu wallet mints by publishing a wallet configuration event (kind 17375).",
     {
@@ -2723,7 +2753,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  registerTool(server,
+  registerTool(
+    server,
     "send_cashu_payment",
     "Send a Cashu payment by melting tokens to pay a Lightning invoice. Uses proofs from your stored Cashu wallet.",
     {
@@ -2818,7 +2849,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  registerTool(server,
+  registerTool(
+    server,
     "list_seller_subscriptions",
     "List all subscriptions to your products. Shows subscriber details, frequency, status, pricing, and shipping info for each subscription.",
     {
@@ -2881,7 +2913,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  registerTool(server,
+  registerTool(
+    server,
     "set_notification_email",
     "Set or update the notification email for order updates, subscription reminders, etc. Supports both buyer and seller roles.",
     {
@@ -2938,7 +2971,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  registerTool(server,
+  registerTool(
+    server,
     "get_notification_email",
     "Retrieve the notification email configured for a given pubkey and role (buyer or seller).",
     {
@@ -2988,7 +3022,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  registerTool(server,
+  registerTool(
+    server,
     "create_email_flow",
     "Create an automated email flow (welcome series, abandoned cart, post-purchase, or winback). Optionally include default template steps or provide custom steps.",
     {
@@ -3100,7 +3135,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  registerTool(server,
+  registerTool(
+    server,
     "list_email_flows",
     "List all email flows for your shop. Returns flow definitions with their type, status, and metadata.",
     {},
@@ -3130,7 +3166,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  registerTool(server,
+  registerTool(
+    server,
     "update_email_flow",
     "Update an email flow's name, sender settings, steps, or any combination. Can add, update, or remove individual steps.",
     {
@@ -3260,7 +3297,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  registerTool(server,
+  registerTool(
+    server,
     "delete_email_flow",
     "Delete an email flow and all its steps, enrollments, and executions.",
     {
@@ -3311,7 +3349,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  registerTool(server,
+  registerTool(
+    server,
     "toggle_email_flow",
     "Activate or pause an email flow. Active flows will process enrollments and send emails. Paused flows stop sending.",
     {
@@ -3365,7 +3404,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  registerTool(server,
+  registerTool(
+    server,
     "get_email_flow_stats",
     "Get enrollment and send statistics for an email flow, including total enrollments, active/completed/cancelled counts, and per-step send/fail/pending counts.",
     {
@@ -3455,6 +3495,494 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
       } catch (error) {
         return errorResponse(
           "Failed to get email flow stats",
+          error instanceof Error ? error.message : "Unknown error",
+          startTime
+        );
+      }
+    }
+  );
+
+  const VALID_DOMAIN_TARGETS = ["milk.market", "milk-market.replit.app"];
+
+  registerTool(
+    server,
+    "manage_custom_domain",
+    "Register, verify, get, or delete a custom domain for your storefront. You must have a shop slug set up first. After registering, add a CNAME record pointing your domain to milk-market.replit.app, then use the 'verify' action to check DNS propagation.",
+    {
+      action: z
+        .enum(["register", "get", "verify", "delete"])
+        .describe(
+          "Action to perform: 'register' to set a custom domain, 'get' to check current domain status, 'verify' to check DNS and mark as verified, 'delete' to remove the custom domain"
+        ),
+      domain: z
+        .string()
+        .optional()
+        .describe(
+          "The custom domain to register (e.g. 'shop.example.com'). Required for 'register' action."
+        ),
+    },
+    async (params) => {
+      const startTime = Date.now();
+      if (apiKey.permissions !== "full_access") return permissionError();
+      const signer = await getSigner(apiKey);
+      if (!signer) return noSignerError();
+
+      try {
+        const pubkey = signer.getPubKey();
+        const dbPool = getDbPool();
+
+        if (params.action === "register") {
+          if (!params.domain) {
+            return errorResponse(
+              "Domain is required for register action",
+              "Provide a domain parameter",
+              startTime
+            );
+          }
+
+          const cleanDomain = params.domain.toLowerCase().trim();
+
+          const slugResult = await dbPool.query(
+            "SELECT slug FROM shop_slugs WHERE pubkey = $1",
+            [pubkey]
+          );
+          if (slugResult.rows.length === 0) {
+            return errorResponse(
+              "You must set up a shop slug first",
+              "Use register_shop_slug to create a slug before adding a custom domain",
+              startTime
+            );
+          }
+
+          try {
+            await dbPool.query(
+              `INSERT INTO custom_domains (pubkey, domain, shop_slug, verified)
+               VALUES ($1, $2, $3, false)
+               ON CONFLICT (pubkey) DO UPDATE SET domain = $2, shop_slug = $3, verified = false, updated_at = NOW()`,
+              [pubkey, cleanDomain, slugResult.rows[0].slug]
+            );
+          } catch (err: any) {
+            if (err?.code === "23505") {
+              return errorResponse(
+                "This domain is already registered by another seller",
+                cleanDomain,
+                startTime
+              );
+            }
+            throw err;
+          }
+
+          return successResponse(
+            {
+              domain: cleanDomain,
+              verified: false,
+              instructions: {
+                type: "CNAME",
+                host: cleanDomain,
+                value: "milk-market.replit.app",
+                note: "Add a CNAME record pointing your domain to milk-market.replit.app. Verification may take up to 48 hours after DNS propagation.",
+              },
+            },
+            startTime
+          );
+        }
+
+        if (params.action === "get") {
+          const result = await dbPool.query(
+            "SELECT domain, verified, created_at FROM custom_domains WHERE pubkey = $1",
+            [pubkey]
+          );
+          if (result.rows.length === 0) {
+            return successResponse(
+              { customDomain: null, message: "No custom domain configured" },
+              startTime
+            );
+          }
+          return successResponse({ customDomain: result.rows[0] }, startTime);
+        }
+
+        if (params.action === "verify") {
+          const result = await dbPool.query(
+            "SELECT domain FROM custom_domains WHERE pubkey = $1",
+            [pubkey]
+          );
+          if (result.rows.length === 0) {
+            return errorResponse(
+              "No custom domain found",
+              "Register a domain first using the 'register' action",
+              startTime
+            );
+          }
+
+          const domain = result.rows[0].domain;
+          let verified = false;
+
+          try {
+            const cnameRecords = await resolveCname(domain);
+            verified = cnameRecords.some((record: string) =>
+              VALID_DOMAIN_TARGETS.some((target) =>
+                record.toLowerCase().endsWith(target.toLowerCase())
+              )
+            );
+          } catch {
+            try {
+              const milkMarketIps = await resolve4("milk.market");
+              const domainIps = await resolve4(domain);
+              verified = domainIps.some((ip: string) =>
+                milkMarketIps.includes(ip)
+              );
+            } catch {
+              verified = false;
+            }
+          }
+
+          if (verified) {
+            await dbPool.query(
+              "UPDATE custom_domains SET verified = true, updated_at = NOW() WHERE pubkey = $1",
+              [pubkey]
+            );
+          }
+
+          return successResponse(
+            {
+              domain,
+              verified,
+              message: verified
+                ? "Domain verified successfully!"
+                : "DNS records not found yet. Make sure your CNAME record points to milk-market.replit.app and wait for DNS propagation (can take up to 48 hours).",
+            },
+            startTime
+          );
+        }
+
+        if (params.action === "delete") {
+          await dbPool.query("DELETE FROM custom_domains WHERE pubkey = $1", [
+            pubkey,
+          ]);
+          return successResponse(
+            { message: "Custom domain removed" },
+            startTime
+          );
+        }
+
+        return errorResponse(
+          "Invalid action",
+          "Use register, get, verify, or delete",
+          startTime
+        );
+      } catch (error) {
+        return errorResponse(
+          "Failed to manage custom domain",
+          error instanceof Error ? error.message : "Unknown error",
+          startTime
+        );
+      }
+    }
+  );
+
+  registerTool(
+    server,
+    "set_storefront_policies",
+    "Set or update storefront policies (return & refund, terms of service, privacy, cancellation). Each policy can be enabled/disabled and has markdown content. This merges with your existing shop profile — only specified policies are changed.",
+    {
+      returnPolicy: z
+        .object({
+          enabled: z
+            .boolean()
+            .describe("Whether this policy page is visible on the storefront"),
+          content: z
+            .string()
+            .describe("Markdown content for the return & refund policy"),
+        })
+        .optional()
+        .describe("Return & refund policy"),
+      termsOfService: z
+        .object({
+          enabled: z
+            .boolean()
+            .describe("Whether this policy page is visible on the storefront"),
+          content: z
+            .string()
+            .describe("Markdown content for the terms of service"),
+        })
+        .optional()
+        .describe("Terms of service"),
+      privacyPolicy: z
+        .object({
+          enabled: z
+            .boolean()
+            .describe("Whether this policy page is visible on the storefront"),
+          content: z
+            .string()
+            .describe("Markdown content for the privacy policy"),
+        })
+        .optional()
+        .describe("Privacy policy"),
+      cancellationPolicy: z
+        .object({
+          enabled: z
+            .boolean()
+            .describe("Whether this policy page is visible on the storefront"),
+          content: z
+            .string()
+            .describe("Markdown content for the cancellation policy"),
+        })
+        .optional()
+        .describe("Cancellation policy"),
+      useDefaults: z
+        .boolean()
+        .optional()
+        .describe(
+          "If true, generate and apply default policies for all policy types not explicitly provided. Requires a shop name to be set."
+        ),
+    },
+    async (params) => {
+      const startTime = Date.now();
+      if (apiKey.permissions !== "full_access") return permissionError();
+      const signer = await getSigner(apiKey);
+      if (!signer) return noSignerError();
+
+      try {
+        const pubkey = signer.getPubKey();
+
+        const profileEvents = await fetchAllProfilesFromDb();
+        const existingProfile = profileEvents
+          .filter((e) => e.kind === 30019 && e.pubkey === pubkey)
+          .sort((a, b) => b.created_at - a.created_at)[0];
+
+        let content: Record<string, any> = {};
+        if (existingProfile) {
+          try {
+            content = JSON.parse(existingProfile.content);
+          } catch {}
+        }
+
+        if (!content.storefront) content.storefront = {};
+        if (!content.storefront.footer) content.storefront.footer = {};
+
+        const existingPolicies = content.storefront.footer.policies || {};
+        const newPolicies: Record<string, any> = { ...existingPolicies };
+
+        if (params.returnPolicy) newPolicies.returnPolicy = params.returnPolicy;
+        if (params.termsOfService)
+          newPolicies.termsOfService = params.termsOfService;
+        if (params.privacyPolicy)
+          newPolicies.privacyPolicy = params.privacyPolicy;
+        if (params.cancellationPolicy)
+          newPolicies.cancellationPolicy = params.cancellationPolicy;
+
+        if (params.useDefaults) {
+          const shopName = content.name || "this shop";
+          const { getDefaultPolicies } = await import(
+            "@/utils/storefront-policies"
+          );
+          const defaults = getDefaultPolicies(shopName);
+          if (!params.returnPolicy && !existingPolicies.returnPolicy)
+            newPolicies.returnPolicy = defaults.returnPolicy;
+          if (!params.termsOfService && !existingPolicies.termsOfService)
+            newPolicies.termsOfService = defaults.termsOfService;
+          if (!params.privacyPolicy && !existingPolicies.privacyPolicy)
+            newPolicies.privacyPolicy = defaults.privacyPolicy;
+          if (
+            !params.cancellationPolicy &&
+            !existingPolicies.cancellationPolicy
+          )
+            newPolicies.cancellationPolicy = defaults.cancellationPolicy;
+        }
+
+        content.storefront.footer.policies = newPolicies;
+
+        const eventTemplate: EventTemplate = {
+          created_at: Math.floor(Date.now() / 1000),
+          content: JSON.stringify(content),
+          kind: 30019,
+          tags: [["d", pubkey]],
+        };
+
+        const signedEvent = await signAndPublishEvent(signer, eventTemplate);
+        await cacheEvent(signedEvent).catch(console.error);
+
+        return successResponse(
+          {
+            eventId: signedEvent.id,
+            pubkey: signedEvent.pubkey,
+            policies: newPolicies,
+          },
+          startTime
+        );
+      } catch (error) {
+        return errorResponse(
+          "Failed to set storefront policies",
+          error instanceof Error ? error.message : "Unknown error",
+          startTime
+        );
+      }
+    }
+  );
+
+  registerTool(
+    server,
+    "set_email_popup",
+    "Configure the email popup for your storefront. When enabled, visitors see a popup offering a discount in exchange for their email address. This merges with your existing shop profile.",
+    {
+      enabled: z
+        .boolean()
+        .describe("Enable or disable the email popup on the storefront"),
+      discountPercentage: z
+        .number()
+        .min(1)
+        .max(100)
+        .describe("Discount percentage to offer (e.g. 10 for 10% off)"),
+      headline: z
+        .string()
+        .optional()
+        .describe("Popup headline text (e.g. 'Get 10% Off Your First Order')"),
+      subtext: z
+        .string()
+        .optional()
+        .describe("Popup subtext below the headline"),
+      collectPhone: z
+        .boolean()
+        .optional()
+        .describe("Show a phone number input field"),
+      requirePhone: z
+        .boolean()
+        .optional()
+        .describe("Make the phone number field required"),
+      buttonText: z
+        .string()
+        .optional()
+        .describe("Text on the submit button (default: 'Get My Discount')"),
+      successMessage: z
+        .string()
+        .optional()
+        .describe("Message shown after successful signup"),
+    },
+    async (params) => {
+      const startTime = Date.now();
+      if (apiKey.permissions !== "full_access") return permissionError();
+      const signer = await getSigner(apiKey);
+      if (!signer) return noSignerError();
+
+      try {
+        const pubkey = signer.getPubKey();
+
+        const profileEvents = await fetchAllProfilesFromDb();
+        const existingProfile = profileEvents
+          .filter((e) => e.kind === 30019 && e.pubkey === pubkey)
+          .sort((a, b) => b.created_at - a.created_at)[0];
+
+        let content: Record<string, any> = {};
+        if (existingProfile) {
+          try {
+            content = JSON.parse(existingProfile.content);
+          } catch {}
+        }
+
+        if (!content.storefront) content.storefront = {};
+
+        const emailPopup: Record<string, any> = {
+          enabled: params.enabled,
+          discountPercentage: params.discountPercentage,
+        };
+        if (params.headline !== undefined)
+          emailPopup.headline = params.headline;
+        if (params.subtext !== undefined) emailPopup.subtext = params.subtext;
+        if (params.collectPhone !== undefined)
+          emailPopup.collectPhone = params.collectPhone;
+        if (params.requirePhone !== undefined)
+          emailPopup.requirePhone = params.requirePhone;
+        if (params.buttonText !== undefined)
+          emailPopup.buttonText = params.buttonText;
+        if (params.successMessage !== undefined)
+          emailPopup.successMessage = params.successMessage;
+
+        content.storefront.emailPopup = emailPopup;
+
+        const eventTemplate: EventTemplate = {
+          created_at: Math.floor(Date.now() / 1000),
+          content: JSON.stringify(content),
+          kind: 30019,
+          tags: [["d", pubkey]],
+        };
+
+        const signedEvent = await signAndPublishEvent(signer, eventTemplate);
+        await cacheEvent(signedEvent).catch(console.error);
+
+        return successResponse(
+          {
+            eventId: signedEvent.id,
+            pubkey: signedEvent.pubkey,
+            emailPopup,
+          },
+          startTime
+        );
+      } catch (error) {
+        return errorResponse(
+          "Failed to set email popup",
+          error instanceof Error ? error.message : "Unknown error",
+          startTime
+        );
+      }
+    }
+  );
+
+  registerTool(
+    server,
+    "list_email_captures",
+    "List all emails captured from the storefront email popup. Returns subscriber emails, phone numbers, discount codes issued, and capture timestamps.",
+    {
+      limit: z
+        .number()
+        .optional()
+        .describe("Maximum number of results to return (default: 50)"),
+      offset: z
+        .number()
+        .optional()
+        .describe("Number of results to skip for pagination (default: 0)"),
+    },
+    async (params) => {
+      const startTime = Date.now();
+      if (apiKey.permissions !== "full_access") return permissionError();
+      const signer = await getSigner(apiKey);
+      if (!signer) return noSignerError();
+
+      try {
+        const pubkey = signer.getPubKey();
+        const dbPool = getDbPool();
+        const limit = params.limit || 50;
+        const offset = params.offset || 0;
+
+        const countResult = await dbPool.query(
+          "SELECT COUNT(*) FROM popup_email_captures WHERE seller_pubkey = $1",
+          [pubkey]
+        );
+        const totalCount = parseInt(countResult.rows[0].count);
+
+        const result = await dbPool.query(
+          `SELECT email, phone, discount_code, discount_percentage, created_at
+           FROM popup_email_captures
+           WHERE seller_pubkey = $1
+           ORDER BY created_at DESC
+           LIMIT $2 OFFSET $3`,
+          [pubkey, limit, offset]
+        );
+
+        return successResponse(
+          {
+            captures: result.rows,
+            pagination: {
+              total: totalCount,
+              limit,
+              offset,
+              hasMore: offset + limit < totalCount,
+            },
+          },
+          startTime
+        );
+      } catch (error) {
+        return errorResponse(
+          "Failed to list email captures",
           error instanceof Error ? error.message : "Unknown error",
           startTime
         );

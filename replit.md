@@ -27,8 +27,9 @@ Preferred communication style: Simple, everyday language.
 ## Authentication & Signing
 
 - **Multiple Signer Support**: NIP-07, NIP-46, and direct nsec key input.
-- **Key Management**: NIP-49 encrypted private key storage.
+- **Key Management**: NIP-49 encrypted private key storage (ncryptsec). Sign-in supports both nsec and ncryptsec formats with auto-detection.
 - **Migration System**: Automatic migration to NIP-49 standard.
+- **Account Recovery**: Recovery key system for email and nsec users with email attached. Recovery keys (24-char, segmented format e.g. XXXX-XXXX-XXXX-XXXX-XXXX-XXXX) are generated at email signup and can be set up from profile settings for nsec users. Recovery flow: email verification token → recovery key + new password/passphrase → re-encrypted nsec. Recovery key is downloadable as .txt file. DB tables: `account_recovery` (pubkey, email, recovery_key_hash, recovery_encrypted_nsec, auth_type), `account_recovery_tokens`, `recovery_email_verifications`. API routes: `setup-recovery`, `check-recovery`, `request-recovery`, `verify-recovery-token`, `reset-password`, `send-recovery-verification`. UI: `RecoveryKeyModal`, `/auth/recover` page, "Forgot password?" link in SignInModal, recovery setup section in profile settings. Recovery utilities in `utils/auth/recovery.ts`. Security: cryptographically secure RNG (`crypto.randomBytes`) for key/token generation, PBKDF2 with 600,000 iterations (backward-compatible with legacy 1,000 iteration decryption), rate limiting on all recovery endpoints (`utils/auth/rate-limit.ts`), email verification required before recovery setup, `check-recovery` returns masked email only, `reset-password` sets no-cache headers. Recovery page dynamically labels fields as "password" (email users) or "passphrase" (nsec/OAuth users). Expired/used tokens are cleaned up during recovery requests.
 
 ## Nostr Protocol Implementation
 
@@ -112,7 +113,7 @@ The platform exposes a Model Context Protocol (MCP) server enabling AI agents to
 - **MCP Endpoint**: `pages/api/mcp/index.ts` — Streamable HTTP transport endpoint that handles MCP protocol messages
 - **Server Factory**: `mcp/server.ts` — Creates the MCP server with registered tools and resources
 - **Read Tools**: `mcp/tools/read-tools.ts` — Tools for browsing products, companies, reviews, and discount codes
-- **Write Tools**: `mcp/tools/write-tools.ts` — Tools for full marketplace participation (profiles, listings, reviews, DMs, media, relay/blossom config, discount codes, Cashu wallet)
+- **Write Tools**: `mcp/tools/write-tools.ts` — Tools for full marketplace participation (profiles, listings, reviews, DMs, media, relay/blossom config, discount codes, Cashu wallet, custom domains, storefront policies, email popup config, email capture list)
 - **Purchase Tools**: Inline in `pages/api/mcp/index.ts` — Order creation, status, payment verification
 - **Resources**: `mcp/resources.ts` — MCP resources (product catalog via `milkmarket://catalog/products`)
 - **Nostr Signing**: `utils/mcp/nostr-signing.ts` — Server-side Nostr event signing (`McpNostrSigner`), relay management (`McpRelayManager`), encrypted nsec storage, and `signAndPublishEvent()` utility

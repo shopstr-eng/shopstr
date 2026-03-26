@@ -404,6 +404,96 @@ async function initializeTables(): Promise<void> {
       CREATE INDEX IF NOT EXISTS idx_mcp_orders_buyer_pubkey ON mcp_orders(buyer_pubkey);
       CREATE INDEX IF NOT EXISTS idx_mcp_orders_seller_pubkey ON mcp_orders(seller_pubkey);
       CREATE INDEX IF NOT EXISTS idx_mcp_orders_api_key_id ON mcp_orders(api_key_id);
+
+      -- Email auth table
+      CREATE TABLE IF NOT EXISTS email_auth (
+        id SERIAL PRIMARY KEY,
+        email VARCHAR(255) NOT NULL UNIQUE,
+        password_hash VARCHAR(255) NOT NULL,
+        pubkey VARCHAR(64) NOT NULL,
+        encrypted_nsec TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_email_auth_email ON email_auth(email);
+      CREATE INDEX IF NOT EXISTS idx_email_auth_pubkey ON email_auth(pubkey);
+
+      -- OAuth auth table
+      CREATE TABLE IF NOT EXISTS oauth_auth (
+        id SERIAL PRIMARY KEY,
+        provider VARCHAR(50) NOT NULL,
+        provider_user_id VARCHAR(255) NOT NULL,
+        email VARCHAR(255) NOT NULL,
+        pubkey VARCHAR(64) NOT NULL,
+        encrypted_nsec TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(provider, provider_user_id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_oauth_auth_pubkey ON oauth_auth(pubkey);
+
+      -- Account recovery table
+      CREATE TABLE IF NOT EXISTS account_recovery (
+        id SERIAL PRIMARY KEY,
+        pubkey VARCHAR(64) NOT NULL,
+        email VARCHAR(255) NOT NULL,
+        recovery_key_hash VARCHAR(255) NOT NULL,
+        recovery_encrypted_nsec TEXT NOT NULL,
+        auth_type VARCHAR(20) NOT NULL CHECK (auth_type IN ('email', 'oauth', 'nsec')),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(pubkey)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_account_recovery_pubkey ON account_recovery(pubkey);
+      CREATE INDEX IF NOT EXISTS idx_account_recovery_email ON account_recovery(email);
+
+      -- Account recovery tokens table
+      CREATE TABLE IF NOT EXISTS account_recovery_tokens (
+        id SERIAL PRIMARY KEY,
+        pubkey VARCHAR(64) NOT NULL,
+        token_hash VARCHAR(255) NOT NULL,
+        expires_at TIMESTAMP NOT NULL,
+        used BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_account_recovery_tokens_token_hash ON account_recovery_tokens(token_hash);
+
+      -- Recovery email verifications table
+      CREATE TABLE IF NOT EXISTS recovery_email_verifications (
+        id SERIAL PRIMARY KEY,
+        pubkey VARCHAR(64) NOT NULL,
+        email VARCHAR(255) NOT NULL,
+        code VARCHAR(6) NOT NULL,
+        expires_at TIMESTAMP NOT NULL,
+        used BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_recovery_email_verifications_pubkey ON recovery_email_verifications(pubkey);
+
+      -- Signups table
+      CREATE TABLE IF NOT EXISTS signups (
+        id SERIAL PRIMARY KEY,
+        contact VARCHAR(255) NOT NULL UNIQUE,
+        contact_type VARCHAR(10) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      -- UTM tracking table
+      CREATE TABLE IF NOT EXISTS utm_tracking (
+        id SERIAL PRIMARY KEY,
+        utm_source VARCHAR(255),
+        utm_medium VARCHAR(255),
+        utm_campaign VARCHAR(255),
+        utm_term VARCHAR(255),
+        utm_content VARCHAR(255),
+        referrer TEXT,
+        user_agent TEXT,
+        ip_address VARCHAR(45),
+        visited_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
     `);
 
     await client.query(`

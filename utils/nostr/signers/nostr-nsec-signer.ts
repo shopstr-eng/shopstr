@@ -104,6 +104,10 @@ export class NostrNSecSigner implements NostrSigner {
     };
   }
 
+  public getEncryptedPrivKey(): string {
+    return this.encryptedPrivKey;
+  }
+
   public async connect(): Promise<string> {
     return "connected";
   }
