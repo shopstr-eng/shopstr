@@ -13,6 +13,7 @@ import {
   findPubkeyByProfileSlug,
   getProfileSlug,
 } from "@/utils/url-slugs";
+import { OgMetaProps, DEFAULT_OG } from "@/components/og-head";
 
 type MetaTagsType = {
   title: string;
@@ -20,6 +21,14 @@ type MetaTagsType = {
   image: string;
   url: string;
 };
+
+const BASE_URL = "https://shopstr.market";
+
+function ensureAbsoluteUrl(url: string, base: string): string {
+  if (!url) return "";
+  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+  return `${base}${url.startsWith("/") ? "" : "/"}${url}`;
+}
 
 const getMetaTags = (
   windowOrigin: string,
@@ -30,10 +39,9 @@ const getMetaTags = (
   profileData: Map<string, ProfileData>
 ): MetaTagsType => {
   const defaultTags = {
-    title: "Shopstr | Bitcoin-Native Nostr Marketplace | Shop Freely",
-    description:
-      "Shopstr is a global, permissionless marketplace built on Nostr. Buy and sell goods with Bitcoin and Lightning — no KYC, no censorship, no middlemen.",
-    image: "/shopstr-2000x2000.png",
+    title: DEFAULT_OG.title,
+    description: DEFAULT_OG.description,
+    image: ensureAbsoluteUrl("/shopstr-2000x2000.png", BASE_URL),
     url: `${windowOrigin}`,
   };
 
@@ -82,7 +90,10 @@ const getMetaTags = (
         title: productData.title || "Shopstr Listing",
         description:
           productData.summary || "Check out this product on Shopstr!",
-        image: productData.images?.[0] || "/shopstr-2000x2000.png",
+        image: ensureAbsoluteUrl(
+          productData.images?.[0] || "/shopstr-2000x2000.png",
+          BASE_URL
+        ),
         url: `${windowOrigin}/listing/${slug || productId}`,
       };
     }
@@ -113,7 +124,10 @@ const getMetaTags = (
         title: `${shopInfo.content.name} Shop` || "Shopstr Shop",
         description:
           shopInfo.content.about || "Check out this shop on Shopstr!",
-        image: shopInfo.content.ui.picture || "/shopstr-2000x2000.png",
+        image: ensureAbsoluteUrl(
+          shopInfo.content.ui.picture || "/shopstr-2000x2000.png",
+          BASE_URL
+        ),
         url: `${windowOrigin}/marketplace/${profileSlug}`,
       };
     }
@@ -131,10 +145,12 @@ const DynamicHead = ({
   productEvents,
   shopEvents,
   profileData,
+  ssrOgMeta,
 }: {
   productEvents: NostrEvent[];
   shopEvents: Map<string, ShopProfile>;
   profileData: Map<string, ProfileData>;
+  ssrOgMeta?: OgMetaProps | null;
 }) => {
   const router = useRouter();
   const [origin, setOrigin] = useState("");
@@ -143,14 +159,23 @@ const DynamicHead = ({
     setOrigin(window.location.origin);
   }, []);
 
-  const metaTags = getMetaTags(
-    origin ? origin : "https://shopstr.market",
-    router.pathname,
-    router.query,
-    productEvents,
-    shopEvents,
-    profileData
-  );
+  const effectiveOrigin = origin || BASE_URL;
+
+  const metaTags = ssrOgMeta
+    ? {
+        title: ssrOgMeta.title,
+        description: ssrOgMeta.description,
+        image: ensureAbsoluteUrl(ssrOgMeta.image, effectiveOrigin),
+        url: ensureAbsoluteUrl(ssrOgMeta.url, effectiveOrigin),
+      }
+    : getMetaTags(
+        effectiveOrigin,
+        router.pathname,
+        router.query,
+        productEvents,
+        shopEvents,
+        profileData
+      );
 
   const isHomepage = router.pathname === "/" || router.pathname === "/index";
 
@@ -263,11 +288,15 @@ const DynamicHead = ({
       <meta property="og:description" content={metaTags.description} />
       <meta property="og:image" content={metaTags.image} />
       <meta name="twitter:card" content="summary_large_image" />
-      <meta property="twitter:domain" content={origin} />
+      <meta property="twitter:domain" content={origin || "shopstr.market"} />
       <meta property="twitter:url" content={metaTags.url} />
       <meta name="twitter:title" content={metaTags.title} />
       <meta name="twitter:description" content={metaTags.description} />
       <meta name="twitter:image" content={metaTags.image} />
+      <meta
+        name="keywords"
+        content="shopstr, nostr marketplace, bitcoin payments, lightning network, cashu, peer-to-peer commerce, permissionless marketplace"
+      />
       {isHomepage && (
         <script
           type="application/ld+json"

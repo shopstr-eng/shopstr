@@ -689,6 +689,7 @@ function Shopstr({ props }: { props: AppProps }) {
         productEvents={productContext.productEvents}
         shopEvents={shopContext.shopData}
         profileData={profileContext.profileData}
+        ssrOgMeta={pageProps.ogMeta ?? null}
       />
       <StructuredData />
       <CommunityContext.Provider value={communityContext}>

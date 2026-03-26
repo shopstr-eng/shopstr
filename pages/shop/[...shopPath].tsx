@@ -3,6 +3,61 @@ import { useRouter } from "next/router";
 import { ShopMapContext } from "@/utils/context/context";
 import StorefrontLayout from "@/components/storefront/storefront-layout";
 import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
+import { GetServerSideProps } from "next";
+import { OgMetaProps, DEFAULT_OG } from "@/components/og-head";
+import {
+  fetchShopPubkeyBySlug,
+  fetchShopProfileByPubkeyFromDb,
+} from "@/utils/db/db-service";
+
+type ShopSubPageProps = {
+  ogMeta: OgMetaProps;
+};
+
+export const getServerSideProps: GetServerSideProps<ShopSubPageProps> = async (
+  context
+) => {
+  const { shopPath } = context.query;
+  const pathParts = Array.isArray(shopPath) ? shopPath : [];
+  const slug = pathParts[0] || "";
+
+  if (!slug) {
+    return { props: { ogMeta: DEFAULT_OG } };
+  }
+
+  try {
+    const pubkey = await fetchShopPubkeyBySlug(slug);
+    if (pubkey) {
+      const shopEvent = await fetchShopProfileByPubkeyFromDb(pubkey);
+      if (shopEvent) {
+        const content = JSON.parse(shopEvent.content);
+        return {
+          props: {
+            ogMeta: {
+              title: content.name ? `${content.name} Shop` : "Shopstr Shop",
+              description: content.about || "Check out this shop on Shopstr!",
+              image: content.ui?.picture || "/shopstr-2000x2000.png",
+              url: `/shop/${pathParts.join("/")}`,
+            },
+          },
+        };
+      }
+    }
+  } catch (error) {
+    console.error("SSR OG fetch error for shop sub-page:", error);
+  }
+
+  return {
+    props: {
+      ogMeta: {
+        ...DEFAULT_OG,
+        title: "Shopstr Shop",
+        description: "Check out this shop on Shopstr!",
+        url: `/shop/${pathParts.join("/")}`,
+      },
+    },
+  };
+};
 
 export default function ShopSubPage() {
   const router = useRouter();
@@ -26,7 +81,6 @@ export default function ShopSubPage() {
     if (!slug || resolvedRef.current) return;
 
     const lookupBySlug = async () => {
-      // 1. Check in-memory map immediately (instant if relay already loaded)
       if (!shopMapContext.isLoading) {
         for (const [pubkey, shop] of shopMapContext.shopData.entries()) {
           if (shop?.content?.storefront?.shopSlug === slug) {
@@ -38,7 +92,6 @@ export default function ShopSubPage() {
         }
       }
 
-      // 2. Always hit the DB — fast path, doesn't wait for relay
       try {
         const res = await fetch(
           `/api/storefront/lookup?slug=${encodeURIComponent(slug)}`
@@ -56,10 +109,8 @@ export default function ShopSubPage() {
         }
       } catch {}
 
-      // 3. If relay is still loading, wait — effect re-runs when it settles
       if (shopMapContext.isLoading) return;
 
-      // 4. Fall back to generated-slug name matching
       for (const [pubkey, shop] of shopMapContext.shopData.entries()) {
         const shopName = shop?.content?.name;
         if (shopName) {

@@ -5,6 +5,60 @@ import { useRouter } from "next/router";
 import { ShopMapContext } from "@/utils/context/context";
 import StorefrontLayout from "@/components/storefront/storefront-layout";
 import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
+import { GetServerSideProps } from "next";
+import { OgMetaProps, DEFAULT_OG } from "@/components/og-head";
+import {
+  fetchShopPubkeyBySlug,
+  fetchShopProfileByPubkeyFromDb,
+} from "@/utils/db/db-service";
+
+type ShopPageProps = {
+  ogMeta: OgMetaProps;
+};
+
+export const getServerSideProps: GetServerSideProps<ShopPageProps> = async (
+  context
+) => {
+  const { slug } = context.query;
+  const shopSlug = typeof slug === "string" ? slug : "";
+
+  if (!shopSlug) {
+    return { props: { ogMeta: DEFAULT_OG } };
+  }
+
+  try {
+    const pubkey = await fetchShopPubkeyBySlug(shopSlug);
+    if (pubkey) {
+      const shopEvent = await fetchShopProfileByPubkeyFromDb(pubkey);
+      if (shopEvent) {
+        const content = JSON.parse(shopEvent.content);
+        return {
+          props: {
+            ogMeta: {
+              title: content.name ? `${content.name} Shop` : "Shopstr Shop",
+              description: content.about || "Check out this shop on Shopstr!",
+              image: content.ui?.picture || "/shopstr-2000x2000.png",
+              url: `/shop/${shopSlug}`,
+            },
+          },
+        };
+      }
+    }
+  } catch (error) {
+    console.error("SSR OG fetch error for shop:", error);
+  }
+
+  return {
+    props: {
+      ogMeta: {
+        ...DEFAULT_OG,
+        title: "Shopstr Shop",
+        description: "Check out this shop on Shopstr!",
+        url: `/shop/${shopSlug}`,
+      },
+    },
+  };
+};
 
 export default function ShopPage() {
   const router = useRouter();
@@ -24,7 +78,6 @@ export default function ShopPage() {
     if (shopPubkey) return;
 
     const lookupBySlug = async () => {
-      // 1. Check in-memory shop map first (instant if already loaded)
       if (!shopMapContext.isLoading) {
         for (const [pubkey, shop] of shopMapContext.shopData.entries()) {
           if (shop?.content?.storefront?.shopSlug === slug) {
@@ -35,7 +88,6 @@ export default function ShopPage() {
         }
       }
 
-      // 2. Always hit the DB API regardless of context loading state
       try {
         const res = await fetch(
           `/api/storefront/lookup?slug=${encodeURIComponent(slug)}`
@@ -52,10 +104,8 @@ export default function ShopPage() {
         }
       } catch {}
 
-      // 3. If context is still loading, wait — effect will re-run when it resolves
       if (shopMapContext.isLoading) return;
 
-      // 4. Fall back to generated-slug name matching
       for (const [pubkey, shop] of shopMapContext.shopData.entries()) {
         const shopName = shop?.content?.name;
         if (shopName) {
