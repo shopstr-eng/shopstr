@@ -660,7 +660,7 @@ export async function publishSavedForLaterEvent(
     };
 
     await finalizeAndSendNostrEvent(signer, nostr, cartEvent);
-  } catch (_) {
+  } catch {
     return;
   }
 }
@@ -699,7 +699,7 @@ export async function publishWalletEvent(
         console.error("Failed to cache wallet event to database:", error)
       );
     }
-  } catch (_) {
+  } catch {
     return;
   }
 }
@@ -747,7 +747,7 @@ export async function publishProofEvent(
       signedEvent && signedEvent.id ? signedEvent.id : "",
       deletedEventsArray
     );
-  } catch (_) {
+  } catch {
     return;
   }
 }
@@ -786,7 +786,7 @@ export async function publishSpendingHistoryEvent(
       created_at: Math.floor(Date.now() / 1000),
     };
     await finalizeAndSendNostrEvent(signer!, nostr!, cashuSpendingHistoryEvent);
-  } catch (_) {
+  } catch {
     return;
   }
 }

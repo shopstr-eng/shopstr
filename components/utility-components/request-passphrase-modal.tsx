@@ -70,9 +70,11 @@ export default function PassphraseChallengeModal({
   const onCancel = () => {
     if (actionOnCancel) actionOnCancel();
     setIsOpen(false);
-    onCancelRouteTo
-      ? router.push(onCancelRouteTo)
-      : router.push("/marketplace");
+    if (onCancelRouteTo) {
+      router.push(onCancelRouteTo);
+    } else {
+      router.push("/marketplace");
+    }
   };
 
   return (

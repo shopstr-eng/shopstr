@@ -2174,10 +2174,12 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
       if (!signer) return noSignerError();
 
       try {
-        const fileBuffer = Buffer.from(params.fileBase64, "base64");
+        const fileBytes = Uint8Array.from(
+          Buffer.from(params.fileBase64, "base64")
+        );
         const { createHash: cryptoCreateHash } = await import("crypto");
         const hash = cryptoCreateHash("sha256")
-          .update(fileBuffer)
+          .update(fileBytes)
           .digest("hex");
 
         const authEvent: EventTemplate = {
@@ -2187,7 +2189,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           tags: [
             ["t", "upload"],
             ["x", hash],
-            ["size", fileBuffer.length.toString()],
+            ["size", fileBytes.byteLength.toString()],
             [
               "expiration",
               Math.floor((Date.now() + 24 * 60 * 60 * 1000) / 1000).toString(),
@@ -2206,7 +2208,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
         const response = await fetch(uploadUrl.toString(), {
           method: "PUT",
-          body: fileBuffer,
+          body: fileBytes,
           headers: {
             authorization,
             "content-type": params.mimeType,
@@ -2228,7 +2230,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           {
             url: result.url,
             sha256: result.sha256 || hash,
-            size: result.size || fileBuffer.length,
+            size: result.size || fileBytes.byteLength,
             serverUrl,
           },
           startTime
@@ -2592,7 +2594,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           (e: any) => e.pubkey === pubkey
         );
 
-        let availableProofs: any[] = [];
+        const availableProofs: any[] = [];
         for (const event of myProofEvents) {
           try {
             const decryptedContent = signer.decrypt(pubkey, event.content);
