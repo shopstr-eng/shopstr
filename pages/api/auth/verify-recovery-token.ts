@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from "next";
 import { Client } from "pg";
+import { recoveryVerifyLimiter } from "@/utils/auth/rate-limit";
 
 export default async function handler(
   req: NextApiRequest,
@@ -8,6 +9,9 @@ export default async function handler(
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
+
+  const allowed = await recoveryVerifyLimiter(req, res);
+  if (!allowed) return;
 
   const { token } = req.body;
 
@@ -43,7 +47,13 @@ export default async function handler(
       return res.status(400).json({ error: "This recovery token has expired" });
     }
 
-    res.status(200).json({ success: true, email });
+    const recoveryResult = await client.query(
+      "SELECT auth_type FROM account_recovery WHERE email = $1",
+      [email]
+    );
+    const authType = recoveryResult.rows[0]?.auth_type || "email";
+
+    res.status(200).json({ success: true, email, authType });
   } catch (error) {
     console.error("Verify recovery token error:", error);
     res.status(500).json({ error: "Internal server error" });

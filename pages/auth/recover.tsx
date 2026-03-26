@@ -32,6 +32,9 @@ export default function RecoverPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [emailSent, setEmailSent] = useState(false);
+  const [authType, setAuthType] = useState<string>("email");
+
+  const credentialLabel = authType === "email" ? "password" : "passphrase";
 
   const handleRequestRecovery = async () => {
     if (!email) {
@@ -79,6 +82,7 @@ export default function RecoverPage() {
         return;
       }
       setVerifiedEmail(data.email);
+      setAuthType(data.authType || "email");
       setToken(activeToken);
       setStep("reset");
     } catch {
@@ -94,15 +98,23 @@ export default function RecoverPage() {
       return;
     }
     if (!newPassword) {
-      setError("Please enter a new password.");
+      setError(`Please enter a new ${credentialLabel}.`);
       return;
     }
     if (newPassword !== confirmPassword) {
-      setError("Passwords do not match.");
+      setError(
+        `${
+          credentialLabel === "password" ? "Passwords" : "Passphrases"
+        } do not match.`
+      );
       return;
     }
     if (newPassword.length < 6) {
-      setError("Password must be at least 6 characters.");
+      setError(
+        `${
+          credentialLabel === "password" ? "Password" : "Passphrase"
+        } must be at least 6 characters.`
+      );
       return;
     }
     setLoading(true);
@@ -124,18 +136,15 @@ export default function RecoverPage() {
       }
 
       if (data.nsec && data.pubkey) {
-        const passphrase =
-          data.authType === "email" ? newPassword : newPassword;
-
         const { encryptedPrivKey } = NostrNSecSigner.getEncryptedNSEC(
           data.nsec,
-          passphrase
+          newPassword
         );
 
         const signer = newSigner!("nsec", {
           encryptedPrivKey,
           pubkey: data.pubkey,
-          passphrase,
+          passphrase: newPassword,
         });
         await signer.getPubKey();
 
@@ -179,7 +188,7 @@ export default function RecoverPage() {
               "Enter your email to start the recovery process."}
             {step === "verify" && "Verify your recovery link."}
             {step === "reset" &&
-              "Enter your recovery key and choose a new password."}
+              `Enter your recovery key and choose a new ${credentialLabel}.`}
             {step === "success" && "Your account has been recovered!"}
           </p>
         </div>
@@ -309,7 +318,7 @@ export default function RecoverPage() {
               }}
             />
             <Input
-              label="New Password"
+              label={authType === "email" ? "New Password" : "New Passphrase"}
               type="password"
               value={newPassword}
               onValueChange={setNewPassword}
@@ -320,7 +329,11 @@ export default function RecoverPage() {
               }}
             />
             <Input
-              label="Confirm New Password"
+              label={
+                authType === "email"
+                  ? "Confirm New Password"
+                  : "Confirm New Passphrase"
+              }
               type="password"
               value={confirmPassword}
               onValueChange={setConfirmPassword}
@@ -335,7 +348,9 @@ export default function RecoverPage() {
               onPress={handleResetPassword}
               isLoading={loading}
             >
-              Reset Password & Sign In
+              {authType === "email"
+                ? "Reset Password & Sign In"
+                : "Reset Passphrase & Sign In"}
             </Button>
           </div>
         )}
@@ -346,7 +361,9 @@ export default function RecoverPage() {
               <CheckCircleIcon className="h-8 w-8 text-green-600" />
             </div>
             <p className="text-center text-sm text-gray-700">
-              Your password has been reset and you&apos;re now signed in.
+              {authType === "email"
+                ? "Your password has been reset and you're now signed in."
+                : "Your passphrase has been reset and you're now signed in."}
             </p>
             <Button
               className="w-full bg-black font-semibold text-white"

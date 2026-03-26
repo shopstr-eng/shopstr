@@ -1,6 +1,13 @@
 import { NextApiRequest, NextApiResponse } from "next";
 import { Client } from "pg";
 
+function maskEmail(email: string): string {
+  const [local, domain] = email.split("@");
+  if (!local || !domain) return "***@***.***";
+  const visibleChars = Math.min(2, local.length);
+  return local.slice(0, visibleChars) + "***@" + domain;
+}
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
@@ -34,7 +41,7 @@ export default async function handler(
     const { email, auth_type, created_at } = result.rows[0];
     res.status(200).json({
       hasRecovery: true,
-      email,
+      maskedEmail: maskEmail(email),
       authType: auth_type,
       createdAt: created_at,
     });

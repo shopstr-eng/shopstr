@@ -6,6 +6,7 @@ import {
   decryptNsecWithRecoveryKey,
   encryptNsecWithRecoveryKey,
 } from "@/utils/auth/recovery";
+import { recoveryResetLimiter } from "@/utils/auth/rate-limit";
 
 export default async function handler(
   req: NextApiRequest,
@@ -15,6 +16,9 @@ export default async function handler(
     return res.status(405).json({ error: "Method not allowed" });
   }
 
+  const allowed = await recoveryResetLimiter(req, res);
+  if (!allowed) return;
+
   const { token, recoveryKey, newPassword } = req.body;
 
   if (!token || !recoveryKey || !newPassword) {
@@ -22,6 +26,12 @@ export default async function handler(
       .status(400)
       .json({ error: "Token, recovery key, and new password are required" });
   }
+
+  res.setHeader(
+    "Cache-Control",
+    "no-store, no-cache, must-revalidate, private"
+  );
+  res.setHeader("Pragma", "no-cache");
 
   const client = new Client({
     connectionString: process.env["DATABASE_URL"],
@@ -74,11 +84,9 @@ export default async function handler(
     try {
       nsec = decryptNsecWithRecoveryKey(recovery_encrypted_nsec, recoveryKey);
     } catch {
-      return res
-        .status(400)
-        .json({
-          error: "Failed to decrypt account data. Invalid recovery key.",
-        });
+      return res.status(400).json({
+        error: "Failed to decrypt account data. Invalid recovery key.",
+      });
     }
 
     if (auth_type === "email") {

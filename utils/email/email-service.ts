@@ -14,7 +14,7 @@ import {
   SubscriptionEmailParams,
 } from "./email-templates";
 
-async function sendEmail(
+export async function sendEmail(
   to: string,
   subject: string,
   html: string,
