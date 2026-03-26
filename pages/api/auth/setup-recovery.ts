@@ -46,29 +46,23 @@ export default async function handler(
     );
 
     if (verifyResult.rows.length === 0) {
-      return res
-        .status(400)
-        .json({
-          error: "No verification code found. Please request a new one.",
-        });
+      return res.status(400).json({
+        error: "No verification code found. Please request a new one.",
+      });
     }
 
     const verification = verifyResult.rows[0];
 
     if (verification.used) {
-      return res
-        .status(400)
-        .json({
-          error: "Verification code already used. Please request a new one.",
-        });
+      return res.status(400).json({
+        error: "Verification code already used. Please request a new one.",
+      });
     }
 
     if (new Date(verification.expires_at) < new Date()) {
-      return res
-        .status(400)
-        .json({
-          error: "Verification code has expired. Please request a new one.",
-        });
+      return res.status(400).json({
+        error: "Verification code has expired. Please request a new one.",
+      });
     }
 
     if (verification.code !== verificationCode) {

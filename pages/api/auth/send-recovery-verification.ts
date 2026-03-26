@@ -33,18 +33,6 @@ export default async function handler(
   try {
     await client.connect();
 
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS recovery_email_verifications (
-        id SERIAL PRIMARY KEY,
-        pubkey VARCHAR(64) NOT NULL,
-        email VARCHAR(255) NOT NULL,
-        code VARCHAR(6) NOT NULL,
-        expires_at TIMESTAMP NOT NULL,
-        used BOOLEAN DEFAULT FALSE,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
     await client.query(
       "DELETE FROM recovery_email_verifications WHERE pubkey = $1 OR expires_at < NOW()",
       [pubkey]

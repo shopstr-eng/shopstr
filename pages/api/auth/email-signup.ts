@@ -29,17 +29,6 @@ export default async function handler(
   try {
     await client.connect();
 
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS email_auth (
-        id SERIAL PRIMARY KEY,
-        email VARCHAR(255) NOT NULL UNIQUE,
-        password_hash VARCHAR(255) NOT NULL,
-        pubkey VARCHAR(64) NOT NULL,
-        encrypted_nsec TEXT NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
     const existingUser = await client.query(
       "SELECT id FROM email_auth WHERE email = $1",
       [email]
@@ -75,20 +64,6 @@ export default async function handler(
     const recoveryKeyHash = hashRecoveryKey(recoveryKey);
     const recoveryEncryptedNsec = encryptNsecWithRecoveryKey(nsec, recoveryKey);
 
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS account_recovery (
-        id SERIAL PRIMARY KEY,
-        pubkey VARCHAR(64) NOT NULL,
-        email VARCHAR(255) NOT NULL,
-        recovery_key_hash VARCHAR(255) NOT NULL,
-        recovery_encrypted_nsec TEXT NOT NULL,
-        auth_type VARCHAR(20) NOT NULL CHECK (auth_type IN ('email', 'oauth', 'nsec')),
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(pubkey)
-      )
-    `);
-
     await client.query(
       `INSERT INTO account_recovery (pubkey, email, recovery_key_hash, recovery_encrypted_nsec, auth_type)
        VALUES ($1, $2, $3, $4, 'email')
@@ -100,6 +75,11 @@ export default async function handler(
       [pubkey, email, recoveryKeyHash, recoveryEncryptedNsec]
     );
 
+    res.setHeader(
+      "Cache-Control",
+      "no-store, no-cache, must-revalidate, private"
+    );
+    res.setHeader("Pragma", "no-cache");
     res.status(201).json({
       success: true,
       nsec,

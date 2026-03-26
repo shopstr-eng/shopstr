@@ -127,19 +127,6 @@ export default async function handler(
 
     await client.connect();
 
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS oauth_auth (
-        id SERIAL PRIMARY KEY,
-        provider VARCHAR(50) NOT NULL,
-        provider_user_id VARCHAR(255) NOT NULL,
-        email VARCHAR(255) NOT NULL,
-        pubkey VARCHAR(64) NOT NULL,
-        encrypted_nsec TEXT NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(provider, provider_user_id)
-      )
-    `);
-
     // Check if user exists
     const existingUser = await client.query(
       "SELECT pubkey, encrypted_nsec FROM oauth_auth WHERE provider = $1 AND provider_user_id = $2",

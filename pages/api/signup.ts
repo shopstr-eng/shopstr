@@ -54,16 +54,6 @@ export default async function handler(
   try {
     await client.connect();
 
-    // Create table if it doesn't exist
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS signups (
-        id SERIAL PRIMARY KEY,
-        contact VARCHAR(255) NOT NULL UNIQUE,
-        contact_type VARCHAR(10) NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
     // Check if contact already exists
     const existingSignup = await client.query(
       "SELECT id FROM signups WHERE contact = $1",
