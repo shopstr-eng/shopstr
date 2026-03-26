@@ -9,6 +9,7 @@ import { ApiKeyRecord, getAgentSigner } from "@/utils/mcp/auth";
 import { EventTemplate } from "nostr-tools";
 import {
   cacheEvent,
+  fetchAllProfilesFromDb,
   getSubscriptionsBySellerPubkey,
   createEmailFlow,
   getEmailFlows,
@@ -22,6 +23,11 @@ import {
   getFlowEnrollments,
   getDbPool,
 } from "@/utils/db/db-service";
+import dns from "dns";
+import { promisify } from "util";
+
+const resolveCname = promisify(dns.resolveCname);
+const resolve4 = promisify(dns.resolve4);
 import { getDefaultFlowSteps } from "@/utils/email/flow-email-templates";
 import { v4 as uuidv4 } from "uuid";
 import { registerTool } from "./register-tool";
@@ -3455,6 +3461,412 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
       } catch (error) {
         return errorResponse(
           "Failed to get email flow stats",
+          error instanceof Error ? error.message : "Unknown error",
+          startTime
+        );
+      }
+    }
+  );
+
+  const VALID_DOMAIN_TARGETS = ["milk.market", "milk-market.replit.app"];
+
+  registerTool(server,
+    "manage_custom_domain",
+    "Register, verify, get, or delete a custom domain for your storefront. You must have a shop slug set up first. After registering, add a CNAME record pointing your domain to milk-market.replit.app, then use the 'verify' action to check DNS propagation.",
+    {
+      action: z
+        .enum(["register", "get", "verify", "delete"])
+        .describe("Action to perform: 'register' to set a custom domain, 'get' to check current domain status, 'verify' to check DNS and mark as verified, 'delete' to remove the custom domain"),
+      domain: z
+        .string()
+        .optional()
+        .describe("The custom domain to register (e.g. 'shop.example.com'). Required for 'register' action."),
+    },
+    async (params) => {
+      const startTime = Date.now();
+      if (apiKey.permissions !== "full_access") return permissionError();
+      const signer = await getSigner(apiKey);
+      if (!signer) return noSignerError();
+
+      try {
+        const pubkey = signer.getPubKey();
+        const dbPool = getDbPool();
+
+        if (params.action === "register") {
+          if (!params.domain) {
+            return errorResponse("Domain is required for register action", "Provide a domain parameter", startTime);
+          }
+
+          const cleanDomain = params.domain.toLowerCase().trim();
+
+          const slugResult = await dbPool.query(
+            "SELECT slug FROM shop_slugs WHERE pubkey = $1",
+            [pubkey]
+          );
+          if (slugResult.rows.length === 0) {
+            return errorResponse(
+              "You must set up a shop slug first",
+              "Use register_shop_slug to create a slug before adding a custom domain",
+              startTime
+            );
+          }
+
+          try {
+            await dbPool.query(
+              `INSERT INTO custom_domains (pubkey, domain, shop_slug, verified)
+               VALUES ($1, $2, $3, false)
+               ON CONFLICT (pubkey) DO UPDATE SET domain = $2, shop_slug = $3, verified = false, updated_at = NOW()`,
+              [pubkey, cleanDomain, slugResult.rows[0].slug]
+            );
+          } catch (err: any) {
+            if (err?.code === "23505") {
+              return errorResponse("This domain is already registered by another seller", cleanDomain, startTime);
+            }
+            throw err;
+          }
+
+          return successResponse({
+            domain: cleanDomain,
+            verified: false,
+            instructions: {
+              type: "CNAME",
+              host: cleanDomain,
+              value: "milk-market.replit.app",
+              note: "Add a CNAME record pointing your domain to milk-market.replit.app. Verification may take up to 48 hours after DNS propagation.",
+            },
+          }, startTime);
+        }
+
+        if (params.action === "get") {
+          const result = await dbPool.query(
+            "SELECT domain, verified, created_at FROM custom_domains WHERE pubkey = $1",
+            [pubkey]
+          );
+          if (result.rows.length === 0) {
+            return successResponse({ customDomain: null, message: "No custom domain configured" }, startTime);
+          }
+          return successResponse({ customDomain: result.rows[0] }, startTime);
+        }
+
+        if (params.action === "verify") {
+          const result = await dbPool.query(
+            "SELECT domain FROM custom_domains WHERE pubkey = $1",
+            [pubkey]
+          );
+          if (result.rows.length === 0) {
+            return errorResponse("No custom domain found", "Register a domain first using the 'register' action", startTime);
+          }
+
+          const domain = result.rows[0].domain;
+          let verified = false;
+
+          try {
+            const cnameRecords = await resolveCname(domain);
+            verified = cnameRecords.some((record: string) =>
+              VALID_DOMAIN_TARGETS.some((target) =>
+                record.toLowerCase().endsWith(target.toLowerCase())
+              )
+            );
+          } catch {
+            try {
+              const milkMarketIps = await resolve4("milk.market");
+              const domainIps = await resolve4(domain);
+              verified = domainIps.some((ip: string) => milkMarketIps.includes(ip));
+            } catch {
+              verified = false;
+            }
+          }
+
+          if (verified) {
+            await dbPool.query(
+              "UPDATE custom_domains SET verified = true, updated_at = NOW() WHERE pubkey = $1",
+              [pubkey]
+            );
+          }
+
+          return successResponse({
+            domain,
+            verified,
+            message: verified
+              ? "Domain verified successfully!"
+              : "DNS records not found yet. Make sure your CNAME record points to milk-market.replit.app and wait for DNS propagation (can take up to 48 hours).",
+          }, startTime);
+        }
+
+        if (params.action === "delete") {
+          await dbPool.query("DELETE FROM custom_domains WHERE pubkey = $1", [pubkey]);
+          return successResponse({ message: "Custom domain removed" }, startTime);
+        }
+
+        return errorResponse("Invalid action", "Use register, get, verify, or delete", startTime);
+      } catch (error) {
+        return errorResponse(
+          "Failed to manage custom domain",
+          error instanceof Error ? error.message : "Unknown error",
+          startTime
+        );
+      }
+    }
+  );
+
+  registerTool(server,
+    "set_storefront_policies",
+    "Set or update storefront policies (return & refund, terms of service, privacy, cancellation). Each policy can be enabled/disabled and has markdown content. This merges with your existing shop profile — only specified policies are changed.",
+    {
+      returnPolicy: z
+        .object({
+          enabled: z.boolean().describe("Whether this policy page is visible on the storefront"),
+          content: z.string().describe("Markdown content for the return & refund policy"),
+        })
+        .optional()
+        .describe("Return & refund policy"),
+      termsOfService: z
+        .object({
+          enabled: z.boolean().describe("Whether this policy page is visible on the storefront"),
+          content: z.string().describe("Markdown content for the terms of service"),
+        })
+        .optional()
+        .describe("Terms of service"),
+      privacyPolicy: z
+        .object({
+          enabled: z.boolean().describe("Whether this policy page is visible on the storefront"),
+          content: z.string().describe("Markdown content for the privacy policy"),
+        })
+        .optional()
+        .describe("Privacy policy"),
+      cancellationPolicy: z
+        .object({
+          enabled: z.boolean().describe("Whether this policy page is visible on the storefront"),
+          content: z.string().describe("Markdown content for the cancellation policy"),
+        })
+        .optional()
+        .describe("Cancellation policy"),
+      useDefaults: z
+        .boolean()
+        .optional()
+        .describe("If true, generate and apply default policies for all policy types not explicitly provided. Requires a shop name to be set."),
+    },
+    async (params) => {
+      const startTime = Date.now();
+      if (apiKey.permissions !== "full_access") return permissionError();
+      const signer = await getSigner(apiKey);
+      if (!signer) return noSignerError();
+
+      try {
+        const pubkey = signer.getPubKey();
+
+        const profileEvents = await fetchAllProfilesFromDb();
+        const existingProfile = profileEvents
+          .filter((e) => e.kind === 30019 && e.pubkey === pubkey)
+          .sort((a, b) => b.created_at - a.created_at)[0];
+
+        let content: Record<string, any> = {};
+        if (existingProfile) {
+          try {
+            content = JSON.parse(existingProfile.content);
+          } catch {}
+        }
+
+        if (!content.storefront) content.storefront = {};
+        if (!content.storefront.footer) content.storefront.footer = {};
+
+        const existingPolicies = content.storefront.footer.policies || {};
+        const newPolicies: Record<string, any> = { ...existingPolicies };
+
+        if (params.returnPolicy) newPolicies.returnPolicy = params.returnPolicy;
+        if (params.termsOfService) newPolicies.termsOfService = params.termsOfService;
+        if (params.privacyPolicy) newPolicies.privacyPolicy = params.privacyPolicy;
+        if (params.cancellationPolicy) newPolicies.cancellationPolicy = params.cancellationPolicy;
+
+        if (params.useDefaults) {
+          const shopName = content.name || "this shop";
+          const { getDefaultPolicies } = await import("@/utils/storefront-policies");
+          const defaults = getDefaultPolicies(shopName);
+          if (!params.returnPolicy && !existingPolicies.returnPolicy)
+            newPolicies.returnPolicy = defaults.returnPolicy;
+          if (!params.termsOfService && !existingPolicies.termsOfService)
+            newPolicies.termsOfService = defaults.termsOfService;
+          if (!params.privacyPolicy && !existingPolicies.privacyPolicy)
+            newPolicies.privacyPolicy = defaults.privacyPolicy;
+          if (!params.cancellationPolicy && !existingPolicies.cancellationPolicy)
+            newPolicies.cancellationPolicy = defaults.cancellationPolicy;
+        }
+
+        content.storefront.footer.policies = newPolicies;
+
+        const eventTemplate: EventTemplate = {
+          created_at: Math.floor(Date.now() / 1000),
+          content: JSON.stringify(content),
+          kind: 30019,
+          tags: [["d", pubkey]],
+        };
+
+        const signedEvent = await signAndPublishEvent(signer, eventTemplate);
+        await cacheEvent(signedEvent).catch(console.error);
+
+        return successResponse({
+          eventId: signedEvent.id,
+          pubkey: signedEvent.pubkey,
+          policies: newPolicies,
+        }, startTime);
+      } catch (error) {
+        return errorResponse(
+          "Failed to set storefront policies",
+          error instanceof Error ? error.message : "Unknown error",
+          startTime
+        );
+      }
+    }
+  );
+
+  registerTool(server,
+    "set_email_popup",
+    "Configure the email popup for your storefront. When enabled, visitors see a popup offering a discount in exchange for their email address. This merges with your existing shop profile.",
+    {
+      enabled: z.boolean().describe("Enable or disable the email popup on the storefront"),
+      discountPercentage: z
+        .number()
+        .min(1)
+        .max(100)
+        .describe("Discount percentage to offer (e.g. 10 for 10% off)"),
+      headline: z
+        .string()
+        .optional()
+        .describe("Popup headline text (e.g. 'Get 10% Off Your First Order')"),
+      subtext: z
+        .string()
+        .optional()
+        .describe("Popup subtext below the headline"),
+      collectPhone: z
+        .boolean()
+        .optional()
+        .describe("Show a phone number input field"),
+      requirePhone: z
+        .boolean()
+        .optional()
+        .describe("Make the phone number field required"),
+      buttonText: z
+        .string()
+        .optional()
+        .describe("Text on the submit button (default: 'Get My Discount')"),
+      successMessage: z
+        .string()
+        .optional()
+        .describe("Message shown after successful signup"),
+    },
+    async (params) => {
+      const startTime = Date.now();
+      if (apiKey.permissions !== "full_access") return permissionError();
+      const signer = await getSigner(apiKey);
+      if (!signer) return noSignerError();
+
+      try {
+        const pubkey = signer.getPubKey();
+
+        const profileEvents = await fetchAllProfilesFromDb();
+        const existingProfile = profileEvents
+          .filter((e) => e.kind === 30019 && e.pubkey === pubkey)
+          .sort((a, b) => b.created_at - a.created_at)[0];
+
+        let content: Record<string, any> = {};
+        if (existingProfile) {
+          try {
+            content = JSON.parse(existingProfile.content);
+          } catch {}
+        }
+
+        if (!content.storefront) content.storefront = {};
+
+        const emailPopup: Record<string, any> = {
+          enabled: params.enabled,
+          discountPercentage: params.discountPercentage,
+        };
+        if (params.headline !== undefined) emailPopup.headline = params.headline;
+        if (params.subtext !== undefined) emailPopup.subtext = params.subtext;
+        if (params.collectPhone !== undefined) emailPopup.collectPhone = params.collectPhone;
+        if (params.requirePhone !== undefined) emailPopup.requirePhone = params.requirePhone;
+        if (params.buttonText !== undefined) emailPopup.buttonText = params.buttonText;
+        if (params.successMessage !== undefined) emailPopup.successMessage = params.successMessage;
+
+        content.storefront.emailPopup = emailPopup;
+
+        const eventTemplate: EventTemplate = {
+          created_at: Math.floor(Date.now() / 1000),
+          content: JSON.stringify(content),
+          kind: 30019,
+          tags: [["d", pubkey]],
+        };
+
+        const signedEvent = await signAndPublishEvent(signer, eventTemplate);
+        await cacheEvent(signedEvent).catch(console.error);
+
+        return successResponse({
+          eventId: signedEvent.id,
+          pubkey: signedEvent.pubkey,
+          emailPopup,
+        }, startTime);
+      } catch (error) {
+        return errorResponse(
+          "Failed to set email popup",
+          error instanceof Error ? error.message : "Unknown error",
+          startTime
+        );
+      }
+    }
+  );
+
+  registerTool(server,
+    "list_email_captures",
+    "List all emails captured from the storefront email popup. Returns subscriber emails, phone numbers, discount codes issued, and capture timestamps.",
+    {
+      limit: z
+        .number()
+        .optional()
+        .describe("Maximum number of results to return (default: 50)"),
+      offset: z
+        .number()
+        .optional()
+        .describe("Number of results to skip for pagination (default: 0)"),
+    },
+    async (params) => {
+      const startTime = Date.now();
+      if (apiKey.permissions !== "full_access") return permissionError();
+      const signer = await getSigner(apiKey);
+      if (!signer) return noSignerError();
+
+      try {
+        const pubkey = signer.getPubKey();
+        const dbPool = getDbPool();
+        const limit = params.limit || 50;
+        const offset = params.offset || 0;
+
+        const countResult = await dbPool.query(
+          "SELECT COUNT(*) FROM popup_email_captures WHERE seller_pubkey = $1",
+          [pubkey]
+        );
+        const totalCount = parseInt(countResult.rows[0].count);
+
+        const result = await dbPool.query(
+          `SELECT email, phone, discount_code, discount_percentage, created_at
+           FROM popup_email_captures
+           WHERE seller_pubkey = $1
+           ORDER BY created_at DESC
+           LIMIT $2 OFFSET $3`,
+          [pubkey, limit, offset]
+        );
+
+        return successResponse({
+          captures: result.rows,
+          pagination: {
+            total: totalCount,
+            limit,
+            offset,
+            hasMore: offset + limit < totalCount,
+          },
+        }, startTime);
+      } catch (error) {
+        return errorResponse(
+          "Failed to list email captures",
           error instanceof Error ? error.message : "Unknown error",
           startTime
         );
