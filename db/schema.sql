@@ -384,3 +384,32 @@ CREATE TABLE IF NOT EXISTS popup_email_captures (
 
 CREATE INDEX IF NOT EXISTS idx_popup_email_captures_seller ON popup_email_captures(seller_pubkey);
 CREATE INDEX IF NOT EXISTS idx_popup_email_captures_email ON popup_email_captures(email);
+
+-- Account recovery: universal table for all auth types (email, oauth, nsec)
+CREATE TABLE IF NOT EXISTS account_recovery (
+    id SERIAL PRIMARY KEY,
+    pubkey VARCHAR(64) NOT NULL,
+    email VARCHAR(255) NOT NULL,
+    recovery_key_hash VARCHAR(255) NOT NULL,
+    recovery_encrypted_nsec TEXT NOT NULL,
+    auth_type VARCHAR(20) NOT NULL CHECK (auth_type IN ('email', 'oauth', 'nsec')),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(pubkey)
+);
+
+CREATE INDEX IF NOT EXISTS idx_account_recovery_email ON account_recovery(email);
+CREATE INDEX IF NOT EXISTS idx_account_recovery_pubkey ON account_recovery(pubkey);
+
+-- Recovery tokens for email-based verification
+CREATE TABLE IF NOT EXISTS account_recovery_tokens (
+    id SERIAL PRIMARY KEY,
+    email VARCHAR(255) NOT NULL,
+    token VARCHAR(255) NOT NULL UNIQUE,
+    expires_at TIMESTAMP NOT NULL,
+    used BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_recovery_tokens_token ON account_recovery_tokens(token);
+CREATE INDEX IF NOT EXISTS idx_recovery_tokens_email ON account_recovery_tokens(email);

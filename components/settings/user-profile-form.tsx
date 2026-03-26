@@ -11,7 +11,11 @@ import {
   Checkbox,
   Tooltip,
 } from "@nextui-org/react";
-import { InformationCircleIcon } from "@heroicons/react/24/outline";
+import {
+  InformationCircleIcon,
+  ShieldCheckIcon,
+} from "@heroicons/react/24/outline";
+import RecoveryKeyModal from "@/components/sign-in/RecoveryKeyModal";
 import { ProfileMapContext } from "@/utils/context/context";
 import { FiatOptionsType } from "@/utils/types/types";
 import {
@@ -42,6 +46,14 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
   const [isNcryptsecCopied, setIsNcryptsecCopied] = useState(false);
   const [isNcryptsecVisible, setIsNcryptsecVisible] = useState(false);
   const [userNcryptsec, setUserNcryptsec] = useState("");
+
+  const [showRecoverySetup, setShowRecoverySetup] = useState(false);
+  const [recoveryEmail, setRecoveryEmail] = useState("");
+  const [recoverySetupLoading, setRecoverySetupLoading] = useState(false);
+  const [recoverySetupError, setRecoverySetupError] = useState("");
+  const [showRecoveryKeyModal, setShowRecoveryKeyModal] = useState(false);
+  const [generatedRecoveryKey, setGeneratedRecoveryKey] = useState("");
+  const [hasRecoverySetup, setHasRecoverySetup] = useState(false);
 
   const {
     signer,
@@ -99,6 +111,22 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
       if (encKey && encKey.startsWith("ncryptsec")) {
         setUserNcryptsec(encKey);
       }
+    }
+
+    if (userPubkey) {
+      fetch("/api/auth/check-recovery", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pubkey: userPubkey }),
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.hasRecovery) {
+            setHasRecoverySetup(true);
+            setRecoveryEmail(data.email || "");
+          }
+        })
+        .catch(() => {});
     }
   }, [profileContext, userPubkey, signer, reset]);
 
@@ -316,6 +344,160 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
           ncryptsec instead of your nsec to sign in across devices, as it cannot
           be used without your passphrase.
         </p>
+      )}
+
+      {!isOnboarding && userNSec && (
+        <div className="mb-8 rounded-md border-3 border-black bg-white p-4">
+          <div className="mb-3 flex items-center gap-2">
+            <ShieldCheckIcon className="h-5 w-5 text-black" />
+            <h3 className="text-sm font-bold text-black">Account Recovery</h3>
+          </div>
+
+          {hasRecoverySetup ? (
+            <div className="flex flex-col gap-2">
+              <p className="text-xs text-gray-600">
+                Recovery is set up for <strong>{recoveryEmail}</strong>. If you
+                forget your passphrase, you can recover your account using your
+                recovery key and email verification.
+              </p>
+              <Button
+                size="sm"
+                variant="bordered"
+                className="self-start border-black text-black"
+                onPress={async () => {
+                  if (!userPubkey || !userNSec) return;
+                  setRecoverySetupLoading(true);
+                  setRecoverySetupError("");
+                  try {
+                    const res = await fetch("/api/auth/setup-recovery", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        pubkey: userPubkey,
+                        email: recoveryEmail,
+                        nsec: userNSec,
+                        authType:
+                          localStorage.getItem("authProvider") || "nsec",
+                      }),
+                    });
+                    const data = await res.json();
+                    if (!res.ok) {
+                      setRecoverySetupError(
+                        data.error || "Failed to regenerate recovery key."
+                      );
+                      return;
+                    }
+                    setGeneratedRecoveryKey(data.recoveryKey);
+                    setShowRecoveryKeyModal(true);
+                  } catch {
+                    setRecoverySetupError("Something went wrong.");
+                  } finally {
+                    setRecoverySetupLoading(false);
+                  }
+                }}
+                isLoading={recoverySetupLoading}
+              >
+                Generate New Recovery Key
+              </Button>
+              <p className="text-xs text-yellow-700">
+                Generating a new key will invalidate your previous recovery key.
+              </p>
+            </div>
+          ) : !showRecoverySetup ? (
+            <div className="flex flex-col gap-2">
+              <p className="text-xs text-gray-600">
+                Set up account recovery so you can reset your passphrase if you
+                ever forget it. You&apos;ll need an email address for
+                verification.
+              </p>
+              <Button
+                size="sm"
+                className="self-start bg-black text-white"
+                onPress={() => setShowRecoverySetup(true)}
+              >
+                Set Up Recovery
+              </Button>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              <p className="text-xs text-gray-600">
+                Enter the email address you&apos;d like to use for recovery. A
+                recovery key will be generated that you must save.
+              </p>
+              <Input
+                label="Recovery Email"
+                type="email"
+                size="sm"
+                value={recoveryEmail}
+                onValueChange={setRecoveryEmail}
+                variant="bordered"
+                classNames={{
+                  inputWrapper: "border-black",
+                  label: "text-black",
+                }}
+              />
+              {recoverySetupError && (
+                <p className="text-xs text-red-600">{recoverySetupError}</p>
+              )}
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  className="bg-black text-white"
+                  onPress={async () => {
+                    if (!recoveryEmail || !userPubkey || !userNSec) {
+                      setRecoverySetupError("Please enter an email address.");
+                      return;
+                    }
+                    setRecoverySetupLoading(true);
+                    setRecoverySetupError("");
+                    try {
+                      const res = await fetch("/api/auth/setup-recovery", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          pubkey: userPubkey,
+                          email: recoveryEmail,
+                          nsec: userNSec,
+                          authType:
+                            localStorage.getItem("authProvider") || "nsec",
+                        }),
+                      });
+                      const data = await res.json();
+                      if (!res.ok) {
+                        setRecoverySetupError(
+                          data.error || "Failed to set up recovery."
+                        );
+                        return;
+                      }
+                      setGeneratedRecoveryKey(data.recoveryKey);
+                      setHasRecoverySetup(true);
+                      setShowRecoveryKeyModal(true);
+                      setShowRecoverySetup(false);
+                    } catch {
+                      setRecoverySetupError("Something went wrong.");
+                    } finally {
+                      setRecoverySetupLoading(false);
+                    }
+                  }}
+                  isLoading={recoverySetupLoading}
+                >
+                  Set Up Recovery
+                </Button>
+                <Button
+                  size="sm"
+                  variant="bordered"
+                  className="border-black text-black"
+                  onPress={() => {
+                    setShowRecoverySetup(false);
+                    setRecoverySetupError("");
+                  }}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
       )}
 
       {/* Nostr Info Box */}
@@ -720,6 +902,15 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
           Save Profile
         </Button>
       </form>
+      <RecoveryKeyModal
+        isOpen={showRecoveryKeyModal}
+        onClose={() => {
+          setShowRecoveryKeyModal(false);
+          setGeneratedRecoveryKey("");
+        }}
+        recoveryKey={generatedRecoveryKey}
+        email={recoveryEmail}
+      />
     </>
   );
 };

@@ -27,6 +27,7 @@ import { SignerContext } from "@/components/utility-components/nostr-context-pro
 import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 import { NostrNSecSigner } from "@/utils/nostr/signers/nostr-nsec-signer";
 import { InformationCircleIcon } from "@heroicons/react/24/outline";
+import RecoveryKeyModal from "./RecoveryKeyModal";
 
 export default function SignInModal({
   isOpen,
@@ -53,6 +54,11 @@ export default function SignInModal({
 
   const [showFailureModal, setShowFailureModal] = useState(false);
   const [failureText, setFailureText] = useState("");
+
+  const [showRecoveryKeyModal, setShowRecoveryKeyModal] = useState(false);
+  const [recoveryKey, setRecoveryKey] = useState("");
+  const [pendingSignUpSigner, setPendingSignUpSigner] =
+    useState<NostrSigner | null>(null);
 
   const [showSignInOptions, setShowSignInOptions] = useState(false);
   const [showSignUpOptions, setShowSignUpOptions] = useState(false);
@@ -249,7 +255,6 @@ export default function SignInModal({
         return;
       }
 
-      // Use password as passphrase to encrypt the nsec
       const { encryptedPrivKey, pubkey } = NostrNSecSigner.getEncryptedNSEC(
         data.nsec,
         password
@@ -258,18 +263,22 @@ export default function SignInModal({
       const signer = newSigner!("nsec", {
         encryptedPrivKey: encryptedPrivKey,
         pubkey,
-        passphrase: password, // Store passphrase to prevent modal prompts
+        passphrase: password,
       });
       await signer.getPubKey();
-      saveSigner(signer);
 
-      // Store email provider info
       localStorage.setItem("authProvider", "email");
       localStorage.setItem("authEmail", email);
 
-      onClose();
-      // Route to onboarding for sign-up, marketplace for sign-in
-      router.push(isEmailSignUp ? "/onboarding/user-type" : "/marketplace");
+      if (isEmailSignUp && data.recoveryKey) {
+        setPendingSignUpSigner(signer);
+        setRecoveryKey(data.recoveryKey);
+        setShowRecoveryKeyModal(true);
+      } else {
+        saveSigner(signer);
+        onClose();
+        router.push(isEmailSignUp ? "/onboarding/user-type" : "/marketplace");
+      }
     } catch (error) {
       setFailureText("Email sign-in failed: " + error);
       setShowFailureModal(true);
@@ -1041,7 +1050,7 @@ export default function SignInModal({
                     {isEmailSignUp ? "Sign Up" : "Sign In"}
                   </Button>
 
-                  <div className="text-center">
+                  <div className="flex flex-col gap-1 text-center">
                     <button
                       className="text-sm font-bold text-blue-600 underline"
                       onClick={() => setIsEmailSignUp(!isEmailSignUp)}
@@ -1050,6 +1059,16 @@ export default function SignInModal({
                         ? "Already have an account? Sign in"
                         : "Don't have an account? Sign up"}
                     </button>
+                    {!isEmailSignUp && (
+                      <button
+                        className="text-xs text-gray-500 underline hover:text-gray-700"
+                        onClick={() => {
+                          window.open("/auth/recover", "_blank");
+                        }}
+                      >
+                        Forgot your password?
+                      </button>
+                    )}
                   </div>
 
                   <div className="text-center text-xs font-bold text-black">
@@ -1080,6 +1099,21 @@ export default function SignInModal({
           setShowFailureModal(false);
           setFailureText("");
         }}
+      />
+      <RecoveryKeyModal
+        isOpen={showRecoveryKeyModal}
+        onClose={() => {
+          setShowRecoveryKeyModal(false);
+          if (pendingSignUpSigner) {
+            saveSigner(pendingSignUpSigner);
+            setPendingSignUpSigner(null);
+            setRecoveryKey("");
+            onClose();
+            router.push("/onboarding/user-type");
+          }
+        }}
+        recoveryKey={recoveryKey}
+        email={email}
       />
     </>
   );

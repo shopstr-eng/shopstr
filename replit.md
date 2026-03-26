@@ -27,8 +27,9 @@ Preferred communication style: Simple, everyday language.
 ## Authentication & Signing
 
 - **Multiple Signer Support**: NIP-07, NIP-46, and direct nsec key input.
-- **Key Management**: NIP-49 encrypted private key storage.
+- **Key Management**: NIP-49 encrypted private key storage (ncryptsec). Sign-in supports both nsec and ncryptsec formats with auto-detection.
 - **Migration System**: Automatic migration to NIP-49 standard.
+- **Account Recovery**: Recovery key system for email and nsec users with email attached. Recovery keys (24-char, segmented format e.g. XXXX-XXXX-XXXX-XXXX-XXXX-XXXX) are generated at email signup and can be set up from profile settings for nsec users. Recovery flow: email verification token → recovery key + new password → re-encrypted nsec. Recovery key is downloadable as .txt file. DB tables: `account_recovery` (pubkey, email, recovery_key_hash, recovery_encrypted_nsec, auth_type), `account_recovery_tokens`. API routes: `setup-recovery`, `check-recovery`, `request-recovery`, `verify-recovery-token`, `reset-password`. UI: `RecoveryKeyModal`, `/auth/recover` page, "Forgot password?" link in SignInModal, recovery setup section in profile settings. Recovery utilities in `utils/auth/recovery.ts`.
 
 ## Nostr Protocol Implementation
 
