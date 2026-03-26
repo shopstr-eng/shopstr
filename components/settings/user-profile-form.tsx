@@ -39,6 +39,9 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
   const [isNPubCopied, setIsNPubCopied] = useState(false);
   const [isNSecCopied, setIsNSecCopied] = useState(false);
   const [isNSecVisible, setIsNSecVisible] = useState(false);
+  const [isNcryptsecCopied, setIsNcryptsecCopied] = useState(false);
+  const [isNcryptsecVisible, setIsNcryptsecVisible] = useState(false);
+  const [userNcryptsec, setUserNcryptsec] = useState("");
 
   const {
     signer,
@@ -92,6 +95,10 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
           console.error(err);
         }
       );
+      const encKey = nsecSigner.getEncryptedPrivKey();
+      if (encKey && encKey.startsWith("ncryptsec")) {
+        setUserNcryptsec(encKey);
+      }
     }
   }, [profileContext, userPubkey, signer, reset]);
 
@@ -200,7 +207,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
 
       {/* NSec Display */}
       {!isOnboarding && userNSec ? (
-        <div className="mb-12 flex items-center justify-between gap-2 overflow-hidden rounded-md border-3 border-black bg-white p-3">
+        <div className="mb-4 flex items-center justify-between gap-2 overflow-hidden rounded-md border-3 border-black bg-white p-3">
           <p className="break-all font-mono text-sm font-medium text-black">
             {isNSecVisible
               ? userNSec
@@ -246,8 +253,70 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
           </div>
         </div>
       ) : !isOnboarding ? (
+        <div className="mb-4" />
+      ) : null}
+
+      {/* NCryptsec Display */}
+      {!isOnboarding && userNcryptsec ? (
+        <div className="mb-12 flex items-center justify-between gap-2 overflow-hidden rounded-md border-3 border-black bg-white p-3">
+          <div className="min-w-0 flex-1">
+            <p className="mb-1 text-xs font-bold text-gray-500">ncryptsec</p>
+            <p className="break-all font-mono text-sm font-medium text-black">
+              {isNcryptsecVisible
+                ? userNcryptsec
+                : "•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••"}
+            </p>
+          </div>
+          <div className="flex flex-shrink-0 gap-2">
+            <Tooltip
+              content={isNcryptsecVisible ? "Hide ncryptsec" : "Show ncryptsec"}
+              classNames={{
+                content: "text-black bg-white border border-black rounded-md",
+              }}
+              closeDelay={100}
+            >
+              <Button
+                isIconOnly
+                variant="light"
+                className="h-6 w-6 min-w-0 p-0 text-black"
+                onClick={() => setIsNcryptsecVisible(!isNcryptsecVisible)}
+              >
+                {isNcryptsecVisible ? "👁️⃠" : "👁️"}
+              </Button>
+            </Tooltip>
+            <Tooltip
+              content={isNcryptsecCopied ? "Copied!" : "Copy ncryptsec"}
+              classNames={{
+                content: "text-black bg-white border border-black rounded-md",
+              }}
+              closeDelay={100}
+            >
+              <Button
+                isIconOnly
+                variant="light"
+                className="h-6 w-6 min-w-0 p-0 text-black"
+                onClick={() => {
+                  navigator.clipboard.writeText(userNcryptsec);
+                  setIsNcryptsecCopied(true);
+                  setTimeout(() => setIsNcryptsecCopied(false), 2000);
+                }}
+              >
+                {isNcryptsecCopied ? "✅" : "📋"}
+              </Button>
+            </Tooltip>
+          </div>
+        </div>
+      ) : !isOnboarding ? (
         <div className="mb-12" />
       ) : null}
+
+      {!isOnboarding && userNcryptsec && (
+        <p className="-mt-8 mb-12 text-xs text-gray-500">
+          Your ncryptsec is your nsec in encrypted form. It is safer to use your
+          ncryptsec instead of your nsec to sign in across devices, as it cannot
+          be used without your passphrase.
+        </p>
+      )}
 
       {/* Nostr Info Box */}
       {!isOnboarding && (

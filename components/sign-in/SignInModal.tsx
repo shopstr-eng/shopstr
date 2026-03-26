@@ -17,6 +17,8 @@ import {
   validateNSecKey,
   parseBunkerToken,
 } from "@/utils/nostr/nostr-helper-functions";
+import * as nip49 from "nostr-tools/nip49";
+import { getPublicKey } from "nostr-tools";
 import MilkMarketSpinner from "@/components/utility-components/mm-spinner";
 import { RelaysContext } from "../../utils/context/context";
 import { useRouter } from "next/router";
@@ -46,6 +48,8 @@ export default function SignInModal({
   const [isBunkerConnecting, setIsBunkerConnecting] = useState(false);
 
   const [showNsecSignIn, setShowNsecSignIn] = useState(false);
+  const [isNcryptsec, setIsNcryptsec] = useState(false);
+  const [ncryptsecError, setNcryptsecError] = useState("");
 
   const [showFailureModal, setShowFailureModal] = useState(false);
   const [failureText, setFailureText] = useState("");
@@ -166,15 +170,37 @@ export default function SignInModal({
   };
 
   const handleNsecSignup = async () => {
-    if (validPrivateKey) {
+    if (validPrivateKey === "success" || isNcryptsec) {
       if (passphrase === "" || passphrase === null) {
         setFailureText("No passphrase provided!");
         setShowFailureModal(true);
       } else {
-        const { encryptedPrivKey, pubkey } = NostrNSecSigner.getEncryptedNSEC(
-          privateKey,
-          passphrase
-        );
+        let encryptedPrivKey: string;
+        let pubkey: string;
+
+        if (isNcryptsec) {
+          try {
+            setNcryptsecError("");
+            const decryptedSecretKey = await nip49.decrypt(
+              privateKey,
+              passphrase
+            );
+            pubkey = getPublicKey(decryptedSecretKey);
+            encryptedPrivKey = privateKey;
+          } catch (e) {
+            setNcryptsecError("Incorrect passphrase or invalid ncryptsec.");
+            setFailureText(
+              "Could not decrypt ncryptsec. Check your passphrase and try again."
+            );
+            setShowFailureModal(true);
+            return;
+          }
+        } else {
+          ({ encryptedPrivKey, pubkey } = NostrNSecSigner.getEncryptedNSEC(
+            privateKey,
+            passphrase
+          ));
+        }
 
         setTimeout(() => {
           onClose();
@@ -260,18 +286,40 @@ export default function SignInModal({
   };
 
   const handleSignIn = async () => {
-    if (validPrivateKey) {
+    if (validPrivateKey === "success" || isNcryptsec) {
       if (passphrase === "" || passphrase === null) {
         setFailureText("No passphrase provided!");
         setShowFailureModal(true);
       } else {
-        const { encryptedPrivKey, pubkey } = NostrNSecSigner.getEncryptedNSEC(
-          privateKey,
-          passphrase
-        );
+        let encryptedPrivKey: string;
+        let pubkey: string;
+
+        if (isNcryptsec) {
+          try {
+            setNcryptsecError("");
+            const decryptedSecretKey = await nip49.decrypt(
+              privateKey,
+              passphrase
+            );
+            pubkey = getPublicKey(decryptedSecretKey);
+            encryptedPrivKey = privateKey;
+          } catch (e) {
+            setNcryptsecError("Incorrect passphrase or invalid ncryptsec.");
+            setFailureText(
+              "Could not decrypt ncryptsec. Check your passphrase and try again."
+            );
+            setShowFailureModal(true);
+            return;
+          }
+        } else {
+          ({ encryptedPrivKey, pubkey } = NostrNSecSigner.getEncryptedNSEC(
+            privateKey,
+            passphrase
+          ));
+        }
 
         setTimeout(() => {
-          onClose(); // avoids tree walker issue by closing modal
+          onClose();
         }, 500);
 
         const signer = newSigner!("nsec", {
@@ -295,7 +343,15 @@ export default function SignInModal({
   useEffect(() => {
     if (privateKey === "") {
       setValidPrivateKey("default");
+      setIsNcryptsec(false);
+      setNcryptsecError("");
+    } else if (privateKey.startsWith("ncryptsec")) {
+      setIsNcryptsec(true);
+      setValidPrivateKey("success");
+      setNcryptsecError("");
     } else {
+      setIsNcryptsec(false);
+      setNcryptsecError("");
       setValidPrivateKey(validateNSecKey(privateKey) ? "success" : "danger");
     }
   }, [privateKey]);
@@ -314,6 +370,8 @@ export default function SignInModal({
           setShowNsecSignIn(false);
           setPrivateKey("");
           setPassphrase("");
+          setIsNcryptsec(false);
+          setNcryptsecError("");
           setShowSignInOptions(false);
           setShowSignUpOptions(false);
           setShowEmailSignIn(false);
@@ -557,7 +615,7 @@ export default function SignInModal({
                     ------ or ------
                   </div>
 
-                  {/* nsec Sign-up */}
+                  {/* nsec / ncryptsec Sign-up */}
                   <div className="flex flex-col">
                     <div className="">
                       <Button
@@ -570,7 +628,7 @@ export default function SignInModal({
                           showNsecSignIn ? "hidden" : ""
                         }`}
                       >
-                        Nostr nsec Sign-up
+                        Nostr nsec / ncryptsec Sign-up
                       </Button>
                     </div>
                     <div
@@ -580,7 +638,9 @@ export default function SignInModal({
                     >
                       <div>
                         <label className="mb-2 block text-sm font-bold text-black">
-                          Private Key:
+                          {isNcryptsec
+                            ? "Encrypted Private Key (ncryptsec):"
+                            : "Private Key:"}
                         </label>
                         <Input
                           color={validPrivateKey}
@@ -588,7 +648,7 @@ export default function SignInModal({
                           width="100%"
                           size="lg"
                           value={privateKey}
-                          placeholder="Paste your Nostr private key..."
+                          placeholder="Paste your nsec or ncryptsec..."
                           onChange={(e) => setPrivateKey(e.target.value)}
                           classNames={{
                             input: "!text-black font-medium",
@@ -596,10 +656,18 @@ export default function SignInModal({
                               "!bg-white border-3 border-black rounded-md shadow-none hover:!bg-white group-data-[hover=true]:!bg-white group-data-[hover=true]:border-black group-data-[focus=true]:border-3 group-data-[focus=true]:border-black group-data-[focus=true]:!bg-white transition-none",
                           }}
                         />
+                        {isNcryptsec && (
+                          <p className="mt-1 text-xs text-green-600">
+                            ncryptsec detected — enter the passphrase used to
+                            encrypt it.
+                          </p>
+                        )}
                       </div>
                       <div>
                         <label className="mb-2 block text-sm font-bold text-black">
-                          Encryption Passphrase:
+                          {isNcryptsec
+                            ? "Decryption Passphrase:"
+                            : "Encryption Passphrase:"}
                           <span className="text-red-500">*</span>
                         </label>
                         <Input
@@ -607,10 +675,17 @@ export default function SignInModal({
                           width="100%"
                           size="lg"
                           value={passphrase}
-                          placeholder="Enter a passphrase of your choice..."
+                          placeholder={
+                            isNcryptsec
+                              ? "Enter the passphrase used to encrypt..."
+                              : "Enter a passphrase of your choice..."
+                          }
                           onChange={(e) => setPassphrase(e.target.value)}
                           onKeyDown={(e) => {
-                            if (e.key === "Enter" && validPrivateKey)
+                            if (
+                              e.key === "Enter" &&
+                              (validPrivateKey === "success" || isNcryptsec)
+                            )
                               handleNsecSignup();
                           }}
                           classNames={{
@@ -625,9 +700,11 @@ export default function SignInModal({
                           data-testid="nsec-signup-submit-btn"
                           className={`${BLUEBUTTONCLASSNAMES} w-full`}
                           onClick={handleNsecSignup}
-                          isDisabled={validPrivateKey != "success"}
+                          isDisabled={
+                            validPrivateKey !== "success" && !isNcryptsec
+                          }
                         >
-                          nsec Sign-up
+                          {isNcryptsec ? "ncryptsec Sign-up" : "nsec Sign-up"}
                         </Button>
                       </div>
                     </div>
@@ -790,7 +867,7 @@ export default function SignInModal({
                   </div>
                 </div>
 
-                {/* nsec Sign-in */}
+                {/* nsec / ncryptsec Sign-in */}
                 <div className="flex flex-col">
                   <div className="">
                     <Button
@@ -803,7 +880,7 @@ export default function SignInModal({
                         showNsecSignIn ? "hidden" : ""
                       }`}
                     >
-                      Nostr nsec Sign-in
+                      Nostr nsec / ncryptsec Sign-in
                     </Button>
                   </div>
                   <div
@@ -813,7 +890,9 @@ export default function SignInModal({
                   >
                     <div>
                       <label className="mb-2 block text-sm font-bold text-black">
-                        Private Key:
+                        {isNcryptsec
+                          ? "Encrypted Private Key (ncryptsec):"
+                          : "Private Key:"}
                       </label>
                       <Input
                         color={validPrivateKey}
@@ -821,7 +900,7 @@ export default function SignInModal({
                         width="100%"
                         size="lg"
                         value={privateKey}
-                        placeholder="Paste your Nostr private key..."
+                        placeholder="Paste your nsec or ncryptsec..."
                         onChange={(e) => setPrivateKey(e.target.value)}
                         classNames={{
                           input: "!text-black font-medium",
@@ -829,10 +908,18 @@ export default function SignInModal({
                             "!bg-white border-3 border-black rounded-md shadow-none hover:!bg-white group-data-[hover=true]:!bg-white group-data-[hover=true]:border-black group-data-[focus=true]:border-3 group-data-[focus=true]:border-black group-data-[focus=true]:!bg-white transition-none",
                         }}
                       />
+                      {isNcryptsec && (
+                        <p className="mt-1 text-xs text-green-600">
+                          ncryptsec detected — enter the passphrase used to
+                          encrypt it.
+                        </p>
+                      )}
                     </div>
                     <div>
                       <label className="mb-2 block text-sm font-bold text-black">
-                        Encryption Passphrase:
+                        {isNcryptsec
+                          ? "Decryption Passphrase:"
+                          : "Encryption Passphrase:"}
                         <span className="text-red-500">*</span>
                       </label>
                       <Input
@@ -840,10 +927,17 @@ export default function SignInModal({
                         width="100%"
                         size="lg"
                         value={passphrase}
-                        placeholder="Enter a passphrase of your choice..."
+                        placeholder={
+                          isNcryptsec
+                            ? "Enter the passphrase used to encrypt..."
+                            : "Enter a passphrase of your choice..."
+                        }
                         onChange={(e) => setPassphrase(e.target.value)}
                         onKeyDown={(e) => {
-                          if (e.key === "Enter" && validPrivateKey)
+                          if (
+                            e.key === "Enter" &&
+                            (validPrivateKey === "success" || isNcryptsec)
+                          )
                             handleSignIn();
                         }}
                         classNames={{
@@ -852,15 +946,22 @@ export default function SignInModal({
                             "!bg-white border-3 border-black rounded-md shadow-none hover:!bg-white group-data-[hover=true]:!bg-white group-data-[hover=true]:border-black group-data-[focus=true]:border-3 group-data-[focus=true]:border-black group-data-[focus=true]:!bg-white transition-none",
                         }}
                       />
+                      {ncryptsecError && (
+                        <p className="mt-1 text-xs text-red-500">
+                          {ncryptsecError}
+                        </p>
+                      )}
                     </div>
                     <div>
                       <Button
                         data-testid="nsec-submit-btn"
                         className={`${BLUEBUTTONCLASSNAMES} w-full`}
                         onClick={handleSignIn}
-                        isDisabled={validPrivateKey != "success"}
+                        isDisabled={
+                          validPrivateKey !== "success" && !isNcryptsec
+                        }
                       >
-                        nsec Sign-in
+                        {isNcryptsec ? "ncryptsec Sign-in" : "nsec Sign-in"}
                       </Button>
                     </div>
                   </div>
