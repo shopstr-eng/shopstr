@@ -8,6 +8,7 @@ import {
   getDbPool,
 } from "@/utils/db/db-service";
 import { NostrEvent } from "@/utils/types/types";
+import { registerTool } from "./register-tool";
 
 function getTagValue(tags: string[][], key: string): string | undefined {
   const tag = tags.find((t) => t[0] === key);
@@ -21,8 +22,15 @@ function getAllTagValues(tags: string[][], key: string): string[] {
     .filter(Boolean);
 }
 
-function determinePaymentMethods(): string[] {
-  return ["lightning", "cashu"];
+function determinePaymentMethods(
+  _sellerPubkey?: string,
+  hasStripeConnect?: boolean
+): string[] {
+  const methods = ["lightning", "cashu"];
+  if (hasStripeConnect) {
+    methods.push("stripe");
+  }
+  return methods;
 }
 
 function buildPricingBlock(
@@ -184,7 +192,8 @@ function parseReviewEvent(event: NostrEvent) {
 }
 
 export function registerReadTools(server: McpServer) {
-  server.tool(
+  registerTool(
+    server,
     "search_products",
     "Search and filter products by category, location, price range, or keyword",
     {
@@ -293,7 +302,8 @@ export function registerReadTools(server: McpServer) {
     }
   );
 
-  server.tool(
+  registerTool(
+    server,
     "get_product_details",
     "Get full details for a specific product by its event ID",
     {
@@ -349,7 +359,8 @@ export function registerReadTools(server: McpServer) {
     }
   );
 
-  server.tool(
+  registerTool(
+    server,
     "list_companies",
     "List all seller/shop profiles",
     {
@@ -399,7 +410,8 @@ export function registerReadTools(server: McpServer) {
     }
   );
 
-  server.tool(
+  registerTool(
+    server,
     "get_company_details",
     "Get a specific company's shop profile, their products, and reviews",
     {
@@ -450,7 +462,7 @@ export function registerReadTools(server: McpServer) {
         };
       }
 
-      const acceptedPaymentMethods = determinePaymentMethods();
+      const acceptedPaymentMethods = determinePaymentMethods(pubkey, false);
 
       const productsWithPricing = products.map((p) => ({
         ...p,
@@ -490,6 +502,7 @@ export function registerReadTools(server: McpServer) {
                 reviews: { count: reviews.length, items: reviews },
                 paymentInfo: {
                   acceptedPaymentMethods,
+                  hasStripeConnect: false,
                   freeShippingAvailable: freeShippingProducts.length > 0,
                   freeShippingProductCount: freeShippingProducts.length,
                   priceRange:
@@ -519,7 +532,8 @@ export function registerReadTools(server: McpServer) {
     }
   );
 
-  server.tool(
+  registerTool(
+    server,
     "get_reviews",
     "Get reviews for a product or seller",
     {
@@ -595,7 +609,8 @@ export function registerReadTools(server: McpServer) {
     }
   );
 
-  server.tool(
+  registerTool(
+    server,
     "check_discount_code",
     "Validate a discount code for a specific seller",
     {
@@ -628,7 +643,8 @@ export function registerReadTools(server: McpServer) {
     }
   );
 
-  server.tool(
+  registerTool(
+    server,
     "get_storefront",
     "Look up a seller's storefront by shop slug or pubkey. Returns storefront configuration, products, and shop profile for rendering a seller's standalone shop page.",
     {
@@ -636,7 +652,7 @@ export function registerReadTools(server: McpServer) {
         .string()
         .optional()
         .describe(
-          "Shop URL slug (e.g. 'fresh-farm' for shopstr.market/shop/fresh-farm)"
+          "Shop URL slug (e.g. 'fresh-farm' for milk.market/shop/fresh-farm)"
         ),
       pubkey: z
         .string()
@@ -778,7 +794,11 @@ export function registerReadTools(server: McpServer) {
                     items: productsWithPricing,
                   },
                   paymentInfo: {
-                    acceptedPaymentMethods: ["lightning", "cashu"],
+                    acceptedPaymentMethods: determinePaymentMethods(
+                      resolvedPubkey || "",
+                      false
+                    ),
+                    hasStripeConnect: false,
                   },
                   _meta: {
                     responseTimeMs: Date.now() - startTime,

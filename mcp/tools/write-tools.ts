@@ -9,6 +9,12 @@ import { ApiKeyRecord, getAgentSigner } from "@/utils/mcp/auth";
 import { EventTemplate } from "nostr-tools";
 import { cacheEvent, getDbPool } from "@/utils/db/db-service";
 import { v4 as uuidv4 } from "uuid";
+import dns from "dns";
+import { promisify } from "util";
+import { registerTool } from "./register-tool";
+
+const resolveCname = promisify(dns.resolveCname);
+const resolve4 = promisify(dns.resolve4);
 
 function noSignerError() {
   return {
@@ -90,7 +96,8 @@ async function getSigner(apiKey: ApiKeyRecord): Promise<McpNostrSigner | null> {
 export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
   const baseUrl = `http://localhost:${process.env.PORT || 5000}`;
 
-  server.tool(
+  registerTool(
+    server,
     "set_user_profile",
     "Create or update your Nostr user profile (kind 0). Sets metadata like name, about, picture, lightning address, etc.",
     {
@@ -165,7 +172,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  server.tool(
+  registerTool(
+    server,
     "set_shop_profile",
     "Create or update your shop profile (kind 30019). Sets shop metadata like name, about, picture, banner, settings, and storefront configuration.",
     {
@@ -191,7 +199,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         .record(z.string(), z.number())
         .optional()
         .describe(
-          "Per-method discount percentages — object mapping method keys (bitcoin, venmo, cash, etc.) to discount percentages"
+          "Per-method discount percentages — object mapping method keys (bitcoin, stripe, venmo, cash, etc.) to discount percentages"
         ),
       storefrontColorScheme: z
         .object({
@@ -219,7 +227,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         .string()
         .optional()
         .describe(
-          "URL slug for the storefront (e.g. 'fresh-farm' for shopstr.market/shop/fresh-farm). Must be lowercase alphanumeric with hyphens."
+          "URL slug for the storefront (e.g. 'fresh-farm' for milk.market/shop/fresh-farm). Must be lowercase alphanumeric with hyphens."
         ),
       storefrontFontHeading: z
         .string()
@@ -261,7 +269,10 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
               .enum(["left", "right"])
               .optional()
               .describe("Image position for about sections"),
-            fullWidth: z.boolean().optional().describe("Full-width toggle"),
+            fullWidth: z
+              .boolean()
+              .optional()
+              .describe("Full-width toggle for image sections"),
             ctaText: z
               .string()
               .optional()
@@ -289,6 +300,26 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
               )
               .optional()
               .describe("Testimonial items"),
+            ingredientItems: z
+              .array(
+                z.object({
+                  name: z.string(),
+                  description: z.string().optional(),
+                  image: z.string().optional(),
+                })
+              )
+              .optional()
+              .describe("Ingredient items"),
+            comparisonFeatures: z
+              .array(z.string())
+              .optional()
+              .describe("Comparison row labels"),
+            comparisonColumns: z
+              .array(
+                z.object({ heading: z.string(), values: z.array(z.string()) })
+              )
+              .optional()
+              .describe("Comparison columns"),
             timelineItems: z
               .array(
                 z.object({
@@ -472,15 +503,16 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  server.tool(
+  registerTool(
+    server,
     "register_shop_slug",
-    "Register, update, or delete your shop's URL slug for the storefront. The slug becomes part of your shop URL (e.g. shopstr.market/shop/your-slug). Slug must be lowercase alphanumeric with hyphens, 3-50 characters. Reserved words are not allowed. Set action to 'delete' to remove the slug.",
+    "Register, update, or delete your shop's URL slug for the storefront. The slug becomes part of your shop URL (e.g. milk.market/shop/your-slug). Slug must be lowercase alphanumeric with hyphens, 3-50 characters. Reserved words (shop, admin, api, etc.) are not allowed. To delete, set action to 'delete'.",
     {
       slug: z
         .string()
         .optional()
         .describe(
-          "URL slug for the storefront (e.g. 'fresh-farm'). Must be lowercase alphanumeric with hyphens, 3-50 characters. Required for register, not needed for delete."
+          "URL slug for the storefront (e.g. 'fresh-farm'). Must be lowercase, alphanumeric with hyphens, 3-50 characters. Required for register/update, not needed for delete."
         ),
       action: z
         .enum(["register", "delete"])
@@ -596,7 +628,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  server.tool(
+  registerTool(
+    server,
     "create_product_listing",
     "Publish a new product listing (kind 30402) to the marketplace. Creates a classified listing with title, description, price, images, categories, shipping options, and more.",
     {
@@ -658,6 +691,34 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         .describe(
           "Custom d-tag identifier. If omitted, one is generated from the title."
         ),
+      weights: z
+        .array(z.object({ weight: z.string(), price: z.string() }))
+        .optional()
+        .describe("Weight/portion options with prices (e.g. '1 lb' for '$12')"),
+      herdshareAgreement: z
+        .string()
+        .optional()
+        .describe("URL or text of the herdshare agreement document"),
+      requiredCustomerInfo: z
+        .array(z.string())
+        .optional()
+        .describe(
+          "Fields the customer must provide at checkout (e.g. ['name', 'address', 'phone'])"
+        ),
+      subscriptionEnabled: z
+        .boolean()
+        .optional()
+        .describe("Whether this product supports subscriptions"),
+      subscriptionDiscount: z
+        .number()
+        .optional()
+        .describe("Percentage discount applied to subscribers (0-100)"),
+      subscriptionFrequencies: z
+        .array(z.string())
+        .optional()
+        .describe(
+          "Available subscription intervals (e.g. ['weekly', 'biweekly', 'monthly'])"
+        ),
     },
     async (params) => {
       const startTime = Date.now();
@@ -701,7 +762,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
             tags.push(["t", cat]);
           }
         }
-        tags.push(["t", "shopstr"]);
+        tags.push(["t", "MilkMarket"]);
 
         if (params.quantity) {
           tags.push(["quantity", params.quantity]);
@@ -746,6 +807,42 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           }
         }
 
+        if (params.weights) {
+          for (const w of params.weights) {
+            tags.push(["weight", w.weight, w.price]);
+          }
+        }
+
+        if (params.herdshareAgreement) {
+          tags.push(["herdshare_agreement", params.herdshareAgreement]);
+        }
+
+        if (params.requiredCustomerInfo) {
+          for (const field of params.requiredCustomerInfo) {
+            tags.push(["required_customer_info", field]);
+          }
+        }
+
+        if (params.subscriptionEnabled !== undefined) {
+          tags.push([
+            "subscription_enabled",
+            String(params.subscriptionEnabled),
+          ]);
+        }
+
+        if (params.subscriptionDiscount !== undefined) {
+          tags.push([
+            "subscription_discount",
+            String(params.subscriptionDiscount),
+          ]);
+        }
+
+        if (params.subscriptionFrequencies) {
+          for (const freq of params.subscriptionFrequencies) {
+            tags.push(["subscription_frequency", freq]);
+          }
+        }
+
         const created_at = Math.floor(Date.now() / 1000);
         tags.push(["published_at", String(created_at)]);
 
@@ -760,7 +857,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
         const handlerDTag = uuidv4();
         const origin =
-          process.env.NEXT_PUBLIC_BASE_URL || "https://shopstr.market";
+          process.env.NEXT_PUBLIC_BASE_URL || "https://milk.market";
 
         const handlerEvent: EventTemplate = {
           kind: 31990,
@@ -811,7 +908,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  server.tool(
+  registerTool(
+    server,
     "update_product_listing",
     "Update an existing product listing by publishing a new event with the same d-tag. All fields are optional — only provided fields will be included.",
     {
@@ -851,6 +949,30 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         .string()
         .optional()
         .describe("Updated expiration date (ISO 8601 format)"),
+      weights: z
+        .array(z.object({ weight: z.string(), price: z.string() }))
+        .optional()
+        .describe("Updated weight/portion options with prices"),
+      herdshareAgreement: z
+        .string()
+        .optional()
+        .describe("Updated herdshare agreement URL or text"),
+      requiredCustomerInfo: z
+        .array(z.string())
+        .optional()
+        .describe("Updated required customer info fields"),
+      subscriptionEnabled: z
+        .boolean()
+        .optional()
+        .describe("Whether this product supports subscriptions"),
+      subscriptionDiscount: z
+        .number()
+        .optional()
+        .describe("Updated subscriber discount percentage (0-100)"),
+      subscriptionFrequencies: z
+        .array(z.string())
+        .optional()
+        .describe("Updated subscription interval options"),
     },
     async (params) => {
       const startTime = Date.now();
@@ -891,7 +1013,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           for (const cat of params.categories) {
             tags.push(["t", cat]);
           }
-          tags.push(["t", "shopstr"]);
+          tags.push(["t", "MilkMarket"]);
         }
         if (params.quantity) {
           tags.push(["quantity", params.quantity]);
@@ -929,6 +1051,42 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           tags.push(["valid_until", unixTime.toString()]);
         }
 
+        if (params.weights) {
+          for (const w of params.weights) {
+            tags.push(["weight", w.weight, w.price]);
+          }
+        }
+
+        if (params.herdshareAgreement) {
+          tags.push(["herdshare_agreement", params.herdshareAgreement]);
+        }
+
+        if (params.requiredCustomerInfo) {
+          for (const field of params.requiredCustomerInfo) {
+            tags.push(["required_customer_info", field]);
+          }
+        }
+
+        if (params.subscriptionEnabled !== undefined) {
+          tags.push([
+            "subscription_enabled",
+            String(params.subscriptionEnabled),
+          ]);
+        }
+
+        if (params.subscriptionDiscount !== undefined) {
+          tags.push([
+            "subscription_discount",
+            String(params.subscriptionDiscount),
+          ]);
+        }
+
+        if (params.subscriptionFrequencies) {
+          for (const freq of params.subscriptionFrequencies) {
+            tags.push(["subscription_frequency", freq]);
+          }
+        }
+
         const created_at = Math.floor(Date.now() / 1000);
         tags.push(["published_at", String(created_at)]);
 
@@ -960,7 +1118,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  server.tool(
+  registerTool(
+    server,
     "delete_listing",
     "Delete a product listing or any Nostr event by publishing a deletion event (kind 5).",
     {
@@ -1000,7 +1159,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  server.tool(
+  registerTool(
+    server,
     "publish_review",
     "Publish a review (kind 31555) for a product or seller. Includes content text and ratings.",
     {
@@ -1094,7 +1254,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  server.tool(
+  registerTool(
+    server,
     "create_community_post",
     "Create a post in a Nostr community (kind 1111). Supports top-level posts and replies.",
     {
@@ -1171,7 +1332,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  server.tool(
+  registerTool(
+    server,
     "send_direct_message",
     "Send an encrypted direct message using NIP-17 gift wrap (kind 1059/13/14). Supports plain messages, listing inquiries, and order-related messages.",
     {
@@ -1386,7 +1548,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  server.tool(
+  registerTool(
+    server,
     "update_order_address",
     "Update the shipping address for an existing order. Sends an encrypted address change request to the seller via NIP-17 gift-wrapped DM and updates the order record.",
     {
@@ -1538,7 +1701,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  server.tool(
+  registerTool(
+    server,
     "send_shipping_update",
     "Send a shipping update to a buyer via encrypted NIP-17 gift-wrapped DM. Includes tracking number, carrier, and estimated delivery time. Also updates the order status to 'shipped' in the database.",
     {
@@ -1710,7 +1874,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  server.tool(
+  registerTool(
+    server,
     "update_order_status",
     "Update the status of an order and optionally notify the buyer via encrypted DM. Sellers can confirm, ship, or complete orders. Buyers can cancel orders.",
     {
@@ -1879,7 +2044,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  server.tool(
+  registerTool(
+    server,
     "list_messages",
     "Fetch and decrypt your incoming messages (NIP-17 gift-wrapped DMs). Returns decrypted message content, sender, subject, and read status. Use to check inquiries, order messages, address changes, and other DMs.",
     {
@@ -2003,7 +2169,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  server.tool(
+  registerTool(
+    server,
     "mark_messages_read",
     "Mark specific messages as read by their event IDs.",
     {
@@ -2046,7 +2213,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  server.tool(
+  registerTool(
+    server,
     "set_relay_list",
     "Publish your relay list (kind 10002, NIP-65). Configures which relays you read from and write to.",
     {
@@ -2108,7 +2276,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  server.tool(
+  registerTool(
+    server,
     "set_blossom_servers",
     "Publish your Blossom media server list (kind 10063). Configures which servers to use for media uploads.",
     {
@@ -2151,7 +2320,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  server.tool(
+  registerTool(
+    server,
     "upload_media",
     "Upload media to a Blossom server. Creates a signed authorization event (kind 24242) and uploads the file. Returns the URL of the uploaded media.",
     {
@@ -2206,7 +2376,9 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
         const response = await fetch(uploadUrl.toString(), {
           method: "PUT",
-          body: fileBuffer,
+          body: new Blob([Uint8Array.from(fileBuffer)], {
+            type: params.mimeType,
+          }),
           headers: {
             authorization,
             "content-type": params.mimeType,
@@ -2243,7 +2415,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  server.tool(
+  registerTool(
+    server,
     "create_discount_code",
     "Create a discount code for your shop. Codes are percentage-based and can have optional expiration dates.",
     {
@@ -2298,7 +2471,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  server.tool(
+  registerTool(
+    server,
     "delete_discount_code",
     "Delete one of your discount codes.",
     {
@@ -2336,7 +2510,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  server.tool(
+  registerTool(
+    server,
     "list_discount_codes",
     "List your shop's discount codes.",
     {},
@@ -2369,7 +2544,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  server.tool(
+  registerTool(
+    server,
     "get_cashu_balance",
     "Check your Cashu wallet balance by querying stored proof events.",
     {
@@ -2431,7 +2607,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  server.tool(
+  registerTool(
+    server,
     "receive_cashu_tokens",
     "Receive Cashu tokens and store them as a proof event (kind 7375). Publishes the encrypted proof event to your Nostr relays.",
     {
@@ -2499,7 +2676,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  server.tool(
+  registerTool(
+    server,
     "set_cashu_mints",
     "Configure your Cashu wallet mints by publishing a wallet configuration event (kind 17375).",
     {
@@ -2560,7 +2738,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  server.tool(
+  registerTool(
+    server,
     "send_cashu_payment",
     "Send a Cashu payment by melting tokens to pay a Lightning invoice. Uses proofs from your stored Cashu wallet.",
     {
@@ -2648,6 +2827,141 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
       } catch (error) {
         return errorResponse(
           "Failed to send Cashu payment",
+          error instanceof Error ? error.message : "Unknown error",
+          startTime
+        );
+      }
+    }
+  );
+
+  registerTool(
+    server,
+    "manage_custom_domain",
+    "Verify and register a custom domain for your Milk Market storefront. Checks that the domain's CNAME or A record points to milk.market, then records the mapping in the database.",
+    {
+      domain: z
+        .string()
+        .describe(
+          "Custom domain to verify and register (e.g. 'shop.myfarm.com')"
+        ),
+      action: z
+        .enum(["verify", "register", "remove"])
+        .describe(
+          "'verify' checks DNS records, 'register' verifies and saves the mapping, 'remove' deletes the mapping"
+        ),
+      shopSlug: z
+        .string()
+        .optional()
+        .describe("Your shop slug (required for register action)"),
+    },
+    async (params) => {
+      const startTime = Date.now();
+      if (apiKey.permissions !== "full_access") return permissionError();
+      const signer = await getSigner(apiKey);
+      if (!signer) return noSignerError();
+
+      const TARGET_CNAME = "milk.market";
+      const TARGET_IPS = ["75.2.60.5"];
+
+      try {
+        const pubkey = signer.getPubKey();
+
+        if (params.action === "remove") {
+          const pool = await getDbPool();
+          await pool.query(
+            `DELETE FROM custom_domains WHERE pubkey = $1 AND domain = $2`,
+            [pubkey, params.domain]
+          );
+          return successResponse(
+            { domain: params.domain, removed: true },
+            startTime
+          );
+        }
+
+        let cnameOk = false;
+        let aOk = false;
+        let resolvedCname: string | null = null;
+        let resolvedIps: string[] = [];
+
+        try {
+          const cnames = await resolveCname(params.domain);
+          resolvedCname = cnames[0] || null;
+          cnameOk =
+            !!resolvedCname &&
+            (resolvedCname === TARGET_CNAME ||
+              resolvedCname.endsWith("." + TARGET_CNAME));
+        } catch {}
+
+        if (!cnameOk) {
+          try {
+            resolvedIps = await resolve4(params.domain);
+            aOk = resolvedIps.some((ip) => TARGET_IPS.includes(ip));
+          } catch {}
+        }
+
+        const dnsOk = cnameOk || aOk;
+
+        if (params.action === "verify") {
+          return successResponse(
+            {
+              domain: params.domain,
+              dnsOk,
+              cnameOk,
+              aOk,
+              resolvedCname,
+              resolvedIps,
+              instructions: dnsOk
+                ? "DNS is correctly configured."
+                : `Please add a CNAME record pointing ${params.domain} to ${TARGET_CNAME}, or an A record pointing to ${TARGET_IPS[0]}.`,
+            },
+            startTime
+          );
+        }
+
+        if (params.action === "register") {
+          if (!dnsOk) {
+            return errorResponse(
+              "DNS verification failed",
+              `Domain ${params.domain} does not point to ${TARGET_CNAME}. Please configure your DNS first.`,
+              startTime
+            );
+          }
+          if (!params.shopSlug) {
+            return errorResponse(
+              "Missing shopSlug",
+              "shopSlug is required for the register action",
+              startTime
+            );
+          }
+          const pool = await getDbPool();
+          await pool.query(
+            `INSERT INTO custom_domains (pubkey, domain, shop_slug, verified_at)
+             VALUES ($1, $2, $3, NOW())
+             ON CONFLICT (domain) DO UPDATE
+               SET pubkey = EXCLUDED.pubkey,
+                   shop_slug = EXCLUDED.shop_slug,
+                   verified_at = NOW()`,
+            [pubkey, params.domain, params.shopSlug]
+          );
+          return successResponse(
+            {
+              domain: params.domain,
+              shopSlug: params.shopSlug,
+              registered: true,
+              dnsOk,
+            },
+            startTime
+          );
+        }
+
+        return errorResponse(
+          "Invalid action",
+          `Unknown action: ${params.action}`,
+          startTime
+        );
+      } catch (error) {
+        return errorResponse(
+          "Failed to manage custom domain",
           error instanceof Error ? error.message : "Unknown error",
           startTime
         );
