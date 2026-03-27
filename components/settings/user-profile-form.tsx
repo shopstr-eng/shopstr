@@ -1121,7 +1121,6 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
           }}
           isDisabled={isUploadingProfile}
           isLoading={isUploadingProfile}
-          className={`w-full ${BLUEBUTTONCLASSNAMES}`}
         >
           {isSaved ? "✅ Saved!" : "Save Profile"}
         </Button>

@@ -1718,7 +1718,6 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
           }}
           isDisabled={isUploadingShopProfile}
           isLoading={isUploadingShopProfile}
-          className={`w-full text-lg ${BLUEBUTTONCLASSNAMES}`}
         >
           {isSaved ? "✅ Saved!" : "Save Shop"}
         </Button>

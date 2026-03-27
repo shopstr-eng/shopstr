@@ -268,7 +268,6 @@ const BuyerProfileForm = ({ isOnboarding }: BuyerProfileFormProps) => {
           }}
           isDisabled={isUploadingProfile}
           isLoading={isUploadingProfile}
-          className={`mb-10 w-full ${BLUEBUTTONCLASSNAMES}`}
         >
           {isSaved ? "✅ Saved!" : "Save Profile"}
         </Button>
