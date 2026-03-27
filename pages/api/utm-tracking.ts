@@ -26,22 +26,6 @@ export default async function handler(
   try {
     await client.connect();
 
-    // Create table if it doesn't exist
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS utm_tracking (
-        id SERIAL PRIMARY KEY,
-        utm_source VARCHAR(255),
-        utm_medium VARCHAR(255),
-        utm_campaign VARCHAR(255),
-        utm_term VARCHAR(255),
-        utm_content VARCHAR(255),
-        referrer TEXT,
-        user_agent TEXT,
-        ip_address VARCHAR(45),
-        visited_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
     // Get IP address from request
     const ip_address =
       req.headers["x-forwarded-for"] || req.socket.remoteAddress || null;

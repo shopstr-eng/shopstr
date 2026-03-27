@@ -9,6 +9,7 @@ import {
   getDbPool,
 } from "@/utils/db/db-service";
 import { NostrEvent } from "@/utils/types/types";
+import { registerTool } from "./register-tool";
 
 function getTagValue(tags: string[][], key: string): string | undefined {
   const tag = tags.find((t) => t[0] === key);
@@ -194,7 +195,8 @@ function parseReviewEvent(event: NostrEvent) {
 }
 
 export function registerReadTools(server: McpServer) {
-  server.tool(
+  registerTool(
+    server,
     "search_products",
     "Search and filter products by category, location, price range, or keyword",
     {
@@ -303,7 +305,8 @@ export function registerReadTools(server: McpServer) {
     }
   );
 
-  server.tool(
+  registerTool(
+    server,
     "get_product_details",
     "Get full details for a specific product by its event ID",
     {
@@ -359,7 +362,8 @@ export function registerReadTools(server: McpServer) {
     }
   );
 
-  server.tool(
+  registerTool(
+    server,
     "list_companies",
     "List all seller/shop profiles",
     {
@@ -409,7 +413,8 @@ export function registerReadTools(server: McpServer) {
     }
   );
 
-  server.tool(
+  registerTool(
+    server,
     "get_company_details",
     "Get a specific company's shop profile, their products, and reviews",
     {
@@ -538,7 +543,8 @@ export function registerReadTools(server: McpServer) {
     }
   );
 
-  server.tool(
+  registerTool(
+    server,
     "get_storefront",
     "Look up a seller's storefront by shop slug or pubkey. Returns storefront configuration, products, and shop profile for rendering a seller's standalone shop page.",
     {
@@ -737,7 +743,8 @@ export function registerReadTools(server: McpServer) {
     }
   );
 
-  server.tool(
+  registerTool(
+    server,
     "get_reviews",
     "Get reviews for a product or seller",
     {
@@ -813,7 +820,8 @@ export function registerReadTools(server: McpServer) {
     }
   );
 
-  server.tool(
+  registerTool(
+    server,
     "check_discount_code",
     "Validate a discount code for a specific seller",
     {
