@@ -23,6 +23,7 @@ const BuyerProfileForm = ({ isOnboarding }: BuyerProfileFormProps) => {
   const router = useRouter();
   const { nostr } = useContext(NostrContext);
   const [isUploadingProfile, setIsUploadingProfile] = useState(false);
+  const [isSaved, setIsSaved] = useState(false);
   const [isFetchingProfile, setIsFetchingProfile] = useState(false);
 
   const { signer, pubkey: userPubkey } = useContext(SignerContext);
@@ -89,6 +90,8 @@ const BuyerProfileForm = ({ isOnboarding }: BuyerProfileFormProps) => {
       created_at: 0,
     });
     setIsUploadingProfile(false);
+    setIsSaved(true);
+    setTimeout(() => setIsSaved(false), 3000);
 
     if (isOnboarding) {
       router.push("/marketplace");
@@ -265,8 +268,9 @@ const BuyerProfileForm = ({ isOnboarding }: BuyerProfileFormProps) => {
           }}
           isDisabled={isUploadingProfile}
           isLoading={isUploadingProfile}
+          className={`mb-10 w-full ${BLUEBUTTONCLASSNAMES}`}
         >
-          Save Profile
+          {isSaved ? "✅ Saved!" : "Save Profile"}
         </Button>
       </form>
     </>

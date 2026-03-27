@@ -91,6 +91,7 @@ export default function StorefrontLayout({
   const [colors, setColors] = useState<StorefrontColorScheme>(DEFAULT_COLORS);
   const [cartQuantity, setCartQuantity] = useState(0);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [shopDataReady, setShopDataReady] = useState(false);
 
   useEffect(() => {
     if (shopPubkey && shopMapContext.shopData.has(shopPubkey)) {
@@ -106,11 +107,13 @@ export default function StorefrontLayout({
             });
           }
         }
+        setShopDataReady(true);
       }
     }
   }, [shopPubkey, shopMapContext.shopData]);
 
   useEffect(() => {
+    if (!shopDataReady) return;
     document.body.classList.add("sf-active");
     const vars: Record<string, string> = {
       "--sf-primary": colors.primary,
@@ -128,7 +131,7 @@ export default function StorefrontLayout({
         document.body.style.removeProperty(k);
       }
     };
-  }, [colors]);
+  }, [colors, shopDataReady]);
 
   const shopSlug = storefront.shopSlug || "";
 
@@ -311,6 +314,10 @@ export default function StorefrontLayout({
     body.sf-active [data-overlay-container] .font-heading { font-family: var(--font-heading, inherit); }
     body.sf-active [data-overlay-container] .font-body { font-family: var(--font-body, inherit); }
   `;
+
+  if (!shopDataReady) {
+    return null;
+  }
 
   return (
     <>

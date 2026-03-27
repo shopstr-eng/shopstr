@@ -14,6 +14,7 @@ import {
   WHITEBUTTONCLASSNAMES,
 } from "@/utils/STATIC-VARIABLES";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
+import SignInModal from "@/components/sign-in/SignInModal";
 
 function FAQItem({ question, answer }: { question: string; answer: string }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -130,6 +131,7 @@ export default function StandaloneLanding() {
   const [contactType, setContactType] = useState<"email" | "nostr">("email");
   const [contact, setContact] = useState("");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isSignInOpen, setIsSignInOpen] = useState(false);
 
   const signerContext = useContext(SignerContext);
   useEffect(() => {
@@ -239,9 +241,12 @@ export default function StandaloneLanding() {
         </div>
 
         <div className="hidden md:flex md:items-center md:space-x-4">
-          <Link href="/producers" className="w-auto">
-            <button className={WHITEBUTTONCLASSNAMES}>Sell Your Dairy</button>
-          </Link>
+          <button
+            className={WHITEBUTTONCLASSNAMES}
+            onClick={() => setIsSignInOpen(true)}
+          >
+            Sell Your Dairy
+          </button>
           <Link href="/marketplace" className="w-auto">
             <button className={PRIMARYBUTTONCLASSNAMES}>
               Browse Marketplace
@@ -262,14 +267,15 @@ export default function StandaloneLanding() {
           </button>
           {isMobileMenuOpen && (
             <div className="fixed inset-0 top-20 z-40 flex flex-col items-center space-y-6 bg-white pt-10">
-              <Link href="/producers" className="w-auto">
-                <button
-                  className={WHITEBUTTONCLASSNAMES}
-                  onClick={() => setIsMobileMenuOpen(false)}
-                >
-                  Sell Your Dairy
-                </button>
-              </Link>
+              <button
+                className={WHITEBUTTONCLASSNAMES}
+                onClick={() => {
+                  setIsMobileMenuOpen(false);
+                  setIsSignInOpen(true);
+                }}
+              >
+                Sell Your Dairy
+              </button>
               <Link href="/marketplace" className="block">
                 <button
                   className={PRIMARYBUTTONCLASSNAMES}
@@ -366,12 +372,12 @@ export default function StandaloneLanding() {
 
           <p className="mt-4 text-sm text-zinc-500">
             Are you a farmer?{" "}
-            <Link
-              href="/producers"
+            <button
+              onClick={() => setIsSignInOpen(true)}
               className="font-bold underline hover:text-black"
             >
               Start selling today
-            </Link>
+            </button>
           </p>
         </div>
       </section>
@@ -859,6 +865,9 @@ export default function StandaloneLanding() {
               <Link href="/privacy" className="text-sm hover:underline">
                 Privacy
               </Link>
+              <Link href="/producer-guide" className="text-sm hover:underline">
+                Producer Guide
+              </Link>
             </div>
             <div className="mb-6 flex flex-wrap items-center justify-center gap-6">
               <a
@@ -953,6 +962,12 @@ export default function StandaloneLanding() {
           </div>
         </div>
       </footer>
+
+      <SignInModal
+        isOpen={isSignInOpen}
+        onClose={() => setIsSignInOpen(false)}
+        sellerFlow
+      />
     </div>
   );
 }

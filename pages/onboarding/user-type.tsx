@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 import { Card, CardBody, Button, Image } from "@nextui-org/react";
 import {
@@ -10,9 +10,16 @@ import { BLUEBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 
 const UserTypeSelection = () => {
   const router = useRouter();
+  const preselect = router.query.preselect as string | undefined;
   const [selectedType, setSelectedType] = useState<"seller" | "buyer" | null>(
-    null
+    preselect === "seller" ? "seller" : null
   );
+
+  useEffect(() => {
+    if (preselect === "seller") {
+      setSelectedType("seller");
+    }
+  }, [preselect]);
 
   const handleNext = () => {
     if (selectedType === "seller") {

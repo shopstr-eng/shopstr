@@ -277,7 +277,7 @@ export default function AboutPage() {
                   Browse Marketplace
                 </button>
               </Link>
-              <Link href="/producers">
+              <Link href="/producer-guide">
                 <button className={WHITEBUTTONCLASSNAMES}>Start Selling</button>
               </Link>
               <Link href="/contact">

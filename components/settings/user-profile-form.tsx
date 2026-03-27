@@ -39,6 +39,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
   const router = useRouter();
   const { nostr } = useContext(NostrContext);
   const [isUploadingProfile, setIsUploadingProfile] = useState(false);
+  const [isSaved, setIsSaved] = useState(false);
   const [isFetchingProfile, setIsFetchingProfile] = useState(false);
   const [isNPubCopied, setIsNPubCopied] = useState(false);
   const [isNSecCopied, setIsNSecCopied] = useState(false);
@@ -144,6 +145,8 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
       created_at: 0,
     });
     setIsUploadingProfile(false);
+    setIsSaved(true);
+    setTimeout(() => setIsSaved(false), 3000);
 
     if (isOnboarding) {
       router.push("/onboarding/shop-profile");
@@ -1118,8 +1121,9 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
           }}
           isDisabled={isUploadingProfile}
           isLoading={isUploadingProfile}
+          className={`w-full ${BLUEBUTTONCLASSNAMES}`}
         >
-          Save Profile
+          {isSaved ? "✅ Saved!" : "Save Profile"}
         </Button>
       </form>
       <RecoveryKeyModal

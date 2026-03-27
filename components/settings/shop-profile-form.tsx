@@ -153,6 +153,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
   const router = useRouter();
   const { nostr } = useContext(NostrContext);
   const [isUploadingShopProfile, setIsUploadingShopProfile] = useState(false);
+  const [isSaved, setIsSaved] = useState(false);
   const [isFetchingShop, setIsFetchingShop] = useState(false);
   const [notificationEmail, setNotificationEmail] = useState("");
   const [freeShippingThreshold, setFreeShippingThreshold] =
@@ -224,6 +225,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
   const [slugError, setSlugError] = useState("");
   const [colorScheme, setColorScheme] =
     useState<StorefrontColorScheme>(DEFAULT_COLORS);
+  const [isCustomColorScheme, setIsCustomColorScheme] = useState(false);
   const [productLayout, setProductLayout] = useState<
     "grid" | "list" | "featured"
   >("grid");
@@ -301,8 +303,14 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
       if (shop.content.storefront) {
         const sf = shop.content.storefront;
         if (sf.shopSlug) setShopSlug(sf.shopSlug);
-        if (sf.colorScheme)
-          setColorScheme({ ...DEFAULT_COLORS, ...sf.colorScheme });
+        if (sf.colorScheme) {
+          const loaded = { ...DEFAULT_COLORS, ...sf.colorScheme };
+          setColorScheme(loaded);
+          const matchesPreset = COLOR_PRESETS.some(
+            (p) => JSON.stringify(p.colors) === JSON.stringify(loaded)
+          );
+          if (!matchesPreset) setIsCustomColorScheme(true);
+        }
         if (sf.productLayout) setProductLayout(sf.productLayout);
         if (sf.landingPageStyle) setLandingPageStyle(sf.landingPageStyle);
         if (sf.fontHeading) setFontHeading(sf.fontHeading);
@@ -417,7 +425,14 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
     }
   };
 
+  const [shopSlugRequired, setShopSlugRequired] = useState(false);
+
   const onSubmit = async (data: { [x: string]: string }) => {
+    if (!shopSlug || shopSlug.trim() === "") {
+      setShopSlugRequired(true);
+      return;
+    }
+    setShopSlugRequired(false);
     setIsUploadingShopProfile(true);
     const thresholdValue = freeShippingThreshold
       ? parseFloat(freeShippingThreshold)
@@ -496,6 +511,8 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
     }
 
     setIsUploadingShopProfile(false);
+    setIsSaved(true);
+    setTimeout(() => setIsSaved(false), 3000);
 
     if (isOnboarding) {
       router.push("/onboarding/stripe-connect");
@@ -585,7 +602,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                   classNames={{
                     inputWrapper:
                       "border-3 border-black rounded-lg bg-white shadow-none hover:bg-white data-[hover=true]:bg-white group-data-[focus=true]:border-4 group-data-[focus=true]:border-black",
-                    input: "text-base",
+                    input: "text-base !text-black",
                   }}
                   variant="bordered"
                   fullWidth={true}
@@ -609,7 +626,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
             classNames={{
               inputWrapper:
                 "border-3 border-black rounded-lg bg-white shadow-none hover:bg-white data-[hover=true]:bg-white group-data-[focus=true]:border-4 group-data-[focus=true]:border-black",
-              input: "text-base",
+              input: "text-base !text-black",
             }}
             variant="bordered"
             fullWidth={true}
@@ -647,7 +664,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                   classNames={{
                     inputWrapper:
                       "border-3 border-black rounded-lg bg-white shadow-none hover:bg-white data-[hover=true]:bg-white group-data-[focus=true]:border-4 group-data-[focus=true]:border-black",
-                    input: "text-base",
+                    input: "text-base !text-black",
                   }}
                   variant="bordered"
                   fullWidth={true}
@@ -679,7 +696,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                 classNames={{
                   inputWrapper:
                     "border-3 border-black rounded-lg bg-white shadow-none hover:bg-white data-[hover=true]:bg-white group-data-[focus=true]:border-4 group-data-[focus=true]:border-black",
-                  input: "text-base",
+                  input: "text-base !text-black",
                 }}
                 variant="bordered"
                 fullWidth={true}
@@ -778,7 +795,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                         classNames={{
                           inputWrapper:
                             "border-3 border-black rounded-lg bg-white shadow-none hover:bg-white data-[hover=true]:bg-white group-data-[focus=true]:border-4 group-data-[focus=true]:border-black",
-                          input: "text-base",
+                          input: "text-base !text-black",
                         }}
                         variant="bordered"
                         type="number"
@@ -878,9 +895,12 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                       <div className="flex-1">
                         <Input
                           classNames={{
-                            inputWrapper:
-                              "border-3 border-black rounded-lg bg-white shadow-none hover:bg-white data-[hover=true]:bg-white group-data-[focus=true]:border-4 group-data-[focus=true]:border-black",
-                            input: "text-base",
+                            inputWrapper: `border-3 ${
+                              shopSlugRequired
+                                ? "border-red-500"
+                                : "border-black"
+                            } rounded-lg bg-white shadow-none hover:bg-white data-[hover=true]:bg-white group-data-[focus=true]:border-4 group-data-[focus=true]:border-black`,
+                            input: "text-base !text-black",
                           }}
                           variant="bordered"
                           fullWidth={true}
@@ -893,6 +913,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                                 .replace(/[^a-z0-9-]/g, "-")
                             );
                             setSlugStatus("idle");
+                            setShopSlugRequired(false);
                           }}
                           startContent={
                             <span className="text-sm text-gray-400">
@@ -910,6 +931,11 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                     {slugStatus === "error" && (
                       <p className="mt-1 text-sm text-red-600">{slugError}</p>
                     )}
+                    {shopSlugRequired && (
+                      <p className="mt-1 text-sm text-red-600">
+                        A shop URL slug is required before saving.
+                      </p>
+                    )}
                     {shopSlug && slugStatus !== "error" && (
                       <p className="mt-1 text-xs text-gray-400">
                         Your shop will also be available at {shopSlug}
@@ -923,71 +949,110 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                       Color Scheme
                     </label>
                     <div className="mb-3 flex flex-wrap gap-2">
-                      {COLOR_PRESETS.map((preset) => (
-                        <button
-                          key={preset.name}
-                          type="button"
-                          onClick={() => setColorScheme(preset.colors)}
-                          className={`flex items-center gap-2 rounded-lg border-2 px-3 py-2 text-sm font-medium transition-all ${
-                            JSON.stringify(colorScheme) ===
-                            JSON.stringify(preset.colors)
-                              ? "border-black shadow-neo"
-                              : "border-gray-300 hover:border-black"
-                          }`}
-                        >
-                          <div className="flex gap-1">
-                            <div
-                              className="h-4 w-4 rounded-full border"
-                              style={{ backgroundColor: preset.colors.primary }}
-                            />
-                            <div
-                              className="h-4 w-4 rounded-full border"
-                              style={{
-                                backgroundColor: preset.colors.secondary,
-                              }}
-                            />
-                            <div
-                              className="h-4 w-4 rounded-full border"
-                              style={{ backgroundColor: preset.colors.accent }}
-                            />
-                          </div>
-                          {preset.name}
-                        </button>
-                      ))}
-                    </div>
-                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-                      {(
-                        [
-                          "primary",
-                          "secondary",
-                          "accent",
-                          "background",
-                          "text",
-                        ] as const
-                      ).map((key) => (
-                        <div key={key}>
-                          <label className="mb-1 block text-xs font-medium capitalize text-gray-500">
-                            {key}
-                          </label>
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="color"
-                              value={colorScheme[key]}
-                              onChange={(e) =>
-                                setColorScheme((prev) => ({
-                                  ...prev,
-                                  [key]: e.target.value,
-                                }))
-                              }
-                              className="h-8 w-8 cursor-pointer rounded border-2 border-black"
-                            />
-                            <span className="text-xs text-gray-400">
-                              {colorScheme[key]}
-                            </span>
-                          </div>
+                      {COLOR_PRESETS.map((preset) => {
+                        const isActive =
+                          !isCustomColorScheme &&
+                          JSON.stringify(colorScheme) ===
+                            JSON.stringify(preset.colors);
+                        return (
+                          <button
+                            key={preset.name}
+                            type="button"
+                            onClick={() => {
+                              setColorScheme(preset.colors);
+                              setIsCustomColorScheme(false);
+                            }}
+                            className={`flex items-center gap-2 rounded-lg border-2 px-3 py-2 text-sm font-medium transition-all ${
+                              isActive
+                                ? "border-black shadow-neo"
+                                : "border-gray-300 hover:border-black"
+                            }`}
+                          >
+                            <div className="flex gap-1">
+                              <div
+                                className="h-4 w-4 rounded-full border"
+                                style={{
+                                  backgroundColor: preset.colors.primary,
+                                }}
+                              />
+                              <div
+                                className="h-4 w-4 rounded-full border"
+                                style={{
+                                  backgroundColor: preset.colors.secondary,
+                                }}
+                              />
+                              <div
+                                className="h-4 w-4 rounded-full border"
+                                style={{
+                                  backgroundColor: preset.colors.accent,
+                                }}
+                              />
+                            </div>
+                            {preset.name}
+                          </button>
+                        );
+                      })}
+                      <button
+                        type="button"
+                        onClick={() => setIsCustomColorScheme(true)}
+                        className={`flex items-center gap-2 rounded-lg border-2 px-3 py-2 text-sm font-medium transition-all ${
+                          isCustomColorScheme
+                            ? "border-black shadow-neo"
+                            : "border-gray-300 hover:border-black"
+                        }`}
+                      >
+                        <div className="flex gap-1">
+                          <div
+                            className="h-4 w-4 rounded-full border"
+                            style={{ backgroundColor: colorScheme.primary }}
+                          />
+                          <div
+                            className="h-4 w-4 rounded-full border"
+                            style={{ backgroundColor: colorScheme.secondary }}
+                          />
+                          <div
+                            className="h-4 w-4 rounded-full border"
+                            style={{ backgroundColor: colorScheme.accent }}
+                          />
                         </div>
-                      ))}
+                        Custom
+                      </button>
                     </div>
+                    {isCustomColorScheme && (
+                      <div className="grid grid-cols-2 gap-3 rounded-lg border-2 border-gray-200 bg-gray-50 p-4 sm:grid-cols-5">
+                        {(
+                          [
+                            "primary",
+                            "secondary",
+                            "accent",
+                            "background",
+                            "text",
+                          ] as const
+                        ).map((key) => (
+                          <div key={key}>
+                            <label className="mb-1 block text-xs font-medium capitalize text-gray-500">
+                              {key}
+                            </label>
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="color"
+                                value={colorScheme[key]}
+                                onChange={(e) =>
+                                  setColorScheme((prev) => ({
+                                    ...prev,
+                                    [key]: e.target.value,
+                                  }))
+                                }
+                                className="h-8 w-8 cursor-pointer rounded border-2 border-black"
+                              />
+                              <span className="text-xs text-gray-400">
+                                {colorScheme[key]}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   <div className="mb-6">
@@ -1145,6 +1210,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                             classNames={{
                               inputWrapper:
                                 "border-2 border-gray-300 rounded-lg bg-white shadow-none",
+                              input: "!text-black",
                             }}
                             variant="bordered"
                             value={link.label}
@@ -1163,6 +1229,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                             classNames={{
                               inputWrapper:
                                 "border-2 border-gray-300 rounded-lg bg-white shadow-none",
+                              input: "!text-black",
                             }}
                             variant="bordered"
                             value={link.href}
@@ -1285,7 +1352,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                               classNames={{
                                 inputWrapper:
                                   "border-3 border-black rounded-lg bg-white shadow-none hover:bg-white data-[hover=true]:bg-white group-data-[focus=true]:border-4 group-data-[focus=true]:border-black w-24",
-                                input: "text-base",
+                                input: "text-base !text-black",
                               }}
                               variant="bordered"
                               value={String(emailPopup.discountPercentage)}
@@ -1313,7 +1380,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                             classNames={{
                               inputWrapper:
                                 "border-3 border-black rounded-lg bg-white shadow-none hover:bg-white data-[hover=true]:bg-white group-data-[focus=true]:border-4 group-data-[focus=true]:border-black",
-                              input: "text-base",
+                              input: "text-base !text-black",
                             }}
                             variant="bordered"
                             fullWidth
@@ -1336,7 +1403,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                             classNames={{
                               inputWrapper:
                                 "border-3 border-black rounded-lg bg-white shadow-none hover:bg-white data-[hover=true]:bg-white group-data-[focus=true]:border-4 group-data-[focus=true]:border-black",
-                              input: "text-base",
+                              input: "text-base !text-black",
                             }}
                             variant="bordered"
                             fullWidth
@@ -1359,7 +1426,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                             classNames={{
                               inputWrapper:
                                 "border-3 border-black rounded-lg bg-white shadow-none hover:bg-white data-[hover=true]:bg-white group-data-[focus=true]:border-4 group-data-[focus=true]:border-black",
-                              input: "text-base",
+                              input: "text-base !text-black",
                             }}
                             variant="bordered"
                             fullWidth
@@ -1382,7 +1449,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                             classNames={{
                               inputWrapper:
                                 "border-3 border-black rounded-lg bg-white shadow-none hover:bg-white data-[hover=true]:bg-white group-data-[focus=true]:border-4 group-data-[focus=true]:border-black",
-                              input: "text-base",
+                              input: "text-base !text-black",
                             }}
                             variant="bordered"
                             fullWidth
@@ -1651,8 +1718,9 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
           }}
           isDisabled={isUploadingShopProfile}
           isLoading={isUploadingShopProfile}
+          className={`w-full text-lg ${BLUEBUTTONCLASSNAMES}`}
         >
-          Save Shop
+          {isSaved ? "✅ Saved!" : "Save Shop"}
         </Button>
       </form>
 

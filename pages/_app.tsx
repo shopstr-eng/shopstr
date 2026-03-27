@@ -782,12 +782,13 @@ function MilkMarket({ props }: { props: AppProps }) {
                           }
                         >
                           {router.pathname !== "/" &&
-                            router.pathname !== "/producers" &&
+                            router.pathname !== "/producer-guide" &&
                             router.pathname !== "/faq" &&
                             router.pathname !== "/terms" &&
                             router.pathname !== "/privacy" &&
                             router.pathname !== "/about" &&
-                            router.pathname !== "/contact" && (
+                            router.pathname !== "/contact" &&
+                            !router.pathname.startsWith("/shop/") && (
                               <TopNav
                                 setFocusedPubkey={setFocusedPubkey}
                                 setSelectedSection={setSelectedSection}

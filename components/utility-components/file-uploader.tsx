@@ -410,27 +410,30 @@ export const FileUploaderButton = ({
           <Button
             isLoading={loading}
             onClick={handleClick}
-            isIconOnly={isIconOnly}
+            isIconOnly={isIconOnly || loading}
             disabled={disabled || loading}
-            // Updated button styles
             className={`${PRIMARYBUTTONCLASSNAMES} ${
               isProductUpload ? "w-full" : ""
             } ${className} transition-all`}
             startContent={
-              <motion.div
-                animate={loading ? {} : { scale: [1, 1.05, 1] }}
-                transition={{ duration: 2, repeat: Infinity }}
-              >
-                <ArrowUpTrayIcon className="h-6 w-6" />
-              </motion.div>
+              loading ? undefined : (
+                <motion.div
+                  animate={{ scale: [1, 1.05, 1] }}
+                  transition={{ duration: 2, repeat: Infinity }}
+                >
+                  <ArrowUpTrayIcon className="h-6 w-6" />
+                </motion.div>
+              )
             }
           >
-            {children ||
-              (isIconOnly ? null : isProductUpload ? (
-                <span className="text-lg font-medium">Upload Images</span>
-              ) : (
-                <span className="text-lg font-medium">Upload Banner</span>
-              ))}
+            {loading
+              ? null
+              : children ||
+                (isIconOnly ? null : isProductUpload ? (
+                  <span className="text-lg font-medium">Upload Images</span>
+                ) : (
+                  <span className="text-lg font-medium">Upload Banner</span>
+                ))}
           </Button>
         )}
 
