@@ -44,6 +44,7 @@ import {
   fetchCashuWallet,
   fetchAllCommunities,
   fetchGiftWrappedChatsAndMessages,
+  fetchStorefrontData,
 } from "@/utils/nostr/fetch-service";
 import {
   NostrEvent,
@@ -443,14 +444,89 @@ function MilkMarket({ props }: { props: AppProps }) {
 
   const [focusedPubkey, setFocusedPubkey] = useState("");
   const [selectedSection, setSelectedSection] = useState("");
+  const [fullLoadComplete, setFullLoadComplete] = useState(false);
+  const [storefrontLoadPubkey, setStorefrontLoadPubkey] = useState<
+    string | null
+  >(null);
 
   const router = useRouter();
+
+  const isStorefrontRoute = router.pathname.startsWith("/shop/");
+
+  const currentStorefrontSlug = isStorefrontRoute
+    ? decodeURIComponent(
+        router.asPath
+          .replace(/^\/shop\//, "")
+          .split("/")[0]
+          .split("?")[0]
+      )
+    : null;
+
+  useEffect(() => {
+    if (
+      !isStorefrontRoute &&
+      !fullLoadComplete &&
+      nostr &&
+      storefrontLoadPubkey
+    ) {
+      setStorefrontLoadPubkey(null);
+    }
+  }, [isStorefrontRoute, fullLoadComplete, nostr, storefrontLoadPubkey]);
+
+  const initRelays = async (): Promise<string[]> => {
+    const relays = getLocalStorageData().relays || [];
+    const readRelays = getLocalStorageData().readRelays || [];
+    let allRelays = [...relays, ...readRelays];
+
+    if (allRelays.length === 0) {
+      allRelays = getDefaultRelays();
+      localStorage.setItem("relays", JSON.stringify(allRelays));
+    }
+
+    if (isLoggedIn) {
+      try {
+        const { relayList, readRelayList, writeRelayList } =
+          await fetchAllRelays(nostr!, signer!, allRelays, editRelaysContext);
+
+        if (relayList.length !== 0) {
+          localStorage.setItem("relays", JSON.stringify(relayList));
+          localStorage.setItem("readRelays", JSON.stringify(readRelayList));
+          localStorage.setItem("writeRelays", JSON.stringify(writeRelayList));
+          allRelays = [...relayList, ...readRelayList];
+        }
+      } catch (error) {
+        console.error("Error fetching relays:", error);
+        editRelaysContext([], [], [], false);
+      }
+    } else {
+      editRelaysContext(allRelays, [], [], false);
+    }
+
+    return allRelays;
+  };
+
+  const resolveStorefrontPubkey = async (): Promise<string | null> => {
+    const shopPath = router.asPath.replace(/^\/shop\//, "").split("/")[0];
+    if (!shopPath) return null;
+    const slug = decodeURIComponent(shopPath.split("?")[0]);
+    if (!slug) return null;
+
+    try {
+      const res = await fetch(
+        `/api/storefront/lookup?slug=${encodeURIComponent(slug)}`
+      );
+      if (res.ok) {
+        const data = await res.json();
+        if (data.pubkey) return data.pubkey;
+      }
+    } catch {}
+    return null;
+  };
 
   /** FETCH initial FOLLOWS, RELAYS, PRODUCTS, and PROFILES **/
   useEffect(() => {
     async function fetchData() {
       try {
-        // Check login status
         if (getLocalStorageData().signInMethod === "amber") {
           LogOut();
           return;
@@ -466,188 +542,70 @@ function MilkMarket({ props }: { props: AppProps }) {
           }
         }
 
-        // Initialize relays
-        const relays = getLocalStorageData().relays || [];
-        const readRelays = getLocalStorageData().readRelays || [];
-        let allRelays = [...relays, ...readRelays];
+        const allRelays = await initRelays();
 
-        if (allRelays.length === 0) {
-          allRelays = getDefaultRelays();
-          localStorage.setItem("relays", JSON.stringify(allRelays));
-        }
+        if (isStorefrontRoute && !fullLoadComplete) {
+          const sfPubkey = await resolveStorefrontPubkey();
+          if (sfPubkey) {
+            setStorefrontLoadPubkey(sfPubkey);
+            const userPubkey = isLoggedIn
+              ? (await signer?.getPubKey()) || undefined
+              : undefined;
 
-        // Sequential fetch for critical data with individual error handling
-        try {
-          const { relayList, readRelayList, writeRelayList } =
-            await fetchAllRelays(nostr!, signer!, allRelays, editRelaysContext);
-
-          if (relayList.length !== 0) {
-            localStorage.setItem("relays", JSON.stringify(relayList));
-            localStorage.setItem("readRelays", JSON.stringify(readRelayList));
-            localStorage.setItem("writeRelays", JSON.stringify(writeRelayList));
-            allRelays = [...relayList, ...readRelayList];
-          }
-        } catch (error) {
-          console.error("Error fetching relays:", error);
-          editRelaysContext([], [], [], false);
-        }
-
-        try {
-          const { blossomServers } = await fetchAllBlossomServers(
-            nostr!,
-            signer!,
-            allRelays,
-            editBlossomContext
-          );
-
-          if (blossomServers.length != 0) {
-            localStorage.setItem(
-              "blossomServers",
-              JSON.stringify(blossomServers)
-            );
-          }
-        } catch (error) {
-          console.error("Error fetching blossom servers:", error);
-          editBlossomContext([], false);
-        }
-
-        // Fetch products and collect profile pubkeys
-        let productEvents: NostrEvent[] = [];
-        let profileSetFromProducts = new Set<string>();
-        try {
-          const result = await fetchAllPosts(
-            nostr!,
-            allRelays,
-            editProductContext
-          );
-          productEvents = result.productEvents;
-          profileSetFromProducts = result.profileSetFromProducts;
-        } catch (error) {
-          console.error("Error fetching products:", error);
-          editProductContext([], false);
-        }
-
-        // Handle profile fetching
-        let pubkeysToFetchProfilesFor = [...profileSetFromProducts];
-        const userPubkey = (await signer?.getPubKey()) || undefined;
-        const profileSetFromChats = new Set<string>();
-
-        if (isLoggedIn) {
-          try {
-            const { profileSetFromChats: newProfileSetFromChats } =
-              await fetchGiftWrappedChatsAndMessages(
+            try {
+              await fetchStorefrontData(
                 nostr!,
-                signer!,
                 allRelays,
-                editChatContext,
-                userPubkey
+                sfPubkey,
+                editProductContext,
+                editShopContext,
+                editProfileContext,
+                editReviewsContext,
+                editCommunityContext,
+                isLoggedIn && userPubkey
+                  ? {
+                      signer: signer!,
+                      editChatContext,
+                      userPubkey,
+                    }
+                  : undefined
               );
-
-            newProfileSetFromChats.forEach((profile) =>
-              profileSetFromChats.add(profile)
-            );
-          } catch (error) {
-            console.error("Error fetching chats:", error);
-            editChatContext(new Map(), false);
-          }
-        }
-
-        if (userPubkey && profileSetFromChats.size != 0) {
-          pubkeysToFetchProfilesFor = [
-            userPubkey as string,
-            ...pubkeysToFetchProfilesFor,
-            ...profileSetFromChats,
-          ];
-        } else if (userPubkey) {
-          pubkeysToFetchProfilesFor = [
-            userPubkey as string,
-            ...pubkeysToFetchProfilesFor,
-          ];
-        }
-
-        try {
-          await fetchProfile(
-            nostr!,
-            allRelays,
-            pubkeysToFetchProfilesFor,
-            editProfileContext
-          );
-        } catch (error) {
-          console.error("Error fetching profiles:", error);
-          editProfileContext(new Map(), false);
-        }
-
-        try {
-          await fetchShopProfile(
-            nostr!,
-            allRelays,
-            pubkeysToFetchProfilesFor,
-            editShopContext
-          );
-        } catch (error) {
-          console.error("Error fetching shop profiles:", error);
-          editShopContext(new Map(), false);
-        }
-
-        try {
-          await fetchReviews(
-            nostr!,
-            allRelays,
-            productEvents,
-            editReviewsContext
-          );
-        } catch (error) {
-          console.error("Error fetching reviews:", error);
-          editReviewsContext(new Map(), new Map(), false);
-        }
-
-        try {
-          await fetchAllCommunities(nostr!, allRelays, editCommunityContext);
-        } catch (error) {
-          console.error("Error fetching communities:", error);
-          editCommunityContext(new Map(), false);
-        }
-
-        // Fetch wallet if logged in
-        if (isLoggedIn) {
-          try {
-            const { cashuMints, cashuProofs } = await fetchCashuWallet(
-              nostr!,
-              signer!,
-              allRelays,
-              editCashuWalletContext
-            );
-
-            if (cashuMints.length !== 0 && cashuProofs) {
-              localStorage.setItem("mints", JSON.stringify(cashuMints));
-              localStorage.setItem("tokens", JSON.stringify(cashuProofs));
+            } catch (error) {
+              console.error("Error during focused storefront fetch:", error);
             }
-          } catch (error) {
-            console.error("Error fetching wallet:", error);
+
+            if (isLoggedIn) {
+              try {
+                const { blossomServers } = await fetchAllBlossomServers(
+                  nostr!,
+                  signer!,
+                  allRelays,
+                  editBlossomContext
+                );
+                if (blossomServers.length != 0) {
+                  localStorage.setItem(
+                    "blossomServers",
+                    JSON.stringify(blossomServers)
+                  );
+                }
+              } catch (error) {
+                console.error("Error fetching blossom servers:", error);
+                editBlossomContext([], false);
+              }
+            } else {
+              editBlossomContext([], false);
+            }
+
+            if (!isLoggedIn) {
+              editChatContext(new Map(), false);
+            }
+            editFollowsContext([], 0, false);
             editCashuWalletContext([], [], [], false);
+            return;
           }
         }
 
-        try {
-          await fetchAllFollows(
-            nostr!,
-            allRelays,
-            editFollowsContext,
-            userPubkey
-          );
-        } catch (error) {
-          console.error("Error fetching follows:", error);
-          editFollowsContext([], 0, false);
-        }
-
-        // After all fetching operations complete, retry failed relay publishes
-        try {
-          const { relays, writeRelays } = getLocalStorageData();
-          const retryNostr = new NostrManager([...relays, ...writeRelays]);
-          await retryFailedRelayPublishes(retryNostr);
-        } catch (error) {
-          console.error("Failed to retry relay publishes:", error);
-        }
+        await doFullLoad(allRelays);
       } catch (error) {
         console.error("Critical error during app initialization:", error);
         editProductContext([], false);
@@ -663,10 +621,376 @@ function MilkMarket({ props }: { props: AppProps }) {
       }
     }
 
+    async function doFullLoad(allRelays: string[]) {
+      try {
+        const { blossomServers } = await fetchAllBlossomServers(
+          nostr!,
+          signer!,
+          allRelays,
+          editBlossomContext
+        );
+
+        if (blossomServers.length != 0) {
+          localStorage.setItem(
+            "blossomServers",
+            JSON.stringify(blossomServers)
+          );
+        }
+      } catch (error) {
+        console.error("Error fetching blossom servers:", error);
+        editBlossomContext([], false);
+      }
+
+      let productEvents: NostrEvent[] = [];
+      let profileSetFromProducts = new Set<string>();
+      try {
+        const result = await fetchAllPosts(
+          nostr!,
+          allRelays,
+          editProductContext
+        );
+        productEvents = result.productEvents;
+        profileSetFromProducts = result.profileSetFromProducts;
+      } catch (error) {
+        console.error("Error fetching products:", error);
+        editProductContext([], false);
+      }
+
+      let pubkeysToFetchProfilesFor = [...profileSetFromProducts];
+      const userPubkey = (await signer?.getPubKey()) || undefined;
+      const profileSetFromChats = new Set<string>();
+
+      if (isLoggedIn) {
+        try {
+          const { profileSetFromChats: newProfileSetFromChats } =
+            await fetchGiftWrappedChatsAndMessages(
+              nostr!,
+              signer!,
+              allRelays,
+              editChatContext,
+              userPubkey
+            );
+
+          newProfileSetFromChats.forEach((profile) =>
+            profileSetFromChats.add(profile)
+          );
+        } catch (error) {
+          console.error("Error fetching chats:", error);
+          editChatContext(new Map(), false);
+        }
+      }
+
+      if (userPubkey && profileSetFromChats.size != 0) {
+        pubkeysToFetchProfilesFor = [
+          userPubkey as string,
+          ...pubkeysToFetchProfilesFor,
+          ...profileSetFromChats,
+        ];
+      } else if (userPubkey) {
+        pubkeysToFetchProfilesFor = [
+          userPubkey as string,
+          ...pubkeysToFetchProfilesFor,
+        ];
+      }
+
+      try {
+        await fetchProfile(
+          nostr!,
+          allRelays,
+          pubkeysToFetchProfilesFor,
+          editProfileContext
+        );
+      } catch (error) {
+        console.error("Error fetching profiles:", error);
+        editProfileContext(new Map(), false);
+      }
+
+      try {
+        await fetchShopProfile(
+          nostr!,
+          allRelays,
+          pubkeysToFetchProfilesFor,
+          editShopContext
+        );
+      } catch (error) {
+        console.error("Error fetching shop profiles:", error);
+        editShopContext(new Map(), false);
+      }
+
+      try {
+        await fetchReviews(
+          nostr!,
+          allRelays,
+          productEvents,
+          editReviewsContext
+        );
+      } catch (error) {
+        console.error("Error fetching reviews:", error);
+        editReviewsContext(new Map(), new Map(), false);
+      }
+
+      try {
+        await fetchAllCommunities(nostr!, allRelays, editCommunityContext);
+      } catch (error) {
+        console.error("Error fetching communities:", error);
+        editCommunityContext(new Map(), false);
+      }
+
+      if (isLoggedIn) {
+        try {
+          const { cashuMints, cashuProofs } = await fetchCashuWallet(
+            nostr!,
+            signer!,
+            allRelays,
+            editCashuWalletContext
+          );
+
+          if (cashuMints.length !== 0 && cashuProofs) {
+            localStorage.setItem("mints", JSON.stringify(cashuMints));
+            localStorage.setItem("tokens", JSON.stringify(cashuProofs));
+          }
+        } catch (error) {
+          console.error("Error fetching wallet:", error);
+          editCashuWalletContext([], [], [], false);
+        }
+      }
+
+      try {
+        await fetchAllFollows(
+          nostr!,
+          allRelays,
+          editFollowsContext,
+          userPubkey
+        );
+      } catch (error) {
+        console.error("Error fetching follows:", error);
+        editFollowsContext([], 0, false);
+      }
+
+      try {
+        const { relays, writeRelays } = getLocalStorageData();
+        const retryNostr = new NostrManager([...relays, ...writeRelays]);
+        await retryFailedRelayPublishes(retryNostr);
+      } catch (error) {
+        console.error("Failed to retry relay publishes:", error);
+      }
+
+      setFullLoadComplete(true);
+    }
+
     fetchData();
     window.addEventListener("storage", fetchData);
     return () => window.removeEventListener("storage", fetchData);
   }, [nostr, signer, isLoggedIn]);
+
+  useEffect(() => {
+    if (
+      !isStorefrontRoute ||
+      !nostr ||
+      !currentStorefrontSlug ||
+      fullLoadComplete
+    )
+      return;
+
+    const resolveAndFetch = async () => {
+      const sfPubkey = await resolveStorefrontPubkey();
+      if (!sfPubkey || sfPubkey === storefrontLoadPubkey) return;
+
+      setStorefrontLoadPubkey(sfPubkey);
+
+      const userPubkey = isLoggedIn
+        ? (await signer?.getPubKey()) || undefined
+        : undefined;
+
+      const allRelays = await initRelays();
+
+      try {
+        await fetchStorefrontData(
+          nostr!,
+          allRelays,
+          sfPubkey,
+          editProductContext,
+          editShopContext,
+          editProfileContext,
+          editReviewsContext,
+          editCommunityContext,
+          isLoggedIn && userPubkey
+            ? { signer: signer!, editChatContext, userPubkey }
+            : undefined
+        );
+      } catch (error) {
+        console.error("Error during storefront-to-storefront refetch:", error);
+      }
+    };
+
+    resolveAndFetch();
+  }, [currentStorefrontSlug]);
+
+  useEffect(() => {
+    if (!isStorefrontRoute && !fullLoadComplete && nostr) {
+      async function triggerFullLoad() {
+        try {
+          const allRelays = await initRelays();
+
+          let productEvents: NostrEvent[] = [];
+          let profileSetFromProducts = new Set<string>();
+          try {
+            const result = await fetchAllPosts(
+              nostr!,
+              allRelays,
+              editProductContext
+            );
+            productEvents = result.productEvents;
+            profileSetFromProducts = result.profileSetFromProducts;
+          } catch (error) {
+            console.error("Error fetching products:", error);
+            editProductContext([], false);
+          }
+
+          let pubkeysToFetchProfilesFor = [...profileSetFromProducts];
+          const userPubkey = (await signer?.getPubKey()) || undefined;
+          const profileSetFromChats = new Set<string>();
+
+          if (isLoggedIn) {
+            try {
+              const { profileSetFromChats: newProfileSetFromChats } =
+                await fetchGiftWrappedChatsAndMessages(
+                  nostr!,
+                  signer!,
+                  allRelays,
+                  editChatContext,
+                  userPubkey
+                );
+              newProfileSetFromChats.forEach((profile) =>
+                profileSetFromChats.add(profile)
+              );
+            } catch (error) {
+              console.error("Error fetching chats:", error);
+              editChatContext(new Map(), false);
+            }
+          }
+
+          if (userPubkey && profileSetFromChats.size != 0) {
+            pubkeysToFetchProfilesFor = [
+              userPubkey as string,
+              ...pubkeysToFetchProfilesFor,
+              ...profileSetFromChats,
+            ];
+          } else if (userPubkey) {
+            pubkeysToFetchProfilesFor = [
+              userPubkey as string,
+              ...pubkeysToFetchProfilesFor,
+            ];
+          }
+
+          try {
+            await fetchProfile(
+              nostr!,
+              allRelays,
+              pubkeysToFetchProfilesFor,
+              editProfileContext
+            );
+          } catch (error) {
+            console.error("Error fetching profiles:", error);
+            editProfileContext(new Map(), false);
+          }
+
+          try {
+            await fetchShopProfile(
+              nostr!,
+              allRelays,
+              pubkeysToFetchProfilesFor,
+              editShopContext
+            );
+          } catch (error) {
+            console.error("Error fetching shop profiles:", error);
+            editShopContext(new Map(), false);
+          }
+
+          try {
+            await fetchReviews(
+              nostr!,
+              allRelays,
+              productEvents,
+              editReviewsContext
+            );
+          } catch (error) {
+            console.error("Error fetching reviews:", error);
+            editReviewsContext(new Map(), new Map(), false);
+          }
+
+          try {
+            await fetchAllCommunities(nostr!, allRelays, editCommunityContext);
+          } catch (error) {
+            console.error("Error fetching communities:", error);
+            editCommunityContext(new Map(), false);
+          }
+
+          if (isLoggedIn) {
+            try {
+              const { blossomServers } = await fetchAllBlossomServers(
+                nostr!,
+                signer!,
+                allRelays,
+                editBlossomContext
+              );
+              if (blossomServers.length != 0) {
+                localStorage.setItem(
+                  "blossomServers",
+                  JSON.stringify(blossomServers)
+                );
+              }
+            } catch (error) {
+              console.error("Error fetching blossom servers:", error);
+              editBlossomContext([], false);
+            }
+
+            try {
+              const { cashuMints, cashuProofs } = await fetchCashuWallet(
+                nostr!,
+                signer!,
+                allRelays,
+                editCashuWalletContext
+              );
+              if (cashuMints.length !== 0 && cashuProofs) {
+                localStorage.setItem("mints", JSON.stringify(cashuMints));
+                localStorage.setItem("tokens", JSON.stringify(cashuProofs));
+              }
+            } catch (error) {
+              console.error("Error fetching wallet:", error);
+              editCashuWalletContext([], [], [], false);
+            }
+          }
+
+          try {
+            await fetchAllFollows(
+              nostr!,
+              allRelays,
+              editFollowsContext,
+              (await signer?.getPubKey()) || undefined
+            );
+          } catch (error) {
+            console.error("Error fetching follows:", error);
+            editFollowsContext([], 0, false);
+          }
+
+          try {
+            const { relays, writeRelays } = getLocalStorageData();
+            const retryNostr = new NostrManager([...relays, ...writeRelays]);
+            await retryFailedRelayPublishes(retryNostr);
+          } catch (error) {
+            console.error("Failed to retry relay publishes:", error);
+          }
+
+          setFullLoadComplete(true);
+        } catch (error) {
+          console.error("Error during deferred full load:", error);
+        }
+      }
+
+      triggerFullLoad();
+    }
+  }, [isStorefrontRoute, fullLoadComplete, nostr]);
 
   useEffect(() => {
     if ("serviceWorker" in navigator) {

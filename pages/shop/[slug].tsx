@@ -1,4 +1,4 @@
-import { useEffect, useState, useContext } from "react";
+import { useEffect, useState, useContext, useRef } from "react";
 import { useRouter } from "next/router";
 import { ShopMapContext } from "@/utils/context/context";
 import StorefrontLayout from "@/components/storefront/storefront-layout";
@@ -66,59 +66,94 @@ export default function ShopPage() {
   const [shopPubkey, setShopPubkey] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const apiLookupDone = useRef(false);
+  const lastSlug = useRef<string>("");
 
   useEffect(() => {
     if (!slug || typeof slug !== "string") return;
 
-    const lookupBySlug = async () => {
-      for (const [pubkey, shop] of shopMapContext.shopData.entries()) {
-        if (shop?.content?.storefront?.shopSlug === slug) {
-          setShopPubkey(pubkey);
-          setIsLoading(false);
-          return;
-        }
-      }
+    if (slug !== lastSlug.current) {
+      lastSlug.current = slug;
+      apiLookupDone.current = false;
+      setShopPubkey("");
+      setNotFound(false);
+      setIsLoading(true);
+    }
 
+    let cancelled = false;
+
+    const doApiLookup = async () => {
+      if (apiLookupDone.current) return;
       try {
         const res = await fetch(
           `/api/storefront/lookup?slug=${encodeURIComponent(slug)}`
         );
-        if (res.ok) {
+        if (!cancelled && res.ok) {
           const data = await res.json();
           if (data.pubkey) {
+            apiLookupDone.current = true;
             setShopPubkey(data.pubkey);
             setIsLoading(false);
             return;
           }
         }
       } catch {}
-
-      for (const [pubkey, shop] of shopMapContext.shopData.entries()) {
-        const shopName = shop?.content?.name;
-        if (shopName) {
-          const generatedSlug = shopName
-            .toLowerCase()
-            .replace(/[^a-z0-9-]/g, "-")
-            .replace(/-+/g, "-")
-            .replace(/^-|-$/g, "");
-          if (generatedSlug === slug) {
-            setShopPubkey(pubkey);
-            setIsLoading(false);
-            return;
-          }
-        }
-      }
-
-      setNotFound(true);
-      setIsLoading(false);
     };
 
-    if (!shopMapContext.isLoading) {
-      lookupBySlug();
-    }
-  }, [slug, shopMapContext.shopData, shopMapContext.isLoading]);
+    doApiLookup();
 
-  if (isLoading || shopMapContext.isLoading) {
+    return () => {
+      cancelled = true;
+    };
+  }, [slug]);
+
+  useEffect(() => {
+    if (!slug || typeof slug !== "string") return;
+    if (shopPubkey) return;
+    if (shopMapContext.isLoading) return;
+
+    for (const [pubkey, shop] of shopMapContext.shopData.entries()) {
+      if (shop?.content?.storefront?.shopSlug === slug) {
+        setShopPubkey(pubkey);
+        setIsLoading(false);
+        return;
+      }
+    }
+
+    for (const [pubkey, shop] of shopMapContext.shopData.entries()) {
+      const shopName = shop?.content?.name;
+      if (shopName) {
+        const generatedSlug = shopName
+          .toLowerCase()
+          .replace(/[^a-z0-9-]/g, "-")
+          .replace(/-+/g, "-")
+          .replace(/^-|-$/g, "");
+        if (generatedSlug === slug) {
+          setShopPubkey(pubkey);
+          setIsLoading(false);
+          return;
+        }
+      }
+    }
+
+    if (apiLookupDone.current) {
+      setNotFound(true);
+      setIsLoading(false);
+    }
+  }, [slug, shopPubkey, shopMapContext.shopData, shopMapContext.isLoading]);
+
+  useEffect(() => {
+    if (shopPubkey) return;
+    const timeout = setTimeout(() => {
+      if (!shopPubkey) {
+        setNotFound(true);
+        setIsLoading(false);
+      }
+    }, 15000);
+    return () => clearTimeout(timeout);
+  }, [shopPubkey]);
+
+  if (isLoading && !shopPubkey) {
     return (
       <div className="flex min-h-screen items-center justify-center pt-20">
         <MilkMarketSpinner />

@@ -1871,3 +1871,258 @@ export const fetchPendingPosts = async (
     }
   });
 };
+
+export const fetchStorefrontData = async (
+  nostr: NostrManager,
+  relays: string[],
+  shopPubkey: string,
+  editProductContext: (productEvents: NostrEvent[], isLoading: boolean) => void,
+  editShopContext: (
+    shopEvents: Map<string, ShopProfile>,
+    isLoading: boolean
+  ) => void,
+  editProfileContext: (
+    profileData: Map<string, any>,
+    isLoading: boolean
+  ) => void,
+  editReviewsContext: (
+    merchantReviewsData: Map<string, number[]>,
+    productReviewsData: Map<string, Map<string, Map<string, string[][]>>>,
+    isLoading: boolean
+  ) => void,
+  editCommunityContext: (
+    communities: Map<string, Community>,
+    isLoading: boolean
+  ) => void,
+  options?: {
+    signer?: NostrSigner;
+    editChatContext?: (chatsMap: ChatsMap, isLoading: boolean) => void;
+    userPubkey?: string;
+  }
+): Promise<{
+  productEvents: NostrEvent[];
+  profileSetFromProducts: Set<string>;
+}> => {
+  const pubkeysToFetch = [shopPubkey];
+  if (options?.userPubkey && options.userPubkey !== shopPubkey) {
+    pubkeysToFetch.push(options.userPubkey);
+  }
+
+  let productEvents: NostrEvent[] = [];
+  const profileSetFromProducts = new Set<string>([shopPubkey]);
+
+  try {
+    const response = await fetch(
+      `/api/db/fetch-products?pubkey=${encodeURIComponent(shopPubkey)}`
+    );
+    if (response.ok) {
+      const productsFromDb: NostrEvent[] = await response.json();
+      if (productsFromDb.length > 0) {
+        editProductContext(productsFromDb, false);
+        productEvents = productsFromDb;
+      }
+    }
+  } catch (error) {
+    console.error("Failed to fetch storefront products from DB:", error);
+  }
+
+  try {
+    await fetchProfile(nostr, relays, pubkeysToFetch, editProfileContext);
+  } catch (error) {
+    console.error("Error fetching storefront profile:", error);
+    editProfileContext(new Map(), false);
+  }
+
+  try {
+    await fetchShopProfile(nostr, relays, pubkeysToFetch, editShopContext);
+  } catch (error) {
+    console.error("Error fetching storefront shop profile:", error);
+    editShopContext(new Map(), false);
+  }
+
+  try {
+    const productFilter: Filter = {
+      kinds: [30402],
+      authors: [shopPubkey],
+    };
+    const fetchedProducts = await nostr.fetch([productFilter], {}, relays);
+
+    if (fetchedProducts.length > 0) {
+      const getEventKey = (event: NostrEvent): string => {
+        if (event.kind === 30402) {
+          const dTag = event.tags?.find((tag: string[]) => tag[0] === "d")?.[1];
+          if (dTag) return `${event.pubkey}:${dTag}`;
+        }
+        return event.id;
+      };
+
+      const mergedMap = new Map<string, NostrEvent>();
+      for (const event of productEvents) {
+        if (event?.id) mergedMap.set(getEventKey(event), event);
+      }
+      for (const event of fetchedProducts) {
+        if (!event?.id) continue;
+        const key = getEventKey(event);
+        const existing = mergedMap.get(key);
+        if (!existing || event.created_at >= existing.created_at) {
+          mergedMap.set(key, event);
+        }
+      }
+
+      productEvents = Array.from(mergedMap.values());
+      editProductContext(productEvents, false);
+
+      const validProducts = fetchedProducts.filter(
+        (e) => e.id && e.sig && e.pubkey
+      );
+      if (validProducts.length > 0) {
+        cacheEventsToDatabase(validProducts).catch((error) =>
+          console.error(
+            "Failed to cache storefront products to database:",
+            error
+          )
+        );
+      }
+    } else if (productEvents.length === 0) {
+      editProductContext([], false);
+    }
+  } catch (error) {
+    console.error("Error fetching storefront products from relays:", error);
+    if (productEvents.length === 0) {
+      editProductContext([], false);
+    }
+  }
+
+  try {
+    await fetchReviews(nostr, relays, productEvents, editReviewsContext);
+  } catch (error) {
+    console.error("Error fetching storefront reviews:", error);
+    editReviewsContext(new Map(), new Map(), false);
+  }
+
+  try {
+    const communityFilter: Filter = {
+      kinds: [34550],
+      authors: [shopPubkey],
+      "#t": ["milkmarket"],
+    };
+    const fetchedCommunities = await nostr.fetch([communityFilter], {}, relays);
+    const communityMap = new Map<string, Community>();
+
+    try {
+      const response = await fetch("/api/db/fetch-communities");
+      if (response.ok) {
+        const communitiesFromDb = await response.json();
+        for (const event of communitiesFromDb) {
+          if (event.pubkey === shopPubkey) {
+            const community = parseCommunityEvent(event);
+            if (community) communityMap.set(community.id, community);
+          }
+        }
+      }
+    } catch {}
+
+    for (const event of fetchedCommunities) {
+      const community = parseCommunityEvent(event);
+      if (community) {
+        const existing = communityMap.get(community.id);
+        if (!existing || community.createdAt >= existing.createdAt) {
+          communityMap.set(community.id, community);
+        }
+      }
+    }
+
+    editCommunityContext(communityMap, false);
+
+    const validCommunities = fetchedCommunities.filter(
+      (e) => e.id && e.sig && e.pubkey && e.kind === 34550
+    );
+    if (validCommunities.length > 0) {
+      cacheEventsToDatabase(validCommunities).catch((error) =>
+        console.error(
+          "Failed to cache storefront communities to database:",
+          error
+        )
+      );
+    }
+  } catch (error) {
+    console.error("Error fetching storefront communities:", error);
+    editCommunityContext(new Map(), false);
+  }
+
+  if (options?.userPubkey && options?.signer && options?.editChatContext) {
+    try {
+      const isShopOwner = options.userPubkey === shopPubkey;
+
+      let fullChatsMap: ChatsMap = new Map();
+      const capturingEditChat = (chatsMap: ChatsMap, isLoading: boolean) => {
+        fullChatsMap = chatsMap;
+      };
+
+      const { profileSetFromChats } = await fetchGiftWrappedChatsAndMessages(
+        nostr,
+        options.signer,
+        relays,
+        capturingEditChat,
+        options.userPubkey
+      );
+
+      if (isShopOwner) {
+        options.editChatContext(fullChatsMap, false);
+        for (const pk of profileSetFromChats) {
+          profileSetFromProducts.add(pk);
+        }
+      } else {
+        const filteredChatsMap: ChatsMap = new Map();
+
+        for (const [counterpartyPubkey, messages] of fullChatsMap.entries()) {
+          if (counterpartyPubkey === shopPubkey) {
+            filteredChatsMap.set(counterpartyPubkey, messages);
+            profileSetFromProducts.add(counterpartyPubkey);
+            continue;
+          }
+
+          const relevantMessages = messages.filter((msg: NostrMessageEvent) => {
+            const tagsMap = new Map(
+              msg.tags?.map(([k, v]: [string, string]) => [k, v]) || []
+            );
+            const itemTag = tagsMap.get("item") || tagsMap.get("a") || "";
+            if (itemTag) {
+              const parts = itemTag.split(":");
+              if (parts.length >= 2 && parts[1] === shopPubkey) {
+                return true;
+              }
+            }
+            return false;
+          });
+
+          if (relevantMessages.length > 0) {
+            filteredChatsMap.set(counterpartyPubkey, relevantMessages);
+            profileSetFromProducts.add(counterpartyPubkey);
+          }
+        }
+
+        options.editChatContext(filteredChatsMap, false);
+      }
+
+      if (profileSetFromProducts.size > pubkeysToFetch.length) {
+        const allProfilePubkeys = [
+          ...new Set([...pubkeysToFetch, ...profileSetFromProducts]),
+        ];
+        try {
+          await fetchProfile(
+            nostr,
+            relays,
+            allProfilePubkeys,
+            editProfileContext
+          );
+        } catch {}
+      }
+    } catch (error) {
+      console.error("Error fetching storefront chats:", error);
+      options.editChatContext(new Map(), false);
+    }
+  }
+
+  return { productEvents, profileSetFromProducts };
+};

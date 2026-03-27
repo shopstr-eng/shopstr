@@ -1056,6 +1056,12 @@ export async function fetchAllProductsFromDb(): Promise<NostrEvent[]> {
   return fetchCachedEvents(30402);
 }
 
+export async function fetchProductsByPubkeyFromDb(
+  pubkey: string
+): Promise<NostrEvent[]> {
+  return fetchCachedEvents(30402, { pubkey });
+}
+
 export async function fetchProductByIdFromDb(
   identifier: string
 ): Promise<NostrEvent | null> {
