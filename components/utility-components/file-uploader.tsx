@@ -360,7 +360,11 @@ export const FileUploaderButton = ({
   };
 
   return (
-    <div className="flex w-full flex-col gap-4">
+    <div
+      className={`flex flex-col gap-4 ${
+        isPlaceholder || isProductUpload ? "w-full" : ""
+      }`}
+    >
       {/* Drag and Drop Zone */}
       <div
         ref={dropZoneRef}
@@ -368,11 +372,17 @@ export const FileUploaderButton = ({
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        className={`relative w-full duration-300 transition-all ${
+        className={`relative duration-300 transition-all ${
           isPlaceholder
-            ? // Updated placeholder styles
-              "flex h-full min-h-[250px] items-center justify-center rounded-md border-2 border-dashed border-black p-6"
-            : !isDragging && "border-2 border-dashed border-transparent"
+            ? "flex h-full min-h-[250px] w-full items-center justify-center rounded-md border-2 border-dashed border-black p-6"
+            : isProductUpload
+              ? "w-full" +
+                (!isDragging
+                  ? " border-2 border-dashed border-transparent"
+                  : "")
+              : !isDragging
+                ? "border-2 border-dashed border-transparent"
+                : ""
         }`}
       >
         {/* Drag overlay or placeholder state */}
