@@ -12,12 +12,7 @@ import {
   DropdownMenu,
   DropdownItem,
 } from "@nextui-org/react";
-import {
-  FaceFrownIcon,
-  FaceSmileIcon,
-  PlusIcon,
-  EllipsisVerticalIcon,
-} from "@heroicons/react/24/outline";
+import { PlusIcon, EllipsisVerticalIcon } from "@heroicons/react/24/outline";
 import { useRouter } from "next/router";
 import { nip19, Event } from "nostr-tools";
 import { useContext, useEffect, useState, useRef } from "react";
@@ -580,26 +575,14 @@ function MarketplacePage({
                 <div className="inline-flex items-center gap-1 rounded-lg border-2 border-black bg-white px-2 shadow-neo">
                   {merchantReview && merchantReview >= 0.5 ? (
                     <>
-                      <FaceSmileIcon
-                        className={`h-10 w-10 p-1 ${
-                          merchantReview >= 0.75
-                            ? "text-green-500"
-                            : "text-green-300"
-                        }`}
-                      />
+                      <span className="text-2xl">😀</span>
                       <span className="mr-2 whitespace-nowrap text-sm text-black">
                         {merchantQuality}
                       </span>
                     </>
                   ) : (
                     <>
-                      <FaceFrownIcon
-                        className={`h-10 w-10 p-1 ${
-                          merchantReview >= 0.25
-                            ? "text-red-300"
-                            : "text-red-500"
-                        }`}
-                      />
+                      <span className="text-2xl">😢</span>
                       <span className="mr-2 whitespace-nowrap text-sm text-black">
                         {merchantQuality}
                       </span>
