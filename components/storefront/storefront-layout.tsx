@@ -592,7 +592,7 @@ export default function StorefrontLayout({
                         <img
                           src={sanitizeUrl(bannerUrl)}
                           alt={`${shopName} Banner`}
-                          className="h-[200px] w-full object-cover md:h-[280px]"
+                          className="w-full object-contain"
                         />
                       </div>
                     )}

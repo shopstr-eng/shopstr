@@ -593,13 +593,10 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
       <div className="mb-8 xl:max-w-[600px]">
         <div className="relative flex h-48 items-center justify-center overflow-hidden rounded-xl border-3 border-black bg-primary-blue">
           {watchBanner && (
-            <Image
+            <img
               alt={"Shop Banner Image"}
               src={watchBanner}
-              className="h-full w-full object-cover"
-              classNames={{
-                wrapper: "!max-w-full w-full h-full",
-              }}
+              className="absolute inset-0 h-full w-full object-cover"
             />
           )}
           <FileUploaderButton
