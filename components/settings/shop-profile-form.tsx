@@ -3,7 +3,6 @@ import { useRouter } from "next/router";
 import { useForm, Controller } from "react-hook-form";
 import {
   Button,
-  Textarea,
   Input,
   Image,
   Select,
@@ -706,47 +705,6 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
               Receive email alerts when customers place orders
             </p>
           </div>
-
-          <Controller
-            name="about"
-            control={control}
-            rules={{
-              maxLength: {
-                value: 500,
-                message: "This input exceed maxLength of 500.",
-              },
-            }}
-            render={({
-              field: { onChange, onBlur, value },
-              fieldState: { error },
-            }) => {
-              const isErrored = error !== undefined;
-              const errorMessage: string = error?.message ? error.message : "";
-              return (
-                <div>
-                  <label className="mb-2 block text-base font-bold text-black">
-                    About
-                  </label>
-                  <Textarea
-                    classNames={{
-                      inputWrapper:
-                        "border-3 border-black rounded-lg bg-white shadow-none hover:bg-white data-[hover=true]:bg-white group-data-[focus=true]:border-4 group-data-[focus=true]:border-black",
-                      input: "text-base !text-black",
-                    }}
-                    variant="bordered"
-                    fullWidth={true}
-                    minRows={4}
-                    placeholder="Add something about your shop..."
-                    isInvalid={isErrored}
-                    errorMessage={errorMessage}
-                    onChange={onChange}
-                    onBlur={onBlur}
-                    value={value}
-                  />
-                </div>
-              );
-            }}
-          />
 
           <div>
             <label className="mb-2 block text-base font-bold text-black">

@@ -455,10 +455,9 @@ function MilkMarket({ props }: { props: AppProps }) {
 
   const currentStorefrontSlug = isStorefrontRoute
     ? decodeURIComponent(
-        router.asPath
-          .replace(/^\/shop\//, "")
-          .split("/")[0]
-          .split("?")[0]
+        (
+          (router.asPath ?? "").replace(/^\/shop\//, "").split("/")[0] ?? ""
+        ).split("?")[0] ?? ""
       )
     : null;
 
@@ -506,9 +505,9 @@ function MilkMarket({ props }: { props: AppProps }) {
   };
 
   const resolveStorefrontPubkey = async (): Promise<string | null> => {
-    const shopPath = router.asPath.replace(/^\/shop\//, "").split("/")[0];
+    const shopPath = router.asPath.replace(/^\/shop\//, "").split("/")[0] ?? "";
     if (!shopPath) return null;
-    const slug = decodeURIComponent(shopPath.split("?")[0]);
+    const slug = decodeURIComponent(shopPath.split("?")[0] ?? "");
     if (!slug) return null;
 
     try {

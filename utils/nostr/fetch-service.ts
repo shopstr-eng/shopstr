@@ -2055,7 +2055,7 @@ export const fetchStorefrontData = async (
       const isShopOwner = options.userPubkey === shopPubkey;
 
       let fullChatsMap: ChatsMap = new Map();
-      const capturingEditChat = (chatsMap: ChatsMap, isLoading: boolean) => {
+      const capturingEditChat = (chatsMap: ChatsMap, _isLoading: boolean) => {
         fullChatsMap = chatsMap;
       };
 
@@ -2084,7 +2084,10 @@ export const fetchStorefrontData = async (
 
           const relevantMessages = messages.filter((msg: NostrMessageEvent) => {
             const tagsMap = new Map(
-              msg.tags?.map(([k, v]: [string, string]) => [k, v]) || []
+              msg.tags?.map(
+                (tag: string[]) =>
+                  [tag[0] ?? "", tag[1] ?? ""] as [string, string]
+              ) || []
             );
             const itemTag = tagsMap.get("item") || tagsMap.get("a") || "";
             if (itemTag) {

@@ -81,7 +81,6 @@ function MarketplacePage({
   const [isFetchingReviews, setIsFetchingReviews] = useState(false);
 
   const [shopBannerURL, setShopBannerURL] = useState("");
-  const [shopAbout, setShopAbout] = useState("");
   const [isFetchingShop, setIsFetchingShop] = useState(false);
   const [rawEvent, setRawEvent] = useState<Event | undefined>(undefined);
   const [showRawEventModal, setShowRawEventModal] = useState(false);
@@ -201,7 +200,6 @@ function MarketplacePage({
         shopMapContext.shopData.get(focusedPubkey);
       if (shopProfile) {
         setShopBannerURL(shopProfile.content.ui.banner);
-        setShopAbout(shopProfile.content.about);
         setRawEvent(shopProfile.event);
       }
     }
@@ -419,14 +417,6 @@ function MarketplacePage({
               </Button>
               <Button
                 className="bg-transparent text-lg font-bold text-black hover:text-primary-yellow sm:text-xl"
-                onClick={() => {
-                  setSelectedSection("about");
-                }}
-              >
-                About
-              </Button>
-              <Button
-                className="bg-transparent text-lg font-bold text-black hover:text-primary-yellow sm:text-xl"
                 onClick={() => handleSendMessage(focusedPubkey)}
               >
                 Message
@@ -578,12 +568,6 @@ function MarketplacePage({
             onFilteredProductsChange={handleFilteredProductsChange}
             searchBarRef={searchBarRef}
           />
-        )}
-        {selectedSection === "about" && shopAbout && (
-          <div className="flex w-full flex-col justify-start bg-white px-4 py-8 text-black">
-            <h2 className="pb-2 text-2xl font-bold">About</h2>
-            <p className="text-base">{shopAbout}</p>
-          </div>
         )}
         {selectedSection === "reviews" && !isFetchingReviews && (
           <div className="flex w-full flex-col justify-start bg-white px-4 py-8 text-black">

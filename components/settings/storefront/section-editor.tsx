@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Input, Textarea, Select, SelectItem } from "@nextui-org/react";
 import {
   StorefrontSection,
@@ -81,6 +81,7 @@ export default function SectionEditor({
       return () => clearTimeout(timer);
     } else {
       setIsFlashing(false);
+      return undefined;
     }
   }, [isNew]);
 
