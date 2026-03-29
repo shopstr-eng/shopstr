@@ -17,13 +17,16 @@ interface StorefrontFooterProps {
   shopSlug: string;
 }
 
-const SOCIAL_ICONS: Record<string, string> = {
-  instagram: "📷",
-  x: "𝕏",
-  facebook: "📘",
-  youtube: "▶",
-  tiktok: "♪",
-  telegram: "✈",
+const SOCIAL_IMAGE_ICONS: Record<string, string> = {
+  instagram: "/instagram-icon.png",
+  x: "/x-logo-black.png",
+  youtube: "/youtube-icon.png",
+  tiktok: "/tiktok-icon.png",
+  telegram: "/telegram-icon.png",
+  facebook: "/facebook-icon.png",
+};
+
+const SOCIAL_EMOJI_ICONS: Record<string, string> = {
   website: "🌐",
   email: "✉",
   other: "🔗",
@@ -109,7 +112,16 @@ export default function StorefrontFooterComponent({
                   }}
                   title={social.label || social.platform}
                 >
-                  {SOCIAL_ICONS[social.platform] || SOCIAL_ICONS.other}
+                  {SOCIAL_IMAGE_ICONS[social.platform] ? (
+                    <img
+                      src={SOCIAL_IMAGE_ICONS[social.platform]}
+                      alt={social.label || social.platform}
+                      className="h-5 w-5 object-contain"
+                    />
+                  ) : (
+                    SOCIAL_EMOJI_ICONS[social.platform] ||
+                    SOCIAL_EMOJI_ICONS.other
+                  )}
                 </a>
               ))}
             </div>
