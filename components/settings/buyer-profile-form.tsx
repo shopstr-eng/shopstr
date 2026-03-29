@@ -1,7 +1,7 @@
 import { useEffect, useState, useContext, useMemo } from "react";
 import { useRouter } from "next/router";
 import { useForm, Controller } from "react-hook-form";
-import { Button, Textarea, Input, Image } from "@nextui-org/react";
+import { Button, Input, Image } from "@nextui-org/react";
 import { ProfileMapContext } from "@/utils/context/context";
 import {
   BLUEBUTTONCLASSNAMES,
@@ -39,7 +39,6 @@ const BuyerProfileForm = ({ isOnboarding }: BuyerProfileFormProps) => {
     },
   });
 
-  const watchBanner = watch("banner");
   const watchPicture = watch("picture");
   const defaultImage = useMemo(() => {
     return "https://robohash.org/" + userPubkey;
@@ -104,54 +103,34 @@ const BuyerProfileForm = ({ isOnboarding }: BuyerProfileFormProps) => {
 
   return (
     <>
-      <div className="mb-20 h-40 rounded-md">
-        <div className="relative flex h-48 items-center justify-center overflow-hidden rounded-xl border-3 border-black bg-primary-blue">
-          {watchBanner && (
-            <Image
-              alt={"User Banner Image"}
-              src={watchBanner}
-              className="h-full w-full object-cover"
-              classNames={{
-                wrapper: "!max-w-full w-full h-full",
-              }}
-            />
-          )}
-          <FileUploaderButton
-            className={`absolute right-4 top-4 z-20 ${WHITEBUTTONCLASSNAMES}`}
-            imgCallbackOnUpload={(imgUrl) => setValue("banner", imgUrl)}
-          >
-            Upload Banner
-          </FileUploaderButton>
-        </div>
-        <div className="flex items-center justify-center">
-          <div className="relative mt-[-4rem] h-32 w-32">
-            <div className="relative h-full w-full overflow-hidden rounded-full border-4 border-black bg-white">
-              {watchPicture ? (
-                <Image
-                  src={watchPicture}
-                  alt="User Profile Picture"
-                  className="h-full w-full rounded-full object-cover"
-                  classNames={{
-                    wrapper: "!max-w-full w-full h-full",
-                  }}
-                />
-              ) : (
-                <Image
-                  src={defaultImage}
-                  alt="User Profile Picture"
-                  className="h-full w-full rounded-full object-cover"
-                  classNames={{
-                    wrapper: "!max-w-full w-full h-full",
-                  }}
-                />
-              )}
-            </div>
-            <FileUploaderButton
-              isIconOnly={true}
-              className={`!min-w-10 absolute bottom-0 right-0 z-20 !h-10 !w-10 ${WHITEBUTTONCLASSNAMES}`}
-              imgCallbackOnUpload={(imgUrl) => setValue("picture", imgUrl)}
-            />
+      <div className="mb-8 flex justify-center">
+        <div className="relative">
+          <div className="relative h-24 w-24">
+            {watchPicture ? (
+              <Image
+                src={watchPicture}
+                alt="User Profile Picture"
+                className="h-full w-full rounded-full object-cover"
+                classNames={{
+                  wrapper: "!max-w-full w-full h-full",
+                }}
+              />
+            ) : (
+              <Image
+                src={defaultImage}
+                alt="User Profile Picture"
+                className="h-full w-full rounded-full object-cover"
+                classNames={{
+                  wrapper: "!max-w-full w-full h-full",
+                }}
+              />
+            )}
           </div>
+          <FileUploaderButton
+            isIconOnly={true}
+            className={`!min-w-10 absolute bottom-0 right-0 z-20 !h-10 !w-10 ${WHITEBUTTONCLASSNAMES}`}
+            imgCallbackOnUpload={(imgUrl) => setValue("picture", imgUrl)}
+          />
         </div>
       </div>
 
@@ -218,39 +197,6 @@ const BuyerProfileForm = ({ isOnboarding }: BuyerProfileFormProps) => {
                   onChange={onChange}
                   onBlur={onBlur}
                   value={value}
-                />
-              );
-            }}
-          />
-        </div>
-
-        <div className="space-y-2">
-          <label className="block text-base font-bold text-black">About</label>
-          <Controller
-            name="about"
-            control={control}
-            render={({
-              field: { onChange, onBlur, value },
-              fieldState: { error },
-            }) => {
-              const isErrored = error !== undefined;
-              const errorMessage: string = error?.message ? error.message : "";
-              return (
-                <Textarea
-                  classNames={{
-                    inputWrapper:
-                      "!bg-white border-3 border-black rounded-md shadow-none hover:!bg-white group-data-[hover=true]:!bg-white group-data-[hover=true]:border-black group-data-[focus=true]:border-3 group-data-[focus=true]:border-black group-data-[focus=true]:!bg-white transition-none",
-                    input:
-                      "text-base !text-black font-medium placeholder:text-gray-400",
-                  }}
-                  fullWidth={true}
-                  placeholder="Add something about yourself..."
-                  isInvalid={isErrored}
-                  errorMessage={errorMessage}
-                  onChange={onChange}
-                  onBlur={onBlur}
-                  value={value}
-                  minRows={3}
                 />
               );
             }}

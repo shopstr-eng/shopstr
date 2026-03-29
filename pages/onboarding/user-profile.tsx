@@ -48,6 +48,10 @@ const OnboardingUserProfile = () => {
                   ? "Set up your buyer profile or skip this step to finish onboarding."
                   : "Set up your user profile or skip this step to continue."}
               </p>
+              <p className="mt-2 text-sm text-gray-500">
+                This is how you'll appear in product listings, DMs, and
+                community posts.
+              </p>
             </div>
 
             {isBuyer ? (

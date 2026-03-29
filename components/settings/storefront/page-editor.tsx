@@ -3,13 +3,18 @@ import {
   StorefrontPage,
   StorefrontSection,
   StorefrontSectionType,
+  StorefrontNavLink,
 } from "@/utils/types/types";
 import SectionEditor from "./section-editor";
 import { useState } from "react";
+import type { ProductData } from "@/utils/parsers/product-parser-functions";
 
 interface PageEditorProps {
   pages: StorefrontPage[];
   onChange: (pages: StorefrontPage[]) => void;
+  navLinks: StorefrontNavLink[];
+  onNavLinksChange: (links: StorefrontNavLink[]) => void;
+  sellerProducts?: ProductData[];
 }
 
 const SECTION_TYPES: { type: StorefrontSectionType; label: string }[] = [
@@ -30,31 +35,58 @@ const SECTION_TYPES: { type: StorefrontSectionType; label: string }[] = [
 const inputWrapperClass =
   "border-2 border-gray-300 rounded-lg bg-white shadow-none hover:bg-white data-[hover=true]:bg-white group-data-[focus=true]:border-black";
 
-export default function PageEditor({ pages, onChange }: PageEditorProps) {
+export default function PageEditor({
+  pages,
+  onChange,
+  navLinks,
+  onNavLinksChange,
+  sellerProducts = [],
+}: PageEditorProps) {
   const [expandedPage, setExpandedPage] = useState<string | null>(null);
+
+  const externalLinks = navLinks.filter((l) => !l.isPage);
 
   const addPage = () => {
     const id = `page-${Date.now()}`;
-    onChange([
-      ...pages,
-      { id, title: "New Page", slug: "new-page", sections: [] },
-    ]);
+    const slug = "new-page";
+    const title = "New Page";
+    onChange([...pages, { id, title, slug, sections: [] }]);
+    onNavLinksChange([...navLinks, { label: title, href: slug, isPage: true }]);
     setExpandedPage(id);
   };
 
   const removePage = (id: string) => {
+    const page = pages.find((p) => p.id === id);
     onChange(pages.filter((p) => p.id !== id));
+    if (page) {
+      onNavLinksChange(
+        navLinks.filter((l) => !(l.isPage && l.href === page.slug))
+      );
+    }
   };
 
   const updatePage = (id: string, fields: Partial<StorefrontPage>) => {
+    const page = pages.find((p) => p.id === id);
     onChange(pages.map((p) => (p.id === id ? { ...p, ...fields } : p)));
+    if (page && (fields.title || fields.slug)) {
+      const oldSlug = page.slug;
+      const newSlug = fields.slug || oldSlug;
+      const newTitle = fields.title || page.title;
+      onNavLinksChange(
+        navLinks.map((l) =>
+          l.isPage && l.href === oldSlug
+            ? { ...l, label: newTitle, href: newSlug }
+            : l
+        )
+      );
+    }
   };
 
   const updatePageSections = (
     pageId: string,
     sections: StorefrontSection[]
   ) => {
-    updatePage(pageId, { sections });
+    onChange(pages.map((p) => (p.id === pageId ? { ...p, sections } : p)));
   };
 
   const addSectionToPage = (pageId: string, type: StorefrontSectionType) => {
@@ -68,12 +100,51 @@ export default function PageEditor({ pages, onChange }: PageEditorProps) {
     updatePageSections(pageId, [...page.sections, newSection]);
   };
 
+  const addExternalLink = () => {
+    onNavLinksChange([...navLinks, { label: "", href: "" }]);
+  };
+
+  const updateExternalLink = (
+    oldIdx: number,
+    fields: Partial<StorefrontNavLink>
+  ) => {
+    let extCount = 0;
+    onNavLinksChange(
+      navLinks.map((l) => {
+        if (!l.isPage) {
+          if (extCount === oldIdx) {
+            extCount++;
+            return { ...l, ...fields };
+          }
+          extCount++;
+        }
+        return l;
+      })
+    );
+  };
+
+  const removeExternalLink = (extIdx: number) => {
+    let extCount = 0;
+    onNavLinksChange(
+      navLinks.filter((l) => {
+        if (!l.isPage) {
+          if (extCount === extIdx) {
+            extCount++;
+            return false;
+          }
+          extCount++;
+        }
+        return true;
+      })
+    );
+  };
+
   return (
     <div className="space-y-4">
       <label className="block text-base font-bold text-black">Pages</label>
       <p className="text-sm text-gray-500">
-        Create additional pages for your storefront (e.g. About, Contact). Each
-        page gets its own URL and can have its own sections.
+        Create pages for your storefront. Each page gets its own URL, sections,
+        and a link in the navigation bar.
       </p>
 
       {pages.map((page) => (
@@ -169,6 +240,7 @@ export default function PageEditor({ pages, onChange }: PageEditorProps) {
                     }}
                     isFirst={idx === 0}
                     isLast={idx === page.sections.length - 1}
+                    sellerProducts={sellerProducts}
                   />
                 ))}
               </div>
@@ -196,6 +268,61 @@ export default function PageEditor({ pages, onChange }: PageEditorProps) {
         className="text-sm font-bold text-blue-600 hover:underline"
       >
         + Add Page
+      </button>
+
+      {externalLinks.length > 0 && (
+        <div className="mt-4 space-y-2">
+          <label className="block text-sm font-bold text-gray-600">
+            External Links
+          </label>
+          {externalLinks.map((link, extIdx) => (
+            <div key={extIdx} className="flex items-center gap-2">
+              <Input
+                classNames={{
+                  inputWrapper:
+                    "border-2 border-gray-300 rounded-lg bg-white shadow-none",
+                  input: "!text-black",
+                }}
+                variant="bordered"
+                value={link.label}
+                onChange={(e) =>
+                  updateExternalLink(extIdx, { label: e.target.value })
+                }
+                placeholder="Label"
+                className="w-32"
+              />
+              <Input
+                classNames={{
+                  inputWrapper:
+                    "border-2 border-gray-300 rounded-lg bg-white shadow-none",
+                  input: "!text-black",
+                }}
+                variant="bordered"
+                value={link.href}
+                onChange={(e) =>
+                  updateExternalLink(extIdx, { href: e.target.value })
+                }
+                placeholder="URL (e.g. https://...)"
+                className="flex-1"
+              />
+              <button
+                type="button"
+                onClick={() => removeExternalLink(extIdx)}
+                className="text-xs text-red-500"
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <button
+        type="button"
+        onClick={addExternalLink}
+        className="text-sm text-gray-500 hover:text-black hover:underline"
+      >
+        + Add External Link
       </button>
     </div>
   );

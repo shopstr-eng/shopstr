@@ -1,5 +1,8 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { fetchAllProductsFromDb } from "@/utils/db/db-service";
+import {
+  fetchAllProductsFromDb,
+  fetchProductsByPubkeyFromDb,
+} from "@/utils/db/db-service";
 
 export default async function handler(
   req: NextApiRequest,
@@ -10,7 +13,13 @@ export default async function handler(
   }
 
   try {
-    const products = await fetchAllProductsFromDb();
+    const { pubkey } = req.query;
+    let products;
+    if (pubkey && typeof pubkey === "string") {
+      products = await fetchProductsByPubkeyFromDb(pubkey);
+    } else {
+      products = await fetchAllProductsFromDb();
+    }
     res.status(200).json(products);
   } catch (error) {
     console.error("Failed to fetch products from database:", error);

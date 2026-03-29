@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Input, Textarea, Select, SelectItem } from "@nextui-org/react";
 import {
   StorefrontSection,
@@ -10,6 +10,7 @@ import {
   StorefrontTimelineItem,
 } from "@/utils/types/types";
 import { FileUploaderButton } from "@/components/utility-components/file-uploader";
+import { ProductData } from "@/utils/parsers/product-parser-functions";
 
 interface SectionEditorProps {
   section: StorefrontSection;
@@ -19,6 +20,9 @@ interface SectionEditorProps {
   onMoveDown: () => void;
   isFirst: boolean;
   isLast: boolean;
+  sellerProducts?: ProductData[];
+  isNew?: boolean;
+  onFlashDone?: () => void;
 }
 
 const SECTION_LABELS: Record<StorefrontSectionType, string> = {
@@ -56,15 +60,44 @@ export default function SectionEditor({
   onMoveDown,
   isFirst,
   isLast,
+  sellerProducts = [],
+  isNew,
+  onFlashDone,
 }: SectionEditorProps) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isFlashing, setIsFlashing] = useState(false);
+  const dragItemRef = useRef<number | null>(null);
+  const dragOverItemRef = useRef<number | null>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (isNew) {
+      setIsFlashing(true);
+      cardRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      const timer = setTimeout(() => {
+        setIsFlashing(false);
+        onFlashDone?.();
+      }, 1500);
+      return () => clearTimeout(timer);
+    } else {
+      setIsFlashing(false);
+      return undefined;
+    }
+  }, [isNew]);
 
   const update = (fields: Partial<StorefrontSection>) => {
     onChange({ ...section, ...fields });
   };
 
   return (
-    <div className="rounded-lg border-2 border-gray-200 bg-white">
+    <div
+      ref={cardRef}
+      className={`rounded-lg border-2 bg-white duration-500 transition-all ${
+        isFlashing
+          ? "border-blue-500 shadow-[0_0_12px_rgba(59,130,246,0.4)]"
+          : "border-gray-200"
+      }`}
+    >
       <div className="flex items-center justify-between px-4 py-3">
         <div className="flex items-center gap-3">
           <div className="flex flex-col gap-1">
@@ -293,6 +326,62 @@ export default function SectionEditor({
                 }
                 placeholder="Show all"
               />
+
+              {section.productLayout === "featured" &&
+                sellerProducts.length > 0 && (
+                  <div>
+                    <label className="mb-1 block text-sm font-bold text-black">
+                      Hero Product
+                    </label>
+                    <p className="mb-2 text-xs text-gray-500">
+                      Select the product to feature prominently at the top.
+                    </p>
+                    <Select
+                      classNames={selectClassNames}
+                      variant="bordered"
+                      selectedKeys={
+                        section.heroProductId ? [section.heroProductId] : []
+                      }
+                      onChange={(e) =>
+                        update({ heroProductId: e.target.value || undefined })
+                      }
+                      placeholder="First product (default)"
+                    >
+                      {sellerProducts.map((p) => (
+                        <SelectItem
+                          key={p.id}
+                          value={p.id}
+                          className="text-black"
+                        >
+                          {p.title} {p.price ? `($${p.price})` : ""}
+                        </SelectItem>
+                      ))}
+                    </Select>
+                  </div>
+                )}
+
+              {sellerProducts.length > 0 && (
+                <div>
+                  <label className="mb-1 block text-sm font-bold text-black">
+                    Product Order
+                  </label>
+                  <p className="mb-2 text-xs text-gray-500">
+                    Drag to reorder how products appear. Leave empty for default
+                    order.
+                  </p>
+                  <ProductOrderList
+                    sellerProducts={sellerProducts}
+                    productIds={section.productIds || []}
+                    heroProductId={section.heroProductId}
+                    layout={section.productLayout || "grid"}
+                    onChange={(ids) =>
+                      update({ productIds: ids.length > 0 ? ids : undefined })
+                    }
+                    dragItemRef={dragItemRef}
+                    dragOverItemRef={dragOverItemRef}
+                  />
+                </div>
+              )}
             </>
           )}
 
@@ -762,6 +851,133 @@ function ComparisonEditor({
           + Add Column
         </button>
       </div>
+    </div>
+  );
+}
+
+function ProductOrderList({
+  sellerProducts,
+  productIds,
+  heroProductId,
+  layout,
+  onChange,
+  dragItemRef,
+  dragOverItemRef,
+}: {
+  sellerProducts: ProductData[];
+  productIds: string[];
+  heroProductId?: string;
+  layout: "grid" | "list" | "featured";
+  onChange: (ids: string[]) => void;
+  dragItemRef: React.MutableRefObject<number | null>;
+  dragOverItemRef: React.MutableRefObject<number | null>;
+}) {
+  const orderedProducts = (() => {
+    if (productIds.length === 0) return sellerProducts;
+    const idMap = new Map(sellerProducts.map((p) => [p.id, p]));
+    const ordered: ProductData[] = [];
+    for (const id of productIds) {
+      const p = idMap.get(id);
+      if (p) ordered.push(p);
+    }
+    for (const p of sellerProducts) {
+      if (!productIds.includes(p.id)) ordered.push(p);
+    }
+    return ordered;
+  })();
+
+  const handleDragStart = (idx: number) => {
+    dragItemRef.current = idx;
+  };
+
+  const handleDragOver = (e: React.DragEvent, idx: number) => {
+    e.preventDefault();
+    dragOverItemRef.current = idx;
+  };
+
+  const handleDrop = () => {
+    if (dragItemRef.current === null || dragOverItemRef.current === null)
+      return;
+    if (dragItemRef.current === dragOverItemRef.current) return;
+    const items = [...orderedProducts];
+    const [dragged] = items.splice(dragItemRef.current, 1);
+    items.splice(dragOverItemRef.current, 0, dragged!);
+    onChange(items.map((p) => p.id));
+    dragItemRef.current = null;
+    dragOverItemRef.current = null;
+  };
+
+  const moveProduct = (fromIdx: number, toIdx: number) => {
+    if (toIdx < 0 || toIdx >= orderedProducts.length) return;
+    const items = [...orderedProducts];
+    const [moved] = items.splice(fromIdx, 1);
+    items.splice(toIdx, 0, moved!);
+    onChange(items.map((p) => p.id));
+  };
+
+  if (orderedProducts.length === 0) {
+    return <p className="text-xs italic text-gray-400">No products found.</p>;
+  }
+
+  return (
+    <div className="max-h-64 space-y-1 overflow-y-auto rounded border border-gray-200 p-2">
+      {orderedProducts.map((product, idx) => {
+        const isHero =
+          layout === "featured" &&
+          (heroProductId ? product.id === heroProductId : idx === 0);
+        return (
+          <div
+            key={product.id}
+            draggable
+            onDragStart={() => handleDragStart(idx)}
+            onDragOver={(e) => handleDragOver(e, idx)}
+            onDrop={handleDrop}
+            className={`flex cursor-grab items-center gap-2 rounded px-2 py-1.5 text-sm transition-colors active:cursor-grabbing ${
+              isHero
+                ? "border border-blue-300 bg-blue-50"
+                : "border border-transparent hover:bg-gray-50"
+            }`}
+          >
+            <span className="flex flex-col gap-0.5 text-[10px] text-gray-400">
+              <button
+                type="button"
+                onClick={() => moveProduct(idx, idx - 1)}
+                disabled={idx === 0}
+                className="leading-none hover:text-black disabled:opacity-30"
+              >
+                &#9650;
+              </button>
+              <button
+                type="button"
+                onClick={() => moveProduct(idx, idx + 1)}
+                disabled={idx === orderedProducts.length - 1}
+                className="leading-none hover:text-black disabled:opacity-30"
+              >
+                &#9660;
+              </button>
+            </span>
+            <span className="text-xs text-gray-400">&#9776;</span>
+            {product.images?.[0] && (
+              <img
+                src={product.images[0]}
+                alt={product.title}
+                className="h-8 w-8 flex-shrink-0 rounded object-cover"
+              />
+            )}
+            <span className="flex-1 truncate font-medium text-black">
+              {product.title}
+            </span>
+            {isHero && (
+              <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold text-blue-700">
+                HERO
+              </span>
+            )}
+            <span className="text-xs text-gray-500">
+              {product.price ? `$${product.price}` : ""}
+            </span>
+          </div>
+        );
+      })}
     </div>
   );
 }

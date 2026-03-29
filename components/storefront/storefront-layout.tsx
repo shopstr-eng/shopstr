@@ -28,7 +28,6 @@ import { sanitizeUrl } from "@braintree/sanitize-url";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
 import parseTags from "@/utils/parsers/product-parser-functions";
 import Link from "next/link";
-import StorefrontHero from "./storefront-hero";
 import StorefrontProductGrid from "./storefront-product-grid";
 import SectionRenderer from "./section-renderer";
 import StorefrontFooterComponent from "./storefront-footer";
@@ -582,113 +581,120 @@ export default function StorefrontLayout({
           <div className="pt-14">
             <StorefrontPolicyPage policy={policyPageData} colors={colors} />
           </div>
-        ) : hasSections && activeSections.length > 0 ? (
-          <div className="pt-14">
-            {activeSections.map((section) => (
-              <SectionRenderer
-                key={section.id}
-                section={section}
-                colors={colors}
-                shopName={shopName}
-                shopPicture={pictureUrl}
-                shopPubkey={shopPubkey}
-                products={sellerProducts}
-              />
-            ))}
-          </div>
         ) : (
           <>
-            {landingStyle === "hero" && (
-              <div className="pt-14">
-                <StorefrontHero
-                  shopName={shopName}
-                  shopAbout={shopAbout}
-                  bannerUrl={bannerUrl}
-                  pictureUrl={pictureUrl}
-                  colors={colors}
-                  productCount={sellerProducts.length}
-                  reviewCount={reviewCount}
-                />
-              </div>
-            )}
-
-            {landingStyle === "classic" && (
-              <div className="pt-14">
-                {bannerUrl && (
-                  <div className="w-full">
-                    <img
-                      src={sanitizeUrl(bannerUrl)}
-                      alt={`${shopName} Banner`}
-                      className="h-[200px] w-full object-cover md:h-[280px]"
-                    />
-                  </div>
-                )}
-                <div
-                  className="border-b px-6 py-8"
-                  style={{ borderColor: colors.primary + "33" }}
-                >
-                  <div className="mx-auto flex max-w-6xl items-center gap-6">
-                    {pictureUrl && (
-                      <img
-                        src={sanitizeUrl(pictureUrl)}
-                        alt={shopName}
-                        className="h-20 w-20 rounded-full border-4 object-cover"
-                        style={{ borderColor: colors.primary }}
-                      />
+            {!currentPage && landingStyle !== "hero" && (
+              <>
+                {landingStyle === "classic" && (
+                  <div className="pt-14">
+                    {bannerUrl && (
+                      <div className="w-full">
+                        <img
+                          src={sanitizeUrl(bannerUrl)}
+                          alt={`${shopName} Banner`}
+                          className="w-full object-contain"
+                        />
+                      </div>
                     )}
-                    <div>
-                      <h1
-                        className="font-heading text-3xl font-bold"
-                        style={{ color: "var(--sf-text)" }}
-                      >
-                        {shopName}
-                      </h1>
-                      {shopAbout && (
-                        <p className="font-body mt-2 max-w-2xl opacity-70">
-                          {shopAbout}
-                        </p>
-                      )}
-                      <div className="mt-2 flex items-center gap-3 text-sm opacity-60">
-                        <span>{sellerProducts.length} products</span>
-                        {reviewCount > 0 && <span>{reviewCount} reviews</span>}
+                    <div
+                      className="border-b px-6 py-8"
+                      style={{ borderColor: colors.primary + "33" }}
+                    >
+                      <div className="mx-auto flex max-w-6xl items-center gap-6">
+                        {pictureUrl && (
+                          <img
+                            src={sanitizeUrl(pictureUrl)}
+                            alt={shopName}
+                            className="h-20 w-20 rounded-full border-4 object-cover"
+                            style={{ borderColor: colors.primary }}
+                          />
+                        )}
+                        <div>
+                          <h1
+                            className="font-heading text-3xl font-bold"
+                            style={{ color: "var(--sf-text)" }}
+                          >
+                            {shopName}
+                          </h1>
+                          {shopAbout && (
+                            <p className="font-body mt-2 max-w-2xl opacity-70">
+                              {shopAbout}
+                            </p>
+                          )}
+                          <div className="mt-2 flex items-center gap-3 text-sm opacity-60">
+                            <span>{sellerProducts.length} products</span>
+                            {reviewCount > 0 && (
+                              <span>{reviewCount} reviews</span>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              </div>
-            )}
+                )}
 
-            {landingStyle === "minimal" && (
-              <div className="px-6 pb-4 pt-20">
-                <div className="mx-auto max-w-6xl">
-                  <div className="flex items-center gap-4">
-                    {pictureUrl && (
-                      <img
-                        src={sanitizeUrl(pictureUrl)}
-                        alt={shopName}
-                        className="h-14 w-14 rounded-full object-cover"
-                      />
-                    )}
-                    <div>
-                      <h1 className="font-heading text-2xl font-bold">
-                        {shopName}
-                      </h1>
-                      <p className="text-sm opacity-60">
-                        {sellerProducts.length} products
-                      </p>
+                {landingStyle === "minimal" && (
+                  <div className="px-6 pb-4 pt-20">
+                    <div className="mx-auto max-w-6xl">
+                      <div className="flex items-center gap-4">
+                        {pictureUrl && (
+                          <img
+                            src={sanitizeUrl(pictureUrl)}
+                            alt={shopName}
+                            className="h-14 w-14 rounded-full object-cover"
+                          />
+                        )}
+                        <div>
+                          <h1 className="font-heading text-2xl font-bold">
+                            {shopName}
+                          </h1>
+                          <p className="text-sm opacity-60">
+                            {sellerProducts.length} products
+                          </p>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </div>
+                )}
+              </>
             )}
 
-            <div className="mx-auto max-w-6xl px-4 py-8 md:px-6">
-              <StorefrontProductGrid
-                products={sellerProducts}
-                layout={layout}
-                colors={colors}
-              />
-            </div>
+            {hasSections && activeSections.length > 0 ? (
+              <div
+                className={
+                  hasNav && (currentPage || activeSections[0]?.type === "hero")
+                    ? "pt-14"
+                    : ""
+                }
+              >
+                {activeSections.map((section) => (
+                  <SectionRenderer
+                    key={section.id}
+                    section={{
+                      ...section,
+                      productLayout: section.productLayout || layout,
+                    }}
+                    colors={colors}
+                    shopName={shopName}
+                    shopPicture={pictureUrl}
+                    shopPubkey={shopPubkey}
+                    products={sellerProducts}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div
+                className={`mx-auto max-w-6xl px-4 py-8 md:px-6 ${
+                  landingStyle === "hero" ? "pt-14" : ""
+                }`}
+              >
+                <StorefrontProductGrid
+                  products={sellerProducts}
+                  layout={layout}
+                  colors={colors}
+                />
+              </div>
+            )}
           </>
         )}
 

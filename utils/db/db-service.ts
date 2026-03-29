@@ -458,6 +458,8 @@ async function initializeTables(): Promise<void> {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
+      ALTER TABLE account_recovery_tokens ADD COLUMN IF NOT EXISTS token_hash VARCHAR(255);
+
       CREATE INDEX IF NOT EXISTS idx_account_recovery_tokens_token_hash ON account_recovery_tokens(token_hash);
 
       -- Recovery email verifications table
@@ -1054,6 +1056,12 @@ export async function deleteCachedEventsByIds(
 // Fetch all products from database
 export async function fetchAllProductsFromDb(): Promise<NostrEvent[]> {
   return fetchCachedEvents(30402);
+}
+
+export async function fetchProductsByPubkeyFromDb(
+  pubkey: string
+): Promise<NostrEvent[]> {
+  return fetchCachedEvents(30402, { pubkey });
 }
 
 export async function fetchProductByIdFromDb(
@@ -3016,9 +3024,9 @@ export async function getWinbackCandidates(inactiveDays: number = 30): Promise<
       FROM notification_emails ne
       INNER JOIN message_events me ON ne.order_id = me.order_id
       WHERE ne.role = 'buyer'
-        AND me.created_at < NOW() - ($1 || ' days')::INTERVAL
+        AND me.created_at < EXTRACT(EPOCH FROM (NOW() - ($1 || ' days')::INTERVAL))::bigint
       GROUP BY ne.email, ne.pubkey, me.pubkey
-      HAVING MAX(me.created_at) < NOW() - ($1 || ' days')::INTERVAL
+      HAVING MAX(me.created_at) < EXTRACT(EPOCH FROM (NOW() - ($1 || ' days')::INTERVAL))::bigint
       LIMIT 100`,
       [inactiveDays]
     );

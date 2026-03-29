@@ -9,6 +9,37 @@ interface SectionProductsProps {
   isPreview?: boolean;
 }
 
+function applyProductOrder(
+  products: ProductData[],
+  productIds?: string[],
+  heroProductId?: string,
+  layout?: string
+): ProductData[] {
+  let ordered = products;
+  if (productIds && productIds.length > 0) {
+    const idMap = new Map(products.map((p) => [p.id, p]));
+    const result: ProductData[] = [];
+    for (const id of productIds) {
+      const p = idMap.get(id);
+      if (p) result.push(p);
+    }
+    for (const p of products) {
+      if (!productIds.includes(p.id)) result.push(p);
+    }
+    ordered = result;
+  }
+  if (layout === "featured" && heroProductId) {
+    const heroIdx = ordered.findIndex((p) => p.id === heroProductId);
+    if (heroIdx > 0) {
+      const copy = [...ordered];
+      const [hero] = copy.splice(heroIdx, 1);
+      copy.unshift(hero!);
+      return copy;
+    }
+  }
+  return ordered;
+}
+
 export default function SectionProducts({
   section,
   colors,
@@ -17,7 +48,15 @@ export default function SectionProducts({
 }: SectionProductsProps) {
   const layout = section.productLayout || "grid";
   const limit = section.productLimit;
-  const displayProducts = limit ? products.slice(0, limit) : products;
+  const orderedProducts = applyProductOrder(
+    products,
+    section.productIds,
+    section.heroProductId,
+    layout
+  );
+  const displayProducts = limit
+    ? orderedProducts.slice(0, limit)
+    : orderedProducts;
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-16 md:px-6">
