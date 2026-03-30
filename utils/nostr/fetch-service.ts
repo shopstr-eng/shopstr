@@ -764,6 +764,10 @@ export const fetchReviews = async (
             : [...ratingTags, ["created_at", createdAt.toString()]];
 
           productReviews.set(event.pubkey, updatedReview);
+          const oldEventId = reviewEventIdMap.get(reviewKey);
+          if (oldEventId && oldEventId !== event.id) {
+            reviewEventIdsByEventId.delete(oldEventId);
+          }
           reviewEventIdMap.set(reviewKey, event.id);
           reviewEventIdsByEventId.set(event.id, reviewKey);
         }

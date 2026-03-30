@@ -126,6 +126,7 @@ async function initializeTables(): Promise<void> {
       );
 
       CREATE INDEX IF NOT EXISTS idx_comment_events_pubkey ON comment_events(pubkey);
+      CREATE INDEX IF NOT EXISTS idx_comment_events_tags ON comment_events USING gin (tags jsonb_path_ops);
 
       -- Messages table (kind 1059 - gift wrapped DM)
       CREATE TABLE IF NOT EXISTS message_events (
