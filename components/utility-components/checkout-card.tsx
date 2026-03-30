@@ -45,6 +45,7 @@ import BulkSelector from "./bulk-selector";
 import ZapsnagButton from "@/components/ZapsnagButton";
 import { RawEventModal, EventIdModal } from "./modals/event-modals";
 import SubscriptionPricingCards from "./subscription-pricing-cards";
+import SellerReviewReply from "./seller-review-reply";
 
 const SUMMARY_CHARACTER_LIMIT = 200;
 
@@ -1004,6 +1005,13 @@ export default function CheckoutCard({
                               return null;
                             })}
                           </div>
+                          <SellerReviewReply
+                            reviewEventId={reviewsContext.reviewEventIds.get(
+                              `${productData.d}:${reviewerPubkey}`
+                            )}
+                            reviewerPubkey={reviewerPubkey}
+                            merchantPubkey={productData.pubkey}
+                          />
                         </div>
                       )
                     )}

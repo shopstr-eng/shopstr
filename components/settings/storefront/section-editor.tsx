@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useContext } from "react";
 import { Input, Textarea, Select, SelectItem } from "@nextui-org/react";
 import {
   StorefrontSection,
@@ -11,6 +11,7 @@ import {
 } from "@/utils/types/types";
 import { FileUploaderButton } from "@/components/utility-components/file-uploader";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
+import { ReviewsContext } from "@/utils/context/context";
 
 interface SectionEditorProps {
   section: StorefrontSection;
@@ -21,6 +22,7 @@ interface SectionEditorProps {
   isFirst: boolean;
   isLast: boolean;
   sellerProducts?: ProductData[];
+  shopPubkey?: string;
   isNew?: boolean;
   onFlashDone?: () => void;
 }
@@ -61,6 +63,7 @@ export default function SectionEditor({
   isFirst,
   isLast,
   sellerProducts = [],
+  shopPubkey,
   isNew,
   onFlashDone,
 }: SectionEditorProps) {
@@ -153,15 +156,13 @@ export default function SectionEditor({
 
       {isExpanded && (
         <div className="space-y-4 border-t border-gray-100 px-4 py-4">
-          {section.type !== "reviews" && (
-            <Input
-              label="Heading"
-              classNames={{ inputWrapper: inputWrapperClass }}
-              variant="bordered"
-              value={section.heading || ""}
-              onChange={(e) => update({ heading: e.target.value })}
-            />
-          )}
+          <Input
+            label="Heading"
+            classNames={{ inputWrapper: inputWrapperClass }}
+            variant="bordered"
+            value={section.heading || ""}
+            onChange={(e) => update({ heading: e.target.value })}
+          />
 
           {["hero", "products"].includes(section.type) && (
             <Input
@@ -410,6 +411,20 @@ export default function SectionEditor({
                 onChange={(e) => update({ address: e.target.value })}
               />
             </>
+          )}
+
+          {section.type === "reviews" && shopPubkey && (
+            <ReviewOrderList
+              shopPubkey={shopPubkey}
+              reviewOrder={section.reviewOrder || []}
+              onChange={(reviewOrder) =>
+                update({
+                  reviewOrder: reviewOrder.length > 0 ? reviewOrder : undefined,
+                })
+              }
+              dragItemRef={dragItemRef}
+              dragOverItemRef={dragOverItemRef}
+            />
           )}
 
           {section.type === "faq" && (
@@ -978,6 +993,168 @@ function ProductOrderList({
           </div>
         );
       })}
+    </div>
+  );
+}
+
+interface ReviewItem {
+  key: string;
+  reviewerPubkey: string;
+  productDTag: string;
+  comment: string;
+  isPositive: boolean;
+}
+
+function ReviewOrderList({
+  shopPubkey,
+  reviewOrder,
+  onChange,
+  dragItemRef,
+  dragOverItemRef,
+}: {
+  shopPubkey: string;
+  reviewOrder: string[];
+  onChange: (keys: string[]) => void;
+  dragItemRef: React.MutableRefObject<number | null>;
+  dragOverItemRef: React.MutableRefObject<number | null>;
+}) {
+  const reviewsContext = useContext(ReviewsContext);
+
+  const allReviews: ReviewItem[] = (() => {
+    const merchantProducts =
+      reviewsContext?.productReviewsData?.get(shopPubkey);
+    if (!merchantProducts) return [];
+
+    const reviews: ReviewItem[] = [];
+    for (const [productDTag, productReviews] of merchantProducts.entries()) {
+      for (const [reviewerPubkey, reviewData] of productReviews.entries()) {
+        const commentEntry = reviewData.find(([cat]) => cat === "comment");
+        const thumbEntry = reviewData.find(([_, __, cat]) => cat === "thumb");
+        reviews.push({
+          key: `${productDTag}:${reviewerPubkey}`,
+          reviewerPubkey,
+          productDTag,
+          comment: commentEntry?.[1] || "",
+          isPositive: thumbEntry?.[1] === "1",
+        });
+      }
+    }
+    return reviews;
+  })();
+
+  const orderedReviews = (() => {
+    if (reviewOrder.length === 0) return allReviews;
+    const reviewMap = new Map(allReviews.map((r) => [r.key, r]));
+    const ordered: ReviewItem[] = [];
+    for (const key of reviewOrder) {
+      const review = reviewMap.get(key);
+      if (review) {
+        ordered.push(review);
+        reviewMap.delete(key);
+      }
+    }
+    for (const review of reviewMap.values()) {
+      ordered.push(review);
+    }
+    return ordered;
+  })();
+
+  const handleDragStart = (idx: number) => {
+    dragItemRef.current = idx;
+  };
+
+  const handleDragOver = (e: React.DragEvent, idx: number) => {
+    e.preventDefault();
+    dragOverItemRef.current = idx;
+  };
+
+  const handleDrop = () => {
+    if (dragItemRef.current === null || dragOverItemRef.current === null)
+      return;
+    if (dragItemRef.current === dragOverItemRef.current) return;
+    const items = [...orderedReviews];
+    const [dragged] = items.splice(dragItemRef.current, 1);
+    items.splice(dragOverItemRef.current, 0, dragged!);
+    onChange(items.map((r) => r.key));
+    dragItemRef.current = null;
+    dragOverItemRef.current = null;
+  };
+
+  const moveReview = (fromIdx: number, toIdx: number) => {
+    if (toIdx < 0 || toIdx >= orderedReviews.length) return;
+    const items = [...orderedReviews];
+    const [moved] = items.splice(fromIdx, 1);
+    items.splice(toIdx, 0, moved!);
+    onChange(items.map((r) => r.key));
+  };
+
+  if (orderedReviews.length === 0) {
+    return (
+      <p className="text-xs italic text-gray-400">
+        No reviews yet. Reviews will appear here once customers leave feedback.
+      </p>
+    );
+  }
+
+  return (
+    <div>
+      <label className="mb-1 block text-sm font-bold text-black">
+        Review Order
+      </label>
+      <p className="mb-2 text-xs text-gray-500">
+        Drag to reorder how reviews appear on your storefront.
+      </p>
+      <div className="max-h-64 space-y-1 overflow-y-auto rounded border border-gray-200 p-2">
+        {orderedReviews.map((review, idx) => (
+          <div
+            key={review.key}
+            draggable
+            onDragStart={() => handleDragStart(idx)}
+            onDragOver={(e) => handleDragOver(e, idx)}
+            onDrop={handleDrop}
+            className="flex cursor-grab items-center gap-2 rounded border border-transparent px-2 py-1.5 text-sm transition-colors hover:bg-gray-50 active:cursor-grabbing"
+          >
+            <span className="flex flex-col gap-0.5 text-[10px] text-gray-400">
+              <button
+                type="button"
+                onClick={() => moveReview(idx, idx - 1)}
+                disabled={idx === 0}
+                className="leading-none hover:text-black disabled:opacity-30"
+              >
+                &#9650;
+              </button>
+              <button
+                type="button"
+                onClick={() => moveReview(idx, idx + 1)}
+                disabled={idx === orderedReviews.length - 1}
+                className="leading-none hover:text-black disabled:opacity-30"
+              >
+                &#9660;
+              </button>
+            </span>
+            <span className="text-xs text-gray-400">&#9776;</span>
+            <span
+              className={`flex-shrink-0 rounded px-1.5 py-0.5 text-xs font-bold ${
+                review.isPositive
+                  ? "bg-green-100 text-green-700"
+                  : "bg-red-100 text-red-700"
+              }`}
+            >
+              {review.isPositive ? "👍" : "👎"}
+            </span>
+            <span className="flex-1 truncate text-black">
+              {review.comment
+                ? `"${review.comment.slice(0, 60)}${
+                    review.comment.length > 60 ? "..." : ""
+                  }"`
+                : "(no comment)"}
+            </span>
+            <span className="flex-shrink-0 text-[10px] text-gray-400">
+              {review.reviewerPubkey.slice(0, 8)}...
+            </span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

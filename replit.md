@@ -48,14 +48,14 @@ Preferred communication style: Simple, everyday language.
 ## Data Management
 
 - **Event Parsing**: Custom parsers for various data types.
-- **Caching Strategy**: Hybrid local IndexedDB and real-time Nostr events.
+- **Caching Strategy**: Hybrid local IndexedDB and real-time Nostr events. Kind 1111 events are disambiguated by tags: NIP-22 review replies (with `K` tags) go to `comment_events`, community posts (with `a:34550:...` tags) go to `community_events`. Community posts (kind 1111) and approval events (kind 4550) are cached on fetch and loaded DB-first via `fetchCommunityPostsFromDb` / `pages/api/db/fetch-community-posts.ts`.
 - **File Storage**: Blossom server integration for decentralized media.
 - **Encryption**: NIP-44 for private messages and documents.
 
 ## Trust & Web of Trust
 
 - **Social Graph**: Follow-based trust system.
-- **Review System**: User reviews with weighted scoring.
+- **Review System**: User reviews with weighted scoring. Sentiment-based quality labels (Trustworthy/Solid/Questionable/Don't trust) with color coding. Sellers can reply to reviews on their products using NIP-22 (kind 1111) comment events via `publishReviewReply` in `nostr-helper-functions.ts`. Replies are displayed across all review surfaces (checkout card, marketplace, storefront). Shared reply component: `components/utility-components/seller-review-reply.tsx`. Review event IDs and replies stored in `ReviewsContext` (`reviewEventIds`, `reviewReplies`). NIP-22 review reply events cached in `comment_events` DB table.
 - **WoT Filtering**: Filtering based on follow relationships.
 
 ## Key Features
@@ -136,7 +136,7 @@ The platform exposes a Model Context Protocol (MCP) server enabling AI agents to
 - `get_product_details` — Get full details for a product by ID, including all variant options, subscription settings, herdshare agreement URL, and pickup locations
 - `list_companies` — List all seller/shop profiles with fiat options, payment method discounts, and free shipping settings
 - `get_company_details` — Get a company's profile, products, and reviews. Profile includes fiat options, payment preferences, payment method discounts, and free shipping thresholds
-- `get_reviews` — Get reviews for a product or seller
+- `get_reviews` — Get reviews for a product or seller, including seller replies (kind 1111)
 - `check_discount_code` — Validate a discount code
 - `get_payment_methods` — Get available payment methods for a seller (stripe, lightning, cashu, fiat)
 
@@ -163,6 +163,7 @@ The platform exposes a Model Context Protocol (MCP) server enabling AI agents to
 - `update_product_listing` — Update existing listing by d-tag, supports all fields including sizes, volumes, weights, bulk pricing, pickup locations, expiration, herdshare agreement, required customer info, and subscription settings
 - `delete_listing` — Delete events (kind 5)
 - `publish_review` — Publish review (kind 31555) with ratings
+- `reply_to_review` — Reply to a product review as the seller (kind 1111, NIP-22). Validates seller ownership and enforces one reply per review
 - `create_community_post` — Post to communities (kind 1111), supports replies
 - `send_direct_message` — Send encrypted NIP-17 gift-wrapped DMs (kind 1059/13/14), supports order messages and listing inquiries
 - `set_relay_list` — Publish relay list (kind 10002, NIP-65)

@@ -28,6 +28,7 @@ import LocationDropdown from "../utility-components/dropdowns/location-dropdown"
 import { ProfileWithDropdown } from "@/components/utility-components/profile/profile-dropdown";
 import { CATEGORIES, BLUEBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
+import SellerReviewReply from "@/components/utility-components/seller-review-reply";
 import parseTags, {
   ProductData,
 } from "@/utils/parsers/product-parser-functions";
@@ -348,6 +349,13 @@ function MarketplacePage({
                           return null;
                         })}
                       </div>
+                      <SellerReviewReply
+                        reviewEventId={reviewsContext.reviewEventIds.get(
+                          `${product.d}:${reviewerPubkey}`
+                        )}
+                        reviewerPubkey={reviewerPubkey}
+                        merchantPubkey={focusedPubkey}
+                      />
                     </div>
                   )
                 )}
