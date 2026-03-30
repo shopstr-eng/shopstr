@@ -663,7 +663,12 @@ export const fetchReviews = async (
   editReviewsContext: (
     merchantReviewsMap: Map<string, number[]>,
     productReviewsMap: Map<string, Map<string, Map<string, string[][]>>>,
-    isLoading: boolean
+    isLoading: boolean,
+    reviewEventIds?: Map<string, string>,
+    reviewReplies?: Map<
+      string,
+      { pubkey: string; content: string; created_at: number; eventId: string }[]
+    >
   ) => void
 ): Promise<{
   merchantScoresMap: Map<string, number[]>;
@@ -690,6 +695,9 @@ export const fetchReviews = async (
         string,
         { score: number; created_at: number }
       >();
+      const reviewEventIdMap = new Map<string, string>();
+      const reviewEventIdsByEventId = new Map<string, string>();
+
       const getReviewScoreKey = (
         merchantPubkey: string,
         productDTag: string,
@@ -721,6 +729,13 @@ export const fetchReviews = async (
           });
         }
 
+        const reviewKey = `${productDTag}:${event.pubkey}`;
+        const existingEventId = reviewEventIdMap.get(reviewKey);
+        if (!existingEventId) {
+          reviewEventIdMap.set(reviewKey, event.id);
+          reviewEventIdsByEventId.set(event.id, reviewKey);
+        }
+
         if (!productReviewsMap.has(merchantPubkey)) {
           productReviewsMap.set(merchantPubkey, new Map());
         }
@@ -749,6 +764,8 @@ export const fetchReviews = async (
             : [...ratingTags, ["created_at", createdAt.toString()]];
 
           productReviews.set(event.pubkey, updatedReview);
+          reviewEventIdMap.set(reviewKey, event.id);
+          reviewEventIdsByEventId.set(event.id, reviewKey);
         }
       };
 
@@ -792,7 +809,8 @@ export const fetchReviews = async (
           editReviewsContext(
             merchantScoresMap,
             cleanedProductReviewsMap,
-            false
+            false,
+            new Map(reviewEventIdMap)
           );
         }
       } catch (error) {
@@ -834,7 +852,102 @@ export const fetchReviews = async (
         });
       });
 
-      editReviewsContext(merchantScoresMap, productReviewsMap, false);
+      // Fetch NIP-22 comment replies for review events
+      const reviewRepliesMap = new Map<
+        string,
+        {
+          pubkey: string;
+          content: string;
+          created_at: number;
+          eventId: string;
+        }[]
+      >();
+      const allReviewEventIds = Array.from(reviewEventIdMap.values());
+
+      if (allReviewEventIds.length > 0) {
+        try {
+          // Fetch from DB first
+          const commentsResponse = await fetch("/api/db/fetch-comments");
+          if (commentsResponse.ok) {
+            const commentsFromDb = await commentsResponse.json();
+            for (const comment of commentsFromDb) {
+              const eTag = comment.tags.find(
+                (tag: string[]) =>
+                  (tag[0] === "e" || tag[0] === "E") &&
+                  allReviewEventIds.includes(tag[1])
+              );
+              if (eTag) {
+                const reviewEventId = eTag[1];
+                if (!reviewRepliesMap.has(reviewEventId)) {
+                  reviewRepliesMap.set(reviewEventId, []);
+                }
+                const existing = reviewRepliesMap.get(reviewEventId)!;
+                if (!existing.some((r) => r.eventId === comment.id)) {
+                  existing.push({
+                    pubkey: comment.pubkey,
+                    content: comment.content,
+                    created_at: comment.created_at,
+                    eventId: comment.id,
+                  });
+                }
+              }
+            }
+          }
+
+          // Fetch from relays
+          const commentsFilter: Filter = {
+            kinds: [1111],
+            "#e": allReviewEventIds,
+          };
+          const commentEvents = await nostr.fetch([commentsFilter], {}, relays);
+
+          for (const comment of commentEvents) {
+            const eTag = comment.tags.find(
+              (tag) =>
+                (tag[0] === "e" || tag[0] === "E") &&
+                allReviewEventIds.includes(tag[1]!)
+            );
+            if (eTag) {
+              const reviewEventId = eTag[1]!;
+              if (!reviewRepliesMap.has(reviewEventId)) {
+                reviewRepliesMap.set(reviewEventId, []);
+              }
+              const existing = reviewRepliesMap.get(reviewEventId)!;
+              if (!existing.some((r) => r.eventId === comment.id)) {
+                existing.push({
+                  pubkey: comment.pubkey,
+                  content: comment.content,
+                  created_at: comment.created_at,
+                  eventId: comment.id,
+                });
+              }
+            }
+          }
+
+          // Cache comment events
+          const validComments = commentEvents.filter(
+            (e) => e.id && e.sig && e.pubkey && e.kind === 1111
+          );
+          if (validComments.length > 0) {
+            cacheEventsToDatabase(validComments).catch((error) =>
+              console.error(
+                "Failed to cache comment events to database:",
+                error
+              )
+            );
+          }
+        } catch (error) {
+          console.error("Failed to fetch review replies:", error);
+        }
+      }
+
+      editReviewsContext(
+        merchantScoresMap,
+        productReviewsMap,
+        false,
+        reviewEventIdMap,
+        reviewRepliesMap
+      );
 
       // Cache reviews to database via API (only valid events)
       const validReviews = fetchedEvents.filter(

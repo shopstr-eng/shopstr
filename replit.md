@@ -55,7 +55,7 @@ Preferred communication style: Simple, everyday language.
 ## Trust & Web of Trust
 
 - **Social Graph**: Follow-based trust system.
-- **Review System**: User reviews with weighted scoring.
+- **Review System**: User reviews with weighted scoring. Sentiment-based quality labels (Trustworthy/Solid/Questionable/Don't trust) with color coding. Sellers can reply to reviews on their products using NIP-22 (kind 1111) comment events via `publishReviewReply` in `nostr-helper-functions.ts`. Replies are displayed across all review surfaces (checkout card, marketplace, storefront). Shared reply component: `components/utility-components/seller-review-reply.tsx`. Review event IDs and replies stored in `ReviewsContext` (`reviewEventIds`, `reviewReplies`). Comment events cached in `comment_events` DB table.
 - **WoT Filtering**: Filtering based on follow relationships.
 
 ## Key Features

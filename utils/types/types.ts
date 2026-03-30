@@ -166,6 +166,7 @@ export interface StorefrontSection {
   phone?: string;
   address?: string;
   caption?: string;
+  reviewOrder?: string[];
 }
 
 export interface StorefrontPage {

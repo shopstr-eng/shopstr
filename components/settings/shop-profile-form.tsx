@@ -1251,6 +1251,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                           navLinks={navLinks}
                           onNavLinksChange={setNavLinks}
                           sellerProducts={sellerProducts}
+                          shopPubkey={userPubkey}
                         />
                       </div>
 

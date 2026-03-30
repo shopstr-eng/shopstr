@@ -531,6 +531,48 @@ export async function publishReviewEvent(
     throw error;
   }
 }
+export async function publishReviewReply(
+  nostr: NostrManager,
+  signer: NostrSigner,
+  content: string,
+  reviewEventId: string,
+  reviewEventPubkey: string,
+  reviewEventKind: number = 31555,
+  relayHint: string = ""
+) {
+  try {
+    const commentEvent: EventTemplate = {
+      created_at: Math.floor(Date.now() / 1000),
+      content: content,
+      kind: 1111,
+      tags: [
+        ["E", reviewEventId, relayHint, reviewEventPubkey],
+        ["K", reviewEventKind.toString()],
+        ["P", reviewEventPubkey, relayHint],
+        ["e", reviewEventId, relayHint, reviewEventPubkey],
+        ["k", reviewEventKind.toString()],
+        ["p", reviewEventPubkey, relayHint],
+      ],
+    };
+    const signedEvent = await finalizeAndSendNostrEvent(
+      signer,
+      nostr,
+      commentEvent
+    );
+
+    if (signedEvent) {
+      await cacheEventToDatabase(signedEvent).catch((error) =>
+        console.error("Failed to cache comment event to database:", error)
+      );
+    }
+
+    return signedEvent;
+  } catch (error) {
+    console.error(error);
+    throw error;
+  }
+}
+
 export async function createNostrRelayEvent(
   nostr: NostrManager,
   signer: NostrSigner

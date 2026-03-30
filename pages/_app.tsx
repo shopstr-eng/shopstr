@@ -108,22 +108,20 @@ function MilkMarket({ props }: { props: AppProps }) {
     {
       merchantReviewsData: new Map(),
       productReviewsData: new Map(),
+      reviewEventIds: new Map(),
+      reviewReplies: new Map(),
       isLoading: true,
       updateMerchantReviewsData: (
         merchantPubkey: string,
         merchantReviewsData: number[]
       ) => {
-        setReviewsContext((reviewsContext) => {
-          const merchantReviewsDataMap = new Map(
-            reviewsContext.merchantReviewsData
-          );
+        setReviewsContext((prev) => {
+          const merchantReviewsDataMap = new Map(prev.merchantReviewsData);
           merchantReviewsDataMap.set(merchantPubkey, merchantReviewsData);
           return {
+            ...prev,
             merchantReviewsData: merchantReviewsDataMap,
-            productReviewsData: reviewsContext.productReviewsData,
             isLoading: false,
-            updateMerchantReviewsData: reviewsContext.updateMerchantReviewsData,
-            updateProductReviewsData: reviewsContext.updateProductReviewsData,
           };
         });
       },
@@ -132,24 +130,40 @@ function MilkMarket({ props }: { props: AppProps }) {
         productDTag: string,
         productReviewsData: Map<string, string[][]>
       ) => {
-        setReviewsContext((reviewsContext) => {
-          const productReviewsDataMap = new Map(
-            reviewsContext.productReviewsData
-          );
+        setReviewsContext((prev) => {
+          const productReviewsDataMap = new Map(prev.productReviewsData);
           const productScoreMap = new Map(
-            reviewsContext.productReviewsData.get(merchantPubkey)
+            prev.productReviewsData.get(merchantPubkey)
           );
           productReviewsDataMap.set(
             merchantPubkey,
             productScoreMap.set(productDTag, productReviewsData)
           );
           return {
-            merchantReviewsData: reviewsContext.merchantReviewsData,
+            ...prev,
             productReviewsData: productReviewsDataMap,
             isLoading: false,
-            updateMerchantReviewsData: reviewsContext.updateMerchantReviewsData,
-            updateProductReviewsData: reviewsContext.updateProductReviewsData,
           };
+        });
+      },
+      updateReviewEventId: (reviewKey: string, eventId: string) => {
+        setReviewsContext((prev) => {
+          const reviewEventIds = new Map(prev.reviewEventIds);
+          reviewEventIds.set(reviewKey, eventId);
+          return { ...prev, reviewEventIds };
+        });
+      },
+      addReviewReply: (
+        reviewEventId: string,
+        reply: import("@/utils/context/context").ReviewReply
+      ) => {
+        setReviewsContext((prev) => {
+          const reviewReplies = new Map(prev.reviewReplies);
+          const existing = reviewReplies.get(reviewEventId) || [];
+          if (!existing.some((r) => r.eventId === reply.eventId)) {
+            reviewReplies.set(reviewEventId, [...existing, reply]);
+          }
+          return { ...prev, reviewReplies };
         });
       },
     }
@@ -340,15 +354,18 @@ function MilkMarket({ props }: { props: AppProps }) {
   const editReviewsContext = (
     merchantReviewsData: Map<string, number[]>,
     productReviewsData: Map<string, Map<string, Map<string, string[][]>>>,
-    isLoading: boolean
+    isLoading: boolean,
+    reviewEventIds?: Map<string, string>,
+    reviewReplies?: Map<string, import("@/utils/context/context").ReviewReply[]>
   ) => {
-    setReviewsContext((reviewsContext) => {
+    setReviewsContext((prev) => {
       return {
+        ...prev,
         merchantReviewsData,
         productReviewsData,
         isLoading,
-        updateMerchantReviewsData: reviewsContext.updateMerchantReviewsData,
-        updateProductReviewsData: reviewsContext.updateProductReviewsData,
+        ...(reviewEventIds ? { reviewEventIds } : {}),
+        ...(reviewReplies ? { reviewReplies } : {}),
       };
     });
   };

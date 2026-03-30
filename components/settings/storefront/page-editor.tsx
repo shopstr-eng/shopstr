@@ -15,6 +15,7 @@ interface PageEditorProps {
   navLinks: StorefrontNavLink[];
   onNavLinksChange: (links: StorefrontNavLink[]) => void;
   sellerProducts?: ProductData[];
+  shopPubkey?: string;
 }
 
 const SECTION_TYPES: { type: StorefrontSectionType; label: string }[] = [
@@ -41,6 +42,7 @@ export default function PageEditor({
   navLinks,
   onNavLinksChange,
   sellerProducts = [],
+  shopPubkey,
 }: PageEditorProps) {
   const [expandedPage, setExpandedPage] = useState<string | null>(null);
 
@@ -241,6 +243,7 @@ export default function PageEditor({
                     isFirst={idx === 0}
                     isLast={idx === page.sections.length - 1}
                     sellerProducts={sellerProducts}
+                    shopPubkey={shopPubkey}
                   />
                 ))}
               </div>
