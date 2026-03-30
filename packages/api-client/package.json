@@ -9,10 +9,13 @@
   "exports": {
     ".": "./src/index.ts"
   },
+  "dependencies": {
+    "@milk-market/domain": "workspace:*"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json --emitDeclarationOnly",
     "lint": "tsc -p tsconfig.json --noEmit",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node -e \"process.exit(0)\""
+    "test": "pnpm -C ../.. exec jest packages/api-client/src/__tests__ --runInBand"
   }
 }

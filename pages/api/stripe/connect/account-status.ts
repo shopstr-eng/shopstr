@@ -9,6 +9,7 @@ import {
   extractSignedEventFromRequest,
   verifyAndConsumeSignedRequestProof,
 } from "@/utils/mcp/request-proof-server";
+import { verifyNostrAuth } from "@/utils/stripe/verify-nostr-auth";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
   apiVersion: "2025-09-30.clover",
@@ -28,7 +29,6 @@ export default async function handler(
     if (!pubkey || typeof pubkey !== "string" || !pubkey.trim()) {
       return res.status(400).json({ error: "pubkey is required" });
     }
-
     const normalizedPubkey = pubkey.trim();
 
     const signedEvent = extractSignedEventFromRequest(req);
@@ -38,7 +38,16 @@ export default async function handler(
     );
 
     if (!proofResult.ok) {
-      return res.status(proofResult.status).json({ error: proofResult.error });
+      const authResult = verifyNostrAuth(
+        signedEvent,
+        normalizedPubkey,
+        "stripe-connect"
+      );
+      if (!authResult.valid) {
+        return res.status(proofResult.status).json({
+          error: proofResult.error || authResult.error || "Authentication failed",
+        });
+      }
     }
 
     const connectAccount = await getStripeConnectAccount(normalizedPubkey);

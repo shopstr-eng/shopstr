@@ -1,46 +1,36 @@
 import { NextApiRequest, NextApiResponse } from "next";
 import {
   saveNotificationEmail,
-  getSellerNotificationEmail,
-  getUserAuthEmail,
 } from "@/utils/db/db-service";
+import { verifyNostrAuth } from "@/utils/stripe/verify-nostr-auth";
 
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
-  if (req.method === "GET") {
-    const { pubkey, role } = req.query;
-
-    if (!pubkey || typeof pubkey !== "string") {
-      return res.status(400).json({ error: "pubkey is required" });
-    }
-
-    try {
-      let email: string | null = null;
-
-      if (role === "seller") {
-        email = await getSellerNotificationEmail(pubkey);
-      }
-
-      if (!email) {
-        email = await getUserAuthEmail(pubkey);
-      }
-
-      return res.status(200).json({ email });
-    } catch (error) {
-      console.error("Error fetching notification email:", error);
-      return res
-        .status(500)
-        .json({ error: "Failed to fetch notification email" });
-    }
-  }
-
   if (req.method === "POST") {
-    const { email, role, pubkey, orderId } = req.body;
+    const { email, role, pubkey, orderId, signedEvent } = req.body;
 
-    if (!email || !role) {
-      return res.status(400).json({ error: "email and role are required" });
+    if (
+      typeof email !== "string" ||
+      (role !== "buyer" && role !== "seller") ||
+      typeof pubkey !== "string" ||
+      !signedEvent
+    ) {
+      return res
+        .status(400)
+        .json({ error: "email, role, pubkey, and signedEvent are required" });
+    }
+
+    const authResult = verifyNostrAuth(
+      signedEvent,
+      pubkey,
+      "notification-email-write"
+    );
+    if (!authResult.valid) {
+      return res
+        .status(401)
+        .json({ error: authResult.error || "Authentication failed" });
     }
 
     try {

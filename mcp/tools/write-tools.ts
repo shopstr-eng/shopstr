@@ -44,6 +44,7 @@ const resolveCname = promisify(dns.resolveCname);
 const resolve4 = promisify(dns.resolve4);
 import { getDefaultFlowSteps } from "@/utils/email/flow-email-templates";
 import { v4 as uuidv4 } from "uuid";
+import { createSellerActionAuthEventTemplate } from "@milk-market/nostr";
 
 function noSignerError() {
   return {
@@ -3201,6 +3202,12 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
       try {
         const pubkey = signer.getPubKey();
+        const signedEvent = signer.sign(
+          createSellerActionAuthEventTemplate(
+            pubkey,
+            "notification-email-write"
+          )
+        );
         const response = await fetch(
           `${baseUrl}/api/email/notification-email`,
           {
@@ -3210,6 +3217,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
               email: params.email,
               role: params.role,
               pubkey,
+              signedEvent,
             }),
           }
         );
@@ -3260,9 +3268,23 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
       try {
         const pubkey = signer.getPubKey();
-        const roleParam = params.role ? `&role=${params.role}` : "";
+        const signedEvent = signer.sign(
+          createSellerActionAuthEventTemplate(
+            pubkey,
+            "notification-email-read"
+          )
+        );
         const response = await fetch(
-          `${baseUrl}/api/email/notification-email?pubkey=${pubkey}${roleParam}`
+          `${baseUrl}/api/email/notification-email/read`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              pubkey,
+              role: params.role,
+              signedEvent,
+            }),
+          }
         );
 
         const data = await response.json();

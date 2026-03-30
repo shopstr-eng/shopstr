@@ -8,6 +8,7 @@ import {
 } from "react";
 import { useRouter } from "next/router";
 import { useForm, Controller } from "react-hook-form";
+import { createSellerActionAuthEventTemplate } from "@milk-market/nostr";
 import {
   Button,
   Input,
@@ -434,17 +435,34 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
   }, [shopContext, userPubkey, reset]);
 
   useEffect(() => {
-    if (userPubkey) {
-      fetch(`/api/email/notification-email?pubkey=${userPubkey}&role=seller`)
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.email) {
+    if (userPubkey && signer?.sign) {
+      const loadNotificationEmail = async () => {
+        try {
+          const signedEvent = await signer.sign(
+            createSellerActionAuthEventTemplate(
+              userPubkey,
+              "notification-email-read"
+            )
+          );
+          const res = await fetch("/api/email/notification-email/read", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              pubkey: userPubkey,
+              role: "seller",
+              signedEvent,
+            }),
+          });
+          const data = await res.json();
+          if (res.ok && data.email) {
             setNotificationEmail(data.email);
           }
-        })
-        .catch(() => {});
+        } catch {}
+      };
+
+      loadNotificationEmail();
     }
-  }, [userPubkey]);
+  }, [signer, userPubkey]);
 
   useEffect(() => {
     if (userPubkey && signer) {
@@ -470,14 +488,24 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
   }, [userPubkey, signer]);
 
   const handleSaveSlug = async () => {
-    if (!shopSlug || !userPubkey) return;
+    if (!shopSlug || !userPubkey || !signer?.sign) return;
     setSlugStatus("saving");
     setSlugError("");
     try {
+      const signedEvent = await signer.sign(
+        createSellerActionAuthEventTemplate(
+          userPubkey,
+          "storefront-slug-write"
+        )
+      );
       const res = await fetch("/api/storefront/register-slug", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pubkey: userPubkey, slug: shopSlug }),
+        body: JSON.stringify({
+          pubkey: userPubkey,
+          slug: shopSlug,
+          signedEvent,
+        }),
       });
       const data = await res.json();
       if (res.ok) {
@@ -494,12 +522,25 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
   };
 
   const handleRemoveStorefront = async () => {
-    if (!userPubkey) return;
+    if (!userPubkey || !signer?.sign) return;
+    const confirmed = window.confirm(
+      "Are you sure you want to remove your storefront? This will delete your shop URL, custom domain, and reset all storefront settings."
+    );
+    if (!confirmed) return;
     try {
+      const signedEvent = await signer.sign(
+        createSellerActionAuthEventTemplate(
+          userPubkey,
+          "storefront-slug-write"
+        )
+      );
       await fetch("/api/storefront/register-slug", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pubkey: userPubkey }),
+        body: JSON.stringify({
+          pubkey: userPubkey,
+          signedEvent,
+        }),
       });
 
       setShopSlug("");
@@ -651,6 +692,12 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
 
     if (notificationEmail) {
       try {
+        const signedEvent = await signer!.sign(
+          createSellerActionAuthEventTemplate(
+            userPubkey!,
+            "notification-email-write"
+          )
+        );
         await fetch("/api/email/notification-email", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -658,6 +705,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
             pubkey: userPubkey,
             email: notificationEmail,
             role: "seller",
+            signedEvent,
           }),
         });
       } catch (e) {}
