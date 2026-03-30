@@ -866,8 +866,11 @@ export const fetchReviews = async (
 
       if (allReviewEventIds.length > 0) {
         try {
-          // Fetch from DB first
-          const commentsResponse = await fetch("/api/db/fetch-comments");
+          const commentsResponse = await fetch("/api/db/fetch-comments", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ reviewEventIds: allReviewEventIds }),
+          });
           if (commentsResponse.ok) {
             const commentsFromDb = await commentsResponse.json();
             for (const comment of commentsFromDb) {

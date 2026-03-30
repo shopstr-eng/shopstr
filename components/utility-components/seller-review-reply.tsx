@@ -28,18 +28,22 @@ export default function SellerReviewReply({
   const [replyText, setReplyText] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showReplyInput, setShowReplyInput] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
   const replies: ReviewReply[] = reviewEventId
     ? reviewsContext.reviewReplies.get(reviewEventId) || []
     : [];
 
   const isSeller = userPubkey === merchantPubkey;
-  const canReply = isSeller && signer && nostr && reviewEventId;
+  const hasSellerReply = replies.some((r) => r.pubkey === merchantPubkey);
+  const canReply =
+    isSeller && signer && nostr && reviewEventId && !hasSellerReply;
 
   const handleSubmitReply = async () => {
     if (!replyText.trim() || !canReply) return;
 
     setIsSubmitting(true);
+    setErrorMessage("");
     try {
       const signedEvent = await publishReviewReply(
         nostr!,
@@ -56,12 +60,14 @@ export default function SellerReviewReply({
           created_at: Math.floor(Date.now() / 1000),
           eventId: signedEvent.id,
         });
+        setReplyText("");
+        setShowReplyInput(false);
+      } else {
+        setErrorMessage("Reply could not be published. Please try again.");
       }
-
-      setReplyText("");
-      setShowReplyInput(false);
     } catch (error) {
       console.error("Failed to submit reply:", error);
+      setErrorMessage("Something went wrong. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -123,6 +129,9 @@ export default function SellerReviewReply({
             }}
             variant="bordered"
           />
+          {errorMessage && (
+            <p className="text-sm font-medium text-red-500">{errorMessage}</p>
+          )}
           <div className="flex gap-2">
             <Button
               size="sm"
@@ -140,6 +149,7 @@ export default function SellerReviewReply({
               onClick={() => {
                 setShowReplyInput(false);
                 setReplyText("");
+                setErrorMessage("");
               }}
               className="font-bold text-gray-500"
             >

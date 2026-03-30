@@ -537,10 +537,12 @@ export async function publishReviewReply(
   content: string,
   reviewEventId: string,
   reviewEventPubkey: string,
-  reviewEventKind: number = 31555,
-  relayHint: string = ""
+  reviewEventKind: number = 31555
 ) {
   try {
+    const { relays } = getLocalStorageData();
+    const relayHint = relays.length > 0 ? relays[0] : "";
+
     const commentEvent: EventTemplate = {
       created_at: Math.floor(Date.now() / 1000),
       content: content,

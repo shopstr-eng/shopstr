@@ -1401,6 +1401,43 @@ export async function fetchProfileByPubkeyFromDb(
   }
 }
 
+export async function fetchCommentsByReviewIds(
+  reviewEventIds: string[]
+): Promise<NostrEvent[]> {
+  if (!reviewEventIds.length) return [];
+
+  const dbPool = getDbPool();
+  let client;
+  try {
+    client = await dbPool.connect();
+    const placeholders = reviewEventIds.map((_, i) => `$${i + 1}`).join(", ");
+    const query = `
+      SELECT id, pubkey, created_at, kind, tags, content, sig
+      FROM comment_events
+      WHERE EXISTS (
+        SELECT 1 FROM jsonb_array_elements(tags) AS tag
+        WHERE (tag->>0 = 'e' OR tag->>0 = 'E')
+        AND tag->>1 IN (${placeholders})
+      )
+    `;
+    const result = await client.query(query, reviewEventIds);
+    return result.rows.map((row: any) => ({
+      id: row.id,
+      pubkey: row.pubkey,
+      created_at: row.created_at,
+      kind: row.kind,
+      tags: row.tags,
+      content: row.content,
+      sig: row.sig,
+    }));
+  } catch (error) {
+    console.error("Failed to fetch comments by review IDs:", error);
+    return [];
+  } finally {
+    if (client) client.release();
+  }
+}
+
 // Fetch all reviews from database
 export async function fetchAllReviewsFromDb(): Promise<NostrEvent[]> {
   return fetchCachedEvents(31555);

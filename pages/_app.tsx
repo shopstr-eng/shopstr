@@ -364,8 +364,8 @@ function MilkMarket({ props }: { props: AppProps }) {
         merchantReviewsData,
         productReviewsData,
         isLoading,
-        ...(reviewEventIds ? { reviewEventIds } : {}),
-        ...(reviewReplies ? { reviewReplies } : {}),
+        reviewEventIds: reviewEventIds ?? prev.reviewEventIds,
+        reviewReplies: reviewReplies ?? prev.reviewReplies,
       };
     });
   };
