@@ -13,6 +13,12 @@ interface SellerReviewReplyProps {
   reviewerPubkey: string;
   merchantPubkey: string;
   compact?: boolean;
+  colorScheme?: {
+    text?: string;
+    accent?: string;
+    secondary?: string;
+    background?: string;
+  };
 }
 
 export default function SellerReviewReply({
@@ -20,6 +26,7 @@ export default function SellerReviewReply({
   reviewerPubkey,
   merchantPubkey,
   compact = false,
+  colorScheme,
 }: SellerReviewReplyProps) {
   const { signer, pubkey: userPubkey } = useContext(SignerContext);
   const { nostr } = useContext(NostrContext);
@@ -73,13 +80,21 @@ export default function SellerReviewReply({
     }
   };
 
+  const themed = !!colorScheme;
+  const borderColor = themed ? colorScheme.text + "33" : undefined;
+  const textColor = themed ? colorScheme.text + "cc" : undefined;
+  const accentColor = themed ? colorScheme.accent : undefined;
+  const badgeBg = themed ? colorScheme.accent + "22" : undefined;
+  const badgeText = themed ? colorScheme.accent : undefined;
+  const inputBorderColor = themed ? colorScheme.text + "40" : undefined;
+  const inputBg = themed ? colorScheme.background : undefined;
+
   return (
     <div className={compact ? "mt-2" : "mt-3"}>
       {replies.length > 0 && (
         <div
-          className={`space-y-2 ${
-            compact ? "ml-4" : "ml-6"
-          } border-l-2 border-gray-200 pl-3`}
+          className={`space-y-2 ${compact ? "ml-4" : "ml-6"} border-l-2 pl-3`}
+          style={themed ? { borderColor } : { borderColor: "#e5e7eb" }}
         >
           {replies
             .sort((a, b) => a.created_at - b.created_at)
@@ -90,12 +105,20 @@ export default function SellerReviewReply({
                     pubkey={reply.pubkey}
                     dropDownKeys={["shop", "copy_npub"]}
                   />
-                  <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold text-blue-700">
+                  <span
+                    className="rounded px-1.5 py-0.5 text-[10px] font-bold"
+                    style={
+                      themed
+                        ? { backgroundColor: badgeBg, color: badgeText }
+                        : { backgroundColor: "#dbeafe", color: "#1d4ed8" }
+                    }
+                  >
                     Seller
                   </span>
                 </div>
                 <p
-                  className={`${compact ? "text-sm" : "text-base"} text-black`}
+                  className={compact ? "text-sm" : "text-base"}
+                  style={themed ? { color: textColor } : { color: "#000000" }}
                 >
                   {reply.content}
                 </p>
@@ -110,7 +133,8 @@ export default function SellerReviewReply({
           onClick={() => setShowReplyInput(true)}
           className={`${
             compact ? "ml-4 text-xs" : "ml-6 text-sm"
-          } mt-1 font-medium text-blue-600 hover:text-blue-800`}
+          } mt-1 font-medium`}
+          style={themed ? { color: accentColor } : { color: "#2563eb" }}
         >
           Reply
         </button>
@@ -124,9 +148,19 @@ export default function SellerReviewReply({
             value={replyText}
             onChange={(e) => setReplyText(e.target.value)}
             classNames={{
-              inputWrapper:
-                "border-2 border-gray-300 rounded-lg bg-white shadow-none",
+              inputWrapper: themed
+                ? "border-2 rounded-lg shadow-none"
+                : "border-2 border-gray-300 rounded-lg bg-white shadow-none",
             }}
+            style={
+              themed
+                ? {
+                    borderColor: inputBorderColor,
+                    backgroundColor: inputBg,
+                    color: colorScheme.text,
+                  }
+                : undefined
+            }
             variant="bordered"
           />
           {errorMessage && (
@@ -139,7 +173,12 @@ export default function SellerReviewReply({
               isLoading={isSubmitting}
               isDisabled={!replyText.trim()}
               onClick={handleSubmitReply}
-              className="rounded-lg border-2 border-black bg-blue-500 font-bold text-white shadow-neo"
+              className={
+                themed
+                  ? "rounded-lg font-bold text-white"
+                  : "rounded-lg border-2 border-black bg-blue-500 font-bold text-white shadow-neo"
+              }
+              style={themed ? { backgroundColor: accentColor } : undefined}
             >
               Send Reply
             </Button>
@@ -151,7 +190,12 @@ export default function SellerReviewReply({
                 setReplyText("");
                 setErrorMessage("");
               }}
-              className="font-bold text-gray-500"
+              className="font-bold"
+              style={
+                themed
+                  ? { color: colorScheme.text + "80" }
+                  : { color: "#6b7280" }
+              }
             >
               Cancel
             </Button>

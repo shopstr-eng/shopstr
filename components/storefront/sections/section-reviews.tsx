@@ -190,6 +190,7 @@ export default function SectionReviews({
                   reviewerPubkey={review.reviewerPubkey}
                   merchantPubkey={shopPubkey}
                   compact
+                  colorScheme={colors}
                 />
               </div>
             ))}
