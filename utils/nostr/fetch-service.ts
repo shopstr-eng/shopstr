@@ -881,6 +881,7 @@ export const fetchReviews = async (
               const eTag = comment.tags.find(
                 (tag: string[]) =>
                   (tag[0] === "e" || tag[0] === "E") &&
+                  tag[1] != null &&
                   allReviewEventIds.includes(tag[1])
               );
               if (eTag) {

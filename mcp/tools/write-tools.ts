@@ -1303,7 +1303,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         const addressParts = dTagValue.split(":");
         let merchantPubkey: string | null = null;
         if (dTagValue.startsWith("a:")) {
-          merchantPubkey = addressParts.length >= 3 ? addressParts[2] : null;
+          merchantPubkey = addressParts.length >= 3 ? addressParts[2]! : null;
         } else {
           const pTag = reviewEvent.tags.find((t: string[]) => t[0] === "p");
           merchantPubkey = pTag?.[1] || null;

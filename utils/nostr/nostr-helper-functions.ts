@@ -541,7 +541,7 @@ export async function publishReviewReply(
 ) {
   try {
     const { relays } = getLocalStorageData();
-    const relayHint = relays.length > 0 ? relays[0] : "";
+    const relayHint: string = relays.length > 0 ? relays[0]! : "";
 
     const commentEvent: EventTemplate = {
       created_at: Math.floor(Date.now() / 1000),
