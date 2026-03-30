@@ -10,6 +10,8 @@ import { EventTemplate } from "nostr-tools";
 import {
   cacheEvent,
   fetchAllProfilesFromDb,
+  fetchCachedEvents,
+  fetchCommentsByReviewIds,
   getSubscriptionsBySellerPubkey,
   createEmailFlow,
   getEmailFlows,
@@ -1258,6 +1260,115 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
       } catch (error) {
         return errorResponse(
           "Failed to publish review",
+          error instanceof Error ? error.message : "Unknown error",
+          startTime
+        );
+      }
+    }
+  );
+
+  registerTool(
+    server,
+    "reply_to_review",
+    "Reply to a product review as the seller (kind 1111, NIP-22 comment). Only the seller whose product was reviewed can reply. Limited to one reply per review.",
+    {
+      reviewEventId: z
+        .string()
+        .describe("The Nostr event ID of the review to reply to"),
+      content: z.string().describe("Reply text content"),
+    },
+    async (params) => {
+      const startTime = Date.now();
+      if (apiKey.permissions !== "full_access") return permissionError();
+      const signer = await getSigner(apiKey);
+      if (!signer) return noSignerError();
+
+      try {
+        const sellerPubkey = signer.getPubKey();
+
+        const reviewEvents = await fetchCachedEvents(31555);
+        const reviewEvent = reviewEvents.find(
+          (e) => e.id === params.reviewEventId
+        );
+        if (!reviewEvent) {
+          return errorResponse(
+            "Review not found",
+            `No review found with event ID: ${params.reviewEventId}`,
+            startTime
+          );
+        }
+
+        const dTag = reviewEvent.tags.find((t: string[]) => t[0] === "d");
+        const dTagValue = dTag?.[1] || "";
+        const addressParts = dTagValue.split(":");
+        let merchantPubkey: string | null = null;
+        if (dTagValue.startsWith("a:")) {
+          merchantPubkey = addressParts.length >= 3 ? addressParts[2] : null;
+        } else {
+          const pTag = reviewEvent.tags.find((t: string[]) => t[0] === "p");
+          merchantPubkey = pTag?.[1] || null;
+          if (!merchantPubkey && dTagValue.includes(sellerPubkey)) {
+            merchantPubkey = sellerPubkey;
+          }
+        }
+
+        if (!merchantPubkey || merchantPubkey !== sellerPubkey) {
+          return errorResponse(
+            "Permission denied",
+            "You can only reply to reviews on your own products",
+            startTime
+          );
+        }
+
+        const existingReplies = await fetchCommentsByReviewIds([
+          params.reviewEventId,
+        ]);
+        const alreadyReplied = existingReplies.some(
+          (e) => e.pubkey === sellerPubkey
+        );
+        if (alreadyReplied) {
+          return errorResponse(
+            "Already replied",
+            "You have already replied to this review. Only one reply per review is allowed.",
+            startTime
+          );
+        }
+
+        const reviewerPubkey = reviewEvent.pubkey;
+        const relayHint = "";
+
+        const eventTemplate: EventTemplate = {
+          created_at: Math.floor(Date.now() / 1000),
+          content: params.content,
+          kind: 1111,
+          tags: [
+            ["E", params.reviewEventId, relayHint, reviewerPubkey],
+            ["K", "31555"],
+            ["P", reviewerPubkey, relayHint],
+            ["e", params.reviewEventId, relayHint, reviewerPubkey],
+            ["k", "31555"],
+            ["p", reviewerPubkey, relayHint],
+          ],
+        };
+
+        const signedEvent = await signAndPublishEvent(signer, eventTemplate);
+        await cacheEvent(signedEvent).catch(console.error);
+
+        return successResponse(
+          {
+            eventId: signedEvent.id,
+            pubkey: signedEvent.pubkey,
+            reply: {
+              content: params.content,
+              reviewEventId: params.reviewEventId,
+              reviewerPubkey,
+            },
+          },
+          startTime
+        );
+      } catch (error) {
+        return errorResponse(
+          "Failed to reply to review",
           error instanceof Error ? error.message : "Unknown error",
           startTime
         );

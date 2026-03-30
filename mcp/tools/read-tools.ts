@@ -7,6 +7,7 @@ import {
   validateDiscountCode,
   getStripeConnectAccount,
   getDbPool,
+  fetchCommentsByReviewIds,
 } from "@/utils/db/db-service";
 import { NostrEvent } from "@/utils/types/types";
 import { registerTool } from "./register-tool";
@@ -192,6 +193,48 @@ function parseReviewEvent(event: NostrEvent) {
     ratings,
     createdAt: event.created_at,
   };
+}
+
+function parseCommentEvent(event: NostrEvent) {
+  const tags = event.tags || [];
+  const referencedEventId =
+    tags.find((t) => (t[0] === "e" || t[0] === "E") && t[1])?.[1] || null;
+
+  return {
+    id: event.id,
+    pubkey: event.pubkey,
+    content: event.content,
+    createdAt: event.created_at,
+    referencedReviewEventId: referencedEventId,
+  };
+}
+
+async function attachRepliesToReviews(
+  reviews: ReturnType<typeof parseReviewEvent>[]
+) {
+  const reviewIds = reviews.map((r) => r.id).filter(Boolean) as string[];
+  if (reviewIds.length === 0) return reviews;
+
+  const commentEvents = await fetchCommentsByReviewIds(reviewIds);
+  const repliesByReviewId = new Map<
+    string,
+    ReturnType<typeof parseCommentEvent>[]
+  >();
+
+  for (const event of commentEvents) {
+    const parsed = parseCommentEvent(event);
+    if (parsed.referencedReviewEventId) {
+      const existing =
+        repliesByReviewId.get(parsed.referencedReviewEventId) || [];
+      existing.push(parsed);
+      repliesByReviewId.set(parsed.referencedReviewEventId, existing);
+    }
+  }
+
+  return reviews.map((review) => ({
+    ...review,
+    replies: repliesByReviewId.get(review.id!) || [],
+  }));
 }
 
 export function registerReadTools(server: McpServer) {
@@ -447,6 +490,8 @@ export function registerReadTools(server: McpServer) {
         })
         .map(parseReviewEvent);
 
+      const reviewsWithReplies = await attachRepliesToReviews(reviews);
+
       if (!shopProfile && !userProfile) {
         return {
           content: [
@@ -510,7 +555,10 @@ export function registerReadTools(server: McpServer) {
                   count: productsWithPricing.length,
                   items: productsWithPricing,
                 },
-                reviews: { count: reviews.length, items: reviews },
+                reviews: {
+                  count: reviewsWithReplies.length,
+                  items: reviewsWithReplies,
+                },
                 paymentInfo: {
                   acceptedPaymentMethods,
                   hasStripeConnect: hasStripe,
@@ -788,6 +836,8 @@ export function registerReadTools(server: McpServer) {
         reviews = reviews.filter((r) => r.d && r.d.includes(sellerPubkey));
       }
 
+      const reviewsWithReplies = await attachRepliesToReviews(reviews);
+
       const latestTimestamp = reviews.reduce(
         (max, r) =>
           r.createdAt && Number(r.createdAt) > max ? Number(r.createdAt) : max,
@@ -800,15 +850,15 @@ export function registerReadTools(server: McpServer) {
             type: "text" as const,
             text: JSON.stringify(
               {
-                count: reviews.length,
-                reviews,
+                count: reviewsWithReplies.length,
+                reviews: reviewsWithReplies,
                 _meta: {
                   responseTimeMs: Date.now() - startTime,
                   dataSource: "cached_db",
                   dataFreshness: latestTimestamp
                     ? new Date(latestTimestamp * 1000).toISOString()
                     : null,
-                  resultCount: reviews.length,
+                  resultCount: reviewsWithReplies.length,
                 },
               },
               null,
