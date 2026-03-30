@@ -550,6 +550,19 @@ async function initializeTables(): Promise<void> {
     await client.query(`
       DO $$
       BEGIN
+        IF EXISTS (
+          SELECT 1 FROM pg_constraint
+          WHERE conname = 'community_events_kind_check'
+        ) THEN
+          ALTER TABLE community_events DROP CONSTRAINT community_events_kind_check;
+          ALTER TABLE community_events ADD CONSTRAINT community_events_kind_check CHECK (kind IN (34550, 1111, 4550));
+        END IF;
+      END $$;
+    `);
+
+    await client.query(`
+      DO $$
+      BEGIN
         IF NOT EXISTS (
           SELECT 1 FROM information_schema.columns
           WHERE table_name = 'email_flows' AND column_name = 'from_name'
@@ -586,7 +599,7 @@ function getTableForKind(kind: number): string | null {
   // Reviews
   if (kind === 31555) return "review_events";
 
-  // Comments/replies (NIP-22)
+  // Comments/replies (NIP-22) — for kind 1111 without community context
   if (kind === 1111) return "comment_events";
 
   // Messages
@@ -599,12 +612,26 @@ function getTableForKind(kind: number): string | null {
   if ([7375, 7376, 17375, 37375].includes(kind)) return "wallet_events";
 
   // Community
-  if ([34550, 1111, 4550].includes(kind)) return "community_events";
+  if ([34550, 4550].includes(kind)) return "community_events";
 
   // Config
   if ([10002, 10063, 30405].includes(kind)) return "config_events";
 
   return null;
+}
+
+function getTableForEvent(event: NostrEvent): string | null {
+  if (event.kind === 1111) {
+    const hasCommunityRef = event.tags.some(
+      (t) =>
+        (t[0] === "a" && t[1]?.startsWith("34550:")) ||
+        (t[0] === "A" && t[1]?.startsWith("34550:")) ||
+        (t[0] === "K" && t[1] === "34550")
+    );
+    if (hasCommunityRef) return "community_events";
+    return "comment_events";
+  }
+  return getTableForKind(event.kind);
 }
 
 // Helper function to check if event kind should only keep latest per pubkey
@@ -621,7 +648,7 @@ function isReviewEvent(kind: number): boolean {
 
 // Cache a single event to the database
 export async function cacheEvent(event: NostrEvent): Promise<void> {
-  const table = getTableForKind(event.kind);
+  const table = getTableForEvent(event);
   if (!table) {
     console.warn(`No table mapping for event kind ${event.kind}`);
     return;
@@ -776,7 +803,7 @@ async function cacheEventsTransaction(events: NostrEvent[]): Promise<void> {
 
   // Group events by table
   for (const event of events) {
-    const table = getTableForKind(event.kind);
+    const table = getTableForEvent(event);
     if (table) {
       if (!eventsByTable.has(table)) {
         eventsByTable.set(table, []);
@@ -1671,6 +1698,76 @@ export async function fetchAllWalletEventsFromDb(
 // Fetch all communities from database
 export async function fetchAllCommunitiesFromDb(): Promise<NostrEvent[]> {
   return fetchCachedEvents(34550);
+}
+
+export async function fetchCommunityPostsFromDb(
+  communityAddress: string
+): Promise<NostrEvent[]> {
+  const dbPool = getDbPool();
+  let client;
+  try {
+    client = await dbPool.connect();
+    const query = `
+      SELECT id, pubkey, created_at, kind, tags, content, sig
+      FROM community_events
+      WHERE kind = 1111
+      AND EXISTS (
+        SELECT 1 FROM jsonb_array_elements(tags) AS tag
+        WHERE tag->>0 = 'a' AND tag->>1 = $1
+      )
+      ORDER BY created_at DESC
+    `;
+    const result = await client.query(query, [communityAddress]);
+    return result.rows.map((row: any) => ({
+      id: row.id,
+      pubkey: row.pubkey,
+      created_at: row.created_at,
+      kind: row.kind,
+      tags: row.tags,
+      content: row.content,
+      sig: row.sig,
+    }));
+  } catch (error) {
+    console.error("Failed to fetch community posts from database:", error);
+    return [];
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function fetchCommunityApprovalsFromDb(
+  communityAddress: string
+): Promise<NostrEvent[]> {
+  const dbPool = getDbPool();
+  let client;
+  try {
+    client = await dbPool.connect();
+    const query = `
+      SELECT id, pubkey, created_at, kind, tags, content, sig
+      FROM community_events
+      WHERE kind = 4550
+      AND EXISTS (
+        SELECT 1 FROM jsonb_array_elements(tags) AS tag
+        WHERE tag->>0 = 'a' AND tag->>1 = $1
+      )
+      ORDER BY created_at DESC
+    `;
+    const result = await client.query(query, [communityAddress]);
+    return result.rows.map((row: any) => ({
+      id: row.id,
+      pubkey: row.pubkey,
+      created_at: row.created_at,
+      kind: row.kind,
+      tags: row.tags,
+      content: row.content,
+      sig: row.sig,
+    }));
+  } catch (error) {
+    console.error("Failed to fetch community approvals from database:", error);
+    return [];
+  } finally {
+    if (client) client.release();
+  }
 }
 
 // Fetch relay config events from database

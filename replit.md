@@ -48,14 +48,14 @@ Preferred communication style: Simple, everyday language.
 ## Data Management
 
 - **Event Parsing**: Custom parsers for various data types.
-- **Caching Strategy**: Hybrid local IndexedDB and real-time Nostr events.
+- **Caching Strategy**: Hybrid local IndexedDB and real-time Nostr events. Kind 1111 events are disambiguated by tags: NIP-22 review replies (with `K` tags) go to `comment_events`, community posts (with `a:34550:...` tags) go to `community_events`. Community posts (kind 1111) and approval events (kind 4550) are cached on fetch and loaded DB-first via `fetchCommunityPostsFromDb` / `pages/api/db/fetch-community-posts.ts`.
 - **File Storage**: Blossom server integration for decentralized media.
 - **Encryption**: NIP-44 for private messages and documents.
 
 ## Trust & Web of Trust
 
 - **Social Graph**: Follow-based trust system.
-- **Review System**: User reviews with weighted scoring. Sentiment-based quality labels (Trustworthy/Solid/Questionable/Don't trust) with color coding. Sellers can reply to reviews on their products using NIP-22 (kind 1111) comment events via `publishReviewReply` in `nostr-helper-functions.ts`. Replies are displayed across all review surfaces (checkout card, marketplace, storefront). Shared reply component: `components/utility-components/seller-review-reply.tsx`. Review event IDs and replies stored in `ReviewsContext` (`reviewEventIds`, `reviewReplies`). Comment events cached in `comment_events` DB table.
+- **Review System**: User reviews with weighted scoring. Sentiment-based quality labels (Trustworthy/Solid/Questionable/Don't trust) with color coding. Sellers can reply to reviews on their products using NIP-22 (kind 1111) comment events via `publishReviewReply` in `nostr-helper-functions.ts`. Replies are displayed across all review surfaces (checkout card, marketplace, storefront). Shared reply component: `components/utility-components/seller-review-reply.tsx`. Review event IDs and replies stored in `ReviewsContext` (`reviewEventIds`, `reviewReplies`). NIP-22 review reply events cached in `comment_events` DB table.
 - **WoT Filtering**: Filtering based on follow relationships.
 
 ## Key Features

@@ -1817,6 +1817,53 @@ export const fetchAllCommunities = async (
   });
 };
 
+type ApprovalInfo = {
+  approvalId: string;
+  approver: string;
+  created_at: number;
+};
+
+function buildApprovalMap(approvals: NostrEvent[]): Map<string, ApprovalInfo> {
+  const approvalByPostId = new Map<string, ApprovalInfo>();
+  for (const ap of approvals) {
+    const eTags = ap.tags
+      .filter((t) => t[0] === "e")
+      .map((t) => t[1])
+      .filter((id): id is string => !!id);
+    for (const approvedId of eTags) {
+      const existing = approvalByPostId.get(approvedId);
+      if (!existing || ap.created_at > existing.created_at) {
+        approvalByPostId.set(approvedId, {
+          approvalId: ap.id,
+          approver: ap.pubkey,
+          created_at: ap.created_at,
+        });
+      }
+    }
+  }
+  return approvalByPostId;
+}
+
+function annotatePosts(
+  posts: NostrEvent[],
+  approvalByPostId: Map<string, ApprovalInfo>
+): NostrEvent[] {
+  const annotated = posts.map((post) => {
+    const approval = approvalByPostId.get(post.id);
+    const a: any = { ...post };
+    if (approval) {
+      a.approved = true;
+      a.approvalEventId = approval.approvalId;
+      a.approvedBy = approval.approver;
+    } else {
+      a.approved = false;
+    }
+    return a as NostrEvent;
+  });
+  annotated.sort((a, b) => b.created_at - a.created_at);
+  return annotated;
+}
+
 // returns CommunityPost[] (posts augmented with approval metadata)
 export const fetchCommunityPosts = async (
   nostr: NostrManager,
@@ -1831,70 +1878,75 @@ export const fetchCommunityPosts = async (
     try {
       const communityAddress = `${community.kind}:${community.pubkey}:${community.d}`;
       const { relays: userRelays } = getLocalStorageData();
-      // Create a combined, unique list of relays for fetching
       const combinedRelays = Array.from(
         new Set([...community.relays.all, ...userRelays])
       );
 
+      const dbPostsMap = new Map<string, NostrEvent>();
+      const dbApprovalsMap = new Map<string, NostrEvent>();
+      try {
+        const response = await fetch("/api/db/fetch-community-posts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ communityAddress, includeApprovals: true }),
+        });
+        if (response.ok) {
+          const { posts: postsFromDb, approvals: approvalsFromDb } =
+            await response.json();
+          for (const post of postsFromDb) {
+            dbPostsMap.set(post.id, post);
+          }
+          for (const approval of approvalsFromDb) {
+            dbApprovalsMap.set(approval.id, approval);
+          }
+        }
+      } catch (error) {
+        console.error("Failed to fetch community data from database:", error);
+      }
+
       if (combinedRelays.length === 0) {
-        resolve([]);
+        const dbApprovals = Array.from(dbApprovalsMap.values()).filter((ap) =>
+          community.moderators.includes(ap.pubkey)
+        );
+        const dbApprovalByPostId = buildApprovalMap(dbApprovals);
+        const dbPosts = Array.from(dbPostsMap.values());
+        resolve(annotatePosts(dbPosts, dbApprovalByPostId));
         return;
       }
 
-      // choose relays to check approvals: prefer explicitly labeled approvals relays, fallback to all
       const approvalRelays = community.relays.approvals.length
         ? community.relays.approvals
         : combinedRelays;
 
-      // Step 1: Fetch approval events from relays where approvals are expected
       const approvalFilter: Filter = {
         kinds: [4550],
         "#a": [communityAddress],
-        limit: limit * 4, // fetch a bit more approval events
+        limit: limit * 4,
       };
 
-      // fetch approvals across candidate relays
       const approvalEvents = await nostr.fetch(
         [approvalFilter],
         {},
         approvalRelays
       );
 
-      // Step 2: Validate approval events: only accept those issued by moderators of the community.
-      const validApprovals = approvalEvents.filter((ap) =>
+      for (const ap of approvalEvents) {
+        dbApprovalsMap.set(ap.id, ap);
+      }
+
+      const allApprovals = Array.from(dbApprovalsMap.values());
+      const validApprovals = allApprovals.filter((ap) =>
         community.moderators.includes(ap.pubkey)
       );
 
-      // map post id -> single approval (take latest per approver)
-      const approvalByPostId: Map<
-        string,
-        { approvalId: string; approver: string; created_at: number }
-      > = new Map();
-
-      for (const ap of validApprovals) {
-        const eTags = ap.tags
-          .filter((t) => t[0] === "e")
-          .map((t) => t[1])
-          .filter((id): id is string => !!id);
-        for (const approvedId of eTags) {
-          const existing = approvalByPostId.get(approvedId);
-          if (!existing || ap.created_at > existing.created_at) {
-            approvalByPostId.set(approvedId, {
-              approvalId: ap.id,
-              approver: ap.pubkey,
-              created_at: ap.created_at,
-            });
-          }
-        }
-      }
+      const approvalByPostId = buildApprovalMap(validApprovals);
 
       const approvedEventIds = Array.from(approvalByPostId.keys());
       if (approvedEventIds.length === 0) {
-        resolve([]);
+        resolve(Array.from(dbPostsMap.values()));
         return;
       }
 
-      // Step 3: Fetch approved posts in batches using request relays or all
       const requestRelays = community.relays.requests.length
         ? community.relays.requests
         : combinedRelays;
@@ -1916,23 +1968,28 @@ export const fetchCommunityPosts = async (
         }
       }
 
-      // Annotate posts with approval metadata where available
-      const annotatedPosts = postEvents.map((post) => {
-        const approval = approvalByPostId.get(post.id);
-        const annotated: any = { ...post };
-        if (approval) {
-          annotated.approved = true;
-          annotated.approvalEventId = approval.approvalId;
-          annotated.approvedBy = approval.approver;
-        } else {
-          annotated.approved = false;
-        }
-        return annotated as NostrEvent;
-      });
+      for (const post of postEvents) {
+        dbPostsMap.set(post.id, post);
+      }
 
-      // Sort posts by creation date, newest first.
-      annotatedPosts.sort((a, b) => b.created_at - a.created_at);
-      resolve(annotatedPosts);
+      const validPostsToCache = postEvents.filter(
+        (e) => e.id && e.sig && e.pubkey && e.kind === 1111
+      );
+      const validApprovalsToCache = approvalEvents.filter(
+        (e) => e.id && e.sig && e.pubkey && e.kind === 4550
+      );
+      const eventsToCache = [...validPostsToCache, ...validApprovalsToCache];
+      if (eventsToCache.length > 0) {
+        cacheEventsToDatabase(eventsToCache).catch((error) =>
+          console.error(
+            "Failed to cache community posts/approvals to database:",
+            error
+          )
+        );
+      }
+
+      const allPosts = Array.from(dbPostsMap.values());
+      resolve(annotatePosts(allPosts, approvalByPostId));
     } catch (error) {
       console.error("Failed to fetch community posts:", error);
       reject(error);
@@ -1980,7 +2037,18 @@ export const fetchPendingPosts = async (
         requestRelays
       );
 
-      // Pending = requests that don't have an approval
+      const validPostsToCache = allPostRequests.filter(
+        (e) => e.id && e.sig && e.pubkey && e.kind === 1111
+      );
+      if (validPostsToCache.length > 0) {
+        cacheEventsToDatabase(validPostsToCache).catch((error) =>
+          console.error(
+            "Failed to cache pending community posts to database:",
+            error
+          )
+        );
+      }
+
       const pendingPosts = allPostRequests.filter(
         (post) => !approvedPostIds.has(post.id)
       );
