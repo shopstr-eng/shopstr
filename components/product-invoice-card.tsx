@@ -142,6 +142,8 @@ export default function ProductInvoiceCard({
     selectedVolume?: string;
     selectedWeight?: string;
     selectedBulkOption?: string;
+    productId?: string;
+    quantity?: number;
   } | null>(null);
 
   const [buyerEmail, setBuyerEmail] = useState("");

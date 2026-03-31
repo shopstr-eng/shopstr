@@ -72,9 +72,9 @@ async function handlePost(req: NextApiRequest, res: NextApiResponse) {
           variantKey
         );
         if (!result.success) {
-          return res.status(409).json({ success: false, error: result.error });
+          return res.status(409).json(result);
         }
-        return res.status(200).json({ success: true, ...result });
+        return res.status(200).json(result);
       }
 
       case "set": {
@@ -108,7 +108,7 @@ async function handlePost(req: NextApiRequest, res: NextApiResponse) {
           orderId,
           variantKey
         );
-        return res.status(200).json({ success: true, ...result });
+        return res.status(200).json(result);
       }
 
       case "sync": {

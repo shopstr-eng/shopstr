@@ -122,7 +122,7 @@ export async function setStock(
        VALUES ($1, $2, $3, $4, $5, NOW())
        ON CONFLICT (product_id, variant_key) DO UPDATE
        SET quantity = $4, source = $5, seller_pubkey = $2, updated_at = NOW()`,
-      [productId, sellerPubkey, variantKey, quantity, source]
+      [productId, sellerPubkey, variantKey, String(quantity), source]
     );
 
     await client.query(
@@ -131,10 +131,10 @@ export async function setStock(
       [
         productId,
         variantKey,
-        quantity - previousQuantity,
+        String(quantity - previousQuantity),
         `stock_set_${source}`,
-        previousQuantity,
-        quantity,
+        String(previousQuantity),
+        String(quantity),
       ]
     );
 
@@ -190,13 +190,20 @@ export async function deductStock(
     const newQty = currentQty - amount;
     await client.query(
       `UPDATE inventory SET quantity = $1, updated_at = NOW() WHERE product_id = $2 AND variant_key = $3`,
-      [newQty, productId, variantKey]
+      [String(newQty), productId, variantKey]
     );
 
     await client.query(
       `INSERT INTO inventory_log (product_id, variant_key, change_amount, reason, order_id, previous_quantity, new_quantity)
        VALUES ($1, $2, $3, 'order_deduction', $4, $5, $6)`,
-      [productId, variantKey, -amount, orderId, currentQty, newQty]
+      [
+        productId,
+        variantKey,
+        String(-amount),
+        orderId,
+        String(currentQty),
+        String(newQty),
+      ]
     );
 
     await client.query("COMMIT");
@@ -237,13 +244,20 @@ export async function restoreStock(
 
     await client.query(
       `UPDATE inventory SET quantity = $1, updated_at = NOW() WHERE product_id = $2 AND variant_key = $3`,
-      [newQty, productId, variantKey]
+      [String(newQty), productId, variantKey]
     );
 
     await client.query(
       `INSERT INTO inventory_log (product_id, variant_key, change_amount, reason, order_id, previous_quantity, new_quantity)
        VALUES ($1, $2, $3, 'order_cancellation_restore', $4, $5, $6)`,
-      [productId, variantKey, amount, orderId, currentQty, newQty]
+      [
+        productId,
+        variantKey,
+        String(amount),
+        orderId,
+        String(currentQty),
+        String(newQty),
+      ]
     );
 
     await client.query("COMMIT");
