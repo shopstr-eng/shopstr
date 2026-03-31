@@ -663,7 +663,12 @@ export const fetchReviews = async (
   editReviewsContext: (
     merchantReviewsMap: Map<string, number[]>,
     productReviewsMap: Map<string, Map<string, Map<string, string[][]>>>,
-    isLoading: boolean
+    isLoading: boolean,
+    reviewEventIds?: Map<string, string>,
+    reviewReplies?: Map<
+      string,
+      { pubkey: string; content: string; created_at: number; eventId: string }[]
+    >
   ) => void
 ): Promise<{
   merchantScoresMap: Map<string, number[]>;
@@ -690,6 +695,9 @@ export const fetchReviews = async (
         string,
         { score: number; created_at: number }
       >();
+      const reviewEventIdMap = new Map<string, string>();
+      const reviewEventIdsByEventId = new Map<string, string>();
+
       const getReviewScoreKey = (
         merchantPubkey: string,
         productDTag: string,
@@ -721,6 +729,13 @@ export const fetchReviews = async (
           });
         }
 
+        const reviewKey = `${productDTag}:${event.pubkey}`;
+        const existingEventId = reviewEventIdMap.get(reviewKey);
+        if (!existingEventId) {
+          reviewEventIdMap.set(reviewKey, event.id);
+          reviewEventIdsByEventId.set(event.id, reviewKey);
+        }
+
         if (!productReviewsMap.has(merchantPubkey)) {
           productReviewsMap.set(merchantPubkey, new Map());
         }
@@ -749,6 +764,12 @@ export const fetchReviews = async (
             : [...ratingTags, ["created_at", createdAt.toString()]];
 
           productReviews.set(event.pubkey, updatedReview);
+          const oldEventId = reviewEventIdMap.get(reviewKey);
+          if (oldEventId && oldEventId !== event.id) {
+            reviewEventIdsByEventId.delete(oldEventId);
+          }
+          reviewEventIdMap.set(reviewKey, event.id);
+          reviewEventIdsByEventId.set(event.id, reviewKey);
         }
       };
 
@@ -792,7 +813,8 @@ export const fetchReviews = async (
           editReviewsContext(
             merchantScoresMap,
             cleanedProductReviewsMap,
-            false
+            false,
+            new Map(reviewEventIdMap)
           );
         }
       } catch (error) {
@@ -834,7 +856,106 @@ export const fetchReviews = async (
         });
       });
 
-      editReviewsContext(merchantScoresMap, productReviewsMap, false);
+      // Fetch NIP-22 comment replies for review events
+      const reviewRepliesMap = new Map<
+        string,
+        {
+          pubkey: string;
+          content: string;
+          created_at: number;
+          eventId: string;
+        }[]
+      >();
+      const allReviewEventIds = Array.from(reviewEventIdMap.values());
+
+      if (allReviewEventIds.length > 0) {
+        try {
+          const commentsResponse = await fetch("/api/db/fetch-comments", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ reviewEventIds: allReviewEventIds }),
+          });
+          if (commentsResponse.ok) {
+            const commentsFromDb = await commentsResponse.json();
+            for (const comment of commentsFromDb) {
+              const eTag = comment.tags.find(
+                (tag: string[]) =>
+                  (tag[0] === "e" || tag[0] === "E") &&
+                  tag[1] != null &&
+                  allReviewEventIds.includes(tag[1])
+              );
+              if (eTag) {
+                const reviewEventId = eTag[1];
+                if (!reviewRepliesMap.has(reviewEventId)) {
+                  reviewRepliesMap.set(reviewEventId, []);
+                }
+                const existing = reviewRepliesMap.get(reviewEventId)!;
+                if (!existing.some((r) => r.eventId === comment.id)) {
+                  existing.push({
+                    pubkey: comment.pubkey,
+                    content: comment.content,
+                    created_at: comment.created_at,
+                    eventId: comment.id,
+                  });
+                }
+              }
+            }
+          }
+
+          // Fetch from relays
+          const commentsFilter: Filter = {
+            kinds: [1111],
+            "#e": allReviewEventIds,
+          };
+          const commentEvents = await nostr.fetch([commentsFilter], {}, relays);
+
+          for (const comment of commentEvents) {
+            const eTag = comment.tags.find(
+              (tag) =>
+                (tag[0] === "e" || tag[0] === "E") &&
+                allReviewEventIds.includes(tag[1]!)
+            );
+            if (eTag) {
+              const reviewEventId = eTag[1]!;
+              if (!reviewRepliesMap.has(reviewEventId)) {
+                reviewRepliesMap.set(reviewEventId, []);
+              }
+              const existing = reviewRepliesMap.get(reviewEventId)!;
+              if (!existing.some((r) => r.eventId === comment.id)) {
+                existing.push({
+                  pubkey: comment.pubkey,
+                  content: comment.content,
+                  created_at: comment.created_at,
+                  eventId: comment.id,
+                });
+              }
+            }
+          }
+
+          // Cache comment events
+          const validComments = commentEvents.filter(
+            (e) => e.id && e.sig && e.pubkey && e.kind === 1111
+          );
+          if (validComments.length > 0) {
+            cacheEventsToDatabase(validComments).catch((error) =>
+              console.error(
+                "Failed to cache comment events to database:",
+                error
+              )
+            );
+          }
+        } catch (error) {
+          console.error("Failed to fetch review replies:", error);
+        }
+      }
+
+      editReviewsContext(
+        merchantScoresMap,
+        productReviewsMap,
+        false,
+        reviewEventIdMap,
+        reviewRepliesMap
+      );
 
       // Cache reviews to database via API (only valid events)
       const validReviews = fetchedEvents.filter(
@@ -1696,6 +1817,53 @@ export const fetchAllCommunities = async (
   });
 };
 
+type ApprovalInfo = {
+  approvalId: string;
+  approver: string;
+  created_at: number;
+};
+
+function buildApprovalMap(approvals: NostrEvent[]): Map<string, ApprovalInfo> {
+  const approvalByPostId = new Map<string, ApprovalInfo>();
+  for (const ap of approvals) {
+    const eTags = ap.tags
+      .filter((t) => t[0] === "e")
+      .map((t) => t[1])
+      .filter((id): id is string => !!id);
+    for (const approvedId of eTags) {
+      const existing = approvalByPostId.get(approvedId);
+      if (!existing || ap.created_at > existing.created_at) {
+        approvalByPostId.set(approvedId, {
+          approvalId: ap.id,
+          approver: ap.pubkey,
+          created_at: ap.created_at,
+        });
+      }
+    }
+  }
+  return approvalByPostId;
+}
+
+function annotatePosts(
+  posts: NostrEvent[],
+  approvalByPostId: Map<string, ApprovalInfo>
+): NostrEvent[] {
+  const annotated = posts.map((post) => {
+    const approval = approvalByPostId.get(post.id);
+    const a: any = { ...post };
+    if (approval) {
+      a.approved = true;
+      a.approvalEventId = approval.approvalId;
+      a.approvedBy = approval.approver;
+    } else {
+      a.approved = false;
+    }
+    return a as NostrEvent;
+  });
+  annotated.sort((a, b) => b.created_at - a.created_at);
+  return annotated;
+}
+
 // returns CommunityPost[] (posts augmented with approval metadata)
 export const fetchCommunityPosts = async (
   nostr: NostrManager,
@@ -1710,70 +1878,75 @@ export const fetchCommunityPosts = async (
     try {
       const communityAddress = `${community.kind}:${community.pubkey}:${community.d}`;
       const { relays: userRelays } = getLocalStorageData();
-      // Create a combined, unique list of relays for fetching
       const combinedRelays = Array.from(
         new Set([...community.relays.all, ...userRelays])
       );
 
+      const dbPostsMap = new Map<string, NostrEvent>();
+      const dbApprovalsMap = new Map<string, NostrEvent>();
+      try {
+        const response = await fetch("/api/db/fetch-community-posts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ communityAddress, includeApprovals: true }),
+        });
+        if (response.ok) {
+          const { posts: postsFromDb, approvals: approvalsFromDb } =
+            await response.json();
+          for (const post of postsFromDb) {
+            dbPostsMap.set(post.id, post);
+          }
+          for (const approval of approvalsFromDb) {
+            dbApprovalsMap.set(approval.id, approval);
+          }
+        }
+      } catch (error) {
+        console.error("Failed to fetch community data from database:", error);
+      }
+
       if (combinedRelays.length === 0) {
-        resolve([]);
+        const dbApprovals = Array.from(dbApprovalsMap.values()).filter((ap) =>
+          community.moderators.includes(ap.pubkey)
+        );
+        const dbApprovalByPostId = buildApprovalMap(dbApprovals);
+        const dbPosts = Array.from(dbPostsMap.values());
+        resolve(annotatePosts(dbPosts, dbApprovalByPostId));
         return;
       }
 
-      // choose relays to check approvals: prefer explicitly labeled approvals relays, fallback to all
       const approvalRelays = community.relays.approvals.length
         ? community.relays.approvals
         : combinedRelays;
 
-      // Step 1: Fetch approval events from relays where approvals are expected
       const approvalFilter: Filter = {
         kinds: [4550],
         "#a": [communityAddress],
-        limit: limit * 4, // fetch a bit more approval events
+        limit: limit * 4,
       };
 
-      // fetch approvals across candidate relays
       const approvalEvents = await nostr.fetch(
         [approvalFilter],
         {},
         approvalRelays
       );
 
-      // Step 2: Validate approval events: only accept those issued by moderators of the community.
-      const validApprovals = approvalEvents.filter((ap) =>
+      for (const ap of approvalEvents) {
+        dbApprovalsMap.set(ap.id, ap);
+      }
+
+      const allApprovals = Array.from(dbApprovalsMap.values());
+      const validApprovals = allApprovals.filter((ap) =>
         community.moderators.includes(ap.pubkey)
       );
 
-      // map post id -> single approval (take latest per approver)
-      const approvalByPostId: Map<
-        string,
-        { approvalId: string; approver: string; created_at: number }
-      > = new Map();
-
-      for (const ap of validApprovals) {
-        const eTags = ap.tags
-          .filter((t) => t[0] === "e")
-          .map((t) => t[1])
-          .filter((id): id is string => !!id);
-        for (const approvedId of eTags) {
-          const existing = approvalByPostId.get(approvedId);
-          if (!existing || ap.created_at > existing.created_at) {
-            approvalByPostId.set(approvedId, {
-              approvalId: ap.id,
-              approver: ap.pubkey,
-              created_at: ap.created_at,
-            });
-          }
-        }
-      }
+      const approvalByPostId = buildApprovalMap(validApprovals);
 
       const approvedEventIds = Array.from(approvalByPostId.keys());
       if (approvedEventIds.length === 0) {
-        resolve([]);
+        resolve(Array.from(dbPostsMap.values()));
         return;
       }
 
-      // Step 3: Fetch approved posts in batches using request relays or all
       const requestRelays = community.relays.requests.length
         ? community.relays.requests
         : combinedRelays;
@@ -1795,23 +1968,28 @@ export const fetchCommunityPosts = async (
         }
       }
 
-      // Annotate posts with approval metadata where available
-      const annotatedPosts = postEvents.map((post) => {
-        const approval = approvalByPostId.get(post.id);
-        const annotated: any = { ...post };
-        if (approval) {
-          annotated.approved = true;
-          annotated.approvalEventId = approval.approvalId;
-          annotated.approvedBy = approval.approver;
-        } else {
-          annotated.approved = false;
-        }
-        return annotated as NostrEvent;
-      });
+      for (const post of postEvents) {
+        dbPostsMap.set(post.id, post);
+      }
 
-      // Sort posts by creation date, newest first.
-      annotatedPosts.sort((a, b) => b.created_at - a.created_at);
-      resolve(annotatedPosts);
+      const validPostsToCache = postEvents.filter(
+        (e) => e.id && e.sig && e.pubkey && e.kind === 1111
+      );
+      const validApprovalsToCache = approvalEvents.filter(
+        (e) => e.id && e.sig && e.pubkey && e.kind === 4550
+      );
+      const eventsToCache = [...validPostsToCache, ...validApprovalsToCache];
+      if (eventsToCache.length > 0) {
+        cacheEventsToDatabase(eventsToCache).catch((error) =>
+          console.error(
+            "Failed to cache community posts/approvals to database:",
+            error
+          )
+        );
+      }
+
+      const allPosts = Array.from(dbPostsMap.values());
+      resolve(annotatePosts(allPosts, approvalByPostId));
     } catch (error) {
       console.error("Failed to fetch community posts:", error);
       reject(error);
@@ -1859,7 +2037,18 @@ export const fetchPendingPosts = async (
         requestRelays
       );
 
-      // Pending = requests that don't have an approval
+      const validPostsToCache = allPostRequests.filter(
+        (e) => e.id && e.sig && e.pubkey && e.kind === 1111
+      );
+      if (validPostsToCache.length > 0) {
+        cacheEventsToDatabase(validPostsToCache).catch((error) =>
+          console.error(
+            "Failed to cache pending community posts to database:",
+            error
+          )
+        );
+      }
+
       const pendingPosts = allPostRequests.filter(
         (post) => !approvedPostIds.has(post.id)
       );
@@ -1870,4 +2059,262 @@ export const fetchPendingPosts = async (
       reject(error);
     }
   });
+};
+
+export const fetchStorefrontData = async (
+  nostr: NostrManager,
+  relays: string[],
+  shopPubkey: string,
+  editProductContext: (productEvents: NostrEvent[], isLoading: boolean) => void,
+  editShopContext: (
+    shopEvents: Map<string, ShopProfile>,
+    isLoading: boolean
+  ) => void,
+  editProfileContext: (
+    profileData: Map<string, any>,
+    isLoading: boolean
+  ) => void,
+  editReviewsContext: (
+    merchantReviewsData: Map<string, number[]>,
+    productReviewsData: Map<string, Map<string, Map<string, string[][]>>>,
+    isLoading: boolean
+  ) => void,
+  editCommunityContext: (
+    communities: Map<string, Community>,
+    isLoading: boolean
+  ) => void,
+  options?: {
+    signer?: NostrSigner;
+    editChatContext?: (chatsMap: ChatsMap, isLoading: boolean) => void;
+    userPubkey?: string;
+  }
+): Promise<{
+  productEvents: NostrEvent[];
+  profileSetFromProducts: Set<string>;
+}> => {
+  const pubkeysToFetch = [shopPubkey];
+  if (options?.userPubkey && options.userPubkey !== shopPubkey) {
+    pubkeysToFetch.push(options.userPubkey);
+  }
+
+  let productEvents: NostrEvent[] = [];
+  const profileSetFromProducts = new Set<string>([shopPubkey]);
+
+  try {
+    const response = await fetch(
+      `/api/db/fetch-products?pubkey=${encodeURIComponent(shopPubkey)}`
+    );
+    if (response.ok) {
+      const productsFromDb: NostrEvent[] = await response.json();
+      if (productsFromDb.length > 0) {
+        editProductContext(productsFromDb, false);
+        productEvents = productsFromDb;
+      }
+    }
+  } catch (error) {
+    console.error("Failed to fetch storefront products from DB:", error);
+  }
+
+  try {
+    await fetchProfile(nostr, relays, pubkeysToFetch, editProfileContext);
+  } catch (error) {
+    console.error("Error fetching storefront profile:", error);
+    editProfileContext(new Map(), false);
+  }
+
+  try {
+    await fetchShopProfile(nostr, relays, pubkeysToFetch, editShopContext);
+  } catch (error) {
+    console.error("Error fetching storefront shop profile:", error);
+    editShopContext(new Map(), false);
+  }
+
+  try {
+    const productFilter: Filter = {
+      kinds: [30402],
+      authors: [shopPubkey],
+    };
+    const fetchedProducts = await nostr.fetch([productFilter], {}, relays);
+
+    if (fetchedProducts.length > 0) {
+      const getEventKey = (event: NostrEvent): string => {
+        if (event.kind === 30402) {
+          const dTag = event.tags?.find((tag: string[]) => tag[0] === "d")?.[1];
+          if (dTag) return `${event.pubkey}:${dTag}`;
+        }
+        return event.id;
+      };
+
+      const mergedMap = new Map<string, NostrEvent>();
+      for (const event of productEvents) {
+        if (event?.id) mergedMap.set(getEventKey(event), event);
+      }
+      for (const event of fetchedProducts) {
+        if (!event?.id) continue;
+        const key = getEventKey(event);
+        const existing = mergedMap.get(key);
+        if (!existing || event.created_at >= existing.created_at) {
+          mergedMap.set(key, event);
+        }
+      }
+
+      productEvents = Array.from(mergedMap.values());
+      editProductContext(productEvents, false);
+
+      const validProducts = fetchedProducts.filter(
+        (e) => e.id && e.sig && e.pubkey
+      );
+      if (validProducts.length > 0) {
+        cacheEventsToDatabase(validProducts).catch((error) =>
+          console.error(
+            "Failed to cache storefront products to database:",
+            error
+          )
+        );
+      }
+    } else if (productEvents.length === 0) {
+      editProductContext([], false);
+    }
+  } catch (error) {
+    console.error("Error fetching storefront products from relays:", error);
+    if (productEvents.length === 0) {
+      editProductContext([], false);
+    }
+  }
+
+  try {
+    await fetchReviews(nostr, relays, productEvents, editReviewsContext);
+  } catch (error) {
+    console.error("Error fetching storefront reviews:", error);
+    editReviewsContext(new Map(), new Map(), false);
+  }
+
+  try {
+    const communityFilter: Filter = {
+      kinds: [34550],
+      authors: [shopPubkey],
+      "#t": ["milkmarket"],
+    };
+    const fetchedCommunities = await nostr.fetch([communityFilter], {}, relays);
+    const communityMap = new Map<string, Community>();
+
+    try {
+      const response = await fetch("/api/db/fetch-communities");
+      if (response.ok) {
+        const communitiesFromDb = await response.json();
+        for (const event of communitiesFromDb) {
+          if (event.pubkey === shopPubkey) {
+            const community = parseCommunityEvent(event);
+            if (community) communityMap.set(community.id, community);
+          }
+        }
+      }
+    } catch {}
+
+    for (const event of fetchedCommunities) {
+      const community = parseCommunityEvent(event);
+      if (community) {
+        const existing = communityMap.get(community.id);
+        if (!existing || community.createdAt >= existing.createdAt) {
+          communityMap.set(community.id, community);
+        }
+      }
+    }
+
+    editCommunityContext(communityMap, false);
+
+    const validCommunities = fetchedCommunities.filter(
+      (e) => e.id && e.sig && e.pubkey && e.kind === 34550
+    );
+    if (validCommunities.length > 0) {
+      cacheEventsToDatabase(validCommunities).catch((error) =>
+        console.error(
+          "Failed to cache storefront communities to database:",
+          error
+        )
+      );
+    }
+  } catch (error) {
+    console.error("Error fetching storefront communities:", error);
+    editCommunityContext(new Map(), false);
+  }
+
+  if (options?.userPubkey && options?.signer && options?.editChatContext) {
+    try {
+      const isShopOwner = options.userPubkey === shopPubkey;
+
+      let fullChatsMap: ChatsMap = new Map();
+      const capturingEditChat = (chatsMap: ChatsMap, _isLoading: boolean) => {
+        fullChatsMap = chatsMap;
+      };
+
+      const { profileSetFromChats } = await fetchGiftWrappedChatsAndMessages(
+        nostr,
+        options.signer,
+        relays,
+        capturingEditChat,
+        options.userPubkey
+      );
+
+      if (isShopOwner) {
+        options.editChatContext(fullChatsMap, false);
+        for (const pk of profileSetFromChats) {
+          profileSetFromProducts.add(pk);
+        }
+      } else {
+        const filteredChatsMap: ChatsMap = new Map();
+
+        for (const [counterpartyPubkey, messages] of fullChatsMap.entries()) {
+          if (counterpartyPubkey === shopPubkey) {
+            filteredChatsMap.set(counterpartyPubkey, messages);
+            profileSetFromProducts.add(counterpartyPubkey);
+            continue;
+          }
+
+          const relevantMessages = messages.filter((msg: NostrMessageEvent) => {
+            const tagsMap = new Map(
+              msg.tags?.map(
+                (tag: string[]) =>
+                  [tag[0] ?? "", tag[1] ?? ""] as [string, string]
+              ) || []
+            );
+            const itemTag = tagsMap.get("item") || tagsMap.get("a") || "";
+            if (itemTag) {
+              const parts = itemTag.split(":");
+              if (parts.length >= 2 && parts[1] === shopPubkey) {
+                return true;
+              }
+            }
+            return false;
+          });
+
+          if (relevantMessages.length > 0) {
+            filteredChatsMap.set(counterpartyPubkey, relevantMessages);
+            profileSetFromProducts.add(counterpartyPubkey);
+          }
+        }
+
+        options.editChatContext(filteredChatsMap, false);
+      }
+
+      if (profileSetFromProducts.size > pubkeysToFetch.length) {
+        const allProfilePubkeys = [
+          ...new Set([...pubkeysToFetch, ...profileSetFromProducts]),
+        ];
+        try {
+          await fetchProfile(
+            nostr,
+            relays,
+            allProfilePubkeys,
+            editProfileContext
+          );
+        } catch {}
+      }
+    } catch (error) {
+      console.error("Error fetching storefront chats:", error);
+      options.editChatContext(new Map(), false);
+    }
+  }
+
+  return { productEvents, profileSetFromProducts };
 };

@@ -85,8 +85,9 @@ export default function RecoveryKeyModal({
       hideCloseButton
       size="lg"
       classNames={{
-        body: "py-6",
-        base: "border border-light-fg-border dark:border-dark-fg-border bg-light-bg dark:bg-dark-bg text-light-text dark:text-dark-text",
+        body: "py-6 bg-white",
+        backdrop: "bg-black/50 backdrop-opacity-60",
+        base: "border-4 border-black rounded-md shadow-neo bg-white",
       }}
     >
       <ModalContent>

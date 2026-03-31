@@ -368,7 +368,7 @@ export default function ContactPage() {
                 <p className="text-sm text-zinc-600">
                   Check out our{" "}
                   <Link
-                    href="/producers"
+                    href="/producer-guide"
                     className="font-bold text-blue-700 underline"
                   >
                     Producer Guide

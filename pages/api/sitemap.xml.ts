@@ -7,7 +7,7 @@ export default function handler(_req: NextApiRequest, res: NextApiResponse) {
   const pages = [
     { url: "/", changefreq: "daily", priority: "1.0" },
     { url: "/marketplace", changefreq: "daily", priority: "0.9" },
-    { url: "/producers", changefreq: "weekly", priority: "0.8" },
+    { url: "/producer-guide", changefreq: "weekly", priority: "0.8" },
     { url: "/about", changefreq: "monthly", priority: "0.7" },
     { url: "/contact", changefreq: "monthly", priority: "0.7" },
     { url: "/faq", changefreq: "weekly", priority: "0.6" },

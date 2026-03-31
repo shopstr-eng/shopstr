@@ -27,6 +27,93 @@ const SOCIAL_PLATFORMS = [
   "other",
 ] as const;
 
+const PLATFORM_CONFIG: Record<
+  string,
+  { baseUrl: string; prefix?: string; placeholder: string; isFullUrl?: boolean }
+> = {
+  instagram: {
+    baseUrl: "https://instagram.com/",
+    placeholder: "yourfarm",
+  },
+  x: {
+    baseUrl: "https://x.com/",
+    placeholder: "yourfarm",
+  },
+  facebook: {
+    baseUrl: "https://facebook.com/",
+    placeholder: "yourfarm",
+  },
+  youtube: {
+    baseUrl: "https://youtube.com/@",
+    placeholder: "yourfarm",
+  },
+  tiktok: {
+    baseUrl: "https://tiktok.com/",
+    prefix: "@",
+    placeholder: "yourfarm",
+  },
+  telegram: {
+    baseUrl: "https://t.me/",
+    placeholder: "yourfarm",
+  },
+  website: {
+    baseUrl: "",
+    placeholder: "https://yourfarm.com",
+    isFullUrl: true,
+  },
+  email: {
+    baseUrl: "mailto:",
+    placeholder: "hello@yourfarm.com",
+    isFullUrl: true,
+  },
+  other: {
+    baseUrl: "",
+    placeholder: "https://...",
+    isFullUrl: true,
+  },
+};
+
+function extractUsername(platform: string, url: string): string {
+  const config = PLATFORM_CONFIG[platform];
+  if (!config || config.isFullUrl) return url;
+  if (config.baseUrl && url.startsWith(config.baseUrl)) {
+    return url.slice(config.baseUrl.length);
+  }
+  const altBases = [
+    `https://www.${platform}.com/`,
+    `http://${platform}.com/`,
+    `http://www.${platform}.com/`,
+  ];
+  if (platform === "x") {
+    altBases.push("https://twitter.com/", "https://www.twitter.com/");
+  }
+  if (platform === "telegram") {
+    altBases.push("https://telegram.me/");
+  }
+  for (const base of altBases) {
+    if (url.startsWith(base)) {
+      return url.slice(base.length);
+    }
+  }
+  if (url.startsWith("http://") || url.startsWith("https://")) {
+    return url;
+  }
+  return url;
+}
+
+function buildFullUrl(platform: string, username: string): string {
+  const config = PLATFORM_CONFIG[platform];
+  if (!config || config.isFullUrl) return username;
+  if (username.startsWith("http://") || username.startsWith("https://")) {
+    return username;
+  }
+  let clean = username.replace(/^@+/, "");
+  if (config.prefix) {
+    clean = config.prefix + clean;
+  }
+  return config.baseUrl + clean;
+}
+
 const inputWrapperClass =
   "border-3 border-black rounded-lg bg-white shadow-none hover:bg-white data-[hover=true]:bg-white";
 
@@ -219,53 +306,86 @@ export default function FooterEditor({
           Social Links
         </label>
         <div className="space-y-2">
-          {socialLinks.map((link, idx) => (
-            <div key={idx} className="flex items-center gap-2">
-              <Select
-                classNames={{
-                  ...selectClassNames,
-                  trigger: selectClassNames.trigger + " w-36",
-                }}
-                variant="bordered"
-                selectedKeys={[link.platform]}
-                onChange={(e) => {
-                  if (e.target.value) {
-                    updateSocial(idx, {
-                      platform: e.target
-                        .value as StorefrontSocialLink["platform"],
-                    });
+          {socialLinks.map((link, idx) => {
+            const config = PLATFORM_CONFIG[link.platform];
+            const isFullUrl = config?.isFullUrl;
+            const displayValue = isFullUrl
+              ? link.url
+              : extractUsername(link.platform, link.url);
+            return (
+              <div key={idx} className="flex items-center gap-2">
+                <Select
+                  classNames={{
+                    ...selectClassNames,
+                    trigger: selectClassNames.trigger + " w-36",
+                  }}
+                  variant="bordered"
+                  selectedKeys={[link.platform]}
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      const newPlatform = e.target
+                        .value as StorefrontSocialLink["platform"];
+                      const currentUsername = extractUsername(
+                        link.platform,
+                        link.url
+                      );
+                      const newConfig = PLATFORM_CONFIG[newPlatform];
+                      const newUrl = newConfig?.isFullUrl
+                        ? ""
+                        : buildFullUrl(newPlatform, currentUsername);
+                      updateSocial(idx, {
+                        platform: newPlatform,
+                        url: newUrl,
+                      });
+                    }
+                  }}
+                  aria-label="Platform"
+                  className="w-36"
+                >
+                  {SOCIAL_PLATFORMS.map((p) => (
+                    <SelectItem
+                      key={p}
+                      value={p}
+                      className="capitalize text-black"
+                    >
+                      {p}
+                    </SelectItem>
+                  ))}
+                </Select>
+                <Input
+                  classNames={{
+                    inputWrapper: inputWrapperClass,
+                    input: "!text-black",
+                  }}
+                  variant="bordered"
+                  value={displayValue}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    const fullUrl = isFullUrl
+                      ? val
+                      : buildFullUrl(link.platform, val);
+                    updateSocial(idx, { url: fullUrl });
+                  }}
+                  placeholder={config?.placeholder || "https://..."}
+                  className="flex-1"
+                  startContent={
+                    !isFullUrl && config?.baseUrl ? (
+                      <span className="whitespace-nowrap text-sm text-gray-400">
+                        {config.baseUrl}
+                      </span>
+                    ) : undefined
                   }
-                }}
-                aria-label="Platform"
-                className="w-36"
-              >
-                {SOCIAL_PLATFORMS.map((p) => (
-                  <SelectItem
-                    key={p}
-                    value={p}
-                    className="capitalize text-black"
-                  >
-                    {p}
-                  </SelectItem>
-                ))}
-              </Select>
-              <Input
-                classNames={{ inputWrapper: inputWrapperClass }}
-                variant="bordered"
-                value={link.url}
-                onChange={(e) => updateSocial(idx, { url: e.target.value })}
-                placeholder="https://..."
-                className="flex-1"
-              />
-              <button
-                type="button"
-                onClick={() => removeSocial(idx)}
-                className="text-xs text-red-500"
-              >
-                ✕
-              </button>
-            </div>
-          ))}
+                />
+                <button
+                  type="button"
+                  onClick={() => removeSocial(idx)}
+                  className="text-xs text-red-500"
+                >
+                  ✕
+                </button>
+              </div>
+            );
+          })}
         </div>
         <button
           type="button"

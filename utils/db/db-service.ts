@@ -112,6 +112,22 @@ async function initializeTables(): Promise<void> {
 
       CREATE INDEX IF NOT EXISTS idx_review_events_pubkey ON review_events(pubkey);
 
+      -- Comment/reply events table (kind 1111 - NIP-22)
+      CREATE TABLE IF NOT EXISTS comment_events (
+          id TEXT PRIMARY KEY,
+          pubkey TEXT NOT NULL,
+          created_at BIGINT NOT NULL,
+          kind INTEGER NOT NULL,
+          tags JSONB NOT NULL,
+          content TEXT NOT NULL,
+          sig TEXT NOT NULL,
+          cached_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          CONSTRAINT comment_events_kind_check CHECK (kind = 1111)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_comment_events_pubkey ON comment_events(pubkey);
+      CREATE INDEX IF NOT EXISTS idx_comment_events_tags ON comment_events USING gin (tags jsonb_path_ops);
+
       -- Messages table (kind 1059 - gift wrapped DM)
       CREATE TABLE IF NOT EXISTS message_events (
           id TEXT PRIMARY KEY,
@@ -458,6 +474,8 @@ async function initializeTables(): Promise<void> {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
+      ALTER TABLE account_recovery_tokens ADD COLUMN IF NOT EXISTS token_hash VARCHAR(255);
+
       CREATE INDEX IF NOT EXISTS idx_account_recovery_tokens_token_hash ON account_recovery_tokens(token_hash);
 
       -- Recovery email verifications table
@@ -532,6 +550,19 @@ async function initializeTables(): Promise<void> {
     await client.query(`
       DO $$
       BEGIN
+        IF EXISTS (
+          SELECT 1 FROM pg_constraint
+          WHERE conname = 'community_events_kind_check'
+        ) THEN
+          ALTER TABLE community_events DROP CONSTRAINT community_events_kind_check;
+          ALTER TABLE community_events ADD CONSTRAINT community_events_kind_check CHECK (kind IN (34550, 1111, 4550));
+        END IF;
+      END $$;
+    `);
+
+    await client.query(`
+      DO $$
+      BEGIN
         IF NOT EXISTS (
           SELECT 1 FROM information_schema.columns
           WHERE table_name = 'email_flows' AND column_name = 'from_name'
@@ -568,6 +599,9 @@ function getTableForKind(kind: number): string | null {
   // Reviews
   if (kind === 31555) return "review_events";
 
+  // Comments/replies (NIP-22) — for kind 1111 without community context
+  if (kind === 1111) return "comment_events";
+
   // Messages
   if (kind === 1059) return "message_events";
 
@@ -578,12 +612,26 @@ function getTableForKind(kind: number): string | null {
   if ([7375, 7376, 17375, 37375].includes(kind)) return "wallet_events";
 
   // Community
-  if ([34550, 1111, 4550].includes(kind)) return "community_events";
+  if ([34550, 4550].includes(kind)) return "community_events";
 
   // Config
   if ([10002, 10063, 30405].includes(kind)) return "config_events";
 
   return null;
+}
+
+function getTableForEvent(event: NostrEvent): string | null {
+  if (event.kind === 1111) {
+    const hasCommunityRef = event.tags.some(
+      (t) =>
+        (t[0] === "a" && t[1]?.startsWith("34550:")) ||
+        (t[0] === "A" && t[1]?.startsWith("34550:")) ||
+        (t[0] === "K" && t[1] === "34550")
+    );
+    if (hasCommunityRef) return "community_events";
+    return "comment_events";
+  }
+  return getTableForKind(event.kind);
 }
 
 // Helper function to check if event kind should only keep latest per pubkey
@@ -600,7 +648,7 @@ function isReviewEvent(kind: number): boolean {
 
 // Cache a single event to the database
 export async function cacheEvent(event: NostrEvent): Promise<void> {
-  const table = getTableForKind(event.kind);
+  const table = getTableForEvent(event);
   if (!table) {
     console.warn(`No table mapping for event kind ${event.kind}`);
     return;
@@ -755,7 +803,7 @@ async function cacheEventsTransaction(events: NostrEvent[]): Promise<void> {
 
   // Group events by table
   for (const event of events) {
-    const table = getTableForKind(event.kind);
+    const table = getTableForEvent(event);
     if (table) {
       if (!eventsByTable.has(table)) {
         eventsByTable.set(table, []);
@@ -1054,6 +1102,12 @@ export async function deleteCachedEventsByIds(
 // Fetch all products from database
 export async function fetchAllProductsFromDb(): Promise<NostrEvent[]> {
   return fetchCachedEvents(30402);
+}
+
+export async function fetchProductsByPubkeyFromDb(
+  pubkey: string
+): Promise<NostrEvent[]> {
+  return fetchCachedEvents(30402, { pubkey });
 }
 
 export async function fetchProductByIdFromDb(
@@ -1375,6 +1429,43 @@ export async function fetchProfileByPubkeyFromDb(
   }
 }
 
+export async function fetchCommentsByReviewIds(
+  reviewEventIds: string[]
+): Promise<NostrEvent[]> {
+  if (!reviewEventIds.length) return [];
+
+  const dbPool = getDbPool();
+  let client;
+  try {
+    client = await dbPool.connect();
+    const placeholders = reviewEventIds.map((_, i) => `$${i + 1}`).join(", ");
+    const query = `
+      SELECT id, pubkey, created_at, kind, tags, content, sig
+      FROM comment_events
+      WHERE EXISTS (
+        SELECT 1 FROM jsonb_array_elements(tags) AS tag
+        WHERE (tag->>0 = 'e' OR tag->>0 = 'E')
+        AND tag->>1 IN (${placeholders})
+      )
+    `;
+    const result = await client.query(query, reviewEventIds);
+    return result.rows.map((row: any) => ({
+      id: row.id,
+      pubkey: row.pubkey,
+      created_at: row.created_at,
+      kind: row.kind,
+      tags: row.tags,
+      content: row.content,
+      sig: row.sig,
+    }));
+  } catch (error) {
+    console.error("Failed to fetch comments by review IDs:", error);
+    return [];
+  } finally {
+    if (client) client.release();
+  }
+}
+
 // Fetch all reviews from database
 export async function fetchAllReviewsFromDb(): Promise<NostrEvent[]> {
   return fetchCachedEvents(31555);
@@ -1607,6 +1698,76 @@ export async function fetchAllWalletEventsFromDb(
 // Fetch all communities from database
 export async function fetchAllCommunitiesFromDb(): Promise<NostrEvent[]> {
   return fetchCachedEvents(34550);
+}
+
+export async function fetchCommunityPostsFromDb(
+  communityAddress: string
+): Promise<NostrEvent[]> {
+  const dbPool = getDbPool();
+  let client;
+  try {
+    client = await dbPool.connect();
+    const query = `
+      SELECT id, pubkey, created_at, kind, tags, content, sig
+      FROM community_events
+      WHERE kind = 1111
+      AND EXISTS (
+        SELECT 1 FROM jsonb_array_elements(tags) AS tag
+        WHERE tag->>0 = 'a' AND tag->>1 = $1
+      )
+      ORDER BY created_at DESC
+    `;
+    const result = await client.query(query, [communityAddress]);
+    return result.rows.map((row: any) => ({
+      id: row.id,
+      pubkey: row.pubkey,
+      created_at: row.created_at,
+      kind: row.kind,
+      tags: row.tags,
+      content: row.content,
+      sig: row.sig,
+    }));
+  } catch (error) {
+    console.error("Failed to fetch community posts from database:", error);
+    return [];
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function fetchCommunityApprovalsFromDb(
+  communityAddress: string
+): Promise<NostrEvent[]> {
+  const dbPool = getDbPool();
+  let client;
+  try {
+    client = await dbPool.connect();
+    const query = `
+      SELECT id, pubkey, created_at, kind, tags, content, sig
+      FROM community_events
+      WHERE kind = 4550
+      AND EXISTS (
+        SELECT 1 FROM jsonb_array_elements(tags) AS tag
+        WHERE tag->>0 = 'a' AND tag->>1 = $1
+      )
+      ORDER BY created_at DESC
+    `;
+    const result = await client.query(query, [communityAddress]);
+    return result.rows.map((row: any) => ({
+      id: row.id,
+      pubkey: row.pubkey,
+      created_at: row.created_at,
+      kind: row.kind,
+      tags: row.tags,
+      content: row.content,
+      sig: row.sig,
+    }));
+  } catch (error) {
+    console.error("Failed to fetch community approvals from database:", error);
+    return [];
+  } finally {
+    if (client) client.release();
+  }
 }
 
 // Fetch relay config events from database
@@ -3016,9 +3177,9 @@ export async function getWinbackCandidates(inactiveDays: number = 30): Promise<
       FROM notification_emails ne
       INNER JOIN message_events me ON ne.order_id = me.order_id
       WHERE ne.role = 'buyer'
-        AND me.created_at < NOW() - ($1 || ' days')::INTERVAL
+        AND me.created_at < EXTRACT(EPOCH FROM (NOW() - ($1 || ' days')::INTERVAL))::bigint
       GROUP BY ne.email, ne.pubkey, me.pubkey
-      HAVING MAX(me.created_at) < NOW() - ($1 || ' days')::INTERVAL
+      HAVING MAX(me.created_at) < EXTRACT(EPOCH FROM (NOW() - ($1 || ' days')::INTERVAL))::bigint
       LIMIT 100`,
       [inactiveDays]
     );

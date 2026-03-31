@@ -26,15 +26,21 @@ import FailureModal from "../../components/utility-components/failure-modal";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 import { NostrNSecSigner } from "@/utils/nostr/signers/nostr-nsec-signer";
-import { InformationCircleIcon } from "@heroicons/react/24/outline";
+import {
+  InformationCircleIcon,
+  EyeIcon,
+  EyeSlashIcon,
+} from "@heroicons/react/24/outline";
 import RecoveryKeyModal from "./RecoveryKeyModal";
 
 export default function SignInModal({
   isOpen,
   onClose,
+  sellerFlow,
 }: {
   isOpen: boolean;
   onClose: () => void;
+  sellerFlow?: boolean;
 }) {
   const [bunkerToken, setBunkerToken] = useState("");
   const [validBunkerToken, setValidBunkerToken] =
@@ -59,6 +65,10 @@ export default function SignInModal({
   const [recoveryKey, setRecoveryKey] = useState("");
   const [pendingSignUpSigner, setPendingSignUpSigner] =
     useState<NostrSigner | null>(null);
+
+  const [showPrivateKey, setShowPrivateKey] = useState(false);
+  const [showPassphrase, setShowPassphrase] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const [showSignInOptions, setShowSignInOptions] = useState(false);
   const [showSignUpOptions, setShowSignUpOptions] = useState(false);
@@ -151,7 +161,11 @@ export default function SignInModal({
       await signer.getPubKey();
       saveSigner(signer);
       onClose();
-      router.push("/onboarding/user-type");
+      router.push(
+        sellerFlow
+          ? "/onboarding/user-type?preselect=seller"
+          : "/onboarding/user-type"
+      );
     } catch (error) {
       setFailureText("Extension sign-up failed! " + error);
       setShowFailureModal(true);
@@ -167,7 +181,11 @@ export default function SignInModal({
       setIsBunkerConnecting(false);
       await signer.getPubKey();
       onClose();
-      router.push("/onboarding/user-type");
+      router.push(
+        sellerFlow
+          ? "/onboarding/user-type?preselect=seller"
+          : "/onboarding/user-type"
+      );
     } catch (error) {
       setFailureText("Bunker sign-up failed!");
       setShowFailureModal(true);
@@ -220,7 +238,11 @@ export default function SignInModal({
         saveSigner(signer);
         onClose();
 
-        router.push("/onboarding/user-type");
+        router.push(
+          sellerFlow
+            ? "/onboarding/user-type?preselect=seller"
+            : "/onboarding/user-type"
+        );
       }
     } else {
       setFailureText(
@@ -277,7 +299,13 @@ export default function SignInModal({
       } else {
         saveSigner(signer);
         onClose();
-        router.push(isEmailSignUp ? "/onboarding/user-type" : "/marketplace");
+        router.push(
+          isEmailSignUp
+            ? sellerFlow
+              ? "/onboarding/user-type?preselect=seller"
+              : "/onboarding/user-type"
+            : "/marketplace"
+        );
       }
     } catch (error) {
       setFailureText("Email sign-in failed: " + error);
@@ -379,6 +407,9 @@ export default function SignInModal({
           setShowNsecSignIn(false);
           setPrivateKey("");
           setPassphrase("");
+          setShowPrivateKey(false);
+          setShowPassphrase(false);
+          setShowPassword(false);
           setIsNcryptsec(false);
           setNcryptsecError("");
           setShowSignInOptions(false);
@@ -653,12 +684,25 @@ export default function SignInModal({
                         </label>
                         <Input
                           color={validPrivateKey}
-                          type="password"
+                          type={showPrivateKey ? "text" : "password"}
                           width="100%"
                           size="lg"
                           value={privateKey}
                           placeholder="Paste your nsec or ncryptsec..."
                           onChange={(e) => setPrivateKey(e.target.value)}
+                          endContent={
+                            <button
+                              type="button"
+                              onClick={() => setShowPrivateKey((v) => !v)}
+                              className="text-gray-400 hover:text-black"
+                            >
+                              {showPrivateKey ? (
+                                <EyeSlashIcon className="h-5 w-5" />
+                              ) : (
+                                <EyeIcon className="h-5 w-5" />
+                              )}
+                            </button>
+                          }
                           classNames={{
                             input: "!text-black font-medium",
                             inputWrapper:
@@ -680,7 +724,7 @@ export default function SignInModal({
                           <span className="text-red-500">*</span>
                         </label>
                         <Input
-                          type="password"
+                          type={showPassphrase ? "text" : "password"}
                           width="100%"
                           size="lg"
                           value={passphrase}
@@ -697,6 +741,19 @@ export default function SignInModal({
                             )
                               handleNsecSignup();
                           }}
+                          endContent={
+                            <button
+                              type="button"
+                              onClick={() => setShowPassphrase((v) => !v)}
+                              className="text-gray-400 hover:text-black"
+                            >
+                              {showPassphrase ? (
+                                <EyeSlashIcon className="h-5 w-5" />
+                              ) : (
+                                <EyeIcon className="h-5 w-5" />
+                              )}
+                            </button>
+                          }
                           classNames={{
                             input: "!text-black font-medium",
                             inputWrapper:
@@ -905,12 +962,25 @@ export default function SignInModal({
                       </label>
                       <Input
                         color={validPrivateKey}
-                        type="password"
+                        type={showPrivateKey ? "text" : "password"}
                         width="100%"
                         size="lg"
                         value={privateKey}
                         placeholder="Paste your nsec or ncryptsec..."
                         onChange={(e) => setPrivateKey(e.target.value)}
+                        endContent={
+                          <button
+                            type="button"
+                            onClick={() => setShowPrivateKey((v) => !v)}
+                            className="text-gray-400 hover:text-black"
+                          >
+                            {showPrivateKey ? (
+                              <EyeSlashIcon className="h-5 w-5" />
+                            ) : (
+                              <EyeIcon className="h-5 w-5" />
+                            )}
+                          </button>
+                        }
                         classNames={{
                           input: "!text-black font-medium",
                           inputWrapper:
@@ -932,7 +1002,7 @@ export default function SignInModal({
                         <span className="text-red-500">*</span>
                       </label>
                       <Input
-                        type="password"
+                        type={showPassphrase ? "text" : "password"}
                         width="100%"
                         size="lg"
                         value={passphrase}
@@ -949,6 +1019,19 @@ export default function SignInModal({
                           )
                             handleSignIn();
                         }}
+                        endContent={
+                          <button
+                            type="button"
+                            onClick={() => setShowPassphrase((v) => !v)}
+                            className="text-gray-400 hover:text-black"
+                          >
+                            {showPassphrase ? (
+                              <EyeSlashIcon className="h-5 w-5" />
+                            ) : (
+                              <EyeIcon className="h-5 w-5" />
+                            )}
+                          </button>
+                        }
                         classNames={{
                           input: "!text-black font-medium",
                           inputWrapper:
@@ -1017,7 +1100,7 @@ export default function SignInModal({
                       Password:
                     </label>
                     <Input
-                      type="password"
+                      type={showPassword ? "text" : "password"}
                       width="100%"
                       size="lg"
                       value={password}
@@ -1026,6 +1109,19 @@ export default function SignInModal({
                       onKeyDown={(e) => {
                         if (e.key === "Enter") handleEmailSignIn();
                       }}
+                      endContent={
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword((v) => !v)}
+                          className="text-gray-400 hover:text-black"
+                        >
+                          {showPassword ? (
+                            <EyeSlashIcon className="h-5 w-5" />
+                          ) : (
+                            <EyeIcon className="h-5 w-5" />
+                          )}
+                        </button>
+                      }
                       classNames={{
                         input: "!text-black font-medium",
                         inputWrapper:
@@ -1109,7 +1205,11 @@ export default function SignInModal({
             setPendingSignUpSigner(null);
             setRecoveryKey("");
             onClose();
-            router.push("/onboarding/user-type");
+            router.push(
+              sellerFlow
+                ? "/onboarding/user-type?preselect=seller"
+                : "/onboarding/user-type"
+            );
           }
         }}
         recoveryKey={recoveryKey}

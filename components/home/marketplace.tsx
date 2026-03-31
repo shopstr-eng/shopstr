@@ -12,12 +12,7 @@ import {
   DropdownMenu,
   DropdownItem,
 } from "@nextui-org/react";
-import {
-  FaceFrownIcon,
-  FaceSmileIcon,
-  PlusIcon,
-  EllipsisVerticalIcon,
-} from "@heroicons/react/24/outline";
+import { PlusIcon, EllipsisVerticalIcon } from "@heroicons/react/24/outline";
 import { useRouter } from "next/router";
 import { nip19, Event } from "nostr-tools";
 import { useContext, useEffect, useState, useRef } from "react";
@@ -33,6 +28,7 @@ import LocationDropdown from "../utility-components/dropdowns/location-dropdown"
 import { ProfileWithDropdown } from "@/components/utility-components/profile/profile-dropdown";
 import { CATEGORIES, BLUEBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
+import SellerReviewReply from "@/components/utility-components/seller-review-reply";
 import parseTags, {
   ProductData,
 } from "@/utils/parsers/product-parser-functions";
@@ -81,7 +77,6 @@ function MarketplacePage({
   const [isFetchingReviews, setIsFetchingReviews] = useState(false);
 
   const [shopBannerURL, setShopBannerURL] = useState("");
-  const [shopAbout, setShopAbout] = useState("");
   const [isFetchingShop, setIsFetchingShop] = useState(false);
   const [rawEvent, setRawEvent] = useState<Event | undefined>(undefined);
   const [showRawEventModal, setShowRawEventModal] = useState(false);
@@ -201,7 +196,6 @@ function MarketplacePage({
         shopMapContext.shopData.get(focusedPubkey);
       if (shopProfile) {
         setShopBannerURL(shopProfile.content.ui.banner);
-        setShopAbout(shopProfile.content.about);
         setRawEvent(shopProfile.event);
       }
     }
@@ -355,6 +349,13 @@ function MarketplacePage({
                           return null;
                         })}
                       </div>
+                      <SellerReviewReply
+                        reviewEventId={reviewsContext.reviewEventIds.get(
+                          `${product.d}:${reviewerPubkey}`
+                        )}
+                        reviewerPubkey={reviewerPubkey}
+                        merchantPubkey={focusedPubkey}
+                      />
                     </div>
                   )
                 )}
@@ -416,14 +417,6 @@ function MarketplacePage({
                 }}
               >
                 Reviews
-              </Button>
-              <Button
-                className="bg-transparent text-lg font-bold text-black hover:text-primary-yellow sm:text-xl"
-                onClick={() => {
-                  setSelectedSection("about");
-                }}
-              >
-                About
               </Button>
               <Button
                 className="bg-transparent text-lg font-bold text-black hover:text-primary-yellow sm:text-xl"
@@ -579,12 +572,6 @@ function MarketplacePage({
             searchBarRef={searchBarRef}
           />
         )}
-        {selectedSection === "about" && shopAbout && (
-          <div className="flex w-full flex-col justify-start bg-white px-4 py-8 text-black">
-            <h2 className="pb-2 text-2xl font-bold">About</h2>
-            <p className="text-base">{shopAbout}</p>
-          </div>
-        )}
         {selectedSection === "reviews" && !isFetchingReviews && (
           <div className="flex w-full flex-col justify-start bg-white px-4 py-8 text-black">
             <h2 className="pb-2 text-2xl font-bold">Reviews</h2>
@@ -596,26 +583,14 @@ function MarketplacePage({
                 <div className="inline-flex items-center gap-1 rounded-lg border-2 border-black bg-white px-2 shadow-neo">
                   {merchantReview && merchantReview >= 0.5 ? (
                     <>
-                      <FaceSmileIcon
-                        className={`h-10 w-10 p-1 ${
-                          merchantReview >= 0.75
-                            ? "text-green-500"
-                            : "text-green-300"
-                        }`}
-                      />
+                      <span className="text-2xl">😀</span>
                       <span className="mr-2 whitespace-nowrap text-sm text-black">
                         {merchantQuality}
                       </span>
                     </>
                   ) : (
                     <>
-                      <FaceFrownIcon
-                        className={`h-10 w-10 p-1 ${
-                          merchantReview >= 0.25
-                            ? "text-red-300"
-                            : "text-red-500"
-                        }`}
-                      />
+                      <span className="text-2xl">😢</span>
                       <span className="mr-2 whitespace-nowrap text-sm text-black">
                         {merchantQuality}
                       </span>

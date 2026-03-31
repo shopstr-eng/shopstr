@@ -22,8 +22,6 @@ import {
 } from "@nextui-org/react";
 import { locationAvatar } from "./dropdowns/location-dropdown";
 import {
-  FaceFrownIcon,
-  FaceSmileIcon,
   ArrowLongDownIcon,
   ArrowLongUpIcon,
   EllipsisVerticalIcon,
@@ -47,6 +45,7 @@ import BulkSelector from "./bulk-selector";
 import ZapsnagButton from "@/components/ZapsnagButton";
 import { RawEventModal, EventIdModal } from "./modals/event-modals";
 import SubscriptionPricingCards from "./subscription-pricing-cards";
+import SellerReviewReply from "./seller-review-reply";
 
 const SUMMARY_CHARACTER_LIMIT = 200;
 
@@ -616,26 +615,14 @@ export default function CheckoutCard({
                     <div className="inline-flex items-center gap-2 rounded-md border-2 border-black bg-white px-3 py-1 shadow-neo">
                       {merchantReview >= 0.5 ? (
                         <>
-                          <FaceSmileIcon
-                            className={`h-6 w-6 ${
-                              merchantReview >= 0.75
-                                ? "text-green-500"
-                                : "text-green-300"
-                            }`}
-                          />
+                          <span className="text-lg">😀</span>
                           <span className="text-sm font-semibold text-black">
                             {merchantQuality}
                           </span>
                         </>
                       ) : (
                         <>
-                          <FaceFrownIcon
-                            className={`h-6 w-6 ${
-                              merchantReview >= 0.25
-                                ? "text-red-300"
-                                : "text-red-500"
-                            }`}
-                          />
+                          <span className="text-lg">😢</span>
                           <span className="text-sm font-semibold text-black">
                             {merchantQuality}
                           </span>
@@ -1018,6 +1005,13 @@ export default function CheckoutCard({
                               return null;
                             })}
                           </div>
+                          <SellerReviewReply
+                            reviewEventId={reviewsContext.reviewEventIds.get(
+                              `${productData.d}:${reviewerPubkey}`
+                            )}
+                            reviewerPubkey={reviewerPubkey}
+                            merchantPubkey={productData.pubkey}
+                          />
                         </div>
                       )
                     )}

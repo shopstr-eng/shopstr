@@ -6,10 +6,7 @@ import DisplayProducts from "../display-products";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import { Button, useDisclosure } from "@nextui-org/react";
 import { Bars3Icon } from "@heroicons/react/24/outline";
-import {
-  BLUEBUTTONCLASSNAMES,
-  WHITEBUTTONCLASSNAMES,
-} from "@/utils/STATIC-VARIABLES";
+import { BLUEBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import SignInModal from "../sign-in/SignInModal";
 import { ShopMapContext } from "@/utils/context/context";
 import { ShopProfile } from "../../utils/types/types";
@@ -22,7 +19,6 @@ const MyListingsPage = () => {
   const { isOpen, onOpen, onClose } = useDisclosure();
 
   const [shopBannerURL, setShopBannerURL] = useState("");
-  const [shopAbout, setShopAbout] = useState("");
   const [isFetchingShop, setIsFetchingShop] = useState(false);
 
   const [selectedSection, setSelectedSection] = useState("Listings");
@@ -60,7 +56,6 @@ const MyListingsPage = () => {
         shopMapContext.shopData.get(usersPubkey);
       if (shopProfile) {
         setShopBannerURL(shopProfile.content.ui.banner);
-        setShopAbout(shopProfile.content.about);
       }
     }
     setIsFetchingShop(false);
@@ -118,15 +113,6 @@ const MyListingsPage = () => {
           }}
         >
           Discounts
-        </Button>
-        <Button
-          className="w-full bg-transparent px-4 py-2 text-left text-sm font-bold text-black hover:bg-gray-100"
-          onClick={() => {
-            setSelectedSection("About");
-            setIsMobileMenuOpen(false);
-          }}
-        >
-          About
         </Button>
         <Button
           className="w-full bg-transparent px-4 py-2 text-left text-sm font-bold text-black hover:bg-gray-100"
@@ -203,16 +189,6 @@ const MyListingsPage = () => {
                 Discounts
               </Button>
               <Button
-                className={`bg-transparent px-0 text-lg font-bold ${
-                  selectedSection === "About"
-                    ? "border-b-4 border-black text-black"
-                    : "text-gray-500 hover:text-black"
-                }`}
-                onClick={() => setSelectedSection("About")}
-              >
-                About
-              </Button>
-              <Button
                 className="bg-transparent px-0 text-lg font-bold text-gray-500 hover:text-black"
                 onClick={() => handleViewOrders()}
               >
@@ -261,14 +237,6 @@ const MyListingsPage = () => {
                 Edit Shop
               </Button>
             </div>
-
-            {/* About Section in Sidebar */}
-            {shopAbout && (
-              <div className="mt-8">
-                <h3 className="mb-3 text-xl font-bold text-black">About</h3>
-                <p className="text-sm text-gray-700">{shopAbout}</p>
-              </div>
-            )}
           </div>
 
           {/* Main Content Area */}
@@ -282,30 +250,6 @@ const MyListingsPage = () => {
                 isMyListings={true}
                 setCategories={setCategories}
               />
-            )}
-            {selectedSection === "About" && shopAbout && (
-              <div className="flex w-full flex-col justify-start px-4 py-8 text-black">
-                <h2 className="mb-4 text-2xl font-bold">About</h2>
-                <p className="text-base text-gray-700">{shopAbout}</p>
-              </div>
-            )}
-            {selectedSection === "About" && !shopAbout && (
-              <div className="mt-20 flex flex-grow items-center justify-center py-10">
-                <div className="w-full max-w-lg rounded-lg border-4 border-black bg-primary-blue p-8 text-center shadow-neo">
-                  <p className="text-3xl font-semibold text-white">
-                    Nothing here . . . yet!
-                  </p>
-                  <p className="mt-4 text-lg text-white">
-                    Set up your shop in settings!
-                  </p>
-                  <Button
-                    className={`${WHITEBUTTONCLASSNAMES} mt-6`}
-                    onClick={() => handleEditShop()}
-                  >
-                    Go to Settings
-                  </Button>
-                </div>
-              </div>
             )}
           </div>
           {usersPubkey && selectedSection === "Discounts" && <DiscountCodes />}

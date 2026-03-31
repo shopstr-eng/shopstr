@@ -112,10 +112,13 @@ export interface StorefrontSection {
   timelineItems?: StorefrontTimelineItem[];
   productLayout?: "grid" | "list" | "featured";
   productLimit?: number;
+  productIds?: string[];
+  heroProductId?: string;
   email?: string;
   phone?: string;
   address?: string;
   caption?: string;
+  reviewOrder?: string[];
 }
 
 export interface StorefrontPage {
