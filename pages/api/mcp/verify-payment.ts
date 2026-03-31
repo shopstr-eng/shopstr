@@ -4,6 +4,7 @@ import { authenticateRequest, initializeApiKeysTable } from "@/utils/mcp/auth";
 import { getMcpOrder, updateMcpOrderPayment } from "@/mcp/tools/purchase-tools";
 import { recordRequest } from "@/utils/mcp/metrics";
 import { pendingLightningPayments } from "./create-order";
+import { deductStock } from "@/utils/db/inventory-service";
 
 let tablesReady = false;
 
@@ -97,6 +98,18 @@ export default async function handler(
       quoteStatus.state === MintQuoteState.ISSUED
     ) {
       await updateMcpOrderPayment(orderId, `ln_${pending.quote}`, "paid");
+
+      try {
+        await deductStock(
+          pending.productId,
+          pending.quantity,
+          orderId,
+          pending.inventoryVariantKey
+        );
+      } catch (invErr) {
+        console.error("Inventory deduction failed (lightning verify):", invErr);
+      }
+
       pendingLightningPayments.delete(orderId);
 
       return res.status(200).json({

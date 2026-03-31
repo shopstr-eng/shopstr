@@ -71,6 +71,24 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
       }
 
       try {
+        const invRes = await fetch(
+          `/api/inventory?productId=${encodeURIComponent(product.id)}`
+        );
+        if (invRes.ok) {
+          const invData = await invRes.json();
+          if (
+            invData.default_quantity !== null &&
+            invData.default_quantity !== undefined
+          ) {
+            const sold = (product.quantity || 0) - invData.default_quantity;
+            setSoldCount(Math.max(0, sold));
+            setIsCheckingInventory(false);
+            return;
+          }
+        }
+      } catch {}
+
+      try {
         const filter = { kinds: [9735], "#e": [product.id] };
         const zaps = await nostrManager.fetch([filter]);
         setSoldCount(zaps.length);

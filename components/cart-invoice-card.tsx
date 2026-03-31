@@ -319,6 +319,8 @@ export default function CartInvoiceCard({
     selectedBulkOption?: string;
     includeBuyerEmail?: boolean;
     subscriptionFrequency?: string;
+    productId?: string;
+    quantity?: number;
   }) => {
     try {
       const shouldIncludeBuyer = params.includeBuyerEmail !== false;
@@ -343,6 +345,8 @@ export default function CartInvoiceCard({
           selectedWeight: params.selectedWeight,
           selectedBulkOption: params.selectedBulkOption,
           subscriptionFrequency: params.subscriptionFrequency,
+          productId: params.productId,
+          quantity: params.quantity,
         }),
       });
     } catch (e) {}
@@ -360,6 +364,28 @@ export default function CartInvoiceCard({
           ...entry,
           includeBuyerEmail: index === 0,
         });
+      });
+
+      products.forEach((p: any) => {
+        const qty = quantities[p.id] || 1;
+        const bulkMultiplier = p.selectedBulkOption
+          ? Number(p.selectedBulkOption)
+          : 1;
+        const effectiveQty = qty * (isNaN(bulkMultiplier) ? 1 : bulkMultiplier);
+        const variantKey = p.selectedSize
+          ? `size:${p.selectedSize}`
+          : "_default";
+        fetch("/api/inventory", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "deduct",
+            productId: p.id,
+            amount: effectiveQty,
+            orderId: emailEntries[0]?.orderId || "cart_order",
+            variantKey,
+          }),
+        }).catch(() => {});
       });
 
       try {

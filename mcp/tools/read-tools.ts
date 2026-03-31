@@ -87,7 +87,11 @@ function parseProductEvent(event: NostrEvent) {
 
   const bulk = tags
     .filter((t) => t[0] === "bulk" && t[1] && t[2])
-    .map((t) => ({ units: Number(t[1]), price: Number(t[2]) }));
+    .map((t) => ({
+      units: Number(t[1]),
+      price: Number(t[2]),
+      variant: t[3] || undefined,
+    }));
 
   const pickupLocations = getAllTagValues(tags, "pickup_location");
 

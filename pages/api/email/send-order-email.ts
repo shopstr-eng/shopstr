@@ -13,6 +13,7 @@ import {
   getFlowEnrollments,
   getDbPool,
 } from "@/utils/db/db-service";
+import { deductStock } from "@/utils/db/inventory-service";
 
 export default async function handler(
   req: NextApiRequest,
@@ -40,6 +41,8 @@ export default async function handler(
     selectedWeight,
     selectedBulkOption,
     subscriptionFrequency,
+    productId,
+    quantity,
   } = req.body;
 
   if (!orderId || !productTitle) {
@@ -112,6 +115,21 @@ export default async function handler(
         });
       } catch (enrollError) {
         console.error("Error auto-enrolling in email flows:", enrollError);
+      }
+    }
+
+    if (productId && orderId) {
+      try {
+        const deductQty = quantity ? parseInt(String(quantity), 10) : 1;
+        const bulkMultiplier = selectedBulkOption
+          ? parseInt(String(selectedBulkOption), 10)
+          : 1;
+        const effectiveDeductQty =
+          deductQty * (isNaN(bulkMultiplier) ? 1 : bulkMultiplier);
+        const variantKey = selectedSize ? `size:${selectedSize}` : "_default";
+        await deductStock(productId, effectiveDeductQty, orderId, variantKey);
+      } catch (invErr) {
+        console.error("Inventory deduction failed (frontend order):", invErr);
       }
     }
 

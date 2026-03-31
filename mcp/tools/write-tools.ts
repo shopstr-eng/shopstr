@@ -700,9 +700,17 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         .optional()
         .describe("Volume/variant options with prices"),
       bulk: z
-        .array(z.object({ units: z.string(), price: z.string() }))
+        .array(
+          z.object({
+            units: z.string(),
+            price: z.string(),
+            variant: z.string().optional(),
+          })
+        )
         .optional()
-        .describe("Bulk/bundle pricing tiers (e.g. 5 units for $100)"),
+        .describe(
+          "Bulk/bundle pricing tiers. Use 'variant' to tie a tier to a specific volume/weight (e.g. {units: '5', price: '100', variant: '1 Gallon'})"
+        ),
       weights: z
         .array(z.object({ weight: z.string(), price: z.string() }))
         .optional()
@@ -808,7 +816,11 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
         if (params.bulk) {
           for (const b of params.bulk) {
-            tags.push(["bulk", b.units, b.price]);
+            if (b.variant) {
+              tags.push(["bulk", b.units, b.price, b.variant]);
+            } else {
+              tags.push(["bulk", b.units, b.price]);
+            }
           }
         }
 
@@ -958,9 +970,17 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         .optional()
         .describe("Updated volume/variant options with prices"),
       bulk: z
-        .array(z.object({ units: z.string(), price: z.string() }))
+        .array(
+          z.object({
+            units: z.string(),
+            price: z.string(),
+            variant: z.string().optional(),
+          })
+        )
         .optional()
-        .describe("Updated bulk/bundle pricing tiers"),
+        .describe(
+          "Updated bulk/bundle pricing tiers. Use 'variant' to tie a tier to a specific volume/weight"
+        ),
       weights: z
         .array(z.object({ weight: z.string(), price: z.string() }))
         .optional()
@@ -1058,7 +1078,11 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         }
         if (params.bulk) {
           for (const b of params.bulk) {
-            tags.push(["bulk", b.units, b.price]);
+            if (b.variant) {
+              tags.push(["bulk", b.units, b.price, b.variant]);
+            } else {
+              tags.push(["bulk", b.units, b.price]);
+            }
           }
         }
         if (params.weights) {

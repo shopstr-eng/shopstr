@@ -19,12 +19,21 @@ import {
   CreateOrderInput,
 } from "@/mcp/tools/purchase-tools";
 import { parseTags } from "@/utils/parsers/product-parser-functions";
+import { checkAvailability, deductStock } from "@/utils/db/inventory-service";
 
 const DEFAULT_MINT_URL = "https://mint.minibits.cash/Bitcoin";
 
 const pendingLightningPayments = new Map<
   string,
-  { quote: string; mintUrl: string; amount: number; orderId: string }
+  {
+    quote: string;
+    mintUrl: string;
+    amount: number;
+    orderId: string;
+    productId: string;
+    quantity: number;
+    inventoryVariantKey: string;
+  }
 >();
 
 let tablesReady = false;
@@ -169,21 +178,50 @@ async function handleCreateOrder(
           availableSizes: product.sizes || [],
         });
       }
-      const sizeStock = product.sizeQuantities?.get(selectedSize);
-      if (sizeStock !== undefined && sizeStock < quantity) {
+      const inventoryCheck = await checkAvailability(
+        productId,
+        quantity,
+        selectedSize
+      );
+      if (inventoryCheck.tracked) {
+        if (!inventoryCheck.available) {
+          return res.status(400).json({
+            error: `Insufficient stock for size "${selectedSize}"`,
+            available: inventoryCheck.stock,
+            requested: quantity,
+          });
+        }
+      } else {
+        const sizeStock = product.sizeQuantities?.get(selectedSize);
+        if (sizeStock !== undefined && sizeStock < quantity) {
+          return res.status(400).json({
+            error: `Insufficient stock for size "${selectedSize}"`,
+            available: sizeStock,
+            requested: quantity,
+          });
+        }
+      }
+      selectedSpecs.size = selectedSize;
+    } else {
+      const inventoryCheck = await checkAvailability(productId, quantity);
+      if (inventoryCheck.tracked) {
+        if (!inventoryCheck.available) {
+          return res.status(400).json({
+            error: "Insufficient stock",
+            available: inventoryCheck.stock,
+            requested: quantity,
+          });
+        }
+      } else if (
+        product.quantity !== undefined &&
+        product.quantity < quantity
+      ) {
         return res.status(400).json({
-          error: `Insufficient stock for size "${selectedSize}"`,
-          available: sizeStock,
+          error: "Insufficient stock",
+          available: product.quantity,
           requested: quantity,
         });
       }
-      selectedSpecs.size = selectedSize;
-    } else if (product.quantity !== undefined && product.quantity < quantity) {
-      return res.status(400).json({
-        error: "Insufficient stock",
-        available: product.quantity,
-        requested: quantity,
-      });
     }
 
     let unitPrice = product.price;
@@ -223,11 +261,19 @@ async function handleCreateOrder(
     let subtotal: number;
 
     if (selectedBulkUnits) {
-      if (!product.bulkPrices || !product.bulkPrices.has(selectedBulkUnits)) {
+      const selectedVariant = selectedVolume || selectedWeight || null;
+      let resolvedBulkPrices: Map<number, number> | undefined;
+      if (selectedVariant && product.variantBulkPrices) {
+        resolvedBulkPrices = product.variantBulkPrices.get(selectedVariant);
+      }
+      if (!resolvedBulkPrices && product.bulkPrices) {
+        resolvedBulkPrices = product.bulkPrices;
+      }
+      if (!resolvedBulkPrices || !resolvedBulkPrices.has(selectedBulkUnits)) {
         return res.status(400).json({
           error: `Invalid bulk tier: ${selectedBulkUnits} units`,
-          availableBulkTiers: product.bulkPrices
-            ? Array.from(product.bulkPrices.entries()).map(
+          availableBulkTiers: resolvedBulkPrices
+            ? Array.from(resolvedBulkPrices.entries()).map(
                 ([units, price]) => ({
                   units,
                   totalPrice: price,
@@ -236,7 +282,7 @@ async function handleCreateOrder(
             : [],
         });
       }
-      const bulkTotalPrice = product.bulkPrices.get(selectedBulkUnits)!;
+      const bulkTotalPrice = resolvedBulkPrices.get(selectedBulkUnits)!;
       subtotal = bulkTotalPrice * quantity;
       effectiveQuantity = selectedBulkUnits * quantity;
       selectedSpecs.bulk = {
@@ -297,7 +343,15 @@ async function handleCreateOrder(
       unitPrice,
       quantity: effectiveQuantity,
       subtotal: selectedBulkUnits
-        ? product.bulkPrices!.get(selectedBulkUnits)! * quantity
+        ? (() => {
+            const sv = selectedVolume || selectedWeight || null;
+            let bp =
+              sv && product.variantBulkPrices
+                ? product.variantBulkPrices.get(sv)
+                : undefined;
+            if (!bp) bp = product.bulkPrices;
+            return (bp?.get(selectedBulkUnits) ?? unitPrice) * quantity;
+          })()
         : unitPrice * quantity,
       discountPercentage: discountPercentage || undefined,
       discountedSubtotal: discountPercentage ? subtotal : undefined,
@@ -310,6 +364,10 @@ async function handleCreateOrder(
       pricingBlock.selectedSpecs = selectedSpecs;
     }
 
+    const inventoryVariantKey = selectedSize
+      ? `size:${selectedSize}`
+      : "_default";
+
     if (paymentMethod === "lightning") {
       return handleLightningPayment(
         res,
@@ -318,13 +376,14 @@ async function handleCreateOrder(
         buyerPubkey,
         product,
         productId,
-        quantity,
+        effectiveQuantity,
         totalAmount,
         currency,
         buyerEmail || null,
         shippingAddress || null,
         pricingBlock,
-        mintUrl
+        mintUrl,
+        inventoryVariantKey
       );
     }
 
@@ -342,7 +401,8 @@ async function handleCreateOrder(
         buyerEmail || null,
         shippingAddress || null,
         pricingBlock,
-        cashuToken
+        cashuToken,
+        inventoryVariantKey
       );
     }
 
@@ -354,14 +414,15 @@ async function handleCreateOrder(
         buyerPubkey,
         product,
         productId,
-        quantity,
+        effectiveQuantity,
         totalAmount,
         currency,
         buyerEmail || null,
         shippingAddress || null,
         pricingBlock,
         sellerProfile,
-        fiatMethod
+        fiatMethod,
+        inventoryVariantKey
       );
     }
 
@@ -377,7 +438,8 @@ async function handleCreateOrder(
       currency,
       buyerEmail || null,
       shippingAddress || null,
-      pricingBlock
+      pricingBlock,
+      inventoryVariantKey
     );
   } catch (error) {
     console.error("Failed to create MCP order:", error);
@@ -401,7 +463,8 @@ async function handleLightningPayment(
   buyerEmail: string | null,
   shippingAddress: Record<string, string> | null,
   pricingBlock: any,
-  mintUrl?: string
+  mintUrl?: string,
+  inventoryVariantKey?: string
 ) {
   const mint = mintUrl || DEFAULT_MINT_URL;
 
@@ -439,6 +502,9 @@ async function handleLightningPayment(
       mintUrl: mint,
       amount: amountInSats,
       orderId,
+      productId,
+      quantity,
+      inventoryVariantKey: inventoryVariantKey || "_default",
     });
 
     await sendOrderEmail(
@@ -495,7 +561,8 @@ async function handleCashuPayment(
   buyerEmail: string | null,
   shippingAddress: Record<string, string> | null,
   pricingBlock: any,
-  cashuToken?: string
+  cashuToken?: string,
+  inventoryVariantKey?: string
 ) {
   if (!cashuToken) {
     return res.status(400).json({
@@ -574,6 +641,18 @@ async function handleCashuPayment(
     );
 
     await updateOrderPaymentStatus(orderId, "paid");
+
+    try {
+      await deductStock(
+        productId,
+        quantity,
+        orderId,
+        inventoryVariantKey || "_default"
+      );
+    } catch (invErr) {
+      console.error("Inventory deduction failed (cashu):", invErr);
+    }
+
     await sendOrderEmail(
       buyerEmail,
       buyerPubkey,
@@ -621,7 +700,8 @@ async function handleFiatPayment(
   shippingAddress: Record<string, string> | null,
   pricingBlock: any,
   sellerProfile: any,
-  fiatMethod?: string
+  fiatMethod?: string,
+  inventoryVariantKey?: string
 ) {
   const fiatOptions = sellerProfile?.fiat_options || [];
   if (fiatOptions.length === 0) {
@@ -658,6 +738,17 @@ async function handleFiatPayment(
     shippingAddress,
     `fiat_${fiatMethod || "unspecified"}_${orderId}`
   );
+
+  try {
+    await deductStock(
+      productId,
+      quantity,
+      orderId,
+      inventoryVariantKey || "_default"
+    );
+  } catch (invErr) {
+    console.error("Inventory deduction failed (fiat):", invErr);
+  }
 
   await sendOrderEmail(
     buyerEmail,
@@ -710,7 +801,8 @@ async function handleStripePayment(
   currency: string,
   buyerEmail: string | null,
   shippingAddress: Record<string, string> | null,
-  pricingBlock: any
+  pricingBlock: any,
+  inventoryVariantKey?: string
 ) {
   let paymentIntentId: string | null = null;
   let clientSecret: string | null = null;
@@ -790,6 +882,17 @@ async function handleStripePayment(
     shippingAddress,
     paymentIntentId
   );
+
+  try {
+    await deductStock(
+      productId,
+      quantity,
+      orderId,
+      inventoryVariantKey || "_default"
+    );
+  } catch (invErr) {
+    console.error("Inventory deduction failed (stripe):", invErr);
+  }
 
   await sendOrderEmail(
     buyerEmail,
