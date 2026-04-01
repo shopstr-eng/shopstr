@@ -95,7 +95,8 @@
     "typescript": "5.2.2"
   },
   "overrides": {
-    "serialize-javascript": "7.0.4"
+    "serialize-javascript": "7.0.5",
+    "picomatch": "4.0.4"
   },
   "resolutions": {
     "@types/react": "18.2.22",

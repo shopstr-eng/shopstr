@@ -59,7 +59,7 @@ describe("DynamicHead", () => {
       />
     );
     await waitFor(() => {
-      expect(document.title).toBe("Milk Market");
+      expect(document.title).toBe("Milk Market - Farm-Fresh Dairy Direct from Local Farmers");
     });
   });
 
@@ -167,7 +167,7 @@ describe("DynamicHead", () => {
         />
       );
       await waitFor(() =>
-        expect(getMetaContent("og:image")).toBe("/milk-market.png")
+        expect(getMetaContent("og:image")).toBe("https://milk.market/milk-market.png")
       );
     });
   });
@@ -216,7 +216,7 @@ describe("DynamicHead", () => {
         />
       );
       await waitFor(() => expect(document.title).toBe("Milk Market Listing"));
-      expect(getMetaContent("og:image")).toBe("/milk-market.png");
+      expect(getMetaContent("og:image")).toBe("https://milk.market/milk-market.png");
     });
 
     test("should render fallback tags for a listing when parsing fails", async () => {
