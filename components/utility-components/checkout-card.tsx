@@ -166,6 +166,12 @@ export default function CheckoutCard({
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    setSelectedImage(productData.images[0]);
+    setShowAllImages(false);
+    setVisibleImages(productData.images.slice(0, 3));
+  }, [productData.id]);
+
+  useEffect(() => {
     if (typeof window !== "undefined") {
       const cartList = localStorage.getItem("cart")
         ? JSON.parse(localStorage.getItem("cart") as string)
