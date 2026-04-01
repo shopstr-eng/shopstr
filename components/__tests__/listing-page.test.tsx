@@ -5,11 +5,13 @@ import ListingPage, {
   getServerSideProps,
 } from "../../pages/listing/[[...productId]]";
 import { ProductContext } from "@/utils/context/context";
+import { NostrContext } from "@/components/utility-components/nostr-context-provider";
 import {
   fetchProductByDTagAndPubkey,
   fetchProductByIdFromDb,
   fetchProductByTitleSlug,
 } from "@/utils/db/db-service";
+import { fetchProductByIdentifierFromRelays } from "@/utils/nostr/fetch-service";
 import { NostrEvent } from "@/utils/types/types";
 
 jest.mock("next/router", () => ({ __esModule: true, useRouter: jest.fn() }));
@@ -24,6 +26,16 @@ jest.mock("@/utils/db/db-service", () => ({
   fetchProductByDTagAndPubkey: jest.fn(),
   fetchProductByIdFromDb: jest.fn(),
   fetchProductByTitleSlug: jest.fn(),
+}));
+jest.mock("@/utils/nostr/fetch-service", () => ({
+  fetchProductByIdentifierFromRelays: jest.fn(),
+}));
+jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
+  getLocalStorageData: jest.fn(() => ({
+    relays: ["wss://relay.one"],
+    readRelays: [],
+  })),
+  getDefaultRelays: jest.fn(() => ["wss://relay.default"]),
 }));
 jest.mock(
   "@/components/storefront/storefront-theme-wrapper",
@@ -56,6 +68,8 @@ const mockFetchProductByDTagAndPubkey =
   fetchProductByDTagAndPubkey as jest.Mock;
 const mockFetchProductByIdFromDb = fetchProductByIdFromDb as jest.Mock;
 const mockFetchProductByTitleSlug = fetchProductByTitleSlug as jest.Mock;
+const mockFetchProductByIdentifierFromRelays =
+  fetchProductByIdentifierFromRelays as jest.Mock;
 
 const baseEvent: NostrEvent = {
   id: "event-id",
@@ -78,6 +92,7 @@ const baseEvent: NostrEvent = {
 describe("Listing page", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockFetchProductByIdentifierFromRelays.mockResolvedValue(null);
     mockUseRouter.mockReturnValue({
       isReady: true,
       push: jest.fn(),
@@ -88,24 +103,26 @@ describe("Listing page", () => {
 
   it("renders from the SSR-fetched product when product context is empty", () => {
     render(
-      <ProductContext.Provider
-        value={{
-          productEvents: [],
-          isLoading: false,
-          addNewlyCreatedProductEvent: jest.fn(),
-          removeDeletedProductEvent: jest.fn(),
-        }}
-      >
-        <ListingPage
-          ogMeta={{
-            title: "Shopstr Listing",
-            description: "Check out this listing on Shopstr!",
-            image: "/shopstr-2000x2000.png",
-            url: "/listing/cold-load-listing",
+      <NostrContext.Provider value={{ nostr: {} as any }}>
+        <ProductContext.Provider
+          value={{
+            productEvents: [],
+            isLoading: false,
+            addNewlyCreatedProductEvent: jest.fn(),
+            removeDeletedProductEvent: jest.fn(),
           }}
-          initialProductEvent={baseEvent}
-        />
-      </ProductContext.Provider>
+        >
+          <ListingPage
+            ogMeta={{
+              title: "Shopstr Listing",
+              description: "Check out this listing on Shopstr!",
+              image: "/shopstr-2000x2000.png",
+              url: "/listing/cold-load-listing",
+            }}
+            initialProductEvent={baseEvent}
+          />
+        </ProductContext.Provider>
+      </NostrContext.Provider>
     );
 
     expect(screen.getByTestId("checkout-card")).toHaveTextContent(
@@ -142,5 +159,47 @@ describe("Listing page", () => {
         initialProductEvent: baseEvent,
       },
     });
+  });
+
+  it("falls back to relay fetch when SSR and product context both miss", async () => {
+    mockUseRouter.mockReturnValue({
+      isReady: true,
+      push: jest.fn(),
+      replace: jest.fn(),
+      query: { productId: ["naddr1testlisting"] },
+    });
+    mockFetchProductByIdentifierFromRelays.mockResolvedValue(baseEvent);
+
+    render(
+      <NostrContext.Provider value={{ nostr: {} as any }}>
+        <ProductContext.Provider
+          value={{
+            productEvents: [],
+            isLoading: false,
+            addNewlyCreatedProductEvent: jest.fn(),
+            removeDeletedProductEvent: jest.fn(),
+          }}
+        >
+          <ListingPage
+            ogMeta={{
+              title: "Shopstr Listing",
+              description: "Check out this listing on Shopstr!",
+              image: "/shopstr-2000x2000.png",
+              url: "/listing/naddr1testlisting",
+            }}
+            initialProductEvent={null}
+          />
+        </ProductContext.Provider>
+      </NostrContext.Provider>
+    );
+
+    expect(
+      await screen.findByTestId("checkout-card")
+    ).toHaveTextContent("Cold Load Listing");
+    expect(mockFetchProductByIdentifierFromRelays).toHaveBeenCalledWith(
+      expect.anything(),
+      ["wss://relay.one"],
+      "naddr1testlisting"
+    );
   });
 });
