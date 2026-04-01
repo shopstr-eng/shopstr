@@ -428,3 +428,34 @@ CREATE TABLE IF NOT EXISTS account_recovery_tokens (
 
 CREATE INDEX IF NOT EXISTS idx_recovery_tokens_token ON account_recovery_tokens(token);
 CREATE INDEX IF NOT EXISTS idx_recovery_tokens_email ON account_recovery_tokens(email);
+
+-- Centralized inventory tracking
+CREATE TABLE IF NOT EXISTS inventory (
+    id SERIAL PRIMARY KEY,
+    product_id TEXT NOT NULL,
+    seller_pubkey TEXT NOT NULL,
+    variant_key TEXT NOT NULL DEFAULT '_default',
+    quantity INTEGER NOT NULL DEFAULT 0,
+    source TEXT NOT NULL DEFAULT 'system' CHECK (source IN ('system', 'seller_override', 'nostr_sync')),
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(product_id, variant_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_inventory_product_id ON inventory(product_id);
+CREATE INDEX IF NOT EXISTS idx_inventory_seller_pubkey ON inventory(seller_pubkey);
+
+-- Inventory change log for auditing
+CREATE TABLE IF NOT EXISTS inventory_log (
+    id SERIAL PRIMARY KEY,
+    product_id TEXT NOT NULL,
+    variant_key TEXT NOT NULL DEFAULT '_default',
+    change_amount INTEGER NOT NULL,
+    reason TEXT NOT NULL,
+    order_id TEXT,
+    previous_quantity INTEGER NOT NULL,
+    new_quantity INTEGER NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_inventory_log_product_id ON inventory_log(product_id);
+CREATE INDEX IF NOT EXISTS idx_inventory_log_order_id ON inventory_log(order_id);

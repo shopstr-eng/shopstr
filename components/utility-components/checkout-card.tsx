@@ -131,8 +131,19 @@ export default function CheckoutCard({
 
   const hasVolumes = productData.volumes && productData.volumes.length > 0;
   const hasWeights = productData.weights && productData.weights.length > 0;
-  const hasBulkPrices =
-    productData.bulkPrices && productData.bulkPrices.size > 0;
+
+  const activeBulkPrices = (() => {
+    const selectedVariant = selectedVolume || selectedWeight;
+    if (selectedVariant && productData.variantBulkPrices) {
+      const variantTiers = productData.variantBulkPrices.get(selectedVariant);
+      if (variantTiers && variantTiers.size > 0) return variantTiers;
+    }
+    if (productData.bulkPrices && productData.bulkPrices.size > 0) {
+      return productData.bulkPrices;
+    }
+    return null;
+  })();
+  const hasBulkPrices = activeBulkPrices !== null && activeBulkPrices.size > 0;
 
   const isExpired = productData.expiration
     ? Date.now() / 1000 > productData.expiration
@@ -142,30 +153,32 @@ export default function CheckoutCard({
     productData.d === "zapsnag" || productData.categories?.includes("zapsnag");
 
   useEffect(() => {
-    if (
-      selectedBulkOption &&
-      selectedBulkOption !== "1" &&
-      productData.bulkPrices
-    ) {
-      const bulkPrice = productData.bulkPrices.get(
-        parseInt(selectedBulkOption)
-      );
+    setSelectedBulkOption("1");
+  }, [selectedVolume, selectedWeight]);
+
+  useEffect(() => {
+    if (selectedBulkOption && selectedBulkOption !== "1" && activeBulkPrices) {
+      const bulkPrice = activeBulkPrices.get(parseInt(selectedBulkOption));
       if (bulkPrice !== undefined) {
         setCurrentPrice(bulkPrice);
+        return;
       }
-    } else if (selectedVolume && productData.volumePrices) {
+    }
+    if (selectedVolume && productData.volumePrices) {
       const volumePrice = productData.volumePrices.get(selectedVolume);
       if (volumePrice !== undefined) {
         setCurrentPrice(volumePrice);
+        return;
       }
-    } else if (selectedWeight && productData.weightPrices) {
+    }
+    if (selectedWeight && productData.weightPrices) {
       const weightPrice = productData.weightPrices.get(selectedWeight);
       if (weightPrice !== undefined) {
         setCurrentPrice(weightPrice);
+        return;
       }
-    } else {
-      setCurrentPrice(productData.price);
     }
+    setCurrentPrice(productData.price);
   }, [
     selectedVolume,
     productData.price,
@@ -173,7 +186,7 @@ export default function CheckoutCard({
     selectedWeight,
     productData.weightPrices,
     selectedBulkOption,
-    productData.bulkPrices,
+    activeBulkPrices,
   ]);
 
   const toggleExpand = () => {
@@ -331,15 +344,11 @@ export default function CheckoutCard({
         }
       }
     }
-    if (selectedBulkOption && selectedBulkOption !== "1") {
+    if (selectedBulkOption && selectedBulkOption !== "1" && activeBulkPrices) {
       productToAdd.selectedBulkOption = parseInt(selectedBulkOption);
-      if (productData.bulkPrices) {
-        const bulkPrice = productData.bulkPrices.get(
-          parseInt(selectedBulkOption)
-        );
-        if (bulkPrice !== undefined) {
-          productToAdd.bulkPrice = bulkPrice;
-        }
+      const bulkPrice = activeBulkPrices.get(parseInt(selectedBulkOption));
+      if (bulkPrice !== undefined) {
+        productToAdd.bulkPrice = bulkPrice;
       }
     }
 
@@ -533,8 +542,8 @@ export default function CheckoutCard({
         ? parseInt(selectedBulkOption)
         : undefined,
     bulkPrice:
-      selectedBulkOption && selectedBulkOption !== "1" && productData.bulkPrices
-        ? productData.bulkPrices.get(parseInt(selectedBulkOption))
+      selectedBulkOption && selectedBulkOption !== "1" && activeBulkPrices
+        ? activeBulkPrices.get(parseInt(selectedBulkOption))
         : undefined,
   };
 
@@ -751,10 +760,20 @@ export default function CheckoutCard({
                 {/* Size Grid */}
                 {hasSizes && renderSizeGrid()}
 
-                {hasBulkPrices && (
+                {hasBulkPrices && activeBulkPrices && (
                   <BulkSelector
-                    bulkPrices={productData.bulkPrices!}
-                    basePrice={productData.price}
+                    bulkPrices={activeBulkPrices}
+                    basePrice={
+                      selectedVolume &&
+                      productData.volumePrices?.get(selectedVolume) !==
+                        undefined
+                        ? productData.volumePrices.get(selectedVolume)!
+                        : selectedWeight &&
+                            productData.weightPrices?.get(selectedWeight) !==
+                              undefined
+                          ? productData.weightPrices.get(selectedWeight)!
+                          : productData.price
+                    }
                     currency={productData.currency}
                     selectedBulkOption={selectedBulkOption}
                     onBulkChange={setSelectedBulkOption}

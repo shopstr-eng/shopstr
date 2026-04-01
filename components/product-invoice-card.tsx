@@ -142,6 +142,8 @@ export default function ProductInvoiceCard({
     selectedVolume?: string;
     selectedWeight?: string;
     selectedBulkOption?: string;
+    productId?: string;
+    quantity?: number;
   } | null>(null);
 
   const [buyerEmail, setBuyerEmail] = useState("");
@@ -191,6 +193,8 @@ export default function ProductInvoiceCard({
     selectedVolume?: string;
     selectedWeight?: string;
     selectedBulkOption?: string;
+    productId?: string;
+    quantity?: number;
   }) => {
     try {
       await fetch("/api/email/send-order-email", {
@@ -213,6 +217,8 @@ export default function ProductInvoiceCard({
           selectedVolume: params.selectedVolume,
           selectedWeight: params.selectedWeight,
           selectedBulkOption: params.selectedBulkOption,
+          productId: params.productId,
+          quantity: params.quantity,
         }),
       });
     } catch (e) {}
@@ -887,6 +893,8 @@ export default function ProductInvoiceCard({
         selectedBulkOption: selectedBulkOption
           ? String(selectedBulkOption)
           : undefined,
+        productId: productData.id,
+        quantity: productData.selectedQuantity || 1,
       };
 
       if (paymentType === "cashu") {
@@ -1490,6 +1498,8 @@ export default function ProductInvoiceCard({
         selectedBulkOption: selectedBulkOption
           ? String(selectedBulkOption)
           : undefined,
+        productId: productData.id,
+        quantity: productData.selectedQuantity || 1,
       });
     } catch (error) {
       setFiatOrderFailed(true);

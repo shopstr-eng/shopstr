@@ -260,6 +260,32 @@ export default function DisplayProductModal({
                 </div>
               </>
             ) : null}
+            {productData.variantBulkPrices &&
+            productData.variantBulkPrices.size > 0 ? (
+              <>
+                <span className="text-xl font-semibold">
+                  Bulk Pricing by Variant:{" "}
+                </span>
+                {Array.from(productData.variantBulkPrices.entries()).map(
+                  ([variant, tiers]) => (
+                    <div key={variant} className="mb-2">
+                      <span className="font-semibold text-black">
+                        {variant}:{" "}
+                      </span>
+                      <span className="text-black">
+                        {Array.from(tiers.entries())
+                          .sort((a, b) => a[0] - b[0])
+                          .map(
+                            ([units, price]) =>
+                              `${units} units: ${price} ${productData.currency}`
+                          )
+                          .join(", ")}
+                      </span>
+                    </div>
+                  )
+                )}
+              </>
+            ) : null}
             {productData.condition && (
               <>
                 {/* Updated text color */}

@@ -35,6 +35,7 @@ export type ProductData = {
   selectedWeight?: string;
   weightPrice?: number;
   bulkPrices?: Map<number, number>;
+  variantBulkPrices?: Map<string, Map<number, number>>;
   selectedBulkOption?: number;
   bulkPrice?: number;
   required?: string;
@@ -174,11 +175,33 @@ export const parseTags = (productEvent: NostrEvent) => {
         }
         break;
       case "bulk":
-        if (!parsedData.bulkPrices) {
-          parsedData.bulkPrices = new Map<number, number>();
-        }
         if (values[0] && values[1]) {
-          parsedData.bulkPrices.set(parseInt(values[0]), parseFloat(values[1]));
+          const variantName = values[2];
+          if (variantName) {
+            if (!parsedData.variantBulkPrices) {
+              parsedData.variantBulkPrices = new Map<
+                string,
+                Map<number, number>
+              >();
+            }
+            if (!parsedData.variantBulkPrices.has(variantName)) {
+              parsedData.variantBulkPrices.set(
+                variantName,
+                new Map<number, number>()
+              );
+            }
+            parsedData.variantBulkPrices
+              .get(variantName)!
+              .set(parseInt(values[0]), parseFloat(values[1]));
+          } else {
+            if (!parsedData.bulkPrices) {
+              parsedData.bulkPrices = new Map<number, number>();
+            }
+            parsedData.bulkPrices.set(
+              parseInt(values[0]),
+              parseFloat(values[1])
+            );
+          }
         }
         break;
       case "condition":
