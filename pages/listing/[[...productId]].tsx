@@ -41,6 +41,7 @@ import { NostrEvent } from "@/utils/types/types";
 
 type ListingPageProps = {
   ogMeta: OgMetaProps;
+  initialProductEvent: NostrEvent | null;
 };
 
 function eventToOgMeta(event: NostrEvent, urlPath: string): OgMetaProps {
@@ -67,6 +68,53 @@ const LISTING_FALLBACK: OgMetaProps = {
   description: "Check out this listing on Shopstr!",
 };
 
+async function fetchInitialProductEvent(
+  identifier: string
+): Promise<NostrEvent | null> {
+  if (identifier.startsWith("naddr1")) {
+    try {
+      const decoded = nip19.decode(identifier);
+      if (decoded.type === "naddr") {
+        return await fetchProductByDTagAndPubkey(
+          decoded.data.identifier,
+          decoded.data.pubkey
+        );
+      }
+    } catch {}
+
+    return null;
+  }
+
+  const eventById = await fetchProductByIdFromDb(identifier);
+  if (eventById) return eventById;
+
+  return await fetchProductByTitleSlug(identifier);
+}
+
+function getListingStateFromEvent(event: NostrEvent | null) {
+  if (!event) {
+    return {
+      parsedProduct: undefined,
+      rawEvent: undefined,
+      isZapsnag: false,
+    };
+  }
+
+  if (event.kind === 1) {
+    return {
+      parsedProduct: parseZapsnagNote(event),
+      rawEvent: event as Event,
+      isZapsnag: true,
+    };
+  }
+
+  return {
+    parsedProduct: parseTags(event),
+    rawEvent: event as Event,
+    isZapsnag: false,
+  };
+}
+
 export const getServerSideProps: GetServerSideProps<ListingPageProps> = async (
   context
 ) => {
@@ -74,49 +122,44 @@ export const getServerSideProps: GetServerSideProps<ListingPageProps> = async (
   const identifier = Array.isArray(productId) ? productId[0] : productId;
 
   if (!identifier) {
-    return { props: { ogMeta: LISTING_FALLBACK } };
+    return { props: { ogMeta: LISTING_FALLBACK, initialProductEvent: null } };
   }
 
   const urlPath = `/listing/${identifier}`;
 
   try {
-    if (identifier.startsWith("naddr1")) {
-      try {
-        const decoded = nip19.decode(identifier);
-        if (decoded.type === "naddr") {
-          const event = await fetchProductByDTagAndPubkey(
-            decoded.data.identifier,
-            decoded.data.pubkey
-          );
-          if (event)
-            return { props: { ogMeta: eventToOgMeta(event, urlPath) } };
-        }
-      } catch {}
-      return { props: { ogMeta: { ...LISTING_FALLBACK, url: urlPath } } };
+    const initialProductEvent = await fetchInitialProductEvent(identifier);
+    if (initialProductEvent) {
+      return {
+        props: {
+          ogMeta: eventToOgMeta(initialProductEvent, urlPath),
+          initialProductEvent,
+        },
+      };
     }
-
-    const eventById = await fetchProductByIdFromDb(identifier);
-    if (eventById)
-      return { props: { ogMeta: eventToOgMeta(eventById, urlPath) } };
-
-    const eventBySlug = await fetchProductByTitleSlug(identifier);
-    if (eventBySlug)
-      return { props: { ogMeta: eventToOgMeta(eventBySlug, urlPath) } };
   } catch (error) {
     console.error("SSR OG fetch error for listing:", error);
   }
 
-  return { props: { ogMeta: { ...LISTING_FALLBACK, url: urlPath } } };
+  return {
+    props: {
+      ogMeta: { ...LISTING_FALLBACK, url: urlPath },
+      initialProductEvent: null,
+    },
+  };
 };
 
-const Listing = () => {
+const Listing = ({ initialProductEvent }: ListingPageProps) => {
   const router = useRouter();
+  const initialListingState = getListingStateFromEvent(initialProductEvent);
   const [productData, setProductData] = useState<ProductData | undefined>(
-    undefined
+    initialListingState.parsedProduct
   );
-  const [isZapsnag, setIsZapsnag] = useState(false);
+  const [isZapsnag, setIsZapsnag] = useState(initialListingState.isZapsnag);
   const [productIdString, setProductIdString] = useState("");
-  const [rawEvent, setRawEvent] = useState<Event | undefined>(undefined);
+  const [rawEvent, setRawEvent] = useState<Event | undefined>(
+    initialListingState.rawEvent
+  );
   const [showRawEventModal, setShowRawEventModal] = useState(false);
   const [showEventIdModal, setShowEventIdModal] = useState(false);
   const [sfSellerPubkey, setSfSellerPubkey] = useState("");
@@ -140,13 +183,26 @@ const Listing = () => {
   useEffect(() => {
     if (router.isReady) {
       const { productId } = router.query;
-      const productIdString = productId ? productId[0] : "";
-      setProductIdString(productIdString!);
-      if (!productIdString) {
+      const nextProductIdString = Array.isArray(productId)
+        ? productId[0] || ""
+        : productId || "";
+      setProductIdString(nextProductIdString);
+      if (!nextProductIdString) {
         router.push("/marketplace");
       }
     }
-  }, [router]);
+  }, [router, router.isReady, router.query]);
+
+  useEffect(() => {
+    if (!initialProductEvent) return;
+
+    const initialState = getListingStateFromEvent(initialProductEvent);
+    if (!initialState.parsedProduct) return;
+
+    setRawEvent(initialState.rawEvent);
+    setIsZapsnag(initialState.isZapsnag);
+    setProductData(initialState.parsedProduct);
+  }, [initialProductEvent]);
 
   useEffect(() => {
     if (!productContext.isLoading && productContext.productEvents) {
@@ -191,18 +247,12 @@ const Listing = () => {
           localStorage.removeItem("sf_shop_slug");
         }
         setRawEvent(matchingEvent);
-        let parsed;
-        if (matchingEvent.kind === 1) {
-          parsed = parseZapsnagNote(matchingEvent);
-          setIsZapsnag(true);
-        } else {
-          parsed = parseTags(matchingEvent);
-          setIsZapsnag(false);
-        }
-        setProductData(parsed);
+        const nextState = getListingStateFromEvent(matchingEvent);
+        setIsZapsnag(nextState.isZapsnag);
+        setProductData(nextState.parsedProduct);
 
-        if (parsed && parsed.title && matchingEvent.kind !== 1) {
-          const canonicalSlug = getListingSlug(parsed, allParsed);
+        if (nextState.parsedProduct && matchingEvent.kind !== 1) {
+          const canonicalSlug = getListingSlug(nextState.parsedProduct, allParsed);
           if (canonicalSlug && productIdString !== canonicalSlug) {
             router.replace(`/listing/${canonicalSlug}`, undefined, {
               shallow: true,
