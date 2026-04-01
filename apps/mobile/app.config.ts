@@ -12,23 +12,23 @@ const config: ExpoConfig = {
     [
       "expo-dev-client",
       {
-        launchMode: "most-recent"
-      }
-    ]
+        launchMode: "most-recent",
+      },
+    ],
   ],
   experiments: {
-    typedRoutes: true
+    typedRoutes: true,
   },
   ios: {
     supportsTablet: true,
-    bundleIdentifier: "com.milkmarket.mobile"
+    bundleIdentifier: "com.milkmarket.mobile",
   },
   android: {
-    package: "com.milkmarket.mobile"
+    package: "com.milkmarket.mobile",
   },
   web: {
-    bundler: "metro"
-  }
+    bundler: "metro",
+  },
 };
 
 export default config;

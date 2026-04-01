@@ -23,7 +23,8 @@ export default function PhaseOneCheckScreen() {
       <Text style={styles.eyebrow}>Phase 1 acceptance route</Text>
       <Text style={styles.title}>Native runtime validation</Text>
       <Text style={styles.description}>
-        Use this screen in the iOS Simulator or Android Emulator to close out Phase 1.
+        Use this screen in the iOS Simulator or Android Emulator to close out
+        Phase 1.
       </Text>
 
       <View style={styles.card}>
@@ -38,23 +39,32 @@ export default function PhaseOneCheckScreen() {
         </View>
         <View style={styles.statusRow}>
           <Text style={styles.statusLabel}>Domain package</Text>
-          <Text style={styles.statusValue}>{CATEGORIES.length > 0 ? "Ready" : "Pending"}</Text>
+          <Text style={styles.statusValue}>
+            {CATEGORIES.length > 0 ? "Ready" : "Pending"}
+          </Text>
         </View>
         <View style={styles.statusRow}>
           <Text style={styles.statusLabel}>Nostr package</Text>
-          <Text style={styles.statusValue}>{NOSTR_PACKAGE_READY ? "Ready" : "Pending"}</Text>
+          <Text style={styles.statusValue}>
+            {NOSTR_PACKAGE_READY ? "Ready" : "Pending"}
+          </Text>
         </View>
         <View style={styles.statusRow}>
           <Text style={styles.statusLabel}>API client package</Text>
-          <Text style={styles.statusValue}>{API_CLIENT_PACKAGE_READY ? "Ready" : "Pending"}</Text>
+          <Text style={styles.statusValue}>
+            {API_CLIENT_PACKAGE_READY ? "Ready" : "Pending"}
+          </Text>
         </View>
       </View>
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Deep-link test URL</Text>
-        <Text style={styles.codeBlock}>milkmarket://phase-one-check?source=deeplink</Text>
+        <Text style={styles.codeBlock}>
+          milkmarket://phase-one-check?source=deeplink
+        </Text>
         <Text style={styles.helpText}>
-          Open that URL from the simulator to confirm the custom scheme lands on this route.
+          Open that URL from the simulator to confirm the custom scheme lands on
+          this route.
         </Text>
       </View>
 

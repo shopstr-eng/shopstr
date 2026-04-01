@@ -17,10 +17,13 @@ export default function DashboardScreen() {
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.eyebrow}>Phase 1 workspace foundation</Text>
-      <Text style={styles.title}>Seller mobile shell is wired and ready for feature work.</Text>
+      <Text style={styles.title}>
+        Seller mobile shell is wired and ready for feature work.
+      </Text>
       <Text style={styles.description}>
-        This screen exists to prove the monorepo, Expo Router, deep-link scheme, and
-        shared package imports are working before seller functionality is added.
+        This screen exists to prove the monorepo, Expo Router, deep-link scheme,
+        and shared package imports are working before seller functionality is
+        added.
       </Text>
 
       <View style={styles.card}>
@@ -28,7 +31,9 @@ export default function DashboardScreen() {
         {packageStatus.map((item) => (
           <View key={item.label} style={styles.statusRow}>
             <Text style={styles.statusLabel}>{item.label}</Text>
-            <Text style={styles.statusValue}>{item.ready ? "Ready" : "Pending"}</Text>
+            <Text style={styles.statusValue}>
+              {item.ready ? "Ready" : "Pending"}
+            </Text>
           </View>
         ))}
       </View>
@@ -52,7 +57,10 @@ export default function DashboardScreen() {
           Open storefront shell
         </Link>
         <Link
-          href={{ pathname: "/phase-one-check", params: { source: "dashboard" } }}
+          href={{
+            pathname: "/phase-one-check",
+            params: { source: "dashboard" },
+          }}
           style={styles.linkButtonSecondary}
         >
           Open Phase 1 check

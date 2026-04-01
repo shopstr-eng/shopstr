@@ -9,8 +9,8 @@ export default function ListingsScreen() {
     <View style={styles.container}>
       <Text style={styles.title}>Listings placeholder</Text>
       <Text style={styles.description}>
-        Phase 2 will turn this into the seller catalog manager. For now it confirms
-        Expo Router tabs and shared imports are wired correctly.
+        Phase 2 will turn this into the seller catalog manager. For now it
+        confirms Expo Router tabs and shared imports are wired correctly.
       </Text>
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Planned seller actions</Text>
