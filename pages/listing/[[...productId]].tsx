@@ -275,6 +275,7 @@ const Listing = ({ initialProductEvent }: ListingPageProps) => {
     if (!nostr || !router.isReady || !productIdString || productData) return;
     if (relayFetchAttemptedRef.current === productIdString) return;
 
+    const nostrManager = nostr;
     relayFetchAttemptedRef.current = productIdString;
 
     let isActive = true;
@@ -288,7 +289,7 @@ const Listing = ({ initialProductEvent }: ListingPageProps) => {
         targetRelays.length > 0 ? targetRelays : getDefaultRelays();
 
       const fetchedEvent = await fetchProductByIdentifierFromRelays(
-        nostr,
+        nostrManager,
         effectiveRelays,
         productIdString
       );
