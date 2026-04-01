@@ -168,7 +168,7 @@ describe("SignInModal", () => {
       await user.click(screen.getByTestId("nsec-open-btn"));
 
       const pkInput = await screen.findByPlaceholderText(
-        /paste your nostr private key/i
+        /paste your nsec or ncryptsec/i
       );
       await user.type(pkInput, "abc");
       expect(helpers.validateNSecKey).toHaveBeenCalledWith("abc");
@@ -183,7 +183,7 @@ describe("SignInModal", () => {
       await user.click(screen.getByTestId("nsec-open-btn"));
 
       const pkInput = await screen.findByPlaceholderText(
-        /paste your nostr private key/i
+        /paste your nsec or ncryptsec/i
       );
       const passInput = screen.getByPlaceholderText(
         /enter a passphrase of your choice/i
@@ -206,7 +206,7 @@ describe("SignInModal", () => {
       await user.click(screen.getByTestId("nsec-open-btn"));
 
       const pkInput = await screen.findByPlaceholderText(
-        /paste your nostr private key/i
+        /paste your nsec or ncryptsec/i
       );
       await user.type(pkInput, "nsec1validkey");
 

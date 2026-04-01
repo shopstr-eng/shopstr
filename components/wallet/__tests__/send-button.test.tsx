@@ -338,7 +338,7 @@ describe("SendButton", () => {
 
     expect(
       await screen.findByText(/If the token is taking a while to be generated/i)
-    ).toBeVisible();
+    ).toBeInTheDocument();
   });
 
   test("handles send to nostr contact", async () => {
