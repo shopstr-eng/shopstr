@@ -1,9 +1,30 @@
+import type { StorefrontConfig } from "@milk-market/domain";
 import { Event } from "nostr-tools";
 
-export type ItemType = "products" | "profiles" | "chats" | "communities";
+export type {
+  CombinedFormData,
+  ContactFormData,
+  ProductFormValues,
+  ShippingFormData,
+  StorefrontColorScheme,
+  StorefrontComparisonColumn,
+  StorefrontConfig,
+  StorefrontEmailPopup,
+  StorefrontFaqItem,
+  StorefrontFooter,
+  StorefrontIngredientItem,
+  StorefrontNavLink,
+  StorefrontPage,
+  StorefrontPolicies,
+  StorefrontPolicy,
+  StorefrontSection,
+  StorefrontSectionType,
+  StorefrontSocialLink,
+  StorefrontTestimonial,
+  StorefrontTimelineItem,
+} from "@milk-market/domain";
 
-type ProductFormValue = [key: string, ...values: string[]];
-export type ProductFormValues = ProductFormValue[];
+export type ItemType = "products" | "profiles" | "chats" | "communities";
 
 export interface NostrEvent extends Event {}
 
@@ -18,192 +39,31 @@ export interface ChatObject {
 }
 
 export interface CommunityRelays {
-  approvals: string[]; // relays to publish/fetch approvals
-  requests: string[]; // relays to publish/fetch post requests
-  metadata: string[]; // relays for community author metadata (profile)
-  all: string[]; // flattened list of all relays declared
+  approvals: string[];
+  requests: string[];
+  metadata: string[];
+  all: string[];
 }
 
 export interface Community {
-  id: string; // community definition event id
+  id: string;
   kind: number;
-  pubkey: string; // author pubkey
+  pubkey: string;
   createdAt: number;
-  d: string; // identifier (a-tag identifier)
+  d: string;
   name: string;
   description: string;
   image: string;
   moderators: string[];
   relays: CommunityRelays;
-  // backward compatibility: keep a simple relays array optional
   relaysList?: string[];
 }
 
 export interface CommunityPost extends NostrEvent {
-  // Augmented by fetchCommunityPosts: optional approval metadata
   approved?: boolean;
   approvalEventId?: string;
   approvedBy?: string;
 }
-
-export interface StorefrontColorScheme {
-  primary: string;
-  secondary: string;
-  accent: string;
-  background: string;
-  text: string;
-}
-
-export interface StorefrontSocialLink {
-  platform:
-    | "instagram"
-    | "x"
-    | "facebook"
-    | "youtube"
-    | "tiktok"
-    | "telegram"
-    | "website"
-    | "email"
-    | "other";
-  url: string;
-  label?: string;
-}
-
-export interface StorefrontNavLink {
-  label: string;
-  href: string;
-  isPage?: boolean;
-}
-
-export interface StorefrontPolicy {
-  enabled: boolean;
-  content: string;
-}
-
-export interface StorefrontPolicies {
-  returnPolicy?: StorefrontPolicy;
-  termsOfService?: StorefrontPolicy;
-  privacyPolicy?: StorefrontPolicy;
-  cancellationPolicy?: StorefrontPolicy;
-}
-
-export interface StorefrontFooter {
-  text?: string;
-  socialLinks?: StorefrontSocialLink[];
-  navLinks?: StorefrontNavLink[];
-  showPoweredBy?: boolean;
-  policies?: StorefrontPolicies;
-}
-
-export interface StorefrontTestimonial {
-  quote: string;
-  author: string;
-  image?: string;
-  rating?: number;
-}
-
-export interface StorefrontFaqItem {
-  question: string;
-  answer: string;
-}
-
-export interface StorefrontIngredientItem {
-  name: string;
-  description?: string;
-  image?: string;
-}
-
-export interface StorefrontComparisonColumn {
-  heading: string;
-  values: string[];
-}
-
-export interface StorefrontTimelineItem {
-  year?: string;
-  heading: string;
-  body: string;
-  image?: string;
-}
-
-export type StorefrontSectionType =
-  | "hero"
-  | "about"
-  | "story"
-  | "products"
-  | "testimonials"
-  | "faq"
-  | "ingredients"
-  | "comparison"
-  | "text"
-  | "image"
-  | "contact"
-  | "reviews";
-
-export interface StorefrontSection {
-  id: string;
-  type: StorefrontSectionType;
-  enabled?: boolean;
-  heading?: string;
-  subheading?: string;
-  body?: string;
-  image?: string;
-  imagePosition?: "left" | "right";
-  fullWidth?: boolean;
-  ctaText?: string;
-  ctaLink?: string;
-  overlayOpacity?: number;
-  items?: StorefrontFaqItem[];
-  testimonials?: StorefrontTestimonial[];
-  ingredientItems?: StorefrontIngredientItem[];
-  comparisonFeatures?: string[];
-  comparisonColumns?: StorefrontComparisonColumn[];
-  timelineItems?: StorefrontTimelineItem[];
-  productLayout?: "grid" | "list" | "featured";
-  productLimit?: number;
-  productIds?: string[];
-  heroProductId?: string;
-  email?: string;
-  phone?: string;
-  address?: string;
-  caption?: string;
-  reviewOrder?: string[];
-}
-
-export interface StorefrontPage {
-  id: string;
-  title: string;
-  slug: string;
-  sections: StorefrontSection[];
-}
-
-export interface StorefrontEmailPopup {
-  enabled: boolean;
-  discountPercentage: number;
-  headline?: string;
-  subtext?: string;
-  collectPhone?: boolean;
-  requirePhone?: boolean;
-  buttonText?: string;
-  successMessage?: string;
-}
-
-export interface StorefrontConfig {
-  colorScheme?: StorefrontColorScheme;
-  productLayout?: "grid" | "list" | "featured";
-  landingPageStyle?: "classic" | "hero" | "minimal";
-  shopSlug?: string;
-  customDomain?: string;
-  fontHeading?: string;
-  fontBody?: string;
-  sections?: StorefrontSection[];
-  pages?: StorefrontPage[];
-  footer?: StorefrontFooter;
-  navLinks?: StorefrontNavLink[];
-  showCommunityPage?: boolean;
-  showWalletPage?: boolean;
-  emailPopup?: StorefrontEmailPopup;
-}
-
 export interface ShopProfile {
   pubkey: string;
   content: {
@@ -251,41 +111,8 @@ export type FiatOptionsType = {
   [key: string]: string;
 };
 
-export interface ShippingFormData {
-  Name: string;
-  Address: string;
-  Unit?: string;
-  City: string;
-  "Postal Code": string;
-  "State/Province": string;
-  Country: string;
-  Required?: string;
-}
-
-export interface ContactFormData {
-  Contact: string;
-  "Contact Type": string;
-  Instructions: string;
-  Required?: string;
-}
-
-export interface CombinedFormData {
-  Name: string;
-  Address: string;
-  Unit?: string;
-  City: string;
-  "Postal Code": string;
-  "State/Province": string;
-  Country: string;
-  Contact: string;
-  "Contact Type": string;
-  Instructions: string;
-  Required?: string;
-}
-
 declare global {
   interface Window {
-    // For NIP-07 browser extensions
     nostr: {
       getPublicKey: () => Promise<string>;
       signEvent: (event: any) => Promise<any>;
@@ -294,7 +121,6 @@ declare global {
         decrypt: (pubkey: string, cipherText: string) => Promise<string>;
       };
     };
-    // For WebLN (which Alby SDK also polyfills)
     webln: any;
   }
 }

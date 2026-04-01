@@ -7,26 +7,31 @@ Welcome to Milk Market! 🛒⚡ We're excited to have you contribute to our glob
 1. [Prerequisites](#prerequisites)
 2. [Fork and Clone](#fork-and-clone)
 3. [Local Development Setup](#local-development-setup)
-4. [Development Workflow](#development-workflow)
-5. [Code Quality Standards](#code-quality-standards)
-6. [Testing](#testing)
-7. [Creating a Pull Request](#creating-a-pull-request)
-8. [Docker Development](#docker-development)
+4. [Repository Structure](#repository-structure)
+5. [Development Workflow](#development-workflow)
+6. [Code Quality Standards](#code-quality-standards)
+7. [Testing](#testing)
+8. [Creating a Pull Request](#creating-a-pull-request)
+9. [Docker Development](#docker-development)
 
 ## Prerequisites
 
 Before you begin, ensure you have the following installed on your system:
 
-- **Node.js**: Version 18.17.0 or higher
-- **npm**: Version 9.6.7 or higher
+- **Node.js**: Version 20.0.0 or higher
+- **pnpm**: Version 9.15.9 or higher
 - **Git**: Latest version
+- **Mobile Development (Optional)**:
+  - **Xcode** on macOS for the iOS Simulator
+  - **Android Studio** for the Android Emulator
+  - or a physical iOS/Android device for an Expo development build
 - **Docker** (optional, for containerized development)
 
 ### Check Your Versions
 
 ```bash
-node --version  # Should be >=18.17.0
-npm --version   # Should be >=9.6.7
+node --version  # Should be >=20.0.0
+pnpm --version  # Should be >=9.15.9
 git --version
 ```
 
@@ -69,19 +74,31 @@ upstream  https://github.com/shopstr-eng/milk-market.git (push)
 
 ```bash
 # Install all project dependencies
-npm ci
+pnpm install
 ```
 
-> **Note**: We use `npm ci` instead of `npm install` for consistent, reproducible installations based on the `package-lock.json` file.
+> **Note**: This repository now uses `pnpm` workspaces with a single `pnpm-lock.yaml` file.
 
 ### 2. Start Development Server
 
 ```bash
-# Start the development server
-npm run dev
+# Start the website development server
+pnpm run dev:web
 ```
 
-### 3. Database Setup
+### 3. Start Mobile Development (Optional)
+
+```bash
+# Start the Expo development server
+pnpm run dev:mobile
+```
+
+In the Expo terminal:
+
+- Press `i` to open the iOS simulator
+- Press `w` to open the web preview
+
+### 4. Database Setup
 
 This application requires a PostgreSQL database. You can run it locally using Docker Compose:
 
@@ -110,13 +127,25 @@ This application requires a PostgreSQL database. You can run it locally using Do
    docker-compose down -v
    ```
 
-The application will be available at `http://localhost:3000`
+The website will be available at `http://localhost:5000`
 
-### 4. Verify Installation
+### 5. Verify Installation
 
-- Open your browser to `http://localhost:3000`
+- Open your browser to `http://localhost:5000`
 - Check that the application loads without errors
 - Check the browser console for any warnings or errors
+
+## Repository Structure
+
+This project is a Turborepo monorepo using `pnpm` workspaces.
+
+- **`/` (root)**: The existing Next.js web application and backend API routes.
+- **`apps/mobile`**: The React Native (Expo) mobile application.
+- **`packages/domain`**: Pure TypeScript business logic, types, product parsing, pricing logic, and validation schemas shared across web and mobile.
+- **`packages/nostr`**: Shared Nostr protocol logic, relay helpers, and related primitives.
+- **`packages/api-client`**: Typed wrappers for the existing Next.js API routes.
+
+**Rule of thumb:** If you are writing business logic, pricing math, parsing, or shared data models, put it in a package such as `packages/domain` instead of directly inside UI components.
 
 ## Development Workflow
 
@@ -160,7 +189,7 @@ Run ESLint to check for code issues:
 
 ```bash
 # Check for linting errors
-npm run lint
+pnpm run lint
 
 # Fix auto-fixable issues
 npx eslint . --ext .ts,.tsx --fix
@@ -172,7 +201,7 @@ Ensure your code passes TypeScript checks:
 
 ```bash
 # Run type checking
-npm run type-check
+pnpm run typecheck
 ```
 
 ### 3. Prettier
@@ -193,7 +222,7 @@ Before committing, run all quality checks:
 
 ```bash
 # Run linting and type checking together
-npm run lint-all
+pnpm run lint-all
 ```
 
 ## Testing
@@ -201,11 +230,14 @@ npm run lint-all
 ### 1. Run Tests
 
 ```bash
-# Run all tests
-npm test
+# Run website tests
+pnpm run test:web
+
+# Run all tests across the monorepo
+pnpm run test:all
 
 # Run tests in watch mode during development
-npm run test:watch
+pnpm run test:watch
 ```
 
 ### 2. Writing Tests
@@ -220,14 +252,17 @@ npm run test:watch
 Before creating a pull request, ensure your code meets quality standards by running:
 
 ```bash
-# Run the full build process
-npm run build
+# Run the website production build
+pnpm run build:web
 
-# Run all linting and type checks
-npm run lint-all
+# Run package/mobile builds managed by Turbo
+pnpm run build:all
 
-# Run tests
-npm test
+# Run workspace type checks
+pnpm run typecheck
+
+# Run all tests across the monorepo
+pnpm run test:all
 
 # Format code
 npx prettier --write .
