@@ -68,9 +68,9 @@
     "tailwindcss": "3.3.1",
     "uuid": "9.0.0",
     "ws": "8.19.0",
-    "@milk-market/domain": "workspace:*",
-    "@milk-market/nostr": "workspace:*",
-    "@milk-market/api-client": "workspace:*"
+    "@milk-market/domain": "file:./packages/domain",
+    "@milk-market/nostr": "file:./packages/nostr",
+    "@milk-market/api-client": "file:./packages/api-client"
   },
   "devDependencies": {
     "@testing-library/dom": "10.4.0",
