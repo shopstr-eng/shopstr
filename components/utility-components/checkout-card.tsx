@@ -690,7 +690,9 @@ export default function CheckoutCard({
 
                 {/* Description */}
                 <div>
-                  <p className="text-base text-black">{renderSummary()}</p>
+                  <p className="whitespace-pre-wrap break-words text-base text-black">
+                    {renderSummary()}
+                  </p>
                   {productData.summary.length > SUMMARY_CHARACTER_LIMIT && (
                     <button
                       onClick={toggleExpand}
