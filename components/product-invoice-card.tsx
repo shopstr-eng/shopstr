@@ -2528,7 +2528,7 @@ export default function ProductInvoiceCard({
       const filteredProofs = tokens.filter(
         (p: Proof) =>
           mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
-      );
+      ) as Proof[];
       const { keep, send } = await wallet.send(price, filteredProofs, {
         includeFees: true,
       });
@@ -2538,8 +2538,7 @@ export default function ProductInvoiceCard({
             .filter((event) =>
               event.proofs.some((proof: Proof) =>
                 filteredProofs.some(
-                  (filteredProof) =>
-                    JSON.stringify(proof) === JSON.stringify(filteredProof)
+                  (filteredProof) => filteredProof.secret === proof.secret
                 )
               )
             )
@@ -2547,20 +2546,14 @@ export default function ProductInvoiceCard({
           ...walletContext.proofEvents
             .filter((event) =>
               event.proofs.some((proof: Proof) =>
-                keep.some(
-                  (keepProof) =>
-                    JSON.stringify(proof) === JSON.stringify(keepProof)
-                )
+                keep.some((keepProof) => keepProof.secret === proof.secret)
               )
             )
             .map((event) => event.id),
           ...walletContext.proofEvents
             .filter((event) =>
               event.proofs.some((proof: Proof) =>
-                send.some(
-                  (sendProof) =>
-                    JSON.stringify(proof) === JSON.stringify(sendProof)
-                )
+                send.some((sendProof) => sendProof.secret === proof.secret)
               )
             )
             .map((event) => event.id),
@@ -2583,8 +2576,8 @@ export default function ProductInvoiceCard({
       const changeProofs = keep;
       const remainingProofs = tokens.filter(
         (p: Proof) =>
-          mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id !== p.id)
-      );
+          !mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
+      ) as Proof[];
       let proofArray;
       if (changeProofs.length >= 1 && changeProofs) {
         proofArray = [...remainingProofs, ...changeProofs];

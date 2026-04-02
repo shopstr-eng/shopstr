@@ -18,6 +18,7 @@ import {
   generateKeys,
   getLocalStorageData,
   publishProofEvent,
+  publishWalletEvent,
   constructGiftWrappedEvent,
   constructMessageSeal,
   constructMessageGiftWrap,
@@ -203,6 +204,7 @@ export default function ClaimButton({ token }: { token: string }) {
         if (!mints.includes(tokenMint)) {
           const updatedMints = [...mints, tokenMint];
           localStorage.setItem("mints", JSON.stringify(updatedMints));
+          await publishWalletEvent(nostr!, signer!);
         }
         if (isInvalid) {
           setIsInvalidSuccess(true);

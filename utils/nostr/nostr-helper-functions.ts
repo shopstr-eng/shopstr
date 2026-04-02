@@ -50,11 +50,13 @@ export async function generateKeys(): Promise<{ nsec: string; npub: string }> {
 export async function deleteEvent(
   nostr: NostrManager,
   signer: NostrSigner,
-  event_ids_to_delete: string[]
+  event_ids_to_delete: string[],
+  deletedKind?: number
 ) {
   const deletionEvent = createNostrDeleteEvent(
     event_ids_to_delete,
-    "Milk Market deletion request"
+    "Milk Market deletion request",
+    deletedKind
   );
 
   await finalizeAndSendNostrEvent(signer, nostr, deletionEvent);
@@ -67,12 +69,16 @@ export async function deleteEvent(
 
 export function createNostrDeleteEvent(
   event_ids: string[],
-  content: string
+  content: string,
+  deletedKind?: number
 ): EventTemplate {
   const msg: EventTemplate = {
     kind: 5,
     content: content,
-    tags: event_ids.map((id) => ["e", id]),
+    tags: [
+      ...event_ids.map((id) => ["e", id]),
+      ...(deletedKind !== undefined ? [["k", deletedKind.toString()]] : []),
+    ],
     created_at: Math.floor(Date.now() / 1000),
   };
 
@@ -784,6 +790,7 @@ export async function publishProofEvent(
     if (proofs.length > 0) {
       const tokenArray = {
         mint: mint,
+        unit: "sat",
         proofs: proofs,
         ...(deletedEventsArray ? { del: deletedEventsArray } : {}),
       };
@@ -800,7 +807,7 @@ export async function publishProofEvent(
       );
     }
     if (deletedEventsArray && deletedEventsArray.length > 0) {
-      await deleteEvent(nostr!, signer!, deletedEventsArray);
+      await deleteEvent(nostr!, signer!, deletedEventsArray, 7375);
     }
 
     await publishSpendingHistoryEvent(
@@ -831,6 +838,7 @@ export async function publishSpendingHistoryEvent(
     const eventContent = [
       ["direction", direction],
       ["amount", amount],
+      ["unit", "sat"],
     ];
     const userPubkey = await signer?.getPubKey?.();
     if (sentEventIds && sentEventIds.length > 0) {

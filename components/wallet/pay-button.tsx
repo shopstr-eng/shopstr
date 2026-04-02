@@ -93,7 +93,7 @@ const PayButton = () => {
       const mintKeySetIds = await wallet.getKeySets();
       const filteredProofs = tokens.filter((p: Proof) =>
         mintKeySetIds.some((keyset: MintKeyset) => keyset.id === p.id)
-      );
+      ) as Proof[];
       const meltQuote = await wallet.createMeltQuote(invoiceString);
       const meltQuoteTotal = meltQuote.amount + meltQuote.fee_reserve;
       const { keep, send } = await wallet.send(meltQuoteTotal, filteredProofs, {
@@ -105,8 +105,7 @@ const PayButton = () => {
             .filter((event) =>
               event.proofs.some((proof: Proof) =>
                 filteredProofs.some(
-                  (filteredProof) =>
-                    JSON.stringify(proof) === JSON.stringify(filteredProof)
+                  (filteredProof) => filteredProof.secret === proof.secret
                 )
               )
             )
@@ -114,20 +113,14 @@ const PayButton = () => {
           ...walletContext.proofEvents
             .filter((event) =>
               event.proofs.some((proof: Proof) =>
-                keep.some(
-                  (keepProof) =>
-                    JSON.stringify(proof) === JSON.stringify(keepProof)
-                )
+                keep.some((keepProof) => keepProof.secret === proof.secret)
               )
             )
             .map((event) => event.id),
           ...walletContext.proofEvents
             .filter((event) =>
               event.proofs.some((proof: Proof) =>
-                send.some(
-                  (sendProof) =>
-                    JSON.stringify(proof) === JSON.stringify(sendProof)
-                )
+                send.some((sendProof) => sendProof.secret === proof.secret)
               )
             )
             .map((event) => event.id),
@@ -144,8 +137,8 @@ const PayButton = () => {
           : 0;
       const remainingProofs = tokens.filter(
         (p: Proof) =>
-          mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id !== p.id)
-      );
+          !mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
+      ) as Proof[];
       let proofArray;
       if (changeAmount >= 1 && changeProofs) {
         proofArray = [...remainingProofs, ...changeProofs];
