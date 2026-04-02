@@ -82,7 +82,9 @@ export function isMcpRequestProofFresh(
   event: Event,
   nowSeconds = Math.floor(Date.now() / 1000)
 ): boolean {
-  return Math.abs(nowSeconds - event.created_at) <= MCP_REQUEST_PROOF_MAX_AGE_SECONDS;
+  return (
+    Math.abs(nowSeconds - event.created_at) <= MCP_REQUEST_PROOF_MAX_AGE_SECONDS
+  );
 }
 
 export function parseSignedEventHeader(headerValue: string): Event | null {

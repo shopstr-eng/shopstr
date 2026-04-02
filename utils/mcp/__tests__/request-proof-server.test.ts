@@ -105,13 +105,16 @@ describe("verifyAndConsumeSignedRequestProof", () => {
       sig: "valid",
     };
 
-    const result = await verifyAndConsumeSignedRequestProof(signedEvent as any, {
-      ...wrongProof,
-      fields: {
-        ...wrongProof.fields,
-        name: "Expected Name",
-      },
-    });
+    const result = await verifyAndConsumeSignedRequestProof(
+      signedEvent as any,
+      {
+        ...wrongProof,
+        fields: {
+          ...wrongProof.fields,
+          name: "Expected Name",
+        },
+      }
+    );
 
     expect(result).toEqual({
       ok: false,

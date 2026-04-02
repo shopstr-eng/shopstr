@@ -32,17 +32,15 @@ jest.mock("@nextui-org/react", () => ({
     return (
       <label>
         {label}
-        <select
-          aria-label={label}
-          value={selectedValue}
-          onChange={onChange}
-        >
+        <select aria-label={label} value={selectedValue} onChange={onChange}>
           {children}
         </select>
       </label>
     );
   },
-  SelectItem: ({ children, value }: any) => <option value={value}>{children}</option>,
+  SelectItem: ({ children, value }: any) => (
+    <option value={value}>{children}</option>
+  ),
   Spinner: () => <div>Loading...</div>,
 }));
 

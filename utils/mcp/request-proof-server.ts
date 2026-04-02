@@ -71,7 +71,8 @@ export async function verifyAndConsumeSignedRequestProof(
     return {
       ok: false,
       status: 401,
-      error: "A signed Nostr request proof is required to prove pubkey ownership.",
+      error:
+        "A signed Nostr request proof is required to prove pubkey ownership.",
     };
   }
 

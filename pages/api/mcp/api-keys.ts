@@ -5,7 +5,6 @@ import {
   revokeApiKey,
   initializeApiKeysTable,
   ApiKeyPermission,
-  verifyNostrAuth,
 } from "@/utils/mcp/auth";
 import {
   buildApiKeyCreateProof,
@@ -46,7 +45,7 @@ async function requireSignedEvent(
 
 export default async function handler(
   req: NextApiRequest,
-  res: NextApiResponse,
+  res: NextApiResponse
 ) {
   await ensureTables();
 
@@ -67,7 +66,8 @@ export default async function handler(
       permissions !== "read_write"
     ) {
       return res.status(400).json({
-        error: 'Invalid permissions. Supported values are "read" and "read_write".',
+        error:
+          'Invalid permissions. Supported values are "read" and "read_write".',
       });
     }
 
