@@ -16,6 +16,7 @@ import {
   ProductData,
   parseTags,
 } from "@/utils/parsers/product-parser-functions";
+import { parseZapsnagNote } from "@/utils/parsers/zapsnag-parser";
 import { parseCommunityEvent } from "../parsers/community-parser-functions";
 import { calculateWeightedScore } from "@/utils/parsers/review-parser-functions";
 import { hashToCurve } from "@cashu/crypto/modules/common";
@@ -38,6 +39,99 @@ function getUniqueProofs(proofs: Proof[]): Proof[] {
 function isHexString(value: string): boolean {
   return /^[0-9a-fA-F]{64}$/.test(value);
 }
+
+export const fetchMarketplaceProductsReadOnly = async (
+  nostr: NostrManager,
+  relays: string[],
+  options?: {
+    authors?: string[];
+    ids?: string[];
+    limit?: number;
+    includeZapsnag?: boolean;
+  }
+): Promise<ProductData[]> => {
+  const filters: Filter[] = [
+    {
+      kinds: [30402],
+      authors: options?.authors,
+      ids: options?.ids,
+      limit: options?.limit,
+    },
+  ];
+
+  if (options?.includeZapsnag) {
+    filters.push({
+      kinds: [1],
+      "#t": ["shopstr-zapsnag", "zapsnag"],
+      authors: options.authors,
+      ids: options.ids,
+      limit: options.limit,
+    });
+  }
+
+  const fetchedEvents = await nostr.fetch(filters, {}, relays);
+  const latestEventsMap = new Map<string, NostrEvent>();
+
+  const getEventKey = (event: NostrEvent): string => {
+    if (event.kind === 30402) {
+      const dTag = event.tags?.find((tag: string[]) => tag[0] === "d")?.[1];
+      if (dTag) return `${event.pubkey}:${dTag}`;
+    }
+    return event.id;
+  };
+
+  for (const event of fetchedEvents) {
+    const key = getEventKey(event);
+    const existing = latestEventsMap.get(key);
+
+    if (!existing || event.created_at >= existing.created_at) {
+      latestEventsMap.set(key, event);
+    }
+  }
+
+  return Array.from(latestEventsMap.values())
+    .map((event) => {
+      if (event.kind === 1) {
+        return parseZapsnagNote(event);
+      }
+
+      return parseTags(event);
+    })
+    .filter((product): product is ProductData => !!product);
+};
+
+export const fetchMarketplaceProductsBySellerReadOnly = async (
+  nostr: NostrManager,
+  relays: string[],
+  pubkey: string,
+  options?: {
+    limit?: number;
+    includeZapsnag?: boolean;
+  }
+): Promise<ProductData[]> => {
+  return fetchMarketplaceProductsReadOnly(nostr, relays, {
+    authors: [pubkey],
+    limit: options?.limit,
+    includeZapsnag: options?.includeZapsnag,
+  });
+};
+
+export const fetchMarketplaceProductByIdReadOnly = async (
+  nostr: NostrManager,
+  relays: string[],
+  id: string,
+  options?: {
+    includeZapsnag?: boolean;
+  }
+): Promise<ProductData | undefined> => {
+  const products = await fetchMarketplaceProductsReadOnly(nostr, relays, {
+    ids: [id],
+    limit: 1,
+    includeZapsnag: options?.includeZapsnag,
+  });
+
+  return products[0];
+};
 
 export const fetchAllPosts = async (
   nostr: NostrManager,
