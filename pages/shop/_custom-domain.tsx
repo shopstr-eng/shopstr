@@ -57,11 +57,10 @@ export default function CustomDomainPage() {
         <p className="mt-4 text-gray-500">
           This domain is not connected to any shop.
         </p>
-        <Link
-          href="/"
-          className="mt-6 rounded-lg bg-shopstr-purple px-6 py-3 font-bold text-white"
-        >
-          Visit Shopstr
+        <Link href="/">
+          <a className="mt-6 rounded-lg bg-shopstr-purple px-6 py-3 font-bold text-white">
+            Visit Shopstr
+          </a>
         </Link>
       </div>
     );
