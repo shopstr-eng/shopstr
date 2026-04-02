@@ -5,21 +5,34 @@ export type Nip56ReportEventDraft = Pick<
   "pubkey" | "created_at" | "kind" | "tags" | "content"
 >;
 
+export type Nip56ReportType =
+  | "nudity"
+  | "malware"
+  | "profanity"
+  | "illegal"
+  | "spam"
+  | "impersonation"
+  | "other";
+
 export function buildNip56ReportEvent({
   reporterPubkey,
   reportedPubkey,
+  reportType,
   reportContent = "",
   reportedEventId,
 }: {
   reporterPubkey: string;
   reportedPubkey: string;
+  reportType: Nip56ReportType;
   reportContent?: string;
   reportedEventId?: string;
 }): Nip56ReportEventDraft {
-  const tags: string[][] = [["p", reportedPubkey]];
+  const tags: string[][] = reportedEventId
+    ? [["p", reportedPubkey]]
+    : [["p", reportedPubkey, reportType]];
 
   if (reportedEventId) {
-    tags.push(["e", reportedEventId]);
+    tags.push(["e", reportedEventId, reportType]);
   }
 
   return {
@@ -30,4 +43,3 @@ export function buildNip56ReportEvent({
     content: reportContent,
   };
 }
-
