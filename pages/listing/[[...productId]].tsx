@@ -28,7 +28,7 @@ import {
   RawEventModal,
   EventIdModal,
 } from "../../components/utility-components/modals/event-modals";
-import { findProductBySlug, getListingSlug } from "@/utils/url-slugs";
+import { findProductBySlug, getListingSlug, titleToSlug } from "@/utils/url-slugs";
 import StorefrontThemeWrapper from "@/components/storefront/storefront-theme-wrapper";
 import { GetServerSideProps } from "next";
 import { OgMetaProps, DEFAULT_OG } from "@/components/og-head";
@@ -121,6 +121,46 @@ function getListingStateFromEvent(event: NostrEvent | null) {
   };
 }
 
+function eventMatchesIdentifier(
+  event: NostrEvent | null,
+  identifier: string
+): boolean {
+  if (!event || !identifier) return false;
+  if (event.id === identifier) return true;
+
+  const dTag = event.tags.find((tag: string[]) => tag[0] === "d")?.[1];
+  if (dTag === identifier) return true;
+
+  if (identifier.startsWith("naddr1") && dTag) {
+    try {
+      return (
+        nip19.naddrEncode({
+          identifier: dTag,
+          pubkey: event.pubkey,
+          kind: event.kind,
+        }) === identifier
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  const title = event.tags.find((tag: string[]) => tag[0] === "title")?.[1];
+  if (!title) return false;
+
+  const normalizedIdentifier = identifier.toLowerCase();
+  const slug = titleToSlug(title).toLowerCase();
+  const slugWithPubkeySuffixMatch = identifier.match(/^(.+)-([a-f0-9]{8})$/);
+  if (slugWithPubkeySuffixMatch) {
+    return (
+      slug === slugWithPubkeySuffixMatch[1]!.toLowerCase() &&
+      event.pubkey.startsWith(slugWithPubkeySuffixMatch[2]!)
+    );
+  }
+
+  return slug === normalizedIdentifier;
+}
+
 export const getServerSideProps: GetServerSideProps<ListingPageProps> = async (
   context
 ) => {
@@ -202,15 +242,23 @@ const Listing = ({ initialProductEvent }: ListingPageProps) => {
   }, [router, router.isReady, router.query]);
 
   useEffect(() => {
-    if (!initialProductEvent) return;
+    relayFetchAttemptedRef.current = "";
 
-    const initialState = getListingStateFromEvent(initialProductEvent);
-    if (!initialState.parsedProduct) return;
+    if (
+      initialProductEvent &&
+      (!productIdString || eventMatchesIdentifier(initialProductEvent, productIdString))
+    ) {
+      const initialState = getListingStateFromEvent(initialProductEvent);
+      setRawEvent(initialState.rawEvent);
+      setIsZapsnag(initialState.isZapsnag);
+      setProductData(initialState.parsedProduct);
+      return;
+    }
 
-    setRawEvent(initialState.rawEvent);
-    setIsZapsnag(initialState.isZapsnag);
-    setProductData(initialState.parsedProduct);
-  }, [initialProductEvent]);
+    setRawEvent(undefined);
+    setIsZapsnag(false);
+    setProductData(undefined);
+  }, [initialProductEvent, productIdString]);
 
   useEffect(() => {
     if (!productContext.isLoading && productContext.productEvents) {
