@@ -236,6 +236,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
   const watchBanner = watch("banner");
   const watchPicture = watch("picture");
   const defaultImage = "/shopstr-2000x2000.png";
+  const isSubmittingRef = useRef(false);
 
   // Tracks whether relay-context data has been applied so DB pre-load doesn't
   // override more authoritative data that arrived later.
@@ -322,57 +323,65 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
   }, [shopContext, userPubkey, applyShopConfig]);
 
   const onSubmit = async (data: { [x: string]: string }) => {
+    if (isSubmittingRef.current) {
+      return;
+    }
+    isSubmittingRef.current = true;
     setIsUploadingShopProfile(true);
-    const thresholdValue = freeShippingThreshold
-      ? parseFloat(freeShippingThreshold)
-      : undefined;
-    const transformedData: any = {
-      name: data.name || "",
-      about: data.about || "",
-      ui: {
-        picture: data.picture || "",
-        banner: data.banner || "",
-        theme: "",
-        darkMode: false,
-      },
-      merchants: [userPubkey!],
-    };
-    if (thresholdValue && thresholdValue > 0) {
-      transformedData.freeShippingThreshold = thresholdValue;
-      transformedData.freeShippingCurrency = freeShippingCurrency;
-    }
-    if (shopSlug) {
-      const storefrontConfig: StorefrontConfig = {
-        colorScheme: colors,
-        productLayout,
-        landingPageStyle,
-        shopSlug,
-        customDomain: customDomain || undefined,
-        fontHeading: fontHeading || undefined,
-        fontBody: fontBody || undefined,
-        sections: sections.length > 0 ? sections : undefined,
-        pages: pages.length > 0 ? pages : undefined,
-        footer,
-        navLinks: navLinks.length > 0 ? navLinks : undefined,
-        showCommunityPage: showCommunityPage || undefined,
-        showWalletPage: showWalletPage || undefined,
-        contactEmail: contactEmail || undefined,
+    try {
+      const thresholdValue = freeShippingThreshold
+        ? parseFloat(freeShippingThreshold)
+        : undefined;
+      const transformedData: any = {
+        name: data.name || "",
+        about: data.about || "",
+        ui: {
+          picture: data.picture || "",
+          banner: data.banner || "",
+          theme: "",
+          darkMode: false,
+        },
+        merchants: [userPubkey!],
       };
-      transformedData.storefront = storefrontConfig;
-    }
-    await createNostrShopEvent(
-      nostr!,
-      signer!,
-      JSON.stringify(transformedData)
-    );
-    shopContext.updateShopData({
-      pubkey: userPubkey!,
-      content: transformedData,
-      created_at: 0,
-    });
-    setIsUploadingShopProfile(false);
-    if (isOnboarding) {
-      router.push("/marketplace");
+      if (thresholdValue && thresholdValue > 0) {
+        transformedData.freeShippingThreshold = thresholdValue;
+        transformedData.freeShippingCurrency = freeShippingCurrency;
+      }
+      if (shopSlug) {
+        const storefrontConfig: StorefrontConfig = {
+          colorScheme: colors,
+          productLayout,
+          landingPageStyle,
+          shopSlug,
+          customDomain: customDomain || undefined,
+          fontHeading: fontHeading || undefined,
+          fontBody: fontBody || undefined,
+          sections: sections.length > 0 ? sections : undefined,
+          pages: pages.length > 0 ? pages : undefined,
+          footer,
+          navLinks: navLinks.length > 0 ? navLinks : undefined,
+          showCommunityPage: showCommunityPage || undefined,
+          showWalletPage: showWalletPage || undefined,
+          contactEmail: contactEmail || undefined,
+        };
+        transformedData.storefront = storefrontConfig;
+      }
+      await createNostrShopEvent(
+        nostr!,
+        signer!,
+        JSON.stringify(transformedData)
+      );
+      shopContext.updateShopData({
+        pubkey: userPubkey!,
+        content: transformedData,
+        created_at: 0,
+      });
+      if (isOnboarding) {
+        router.push("/marketplace");
+      }
+    } finally {
+      isSubmittingRef.current = false;
+      setIsUploadingShopProfile(false);
     }
   };
 

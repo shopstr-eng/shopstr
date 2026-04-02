@@ -77,10 +77,11 @@ export const ProfileWithDropdown = ({
     setIsNip05Verified(profile?.nip05Verified || false);
   }, [profileContext, pubkey, npub]);
 
-  const DropDownItems: {
-    [key in DropDownKeys]: DropdownItemProps & { label: string };
-  } = {
-    shop: {
+  const dropDownItems: Record<
+    DropDownKeys,
+    () => DropdownItemProps & { label: string }
+  > = {
+    shop: () => ({
       key: "shop",
       color: "default",
       className: "text-light-text dark:text-dark-text",
@@ -90,8 +91,8 @@ export const ProfileWithDropdown = ({
         router.push(`/marketplace/${slug}`);
       },
       label: "Visit Seller",
-    },
-    storefront: {
+    }),
+    storefront: () => ({
       key: "storefront",
       color: "default",
       className: "text-light-text dark:text-dark-text",
@@ -107,8 +108,8 @@ export const ProfileWithDropdown = ({
         }
       },
       label: "Visit Storefront",
-    },
-    shop_profile: {
+    }),
+    shop_profile: () => ({
       key: "shop_profile",
       color: "default",
       className: "text-light-text dark:text-dark-text",
@@ -117,8 +118,8 @@ export const ProfileWithDropdown = ({
         router.push("/settings/shop-profile");
       },
       label: "Shop Profile",
-    },
-    inquiry: {
+    }),
+    inquiry: () => ({
       key: "inquiry",
       color: "default",
       className: "text-light-text dark:text-dark-text",
@@ -134,8 +135,8 @@ export const ProfileWithDropdown = ({
         }
       },
       label: "Send Inquiry",
-    },
-    user_profile: {
+    }),
+    user_profile: () => ({
       key: "user_profile",
       color: "default",
       className: "text-light-text dark:text-dark-text",
@@ -144,8 +145,8 @@ export const ProfileWithDropdown = ({
         router.push("/settings/user-profile");
       },
       label: "Profile",
-    },
-    settings: {
+    }),
+    settings: () => ({
       key: "settings",
       color: "default",
       className: "text-light-text dark:text-dark-text",
@@ -154,8 +155,8 @@ export const ProfileWithDropdown = ({
         router.push("/settings");
       },
       label: "Settings",
-    },
-    logout: {
+    }),
+    logout: () => ({
       key: "logout",
       color: "danger",
       className: "text-light-text dark:text-dark-text",
@@ -165,8 +166,8 @@ export const ProfileWithDropdown = ({
         router.push("/marketplace");
       },
       label: "Log Out",
-    },
-    copy_npub: {
+    }),
+    copy_npub: () => ({
       key: "copy_npub",
       color: "default",
       className: "text-light-text dark:text-dark-text",
@@ -184,7 +185,7 @@ export const ProfileWithDropdown = ({
         }, 2100);
       },
       label: isNPubCopied ? "Copied!" : "Copy npub",
-    },
+    }),
   };
 
   return (
@@ -211,7 +212,7 @@ export const ProfileWithDropdown = ({
         <DropdownMenu
           aria-label="User Actions"
           variant="flat"
-          items={dropDownKeys.map((key) => DropDownItems[key])}
+          items={dropDownKeys.map((key) => dropDownItems[key]())}
         >
           {(item) => {
             return (
