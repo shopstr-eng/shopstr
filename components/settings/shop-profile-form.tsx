@@ -308,11 +308,12 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
       return;
     }
     hasLoadedShopRef.current = true;
+    const shopUi = (shop.content as any)?.ui || {};
     const mappedContent = {
       name: shop.content.name,
       about: shop.content.about,
-      picture: shop.content.ui.picture,
-      banner: shop.content.ui.banner,
+      picture: shopUi.picture,
+      banner: shopUi.banner,
     };
     reset(mappedContent);
     if (
@@ -513,7 +514,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
     const existingShop = shopMap.has(userPubkey!)
       ? shopMap.get(userPubkey!)
       : undefined;
-    const existingContent = existingShop?.content || {};
+    const existingContent: any = existingShop?.content || {};
     const existingUi = existingContent.ui || {};
 
     const transformedData: any = {
