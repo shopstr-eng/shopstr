@@ -227,7 +227,7 @@ export default function ClaimButton({ token }: { token: string }) {
         setIsSpent(true);
         setIsRedeeming(false);
       }
-    } catch {
+      } catch {
       setIsInvalidToken(true);
       setIsRedeeming(false);
     }
@@ -312,7 +312,7 @@ export default function ClaimButton({ token }: { token: string }) {
       } else {
         throw new Error("Wallet not initialized");
       }
-    } catch {
+      } catch {
       setIsPaid(false);
       setOpenRedemptionModal(true);
       setIsRedeeming(false);

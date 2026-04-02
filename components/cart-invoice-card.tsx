@@ -507,7 +507,7 @@ export default function CartInvoiceCard({
         receiverNpub: npubForReceiver,
         receiverNsec: nsecForReceiver,
       };
-    } catch {
+      } catch {
       return null;
     }
   };
@@ -867,7 +867,7 @@ export default function CartInvoiceCard({
       } else {
         await handleLightningPayment(price, paymentData);
       }
-    } catch {
+      } catch {
       setFailureText("Payment failed. Please try again.");
       setShowFailureModal(true);
     }
@@ -1035,7 +1035,7 @@ export default function CartInvoiceCard({
         }
       }
       await invoiceHasBeenPaid(wallet, totalCost, hash, data);
-    } catch {
+      } catch {
       if (setInvoiceGenerationFailed) {
         setInvoiceGenerationFailed(true);
       } else {
@@ -2171,7 +2171,7 @@ export default function CartInvoiceCard({
       if (setCashuPaymentSent) {
         setCashuPaymentSent(true);
       }
-    } catch {
+      } catch {
       if (setCashuPaymentFailed) {
         setCashuPaymentFailed(true);
       } else {

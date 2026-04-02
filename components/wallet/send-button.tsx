@@ -156,7 +156,7 @@ const SendButton = () => {
         sendTotal.toString(),
         deletedEventIds
       );
-    } catch {
+      } catch {
       setSendFailed(true);
     }
   };

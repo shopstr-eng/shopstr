@@ -10,5 +10,3 @@ coverage
 *.log
 .env*
 package-lock.json
-.local
-.cache

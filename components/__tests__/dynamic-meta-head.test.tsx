@@ -6,6 +6,7 @@ import { useRouter } from "next/router";
 import { nip19 } from "nostr-tools";
 import parseTags from "@/utils/parsers/product-parser-functions";
 import { NostrEvent, ShopProfile } from "@/utils/types/types";
+import { DEFAULT_OG } from "../og-head";
 
 jest.mock("next/head", () => {
   return {
@@ -57,9 +58,7 @@ describe("DynamicHead", () => {
       />
     );
     await waitFor(() => {
-      expect(document.title).toBe(
-        "Shopstr | Bitcoin-Native Nostr Marketplace | Shop Freely"
-      );
+      expect(document.title).toBe(DEFAULT_OG.title);
     });
   });
 
@@ -130,11 +129,7 @@ describe("DynamicHead", () => {
           profileData={new Map()}
         />
       );
-      await waitFor(() =>
-        expect(document.title).toBe(
-          "Shopstr | Bitcoin-Native Nostr Marketplace | Shop Freely"
-        )
-      );
+      await waitFor(() => expect(document.title).toBe(DEFAULT_OG.title));
     });
 
     test("should use fallback image for a shop with picture set to null", async () => {

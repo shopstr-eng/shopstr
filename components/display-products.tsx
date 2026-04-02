@@ -1,5 +1,5 @@
 import { useState, useEffect, useContext } from "react";
-import { nip19 } from "nostr-tools";
+
 import { deleteEvent } from "@/utils/nostr/nostr-helper-functions";
 import { NostrEvent } from "../utils/types/types";
 import {
@@ -22,6 +22,7 @@ import {
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
 import { getListingSlug } from "@/utils/url-slugs";
+import { productSatisfiesAllFilters } from "@/utils/parsers/search-predicate";
 
 const escapeRegExp = (value: string) =>
   value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -140,13 +141,13 @@ const DisplayProducts = ({
 
     const filtered = productEvents.filter((product) => {
       if (focusedPubkey && product.pubkey !== focusedPubkey) return false;
-      if (!productSatisfiesAllFilters(product)) return false;
+      if (!productSatisfiesAllFilters(product, selectedCategories, selectedLocation, selectedSearch)) return false;
       if (!product.currency) return false;
       if (product.images.length === 0) return false;
       if (product.contentWarning) return false;
       if (
         product.pubkey ===
-          "3da2082b7aa5b76a8f0c134deab3f7848c3b5e3a3079c65947d88422b69c1755" &&
+        "3da2082b7aa5b76a8f0c134deab3f7848c3b5e3a3079c65947d88422b69c1755" &&
         userPubkey !== product.pubkey
       ) {
         return false;
@@ -220,7 +221,7 @@ const DisplayProducts = ({
     try {
       await deleteEvent(nostr!, signer!, [productId]);
       productEventContext.removeDeletedProductEvent(productId);
-    } catch {
+      } catch {
       return;
     }
   };
@@ -361,9 +362,9 @@ const DisplayProducts = ({
     <>
       <div className="w-full md:pl-4">
         {!isMyListings &&
-        (profileMapContext.isLoading ||
-          productEventContext.isLoading ||
-          isProductsLoading) ? (
+          (profileMapContext.isLoading ||
+            productEventContext.isLoading ||
+            isProductsLoading) ? (
           <div className="mb-6 mt-6 flex items-center justify-center">
             <ShopstrSpinner />
           </div>

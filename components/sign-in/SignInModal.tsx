@@ -127,7 +127,7 @@ export default function SignInModal({
       setIsBunkerConnecting(false);
       await signer.getPubKey();
       onClose();
-      router.push("/marketplace");
+      router.push("/onboarding/user-profile");
     } catch {
       setFailureText("Bunker sign-in failed!");
       setShowFailureModal(true);
