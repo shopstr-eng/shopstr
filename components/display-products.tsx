@@ -219,7 +219,7 @@ const DisplayProducts = ({
     try {
       await deleteEvent(nostr!, signer!, [productId]);
       productEventContext.removeDeletedProductEvent(productId);
-    } catch (_) {
+    } catch {
       return;
     }
   };
@@ -289,7 +289,7 @@ const DisplayProducts = ({
           );
         }
         return false;
-      } catch (_) {
+      } catch {
         return false;
       }
     }
@@ -301,7 +301,7 @@ const DisplayProducts = ({
           return parsedNpub.data === productData.pubkey;
         }
         return false;
-      } catch (_) {
+      } catch {
         return false;
       }
     }
@@ -323,7 +323,7 @@ const DisplayProducts = ({
       }
 
       return false;
-    } catch (_) {
+    } catch {
       return false;
     }
   };

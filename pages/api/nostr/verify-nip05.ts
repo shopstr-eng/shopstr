@@ -30,7 +30,9 @@ export default async function handler(
 
     const [username, domain] = parts;
     if (!username || !domain) {
-      return res.status(400).json({ verified: false, error: "Invalid username or domain" });
+      return res
+        .status(400)
+        .json({ verified: false, error: "Invalid username or domain" });
     }
 
     const url = `https://${domain}/.well-known/nostr.json?name=${username}`;
@@ -52,14 +54,14 @@ export default async function handler(
     }
 
     const names = data.names || {};
-    const verified = names[username] === pubkey || names[username.toLowerCase()] === pubkey;
+    const verified =
+      names[username] === pubkey || names[username.toLowerCase()] === pubkey;
 
     // Cache the result briefly to avoid spamming the target domain
-    res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
+    res.setHeader("Cache-Control", "s-maxage=60, stale-while-revalidate=300");
     return res.status(200).json({ verified });
-
   } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
+    if (error instanceof Error && error.name === "AbortError") {
       console.warn(`NIP-05 verification proxy timeout for ${nip05}`);
     } else {
       console.error("NIP-05 verification proxy error:", error);

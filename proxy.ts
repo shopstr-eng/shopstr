@@ -115,7 +115,7 @@ export function proxy(request: NextRequest) {
           new URL(`/communities${pathname}`, request.url)
         );
       }
-    } catch (e) {
+    } catch {
       /* ignore */
     }
   }

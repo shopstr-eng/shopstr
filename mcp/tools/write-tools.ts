@@ -2774,7 +2774,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           (e: any) => e.pubkey === pubkey
         );
 
-        let availableProofs: any[] = [];
+        const availableProofs: any[] = [];
         for (const event of myProofEvents) {
           try {
             const decryptedContent = signer.decrypt(pubkey, event.content);
