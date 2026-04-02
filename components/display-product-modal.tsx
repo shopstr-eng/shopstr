@@ -196,7 +196,7 @@ export default function DisplayProductModal({
             {/* Updated Divider style */}
             <Divider className="h-0.5 bg-black" />
             <span className="text-xl font-semibold">Summary: </span>
-            <span className="whitespace-break-spaces break-all">
+            <span className="whitespace-pre-wrap break-words">
               {productData.summary}
             </span>
             {productData.sizes && productData.sizes.length > 0 ? (
