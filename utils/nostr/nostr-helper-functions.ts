@@ -1554,48 +1554,22 @@ export async function verifyNip05Identifier(
   try {
     if (!nip05 || !pubkey) return false;
 
-    const parts = nip05.split("@");
-    if (parts.length !== 2) return false;
+    // Use a timeout to prevent hanging requests
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-    const [username, domain] = parts;
-    if (!username || !domain) return false;
+    const response = await fetch(
+      `/api/nostr/verify-nip05?nip05=${encodeURIComponent(nip05)}&pubkey=${encodeURIComponent(pubkey)}`,
+      { signal: controller.signal }
+    );
+    clearTimeout(timeoutId);
 
-    let url;
-    try {
-      url = `https://${domain}/.well-known/nostr.json?name=${username}`;
-    } catch {
-      return false;
-    }
+    if (!response.ok) return false;
 
-    try {
-      // Use a timeout to prevent hanging requests
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
-
-      const response = await fetch(url, { signal: controller.signal });
-      clearTimeout(timeoutId);
-
-      if (!response.ok) return false;
-
-      let data;
-      try {
-        data = await response.json();
-      } catch {
-        return false;
-      }
-
-      if (!data || typeof data !== "object") return false;
-
-      const names = data.names || {};
-      return (
-        names[username] === pubkey || names[username.toLowerCase()] === pubkey
-      );
-    } catch {
-      // This will catch fetch errors, timeout errors, etc.
-      return false;
-    }
+    const data = await response.json();
+    return !!data.verified;
   } catch {
-    // Catch any unexpected errors
+    // Catch any unexpected errors (e.g., timeout, network failure)
     return false;
   }
 }
