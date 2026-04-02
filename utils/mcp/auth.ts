@@ -1,6 +1,8 @@
 import { pbkdf2Sync, randomBytes, timingSafeEqual } from "crypto";
 import type { NextApiRequest, NextApiResponse } from "next";
+import type { PoolClient } from "pg";
 import { getDbPool } from "@/utils/db/db-service";
+import { verifyEvent } from "nostr-tools";
 
 export type ApiKeyPermission = "read" | "read_write" | "full_access";
 
@@ -21,6 +23,41 @@ export interface AuthenticatedRequest extends NextApiRequest {
   apiKey?: ApiKeyRecord;
 }
 
+const AUTH_EVENT_KIND = 27235;
+const MAX_EVENT_AGE_SECONDS = 120;
+
+export function verifyNostrAuth(
+  signedEvent: any,
+  expectedPubkey?: string
+): { valid: boolean; pubkey: string; error?: string } {
+  if (!signedEvent || typeof signedEvent !== "object") {
+    return { valid: false, pubkey: "", error: "Missing signed auth event" };
+  }
+
+  if (signedEvent.kind !== AUTH_EVENT_KIND) {
+    return { valid: false, pubkey: "", error: "Invalid auth event kind" };
+  }
+
+  if (!verifyEvent(signedEvent)) {
+    return { valid: false, pubkey: "", error: "Invalid event signature" };
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  if (Math.abs(now - signedEvent.created_at) > MAX_EVENT_AGE_SECONDS) {
+    return { valid: false, pubkey: "", error: "Auth event has expired" };
+  }
+
+  if (expectedPubkey && signedEvent.pubkey !== expectedPubkey) {
+    return {
+      valid: false,
+      pubkey: signedEvent.pubkey,
+      error: "Pubkey mismatch",
+    };
+  }
+
+  return { valid: true, pubkey: signedEvent.pubkey };
+}
+
 export function hashApiKey(key: string): string {
   const salt = randomBytes(16);
   const iterations = 100_000;
@@ -39,7 +76,7 @@ export function generateApiKey(): { key: string; prefix: string } {
 
 export async function initializeApiKeysTable(): Promise<void> {
   const pool = getDbPool();
-  let client;
+  let client: PoolClient | undefined;
   try {
     client = await pool.connect();
     await client.query(`
@@ -113,7 +150,7 @@ export async function createApiKey(
   const keyHash = hashApiKey(key);
 
   const pool = getDbPool();
-  let client;
+  let client: PoolClient | undefined;
   try {
     client = await pool.connect();
     const result = await client.query(
@@ -197,7 +234,7 @@ export async function validateApiKey(
   const prefix = key.substring(0, 10);
 
   const pool = getDbPool();
-  let client;
+  let client: PoolClient | undefined;
   try {
     client = await pool.connect();
     const result = await client.query(
@@ -223,7 +260,7 @@ export async function validateApiKey(
 
 export async function listApiKeys(pubkey: string): Promise<ApiKeyRecord[]> {
   const pool = getDbPool();
-  let client;
+  let client: PoolClient | undefined;
   try {
     client = await pool.connect();
     const result = await client.query(
@@ -242,12 +279,12 @@ export async function revokeApiKey(
   pubkey: string
 ): Promise<boolean> {
   const pool = getDbPool();
-  let client;
+  let client: PoolClient | undefined;
   try {
     client = await pool.connect();
     const result = await client.query(
       `UPDATE mcp_api_keys SET is_active = FALSE WHERE id = $1 AND pubkey = $2`,
-      [id, pubkey] as any[]
+      [String(id), pubkey]
     );
     return (result.rowCount ?? 0) > 0;
   } finally {

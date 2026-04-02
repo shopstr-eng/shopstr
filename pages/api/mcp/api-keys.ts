@@ -5,8 +5,8 @@ import {
   revokeApiKey,
   initializeApiKeysTable,
   ApiKeyPermission,
+  verifyNostrAuth,
 } from "@/utils/mcp/auth";
-import { verifyEvent } from "nostr-tools";
 
 let tablesReady = false;
 
@@ -33,11 +33,9 @@ export default async function handler(
     }
 
     if (signedEvent) {
-      const isValid = verifyEvent(signedEvent) && signedEvent.pubkey === pubkey;
-      if (!isValid) {
-        return res
-          .status(401)
-          .json({ error: "Invalid signed event or pubkey mismatch" });
+      const authResult = verifyNostrAuth(signedEvent, pubkey);
+      if (!authResult.valid) {
+        return res.status(401).json({ error: authResult.error });
       }
     }
 
@@ -86,11 +84,9 @@ export default async function handler(
     }
 
     if (signedEvent) {
-      const isValid = verifyEvent(signedEvent) && signedEvent.pubkey === pubkey;
-      if (!isValid) {
-        return res
-          .status(401)
-          .json({ error: "Invalid signed event or pubkey mismatch" });
+      const authResult = verifyNostrAuth(signedEvent, pubkey);
+      if (!authResult.valid) {
+        return res.status(401).json({ error: authResult.error });
       }
     }
 
