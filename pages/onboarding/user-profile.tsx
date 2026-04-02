@@ -3,16 +3,24 @@ import { Card, CardBody, Button, Image } from "@nextui-org/react";
 import { ArrowLongRightIcon } from "@heroicons/react/24/outline";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import UserProfileForm from "@/components/settings/user-profile-form";
+import BuyerProfileForm from "@/components/settings/buyer-profile-form";
 
 const OnboardingUserProfile = () => {
   const router = useRouter();
+  const { type } = router.query;
+  const isBuyer = type === "buyer";
+  const isSeller = type === "seller";
 
   const handleNext = () => {
-    router.push("/onboarding/wallet");
+    if (isSeller) {
+      router.push("/onboarding/wallet?type=seller");
+    } else {
+      router.push("/onboarding/wallet?type=buyer");
+    }
   };
 
   return (
-    <div className="flex h-[100vh] flex-col bg-light-bg pt-24 dark:bg-dark-bg">
+    <div className="flex min-h-screen flex-col bg-light-bg pt-24 dark:bg-dark-bg">
       <div className="mx-auto w-full max-w-2xl px-4 py-6">
         <Card>
           <CardBody>
@@ -30,18 +38,22 @@ const OnboardingUserProfile = () => {
             </div>
             <div className="mb-4 text-center">
               <h2 className="text-2xl font-bold text-light-text dark:text-dark-text">
-                Step 2: Setup Your Profile
+                Step 3: Set Up Your Profile
               </h2>
               <p className="text-light-text dark:text-dark-text">
-                Set up your user profile or skip this step to continue.
+                Set up your profile or skip this step to continue.
               </p>
             </div>
 
-            <UserProfileForm isOnboarding={true} />
+            {isBuyer ? (
+              <BuyerProfileForm isOnboarding={true} />
+            ) : (
+              <UserProfileForm isOnboarding={true} />
+            )}
 
-            <div className="flex justify-center">
+            <div className="mt-8 flex justify-center">
               <Button className={SHOPSTRBUTTONCLASSNAMES} onClick={handleNext}>
-                Next <ArrowLongRightIcon className="h-5 w-5" />
+                Next (or skip) <ArrowLongRightIcon className="ml-1 h-5 w-5" />
               </Button>
             </div>
           </CardBody>
