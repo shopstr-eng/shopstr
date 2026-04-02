@@ -1549,22 +1549,36 @@ export function getDefaultBlossomServer(): string {
 
 export async function verifyNip05Identifier(
   nip05: string,
-  pubkey: string
+  pubkey: string,
+  options?: { baseUrl?: string }
 ): Promise<boolean> {
   try {
     if (!nip05 || !pubkey) return false;
 
+    const params = new URLSearchParams({ nip05, pubkey });
+    const path = `/api/nostr/verify-nip05?${params.toString()}`;
+
+    let requestUrl = path;
+    const runtimeBaseUrl =
+      options?.baseUrl ||
+      (typeof window !== "undefined" ? window.location.origin : undefined);
+
+    // Node/SSR fetch generally needs an absolute URL.
+    if (runtimeBaseUrl) {
+      requestUrl = new URL(path, runtimeBaseUrl).toString();
+    } else if (typeof window === "undefined") {
+      return false;
+    }
+
     // Use a timeout to prevent hanging requests
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000);
-
-    const response = await fetch(
-      `/api/nostr/verify-nip05?nip05=${encodeURIComponent(
-        nip05
-      )}&pubkey=${encodeURIComponent(pubkey)}`,
-      { signal: controller.signal }
-    );
-    clearTimeout(timeoutId);
+    let response: Response;
+    try {
+      response = await fetch(requestUrl, { signal: controller.signal });
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
     if (!response.ok) return false;
 
