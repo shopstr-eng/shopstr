@@ -18,29 +18,31 @@ describe("buildNip56ReportEvent", () => {
     const event = buildNip56ReportEvent({
       reporterPubkey: "reporter-pubkey",
       reportedPubkey: "reported-pubkey",
-      reportContent: "spam",
+      reportType: "spam",
+      reportContent: "Repeated unsolicited ads",
     });
 
     expect(event).toEqual<Nip56ReportEventDraft>({
       pubkey: "reporter-pubkey",
       created_at: 1710000000,
       kind: 1984,
-      tags: [["p", "reported-pubkey"]],
-      content: "spam",
+      tags: [["p", "reported-pubkey", "spam"]],
+      content: "Repeated unsolicited ads",
     });
   });
 
-  it("adds an event tag when a reported event id is provided", () => {
+  it("adds a typed event tag when a reported event id is provided", () => {
     const event = buildNip56ReportEvent({
       reporterPubkey: "reporter-pubkey",
       reportedPubkey: "reported-pubkey",
-      reportContent: "impersonation",
+      reportType: "impersonation",
+      reportContent: "This note is impersonating another account.",
       reportedEventId: "event-123",
     });
 
     expect(event.tags).toEqual([
       ["p", "reported-pubkey"],
-      ["e", "event-123"],
+      ["e", "event-123", "impersonation"],
     ]);
   });
 
@@ -48,9 +50,9 @@ describe("buildNip56ReportEvent", () => {
     const event = buildNip56ReportEvent({
       reporterPubkey: "reporter-pubkey",
       reportedPubkey: "reported-pubkey",
+      reportType: "other",
     });
 
     expect(event.content).toBe("");
   });
 });
-
