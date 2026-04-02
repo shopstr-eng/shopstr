@@ -5,6 +5,7 @@ import {
   revokeApiKey,
   initializeApiKeysTable,
   ApiKeyPermission,
+  verifyNostrAuth,
 } from "@/utils/mcp/auth";
 import {
   buildApiKeyCreateProof,

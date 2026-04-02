@@ -62,8 +62,7 @@ export default async function handler(
           name: "(required) string - Name for this agent/integration",
           permissions:
             '(optional) "read" | "read_write" | "full_access" - defaults to "read"',
-          contact:
-            "(optional) string - Contact URL or identifier for this agent",
+          contact: "(optional) string - Contact email or URL for this agent",
           pubkey:
             "(optional) string - Existing Nostr pubkey (hex or npub1...). If omitted, a new keypair is generated.",
           nsec: "(optional) string - Nostr secret key (nsec1... or hex). Required for full_access with an existing pubkey. Stored encrypted.",
