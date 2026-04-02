@@ -57,11 +57,20 @@ const MintButton = () => {
     reset: mintReset,
   } = useForm();
 
-  const handleToggleMintModal = () => {
+  const resetMintModalState = () => {
     mintReset();
     setPaymentConfirmed(false);
-    setShowMintModal(!showMintModal);
     setShowInvoiceCard(false);
+  };
+
+  const openMintModal = () => {
+    resetMintModalState();
+    setShowMintModal(true);
+  };
+
+  const closeMintModal = () => {
+    resetMintModalState();
+    setShowMintModal(false);
   };
 
   const onMintSubmit = async (data: { [x: string]: number }) => {
@@ -151,7 +160,7 @@ const MintButton = () => {
               setPaymentConfirmed(true);
               setQrCodeUrl(null);
               setTimeout(() => {
-                handleToggleMintModal(); // takes you back to the page after payment has been confirmed by cashu mint api
+                closeMintModal(); // takes you back to the page after payment has been confirmed by cashu mint api
               }, 1900); // 1.9 seconds is the amount of time for the checkmark animation to play
               break;
             }
@@ -169,7 +178,7 @@ const MintButton = () => {
               );
               setShowFailureModal(true);
               setTimeout(() => {
-                handleToggleMintModal();
+                closeMintModal();
               }, 1900);
               break;
             }
@@ -189,7 +198,7 @@ const MintButton = () => {
           );
           setShowFailureModal(true);
           setTimeout(() => {
-            handleToggleMintModal();
+            closeMintModal();
           }, 1900);
           break;
         }
@@ -237,7 +246,7 @@ const MintButton = () => {
     <div>
       <Button
         className={SHOPSTRBUTTONCLASSNAMES + " m-2"}
-        onClick={() => setShowMintModal(!showMintModal)}
+        onClick={openMintModal}
         startContent={
           <BanknotesIcon className="h-6 w-6 hover:text-yellow-500 dark:hover:text-purple-500" />
         }
@@ -247,7 +256,7 @@ const MintButton = () => {
       <Modal
         backdrop="blur"
         isOpen={showMintModal}
-        onClose={handleToggleMintModal}
+        onClose={closeMintModal}
         classNames={{
           body: "py-6",
           backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
@@ -382,7 +391,7 @@ const MintButton = () => {
               <Button
                 color="danger"
                 variant="light"
-                onClick={handleToggleMintModal}
+                onClick={closeMintModal}
               >
                 Cancel
               </Button>
