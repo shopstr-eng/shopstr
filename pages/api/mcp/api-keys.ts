@@ -32,13 +32,17 @@ export default async function handler(
         .json({ error: "Missing required fields: name, pubkey" });
     }
 
-    if (signedEvent) {
-      const isValid = verifyEvent(signedEvent) && signedEvent.pubkey === pubkey;
-      if (!isValid) {
-        return res
-          .status(401)
-          .json({ error: "Invalid signed event or pubkey mismatch" });
-      }
+    if (!signedEvent) {
+      return res
+        .status(401)
+        .json({ error: "A signed Nostr event is required to prove pubkey ownership" });
+    }
+
+    const isValid = verifyEvent(signedEvent) && signedEvent.pubkey === pubkey;
+    if (!isValid) {
+      return res
+        .status(401)
+        .json({ error: "Invalid signed event or pubkey mismatch" });
     }
 
     const perm: ApiKeyPermission =
@@ -85,13 +89,17 @@ export default async function handler(
         .json({ error: "Missing required fields: id, pubkey" });
     }
 
-    if (signedEvent) {
-      const isValid = verifyEvent(signedEvent) && signedEvent.pubkey === pubkey;
-      if (!isValid) {
-        return res
-          .status(401)
-          .json({ error: "Invalid signed event or pubkey mismatch" });
-      }
+    if (!signedEvent) {
+      return res
+        .status(401)
+        .json({ error: "A signed Nostr event is required to prove pubkey ownership" });
+    }
+
+    const isValid = verifyEvent(signedEvent) && signedEvent.pubkey === pubkey;
+    if (!isValid) {
+      return res
+        .status(401)
+        .json({ error: "Invalid signed event or pubkey mismatch" });
     }
 
     try {
