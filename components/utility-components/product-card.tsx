@@ -64,7 +64,7 @@ export default function ProductCard({
         relays: targetRelays,
       });
       window.open(`https://njump.me/${nevent}`, "_blank");
-    } catch {
+      } catch {
       // console.error("Failed to generate njump link", err);
     }
   };
@@ -73,9 +73,9 @@ export default function ProductCard({
     <div
       className="cursor-pointer"
       onClick={(e) => {
-        if (onProductClick) {
-          onProductClick(productData, e);
-        }
+          if (onProductClick) {
+            onProductClick(productData, e);
+          }
       }}
     >
       <div>

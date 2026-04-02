@@ -88,16 +88,15 @@ const renderWithProviders = (
 describe("ShopProfileForm", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    global.fetch = jest.fn(() =>
-      Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({}),
-      })
-    ) as jest.Mock;
-  });
-
-  afterEach(() => {
-    (global.fetch as jest.Mock).mockRestore?.();
+    global.fetch = jest.fn().mockImplementation((url: string) => {
+      if (url.includes("/api/storefront/lookup")) {
+        return Promise.resolve({ json: () => Promise.resolve({}) });
+      }
+      if (url.includes("/api/storefront/custom-domain")) {
+        return Promise.resolve({ json: () => Promise.resolve({}) });
+      }
+      return Promise.resolve({ json: () => Promise.resolve({}) });
+    }) as unknown as typeof fetch;
   });
 
   test("displays the form after initial data load", async () => {
@@ -206,11 +205,8 @@ describe("ShopProfileForm", () => {
     const user = userEvent.setup();
     renderWithProviders(<ShopProfileForm />);
 
-    await user.type(await screen.findByLabelText("Shop Name"), "My Shop");
-    const saveButton = screen.getByRole("button", { name: /Save Shop/i });
-
-    saveButton.focus();
-    await user.keyboard("{Enter}");
+    const shopNameInput = await screen.findByLabelText("Shop Name");
+    await user.type(shopNameInput, "My Shop{enter}");
 
     await waitFor(() => {
       expect(createNostrShopEvent).toHaveBeenCalledTimes(1);
