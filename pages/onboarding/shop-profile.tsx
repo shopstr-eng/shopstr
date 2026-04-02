@@ -30,7 +30,7 @@ const OnboardingShopProfile = () => {
             </div>
             <div className="mb-4 text-center">
               <h2 className="text-2xl font-bold text-light-text dark:text-dark-text">
-                Step 5: Set Up Your Shop
+                Step 4: Set Up Your Shop
               </h2>
               <p className="text-light-text dark:text-dark-text">
                 Set up your shop details or skip this step to finish onboarding.

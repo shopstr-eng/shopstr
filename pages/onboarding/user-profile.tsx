@@ -13,7 +13,7 @@ const OnboardingUserProfile = () => {
 
   const handleNext = () => {
     if (isSeller) {
-      router.push("/onboarding/wallet?type=seller");
+      router.push("/onboarding/shop-profile");
     } else {
       router.push("/onboarding/wallet?type=buyer");
     }
