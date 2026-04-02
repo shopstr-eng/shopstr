@@ -6,7 +6,7 @@ import {
   initializeApiKeysTable,
   ApiKeyPermission,
 } from "@/utils/mcp/auth";
-import { verifyEvent } from "nostr-tools";
+import { verifyEvent, type Event } from "nostr-tools";
 
 let tablesReady = false;
 
@@ -17,9 +17,37 @@ async function ensureTables() {
   }
 }
 
+/**
+ * Validates that the request contains a signed Nostr event whose pubkey
+ * matches the claimed pubkey. Sends a 401 response and returns false
+ * when verification fails so the caller can early-return.
+ */
+function requireSignedEvent(
+  signedEvent: Event | undefined,
+  pubkey: string,
+  res: NextApiResponse,
+): boolean {
+  if (!signedEvent) {
+    res
+      .status(401)
+      .json({ error: "A signed Nostr event is required to prove pubkey ownership" });
+    return false;
+  }
+
+  const isValid = verifyEvent(signedEvent) && signedEvent.pubkey === pubkey;
+  if (!isValid) {
+    res
+      .status(401)
+      .json({ error: "Invalid signed event or pubkey mismatch" });
+    return false;
+  }
+
+  return true;
+}
+
 export default async function handler(
   req: NextApiRequest,
-  res: NextApiResponse
+  res: NextApiResponse,
 ) {
   await ensureTables();
 
@@ -32,18 +60,7 @@ export default async function handler(
         .json({ error: "Missing required fields: name, pubkey" });
     }
 
-    if (!signedEvent) {
-      return res
-        .status(401)
-        .json({ error: "A signed Nostr event is required to prove pubkey ownership" });
-    }
-
-    const isValid = verifyEvent(signedEvent) && signedEvent.pubkey === pubkey;
-    if (!isValid) {
-      return res
-        .status(401)
-        .json({ error: "Invalid signed event or pubkey mismatch" });
-    }
+    if (!requireSignedEvent(signedEvent, pubkey, res)) return;
 
     const perm: ApiKeyPermission =
       permissions === "read_write" ? "read_write" : "read";
@@ -89,18 +106,7 @@ export default async function handler(
         .json({ error: "Missing required fields: id, pubkey" });
     }
 
-    if (!signedEvent) {
-      return res
-        .status(401)
-        .json({ error: "A signed Nostr event is required to prove pubkey ownership" });
-    }
-
-    const isValid = verifyEvent(signedEvent) && signedEvent.pubkey === pubkey;
-    if (!isValid) {
-      return res
-        .status(401)
-        .json({ error: "Invalid signed event or pubkey mismatch" });
-    }
+    if (!requireSignedEvent(signedEvent, pubkey, res)) return;
 
     try {
       const revoked = await revokeApiKey(id, pubkey);
