@@ -266,6 +266,7 @@ const Listing = () => {
             </div>
           ) : (
             <CheckoutCard
+              key={productData.id}
               productData={productData}
               setFiatOrderIsPlaced={setFiatOrderIsPlaced}
               setFiatOrderFailed={setFiatOrderFailed}
