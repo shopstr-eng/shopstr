@@ -502,14 +502,24 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
     const thresholdValue = freeShippingThreshold
       ? parseFloat(freeShippingThreshold)
       : undefined;
+
+    const shopMap = shopContext.shopData;
+    const existingShop = shopMap.has(userPubkey!)
+      ? shopMap.get(userPubkey!)
+      : undefined;
+    const existingContent = existingShop?.content || {};
+    const existingUi = existingContent.ui || {};
+
     const transformedData: any = {
-      name: data.name || "",
-      about: data.about || "",
+      ...existingContent,
+      name: data.name || existingContent.name || "",
+      about: data.about || existingContent.about || "",
       ui: {
-        picture: data.picture || "",
-        banner: data.banner || "",
-        theme: "",
-        darkMode: false,
+        ...existingUi,
+        picture: data.picture || existingUi.picture || "",
+        banner: data.banner || existingUi.banner || "",
+        theme: existingUi.theme || "",
+        darkMode: existingUi.darkMode || false,
       },
       merchants: [userPubkey!],
     };

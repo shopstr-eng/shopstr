@@ -136,10 +136,24 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
   const onSubmit = async (data: { [x: string]: string }) => {
     if (!userPubkey) throw new Error("pubkey is undefined");
     setIsUploadingProfile(true);
-    await createNostrProfileEvent(nostr!, signer!, JSON.stringify(data));
+
+    const profileMap = profileContext.profileData;
+    const existingProfile = profileMap.has(userPubkey)
+      ? profileMap.get(userPubkey)
+      : undefined;
+    const existingContent = existingProfile?.content || {};
+
+    const mergedData: { [key: string]: any } = { ...existingContent };
+    for (const [key, value] of Object.entries(data)) {
+      if (value !== "" && value !== undefined && value !== null) {
+        mergedData[key] = value;
+      }
+    }
+
+    await createNostrProfileEvent(nostr!, signer!, JSON.stringify(mergedData));
     profileContext.updateProfileData({
       pubkey: userPubkey!,
-      content: data,
+      content: mergedData,
       created_at: 0,
     });
     setIsUploadingProfile(false);

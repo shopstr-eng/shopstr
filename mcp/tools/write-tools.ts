@@ -151,7 +151,19 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
       if (!signer) return noSignerError();
 
       try {
-        const content: Record<string, any> = {};
+        const pubkey = signer.getPubKey();
+        let existingContent: Record<string, any> = {};
+        try {
+          const existingEvents = await fetchCachedEvents(0, {
+            pubkey,
+            limit: 1,
+          });
+          if (existingEvents.length > 0 && existingEvents[0].content) {
+            existingContent = JSON.parse(existingEvents[0].content);
+          }
+        } catch {}
+
+        const content: Record<string, any> = { ...existingContent };
         if (params.name) content.name = params.name;
         if (params.display_name) content.display_name = params.display_name;
         if (params.about) content.about = params.about;
@@ -453,24 +465,40 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
       try {
         const pubkey = signer.getPubKey();
-        const content: Record<string, any> = {};
+
+        let existingContent: Record<string, any> = {};
+        try {
+          const existingEvents = await fetchCachedEvents(30019, {
+            pubkey,
+            limit: 1,
+          });
+          if (existingEvents.length > 0 && existingEvents[0].content) {
+            existingContent = JSON.parse(existingEvents[0].content);
+          }
+        } catch {}
+
+        const content: Record<string, any> = { ...existingContent };
         if (params.name) content.name = params.name;
         if (params.about) content.about = params.about;
         if (params.merchants) content.merchants = params.merchants;
         if (params.paymentMethodDiscounts)
           content.paymentMethodDiscounts = params.paymentMethodDiscounts;
-        const ui: Record<string, any> = {};
+
+        const existingUi = existingContent.ui || {};
+        const ui: Record<string, any> = { ...existingUi };
         if (params.picture) ui.picture = params.picture;
         if (params.banner) ui.banner = params.banner;
         if (params.theme) ui.theme = params.theme;
         if (params.darkMode !== undefined) ui.darkMode = params.darkMode;
         if (Object.keys(ui).length > 0) content.ui = ui;
+
         if (params.freeShippingThreshold)
           content.freeShippingThreshold = params.freeShippingThreshold;
         if (params.freeShippingCurrency)
           content.freeShippingCurrency = params.freeShippingCurrency;
 
-        const storefront: Record<string, any> = {};
+        const existingStorefront = existingContent.storefront || {};
+        const storefront: Record<string, any> = { ...existingStorefront };
         if (params.storefrontColorScheme)
           storefront.colorScheme = params.storefrontColorScheme;
         if (params.storefrontProductLayout)
