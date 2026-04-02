@@ -8,8 +8,13 @@ import { BLUEBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 const MilkMarketSlider = () => {
   const followsContext = useContext(FollowsContext);
 
-  const [wot, setWot] = useState(getLocalStorageData().wot);
+  const [wot, setWot] = useState(3);
   const [wotIsChanged, setWotIsChanged] = useState(false);
+
+  useEffect(() => {
+    const savedWot = getLocalStorageData().wot;
+    setWot(savedWot);
+  }, []);
 
   useEffect(() => {
     localStorage.setItem("wot", String(wot));
@@ -36,7 +41,7 @@ const MilkMarketSlider = () => {
                 : 2
           }
           minValue={1}
-          defaultValue={wot}
+          value={wot}
           className="max-w-md"
           classNames={{
             thumb: "bg-primary-blue",

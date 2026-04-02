@@ -14,7 +14,7 @@ jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
 }));
 
 jest.mock("@/utils/STATIC-VARIABLES", () => ({
-  BLACKBUTTONCLASSNAMES: "mock-button-class",
+  BLUEBUTTONCLASSNAMES: "mock-button-class",
 }));
 
 const mockOnChangeEnd = jest.fn();
