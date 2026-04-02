@@ -35,7 +35,10 @@ import {
   NostrContext,
 } from "@/components/utility-components/nostr-context-provider";
 import { createNostrShopEvent } from "@/utils/nostr/nostr-helper-functions";
-import { createAuthEventTemplate } from "@/utils/stripe/verify-nostr-auth";
+import {
+  buildMcpRequestProofTemplate,
+  buildStripeAccountStatusProof,
+} from "@/utils/mcp/request-proof";
 import { FileUploaderButton } from "@/components/utility-components/file-uploader";
 import MilkMarketSpinner from "@/components/utility-components/mm-spinner";
 import currencySelection from "@/public/currencySelection.json";
@@ -375,8 +378,11 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
     if (userPubkey && signer) {
       (async () => {
         try {
-          const template = createAuthEventTemplate(userPubkey);
-          const signedEvent = await signer.sign(template);
+          const signedEvent = await signer.sign(
+            buildMcpRequestProofTemplate(
+              buildStripeAccountStatusProof(userPubkey)
+            )
+          );
           const res = await fetch("/api/stripe/connect/account-status", {
             method: "POST",
             headers: { "Content-Type": "application/json" },

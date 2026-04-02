@@ -18,7 +18,11 @@ import {
   WHITEBUTTONCLASSNAMES,
 } from "@/utils/STATIC-VARIABLES";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
-import { createAuthEventTemplate } from "@/utils/stripe/verify-nostr-auth";
+import {
+  buildMcpRequestProofTemplate,
+  buildStripeCreateAccountProof,
+  buildStripeCreateAccountLinkProof,
+} from "@/utils/mcp/request-proof";
 
 interface StripeConnectModalProps {
   isOpen: boolean;
@@ -39,26 +43,24 @@ const StripeConnectModal: React.FC<StripeConnectModalProps> = ({
   const [error, setError] = useState<string | null>(null);
   const { signer } = useContext(SignerContext);
 
-  const signAuthEvent = async () => {
-    if (!signer || !signer.sign) {
-      throw new Error("No signer available. Please log in first.");
-    }
-    const template = createAuthEventTemplate(pubkey);
-    const signed = await signer.sign(template);
-    return signed;
-  };
-
   const handleSetupStripe = async () => {
+    if (!signer || !signer.sign) {
+      setError("No signer available. Please log in first.");
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
 
     try {
-      const signedEvent = await signAuthEvent();
+      const createSignedEvent = await signer.sign(
+        buildMcpRequestProofTemplate(buildStripeCreateAccountProof(pubkey))
+      );
 
       const createRes = await fetch("/api/stripe/connect/create-account", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pubkey, signedEvent }),
+        body: JSON.stringify({ pubkey, signedEvent: createSignedEvent }),
       });
 
       if (!createRes.ok) {
@@ -68,13 +70,19 @@ const StripeConnectModal: React.FC<StripeConnectModalProps> = ({
 
       const { accountId } = await createRes.json();
 
+      const linkSignedEvent = await signer.sign(
+        buildMcpRequestProofTemplate(
+          buildStripeCreateAccountLinkProof({ pubkey, accountId })
+        )
+      );
+
       const linkRes = await fetch("/api/stripe/connect/create-account-link", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           accountId,
           pubkey,
-          signedEvent,
+          signedEvent: linkSignedEvent,
           returnPath: returnPath || "/settings/shop-profile?stripe=success",
           refreshPath: refreshPath || "/settings/shop-profile?stripe=refresh",
         }),

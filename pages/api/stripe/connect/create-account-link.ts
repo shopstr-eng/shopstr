@@ -1,7 +1,11 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import Stripe from "stripe";
 import { getStripeConnectAccount } from "@/utils/db/db-service";
-import { verifyNostrAuth } from "@/utils/stripe/verify-nostr-auth";
+import { buildStripeCreateAccountLinkProof } from "@/utils/mcp/request-proof";
+import {
+  extractSignedEventFromRequest,
+  verifyAndConsumeSignedRequestProof,
+} from "@/utils/mcp/request-proof-server";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
   apiVersion: "2025-09-30.clover",
@@ -16,23 +20,30 @@ export default async function handler(
   }
 
   try {
-    const { accountId, returnPath, refreshPath, pubkey, signedEvent } =
-      req.body;
+    const { accountId, returnPath, refreshPath, pubkey } = req.body || {};
 
-    if (!accountId || !pubkey || !signedEvent) {
+    if (!accountId || !pubkey || typeof pubkey !== "string" || !pubkey.trim()) {
       return res
         .status(400)
-        .json({ error: "accountId, pubkey, and signedEvent are required" });
+        .json({ error: "accountId and pubkey are required" });
     }
 
-    const authResult = verifyNostrAuth(signedEvent, pubkey);
-    if (!authResult.valid) {
-      return res
-        .status(401)
-        .json({ error: authResult.error || "Authentication failed" });
+    const normalizedPubkey = pubkey.trim();
+
+    const signedEvent = extractSignedEventFromRequest(req);
+    const proofResult = await verifyAndConsumeSignedRequestProof(
+      signedEvent,
+      buildStripeCreateAccountLinkProof({
+        pubkey: normalizedPubkey,
+        accountId,
+      })
+    );
+
+    if (!proofResult.ok) {
+      return res.status(proofResult.status).json({ error: proofResult.error });
     }
 
-    const connectAccount = await getStripeConnectAccount(pubkey);
+    const connectAccount = await getStripeConnectAccount(normalizedPubkey);
     if (!connectAccount || connectAccount.stripe_account_id !== accountId) {
       return res
         .status(403)

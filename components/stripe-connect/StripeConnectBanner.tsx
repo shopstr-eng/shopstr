@@ -4,7 +4,10 @@ import { Button, useDisclosure } from "@nextui-org/react";
 import { CreditCardIcon } from "@heroicons/react/24/outline";
 import { BLUEBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
-import { createAuthEventTemplate } from "@/utils/stripe/verify-nostr-auth";
+import {
+  buildMcpRequestProofTemplate,
+  buildStripeAccountStatusProof,
+} from "@/utils/mcp/request-proof";
 import StripeConnectModal from "./StripeConnectModal";
 
 interface StripeConnectBannerProps {
@@ -28,8 +31,9 @@ const StripeConnectBanner: React.FC<StripeConnectBannerProps> = ({
 
     const checkStatus = async () => {
       try {
-        const template = createAuthEventTemplate(pubkey);
-        const signedEvent = await signer.sign(template);
+        const signedEvent = await signer.sign(
+          buildMcpRequestProofTemplate(buildStripeAccountStatusProof(pubkey))
+        );
 
         const res = await fetch("/api/stripe/connect/account-status", {
           method: "POST",

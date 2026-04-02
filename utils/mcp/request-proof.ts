@@ -180,3 +180,39 @@ export function buildOnboardExistingPubkeyProof({
     },
   };
 }
+
+export function buildStripeCreateAccountProof(pubkey: string): McpRequestProof {
+  return {
+    action: "stripe_create_account",
+    method: "POST",
+    path: "/api/stripe/connect/create-account",
+    pubkey,
+  };
+}
+
+export function buildStripeCreateAccountLinkProof({
+  pubkey,
+  accountId,
+}: {
+  pubkey: string;
+  accountId: string;
+}): McpRequestProof {
+  return {
+    action: "stripe_create_account_link",
+    method: "POST",
+    path: "/api/stripe/connect/create-account-link",
+    pubkey,
+    fields: {
+      accountId,
+    },
+  };
+}
+
+export function buildStripeAccountStatusProof(pubkey: string): McpRequestProof {
+  return {
+    action: "stripe_account_status",
+    method: "POST",
+    path: "/api/stripe/connect/account-status",
+    pubkey,
+  };
+}

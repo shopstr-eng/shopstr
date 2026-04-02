@@ -4,7 +4,11 @@ import {
   getStripeConnectAccount,
   upsertStripeConnectAccount,
 } from "@/utils/db/db-service";
-import { verifyNostrAuth } from "@/utils/stripe/verify-nostr-auth";
+import { buildStripeCreateAccountProof } from "@/utils/mcp/request-proof";
+import {
+  extractSignedEventFromRequest,
+  verifyAndConsumeSignedRequestProof,
+} from "@/utils/mcp/request-proof-server";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
   apiVersion: "2025-09-30.clover",
@@ -19,20 +23,25 @@ export default async function handler(
   }
 
   try {
-    const { pubkey, signedEvent } = req.body;
+    const { pubkey } = req.body || {};
 
-    if (!pubkey) {
+    if (!pubkey || typeof pubkey !== "string" || !pubkey.trim()) {
       return res.status(400).json({ error: "pubkey is required" });
     }
 
-    const authResult = verifyNostrAuth(signedEvent, pubkey);
-    if (!authResult.valid) {
-      return res
-        .status(401)
-        .json({ error: authResult.error || "Authentication failed" });
+    const normalizedPubkey = pubkey.trim();
+
+    const signedEvent = extractSignedEventFromRequest(req);
+    const proofResult = await verifyAndConsumeSignedRequestProof(
+      signedEvent,
+      buildStripeCreateAccountProof(normalizedPubkey)
+    );
+
+    if (!proofResult.ok) {
+      return res.status(proofResult.status).json({ error: proofResult.error });
     }
 
-    const existing = await getStripeConnectAccount(pubkey);
+    const existing = await getStripeConnectAccount(normalizedPubkey);
     if (existing && existing.stripe_account_id) {
       return res.status(200).json({
         accountId: existing.stripe_account_id,
@@ -43,11 +52,17 @@ export default async function handler(
     const account = await stripe.accounts.create({
       type: "express",
       metadata: {
-        pubkey,
+        pubkey: normalizedPubkey,
       },
     });
 
-    await upsertStripeConnectAccount(pubkey, account.id, false, false, false);
+    await upsertStripeConnectAccount(
+      normalizedPubkey,
+      account.id,
+      false,
+      false,
+      false
+    );
 
     return res.status(200).json({
       accountId: account.id,

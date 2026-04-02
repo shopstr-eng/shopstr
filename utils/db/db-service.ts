@@ -421,6 +421,17 @@ async function initializeTables(): Promise<void> {
       CREATE INDEX IF NOT EXISTS idx_mcp_orders_seller_pubkey ON mcp_orders(seller_pubkey);
       CREATE INDEX IF NOT EXISTS idx_mcp_orders_api_key_id ON mcp_orders(api_key_id);
 
+      -- MCP Request Proofs table (replay protection for signed Nostr auth proofs)
+      CREATE TABLE IF NOT EXISTS mcp_request_proofs (
+          event_id TEXT NOT NULL,
+          pubkey TEXT NOT NULL,
+          action TEXT NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY (event_id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_mcp_request_proofs_created_at ON mcp_request_proofs(created_at);
+
       -- Email auth table
       CREATE TABLE IF NOT EXISTS email_auth (
         id SERIAL PRIMARY KEY,

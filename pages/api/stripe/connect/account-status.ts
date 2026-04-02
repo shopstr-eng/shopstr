@@ -4,7 +4,11 @@ import {
   getStripeConnectAccount,
   upsertStripeConnectAccount,
 } from "@/utils/db/db-service";
-import { verifyNostrAuth } from "@/utils/stripe/verify-nostr-auth";
+import { buildStripeAccountStatusProof } from "@/utils/mcp/request-proof";
+import {
+  extractSignedEventFromRequest,
+  verifyAndConsumeSignedRequestProof,
+} from "@/utils/mcp/request-proof-server";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
   apiVersion: "2025-09-30.clover",
@@ -19,20 +23,25 @@ export default async function handler(
   }
 
   try {
-    const { pubkey, signedEvent } = req.body;
+    const { pubkey } = req.body || {};
 
-    if (!pubkey) {
+    if (!pubkey || typeof pubkey !== "string" || !pubkey.trim()) {
       return res.status(400).json({ error: "pubkey is required" });
     }
 
-    const authResult = verifyNostrAuth(signedEvent, pubkey);
-    if (!authResult.valid) {
-      return res
-        .status(401)
-        .json({ error: authResult.error || "Authentication failed" });
+    const normalizedPubkey = pubkey.trim();
+
+    const signedEvent = extractSignedEventFromRequest(req);
+    const proofResult = await verifyAndConsumeSignedRequestProof(
+      signedEvent,
+      buildStripeAccountStatusProof(normalizedPubkey)
+    );
+
+    if (!proofResult.ok) {
+      return res.status(proofResult.status).json({ error: proofResult.error });
     }
 
-    const connectAccount = await getStripeConnectAccount(pubkey);
+    const connectAccount = await getStripeConnectAccount(normalizedPubkey);
 
     if (!connectAccount) {
       return res.status(200).json({
@@ -52,7 +61,7 @@ export default async function handler(
     const payoutsEnabled = account.payouts_enabled || false;
 
     await upsertStripeConnectAccount(
-      pubkey,
+      normalizedPubkey,
       connectAccount.stripe_account_id,
       onboardingComplete,
       chargesEnabled,

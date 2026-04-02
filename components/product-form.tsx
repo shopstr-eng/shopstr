@@ -51,7 +51,10 @@ import {
 } from "@/components/utility-components/nostr-context-provider";
 import { ProductFormValues } from "../utils/types/types";
 import StripeConnectModal from "@/components/stripe-connect/StripeConnectModal";
-import { createAuthEventTemplate } from "@/utils/stripe/verify-nostr-auth";
+import {
+  buildMcpRequestProofTemplate,
+  buildStripeAccountStatusProof,
+} from "@/utils/mcp/request-proof";
 
 interface ProductFormProps {
   handleModalToggle: () => void;
@@ -215,8 +218,11 @@ export default function ProductForm({
     if (showModal && signerPubKey && signer) {
       (async () => {
         try {
-          const template = createAuthEventTemplate(signerPubKey);
-          const signedEvent = await signer.sign(template);
+          const signedEvent = await signer.sign(
+            buildMcpRequestProofTemplate(
+              buildStripeAccountStatusProof(signerPubKey)
+            )
+          );
           const res = await fetch("/api/stripe/connect/account-status", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -481,8 +487,9 @@ export default function ProductForm({
 
     if (pubkey && !isEdit && signer) {
       try {
-        const template = createAuthEventTemplate(pubkey);
-        const signedEvent = await signer.sign(template);
+        const signedEvent = await signer.sign(
+          buildMcpRequestProofTemplate(buildStripeAccountStatusProof(pubkey))
+        );
         const res = await fetch("/api/stripe/connect/account-status", {
           method: "POST",
           headers: { "Content-Type": "application/json" },

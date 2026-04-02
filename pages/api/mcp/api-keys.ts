@@ -6,7 +6,6 @@ import {
   initializeApiKeysTable,
   ApiKeyPermission,
 } from "@/utils/mcp/auth";
-import { veFrifyNostrAuth } from "@/utils/stripe/verify-nostr-auth";
 import {
   buildApiKeyCreateProof,
   buildApiKeyRevokeProof,

@@ -12,7 +12,12 @@ import {
   WHITEBUTTONCLASSNAMES,
 } from "@/utils/STATIC-VARIABLES";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
-import { createAuthEventTemplate } from "@/utils/stripe/verify-nostr-auth";
+import {
+  buildMcpRequestProofTemplate,
+  buildStripeAccountStatusProof,
+  buildStripeCreateAccountProof,
+  buildStripeCreateAccountLinkProof,
+} from "@/utils/mcp/request-proof";
 
 const OnboardingStripeConnect = () => {
   const router = useRouter();
@@ -25,20 +30,14 @@ const OnboardingStripeConnect = () => {
   const isSuccess = router.query.success === "true";
   const isRefresh = router.query.refresh === "true";
 
-  const signAuthEvent = async () => {
-    if (!signer || !signer.sign || !pubkey) {
-      throw new Error("No signer available");
-    }
-    const template = createAuthEventTemplate(pubkey);
-    return await signer.sign(template);
-  };
-
   useEffect(() => {
     if (isSuccess && pubkey && signer) {
       setIsCheckingStatus(true);
       const checkStatus = async () => {
         try {
-          const signedEvent = await signAuthEvent();
+          const signedEvent = await signer.sign(
+            buildMcpRequestProofTemplate(buildStripeAccountStatusProof(pubkey))
+          );
           const res = await fetch("/api/stripe/connect/account-status", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -72,12 +71,14 @@ const OnboardingStripeConnect = () => {
     setError(null);
 
     try {
-      const signedEvent = await signAuthEvent();
+      const createSignedEvent = await signer.sign(
+        buildMcpRequestProofTemplate(buildStripeCreateAccountProof(pubkey))
+      );
 
       const createRes = await fetch("/api/stripe/connect/create-account", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pubkey, signedEvent }),
+        body: JSON.stringify({ pubkey, signedEvent: createSignedEvent }),
       });
 
       if (!createRes.ok) {
@@ -87,13 +88,19 @@ const OnboardingStripeConnect = () => {
 
       const { accountId } = await createRes.json();
 
+      const linkSignedEvent = await signer.sign(
+        buildMcpRequestProofTemplate(
+          buildStripeCreateAccountLinkProof({ pubkey, accountId })
+        )
+      );
+
       const linkRes = await fetch("/api/stripe/connect/create-account-link", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           accountId,
           pubkey,
-          signedEvent,
+          signedEvent: linkSignedEvent,
           returnPath: "/onboarding/stripe-connect?success=true",
           refreshPath: "/onboarding/stripe-connect?refresh=true",
         }),
