@@ -176,7 +176,7 @@ export default function SignInModal({
 
   const handleNsecSignup = async () => {
     if (validPrivateKey === "success" || isNcryptsec) {
-      if (passphrase === "" || passphrase === null) {
+      if (!passphrase || passphrase.trim() === "") {
         setFailureText("No passphrase provided!");
         setShowFailureModal(true);
       } else {
@@ -250,7 +250,7 @@ export default function SignInModal({
 
   const handleSignIn = async () => {
     if (validPrivateKey === "success" || isNcryptsec) {
-      if (passphrase === "" || passphrase === null) {
+      if (!passphrase || passphrase.trim() === "") {
         setFailureText("No passphrase provided!");
         setShowFailureModal(true);
       } else {
