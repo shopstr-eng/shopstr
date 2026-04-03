@@ -23,6 +23,9 @@ import {
 } from "@/components/utility-components/nostr-context-provider";
 import { getListingSlug } from "@/utils/url-slugs";
 
+const escapeRegExp = (value: string) =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 const DisplayProducts = ({
   focusedPubkey,
   selectedCategories,
@@ -276,12 +279,14 @@ const DisplayProducts = ({
   };
 
   const productSatisfiesSearchFilter = (productData: ProductData) => {
-    if (!selectedSearch) return true;
+    const normalizedSearch = selectedSearch.trim();
+
+    if (!normalizedSearch) return true;
     if (!productData.title) return false;
 
-    if (selectedSearch.includes("naddr")) {
+    if (normalizedSearch.includes("naddr")) {
       try {
-        const parsedNaddr = nip19.decode(selectedSearch);
+        const parsedNaddr = nip19.decode(normalizedSearch);
         if (parsedNaddr.type === "naddr") {
           return (
             productData.d === parsedNaddr.data.identifier &&
@@ -294,9 +299,9 @@ const DisplayProducts = ({
       }
     }
 
-    if (selectedSearch.includes("npub")) {
+    if (normalizedSearch.includes("npub")) {
       try {
-        const parsedNpub = nip19.decode(selectedSearch);
+        const parsedNpub = nip19.decode(normalizedSearch);
         if (parsedNpub.type === "npub") {
           return parsedNpub.data === productData.pubkey;
         }
@@ -307,7 +312,7 @@ const DisplayProducts = ({
     }
 
     try {
-      const re = new RegExp(selectedSearch, "gi");
+      const re = new RegExp(escapeRegExp(normalizedSearch), "i");
 
       const titleMatch = productData.title.match(re);
       if (titleMatch && titleMatch.length > 0) return true;
@@ -317,7 +322,7 @@ const DisplayProducts = ({
         if (summaryMatch && summaryMatch.length > 0) return true;
       }
 
-      const numericSearch = parseFloat(selectedSearch);
+      const numericSearch = parseFloat(normalizedSearch);
       if (!isNaN(numericSearch) && productData.price === numericSearch) {
         return true;
       }
