@@ -15,6 +15,8 @@ import {
   ChatsMap,
   ReviewsContextInterface,
   ReviewsContext,
+  ReportsContextInterface,
+  ReportsContext,
   FollowsContextInterface,
   FollowsContext,
   RelaysContextInterface,
@@ -44,6 +46,7 @@ import {
   fetchCashuWallet,
   fetchAllCommunities,
   fetchGiftWrappedChatsAndMessages,
+  fetchReports,
 } from "@/utils/nostr/fetch-service";
 import {
   NostrEvent,
@@ -76,9 +79,8 @@ function Shopstr({ props }: { props: AppProps }) {
       isLoading: true,
       addNewlyCreatedProductEvent: (productEvent: any) => {
         setProductContext((productContext) => {
-          const productEvents = [...productContext.productEvents, productEvent];
           return {
-            productEvents: productEvents,
+            productEvents: [...productContext.productEvents, productEvent],
             isLoading: false,
             addNewlyCreatedProductEvent:
               productContext.addNewlyCreatedProductEvent,
@@ -97,6 +99,35 @@ function Shopstr({ props }: { props: AppProps }) {
             addNewlyCreatedProductEvent:
               productContext.addNewlyCreatedProductEvent,
             removeDeletedProductEvent: productContext.removeDeletedProductEvent,
+          };
+        });
+      },
+    }
+  );
+
+  const [reportsContext, setReportsContext] = useState<ReportsContextInterface>(
+    {
+      reportEvents: [],
+      isLoading: true,
+      addReportEvent: (reportEvent: NostrEvent) => {
+        setReportsContext((reportsContext) => {
+          const reportEventsMap = new Map(
+            reportsContext.reportEvents.map((event) => [event.id, event])
+          );
+          const existingEvent = reportEventsMap.get(reportEvent.id);
+          if (
+            !existingEvent ||
+            reportEvent.created_at >= existingEvent.created_at
+          ) {
+            reportEventsMap.set(reportEvent.id, reportEvent);
+          }
+
+          return {
+            reportEvents: Array.from(reportEventsMap.values()).sort(
+              (a, b) => b.created_at - a.created_at
+            ),
+            isLoading: false,
+            addReportEvent: reportsContext.addReportEvent,
           };
         });
       },
@@ -352,6 +383,19 @@ function Shopstr({ props }: { props: AppProps }) {
     });
   };
 
+  const editReportsContext = (
+    reportEvents: NostrEvent[],
+    isLoading: boolean
+  ) => {
+    setReportsContext((reportsContext) => {
+      return {
+        reportEvents,
+        isLoading,
+        addReportEvent: reportsContext.addReportEvent,
+      };
+    });
+  };
+
   const editShopContext = (
     shopData: Map<string, ShopProfile>,
     isLoading: boolean
@@ -602,6 +646,13 @@ function Shopstr({ props }: { props: AppProps }) {
         }
 
         try {
+          await fetchReports(nostr!, allRelays, productEvents, editReportsContext);
+        } catch (error) {
+          console.error("Error fetching reports:", error);
+          editReportsContext([], false);
+        }
+
+        try {
           await fetchAllCommunities(nostr!, allRelays, editCommunityContext);
         } catch (error) {
           console.error("Error fetching communities:", error);
@@ -652,6 +703,7 @@ function Shopstr({ props }: { props: AppProps }) {
         console.error("Critical error during app initialization:", error);
         editProductContext([], false);
         editReviewsContext(new Map(), new Map(), false);
+        editReportsContext([], false);
         editShopContext(new Map(), false);
         editProfileContext(new Map(), false);
         editChatContext(new Map(), false);
@@ -699,47 +751,49 @@ function Shopstr({ props }: { props: AppProps }) {
               <FollowsContext.Provider value={followsContext}>
                 <ProductContext.Provider value={productContext}>
                   <ReviewsContext.Provider value={reviewsContext}>
-                    <ProfileMapContext.Provider value={profileContext}>
-                      <ShopMapContext.Provider value={shopContext}>
-                        <ChatsContext.Provider
-                          value={
-                            {
-                              chatsMap: chatsMap,
-                              isLoading: isChatLoading,
-                              addNewlyCreatedMessageEvent:
-                                addNewlyCreatedMessageEvent,
-                              markAllMessagesAsRead: markAllMessagesAsRead,
-                              newOrderIds: newOrderIds,
-                            } as ChatsContextInterface
-                          }
-                        >
-                          {![
-                            "/",
-                            "/about",
-                            "/contact",
-                            "/faq",
-                            "/terms",
-                            "/privacy",
-                          ].includes(router.pathname) && (
-                            <TopNav
-                              setFocusedPubkey={setFocusedPubkey}
-                              setSelectedSection={setSelectedSection}
-                            />
-                          )}
-                          <div className="flex">
-                            <main className="flex-1">
-                              <Component
-                                {...pageProps}
-                                focusedPubkey={focusedPubkey}
+                    <ReportsContext.Provider value={reportsContext}>
+                      <ProfileMapContext.Provider value={profileContext}>
+                        <ShopMapContext.Provider value={shopContext}>
+                          <ChatsContext.Provider
+                            value={
+                              {
+                                chatsMap: chatsMap,
+                                isLoading: isChatLoading,
+                                addNewlyCreatedMessageEvent:
+                                  addNewlyCreatedMessageEvent,
+                                markAllMessagesAsRead: markAllMessagesAsRead,
+                                newOrderIds: newOrderIds,
+                              } as ChatsContextInterface
+                            }
+                          >
+                            {![
+                              "/",
+                              "/about",
+                              "/contact",
+                              "/faq",
+                              "/terms",
+                              "/privacy",
+                            ].includes(router.pathname) && (
+                              <TopNav
                                 setFocusedPubkey={setFocusedPubkey}
-                                selectedSection={selectedSection}
                                 setSelectedSection={setSelectedSection}
                               />
-                            </main>
-                          </div>
-                        </ChatsContext.Provider>
-                      </ShopMapContext.Provider>
-                    </ProfileMapContext.Provider>
+                            )}
+                            <div className="flex">
+                              <main className="flex-1">
+                                <Component
+                                  {...pageProps}
+                                  focusedPubkey={focusedPubkey}
+                                  setFocusedPubkey={setFocusedPubkey}
+                                  selectedSection={selectedSection}
+                                  setSelectedSection={setSelectedSection}
+                                />
+                              </main>
+                            </div>
+                          </ChatsContext.Provider>
+                        </ShopMapContext.Provider>
+                      </ProfileMapContext.Provider>
+                    </ReportsContext.Provider>
                   </ReviewsContext.Provider>
                 </ProductContext.Provider>
               </FollowsContext.Provider>
