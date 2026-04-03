@@ -372,7 +372,7 @@ const DisplayProducts = ({
         ) : null}
         {filteredProducts.length > 0 ? (
           <>
-            <div className="grid max-w-full grid-cols-[repeat(auto-fill,minmax(300px,1fr))] justify-items-center gap-4 overflow-x-hidden">
+            <div className="grid max-w-full grid-cols-[repeat(auto-fill,minmax(280px,1fr))] justify-items-stretch gap-4 overflow-x-hidden">
               {getCurrentPageProducts().map(
                 (productData: ProductData, index) => (
                   <ProductCard

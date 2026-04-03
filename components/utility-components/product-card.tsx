@@ -87,8 +87,8 @@ export default function ProductCard({
       <div className="flex flex-col p-4">
         {router.pathname !== "/" && (
           <div className="mb-2 flex items-center justify-between">
-            <div className="flex max-w-[80%] items-center gap-2">
-              <h2 className="truncate text-xl font-semibold text-light-text dark:text-dark-text">
+            <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
+              <h2 className="min-w-0 truncate text-xl font-semibold text-light-text dark:text-dark-text">
                 {productData.title}
               </h2>
               {isZapsnag && productData.pubkey === userPubkey && (
@@ -191,9 +191,9 @@ export default function ProductCard({
 
   return (
     <div
-      className={`${cardHoverStyle} mx-2 my-4 rounded-2xl bg-white shadow-md duration-300 transition-all dark:bg-neutral-900`}
+      className={`${cardHoverStyle} my-4 w-full rounded-2xl bg-white shadow-md duration-300 transition-all dark:bg-neutral-900`}
     >
-      <div className="w-80 overflow-hidden rounded-2xl">
+      <div className="w-full overflow-hidden rounded-2xl">
         {href ? (
           <Link href={href} className="block">
             {content}
