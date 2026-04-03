@@ -73,7 +73,7 @@ async function initializeTables(): Promise<void> {
     client = await dbPool.connect();
 
     await client.query(`
-      -- Products table (kind 30402 - listings)
+      -- Products table (kind 30402 / 30018 - listings)
       CREATE TABLE IF NOT EXISTS product_events (
           id TEXT PRIMARY KEY,
           pubkey TEXT NOT NULL,
@@ -83,7 +83,7 @@ async function initializeTables(): Promise<void> {
           content TEXT NOT NULL,
           sig TEXT NOT NULL,
           cached_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          CONSTRAINT product_events_kind_check CHECK (kind = 30402)
+          CONSTRAINT product_events_kind_check CHECK (kind IN (30402, 30018))
       );
 
       CREATE INDEX IF NOT EXISTS idx_product_events_pubkey ON product_events(pubkey);
@@ -271,6 +271,28 @@ async function initializeTables(): Promise<void> {
     await client.query(`
       DO $$
       BEGIN
+        IF EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conname = 'product_events_kind_check'
+        ) THEN
+          ALTER TABLE product_events DROP CONSTRAINT product_events_kind_check;
+        END IF;
+      EXCEPTION
+        WHEN undefined_object THEN NULL;
+      END $$;
+    `);
+
+    await client.query(`
+      ALTER TABLE product_events
+      ADD CONSTRAINT product_events_kind_check CHECK (kind IN (30402, 30018))
+    `).catch(() => {
+      // Constraint already exists with the expected definition.
+    });
+
+    await client.query(`
+      DO $$
+      BEGIN
         IF NOT EXISTS (
           SELECT 1 FROM information_schema.columns 
           WHERE table_name = 'message_events' AND column_name = 'is_read'
@@ -314,7 +336,7 @@ async function initializeTables(): Promise<void> {
 // Map event kinds to table names
 function getTableForKind(kind: number): string | null {
   // Products
-  if (kind === 30402) return "product_events";
+  if (kind === 30402 || kind === 30018) return "product_events";
 
   // Reviews
   if (kind === 31555) return "review_events";
@@ -804,7 +826,32 @@ export async function deleteCachedEventsByIds(
 
 // Fetch all products from database
 export async function fetchAllProductsFromDb(): Promise<NostrEvent[]> {
-  return fetchCachedEvents(30402);
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    const result = await client.query(
+      `SELECT id, pubkey, created_at, kind, tags, content, sig
+       FROM product_events
+       ORDER BY created_at DESC`
+    );
+
+    return result.rows.map((row) => ({
+      id: row.id,
+      pubkey: row.pubkey,
+      created_at: row.created_at,
+      kind: row.kind,
+      tags: row.tags,
+      content: row.content,
+      sig: row.sig,
+    }));
+  } catch (error) {
+    console.error("Failed to fetch all products from database:", error);
+    return [];
+  } finally {
+    if (client) client.release();
+  }
 }
 
 // Fetch all reviews from database
@@ -1310,15 +1357,21 @@ export async function fetchProductByTitleSlug(
     const result = await client.query(
       `SELECT id, pubkey, created_at, kind, tags, content, sig
        FROM product_events
-       WHERE EXISTS (
-         SELECT 1 FROM jsonb_array_elements(tags) t WHERE t->>0 = 'title'
-       )
        ORDER BY created_at DESC`
     );
     for (const row of result.rows) {
       const tags: string[][] = row.tags;
       const titleTag = tags.find((t) => t[0] === "title");
-      if (titleTag && titleTag[1] && titleToSlug(titleTag[1]) === slug) {
+      let title = titleTag?.[1];
+
+      if (!title && row.kind === 30018) {
+        try {
+          const parsedContent = JSON.parse(row.content || "{}");
+          title = parsedContent.name;
+        } catch {}
+      }
+
+      if (title && titleToSlug(title) === slug) {
         return {
           id: row.id,
           pubkey: row.pubkey,
