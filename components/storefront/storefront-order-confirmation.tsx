@@ -97,7 +97,11 @@ export default function StorefrontOrderConfirmation({
         }
       } catch {}
     }
-    return products.sort(() => Math.random() - 0.5).slice(0, 4);
+    for (let i = products.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [products[i], products[j]] = [products[j], products[i]];
+    }
+    return products.slice(0, 4);
   }, [productContext.productEvents, shopPubkey]);
 
   const formatPaymentMethod = (method: string) => {
