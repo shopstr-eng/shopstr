@@ -65,7 +65,7 @@ export default function ProductCard({
       });
       window.open(`https://njump.me/${nevent}`, "_blank");
     } catch {
-      // console.error("Failed to generate njump link", err);
+      // console.error("Failed to generate njump link");
     }
   };
 
