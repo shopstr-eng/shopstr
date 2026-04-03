@@ -195,9 +195,13 @@ export default function Component() {
         sessionStorage.getItem("sf_seller_pubkey") ||
         localStorage.getItem("sf_seller_pubkey") ||
         "";
-      const fullCart: ProductData[] = localStorage.getItem("cart")
-        ? JSON.parse(localStorage.getItem("cart") as string)
-        : [];
+      let fullCart: ProductData[] = [];
+      try {
+        const raw = localStorage.getItem("cart");
+        if (raw) fullCart = JSON.parse(raw);
+      } catch {
+        localStorage.removeItem("cart");
+      }
 
       let cartList = fullCart;
       if (sfPk) {
@@ -221,7 +225,13 @@ export default function Component() {
       // Load saved discount codes
       const storedDiscounts = localStorage.getItem("cartDiscounts");
       if (storedDiscounts) {
-        const discounts = JSON.parse(storedDiscounts);
+        let discounts;
+        try {
+          discounts = JSON.parse(storedDiscounts);
+        } catch {
+          localStorage.removeItem("cartDiscounts");
+          return;
+        }
         const codes: { [pubkey: string]: string } = {};
         const applied: { [pubkey: string]: number } = {};
 
@@ -325,9 +335,13 @@ export default function Component() {
   };
 
   const handleRemoveFromCart = (productId: string) => {
-    const cartContent = localStorage.getItem("cart")
-      ? JSON.parse(localStorage.getItem("cart") as string)
-      : [];
+    let cartContent: ProductData[] = [];
+    try {
+      const raw = localStorage.getItem("cart");
+      if (raw) cartContent = JSON.parse(raw);
+    } catch {
+      localStorage.removeItem("cart");
+    }
     if (cartContent.length > 0) {
       const updatedCart = cartContent.filter(
         (obj: ProductData) => obj.id !== productId
@@ -373,7 +387,12 @@ export default function Component() {
 
         // Save to localStorage
         const storedDiscounts = localStorage.getItem("cartDiscounts");
-        const discounts = storedDiscounts ? JSON.parse(storedDiscounts) : {};
+        let discounts: { [pubkey: string]: { code: string; percentage: number } } = {};
+        try {
+          if (storedDiscounts) discounts = JSON.parse(storedDiscounts);
+        } catch {
+          localStorage.removeItem("cartDiscounts");
+        }
         discounts[pubkey] = {
           code: code,
           percentage: result.discount_percentage,
@@ -404,7 +423,13 @@ export default function Component() {
     // Remove from localStorage
     const storedDiscounts = localStorage.getItem("cartDiscounts");
     if (storedDiscounts) {
-      const discounts = JSON.parse(storedDiscounts);
+      let discounts;
+      try {
+        discounts = JSON.parse(storedDiscounts);
+      } catch {
+        localStorage.removeItem("cartDiscounts");
+        return;
+      }
       delete discounts[pubkey];
       localStorage.setItem("cartDiscounts", JSON.stringify(discounts));
     }
