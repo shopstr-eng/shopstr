@@ -1,7 +1,7 @@
 import "tailwindcss/tailwind.css";
 import type { AppProps } from "next/app";
 import "../styles/globals.css";
-import { useState, useEffect, useCallback, useContext } from "react";
+import { useState, useEffect, useCallback, useContext, useRef } from "react";
 import { useRouter } from "next/router";
 import {
   ProfileMapContext,
@@ -352,6 +352,37 @@ function Shopstr({ props }: { props: AppProps }) {
       cashuProofs: [],
       isLoading: true,
     });
+  const hydratedMarketplaceProductIdsRef = useRef<Set<string>>(new Set());
+  const pendingMarketplaceProductIdsRef = useRef<Set<string>>(new Set());
+  const didCompleteInitialMarketplaceHydrationRef = useRef(false);
+
+  const mergeReportsContext = (nextReports: NostrEvent[]) => {
+    if (nextReports.length === 0) return;
+
+    setReportsContext((reportsContext) => {
+      const mergedReports = new Map(
+        reportsContext.reportEvents.map((event) => [event.id, event])
+      );
+
+      nextReports.forEach((reportEvent) => {
+        const existingReport = mergedReports.get(reportEvent.id);
+        if (
+          !existingReport ||
+          reportEvent.created_at >= existingReport.created_at
+        ) {
+          mergedReports.set(reportEvent.id, reportEvent);
+        }
+      });
+
+      return {
+        reportEvents: Array.from(mergedReports.values()).sort(
+          (a, b) => b.created_at - a.created_at
+        ),
+        isLoading: false,
+        addReportEvent: reportsContext.addReportEvent,
+      };
+    });
+  };
 
   const editProductContext = (
     productEvents: NostrEvent[],
@@ -493,6 +524,7 @@ function Shopstr({ props }: { props: AppProps }) {
   /** FETCH initial FOLLOWS, RELAYS, PRODUCTS, and PROFILES **/
   useEffect(() => {
     async function fetchData() {
+      let fetchedProductEvents: NostrEvent[] = [];
       try {
         // Check login status
         if (getLocalStorageData().signInMethod === "amber") {
@@ -565,6 +597,7 @@ function Shopstr({ props }: { props: AppProps }) {
             editProductContext
           );
           productEvents = result.productEvents;
+          fetchedProductEvents = result.productEvents;
           profileSetFromProducts = result.profileSetFromProducts;
         } catch (error) {
           console.error("Error fetching products:", error);
@@ -652,6 +685,11 @@ function Shopstr({ props }: { props: AppProps }) {
           editReportsContext([], false);
         }
 
+        hydratedMarketplaceProductIdsRef.current = new Set(
+          fetchedProductEvents.map((event) => event.id).filter(Boolean)
+        );
+        didCompleteInitialMarketplaceHydrationRef.current = true;
+
         try {
           await fetchAllCommunities(nostr!, allRelays, editCommunityContext);
         } catch (error) {
@@ -712,6 +750,8 @@ function Shopstr({ props }: { props: AppProps }) {
         editBlossomContext([], false);
         editCashuWalletContext([], [], [], false);
         editCommunityContext(new Map(), false);
+      } finally {
+        didCompleteInitialMarketplaceHydrationRef.current = true;
       }
     }
 
@@ -719,6 +759,74 @@ function Shopstr({ props }: { props: AppProps }) {
     window.addEventListener("storage", fetchData);
     return () => window.removeEventListener("storage", fetchData);
   }, [nostr, signer, isLoggedIn]);
+
+  useEffect(() => {
+    if (
+      !nostr ||
+      !didCompleteInitialMarketplaceHydrationRef.current ||
+      productContext.isLoading ||
+      !Array.isArray(productContext.productEvents)
+    ) {
+      return;
+    }
+
+    const allRelays = [
+      ...new Set([...relaysContext.relayList, ...relaysContext.readRelayList]),
+    ];
+    const effectiveRelays = allRelays.length > 0 ? allRelays : getDefaultRelays();
+
+    const nextProducts = (productContext.productEvents as NostrEvent[]).filter(
+      (event) =>
+        event.id &&
+        !hydratedMarketplaceProductIdsRef.current.has(event.id) &&
+        !pendingMarketplaceProductIdsRef.current.has(event.id)
+    );
+
+    if (nextProducts.length === 0) return;
+
+    nextProducts.forEach((event) => {
+      pendingMarketplaceProductIdsRef.current.add(event.id);
+    });
+
+    let isActive = true;
+
+    const hydrateReportDelta = async () => {
+      try {
+        const { reportEvents } = await fetchReports(
+          nostr,
+          effectiveRelays,
+          nextProducts,
+          () => {}
+        );
+
+        if (!isActive) return;
+
+        mergeReportsContext(reportEvents);
+
+        nextProducts.forEach((event) => {
+          hydratedMarketplaceProductIdsRef.current.add(event.id);
+        });
+      } catch (error) {
+        console.error("Failed to hydrate report data for new listings:", error);
+      } finally {
+        nextProducts.forEach((event) => {
+          pendingMarketplaceProductIdsRef.current.delete(event.id);
+        });
+      }
+    };
+
+    hydrateReportDelta();
+
+    return () => {
+      isActive = false;
+    };
+  }, [
+    nostr,
+    productContext.isLoading,
+    productContext.productEvents,
+    relaysContext.readRelayList,
+    relaysContext.relayList,
+  ]);
 
   useEffect(() => {
     if ("serviceWorker" in navigator) {
