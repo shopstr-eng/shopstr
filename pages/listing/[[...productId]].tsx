@@ -38,6 +38,12 @@ import {
   fetchProductByTitleSlug,
 } from "@/utils/db/db-service";
 import { NostrEvent } from "@/utils/types/types";
+import { NostrContext } from "@/components/utility-components/nostr-context-provider";
+import {
+  getDefaultRelays,
+  getLocalStorageData,
+} from "@/utils/nostr/nostr-helper-functions";
+import { fetchProductByIdentifierFromRelays } from "@/utils/nostr/fetch-service";
 
 type ListingPageProps = {
   ogMeta: OgMetaProps;
@@ -191,6 +197,7 @@ export const getServerSideProps: GetServerSideProps<ListingPageProps> = async (
 
 const Listing = ({ initialProductEvent }: ListingPageProps) => {
   const router = useRouter();
+  const { nostr } = useContext(NostrContext);
   const initialListingState = getListingStateFromEvent(initialProductEvent);
   const [productData, setProductData] = useState<ProductData | undefined>(
     initialListingState.parsedProduct
@@ -311,6 +318,58 @@ const Listing = ({ initialProductEvent }: ListingPageProps) => {
       }
     }
   }, [productContext.isLoading, productContext.productEvents, productIdString]);
+
+  useEffect(() => {
+    if (!nostr || !router.isReady || !productIdString || productData) return;
+    if (relayFetchAttemptedRef.current === productIdString) return;
+
+    const nostrManager = nostr;
+    relayFetchAttemptedRef.current = productIdString;
+
+    let isActive = true;
+
+    async function fetchListingFromRelays() {
+      const { relays, readRelays } = getLocalStorageData();
+      const targetRelays = [
+        ...new Set([...(relays || []), ...(readRelays || [])]),
+      ];
+      const effectiveRelays =
+        targetRelays.length > 0 ? targetRelays : getDefaultRelays();
+
+      const fetchedEvent = await fetchProductByIdentifierFromRelays(
+        nostrManager,
+        effectiveRelays,
+        productIdString
+      );
+
+      if (!fetchedEvent || !isActive) return;
+
+      const existingEvents = Array.isArray(productContext.productEvents)
+        ? productContext.productEvents
+        : [];
+      if (!existingEvents.some((event: Event) => event.id === fetchedEvent.id)) {
+        productContext.addNewlyCreatedProductEvent(fetchedEvent);
+      }
+
+      const nextState = getListingStateFromEvent(fetchedEvent);
+      setRawEvent(nextState.rawEvent);
+      setIsZapsnag(nextState.isZapsnag);
+      setProductData(nextState.parsedProduct);
+    }
+
+    fetchListingFromRelays();
+
+    return () => {
+      isActive = false;
+    };
+  }, [
+    nostr,
+    productContext.addNewlyCreatedProductEvent,
+    productContext.productEvents,
+    productData,
+    productIdString,
+    router.isReady,
+  ]);
 
   return (
     <StorefrontThemeWrapper sellerPubkey={sfSellerPubkey}>
