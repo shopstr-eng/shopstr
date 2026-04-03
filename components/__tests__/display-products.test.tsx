@@ -21,10 +21,16 @@ jest.mock("next/router", () => ({
   })),
 }));
 
-jest.mock("../utility-components/product-card", () =>
-  function MockProductCard({ productData }: { productData: { title: string } }) {
-    return <div>{productData.title}</div>;
-  }
+jest.mock(
+  "../utility-components/product-card",
+  () =>
+    function MockProductCard({
+      productData,
+    }: {
+      productData: { title: string };
+    }) {
+      return <div>{productData.title}</div>;
+    }
 );
 
 jest.mock("../display-product-modal", () => () => null);
@@ -38,7 +44,9 @@ jest.mock("@/utils/url-slugs", () => ({
 describe("DisplayProducts search filtering", () => {
   it("matches literal special characters in search queries", async () => {
     render(
-      <SignerContext.Provider value={{ pubkey: "viewer-pubkey", isLoggedIn: true }}>
+      <SignerContext.Provider
+        value={{ pubkey: "viewer-pubkey", isLoggedIn: true }}
+      >
         <NostrContext.Provider value={{ nostr: {} as any }}>
           <ProfileMapContext.Provider
             value={{
