@@ -66,6 +66,9 @@ jest.mock("@heroicons/react/24/outline", () => ({
   ArrowRightStartOnRectangleIcon: () => <div data-testid="icon-logout" />,
   ClipboardIcon: () => <div data-testid="icon-clipboard" />,
   CheckIcon: () => <div data-testid="icon-check" />,
+  ExclamationTriangleIcon: () => <div data-testid="icon-report" />,
+  GlobeAltIcon: () => <div data-testid="icon-globe" />,
+  CheckCircleIcon: () => <div data-testid="icon-success" />,
 }));
 
 Object.defineProperty(navigator, "clipboard", {
@@ -237,5 +240,15 @@ describe("ProfileWithDropdown", () => {
     expect(screen.queryByTestId("icon-check")).not.toBeInTheDocument();
 
     jest.useRealTimers();
+  });
+
+  it('renders "Report Profile" when requested', () => {
+    renderWithProviders(
+      <ProfileWithDropdown pubkey={pubkey} dropDownKeys={["report_profile"]} />,
+      { isLoggedIn: true }
+    );
+
+    expect(screen.getByText("Report Profile")).toBeInTheDocument();
+    expect(screen.getByTestId("icon-report")).toBeInTheDocument();
   });
 });

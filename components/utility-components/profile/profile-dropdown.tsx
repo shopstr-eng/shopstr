@@ -1,5 +1,9 @@
 import { LogOut } from "@/utils/nostr/nostr-helper-functions";
-import { ProfileMapContext, ShopMapContext } from "@/utils/context/context";
+import {
+  ProfileMapContext,
+  ReportsContext,
+  ShopMapContext,
+} from "@/utils/context/context";
 import {
   Dropdown,
   DropdownItem,
@@ -20,17 +24,28 @@ import {
   ClipboardIcon,
   Cog6ToothIcon,
   GlobeAltIcon,
+  ExclamationTriangleIcon,
   UserIcon,
 } from "@heroicons/react/24/outline";
 import { useRouter } from "next/router";
-import { SignerContext } from "@/components/utility-components/nostr-context-provider";
+import {
+  NostrContext,
+  SignerContext,
+} from "@/components/utility-components/nostr-context-provider";
+import {
+  publishReportEvent,
+  ReportType,
+} from "@/utils/nostr/nostr-helper-functions";
+import ReportEventModal from "../modals/report-event-modal";
 import SignInModal from "../../sign-in/SignInModal";
+import SuccessModal from "../success-modal";
 
 type DropDownKeys =
   | "shop"
   | "shop_profile"
   | "storefront"
   | "inquiry"
+  | "report_profile"
   | "settings"
   | "user_profile"
   | "logout"
@@ -55,8 +70,12 @@ export const ProfileWithDropdown = ({
   const shopMapContext = useContext(ShopMapContext);
   const npub = pubkey ? nip19.npubEncode(pubkey) : "";
   const router = useRouter();
-  const { isLoggedIn } = useContext(SignerContext);
+  const reportsContext = useContext(ReportsContext);
+  const { nostr } = useContext(NostrContext);
+  const { isLoggedIn, signer } = useContext(SignerContext);
   const { isOpen, onOpen, onClose } = useDisclosure();
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   useEffect(() => {
     const profileMap = profileContext.profileData;
@@ -135,6 +154,20 @@ export const ProfileWithDropdown = ({
       },
       label: "Send Inquiry",
     },
+    report_profile: {
+      key: "report_profile",
+      color: "danger",
+      className: "text-light-text dark:text-dark-text",
+      startContent: <ExclamationTriangleIcon className={"h-5 w-5"} />,
+      onClick: () => {
+        if (isLoggedIn) {
+          setShowReportModal(true);
+        } else {
+          onOpen();
+        }
+      },
+      label: "Report Profile",
+    },
     user_profile: {
       key: "user_profile",
       color: "default",
@@ -187,6 +220,27 @@ export const ProfileWithDropdown = ({
     },
   };
 
+  const handleSubmitProfileReport = async (
+    reportType: ReportType,
+    content: string
+  ) => {
+    if (!nostr || !signer) {
+      throw new Error("Missing nostr manager or signer");
+    }
+
+    const signedEvent = await publishReportEvent(nostr, signer, {
+      content,
+      reportType,
+      reportedPubkey: pubkey,
+    });
+
+    if (signedEvent) {
+      reportsContext.addReportEvent(signedEvent);
+    }
+
+    setShowSuccessModal(true);
+  };
+
   return (
     <>
       <Dropdown placement="bottom-start">
@@ -228,6 +282,17 @@ export const ProfileWithDropdown = ({
           }}
         </DropdownMenu>
       </Dropdown>
+      <ReportEventModal
+        isOpen={showReportModal}
+        onClose={() => setShowReportModal(false)}
+        targetLabel="profile"
+        onSubmit={handleSubmitProfileReport}
+      />
+      <SuccessModal
+        bodyText="Your report has been published."
+        isOpen={showSuccessModal}
+        onClose={() => setShowSuccessModal(false)}
+      />
       <SignInModal isOpen={isOpen} onClose={onClose} />
     </>
   );
