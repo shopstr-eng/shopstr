@@ -25,6 +25,7 @@ import { NostrEvent } from "@/utils/types/types";
 export default function Landing() {
   const router = useRouter();
   const { isOpen, onOpen, onClose } = useDisclosure();
+  const [isSellerFlow, setIsSellerFlow] = useState(false);
   const productEventContext = useContext(ProductContext);
 
   const [parsedProducts, setParsedProducts] = useState<ProductData[]>([]);
@@ -101,7 +102,10 @@ export default function Landing() {
             Start Shopping
           </Button>
           <button
-            onClick={onOpen}
+            onClick={() => {
+              setIsSellerFlow(true);
+              onOpen();
+            }}
             className="flex items-center gap-1.5 text-lg font-medium text-shopstr-purple underline-offset-4 hover:underline dark:text-shopstr-yellow"
           >
             Start Selling
@@ -605,7 +609,14 @@ export default function Landing() {
         </div>
       </section>
 
-      <SignInModal isOpen={isOpen} onClose={onClose} />
+      <SignInModal
+        isOpen={isOpen}
+        onClose={() => {
+          setIsSellerFlow(false);
+          onClose();
+        }}
+        sellerFlow={isSellerFlow}
+      />
 
       {/* Footer */}
       <footer className="w-full bg-light-fg px-4 py-8 dark:bg-dark-fg">

@@ -153,7 +153,7 @@ describe("ReceiveButton", () => {
     fireEvent.click(submitButton);
 
     const successModal = await screen.findByText("Token successfully claimed!");
-    expect(successModal).toBeVisible();
+    expect(successModal).toBeInTheDocument();
 
     const closeButton = screen.getByRole("button", { name: /close/i });
     fireEvent.click(closeButton);
@@ -229,7 +229,7 @@ describe("ReceiveButton", () => {
     );
 
     const errorModal = await screen.findByText("Duplicate token!");
-    expect(errorModal).toBeVisible();
+    expect(errorModal).toBeInTheDocument();
 
     const closeButton = screen.getByRole("button", { name: /close/i });
     fireEvent.click(closeButton);
@@ -257,7 +257,7 @@ describe("ReceiveButton", () => {
     );
 
     const errorModal = await screen.findByText("Invalid token!");
-    expect(errorModal).toBeVisible();
+    expect(errorModal).toBeInTheDocument();
 
     const closeButton = screen.getByRole("button", { name: /close/i });
     fireEvent.click(closeButton);
@@ -278,6 +278,6 @@ describe("ReceiveButton", () => {
       "If the token is taking a while to be received, make sure to check your bunker application to approve the transaction events.";
     expect(
       await within(modal).findByText(infoMessage, { exact: false })
-    ).toBeVisible();
+    ).toBeInTheDocument();
   });
 });

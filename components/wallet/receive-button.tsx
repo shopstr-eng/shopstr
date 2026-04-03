@@ -19,6 +19,7 @@ import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
   getLocalStorageData,
   publishProofEvent,
+  publishWalletEvent,
 } from "@/utils/nostr/nostr-helper-functions";
 import {
   CashuMint,
@@ -92,6 +93,7 @@ const ReceiveButton = () => {
         if (!mints.includes(tokenMint)) {
           const updatedMints = [...mints, tokenMint];
           localStorage.setItem("mints", JSON.stringify(updatedMints));
+          await publishWalletEvent(nostr!, signer!);
         }
         setIsClaimed(true);
         handleToggleReceiveModal();

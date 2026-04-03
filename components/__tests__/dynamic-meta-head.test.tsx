@@ -57,7 +57,9 @@ describe("DynamicHead", () => {
       />
     );
     await waitFor(() => {
-      expect(document.title).toBe("Shopstr");
+      expect(document.title).toBe(
+        "Shopstr | Bitcoin-Native Nostr Marketplace | Shop Freely"
+      );
     });
   });
 
@@ -128,7 +130,11 @@ describe("DynamicHead", () => {
           profileData={new Map()}
         />
       );
-      await waitFor(() => expect(document.title).toBe("Shopstr"));
+      await waitFor(() =>
+        expect(document.title).toBe(
+          "Shopstr | Bitcoin-Native Nostr Marketplace | Shop Freely"
+        )
+      );
     });
 
     test("should use fallback image for a shop with picture set to null", async () => {
@@ -162,7 +168,9 @@ describe("DynamicHead", () => {
         />
       );
       await waitFor(() =>
-        expect(getMetaContent("og:image")).toBe("/shopstr-2000x2000.png")
+        expect(getMetaContent("og:image")).toBe(
+          "https://shopstr.market/shopstr-2000x2000.png"
+        )
       );
     });
   });
@@ -211,7 +219,9 @@ describe("DynamicHead", () => {
         />
       );
       await waitFor(() => expect(document.title).toBe("Shopstr Listing"));
-      expect(getMetaContent("og:image")).toBe("/shopstr-2000x2000.png");
+      expect(getMetaContent("og:image")).toBe(
+        "https://shopstr.market/shopstr-2000x2000.png"
+      );
     });
 
     test("should render fallback tags for a listing when parsing fails", async () => {
