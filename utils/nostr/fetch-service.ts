@@ -383,6 +383,7 @@ export const fetchProfile = async (
         if (response.ok) {
           const profilesFromDb = await response.json();
           for (const event of profilesFromDb) {
+            if (event.kind !== 0) continue;
             if (pubkeyProfilesToFetch.includes(event.pubkey)) {
               try {
                 const content = JSON.parse(event.content);
@@ -430,6 +431,7 @@ export const fetchProfile = async (
       const fetchedEvents = await nostr.fetch([subParams], {}, relays);
 
       for (const event of fetchedEvents) {
+        if (event.kind !== 0) continue;
         const existing = profileMap.get(event.pubkey);
         if (
           existing === null ||
