@@ -32,6 +32,7 @@ import {
 import {
   ReviewsContext,
   ProductContext,
+  ReportsContext,
   ShopMapContext,
 } from "@/utils/context/context";
 import FreeShippingNotification from "../free-shipping-notification";
@@ -39,11 +40,19 @@ import FailureModal from "../utility-components/failure-modal";
 import SuccessModal from "../utility-components/success-modal";
 import SignInModal from "../sign-in/SignInModal";
 import currencySelection from "../../public/currencySelection.json";
-import { SignerContext } from "@/components/utility-components/nostr-context-provider";
+import {
+  NostrContext,
+  SignerContext,
+} from "@/components/utility-components/nostr-context-provider";
 import VolumeSelector from "./volume-selector";
 import BulkSelector from "./bulk-selector";
 import ZapsnagButton from "@/components/ZapsnagButton";
 import { RawEventModal, EventIdModal } from "./modals/event-modals";
+import ReportEventModal from "./modals/report-event-modal";
+import {
+  publishReportEvent,
+  ReportType,
+} from "@/utils/nostr/nostr-helper-functions";
 
 const SUMMARY_CHARACTER_LIMIT = 100;
 
@@ -64,7 +73,9 @@ export default function CheckoutCard({
   uniqueKey?: string;
   rawEvent?: Event;
 }) {
-  const { pubkey: userPubkey, isLoggedIn } = useContext(SignerContext);
+  const reportsContext = useContext(ReportsContext);
+  const { nostr } = useContext(NostrContext);
+  const { pubkey: userPubkey, isLoggedIn, signer } = useContext(SignerContext);
   const productEventContext = useContext(ProductContext);
   const shopMapContext = useContext(ShopMapContext);
   const { isOpen, onOpen, onClose } = useDisclosure();
@@ -72,6 +83,7 @@ export default function CheckoutCard({
     useState(false);
   const [showRawEventModal, setShowRawEventModal] = useState(false);
   const [showEventIdModal, setShowEventIdModal] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
 
   const router = useRouter();
 
@@ -96,6 +108,7 @@ export default function CheckoutCard({
   const [showFailureModal, setShowFailureModal] = useState(false);
   const [failureText, setFailureText] = useState("");
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successText, setSuccessText] = useState("Listing URL copied to clipboard!");
 
   const [cart, setCart] = useState<ProductData[]>([]);
   const [selectedVolume, setSelectedVolume] = useState<string>("");
@@ -357,8 +370,40 @@ export default function CheckoutCard({
       navigator.clipboard.writeText(
         `${window.location.origin}/listing/${listingPath}`
       );
+      setSuccessText("Listing URL copied to clipboard!");
       setShowSuccessModal(true);
     }
+  };
+
+  const openReportFlow = () => {
+    if (isLoggedIn) {
+      setShowReportModal(true);
+    } else {
+      onOpen();
+    }
+  };
+
+  const handleSubmitListingReport = async (
+    reportType: ReportType,
+    content: string
+  ) => {
+    if (!nostr || !signer) {
+      throw new Error("Missing nostr manager or signer");
+    }
+
+    const signedEvent = await publishReportEvent(nostr, signer, {
+      content,
+      reportType,
+      reportedPubkey: productData.pubkey,
+      reportedEventId: productData.id,
+    });
+
+    if (signedEvent) {
+      reportsContext.addReportEvent(signedEvent);
+    }
+
+    setSuccessText("Your report has been published.");
+    setShowSuccessModal(true);
   };
 
   const handleSendMessage = (pubkeyToOpenChatWith: string) => {
@@ -537,7 +582,7 @@ export default function CheckoutCard({
                         dropDownKeys={
                           productData.pubkey === userPubkey
                             ? ["shop_profile"]
-                            : ["shop", "inquiry", "copy_npub"]
+                            : ["shop", "inquiry", "copy_npub", "report_profile"]
                         }
                       />
                       {merchantQuality !== "" && (
@@ -595,18 +640,32 @@ export default function CheckoutCard({
                           </Button>
                         </DropdownTrigger>
                         <DropdownMenu aria-label="Event Actions">
-                          <DropdownItem
-                            key="view-raw"
-                            onPress={() => setShowRawEventModal(true)}
-                          >
-                            View Raw Event
-                          </DropdownItem>
-                          <DropdownItem
-                            key="view-id"
-                            onPress={() => setShowEventIdModal(true)}
-                          >
-                            View Event ID
-                          </DropdownItem>
+                          {[
+                            <DropdownItem
+                              key="view-raw"
+                              onPress={() => setShowRawEventModal(true)}
+                            >
+                              View Raw Event
+                            </DropdownItem>,
+                            <DropdownItem
+                              key="view-id"
+                              onPress={() => setShowEventIdModal(true)}
+                            >
+                              View Event ID
+                            </DropdownItem>,
+                            ...(productData.pubkey !== userPubkey
+                              ? [
+                                  <DropdownItem
+                                    key="report-listing"
+                                    color="danger"
+                                    className="text-danger"
+                                    onPress={openReportFlow}
+                                  >
+                                    Report Listing
+                                  </DropdownItem>,
+                                ]
+                              : []),
+                          ]}
                         </DropdownMenu>
                       </Dropdown>
                     )}
@@ -846,7 +905,12 @@ export default function CheckoutCard({
                                 dropDownKeys={
                                   reviewerPubkey === userPubkey
                                     ? ["shop_profile"]
-                                    : ["shop", "inquiry", "copy_npub"]
+                                    : [
+                                        "shop",
+                                        "inquiry",
+                                        "copy_npub",
+                                        "report_profile",
+                                      ]
                                 }
                               />
                             </div>
@@ -958,9 +1022,15 @@ export default function CheckoutCard({
           onClose={() => setShowFailureModal(false)}
         />
         <SuccessModal
-          bodyText="Listing URL copied to clipboard!"
+          bodyText={successText}
           isOpen={showSuccessModal}
           onClose={() => setShowSuccessModal(false)}
+        />
+        <ReportEventModal
+          isOpen={showReportModal}
+          onClose={() => setShowReportModal(false)}
+          targetLabel="listing"
+          onSubmit={handleSubmitListingReport}
         />
         <RawEventModal
           isOpen={showRawEventModal}

@@ -38,6 +38,20 @@ import {
   fetchProductByTitleSlug,
 } from "@/utils/db/db-service";
 import { NostrEvent } from "@/utils/types/types";
+import {
+  NostrContext,
+  SignerContext,
+} from "@/components/utility-components/nostr-context-provider";
+import {
+  ReportsContext,
+} from "@/utils/context/context";
+import ReportEventModal from "@/components/utility-components/modals/report-event-modal";
+import SuccessModal from "@/components/utility-components/success-modal";
+import SignInModal from "@/components/sign-in/SignInModal";
+import {
+  publishReportEvent,
+  ReportType,
+} from "@/utils/nostr/nostr-helper-functions";
 
 type ListingPageProps = {
   ogMeta: OgMetaProps;
@@ -111,6 +125,9 @@ export const getServerSideProps: GetServerSideProps<ListingPageProps> = async (
 
 const Listing = () => {
   const router = useRouter();
+  const { nostr } = useContext(NostrContext);
+  const reportsContext = useContext(ReportsContext);
+  const { signer, isLoggedIn, pubkey: userPubkey } = useContext(SignerContext);
   const [productData, setProductData] = useState<ProductData | undefined>(
     undefined
   );
@@ -119,14 +136,47 @@ const Listing = () => {
   const [rawEvent, setRawEvent] = useState<Event | undefined>(undefined);
   const [showRawEventModal, setShowRawEventModal] = useState(false);
   const [showEventIdModal, setShowEventIdModal] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [sfSellerPubkey, setSfSellerPubkey] = useState("");
 
   const [invoiceIsPaid, setInvoiceIsPaid] = useState(false);
   const [invoiceGenerationFailed, setInvoiceGenerationFailed] = useState(false);
   const [cashuPaymentSent, setCashuPaymentSent] = useState(false);
   const [cashuPaymentFailed, setCashuPaymentFailed] = useState(false);
+  const [showSignInModal, setShowSignInModal] = useState(false);
 
   const productContext = useContext(ProductContext);
+
+  const openReportFlow = () => {
+    if (isLoggedIn) {
+      setShowReportModal(true);
+    } else {
+      setShowSignInModal(true);
+    }
+  };
+
+  const handleSubmitListingReport = async (
+    reportType: ReportType,
+    content: string
+  ) => {
+    if (!productData || !nostr || !signer) {
+      throw new Error("Missing product, nostr manager, or signer");
+    }
+
+    const signedEvent = await publishReportEvent(nostr, signer, {
+      content,
+      reportType,
+      reportedPubkey: productData.pubkey,
+      reportedEventId: productData.id,
+    });
+
+    if (signedEvent) {
+      reportsContext.addReportEvent(signedEvent);
+    }
+
+    setShowSuccessModal(true);
+  };
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -237,18 +287,32 @@ const Listing = () => {
                           </Button>
                         </DropdownTrigger>
                         <DropdownMenu aria-label="Event Actions">
-                          <DropdownItem
-                            key="view-raw"
-                            onPress={() => setShowRawEventModal(true)}
-                          >
-                            View Raw Event
-                          </DropdownItem>
-                          <DropdownItem
-                            key="view-id"
-                            onPress={() => setShowEventIdModal(true)}
-                          >
-                            View Event ID
-                          </DropdownItem>
+                          {[
+                            <DropdownItem
+                              key="view-raw"
+                              onPress={() => setShowRawEventModal(true)}
+                            >
+                              View Raw Event
+                            </DropdownItem>,
+                            <DropdownItem
+                              key="view-id"
+                              onPress={() => setShowEventIdModal(true)}
+                            >
+                              View Event ID
+                            </DropdownItem>,
+                            ...(productData.pubkey !== userPubkey
+                              ? [
+                                  <DropdownItem
+                                    key="report-listing"
+                                    color="danger"
+                                    className="text-danger"
+                                    onPress={openReportFlow}
+                                  >
+                                    Report Listing
+                                  </DropdownItem>,
+                                ]
+                              : []),
+                          ]}
                         </DropdownMenu>
                       </Dropdown>
                     )}
@@ -270,6 +334,21 @@ const Listing = () => {
                 isOpen={showEventIdModal}
                 onClose={() => setShowEventIdModal(false)}
                 rawEvent={rawEvent}
+              />
+              <ReportEventModal
+                isOpen={showReportModal}
+                onClose={() => setShowReportModal(false)}
+                targetLabel="listing"
+                onSubmit={handleSubmitListingReport}
+              />
+              <SuccessModal
+                bodyText="Your report has been published."
+                isOpen={showSuccessModal}
+                onClose={() => setShowSuccessModal(false)}
+              />
+              <SignInModal
+                isOpen={showSignInModal}
+                onClose={() => setShowSignInModal(false)}
               />
             </div>
           ) : (
