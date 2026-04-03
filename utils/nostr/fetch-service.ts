@@ -14,7 +14,12 @@ import {
 } from "@/utils/nostr/nostr-helper-functions";
 import {
   ProductData,
+  enrichNip15ProductEvent,
+  getMarketplaceEventAddress,
   getMarketplaceEventKey,
+  getNip15StallId,
+  getNip15StallKey,
+  getNip15StallKeyFromProductEvent,
   parseTags,
 } from "@/utils/parsers/product-parser-functions";
 import { parseCommunityEvent } from "../parsers/community-parser-functions";
@@ -52,20 +57,47 @@ export const fetchAllPosts = async (
     try {
       // First, load from database to immediately populate the UI
       let productArrayFromDb: NostrEvent[] = [];
+      let stallArrayFromDb: NostrEvent[] = [];
       try {
-        const response = await fetch("/api/db/fetch-products");
-        if (response.ok) {
-          productArrayFromDb = await response.json();
-          if (productArrayFromDb.length > 0) {
-            editProductContext(productArrayFromDb, false);
+        const [productsResponse, stallsResponse] = await Promise.all([
+          fetch("/api/db/fetch-products"),
+          fetch("/api/db/fetch-stalls"),
+        ]);
+
+        if (productsResponse.ok) {
+          productArrayFromDb = await productsResponse.json();
+        }
+
+        if (stallsResponse.ok) {
+          stallArrayFromDb = await stallsResponse.json();
+        }
+
+        const latestStallsFromDb = new Map<string, NostrEvent>();
+        stallArrayFromDb.forEach((stallEvent) => {
+          const key = getNip15StallKey(stallEvent.pubkey, getNip15StallId(stallEvent));
+          if (!key) return;
+          const existing = latestStallsFromDb.get(key);
+          if (!existing || stallEvent.created_at >= existing.created_at) {
+            latestStallsFromDb.set(key, stallEvent);
           }
+        });
+
+        if (productArrayFromDb.length > 0) {
+          const enrichedDbProducts = productArrayFromDb.map((event) => {
+            const stallKey = getNip15StallKeyFromProductEvent(event);
+            return enrichNip15ProductEvent(
+              event,
+              stallKey ? latestStallsFromDb.get(stallKey) : undefined
+            );
+          });
+          editProductContext(enrichedDbProducts, false);
         }
       } catch (error) {
         console.error("Failed to fetch products from database: ", error);
       }
 
       const filter: Filter = {
-        kinds: [30402, 30018],
+        kinds: [30017, 30018, 30402],
       };
 
       const zapsnagFilter: Filter = {
@@ -74,9 +106,19 @@ export const fetchAllPosts = async (
       };
 
       const profileSetFromProducts: Set<string> = new Set();
+      const mergedStallsMap = new Map<string, NostrEvent>();
 
       productArrayFromDb.forEach((event) => {
         if (event.pubkey) profileSetFromProducts.add(event.pubkey);
+      });
+
+      stallArrayFromDb.forEach((stallEvent) => {
+        const key = getNip15StallKey(stallEvent.pubkey, getNip15StallId(stallEvent));
+        if (!key) return;
+        const existing = mergedStallsMap.get(key);
+        if (!existing || stallEvent.created_at >= existing.created_at) {
+          mergedStallsMap.set(key, stallEvent);
+        }
       });
 
       const fetchedEvents = await nostr.fetch(
@@ -94,7 +136,10 @@ export const fetchAllPosts = async (
           e.id &&
           e.sig &&
           e.pubkey &&
-          (e.kind === 30402 || e.kind === 30018 || e.kind === 1)
+          (e.kind === 30017 ||
+            e.kind === 30018 ||
+            e.kind === 30402 ||
+            e.kind === 1)
       );
       if (validProductEvents.length > 0) {
         cacheEventsToDatabase(validProductEvents).catch((error) =>
@@ -130,6 +175,16 @@ export const fetchAllPosts = async (
       for (const event of fetchedEvents) {
         if (!event || !event.id) continue;
 
+        if (event.kind === 30017) {
+          const key = getNip15StallKey(event.pubkey, getNip15StallId(event));
+          if (!key) continue;
+          const existingStall = mergedStallsMap.get(key);
+          if (!existingStall || event.created_at >= existingStall.created_at) {
+            mergedStallsMap.set(key, event);
+          }
+          continue;
+        }
+
         const key = getMarketplaceEventKey(event);
         const existing = mergedProductsMap.get(key);
         if (shouldReplaceProductEvent(existing, event)) {
@@ -138,7 +193,15 @@ export const fetchAllPosts = async (
         profileSetFromProducts.add(event.pubkey);
       }
 
-      const mergedProductArray = Array.from(mergedProductsMap.values());
+      const mergedProductArray = Array.from(mergedProductsMap.values()).map(
+        (event) => {
+          const stallKey = getNip15StallKeyFromProductEvent(event);
+          return enrichNip15ProductEvent(
+            event,
+            stallKey ? mergedStallsMap.get(stallKey) : undefined
+          );
+        }
+      );
 
       editProductContext(mergedProductArray, false);
 
@@ -203,14 +266,11 @@ export const fetchCart = async (
             cartAddressesArray = addressArray;
             for (const addressElement of addressArray) {
               const address = addressElement[1];
-              const [kind, _, dTag] = address;
-              if (kind === "30402") {
-                const foundEvent = products.find((event) =>
-                  event.tags.some((tag) => tag[0] === "d" && tag[1] === dTag)
-                );
-                if (foundEvent) {
-                  cartArrayFromRelay.push(parseTags(foundEvent) as ProductData);
-                }
+              const foundEvent = products.find(
+                (productEvent) => getMarketplaceEventAddress(productEvent) === address
+              );
+              if (foundEvent) {
+                cartArrayFromRelay.push(parseTags(foundEvent) as ProductData);
               }
             }
           }

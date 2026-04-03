@@ -145,7 +145,7 @@ export default function Landing() {
                         `/listing/${nip19.naddrEncode({
                           identifier: product.d as string,
                           pubkey: product.pubkey,
-                          kind: 30402,
+                          kind: product.kind,
                         })}`
                       )
                     }

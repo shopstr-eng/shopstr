@@ -43,6 +43,7 @@ export const parseZapsnagNote = (event: NostrEvent): ProductData => {
 
   return {
     id: event.id,
+    kind: event.kind,
     pubkey: event.pubkey,
     createdAt: event.created_at,
     title: title,

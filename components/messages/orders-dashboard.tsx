@@ -29,6 +29,7 @@ import ClaimButton from "@/components/utility-components/claim-button";
 import DisplayProductModal from "@/components/display-product-modal";
 import AddressChangeModal from "@/components/utility-components/address-change-modal";
 import parseTags, {
+  getMarketplaceEventAddress,
   ProductData,
 } from "@/utils/parsers/product-parser-functions";
 import {
@@ -425,10 +426,8 @@ const OrdersDashboard = () => {
             if (productAddress && productContext?.productEvents) {
               const productEvent = productContext.productEvents.find(
                 (event: any) => {
-                  const eventAddress = `30402:${event.pubkey}:${event.tags.find(
-                    (tag: any) => tag[0] === "d"
-                  )?.[1]}`;
-                  return productAddress.includes(eventAddress);
+                  const eventAddress = getMarketplaceEventAddress(event);
+                  return !!eventAddress && productAddress.includes(eventAddress);
                 }
               );
               if (productEvent) {
@@ -778,10 +777,8 @@ const OrdersDashboard = () => {
     if (!productContext?.productEvents) return;
 
     const productEvent = productContext.productEvents.find((event: any) => {
-      const eventAddress = `30402:${event.pubkey}:${event.tags.find(
-        (tag: any) => tag[0] === "d"
-      )?.[1]}`;
-      return productAddress.includes(eventAddress);
+      const eventAddress = getMarketplaceEventAddress(event);
+      return !!eventAddress && productAddress.includes(eventAddress);
     });
 
     if (productEvent) {
@@ -1018,7 +1015,7 @@ const OrdersDashboard = () => {
       return false;
     }
 
-    // Extract merchant pubkey from product address (format: 30402:merchantPubkey:dTag)
+    // Extract merchant pubkey from product address (format: kind:merchantPubkey:dTag)
     const addressParts = order.productAddress.split(":");
     const merchantPubkey = addressParts.length >= 2 ? addressParts[1] : null;
 

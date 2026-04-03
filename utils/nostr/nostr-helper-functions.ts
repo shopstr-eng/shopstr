@@ -15,7 +15,10 @@ import {
   NostrEvent,
   ProductFormValues,
 } from "@/utils/types/types";
-import { ProductData } from "@/utils/parsers/product-parser-functions";
+import {
+  getProductAddress,
+  ProductData,
+} from "@/utils/parsers/product-parser-functions";
 import { Proof } from "@cashu/cashu-ts";
 import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
@@ -245,6 +248,27 @@ function buildNip15ShippingZoneId(shippingType?: string): string {
   }
 }
 
+const SHOPSTR_NIP15_STALL_SHIPPING = [
+  {
+    id: "standard",
+    name: "Standard",
+    cost: 0,
+    regions: [],
+  },
+  {
+    id: "pickup",
+    name: "Pickup",
+    cost: 0,
+    regions: [],
+  },
+  {
+    id: "free",
+    name: "Free",
+    cost: 0,
+    regions: [],
+  },
+];
+
 function buildNip15Specs(values: ProductFormValues): [string, string][] {
   const specs: [string, string][] = [];
   const simpleSpecKeys = [
@@ -313,14 +337,7 @@ async function publishNip15ListingCompatibilityEvent(
       id: stallId,
       name: "Shopstr Listings",
       currency: currency || "SAT",
-      shipping: [
-        {
-          id: shippingZoneId,
-          name: shippingType || "Standard",
-          cost: 0,
-          regions: [],
-        },
-      ],
+      shipping: SHOPSTR_NIP15_STALL_SHIPPING,
     }),
   };
 
@@ -497,20 +514,14 @@ export async function constructGiftWrappedEvent(
     if (productData || productAddress) {
       tags.push([
         "item",
-        productData
-          ? `30402:${productData.pubkey}:${productData.d}`
-          : productAddress!,
+        productData ? getProductAddress(productData) : productAddress!,
         quantity ? quantity.toString() : "1",
       ]);
     }
   } else {
     // Handle regular message product references
     if (productData) {
-      tags.push([
-        "a",
-        `30402:${productData.pubkey}:${productData.d}`,
-        relays[0]!,
-      ]);
+      tags.push(["a", getProductAddress(productData), relays[0]!]);
     } else if (productAddress) {
       tags.push(["a", productAddress, relays[0]!]);
     }
@@ -789,7 +800,7 @@ export async function publishSavedForLaterEvent(
       );
     } else if (quantity && quantity > 0) {
       for (let i = 0; i < quantity; i++) {
-        const productTag = ["a", "30402:" + product.pubkey + ":" + product.d];
+        const productTag = ["a", getProductAddress(product)];
         cartTags.push(productTag);
       }
     }

@@ -1,5 +1,11 @@
 import { Pool, PoolClient } from "pg";
 import { NostrEvent } from "../types/types";
+import {
+  enrichNip15ProductEvent,
+  getNip15StallId,
+  getNip15StallKey,
+  getNip15StallKeyFromProductEvent,
+} from "../parsers/product-parser-functions";
 
 let pool: Pool | null = null;
 let tablesInitialized = false;
@@ -73,7 +79,7 @@ async function initializeTables(): Promise<void> {
     client = await dbPool.connect();
 
     await client.query(`
-      -- Products table (kind 30402 / 30018 - listings)
+      -- Products table (kind 30402 / 30018 listings, kind 30017 stalls)
       CREATE TABLE IF NOT EXISTS product_events (
           id TEXT PRIMARY KEY,
           pubkey TEXT NOT NULL,
@@ -83,7 +89,7 @@ async function initializeTables(): Promise<void> {
           content TEXT NOT NULL,
           sig TEXT NOT NULL,
           cached_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          CONSTRAINT product_events_kind_check CHECK (kind IN (30402, 30018))
+          CONSTRAINT product_events_kind_check CHECK (kind IN (30017, 30018, 30402))
       );
 
       CREATE INDEX IF NOT EXISTS idx_product_events_pubkey ON product_events(pubkey);
@@ -285,7 +291,7 @@ async function initializeTables(): Promise<void> {
 
     await client.query(`
       ALTER TABLE product_events
-      ADD CONSTRAINT product_events_kind_check CHECK (kind IN (30402, 30018))
+      ADD CONSTRAINT product_events_kind_check CHECK (kind IN (30017, 30018, 30402))
     `).catch(() => {
       // Constraint already exists with the expected definition.
     });
@@ -336,7 +342,7 @@ async function initializeTables(): Promise<void> {
 // Map event kinds to table names
 function getTableForKind(kind: number): string | null {
   // Products
-  if (kind === 30402 || kind === 30018) return "product_events";
+  if (kind === 30017 || kind === 30018 || kind === 30402) return "product_events";
 
   // Reviews
   if (kind === 31555) return "review_events";
@@ -416,7 +422,7 @@ export async function cacheEvent(event: NostrEvent): Promise<void> {
       // For reviews, keep only the latest per pubkey per product
       await client.query("BEGIN");
 
-      // Extract the product identifier from the 'd' tag (format: "30402:merchant_pubkey:product_d_tag")
+      // Extract the product identifier from the 'd' tag (format: "kind:merchant_pubkey:product_d_tag")
       const dTag = event.tags.find((tag) => tag[0] === "d")?.[1];
 
       if (dTag) {
@@ -824,6 +830,36 @@ export async function deleteCachedEventsByIds(
   }
 }
 
+function buildLatestStallMap(stalls: NostrEvent[]): Map<string, NostrEvent> {
+  const latestStalls = new Map<string, NostrEvent>();
+
+  stalls.forEach((stall) => {
+    const key = getNip15StallKey(stall.pubkey, getNip15StallId(stall));
+
+    if (!key) return;
+
+    const existing = latestStalls.get(key);
+    if (!existing || stall.created_at >= existing.created_at) {
+      latestStalls.set(key, stall);
+    }
+  });
+
+  return latestStalls;
+}
+
+function enrichProductsWithStallData(
+  products: NostrEvent[],
+  stalls: NostrEvent[]
+): NostrEvent[] {
+  const latestStalls = buildLatestStallMap(stalls);
+
+  return products.map((product) => {
+    const stallKey = getNip15StallKeyFromProductEvent(product);
+    const matchingStall = stallKey ? latestStalls.get(stallKey) : undefined;
+    return enrichNip15ProductEvent(product, matchingStall);
+  });
+}
+
 // Fetch all products from database
 export async function fetchAllProductsFromDb(): Promise<NostrEvent[]> {
   const dbPool = getDbPool();
@@ -834,6 +870,40 @@ export async function fetchAllProductsFromDb(): Promise<NostrEvent[]> {
     const result = await client.query(
       `SELECT id, pubkey, created_at, kind, tags, content, sig
        FROM product_events
+       WHERE kind IN (30402, 30018)
+       ORDER BY created_at DESC`
+    );
+
+    const products = result.rows.map((row) => ({
+      id: row.id,
+      pubkey: row.pubkey,
+      created_at: row.created_at,
+      kind: row.kind,
+      tags: row.tags,
+      content: row.content,
+      sig: row.sig,
+    }));
+
+    const stalls = await fetchAllStallsFromDb();
+    return enrichProductsWithStallData(products, stalls);
+  } catch (error) {
+    console.error("Failed to fetch all products from database:", error);
+    return [];
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function fetchAllStallsFromDb(): Promise<NostrEvent[]> {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    const result = await client.query(
+      `SELECT id, pubkey, created_at, kind, tags, content, sig
+       FROM product_events
+       WHERE kind = 30017
        ORDER BY created_at DESC`
     );
 
@@ -847,7 +917,7 @@ export async function fetchAllProductsFromDb(): Promise<NostrEvent[]> {
       sig: row.sig,
     }));
   } catch (error) {
-    console.error("Failed to fetch all products from database:", error);
+    console.error("Failed to fetch all stalls from database:", error);
     return [];
   } finally {
     if (client) client.release();
@@ -1235,7 +1305,9 @@ export async function fetchMarketplaceStats(): Promise<{
       listing_count: string;
       seller_count: string;
     }>(
-      `SELECT COUNT(*) AS listing_count, COUNT(DISTINCT pubkey) AS seller_count FROM product_events`
+      `SELECT COUNT(*) AS listing_count, COUNT(DISTINCT pubkey) AS seller_count
+       FROM product_events
+       WHERE kind IN (30402, 30018)`
     );
     const row = result.rows[0];
     return {
@@ -1287,12 +1359,14 @@ export async function fetchProductByIdFromDb(
     client = await dbPool.connect();
     const result = await client.query(
       `SELECT id, pubkey, created_at, kind, tags, content, sig
-       FROM product_events WHERE id = $1 LIMIT 1`,
+       FROM product_events
+       WHERE id = $1 AND kind IN (30402, 30018)
+       LIMIT 1`,
       [id]
     );
     if (result.rows.length === 0) return null;
     const row = result.rows[0];
-    return {
+    const productEvent = {
       id: row.id,
       pubkey: row.pubkey,
       created_at: row.created_at,
@@ -1301,6 +1375,8 @@ export async function fetchProductByIdFromDb(
       content: row.content,
       sig: row.sig,
     };
+    const stall = await fetchStallByDTagAndPubkeyFromDb(productEvent.pubkey, productEvent);
+    return enrichNip15ProductEvent(productEvent, stall || undefined);
   } catch (error) {
     console.error("Failed to fetch product by id:", error);
     return null;
@@ -1321,6 +1397,7 @@ export async function fetchProductByDTagAndPubkey(
       `SELECT id, pubkey, created_at, kind, tags, content, sig
        FROM product_events
        WHERE pubkey = $1
+         AND kind IN (30402, 30018)
          AND EXISTS (
            SELECT 1 FROM jsonb_array_elements(tags) t
            WHERE t->>0 = 'd' AND t->>1 = $2
@@ -1328,6 +1405,54 @@ export async function fetchProductByDTagAndPubkey(
        ORDER BY created_at DESC LIMIT 1`,
       [pubkey, dTag]
     );
+    if (result.rows.length === 0) return null;
+    const row = result.rows[0];
+    const productEvent = {
+      id: row.id,
+      pubkey: row.pubkey,
+      created_at: row.created_at,
+      kind: row.kind,
+      tags: row.tags,
+      content: row.content,
+      sig: row.sig,
+    };
+    const stall = await fetchStallByDTagAndPubkeyFromDb(productEvent.pubkey, productEvent);
+    return enrichNip15ProductEvent(productEvent, stall || undefined);
+  } catch (error) {
+    console.error("Failed to fetch product by d-tag and pubkey:", error);
+    return null;
+  } finally {
+    if (client) client.release();
+  }
+}
+
+async function fetchStallByDTagAndPubkeyFromDb(
+  pubkey: string,
+  productEvent: NostrEvent
+): Promise<NostrEvent | null> {
+  const stallKey = getNip15StallKeyFromProductEvent(productEvent);
+  if (!stallKey) return null;
+
+  const stallId = stallKey.slice(pubkey.length + 1);
+  if (!stallId) return null;
+
+  const dbPool = getDbPool();
+  let client;
+  try {
+    client = await dbPool.connect();
+    const result = await client.query(
+      `SELECT id, pubkey, created_at, kind, tags, content, sig
+       FROM product_events
+       WHERE pubkey = $1
+         AND kind = 30017
+         AND EXISTS (
+           SELECT 1 FROM jsonb_array_elements(tags) t
+           WHERE t->>0 = 'd' AND t->>1 = $2
+         )
+       ORDER BY created_at DESC LIMIT 1`,
+      [pubkey, stallId]
+    );
+
     if (result.rows.length === 0) return null;
     const row = result.rows[0];
     return {
@@ -1340,7 +1465,7 @@ export async function fetchProductByDTagAndPubkey(
       sig: row.sig,
     };
   } catch (error) {
-    console.error("Failed to fetch product by d-tag and pubkey:", error);
+    console.error("Failed to fetch stall by d-tag and pubkey:", error);
     return null;
   } finally {
     if (client) client.release();
@@ -1357,6 +1482,7 @@ export async function fetchProductByTitleSlug(
     const result = await client.query(
       `SELECT id, pubkey, created_at, kind, tags, content, sig
        FROM product_events
+       WHERE kind IN (30402, 30018)
        ORDER BY created_at DESC`
     );
     for (const row of result.rows) {
@@ -1372,7 +1498,7 @@ export async function fetchProductByTitleSlug(
       }
 
       if (title && titleToSlug(title) === slug) {
-        return {
+        const productEvent = {
           id: row.id,
           pubkey: row.pubkey,
           created_at: row.created_at,
@@ -1381,6 +1507,8 @@ export async function fetchProductByTitleSlug(
           content: row.content,
           sig: row.sig,
         };
+        const stall = await fetchStallByDTagAndPubkeyFromDb(productEvent.pubkey, productEvent);
+        return enrichNip15ProductEvent(productEvent, stall || undefined);
       }
     }
     return null;

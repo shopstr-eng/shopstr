@@ -120,7 +120,7 @@ export default function OrderSummary() {
       const naddr = nip19.naddrEncode({
         identifier: product.d as string,
         pubkey: product.pubkey,
-        kind: 30402,
+        kind: product.kind,
       });
       return `/listing/${naddr}`;
     } catch {

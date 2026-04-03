@@ -1,4 +1,7 @@
-import parseTags from "../product-parser-functions";
+import parseTags, {
+  enrichNip15ProductEvent,
+  getProductAddress,
+} from "../product-parser-functions";
 import { calculateTotalCost } from "@/components/utility-components/display-monetary-info";
 import { NostrEvent } from "@/utils/types/types";
 
@@ -260,5 +263,54 @@ describe("parseTags", () => {
 
     expect(result.shippingType).toBe("Free");
     expect(result.shippingCost).toBe(0);
+  });
+
+  it("should add stall base shipping when enriching a NIP-15 product", () => {
+    const productEvent = {
+      ...baseEvent,
+      kind: 30018,
+      tags: [["d", "coldcard-q"]],
+      content: JSON.stringify({
+        id: "coldcard-q",
+        stall_id: "shopstr-sat",
+        name: "COLDCARD Q",
+        currency: "SAT",
+        price: 1000,
+        shipping: [{ id: "standard", cost: 25 }],
+      }),
+    };
+
+    const stallEvent = {
+      ...baseEvent,
+      id: "stall-event",
+      kind: 30017,
+      tags: [["d", "shopstr-sat"]],
+      content: JSON.stringify({
+        id: "shopstr-sat",
+        shipping: [{ id: "standard", name: "Standard", cost: 15 }],
+      }),
+    };
+
+    const result = parseTags(enrichNip15ProductEvent(productEvent, stallEvent))!;
+
+    expect(result.shippingType).toBe("Added Cost");
+    expect(result.shippingCost).toBe(40);
+  });
+
+  it("should build product addresses using the parsed marketplace kind", () => {
+    const result = parseTags({
+      ...baseEvent,
+      kind: 30018,
+      tags: [["d", "coldcard-q"]],
+      content: JSON.stringify({
+        id: "coldcard-q",
+        stall_id: "shopstr-sat",
+        name: "COLDCARD Q",
+        currency: "SAT",
+        price: 1000,
+      }),
+    })!;
+
+    expect(getProductAddress(result)).toBe("30018:test-pubkey:coldcard-q");
   });
 });

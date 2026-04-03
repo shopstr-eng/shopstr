@@ -97,6 +97,7 @@ Object.defineProperty(global, "crypto", {
 
 const mockProduct = {
   id: "item-123",
+  kind: 30402,
   title: "Test Product",
   price: 100,
   pubkey: "seller-pubkey",

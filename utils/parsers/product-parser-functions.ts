@@ -5,6 +5,8 @@ import { NostrEvent } from "@/utils/types/types";
 type NostrMarketplaceShipping = {
   id?: string;
   cost?: number;
+  name?: string;
+  regions?: string[];
 };
 
 type NostrMarketplaceProductContent = {
@@ -20,8 +22,20 @@ type NostrMarketplaceProductContent = {
   shipping?: NostrMarketplaceShipping[];
 };
 
+type NostrMarketplaceStallContent = {
+  id?: string;
+  name?: string;
+  currency?: string;
+  shipping?: NostrMarketplaceShipping[];
+};
+
+export const SHOPSTR_STALL_BASE_COST_TAG = "shopstr_stall_base_cost";
+export const SHOPSTR_STALL_ZONE_ID_TAG = "shopstr_stall_zone_id";
+export const SHOPSTR_STALL_ZONE_NAME_TAG = "shopstr_stall_zone_name";
+
 export type ProductData = {
   id: string;
+  kind: number;
   pubkey: string;
   createdAt: number;
   title: string;
@@ -36,6 +50,7 @@ export type ProductData = {
   shippingCost?: number;
   totalCost: number;
   d?: string;
+  stallId?: string;
   contentWarning?: boolean;
   quantity?: number;
   sizes?: string[];
@@ -62,6 +77,34 @@ export function getMarketplaceEventDTag(event: NostrEvent): string | undefined {
   return event.tags?.find((tag: string[]) => tag[0] === "d")?.[1];
 }
 
+export function getNip15StallKey(
+  pubkey: string,
+  stallId: string | undefined
+): string | undefined {
+  if (!stallId) return undefined;
+  return `${pubkey}:${stallId}`;
+}
+
+export function getNip15StallKeyFromProductEvent(
+  event: NostrEvent
+): string | undefined {
+  if (event.kind !== 30018) return undefined;
+
+  try {
+    const content = JSON.parse(
+      event.content || "{}"
+    ) as NostrMarketplaceProductContent;
+    return getNip15StallKey(event.pubkey, content.stall_id);
+  } catch {
+    return undefined;
+  }
+}
+
+export function getNip15StallId(event: NostrEvent): string | undefined {
+  const parsedStall = parseNip15StallEvent(event);
+  return parsedStall?.id || getMarketplaceEventDTag(event);
+}
+
 export function getMarketplaceEventKey(event: NostrEvent): string {
   if (event.kind === 30402 || event.kind === 30018) {
     const dTag = getMarketplaceEventDTag(event);
@@ -71,7 +114,60 @@ export function getMarketplaceEventKey(event: NostrEvent): string {
   return event.id;
 }
 
+export function getProductAddress(product: Pick<ProductData, "kind" | "pubkey" | "d">): string {
+  return `${product.kind}:${product.pubkey}:${product.d || ""}`;
+}
+
+export function getMarketplaceEventAddress(event: NostrEvent): string | undefined {
+  const dTag = getMarketplaceEventDTag(event);
+  if (!dTag) return undefined;
+  return `${event.kind}:${event.pubkey}:${dTag}`;
+}
+
+export function parseNip15StallEvent(
+  stallEvent: NostrEvent
+): NostrMarketplaceStallContent | undefined {
+  if (stallEvent.kind !== 30017) return undefined;
+
+  try {
+    return JSON.parse(stallEvent.content || "{}") as NostrMarketplaceStallContent;
+  } catch {
+    return undefined;
+  }
+}
+
+function getTagValue(event: NostrEvent, key: string): string | undefined {
+  return event.tags?.find((tag) => tag[0] === key)?.[1];
+}
+
+function normalizeShippingLabel(value?: string): string {
+  return (value || "").trim().toLowerCase();
+}
+
+function getNip15ShippingType(
+  totalShippingCost: number,
+  shippingZoneId?: string,
+  shippingZoneName?: string
+): ShippingOptionsType {
+  const normalized = normalizeShippingLabel(shippingZoneName || shippingZoneId);
+
+  if (normalized.includes("pickup")) {
+    return totalShippingCost > 0 ? "Added Cost" : "Pickup";
+  }
+
+  if (
+    normalized.includes("free") ||
+    normalized.includes("digital") ||
+    normalized.includes("download")
+  ) {
+    return "Free";
+  }
+
+  return totalShippingCost > 0 ? "Added Cost" : "Free";
+}
+
 function mapNip15ShippingToShopstrShipping(
+  event: NostrEvent,
   shipping?: NostrMarketplaceShipping[]
 ): Pick<ProductData, "shippingType" | "shippingCost"> {
   if (!shipping?.length) {
@@ -82,18 +178,77 @@ function mapNip15ShippingToShopstrShipping(
   }
 
   const firstZone = shipping[0];
-  const shippingCost = Number(firstZone?.cost || 0);
+  const extraShippingCost = Number(firstZone?.cost || 0);
+  const stallBaseCost = Number(getTagValue(event, SHOPSTR_STALL_BASE_COST_TAG) || 0);
+  const shippingCost = extraShippingCost + stallBaseCost;
+  const shippingZoneId =
+    getTagValue(event, SHOPSTR_STALL_ZONE_ID_TAG) || firstZone?.id;
+  const shippingZoneName =
+    getTagValue(event, SHOPSTR_STALL_ZONE_NAME_TAG) || firstZone?.name;
 
-  if (shippingCost <= 0) {
-    return {
-      shippingType: "Free",
-      shippingCost: 0,
-    };
+  return {
+    shippingType: getNip15ShippingType(
+      shippingCost,
+      shippingZoneId,
+      shippingZoneName
+    ),
+    shippingCost,
+  };
+}
+
+export function enrichNip15ProductEvent(
+  productEvent: NostrEvent,
+  stallEvent?: NostrEvent
+): NostrEvent {
+  if (productEvent.kind !== 30018) return productEvent;
+
+  const existingTags = (productEvent.tags || []).filter(
+    (tag) =>
+      ![
+        SHOPSTR_STALL_BASE_COST_TAG,
+        SHOPSTR_STALL_ZONE_ID_TAG,
+        SHOPSTR_STALL_ZONE_NAME_TAG,
+      ].includes(tag[0] || "")
+  );
+
+  const productContent = (() => {
+    try {
+      return JSON.parse(
+        productEvent.content || "{}"
+      ) as NostrMarketplaceProductContent;
+    } catch {
+      return undefined;
+    }
+  })();
+
+  const productShippingZone = productContent?.shipping?.[0];
+  const parsedStall = stallEvent ? parseNip15StallEvent(stallEvent) : undefined;
+  const matchedStallZone = productShippingZone?.id
+    ? parsedStall?.shipping?.find(
+        (zone) => zone.id && zone.id === productShippingZone.id
+      )
+    : parsedStall?.shipping?.[0];
+
+  const enrichedTags = [...existingTags];
+  enrichedTags.push([
+    SHOPSTR_STALL_BASE_COST_TAG,
+    String(Number(matchedStallZone?.cost || 0)),
+  ]);
+
+  if (matchedStallZone?.id || productShippingZone?.id) {
+    enrichedTags.push([
+      SHOPSTR_STALL_ZONE_ID_TAG,
+      matchedStallZone?.id || productShippingZone?.id || "",
+    ]);
+  }
+
+  if (matchedStallZone?.name) {
+    enrichedTags.push([SHOPSTR_STALL_ZONE_NAME_TAG, matchedStallZone.name]);
   }
 
   return {
-    shippingType: "Added Cost",
-    shippingCost,
+    ...productEvent,
+    tags: enrichedTags,
   };
 }
 
@@ -181,6 +336,7 @@ function parseNip15ProductEvent(productEvent: NostrEvent) {
 
   const parsedData: ProductData = {
     id: productEvent.id,
+    kind: productEvent.kind,
     pubkey: productEvent.pubkey,
     createdAt: productEvent.created_at,
     title: content.name || "",
@@ -195,12 +351,13 @@ function parseNip15ProductEvent(productEvent: NostrEvent) {
     currency: content.currency || "",
     totalCost: 0,
     d: getMarketplaceEventDTag(productEvent) || content.id,
+    stallId: content.stall_id,
     quantity:
       typeof content.quantity === "number" ? content.quantity : undefined,
     rawEvent: productEvent,
   };
 
-  const shipping = mapNip15ShippingToShopstrShipping(content.shipping);
+  const shipping = mapNip15ShippingToShopstrShipping(productEvent, content.shipping);
   parsedData.shippingType = shipping.shippingType;
   parsedData.shippingCost = shipping.shippingCost;
 
@@ -217,6 +374,7 @@ export const parseTags = (productEvent: NostrEvent) => {
 
   const parsedData: ProductData = {
     id: "",
+    kind: productEvent.kind,
     pubkey: "",
     createdAt: 0,
     title: "",

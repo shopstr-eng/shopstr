@@ -48,6 +48,7 @@ jest.mock("@nextui-org/react", () => ({
 
 const mockProductData: ProductData = {
   id: "123",
+  kind: 30402,
   pubkey: "owner_pubkey",
   title: "Test Product",
   summary: "A great product summary.",
