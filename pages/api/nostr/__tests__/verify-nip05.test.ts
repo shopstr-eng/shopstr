@@ -77,6 +77,7 @@ describe("/api/nostr/verify-nip05", () => {
         headers: {
           Accept: "application/json",
         },
+        redirect: "manual",
         signal: expect.any(AbortSignal),
       })
     );
@@ -135,6 +136,55 @@ describe("/api/nostr/verify-nip05", () => {
     expect(res.body).toEqual({
       error: "Invalid NIP-05 identifier",
     });
+  });
+
+  it("rejects invalid NIP-05 local-parts before making an external request", async () => {
+    global.fetch = jest.fn() as typeof fetch;
+
+    const req = {
+      method: "GET",
+      query: {
+        nip05: "Alice@example.com",
+        pubkey: "f".repeat(64),
+      },
+    } as Partial<NextApiRequest> as NextApiRequest;
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(mockedLookup).not.toHaveBeenCalled();
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toEqual({
+      error: "Invalid NIP-05 identifier",
+    });
+  });
+
+  it("returns verified false when the upstream endpoint redirects", async () => {
+    mockedLookup.mockResolvedValue([
+      {
+        address: "93.184.216.34",
+        family: 4,
+      },
+    ]);
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 302,
+    }) as typeof fetch;
+
+    const req = {
+      method: "GET",
+      query: {
+        nip05: "alice@example.com",
+        pubkey: "f".repeat(64),
+      },
+    } as Partial<NextApiRequest> as NextApiRequest;
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({ verified: false });
   });
 
   it("returns verified false when the hostname resolves to a private address", async () => {

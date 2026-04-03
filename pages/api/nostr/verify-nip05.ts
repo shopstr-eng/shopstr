@@ -3,6 +3,7 @@ import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 
 const REQUEST_TIMEOUT_MS = 10000;
+const NIP05_LOCAL_PART_PATTERN = /^[a-z0-9._-]+$/;
 const DOMAIN_PATTERN =
   /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i;
 const BLOCKED_HOSTNAMES = new Set(["localhost"]);
@@ -32,6 +33,7 @@ function parseNip05Identifier(
 
   const [username, domain] = parts;
   if (!username || !domain) return null;
+  if (!NIP05_LOCAL_PART_PATTERN.test(username)) return null;
 
   const normalizedDomain = domain.trim().toLowerCase();
   if (
@@ -164,10 +166,14 @@ export default async function handler(
       headers: {
         Accept: "application/json",
       },
+      redirect: "manual",
       signal: controller.signal,
     });
 
-    if (!response.ok) {
+    if (
+      (response.status >= 300 && response.status < 400) ||
+      !response.ok
+    ) {
       return res.status(200).json({ verified: false });
     }
 
