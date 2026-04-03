@@ -194,4 +194,71 @@ describe("parseTags", () => {
 
     expect(result.contentWarning).toBeFalsy();
   });
+
+  it("should parse NIP-15 product content into ProductData", () => {
+    const event = {
+      ...baseEvent,
+      kind: 30018,
+      tags: [
+        ["d", "nip15-product-id"],
+        ["t", "hardware"],
+        ["t", "wallets"],
+      ],
+      content: JSON.stringify({
+        id: "nip15-product-id",
+        stall_id: "shopstr-sat",
+        name: "COLDCARD Q",
+        description: "Airgapped signing device",
+        images: ["coldcard-front.png", "coldcard-back.png"],
+        currency: "SAT",
+        price: 1000,
+        quantity: 4,
+        shipping: [{ id: "worldwide", cost: 25 }],
+        specs: [
+          ["location", "Worldwide"],
+          ["condition", "new"],
+          ["status", "active"],
+          ["pickup_location", "Toronto"],
+        ],
+      }),
+    };
+
+    const result = parseTags(event)!;
+
+    expect(result.title).toBe("COLDCARD Q");
+    expect(result.summary).toBe("Airgapped signing device");
+    expect(result.images).toEqual(["coldcard-front.png", "coldcard-back.png"]);
+    expect(result.categories).toEqual(["hardware", "wallets"]);
+    expect(result.currency).toBe("SAT");
+    expect(result.price).toBe(1000);
+    expect(result.quantity).toBe(4);
+    expect(result.shippingType).toBe("Added Cost");
+    expect(result.shippingCost).toBe(25);
+    expect(result.location).toBe("Worldwide");
+    expect(result.condition).toBe("new");
+    expect(result.status).toBe("active");
+    expect(result.pickupLocations).toEqual(["Toronto"]);
+    expect(result.d).toBe("nip15-product-id");
+  });
+
+  it("should parse free NIP-15 shipping as free shipping", () => {
+    const event = {
+      ...baseEvent,
+      kind: 30018,
+      tags: [["d", "free-ship"]],
+      content: JSON.stringify({
+        id: "free-ship",
+        stall_id: "shopstr-usd",
+        name: "Digital Guide",
+        currency: "USD",
+        price: 10,
+        shipping: [{ id: "digital", cost: 0 }],
+      }),
+    };
+
+    const result = parseTags(event)!;
+
+    expect(result.shippingType).toBe("Free");
+    expect(result.shippingCost).toBe(0);
+  });
 });
