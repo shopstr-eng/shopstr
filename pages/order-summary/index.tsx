@@ -27,6 +27,7 @@ interface OrderSummaryData {
   shippingCost?: string;
   selectedSize?: string;
   selectedVolume?: string;
+  selectedWeight?: string;
   selectedBulkOption?: string;
   shippingAddress?: string;
   pickupLocation?: string;
@@ -45,6 +46,7 @@ interface OrderSummaryData {
     pickupLocation?: string;
     selectedSize?: string;
     selectedVolume?: string;
+    selectedWeight?: string;
     selectedBulkOption?: string;
   }>;
 }
