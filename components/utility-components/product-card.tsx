@@ -6,6 +6,7 @@ import {
   DropdownMenu,
   DropdownItem,
   Button,
+  useDisclosure,
 } from "@nextui-org/react";
 import Link from "next/link";
 import {
@@ -22,6 +23,19 @@ import { ProductData } from "@/utils/parsers/product-parser-functions";
 import { ProfileWithDropdown } from "./profile/profile-dropdown";
 import { useRouter } from "next/router";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
+import {
+  NostrContext,
+} from "@/components/utility-components/nostr-context-provider";
+import {
+  ReportsContext,
+} from "@/utils/context/context";
+import {
+  publishReportEvent,
+  ReportType,
+} from "@/utils/nostr/nostr-helper-functions";
+import ReportEventModal from "./modals/report-event-modal";
+import SuccessModal from "./success-modal";
+import SignInModal from "../sign-in/SignInModal";
 
 export default function ProductCard({
   productData,
@@ -34,9 +48,14 @@ export default function ProductCard({
 }) {
   const [showRawEventModal, setShowRawEventModal] = useState(false);
   const [showEventIdModal, setShowEventIdModal] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   const router = useRouter();
-  const { pubkey: userPubkey } = useContext(SignerContext);
+  const reportsContext = useContext(ReportsContext);
+  const { nostr } = useContext(NostrContext);
+  const { pubkey: userPubkey, signer, isLoggedIn } = useContext(SignerContext);
+  const { isOpen, onOpen, onClose } = useDisclosure();
   if (!productData) return null;
 
   const isZapsnag =
@@ -67,6 +86,36 @@ export default function ProductCard({
     } catch (err) {
       // console.error("Failed to generate njump link", err);
     }
+  };
+
+  const openReportFlow = () => {
+    if (isLoggedIn) {
+      setShowReportModal(true);
+    } else {
+      onOpen();
+    }
+  };
+
+  const handleSubmitListingReport = async (
+    reportType: ReportType,
+    content: string
+  ) => {
+    if (!nostr || !signer) {
+      throw new Error("Missing nostr manager or signer");
+    }
+
+    const signedEvent = await publishReportEvent(nostr, signer, {
+      content,
+      reportType,
+      reportedPubkey: productData.pubkey,
+      reportedEventId: productData.id,
+    });
+
+    if (signedEvent) {
+      reportsContext.addReportEvent(signedEvent);
+    }
+
+    setShowSuccessModal(true);
   };
 
   const content = (
@@ -137,18 +186,32 @@ export default function ProductCard({
                     </Button>
                   </DropdownTrigger>
                   <DropdownMenu aria-label="Event Actions">
-                    <DropdownItem
-                      key="view-raw"
-                      onPress={() => setShowRawEventModal(true)}
-                    >
-                      View Raw Event
-                    </DropdownItem>
-                    <DropdownItem
-                      key="view-id"
-                      onPress={() => setShowEventIdModal(true)}
-                    >
-                      View Event ID
-                    </DropdownItem>
+                    {[
+                      <DropdownItem
+                        key="view-raw"
+                        onPress={() => setShowRawEventModal(true)}
+                      >
+                        View Raw Event
+                      </DropdownItem>,
+                      <DropdownItem
+                        key="view-id"
+                        onPress={() => setShowEventIdModal(true)}
+                      >
+                        View Event ID
+                      </DropdownItem>,
+                      ...(productData.pubkey !== userPubkey
+                        ? [
+                            <DropdownItem
+                              key="report-listing"
+                              className="text-danger"
+                              color="danger"
+                              onPress={openReportFlow}
+                            >
+                              Report Listing
+                            </DropdownItem>,
+                          ]
+                        : []),
+                    ]}
                   </DropdownMenu>
                 </Dropdown>
               )}
@@ -161,7 +224,7 @@ export default function ProductCard({
             dropDownKeys={
               productData.pubkey === userPubkey
                 ? ["shop_profile"]
-                : ["shop", "inquiry", "copy_npub"]
+                : ["shop", "inquiry", "copy_npub", "report_profile"]
             }
           />
         </div>
@@ -212,6 +275,18 @@ export default function ProductCard({
         onClose={() => setShowEventIdModal(false)}
         rawEvent={productData.rawEvent}
       />
+      <ReportEventModal
+        isOpen={showReportModal}
+        onClose={() => setShowReportModal(false)}
+        targetLabel="listing"
+        onSubmit={handleSubmitListingReport}
+      />
+      <SuccessModal
+        bodyText="Your report has been published."
+        isOpen={showSuccessModal}
+        onClose={() => setShowSuccessModal(false)}
+      />
+      <SignInModal isOpen={isOpen} onClose={onClose} />
     </div>
   );
 }
