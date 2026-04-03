@@ -223,13 +223,15 @@ const Listing = ({ initialProductEvent }: ListingPageProps) => {
   useEffect(() => {
     if (router.isReady) {
       const { productId } = router.query;
-      const productIdString = productId ? productId[0] : "";
-      setProductIdString(productIdString!);
-      if (!productIdString) {
+      const nextProductIdString = Array.isArray(productId)
+        ? productId[0] || ""
+        : productId || "";
+      setProductIdString(nextProductIdString);
+      if (!nextProductIdString) {
         router.push("/marketplace");
       }
     }
-  }, [router]);
+  }, [router, router.isReady, router.query]);
 
   useEffect(() => {
     if (
