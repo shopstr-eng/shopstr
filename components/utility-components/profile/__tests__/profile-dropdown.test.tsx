@@ -66,6 +66,13 @@ jest.mock("@heroicons/react/24/outline", () => ({
   ArrowRightStartOnRectangleIcon: () => <div data-testid="icon-logout" />,
   ClipboardIcon: () => <div data-testid="icon-clipboard" />,
   CheckIcon: () => <div data-testid="icon-check" />,
+  FlagIcon: () => <div data-testid="icon-flag" />,
+}));
+
+jest.mock("@/components/utility-components/report-modal", () => ({
+  __esModule: true,
+  default: ({ isOpen }: { isOpen: boolean }) =>
+    isOpen ? <div data-testid="report-modal">Report Modal</div> : null,
 }));
 
 Object.defineProperty(navigator, "clipboard", {
@@ -237,5 +244,15 @@ describe("ProfileWithDropdown", () => {
     expect(screen.queryByTestId("icon-check")).not.toBeInTheDocument();
 
     jest.useRealTimers();
+  });
+
+  it('opens report modal from "Report Seller"', () => {
+    renderWithProviders(
+      <ProfileWithDropdown pubkey={pubkey} dropDownKeys={["report"]} />,
+      {}
+    );
+
+    fireEvent.click(screen.getByText("Report Seller"));
+    expect(screen.getByTestId("report-modal")).toBeInTheDocument();
   });
 });
