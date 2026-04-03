@@ -15,7 +15,19 @@ interface StorefrontFooterProps {
   shopSlug: string;
 }
 
-const SOCIAL_ICONS: Record<string, string> = {
+const SOCIAL_IMG: Record<string, string | null> = {
+  instagram: "/instagram-icon.png",
+  x: null,
+  facebook: "/facebook-icon.png",
+  youtube: "/youtube-icon.png",
+  tiktok: "/tiktok-icon.png",
+  telegram: "/telegram-icon.png",
+  website: null,
+  email: null,
+  other: null,
+};
+
+const SOCIAL_FALLBACK: Record<string, string> = {
   instagram: "📷",
   x: "𝕏",
   facebook: "📘",
@@ -89,22 +101,48 @@ export default function StorefrontFooterComponent({
 
           {socialLinks.length > 0 && (
             <div className="flex gap-4">
-              {socialLinks.map((social, idx) => (
-                <a
-                  key={idx}
-                  href={social.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex h-10 w-10 items-center justify-center rounded-full text-lg transition-transform hover:scale-110"
-                  style={{
-                    backgroundColor: colors.primary + "22",
-                    color: colors.primary,
-                  }}
-                  title={social.label || social.platform}
-                >
-                  {SOCIAL_ICONS[social.platform] || SOCIAL_ICONS.other}
-                </a>
-              ))}
+              {socialLinks.map((social, idx) => {
+                const imgSrc = SOCIAL_IMG[social.platform];
+                const isXPlatform = social.platform === "x";
+                const isDarkBg =
+                  getNavTextColor(colors.secondary) === "#ffffff";
+                const xSrc = isDarkBg
+                  ? "/x-logo-white.png"
+                  : "/x-logo-black.png";
+                return (
+                  <a
+                    key={idx}
+                    href={social.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex h-10 w-10 items-center justify-center rounded-full transition-transform hover:scale-110"
+                    style={{
+                      backgroundColor: colors.primary + "22",
+                      color: colors.primary,
+                    }}
+                    title={social.label || social.platform}
+                  >
+                    {isXPlatform ? (
+                      <img
+                        src={xSrc}
+                        alt="X"
+                        className="h-5 w-5 object-contain"
+                      />
+                    ) : imgSrc ? (
+                      <img
+                        src={imgSrc}
+                        alt={social.platform}
+                        className="h-6 w-6 object-contain"
+                      />
+                    ) : (
+                      <span className="text-lg">
+                        {SOCIAL_FALLBACK[social.platform] ||
+                          SOCIAL_FALLBACK.other}
+                      </span>
+                    )}
+                  </a>
+                );
+              })}
             </div>
           )}
         </div>

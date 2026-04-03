@@ -9,6 +9,35 @@ interface SectionProductsProps {
   isPreview?: boolean;
 }
 
+export function applyProductOrder(
+  products: ProductData[],
+  section: StorefrontSection
+): ProductData[] {
+  const { productIds, heroProductId, productLayout } = section;
+
+  let ordered = [...products];
+
+  if (productIds && productIds.length > 0) {
+    const idIndexMap = new Map(productIds.map((id, i) => [id, i]));
+    const pinned = ordered.filter((p) => idIndexMap.has(p.id));
+    const rest = ordered.filter((p) => !idIndexMap.has(p.id));
+    pinned.sort(
+      (a, b) => (idIndexMap.get(a.id) ?? 999) - (idIndexMap.get(b.id) ?? 999)
+    );
+    ordered = [...pinned, ...rest];
+  }
+
+  if (productLayout === "featured" && heroProductId) {
+    const heroIdx = ordered.findIndex((p) => p.id === heroProductId);
+    if (heroIdx > 0) {
+      const [hero] = ordered.splice(heroIdx, 1);
+      ordered.unshift(hero!);
+    }
+  }
+
+  return ordered;
+}
+
 export default function SectionProducts({
   section,
   colors,
@@ -16,8 +45,11 @@ export default function SectionProducts({
   isPreview,
 }: SectionProductsProps) {
   const layout = section.productLayout || "grid";
+  const orderedProducts = applyProductOrder(products, section);
   const limit = section.productLimit;
-  const displayProducts = limit ? products.slice(0, limit) : products;
+  const displayProducts = limit
+    ? orderedProducts.slice(0, limit)
+    : orderedProducts;
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-16 md:px-6">

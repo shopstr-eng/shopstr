@@ -6,6 +6,7 @@ import {
   StorefrontSection,
   StorefrontSectionType,
 } from "@/utils/types/types";
+import { ProductData } from "@/utils/parsers/product-parser-functions";
 import SectionEditor from "./section-editor";
 
 const PAGE_SECTION_TYPES: { type: StorefrontSectionType; label: string }[] = [
@@ -26,9 +27,14 @@ const PAGE_SECTION_TYPES: { type: StorefrontSectionType; label: string }[] = [
 interface PageEditorProps {
   pages: StorefrontPage[];
   onChange: (pages: StorefrontPage[]) => void;
+  sellerProducts?: ProductData[];
 }
 
-export default function PageEditor({ pages, onChange }: PageEditorProps) {
+export default function PageEditor({
+  pages,
+  onChange,
+  sellerProducts = [],
+}: PageEditorProps) {
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
 
   const addPage = () => {
@@ -183,6 +189,7 @@ export default function PageEditor({ pages, onChange }: PageEditorProps) {
                       <SectionEditor
                         key={section.id}
                         section={section}
+                        products={sellerProducts}
                         onChange={(updated) =>
                           updatePageSection(i, si, updated)
                         }

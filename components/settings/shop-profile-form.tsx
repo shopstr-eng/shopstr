@@ -1,4 +1,11 @@
-import { useEffect, useRef, useState, useContext, useCallback } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  useContext,
+  useCallback,
+  useMemo,
+} from "react";
 import { useRouter } from "next/router";
 import { useForm, Controller } from "react-hook-form";
 import {
@@ -11,7 +18,7 @@ import {
   Switch,
 } from "@nextui-org/react";
 
-import { ShopMapContext } from "@/utils/context/context";
+import { ShopMapContext, ProductContext } from "@/utils/context/context";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
   SignerContext,
@@ -33,7 +40,10 @@ import {
 import SectionEditor from "./storefront/section-editor";
 import FooterEditor from "./storefront/footer-editor";
 import PageEditor from "./storefront/page-editor";
-import StorefrontPreviewModal from "./storefront/storefront-preview-modal";
+import StorefrontPreviewPanel from "./storefront/storefront-preview-panel";
+import parseTags, {
+  ProductData,
+} from "@/utils/parsers/product-parser-functions";
 
 interface ShopProfileFormProps {
   isOnboarding?: boolean;
@@ -219,10 +229,12 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
   const [showCommunityPage, setShowCommunityPage] = useState(false);
   const [showWalletPage, setShowWalletPage] = useState(false);
   const [contactEmail, setContactEmail] = useState("");
-  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
   const { signer, pubkey: userPubkey } = useContext(SignerContext);
   const shopContext = useContext(ShopMapContext);
+  const productContext = useContext(ProductContext);
+  const [isMobilePreviewOpen, setIsMobilePreviewOpen] = useState(false);
+  const [newSectionId, setNewSectionId] = useState<string | null>(null);
 
   const { handleSubmit, control, reset, watch, setValue } = useForm({
     defaultValues: {
@@ -240,6 +252,34 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
   // Tracks whether relay-context data has been applied so DB pre-load doesn't
   // override more authoritative data that arrived later.
   const contextLoadedRef = useRef(false);
+
+  const sellerProducts = useMemo<ProductData[]>(() => {
+    if (!userPubkey || !productContext.productEvents.length) return [];
+    return productContext.productEvents
+      .filter((event: any) => event.pubkey === userPubkey)
+      .map((event: any) => parseTags(event))
+      .filter(
+        (p: ProductData | undefined): p is ProductData => p !== undefined
+      );
+  }, [userPubkey, productContext.productEvents]);
+
+  const buildPreviewProps = () => ({
+    shopName: watch("name"),
+    shopAbout: watch("about"),
+    pictureUrl: watch("picture"),
+    bannerUrl: watch("banner"),
+    colors,
+    productLayout,
+    landingPageStyle,
+    fontHeading,
+    fontBody,
+    sections,
+    pages,
+    footer,
+    navLinks,
+    shopSlug,
+    sellerProducts,
+  });
 
   const applyShopConfig = useCallback(
     (config: any) => {
@@ -742,677 +782,763 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
       )}
       {activeTab === "storefront" && !isOnboarding && (
         <>
-          <div className="space-y-6 py-2">
-            {/* Shop URL */}
-            <div className="pb-2">
-              <p className="pb-1 text-lg font-semibold text-light-text dark:text-dark-text">
-                Shop URL
-              </p>
-              <p className="pb-3 text-sm text-gray-500 dark:text-gray-400">
-                Choose a unique URL for your storefront.
-              </p>
-              <div className="flex gap-2">
-                <div className="flex items-center rounded-l-md border border-r-0 border-gray-300 bg-light-fg px-3 py-2 text-sm text-light-text dark:border-gray-600 dark:bg-dark-fg dark:text-dark-text">
-                  {siteHost}/shop/
-                </div>
-                <Input
-                  className="flex-1"
-                  variant="bordered"
-                  placeholder="your-shop-name"
-                  value={slugInput}
-                  onChange={(e) => {
-                    setSlugInput(sanitizeSlug(e.target.value));
-                    setSlugStatus("idle");
-                    setSlugMessage("");
-                  }}
-                  classNames={{ inputWrapper: "rounded-l-none" }}
-                />
-                <Button
-                  className={`${SHOPSTRBUTTONCLASSNAMES}`}
-                  onPress={registerSlug}
-                  isDisabled={!slugInput || slugInput.length < 2}
-                >
-                  Save
-                </Button>
-              </div>
-              {slugMessage && (
-                <p
-                  className={`mt-2 text-sm ${
-                    slugStatus === "saved"
-                      ? "text-green-600"
-                      : slugStatus === "error" || slugStatus === "taken"
-                        ? "text-red-600"
-                        : "text-gray-500"
-                  }`}
-                >
-                  {slugMessage}
-                </p>
-              )}
-              {shopSlug && (
-                <a
-                  href={`/shop/${shopSlug}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-2 inline-block text-sm text-shopstr-purple underline dark:text-shopstr-yellow"
-                >
-                  {siteHost}/shop/{shopSlug} →
-                </a>
-              )}
-            </div>
-
-            <hr className="border-light-fg dark:border-dark-fg" />
-
-            {/* Landing Page Style */}
-            <div className="pb-2">
-              <p className="pb-3 text-lg font-semibold text-light-text dark:text-dark-text">
-                Landing Page Style
-              </p>
-              <div className="flex flex-wrap gap-3">
-                {[
-                  {
-                    value: "hero" as const,
-                    label: "Hero",
-                    desc: "Large banner with shop info overlay",
-                  },
-                  {
-                    value: "classic" as const,
-                    label: "Classic",
-                    desc: "Banner image with info below",
-                  },
-                  {
-                    value: "minimal" as const,
-                    label: "Minimal",
-                    desc: "Clean, simple header",
-                  },
-                ].map((style) => (
-                  <button
-                    key={style.value}
-                    type="button"
-                    className={`flex-1 rounded-md border-2 p-3 text-left text-sm transition-all ${
-                      landingPageStyle === style.value
-                        ? "border-shopstr-purple bg-shopstr-purple text-white"
-                        : "border-gray-200 text-light-text hover:border-shopstr-purple-light dark:border-gray-600 dark:text-dark-text dark:hover:border-shopstr-purple-light"
-                    }`}
-                    onClick={() => setLandingPageStyle(style.value)}
-                  >
-                    <span className="block font-semibold capitalize">
-                      {style.label}
-                    </span>
-                    <span className="block text-xs opacity-70">
-                      {style.desc}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <hr className="border-light-fg dark:border-dark-fg" />
-
-            {/* Product Layout */}
-            <div className="pb-2">
-              <p className="pb-3 text-lg font-semibold text-light-text dark:text-dark-text">
-                Product Layout
-              </p>
-              <div className="flex flex-wrap gap-3">
-                {[
-                  {
-                    value: "grid" as const,
-                    label: "Grid",
-                    desc: "Products in a grid",
-                  },
-                  {
-                    value: "list" as const,
-                    label: "List",
-                    desc: "Products in a list",
-                  },
-                  {
-                    value: "featured" as const,
-                    label: "Featured",
-                    desc: "Hero product + grid",
-                  },
-                ].map((layout) => (
-                  <button
-                    key={layout.value}
-                    type="button"
-                    className={`flex-1 rounded-md border-2 p-3 text-left text-sm transition-all ${
-                      productLayout === layout.value
-                        ? "border-shopstr-purple bg-shopstr-purple text-white"
-                        : "border-gray-200 text-light-text hover:border-shopstr-purple-light dark:border-gray-600 dark:text-dark-text dark:hover:border-shopstr-purple-light"
-                    }`}
-                    onClick={() => setProductLayout(layout.value)}
-                  >
-                    <span className="block font-semibold capitalize">
-                      {layout.label}
-                    </span>
-                    <span className="block text-xs opacity-70">
-                      {layout.desc}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <hr className="border-light-fg dark:border-dark-fg" />
-
-            {/* Color Scheme */}
-            <div className="pb-2">
-              <p className="pb-3 text-lg font-semibold text-light-text dark:text-dark-text">
-                Color Scheme
-              </p>
-              <div className="mb-4 flex flex-wrap gap-2">
-                {COLOR_PRESETS.map((preset) => (
-                  <button
-                    key={preset.name}
-                    type="button"
-                    onClick={() => setColors(preset.colors)}
-                    className={`flex items-center gap-2 rounded-lg border-2 px-3 py-1.5 text-sm font-medium text-light-text transition-all dark:text-dark-text ${
-                      JSON.stringify(colors) === JSON.stringify(preset.colors)
-                        ? "border-shopstr-purple bg-shopstr-purple/10"
-                        : "border-gray-200 hover:border-shopstr-purple-light dark:border-gray-600 dark:hover:border-gray-400"
-                    }`}
-                  >
-                    <div className="flex gap-1">
-                      <div
-                        className="h-4 w-4 rounded-full border border-gray-300"
-                        style={{ backgroundColor: preset.colors.primary }}
-                      />
-                      <div
-                        className="h-4 w-4 rounded-full border border-gray-300"
-                        style={{ backgroundColor: preset.colors.secondary }}
-                      />
-                      <div
-                        className="h-4 w-4 rounded-full border border-gray-300"
-                        style={{ backgroundColor: preset.colors.accent }}
-                      />
+          <div className="xl:flex xl:items-start xl:gap-6">
+            <div className="min-w-0 xl:w-[45%] xl:flex-shrink-0">
+              <div className="space-y-6 py-2">
+                {/* Shop URL */}
+                <div className="pb-2">
+                  <p className="pb-1 text-lg font-semibold text-light-text dark:text-dark-text">
+                    Shop URL
+                  </p>
+                  <p className="pb-3 text-sm text-gray-500 dark:text-gray-400">
+                    Choose a unique URL for your storefront.
+                  </p>
+                  <div className="flex gap-2">
+                    <div className="flex items-center rounded-l-md border border-r-0 border-gray-300 bg-light-fg px-3 py-2 text-sm text-light-text dark:border-gray-600 dark:bg-dark-fg dark:text-dark-text">
+                      {siteHost}/shop/
                     </div>
-                    {preset.name}
-                  </button>
-                ))}
-              </div>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                {(
-                  [
-                    ["primary", "Primary Color"],
-                    ["secondary", "Secondary / Background"],
-                    ["accent", "Accent Color"],
-                    ["background", "Page Background"],
-                    ["text", "Text Color"],
-                  ] as const
-                ).map(([key, label]) => (
-                  <div key={key}>
-                    <label className="mb-1 block text-sm font-medium text-light-text dark:text-dark-text">
-                      {label}
-                    </label>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="color"
-                        value={colors[key]}
-                        onChange={(e) =>
-                          setColors((prev) => ({
-                            ...prev,
-                            [key]: e.target.value,
-                          }))
-                        }
-                        className="h-10 w-16 cursor-pointer rounded border border-gray-200 dark:border-gray-600"
-                      />
-                      <Input
-                        variant="bordered"
-                        value={colors[key]}
-                        onChange={(e) => {
-                          if (/^#[0-9A-Fa-f]{6}$/.test(e.target.value)) {
-                            setColors((prev) => ({
-                              ...prev,
-                              [key]: e.target.value,
-                            }));
-                          }
-                        }}
-                        className="flex-1"
-                        placeholder="#000000"
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <button
-                type="button"
-                className="mt-4 text-sm text-gray-500 underline hover:text-light-text dark:text-gray-400 dark:hover:text-dark-text"
-                onClick={() => setColors(DEFAULT_COLORS)}
-              >
-                Reset to defaults
-              </button>
-            </div>
-
-            <hr className="border-light-fg dark:border-dark-fg" />
-
-            {/* Typography */}
-            <div className="pb-2">
-              <p className="pb-3 text-lg font-semibold text-light-text dark:text-dark-text">
-                Typography
-              </p>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <Select
-                  className="text-light-text dark:text-dark-text"
-                  classNames={{ label: "text-light-text dark:text-dark-text" }}
-                  variant="bordered"
-                  label="Heading Font"
-                  labelPlacement="outside"
-                  selectedKeys={[fontHeading]}
-                  onChange={(e) => setFontHeading(e.target.value)}
-                  aria-label="Heading font"
-                >
-                  {GOOGLE_FONTS.map((f) => (
-                    <SelectItem key={f.value} value={f.value}>
-                      {f.label}
-                    </SelectItem>
-                  ))}
-                </Select>
-                <Select
-                  className="text-light-text dark:text-dark-text"
-                  classNames={{ label: "text-light-text dark:text-dark-text" }}
-                  variant="bordered"
-                  label="Body Font"
-                  labelPlacement="outside"
-                  selectedKeys={[fontBody]}
-                  onChange={(e) => setFontBody(e.target.value)}
-                  aria-label="Body font"
-                >
-                  {GOOGLE_FONTS.map((f) => (
-                    <SelectItem key={f.value} value={f.value}>
-                      {f.label}
-                    </SelectItem>
-                  ))}
-                </Select>
-              </div>
-            </div>
-
-            <hr className="border-light-fg dark:border-dark-fg" />
-
-            {/* Navigation Links */}
-            <div className="pb-2">
-              <p className="pb-1 text-lg font-semibold text-light-text dark:text-dark-text">
-                Navigation Links
-              </p>
-              <p className="pb-3 text-sm text-gray-500 dark:text-gray-400">
-                Define the top navigation links for your storefront. Leave empty
-                to use default navigation.
-              </p>
-              <div className="space-y-2">
-                {navLinks.map((link, idx) => (
-                  <div key={idx} className="flex items-center gap-2">
                     <Input
-                      variant="bordered"
-                      size="sm"
-                      value={link.label}
-                      onChange={(e) => {
-                        const updated = [...navLinks];
-                        updated[idx] = { ...link, label: e.target.value };
-                        setNavLinks(updated);
-                      }}
-                      placeholder="Label"
-                      className="w-32"
-                    />
-                    <Input
-                      variant="bordered"
-                      size="sm"
-                      value={link.href}
-                      onChange={(e) => {
-                        const updated = [...navLinks];
-                        updated[idx] = { ...link, href: e.target.value };
-                        setNavLinks(updated);
-                      }}
-                      placeholder="URL or page slug"
                       className="flex-1"
+                      variant="bordered"
+                      placeholder="your-shop-name"
+                      value={slugInput}
+                      onChange={(e) => {
+                        setSlugInput(sanitizeSlug(e.target.value));
+                        setSlugStatus("idle");
+                        setSlugMessage("");
+                      }}
+                      classNames={{ inputWrapper: "rounded-l-none" }}
                     />
-                    <label className="flex items-center gap-1 whitespace-nowrap text-xs text-gray-500 dark:text-gray-400">
-                      <input
-                        type="checkbox"
-                        checked={link.isPage || false}
-                        onChange={(e) => {
-                          const updated = [...navLinks];
-                          updated[idx] = { ...link, isPage: e.target.checked };
-                          setNavLinks(updated);
-                        }}
-                      />
-                      Page
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setNavLinks(navLinks.filter((_, i) => i !== idx))
-                      }
-                      className="text-xs text-red-500"
+                    <Button
+                      className={`${SHOPSTRBUTTONCLASSNAMES}`}
+                      onPress={registerSlug}
+                      isDisabled={!slugInput || slugInput.length < 2}
                     >
-                      ✕
-                    </button>
+                      Save
+                    </Button>
                   </div>
-                ))}
-              </div>
-              <button
-                type="button"
-                onClick={() =>
-                  setNavLinks([...navLinks, { label: "", href: "" }])
-                }
-                className="mt-2 text-sm text-shopstr-purple hover:underline dark:text-shopstr-yellow"
-              >
-                + Add Nav Link
-              </button>
-            </div>
+                  {slugMessage && (
+                    <p
+                      className={`mt-2 text-sm ${
+                        slugStatus === "saved"
+                          ? "text-green-600"
+                          : slugStatus === "error" || slugStatus === "taken"
+                            ? "text-red-600"
+                            : "text-gray-500"
+                      }`}
+                    >
+                      {slugMessage}
+                    </p>
+                  )}
+                  {shopSlug && (
+                    <a
+                      href={`/shop/${shopSlug}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-2 inline-block text-sm text-shopstr-purple underline dark:text-shopstr-yellow"
+                    >
+                      {siteHost}/shop/{shopSlug} →
+                    </a>
+                  )}
+                </div>
 
-            <hr className="border-light-fg dark:border-dark-fg" />
+                <hr className="border-light-fg dark:border-dark-fg" />
 
-            {/* Homepage Sections */}
-            <div className="pb-2">
-              <p className="pb-1 text-lg font-semibold text-light-text dark:text-dark-text">
-                Homepage Sections
-              </p>
-              <p className="pb-3 text-sm text-gray-500 dark:text-gray-400">
-                Build your storefront homepage by adding and arranging content
-                sections. If no sections are added, the landing page style above
-                is used instead.
-              </p>
-              <div className="space-y-2">
-                {sections.map((section, idx) => (
-                  <SectionEditor
-                    key={section.id}
-                    section={section}
-                    onChange={(updated) => {
-                      const newSections = [...sections];
-                      newSections[idx] = updated;
-                      setSections(newSections);
-                    }}
-                    onRemove={() =>
-                      setSections(sections.filter((_, i) => i !== idx))
-                    }
-                    onMoveUp={() => {
-                      if (idx === 0) return;
-                      const newSections = [...sections];
-                      [newSections[idx - 1], newSections[idx]] = [
-                        newSections[idx]!,
-                        newSections[idx - 1]!,
-                      ];
-                      setSections(newSections);
-                    }}
-                    onMoveDown={() => {
-                      if (idx === sections.length - 1) return;
-                      const newSections = [...sections];
-                      [newSections[idx], newSections[idx + 1]] = [
-                        newSections[idx + 1]!,
-                        newSections[idx]!,
-                      ];
-                      setSections(newSections);
-                    }}
-                    isFirst={idx === 0}
-                    isLast={idx === sections.length - 1}
-                  />
-                ))}
-              </div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {(
-                  [
-                    { type: "hero" as StorefrontSectionType, label: "Hero" },
-                    { type: "about" as StorefrontSectionType, label: "About" },
-                    {
-                      type: "story" as StorefrontSectionType,
-                      label: "Our Story",
-                    },
-                    {
-                      type: "products" as StorefrontSectionType,
-                      label: "Products",
-                    },
-                    {
-                      type: "testimonials" as StorefrontSectionType,
-                      label: "Testimonials",
-                    },
-                    { type: "faq" as StorefrontSectionType, label: "FAQ" },
-                    {
-                      type: "ingredients" as StorefrontSectionType,
-                      label: "Ingredients",
-                    },
-                    {
-                      type: "comparison" as StorefrontSectionType,
-                      label: "Comparison",
-                    },
-                    { type: "text" as StorefrontSectionType, label: "Text" },
-                    { type: "image" as StorefrontSectionType, label: "Image" },
-                    {
-                      type: "contact" as StorefrontSectionType,
-                      label: "Contact",
-                    },
-                    {
-                      type: "reviews" as StorefrontSectionType,
-                      label: "Reviews",
-                    },
-                  ] as const
-                ).map((st) => (
+                {/* Landing Page Style */}
+                <div className="pb-2">
+                  <p className="pb-3 text-lg font-semibold text-light-text dark:text-dark-text">
+                    Landing Page Style
+                  </p>
+                  <div className="flex flex-wrap gap-3">
+                    {[
+                      {
+                        value: "hero" as const,
+                        label: "Hero",
+                        desc: "Large banner with shop info overlay",
+                      },
+                      {
+                        value: "classic" as const,
+                        label: "Classic",
+                        desc: "Banner image with info below",
+                      },
+                      {
+                        value: "minimal" as const,
+                        label: "Minimal",
+                        desc: "Clean, simple header",
+                      },
+                    ].map((style) => (
+                      <button
+                        key={style.value}
+                        type="button"
+                        className={`flex-1 rounded-md border-2 p-3 text-left text-sm transition-all ${
+                          landingPageStyle === style.value
+                            ? "border-shopstr-purple bg-shopstr-purple text-white"
+                            : "border-gray-200 text-light-text hover:border-shopstr-purple-light dark:border-gray-600 dark:text-dark-text dark:hover:border-shopstr-purple-light"
+                        }`}
+                        onClick={() => setLandingPageStyle(style.value)}
+                      >
+                        <span className="block font-semibold capitalize">
+                          {style.label}
+                        </span>
+                        <span className="block text-xs opacity-70">
+                          {style.desc}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <hr className="border-light-fg dark:border-dark-fg" />
+
+                {/* Product Layout */}
+                <div className="pb-2">
+                  <p className="pb-3 text-lg font-semibold text-light-text dark:text-dark-text">
+                    Product Layout
+                  </p>
+                  <div className="flex flex-wrap gap-3">
+                    {[
+                      {
+                        value: "grid" as const,
+                        label: "Grid",
+                        desc: "Products in a grid",
+                      },
+                      {
+                        value: "list" as const,
+                        label: "List",
+                        desc: "Products in a list",
+                      },
+                      {
+                        value: "featured" as const,
+                        label: "Featured",
+                        desc: "Hero product + grid",
+                      },
+                    ].map((layout) => (
+                      <button
+                        key={layout.value}
+                        type="button"
+                        className={`flex-1 rounded-md border-2 p-3 text-left text-sm transition-all ${
+                          productLayout === layout.value
+                            ? "border-shopstr-purple bg-shopstr-purple text-white"
+                            : "border-gray-200 text-light-text hover:border-shopstr-purple-light dark:border-gray-600 dark:text-dark-text dark:hover:border-shopstr-purple-light"
+                        }`}
+                        onClick={() => setProductLayout(layout.value)}
+                      >
+                        <span className="block font-semibold capitalize">
+                          {layout.label}
+                        </span>
+                        <span className="block text-xs opacity-70">
+                          {layout.desc}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <hr className="border-light-fg dark:border-dark-fg" />
+
+                {/* Color Scheme */}
+                <div className="pb-2">
+                  <p className="pb-3 text-lg font-semibold text-light-text dark:text-dark-text">
+                    Color Scheme
+                  </p>
+                  <div className="mb-4 flex flex-wrap gap-2">
+                    {COLOR_PRESETS.map((preset) => (
+                      <button
+                        key={preset.name}
+                        type="button"
+                        onClick={() => setColors(preset.colors)}
+                        className={`flex items-center gap-2 rounded-lg border-2 px-3 py-1.5 text-sm font-medium text-light-text transition-all dark:text-dark-text ${
+                          JSON.stringify(colors) ===
+                          JSON.stringify(preset.colors)
+                            ? "border-shopstr-purple bg-shopstr-purple/10"
+                            : "border-gray-200 hover:border-shopstr-purple-light dark:border-gray-600 dark:hover:border-gray-400"
+                        }`}
+                      >
+                        <div className="flex gap-1">
+                          <div
+                            className="h-4 w-4 rounded-full border border-gray-300"
+                            style={{ backgroundColor: preset.colors.primary }}
+                          />
+                          <div
+                            className="h-4 w-4 rounded-full border border-gray-300"
+                            style={{ backgroundColor: preset.colors.secondary }}
+                          />
+                          <div
+                            className="h-4 w-4 rounded-full border border-gray-300"
+                            style={{ backgroundColor: preset.colors.accent }}
+                          />
+                        </div>
+                        {preset.name}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    {(
+                      [
+                        ["primary", "Primary Color"],
+                        ["secondary", "Secondary / Background"],
+                        ["accent", "Accent Color"],
+                        ["background", "Page Background"],
+                        ["text", "Text Color"],
+                      ] as const
+                    ).map(([key, label]) => (
+                      <div key={key}>
+                        <label className="mb-1 block text-sm font-medium text-light-text dark:text-dark-text">
+                          {label}
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="color"
+                            value={colors[key]}
+                            onChange={(e) =>
+                              setColors((prev) => ({
+                                ...prev,
+                                [key]: e.target.value,
+                              }))
+                            }
+                            className="h-10 w-16 cursor-pointer rounded border border-gray-200 dark:border-gray-600"
+                          />
+                          <Input
+                            variant="bordered"
+                            value={colors[key]}
+                            onChange={(e) => {
+                              if (/^#[0-9A-Fa-f]{6}$/.test(e.target.value)) {
+                                setColors((prev) => ({
+                                  ...prev,
+                                  [key]: e.target.value,
+                                }));
+                              }
+                            }}
+                            className="flex-1"
+                            placeholder="#000000"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                   <button
-                    key={st.type}
+                    type="button"
+                    className="mt-4 text-sm text-gray-500 underline hover:text-light-text dark:text-gray-400 dark:hover:text-dark-text"
+                    onClick={() => setColors(DEFAULT_COLORS)}
+                  >
+                    Reset to defaults
+                  </button>
+                </div>
+
+                <hr className="border-light-fg dark:border-dark-fg" />
+
+                {/* Typography */}
+                <div className="pb-2">
+                  <p className="pb-3 text-lg font-semibold text-light-text dark:text-dark-text">
+                    Typography
+                  </p>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <Select
+                      className="text-light-text dark:text-dark-text"
+                      classNames={{
+                        label: "text-light-text dark:text-dark-text",
+                      }}
+                      variant="bordered"
+                      label="Heading Font"
+                      labelPlacement="outside"
+                      selectedKeys={[fontHeading]}
+                      onChange={(e) => setFontHeading(e.target.value)}
+                      aria-label="Heading font"
+                    >
+                      {GOOGLE_FONTS.map((f) => (
+                        <SelectItem key={f.value} value={f.value}>
+                          {f.label}
+                        </SelectItem>
+                      ))}
+                    </Select>
+                    <Select
+                      className="text-light-text dark:text-dark-text"
+                      classNames={{
+                        label: "text-light-text dark:text-dark-text",
+                      }}
+                      variant="bordered"
+                      label="Body Font"
+                      labelPlacement="outside"
+                      selectedKeys={[fontBody]}
+                      onChange={(e) => setFontBody(e.target.value)}
+                      aria-label="Body font"
+                    >
+                      {GOOGLE_FONTS.map((f) => (
+                        <SelectItem key={f.value} value={f.value}>
+                          {f.label}
+                        </SelectItem>
+                      ))}
+                    </Select>
+                  </div>
+                </div>
+
+                <hr className="border-light-fg dark:border-dark-fg" />
+
+                {/* Navigation Links */}
+                <div className="pb-2">
+                  <p className="pb-1 text-lg font-semibold text-light-text dark:text-dark-text">
+                    Navigation Links
+                  </p>
+                  <p className="pb-3 text-sm text-gray-500 dark:text-gray-400">
+                    Define the top navigation links for your storefront. Leave
+                    empty to use default navigation.
+                  </p>
+                  <div className="space-y-2">
+                    {navLinks.map((link, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <Input
+                          variant="bordered"
+                          size="sm"
+                          value={link.label}
+                          onChange={(e) => {
+                            const updated = [...navLinks];
+                            updated[idx] = { ...link, label: e.target.value };
+                            setNavLinks(updated);
+                          }}
+                          placeholder="Label"
+                          className="w-32"
+                        />
+                        <Input
+                          variant="bordered"
+                          size="sm"
+                          value={link.href}
+                          onChange={(e) => {
+                            const updated = [...navLinks];
+                            updated[idx] = { ...link, href: e.target.value };
+                            setNavLinks(updated);
+                          }}
+                          placeholder="URL or page slug"
+                          className="flex-1"
+                        />
+                        <label className="flex items-center gap-1 whitespace-nowrap text-xs text-gray-500 dark:text-gray-400">
+                          <input
+                            type="checkbox"
+                            checked={link.isPage || false}
+                            onChange={(e) => {
+                              const updated = [...navLinks];
+                              updated[idx] = {
+                                ...link,
+                                isPage: e.target.checked,
+                              };
+                              setNavLinks(updated);
+                            }}
+                          />
+                          Page
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setNavLinks(navLinks.filter((_, i) => i !== idx))
+                          }
+                          className="text-xs text-red-500"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <button
                     type="button"
                     onClick={() =>
-                      setSections([
-                        ...sections,
-                        {
-                          id: `section-${Date.now()}-${Math.random()
-                            .toString(36)
-                            .slice(2, 6)}`,
-                          type: st.type,
-                          enabled: true,
-                        },
-                      ])
+                      setNavLinks([...navLinks, { label: "", href: "" }])
                     }
-                    className="rounded border border-gray-300 px-2 py-1 text-xs font-medium text-gray-600 hover:border-shopstr-purple hover:text-shopstr-purple dark:border-gray-600 dark:text-gray-400 dark:hover:border-shopstr-yellow dark:hover:text-shopstr-yellow"
+                    className="mt-2 text-sm text-shopstr-purple hover:underline dark:text-shopstr-yellow"
                   >
-                    + {st.label}
+                    + Add Nav Link
                   </button>
-                ))}
+                </div>
+
+                <hr className="border-light-fg dark:border-dark-fg" />
+
+                {/* Homepage Sections */}
+                <div className="pb-2">
+                  <p className="pb-1 text-lg font-semibold text-light-text dark:text-dark-text">
+                    Homepage Sections
+                  </p>
+                  <p className="pb-3 text-sm text-gray-500 dark:text-gray-400">
+                    Build your storefront homepage by adding and arranging
+                    content sections. If no sections are added, the landing page
+                    style above is used instead.
+                  </p>
+                  <div className="space-y-2">
+                    {sections.map((section, idx) => (
+                      <SectionEditor
+                        key={section.id}
+                        section={section}
+                        products={sellerProducts}
+                        onChange={(updated) => {
+                          const newSections = [...sections];
+                          newSections[idx] = updated;
+                          setSections(newSections);
+                        }}
+                        onRemove={() =>
+                          setSections(sections.filter((_, i) => i !== idx))
+                        }
+                        onMoveUp={() => {
+                          if (idx === 0) return;
+                          const newSections = [...sections];
+                          [newSections[idx - 1], newSections[idx]] = [
+                            newSections[idx]!,
+                            newSections[idx - 1]!,
+                          ];
+                          setSections(newSections);
+                        }}
+                        onMoveDown={() => {
+                          if (idx === sections.length - 1) return;
+                          const newSections = [...sections];
+                          [newSections[idx], newSections[idx + 1]] = [
+                            newSections[idx + 1]!,
+                            newSections[idx]!,
+                          ];
+                          setSections(newSections);
+                        }}
+                        isFirst={idx === 0}
+                        isLast={idx === sections.length - 1}
+                        isNew={section.id === newSectionId}
+                        onFlashDone={() => setNewSectionId(null)}
+                      />
+                    ))}
+                  </div>
+                  <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+                    {(
+                      [
+                        {
+                          type: "hero" as StorefrontSectionType,
+                          label: "Hero Banner",
+                          icon: "🖼",
+                          desc: "Full-width banner with CTA",
+                        },
+                        {
+                          type: "about" as StorefrontSectionType,
+                          label: "About",
+                          icon: "💬",
+                          desc: "Info about your shop",
+                        },
+                        {
+                          type: "story" as StorefrontSectionType,
+                          label: "Our Story",
+                          icon: "📖",
+                          desc: "Share your brand story",
+                        },
+                        {
+                          type: "products" as StorefrontSectionType,
+                          label: "Products",
+                          icon: "🛍",
+                          desc: "Show your listings",
+                        },
+                        {
+                          type: "testimonials" as StorefrontSectionType,
+                          label: "Testimonials",
+                          icon: "⭐",
+                          desc: "Customer quotes",
+                        },
+                        {
+                          type: "faq" as StorefrontSectionType,
+                          label: "FAQ",
+                          icon: "❓",
+                          desc: "Frequently asked questions",
+                        },
+                        {
+                          type: "ingredients" as StorefrontSectionType,
+                          label: "Ingredients",
+                          icon: "🌿",
+                          desc: "Highlight key features",
+                        },
+                        {
+                          type: "comparison" as StorefrontSectionType,
+                          label: "Comparison",
+                          icon: "⚖️",
+                          desc: "Compare plans or products",
+                        },
+                        {
+                          type: "text" as StorefrontSectionType,
+                          label: "Text Block",
+                          icon: "✍️",
+                          desc: "Custom text section",
+                        },
+                        {
+                          type: "image" as StorefrontSectionType,
+                          label: "Image",
+                          icon: "📷",
+                          desc: "Full or partial image",
+                        },
+                        {
+                          type: "contact" as StorefrontSectionType,
+                          label: "Contact Info",
+                          icon: "📞",
+                          desc: "Email, phone, address",
+                        },
+                        {
+                          type: "reviews" as StorefrontSectionType,
+                          label: "Reviews",
+                          icon: "🏆",
+                          desc: "Nostr customer reviews",
+                        },
+                      ] as const
+                    ).map((st) => (
+                      <button
+                        key={st.type}
+                        type="button"
+                        onClick={() => {
+                          const id = `section-${Date.now()}-${Math.random()
+                            .toString(36)
+                            .slice(2, 6)}`;
+                          setSections([
+                            ...sections,
+                            { id, type: st.type, enabled: true },
+                          ]);
+                          setNewSectionId(id);
+                        }}
+                        className="flex flex-col items-start gap-1 rounded-lg border-2 border-gray-200 bg-light-fg p-3 text-left transition-all hover:border-shopstr-purple hover:bg-shopstr-purple/5 dark:border-gray-600 dark:bg-dark-fg dark:hover:border-shopstr-yellow dark:hover:bg-shopstr-yellow/5"
+                      >
+                        <span className="text-xl">{st.icon}</span>
+                        <span className="text-xs font-semibold text-light-text dark:text-dark-text">
+                          {st.label}
+                        </span>
+                        <span className="text-[10px] leading-tight text-gray-400 dark:text-gray-500">
+                          {st.desc}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <hr className="border-light-fg dark:border-dark-fg" />
+
+                {/* Custom Pages */}
+                <div className="pb-2">
+                  <PageEditor
+                    pages={pages}
+                    onChange={setPages}
+                    sellerProducts={sellerProducts}
+                  />
+                </div>
+
+                <hr className="border-light-fg dark:border-dark-fg" />
+
+                {/* Built-in Pages */}
+                <div className="pb-2">
+                  <p className="pb-3 text-lg font-semibold text-light-text dark:text-dark-text">
+                    Built-in Pages
+                  </p>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium text-light-text dark:text-dark-text">
+                          Community Page
+                        </p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                          Show a community discussion page
+                        </p>
+                      </div>
+                      <Switch
+                        isSelected={showCommunityPage}
+                        onValueChange={setShowCommunityPage}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium text-light-text dark:text-dark-text">
+                          Wallet Page
+                        </p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                          Show a Bitcoin wallet page for buyers
+                        </p>
+                      </div>
+                      <Switch
+                        isSelected={showWalletPage}
+                        onValueChange={setShowWalletPage}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <hr className="border-light-fg dark:border-dark-fg" />
+
+                {/* Contact Us */}
+                <div className="pb-2">
+                  <p className="pb-1 text-lg font-semibold text-light-text dark:text-dark-text">
+                    Contact Us
+                  </p>
+                  <p className="pb-3 text-sm text-gray-500 dark:text-gray-400">
+                    A &quot;Contact&quot; link is shown on your storefront by
+                    default. Clicking it opens a Nostr DM inquiry with you
+                    directly within your storefront. If you prefer to use email
+                    instead, enter your address below.
+                  </p>
+                  <Input
+                    label="Contact Email"
+                    labelPlacement="outside"
+                    variant="bordered"
+                    type="email"
+                    placeholder="hello@yourshop.com"
+                    value={contactEmail}
+                    onChange={(e) => setContactEmail(e.target.value)}
+                    classNames={{
+                      label:
+                        "text-light-text dark:text-dark-text font-medium pb-1",
+                    }}
+                  />
+                </div>
+
+                <hr className="border-light-fg dark:border-dark-fg" />
+
+                {/* Footer */}
+                <div className="pb-2">
+                  <p className="pb-1 text-lg font-semibold text-light-text dark:text-dark-text">
+                    Footer
+                  </p>
+                  <p className="pb-3 text-sm text-gray-500 dark:text-gray-400">
+                    Customize the footer at the bottom of your storefront.
+                  </p>
+                  <FooterEditor
+                    footer={footer}
+                    onChange={setFooter}
+                    shopName={watch("name")}
+                  />
+                </div>
+
+                <hr className="border-light-fg dark:border-dark-fg" />
+
+                {/* Custom Domain */}
+                <div className="pb-2">
+                  <p className="pb-1 text-lg font-semibold text-light-text dark:text-dark-text">
+                    Custom Domain
+                  </p>
+                  <p className="pb-3 text-sm text-gray-500 dark:text-gray-400">
+                    Want to use your own domain (e.g.,{" "}
+                    <code className="rounded bg-light-fg px-1 text-xs dark:bg-dark-fg">
+                      shop.yourdomain.com
+                    </code>
+                    ) for your storefront? We can help set that up for you.
+                  </p>
+                  {customDomain && (
+                    <div className="mb-3 flex items-center gap-2 rounded-lg border border-green-300 bg-green-50 px-3 py-2 dark:border-green-700 dark:bg-green-950/30">
+                      <span className="text-xs font-medium text-green-700 dark:text-green-400">
+                        Active custom domain:
+                      </span>
+                      <code className="text-xs font-bold text-green-800 dark:text-green-300">
+                        {customDomain}
+                      </code>
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      router.push(
+                        "/orders?pk=npub15dc33fyg3cpd9r58vlqge2hh8dy6hkkrjxkhluv2xpyfreqkmsesesyv6e&isInquiry=true"
+                      )
+                    }
+                    className="inline-block rounded-lg border-3 border-black bg-white px-4 py-2 text-sm font-bold text-black hover:bg-gray-100 dark:border-gray-500 dark:bg-dark-fg dark:text-dark-text dark:hover:bg-dark-bg"
+                  >
+                    {customDomain
+                      ? "Contact Us to Change Domain"
+                      : "Contact Us"}
+                  </button>
+                </div>
+
+                <hr className="border-light-fg dark:border-dark-fg" />
+
+                {/* Preview + Save */}
+                <div className="rounded-lg border-2 border-dashed border-light-fg p-4 dark:border-dark-fg">
+                  <p className="mb-3 text-sm font-medium text-light-text dark:text-dark-text">
+                    Preview your storefront before saving to see how it will
+                    look to visitors.
+                  </p>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setIsMobilePreviewOpen(true)}
+                      className={`${SHOPSTRBUTTONCLASSNAMES} rounded-lg px-4 py-2 text-sm font-bold xl:hidden`}
+                    >
+                      Preview Storefront
+                    </button>
+                    <span className="hidden text-sm text-gray-400 dark:text-gray-500 xl:inline">
+                      ← Live preview shown on the right
+                    </span>
+                    {shopSlug && (
+                      <a
+                        href={`/shop/${shopSlug}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm text-shopstr-purple underline dark:text-shopstr-yellow"
+                      >
+                        {siteHost}/shop/{shopSlug} →
+                      </a>
+                    )}
+                  </div>
+                  <p className="mt-2 text-xs text-gray-400 dark:text-gray-500">
+                    Preview shows approximate appearance. Save to publish your
+                    changes to the live storefront.
+                  </p>
+                </div>
+
+                {/* Remove Storefront */}
+                {shopSlug && (
+                  <div className="pt-2">
+                    <Button
+                      className="border-2 border-red-500 bg-transparent font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30"
+                      onPress={handleRemoveStorefront}
+                    >
+                      Remove Storefront
+                    </Button>
+                    <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+                      This will delete your shop URL, custom domain, and reset
+                      all storefront customization.
+                    </p>
+                  </div>
+                )}
+
+                <Button
+                  className={`w-full ${SHOPSTRBUTTONCLASSNAMES}`}
+                  onPress={saveStorefront}
+                  isDisabled={isSavingStorefront}
+                  isLoading={isSavingStorefront}
+                >
+                  Save Storefront Settings
+                </Button>
               </div>
             </div>
 
-            <hr className="border-light-fg dark:border-dark-fg" />
-
-            {/* Custom Pages */}
-            <div className="pb-2">
-              <PageEditor pages={pages} onChange={setPages} />
+            {/* Live preview panel — xl screens only */}
+            <div className="sticky top-24 hidden h-[calc(100vh-8rem)] flex-shrink-0 overflow-hidden rounded-xl border-2 border-light-fg dark:border-dark-fg xl:flex xl:w-[55%] xl:flex-col">
+              <StorefrontPreviewPanel {...buildPreviewProps()} />
             </div>
+          </div>
 
-            <hr className="border-light-fg dark:border-dark-fg" />
+          {/* Floating preview button — smaller screens */}
+          <div className="fixed bottom-20 right-4 z-40 xl:hidden">
+            <button
+              type="button"
+              onClick={() => setIsMobilePreviewOpen(true)}
+              className={`${SHOPSTRBUTTONCLASSNAMES} rounded-full px-5 py-3 text-sm font-bold shadow-lg`}
+            >
+              Preview ▲
+            </button>
+          </div>
 
-            {/* Built-in Pages */}
-            <div className="pb-2">
-              <p className="pb-3 text-lg font-semibold text-light-text dark:text-dark-text">
-                Built-in Pages
-              </p>
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium text-light-text dark:text-dark-text">
-                      Community Page
-                    </p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                      Show a community discussion page
-                    </p>
-                  </div>
-                  <Switch
-                    isSelected={showCommunityPage}
-                    onValueChange={setShowCommunityPage}
-                  />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium text-light-text dark:text-dark-text">
-                      Wallet Page
-                    </p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                      Show a Bitcoin wallet page for buyers
-                    </p>
-                  </div>
-                  <Switch
-                    isSelected={showWalletPage}
-                    onValueChange={setShowWalletPage}
-                  />
-                </div>
-              </div>
-            </div>
-
-            <hr className="border-light-fg dark:border-dark-fg" />
-
-            {/* Contact Us */}
-            <div className="pb-2">
-              <p className="pb-1 text-lg font-semibold text-light-text dark:text-dark-text">
-                Contact Us
-              </p>
-              <p className="pb-3 text-sm text-gray-500 dark:text-gray-400">
-                A &quot;Contact&quot; link is shown on your storefront by
-                default. Clicking it opens a Nostr DM inquiry with you directly
-                within your storefront. If you prefer to use email instead,
-                enter your address below.
-              </p>
-              <Input
-                label="Contact Email"
-                labelPlacement="outside"
-                variant="bordered"
-                type="email"
-                placeholder="hello@yourshop.com"
-                value={contactEmail}
-                onChange={(e) => setContactEmail(e.target.value)}
-                classNames={{
-                  label: "text-light-text dark:text-dark-text font-medium pb-1",
-                }}
-              />
-            </div>
-
-            <hr className="border-light-fg dark:border-dark-fg" />
-
-            {/* Footer */}
-            <div className="pb-2">
-              <p className="pb-1 text-lg font-semibold text-light-text dark:text-dark-text">
-                Footer
-              </p>
-              <p className="pb-3 text-sm text-gray-500 dark:text-gray-400">
-                Customize the footer at the bottom of your storefront.
-              </p>
-              <FooterEditor
-                footer={footer}
-                onChange={setFooter}
-                shopName={watch("name")}
-              />
-            </div>
-
-            <hr className="border-light-fg dark:border-dark-fg" />
-
-            {/* Custom Domain */}
-            <div className="pb-2">
-              <p className="pb-1 text-lg font-semibold text-light-text dark:text-dark-text">
-                Custom Domain
-              </p>
-              <p className="pb-3 text-sm text-gray-500 dark:text-gray-400">
-                Want to use your own domain (e.g.,{" "}
-                <code className="rounded bg-light-fg px-1 text-xs dark:bg-dark-fg">
-                  shop.yourdomain.com
-                </code>
-                ) for your storefront? We can help set that up for you.
-              </p>
-              {customDomain && (
-                <div className="mb-3 flex items-center gap-2 rounded-lg border border-green-300 bg-green-50 px-3 py-2 dark:border-green-700 dark:bg-green-950/30">
-                  <span className="text-xs font-medium text-green-700 dark:text-green-400">
-                    Active custom domain:
-                  </span>
-                  <code className="text-xs font-bold text-green-800 dark:text-green-300">
-                    {customDomain}
-                  </code>
-                </div>
-              )}
-              <button
-                type="button"
-                onClick={() =>
-                  router.push(
-                    "/orders?pk=npub15dc33fyg3cpd9r58vlqge2hh8dy6hkkrjxkhluv2xpyfreqkmsesesyv6e&isInquiry=true"
-                  )
-                }
-                className="inline-block rounded-lg border-3 border-black bg-white px-4 py-2 text-sm font-bold text-black hover:bg-gray-100 dark:border-gray-500 dark:bg-dark-fg dark:text-dark-text dark:hover:bg-dark-bg"
-              >
-                {customDomain ? "Contact Us to Change Domain" : "Contact Us"}
-              </button>
-            </div>
-
-            <hr className="border-light-fg dark:border-dark-fg" />
-
-            {/* Preview + Save */}
-            <div className="rounded-lg border-2 border-dashed border-light-fg p-4 dark:border-dark-fg">
-              <p className="mb-3 text-sm font-medium text-light-text dark:text-dark-text">
-                Preview your storefront before saving to see how it will look to
-                visitors.
-              </p>
-              <div className="flex flex-wrap items-center gap-3">
+          {/* Mobile preview overlay */}
+          {isMobilePreviewOpen && (
+            <div className="fixed inset-0 z-50 flex flex-col bg-light-bg dark:bg-dark-bg xl:hidden">
+              <div className="flex flex-shrink-0 items-center justify-between border-b border-light-fg px-4 py-3 dark:border-dark-fg">
+                <span className="font-semibold text-light-text dark:text-dark-text">
+                  Storefront Preview
+                </span>
                 <button
                   type="button"
-                  onClick={() => setIsPreviewOpen(true)}
-                  className={`${SHOPSTRBUTTONCLASSNAMES} rounded-lg px-4 py-2 text-sm font-bold`}
+                  onClick={() => setIsMobilePreviewOpen(false)}
+                  className="text-sm font-bold text-shopstr-purple dark:text-shopstr-yellow"
                 >
-                  Preview Storefront
+                  ✕ Close
                 </button>
-                {shopSlug && (
-                  <a
-                    href={`/shop/${shopSlug}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-sm text-shopstr-purple underline dark:text-shopstr-yellow"
-                  >
-                    {siteHost}/shop/{shopSlug} →
-                  </a>
-                )}
               </div>
-              <p className="mt-2 text-xs text-gray-400 dark:text-gray-500">
-                Preview shows approximate appearance. Save to publish your
-                changes to the live storefront.
-              </p>
+              <div className="min-h-0 flex-1 overflow-hidden">
+                <StorefrontPreviewPanel {...buildPreviewProps()} />
+              </div>
             </div>
-
-            {/* Remove Storefront */}
-            {shopSlug && (
-              <div className="pt-2">
-                <Button
-                  className="border-2 border-red-500 bg-transparent font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30"
-                  onPress={handleRemoveStorefront}
-                >
-                  Remove Storefront
-                </Button>
-                <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
-                  This will delete your shop URL, custom domain, and reset all
-                  storefront customization.
-                </p>
-              </div>
-            )}
-
-            <Button
-              className={`w-full ${SHOPSTRBUTTONCLASSNAMES}`}
-              onPress={saveStorefront}
-              isDisabled={isSavingStorefront}
-              isLoading={isSavingStorefront}
-            >
-              Save Storefront Settings
-            </Button>
-          </div>
+          )}
         </>
       )}
-
-      <StorefrontPreviewModal
-        isOpen={isPreviewOpen}
-        onClose={() => setIsPreviewOpen(false)}
-        shopName={watch("name")}
-        shopAbout={watch("about")}
-        pictureUrl={watch("picture")}
-        bannerUrl={watch("banner")}
-        colors={colors}
-        productLayout={productLayout}
-        landingPageStyle={landingPageStyle}
-        fontHeading={fontHeading}
-        fontBody={fontBody}
-        sections={sections}
-        pages={pages}
-        footer={footer}
-        navLinks={navLinks}
-        shopSlug={shopSlug}
-      />
     </>
   );
 };

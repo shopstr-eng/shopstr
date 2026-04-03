@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Input, Textarea } from "@nextui-org/react";
 import {
   ChevronUpIcon,
@@ -6,8 +6,14 @@ import {
   ChevronRightIcon,
   TrashIcon,
 } from "@heroicons/react/24/outline";
-import { StorefrontSection, StorefrontSectionType } from "@/utils/types/types";
+import {
+  StorefrontSection,
+  StorefrontSectionType,
+  StorefrontComparisonColumn,
+  StorefrontTimelineItem,
+} from "@/utils/types/types";
 import { FileUploaderButton } from "@/components/utility-components/file-uploader";
+import { ProductData } from "@/utils/parsers/product-parser-functions";
 
 const SECTION_LABELS: Record<StorefrontSectionType, string> = {
   hero: "Hero Banner",
@@ -32,6 +38,9 @@ interface SectionEditorProps {
   onMoveDown: () => void;
   isFirst: boolean;
   isLast: boolean;
+  products?: ProductData[];
+  isNew?: boolean;
+  onFlashDone?: () => void;
 }
 
 export default function SectionEditor({
@@ -42,20 +51,40 @@ export default function SectionEditor({
   onMoveDown,
   isFirst,
   isLast,
+  products = [],
+  isNew,
+  onFlashDone,
 }: SectionEditorProps) {
   const [expanded, setExpanded] = useState(false);
+  const [isFlashing, setIsFlashing] = useState(false);
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isNew) return;
+    setIsFlashing(true);
+    setExpanded(true);
+    cardRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    const timer = setTimeout(() => {
+      setIsFlashing(false);
+      onFlashDone?.();
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [isNew]);
 
   const update = (fields: Partial<StorefrontSection>) =>
     onChange({ ...section, ...fields });
 
   const enabled = section.enabled !== false;
-  const borderClass = enabled
-    ? "border-gray-400 dark:border-gray-500"
-    : "border-gray-200 dark:border-gray-700";
+  const borderClass = isFlashing
+    ? "border-shopstr-purple dark:border-shopstr-yellow shadow-[0_0_12px_rgba(164,56,186,0.35)]"
+    : enabled
+      ? "border-gray-400 dark:border-gray-500"
+      : "border-gray-200 dark:border-gray-700";
 
   return (
     <div
-      className={`rounded-lg border-2 ${borderClass} bg-light-fg dark:bg-dark-fg`}
+      ref={cardRef}
+      className={`rounded-lg border-2 duration-500 transition-all ${borderClass} bg-light-fg dark:bg-dark-fg`}
     >
       <div className="flex items-center gap-2 p-3">
         <button
@@ -297,6 +326,122 @@ export default function SectionEditor({
                   />
                 </div>
               </div>
+
+              {/* Product ordering */}
+              {products.length > 0 && (
+                <div className="rounded border border-gray-200 bg-light-bg p-2 dark:border-dark-fg dark:bg-dark-bg">
+                  <p className="mb-2 text-xs font-semibold text-gray-500 dark:text-gray-400">
+                    Product Order{" "}
+                    <span className="font-normal opacity-70">
+                      (pin specific products to the top)
+                    </span>
+                  </p>
+                  <div className="space-y-1">
+                    {(section.productIds || []).map((pid, i) => {
+                      const product = products.find((p) => p.id === pid);
+                      return (
+                        <div
+                          key={pid}
+                          className="flex items-center gap-2 rounded bg-light-fg px-2 py-1 dark:bg-dark-fg"
+                        >
+                          <span className="flex-1 truncate text-xs text-light-text dark:text-dark-text">
+                            {product?.title || pid}
+                          </span>
+                          <button
+                            type="button"
+                            disabled={i === 0}
+                            onClick={() => {
+                              const ids = [...(section.productIds || [])];
+                              [ids[i - 1], ids[i]] = [ids[i]!, ids[i - 1]!];
+                              update({ productIds: ids });
+                            }}
+                            className="text-gray-400 hover:text-gray-600 disabled:opacity-20 dark:hover:text-gray-300"
+                          >
+                            ▲
+                          </button>
+                          <button
+                            type="button"
+                            disabled={
+                              i === (section.productIds || []).length - 1
+                            }
+                            onClick={() => {
+                              const ids = [...(section.productIds || [])];
+                              [ids[i], ids[i + 1]] = [ids[i + 1]!, ids[i]!];
+                              update({ productIds: ids });
+                            }}
+                            className="text-gray-400 hover:text-gray-600 disabled:opacity-20 dark:hover:text-gray-300"
+                          >
+                            ▼
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              update({
+                                productIds: (section.productIds || []).filter(
+                                  (_, j) => j !== i
+                                ),
+                              });
+                            }}
+                            className="text-xs text-red-500"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="mt-2">
+                    <select
+                      className="w-full rounded border border-gray-300 bg-white p-1.5 text-xs text-light-text dark:border-gray-600 dark:bg-dark-fg dark:text-dark-text"
+                      value=""
+                      onChange={(e) => {
+                        if (!e.target.value) return;
+                        const existing = section.productIds || [];
+                        if (!existing.includes(e.target.value)) {
+                          update({ productIds: [...existing, e.target.value] });
+                        }
+                        e.target.value = "";
+                      }}
+                    >
+                      <option value="">+ Pin a product to the top…</option>
+                      {products
+                        .filter(
+                          (p) => !(section.productIds || []).includes(p.id)
+                        )
+                        .map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.title}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+
+                  {/* Hero product selector — only for "featured" layout */}
+                  {(section.productLayout || "grid") === "featured" && (
+                    <div className="mt-3">
+                      <label className="mb-1 block text-xs font-semibold text-gray-500 dark:text-gray-400">
+                        Featured (Hero) Product
+                      </label>
+                      <select
+                        className="w-full rounded border border-gray-300 bg-white p-1.5 text-xs text-light-text dark:border-gray-600 dark:bg-dark-fg dark:text-dark-text"
+                        value={section.heroProductId || ""}
+                        onChange={(e) =>
+                          update({
+                            heroProductId: e.target.value || undefined,
+                          })
+                        }
+                      >
+                        <option value="">Auto (first product)</option>
+                        {products.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.title}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+              )}
             </>
           )}
 
@@ -574,6 +719,28 @@ export default function SectionEditor({
             </div>
           )}
 
+          {/* Story timeline items */}
+          {section.type === "story" && (
+            <TimelineEditor
+              items={section.timelineItems || []}
+              onChange={(timelineItems) => update({ timelineItems })}
+            />
+          )}
+
+          {/* Comparison section */}
+          {section.type === "comparison" && (
+            <ComparisonEditor
+              features={section.comparisonFeatures || []}
+              columns={section.comparisonColumns || []}
+              onFeaturesChange={(comparisonFeatures) =>
+                update({ comparisonFeatures })
+              }
+              onColumnsChange={(comparisonColumns) =>
+                update({ comparisonColumns })
+              }
+            />
+          )}
+
           {/* Reviews section */}
           {section.type === "reviews" && (
             <p className="text-xs text-gray-500 dark:text-gray-400">
@@ -583,6 +750,200 @@ export default function SectionEditor({
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+function TimelineEditor({
+  items,
+  onChange,
+}: {
+  items: StorefrontTimelineItem[];
+  onChange: (items: StorefrontTimelineItem[]) => void;
+}) {
+  const add = () => onChange([...items, { heading: "", body: "" }]);
+  const remove = (idx: number) => onChange(items.filter((_, i) => i !== idx));
+  const edit = (idx: number, fields: Partial<StorefrontTimelineItem>) => {
+    const updated = [...items];
+    updated[idx] = { ...updated[idx]!, ...fields };
+    onChange(updated);
+  };
+
+  return (
+    <div className="space-y-2">
+      <label className="block text-xs font-semibold text-light-text dark:text-dark-text">
+        Timeline Entries
+      </label>
+      {items.map((item, idx) => (
+        <div
+          key={idx}
+          className="rounded border border-gray-200 bg-light-bg p-2 dark:border-dark-fg dark:bg-dark-bg"
+        >
+          <div className="flex items-start gap-2">
+            <div className="flex-1 space-y-1">
+              <Input
+                variant="bordered"
+                size="sm"
+                label="Year / Label (optional)"
+                value={item.year || ""}
+                onChange={(e) => edit(idx, { year: e.target.value })}
+              />
+              <Input
+                variant="bordered"
+                size="sm"
+                label="Heading"
+                value={item.heading}
+                onChange={(e) => edit(idx, { heading: e.target.value })}
+              />
+              <Textarea
+                variant="bordered"
+                size="sm"
+                label="Body"
+                minRows={2}
+                value={item.body}
+                onChange={(e) => edit(idx, { body: e.target.value })}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => remove(idx)}
+              className="mt-1 text-xs text-red-500"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      ))}
+      <button
+        type="button"
+        onClick={add}
+        className="text-xs font-bold text-blue-600 hover:underline dark:text-blue-400"
+      >
+        + Add Timeline Entry
+      </button>
+    </div>
+  );
+}
+
+function ComparisonEditor({
+  features,
+  columns,
+  onFeaturesChange,
+  onColumnsChange,
+}: {
+  features: string[];
+  columns: StorefrontComparisonColumn[];
+  onFeaturesChange: (features: string[]) => void;
+  onColumnsChange: (columns: StorefrontComparisonColumn[]) => void;
+}) {
+  return (
+    <div className="space-y-4">
+      <div>
+        <label className="mb-2 block text-xs font-semibold text-light-text dark:text-dark-text">
+          Comparison Rows (Features)
+        </label>
+        {features.map((f, idx) => (
+          <div key={idx} className="mb-1.5 flex items-center gap-2">
+            <Input
+              variant="bordered"
+              size="sm"
+              value={f}
+              onChange={(e) => {
+                const updated = [...features];
+                updated[idx] = e.target.value;
+                onFeaturesChange(updated);
+              }}
+              className="flex-1"
+            />
+            <button
+              type="button"
+              onClick={() =>
+                onFeaturesChange(features.filter((_, i) => i !== idx))
+              }
+              className="text-xs text-red-500"
+            >
+              ✕
+            </button>
+          </div>
+        ))}
+        <button
+          type="button"
+          onClick={() => onFeaturesChange([...features, ""])}
+          className="text-xs font-bold text-blue-600 hover:underline dark:text-blue-400"
+        >
+          + Add Row
+        </button>
+      </div>
+
+      <div>
+        <label className="mb-2 block text-xs font-semibold text-light-text dark:text-dark-text">
+          Columns
+        </label>
+        {columns.map((col, colIdx) => (
+          <div
+            key={colIdx}
+            className="mb-2 rounded border border-gray-200 bg-light-bg p-2 dark:border-dark-fg dark:bg-dark-bg"
+          >
+            <div className="mb-2 flex items-center gap-2">
+              <Input
+                variant="bordered"
+                size="sm"
+                label="Column Heading"
+                value={col.heading}
+                onChange={(e) => {
+                  const updated = [...columns];
+                  updated[colIdx] = {
+                    ...updated[colIdx]!,
+                    heading: e.target.value,
+                  };
+                  onColumnsChange(updated);
+                }}
+                className="flex-1"
+              />
+              <button
+                type="button"
+                onClick={() =>
+                  onColumnsChange(columns.filter((_, i) => i !== colIdx))
+                }
+                className="text-xs text-red-500"
+              >
+                ✕
+              </button>
+            </div>
+            {features.map((f, rowIdx) => (
+              <Input
+                key={rowIdx}
+                variant="bordered"
+                size="sm"
+                label={f || `Row ${rowIdx + 1}`}
+                value={col.values[rowIdx] || ""}
+                onChange={(e) => {
+                  const updated = [...columns];
+                  const vals = [...(updated[colIdx]!.values || [])];
+                  vals[rowIdx] = e.target.value;
+                  updated[colIdx] = { ...updated[colIdx]!, values: vals };
+                  onColumnsChange(updated);
+                }}
+                className="mb-1"
+              />
+            ))}
+            {features.length === 0 && (
+              <p className="text-xs text-gray-400 dark:text-gray-500">
+                Add rows above first, then fill in values for each column.
+              </p>
+            )}
+          </div>
+        ))}
+        <button
+          type="button"
+          onClick={() =>
+            onColumnsChange([...columns, { heading: "", values: [] }])
+          }
+          className="text-xs font-bold text-blue-600 hover:underline dark:text-blue-400"
+        >
+          + Add Column
+        </button>
+      </div>
     </div>
   );
 }

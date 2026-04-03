@@ -10,6 +10,13 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+### Storefront Editor Completions (Milk Market optimizations)
+
+- **`section-editor.tsx`**: Added `isNew`/`onFlashDone` props with `useRef`/`useEffect` flash-and-scroll animation when a new section is added (purple glow border + auto-expand + smooth scroll). Added `TimelineEditor` sub-component (year/heading/body rows for `story` sections). Added `ComparisonEditor` sub-component (feature rows + per-column value inputs for `comparison` sections).
+- **`storefront-preview-panel.tsx`**: Replaced stub `SectionPreview` with real `SectionRenderer`. Added `fillSectionPlaceholders()` to inject generic placeholder data (headings, body, FAQ items, timeline, comparison columns, testimonials) when no user content is set. Added `MOCK_PRODUCTS` (4 Unsplash-sourced generic products) for `products` section preview. Added `buildGoogleFontsUrlForPreview()` with inline CSS `@import` injection for live font rendering inside the editor preview pane. Accepts `sellerProducts` prop so real listings show in the preview when available.
+- **`page-editor.tsx`**: Added `sellerProducts?: ProductData[]` prop; passes it down to each `SectionEditor` inside custom pages.
+- **`shop-profile-form.tsx`**: Passes `sellerProducts` to both `PageEditor` and `buildPreviewProps()`. Tracks `newSectionId` state; wires `isNew`/`onFlashDone` to each `SectionEditor` in the homepage sections list so newly-added sections flash purple and auto-expand.
+
 ### Onboarding Flow Redesign
 
 - **Step 1 (keys.tsx)**: Simplified to only show a passphrase input. Removed public/private key display and copy handlers. Now redirects to user-type selection after completion.
