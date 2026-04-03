@@ -355,17 +355,34 @@ export const fetchProfile = async (
   nostr: NostrManager,
   relays: string[],
   pubkeyProfilesToFetch: string[],
-  editProfileContext: (productEvents: Map<any, any>, isLoading: boolean) => void
+  editProfileContext: (productEvents: Map<any, any>, isLoading: boolean) => void,
+  existingProfileMap: Map<string, any> = new Map()
 ): Promise<{
   profileMap: Map<string, any>;
 }> => {
   return new Promise(async function (resolve, reject) {
     try {
       if (!pubkeyProfilesToFetch.length) {
-        editProfileContext(new Map(), false);
-        resolve({ profileMap: new Map() });
+        const preservedProfileMap = new Map(existingProfileMap);
+        editProfileContext(preservedProfileMap, false);
+        resolve({ profileMap: preservedProfileMap });
         return;
       }
+
+      const mergedProfileMap = new Map(existingProfileMap);
+      const updateProfileIfNewer = (profile: any) => {
+        if (!profile?.pubkey) {
+          return;
+        }
+
+        const existingProfile = mergedProfileMap.get(profile.pubkey);
+        if (
+          !existingProfile ||
+          (profile.created_at ?? 0) >= (existingProfile.created_at ?? 0)
+        ) {
+          mergedProfileMap.set(profile.pubkey, profile);
+        }
+      };
 
       const dbProfileMap = new Map<string, any>();
       try {
@@ -400,10 +417,6 @@ export const fetchProfile = async (
               );
             }
           }
-
-          if (dbProfileMap.size > 0) {
-            editProfileContext(dbProfileMap, false);
-          }
         }
       } catch (error) {
         console.error("Failed to fetch profiles from database: ", error);
@@ -417,9 +430,13 @@ export const fetchProfile = async (
       const profileMap: Map<string, any> = new Map(
         Array.from(pubkeyProfilesToFetch).map((pubkey) => [
           pubkey,
-          dbProfileMap.get(pubkey) || null,
+          dbProfileMap.get(pubkey) || mergedProfileMap.get(pubkey) || null,
         ])
       );
+
+      for (const profile of dbProfileMap.values()) {
+        updateProfileIfNewer(profile);
+      }
 
       const fetchedEvents = await nostr.fetch([subParams], {}, relays);
 
@@ -446,7 +463,13 @@ export const fetchProfile = async (
         }
       }
 
-      editProfileContext(profileMap, false);
+      for (const profile of profileMap.values()) {
+        if (profile) {
+          updateProfileIfNewer(profile);
+        }
+      }
+
+      editProfileContext(mergedProfileMap, false);
 
       // Cache profiles to database via API (reconstruct from fetched events)
       const validProfileEvents = fetchedEvents.filter(
@@ -459,51 +482,67 @@ export const fetchProfile = async (
       }
 
       void (async () => {
-        const profilesToVerify = Array.from(profileMap.entries()).filter(
-          ([, profile]) => profile?.content?.nip05
-        );
+        try {
+          const profilesToVerify = Array.from(mergedProfileMap.entries()).filter(
+            ([, profile]) => profile?.content?.nip05
+          );
 
-        if (profilesToVerify.length === 0) {
-          return;
-        }
-
-        const verifiedProfileMap = new Map(profileMap);
-        let hasUpdates = false;
-
-        const verificationResults = await Promise.allSettled(
-          profilesToVerify.map(async ([pubkey, profile]) => ({
-            pubkey,
-            verified: await verifyNip05Identifier(
-              profile.content.nip05,
-              pubkey
-            ),
-          }))
-        );
-
-        for (const result of verificationResults) {
-          if (result.status !== "fulfilled") {
-            continue;
+          if (profilesToVerify.length === 0) {
+            return;
           }
 
-          const currentProfile = verifiedProfileMap.get(result.value.pubkey);
-          if (
-            currentProfile &&
-            currentProfile.nip05Verified !== result.value.verified
+          const verifiedProfileMap = new Map(mergedProfileMap);
+          let hasUpdates = false;
+          const maxConcurrentVerifications = 5;
+
+          for (
+            let profileIndex = 0;
+            profileIndex < profilesToVerify.length;
+            profileIndex += maxConcurrentVerifications
           ) {
-            verifiedProfileMap.set(result.value.pubkey, {
-              ...currentProfile,
-              nip05Verified: result.value.verified,
-            });
-            hasUpdates = true;
-          }
-        }
+            const verificationBatch = profilesToVerify.slice(
+              profileIndex,
+              profileIndex + maxConcurrentVerifications
+            );
 
-        if (hasUpdates) {
-          editProfileContext(verifiedProfileMap, false);
+            const verificationResults = await Promise.allSettled(
+              verificationBatch.map(async ([pubkey, profile]) => ({
+                pubkey,
+                verified: await verifyNip05Identifier(
+                  profile.content.nip05,
+                  pubkey
+                ),
+              }))
+            );
+
+            for (const result of verificationResults) {
+              if (result.status !== "fulfilled") {
+                continue;
+              }
+
+              const currentProfile = verifiedProfileMap.get(result.value.pubkey);
+              if (
+                currentProfile &&
+                currentProfile.nip05Verified !== result.value.verified
+              ) {
+                verifiedProfileMap.set(result.value.pubkey, {
+                  ...currentProfile,
+                  nip05Verified: result.value.verified,
+                });
+                hasUpdates = true;
+              }
+            }
+          }
+
+          if (hasUpdates) {
+            editProfileContext(verifiedProfileMap, false);
+          }
+        } catch (error) {
+          console.error("Failed to verify NIP-05 identifiers:", error);
         }
       })();
 
-      resolve({ profileMap });
+      resolve({ profileMap: mergedProfileMap });
     } catch (error) {
       reject(error);
     }

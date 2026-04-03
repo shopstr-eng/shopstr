@@ -570,11 +570,12 @@ function Shopstr({ props }: { props: AppProps }) {
             nostr!,
             allRelays,
             pubkeysToFetchProfilesFor,
-            editProfileContext
+            editProfileContext,
+            profileContext.profileData
           );
         } catch (error) {
           console.error("Error fetching profiles:", error);
-          editProfileContext(new Map(), false);
+          editProfileContext(new Map(profileContext.profileData), false);
         }
 
         try {
