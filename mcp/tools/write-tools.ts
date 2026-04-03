@@ -3805,7 +3805,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
               [pubkey]
             );
           }
-
+          
           return successResponse(
             {
               domain,
