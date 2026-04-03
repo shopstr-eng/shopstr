@@ -276,6 +276,30 @@ export default function StorefrontOrderConfirmation({
                       Size: {orderData.selectedSize}
                     </p>
                   )}
+                  {orderData.selectedVolume && (
+                    <p
+                      className="text-sm"
+                      style={{ color: colors.text + "88" }}
+                    >
+                      Volume: {orderData.selectedVolume}
+                    </p>
+                  )}
+                  {orderData.selectedWeight && (
+                    <p
+                      className="text-sm"
+                      style={{ color: colors.text + "88" }}
+                    >
+                      Weight: {orderData.selectedWeight}
+                    </p>
+                  )}
+                  {orderData.selectedBulkOption && (
+                    <p
+                      className="text-sm"
+                      style={{ color: colors.text + "88" }}
+                    >
+                      Bundle: {orderData.selectedBulkOption} units
+                    </p>
+                  )}
                 </div>
               </div>
             </div>

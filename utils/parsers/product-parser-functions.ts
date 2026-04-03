@@ -24,12 +24,16 @@ export type ProductData = {
   sizeQuantities?: Map<string, number>;
   volumes?: string[];
   volumePrices?: Map<string, number>;
+  weights?: string[];
+  weightPrices?: Map<string, number>;
   condition?: string;
   status?: string;
   selectedSize?: string;
   selectedQuantity?: number;
   selectedVolume?: string;
   volumePrice?: number;
+  selectedWeight?: string;
+  weightPrice?: number;
   bulkPrices?: Map<number, number>;
   selectedBulkOption?: number;
   bulkPrice?: number;
@@ -136,6 +140,18 @@ export const parseTags = (productEvent: NostrEvent) => {
           parsedData.volumes.push(values[0]);
           if (values[1]) {
             parsedData.volumePrices!.set(values[0], parseFloat(values[1]));
+          }
+        }
+        break;
+      case "weight":
+        if (!parsedData.weights) {
+          parsedData.weights = [];
+          parsedData.weightPrices = new Map<string, number>();
+        }
+        if (values[0]) {
+          parsedData.weights.push(values[0]);
+          if (values[1]) {
+            parsedData.weightPrices!.set(values[0], parseFloat(values[1]));
           }
         }
         break;
