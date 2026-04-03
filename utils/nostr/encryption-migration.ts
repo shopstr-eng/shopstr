@@ -78,7 +78,7 @@ export async function migrateToNip49(passphrase: string): Promise<boolean> {
 
     migrationAttempted = true;
     return true;
-    } catch {
+  } catch {
     migrationAttempted = true;
     return false;
   }

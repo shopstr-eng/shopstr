@@ -30,9 +30,7 @@ describe("NIP-56 Reporting Helpers", () => {
         "impersonation",
         "This account is pretending to be someone else"
       );
-      expect(content).toBe(
-        "This account is pretending to be someone else"
-      );
+      expect(content).toBe("This account is pretending to be someone else");
     });
 
     it("should support all standard NIP-56 report reasons", () => {
@@ -61,11 +59,7 @@ describe("NIP-56 Reporting Helpers", () => {
     });
 
     it("should format the a tag address as 30402:<pubkey>:<d-tag>", () => {
-      const { tags } = constructListingReportTags(
-        testPubkey,
-        testDTag,
-        "spam"
-      );
+      const { tags } = constructListingReportTags(testPubkey, testDTag, "spam");
       const aTag = tags.find((t) => t[0] === "a");
 
       expect(aTag).toBeDefined();
