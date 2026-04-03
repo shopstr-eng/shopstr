@@ -212,12 +212,15 @@ export interface ShopProfile {
 export interface ProfileData {
   pubkey: string;
   content: {
+    display_name?: string;
     name?: string;
     picture?: string;
     about?: string;
     banner?: string;
     lud16?: string;
+    lnurl?: string;
     nip05?: string;
+    website?: string;
     payment_preference?: string;
     fiat_options?: string[];
     shopstr_donation?: number;

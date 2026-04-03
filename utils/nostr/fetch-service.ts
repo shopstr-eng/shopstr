@@ -427,10 +427,6 @@ export const fetchProfile = async (
         console.error("Failed to fetch profiles from database: ", error);
       }
 
-      if (dbProfileMap.size > 0) {
-        editProfileContext(new Map(dbProfileMap), false);
-      }
-
       const subParams: { kinds: number[]; authors?: string[] } = {
         kinds: [0],
         authors: Array.from(pubkeyProfilesToFetch),
@@ -447,14 +443,21 @@ export const fetchProfile = async (
         updateProfileIfNewer(profile);
       }
 
-      const fetchedEvents = await nostr.fetch([subParams], {}, relays);
+      editProfileContext(new Map(mergedProfileMap), false);
+
+      let fetchedEvents: NostrEvent[] = [];
+      try {
+        fetchedEvents = await nostr.fetch([subParams], {}, relays);
+      } catch (error) {
+        console.error("Failed to fetch profiles from relays:", error);
+      }
 
       for (const event of fetchedEvents) {
         const existing = profileMap.get(event.pubkey);
         if (
           existing === null ||
           !existing ||
-          event.created_at > existing.created_at
+          event.created_at >= existing.created_at
         ) {
           try {
             profileMap.set(event.pubkey, {
