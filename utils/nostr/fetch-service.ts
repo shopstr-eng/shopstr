@@ -127,16 +127,6 @@ export const fetchAllPosts = async (
 
       editProductContext(mergedProductArray, false);
 
-      // Cache fetched products to database via API (only valid events with signatures)
-      const validProducts = fetchedEvents.filter(
-        (e) => e.id && e.sig && e.pubkey
-      );
-      if (validProducts.length > 0) {
-        cacheEventsToDatabase(validProducts).catch((error) =>
-          console.error("Failed to cache products to database:", error)
-        );
-      }
-
       resolve({
         productEvents: mergedProductArray,
         profileSetFromProducts,
@@ -382,31 +372,35 @@ export const fetchProfile = async (
         const response = await fetch("/api/db/fetch-profiles");
         if (response.ok) {
           const profilesFromDb = await response.json();
+          const latestDbEvents = new Map<string, NostrEvent>();
+
           for (const event of profilesFromDb) {
-            if (pubkeyProfilesToFetch.includes(event.pubkey)) {
-              try {
-                const content = JSON.parse(event.content);
-                const profile = {
-                  pubkey: event.pubkey,
-                  created_at: event.created_at,
-                  content: content,
-                  nip05Verified: false,
-                };
-                if (content.nip05) {
-                  profile.nip05Verified = await verifyNip05Identifier(
-                    content.nip05,
-                    event.pubkey
-                  );
-                }
-                dbProfileMap.set(event.pubkey, profile);
-              } catch (error) {
-                console.error(
-                  `Failed to parse profile from DB: ${event.pubkey}`,
-                  error
-                );
-              }
+            if (!pubkeyProfilesToFetch.includes(event.pubkey)) {
+              continue;
+            }
+
+            const existing = latestDbEvents.get(event.pubkey);
+            if (!existing || event.created_at > existing.created_at) {
+              latestDbEvents.set(event.pubkey, event);
             }
           }
+
+          for (const [pubkey, event] of latestDbEvents.entries()) {
+            try {
+              dbProfileMap.set(pubkey, {
+                pubkey,
+                created_at: event.created_at,
+                content: JSON.parse(event.content),
+                nip05Verified: false,
+              });
+            } catch (error) {
+              console.error(
+                `Failed to parse profile from DB: ${pubkey}`,
+                error
+              );
+            }
+          }
+
           if (dbProfileMap.size > 0) {
             editProfileContext(dbProfileMap, false);
           }
@@ -437,21 +431,12 @@ export const fetchProfile = async (
           event.created_at > existing.created_at
         ) {
           try {
-            const content = JSON.parse(event.content);
-            const profile = {
+            profileMap.set(event.pubkey, {
               pubkey: event.pubkey,
               created_at: event.created_at,
-              content: content,
+              content: JSON.parse(event.content),
               nip05Verified: false,
-            };
-            if (content.nip05) {
-              profile.nip05Verified = await verifyNip05Identifier(
-                content.nip05,
-                event.pubkey
-              );
-            }
-
-            profileMap.set(event.pubkey, profile);
+            });
           } catch (error) {
             console.error(
               `Failed parse profile for pubkey: ${event.pubkey}, ${event.content}`,
@@ -460,6 +445,8 @@ export const fetchProfile = async (
           }
         }
       }
+
+      editProfileContext(profileMap, false);
 
       // Cache profiles to database via API (reconstruct from fetched events)
       const validProfileEvents = fetchedEvents.filter(
@@ -470,6 +457,51 @@ export const fetchProfile = async (
           console.error("Failed to cache profiles to database:", error)
         );
       }
+
+      void (async () => {
+        const profilesToVerify = Array.from(profileMap.entries()).filter(
+          ([, profile]) => profile?.content?.nip05
+        );
+
+        if (profilesToVerify.length === 0) {
+          return;
+        }
+
+        const verifiedProfileMap = new Map(profileMap);
+        let hasUpdates = false;
+
+        const verificationResults = await Promise.allSettled(
+          profilesToVerify.map(async ([pubkey, profile]) => ({
+            pubkey,
+            verified: await verifyNip05Identifier(
+              profile.content.nip05,
+              pubkey
+            ),
+          }))
+        );
+
+        for (const result of verificationResults) {
+          if (result.status !== "fulfilled") {
+            continue;
+          }
+
+          const currentProfile = verifiedProfileMap.get(result.value.pubkey);
+          if (
+            currentProfile &&
+            currentProfile.nip05Verified !== result.value.verified
+          ) {
+            verifiedProfileMap.set(result.value.pubkey, {
+              ...currentProfile,
+              nip05Verified: result.value.verified,
+            });
+            hasUpdates = true;
+          }
+        }
+
+        if (hasUpdates) {
+          editProfileContext(verifiedProfileMap, false);
+        }
+      })();
 
       resolve({ profileMap });
     } catch (error) {
@@ -600,7 +632,7 @@ export const fetchGiftWrappedChatsAndMessages = async (
             );
             return;
           }
-          let cachedMessage = chatMessagesFromCache.get(event.id);
+          const cachedMessage = chatMessagesFromCache.get(event.id);
           let chatMessage: NostrMessageEvent;
           if (cachedMessage) {
             chatMessage = {
