@@ -382,8 +382,8 @@ export default function ProductForm({
                 return (
                   <Input
                     className="text-light-text dark:text-dark-text"
-                    autoFocus
                     variant="bordered"
+                    autoFocus
                     fullWidth={true}
                     label="Product name"
                     labelPlacement="inside"
@@ -591,7 +591,6 @@ export default function ProductForm({
                   <Input
                     className="text-light-text dark:text-dark-text"
                     type="number"
-                    autoFocus
                     variant="flat"
                     label="Price"
                     labelPlacement="inside"
@@ -672,7 +671,6 @@ export default function ProductForm({
                   : "";
                 return (
                   <LocationDropdown
-                    autoFocus
                     variant="bordered"
                     aria-label="Select Location"
                     label="Location"
@@ -705,7 +703,6 @@ export default function ProductForm({
                 return (
                   <Select
                     className="text-light-text dark:text-dark-text"
-                    autoFocus
                     variant="bordered"
                     aria-label="Shipping Option"
                     label="Shipping option"
@@ -886,7 +883,6 @@ export default function ProductForm({
                   <Select
                     variant="bordered"
                     isMultiline={true}
-                    autoFocus
                     aria-label="Category"
                     label="Categories"
                     labelPlacement="inside"
