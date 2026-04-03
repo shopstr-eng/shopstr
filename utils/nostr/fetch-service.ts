@@ -446,6 +446,7 @@ export const fetchProfile = async (
       const fetchedEvents = await nostr.fetch([subParams], {}, relays);
 
       for (const event of fetchedEvents) {
+        if (event.kind !== 0) continue;
         const existing = profileMap.get(event.pubkey);
         if (
           existing === null ||
