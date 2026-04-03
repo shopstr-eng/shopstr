@@ -336,9 +336,9 @@ function Shopstr({ props }: { props: AppProps }) {
       cashuProofs: [],
       isLoading: true,
     });
-  const hydratedMarketplaceProductIdsRef = useRef<Set<string>>(new Set());
+  const hydratedMarketplaceProductKeysRef = useRef<Set<string>>(new Set());
   const hydratedMarketplaceSellerPubkeysRef = useRef<Set<string>>(new Set());
-  const pendingMarketplaceProductIdsRef = useRef<Set<string>>(new Set());
+  const pendingMarketplaceProductKeysRef = useRef<Set<string>>(new Set());
   const pendingMarketplaceSellerPubkeysRef = useRef<Set<string>>(new Set());
   const didCompleteInitialMarketplaceHydrationRef = useRef(false);
 
@@ -713,8 +713,8 @@ function Shopstr({ props }: { props: AppProps }) {
           editReviewsContext(new Map(), new Map(), false);
         }
 
-        hydratedMarketplaceProductIdsRef.current = new Set(
-          fetchedProductEvents.map((event) => event.id).filter(Boolean)
+        hydratedMarketplaceProductKeysRef.current = new Set(
+          fetchedProductEvents.map((event) => getMarketplaceEventKey(event))
         );
         hydratedMarketplaceSellerPubkeysRef.current = new Set(
           fetchedProductEvents.map((event) => event.pubkey).filter(Boolean)
@@ -807,15 +807,20 @@ function Shopstr({ props }: { props: AppProps }) {
 
     const nextProducts = (productContext.productEvents as NostrEvent[]).filter(
       (event) =>
-        event.id &&
-        !hydratedMarketplaceProductIdsRef.current.has(event.id) &&
-        !pendingMarketplaceProductIdsRef.current.has(event.id)
+        !hydratedMarketplaceProductKeysRef.current.has(
+          getMarketplaceEventKey(event)
+        ) &&
+        !pendingMarketplaceProductKeysRef.current.has(
+          getMarketplaceEventKey(event)
+        )
     );
 
     if (nextProducts.length === 0) return;
 
     nextProducts.forEach((event) => {
-      pendingMarketplaceProductIdsRef.current.add(event.id);
+      pendingMarketplaceProductKeysRef.current.add(
+        getMarketplaceEventKey(event)
+      );
     });
 
     const nextSellerPubkeys = Array.from(
@@ -863,7 +868,9 @@ function Shopstr({ props }: { props: AppProps }) {
         mergeReviewsContext(merchantScoresMap, productReviewsMap);
 
         nextProducts.forEach((event) => {
-          hydratedMarketplaceProductIdsRef.current.add(event.id);
+          hydratedMarketplaceProductKeysRef.current.add(
+            getMarketplaceEventKey(event)
+          );
         });
         nextSellerPubkeys.forEach((pubkey) => {
           hydratedMarketplaceSellerPubkeysRef.current.add(pubkey);
@@ -872,7 +879,9 @@ function Shopstr({ props }: { props: AppProps }) {
         console.error("Failed to hydrate marketplace relay results:", error);
       } finally {
         nextProducts.forEach((event) => {
-          pendingMarketplaceProductIdsRef.current.delete(event.id);
+          pendingMarketplaceProductKeysRef.current.delete(
+            getMarketplaceEventKey(event)
+          );
         });
         nextSellerPubkeys.forEach((pubkey) => {
           pendingMarketplaceSellerPubkeysRef.current.delete(pubkey);
