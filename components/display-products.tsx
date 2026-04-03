@@ -1,5 +1,4 @@
 import { useState, useEffect, useContext } from "react";
-import { nip19 } from "nostr-tools";
 import { deleteEvent } from "@/utils/nostr/nostr-helper-functions";
 import { NostrEvent } from "../utils/types/types";
 import {
@@ -22,6 +21,7 @@ import {
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
 import { getListingSlug } from "@/utils/url-slugs";
+import { productMatchesMarketplaceSearch } from "@/utils/search/marketplace-search";
 
 const DisplayProducts = ({
   focusedPubkey,
@@ -276,56 +276,7 @@ const DisplayProducts = ({
   };
 
   const productSatisfiesSearchFilter = (productData: ProductData) => {
-    if (!selectedSearch) return true;
-    if (!productData.title) return false;
-
-    if (selectedSearch.includes("naddr")) {
-      try {
-        const parsedNaddr = nip19.decode(selectedSearch);
-        if (parsedNaddr.type === "naddr") {
-          return (
-            productData.d === parsedNaddr.data.identifier &&
-            productData.pubkey === parsedNaddr.data.pubkey
-          );
-        }
-        return false;
-      } catch (_) {
-        return false;
-      }
-    }
-
-    if (selectedSearch.includes("npub")) {
-      try {
-        const parsedNpub = nip19.decode(selectedSearch);
-        if (parsedNpub.type === "npub") {
-          return parsedNpub.data === productData.pubkey;
-        }
-        return false;
-      } catch (_) {
-        return false;
-      }
-    }
-
-    try {
-      const re = new RegExp(selectedSearch, "gi");
-
-      const titleMatch = productData.title.match(re);
-      if (titleMatch && titleMatch.length > 0) return true;
-
-      if (productData.summary) {
-        const summaryMatch = productData.summary.match(re);
-        if (summaryMatch && summaryMatch.length > 0) return true;
-      }
-
-      const numericSearch = parseFloat(selectedSearch);
-      if (!isNaN(numericSearch) && productData.price === numericSearch) {
-        return true;
-      }
-
-      return false;
-    } catch (_) {
-      return false;
-    }
+    return productMatchesMarketplaceSearch(productData, selectedSearch);
   };
 
   const productSatisfiesAllFilters = (productData: ProductData) => {

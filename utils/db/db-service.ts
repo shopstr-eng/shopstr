@@ -8,6 +8,32 @@ let initializingTables = false;
 // Queue for serializing cache operations
 let cacheQueue: Promise<void> = Promise.resolve();
 
+export function isDatabaseConfigured(): boolean {
+  return !!process.env.DATABASE_URL;
+}
+
+function isValidEventTag(tag: unknown): tag is string[] {
+  return Array.isArray(tag) && tag.every((value) => typeof value === "string");
+}
+
+function isCacheableEvent(event: NostrEvent | null | undefined): event is NostrEvent {
+  return !!(
+    event &&
+    typeof event.id === "string" &&
+    event.id.length > 0 &&
+    typeof event.pubkey === "string" &&
+    event.pubkey.length > 0 &&
+    typeof event.created_at === "number" &&
+    Number.isFinite(event.created_at) &&
+    typeof event.kind === "number" &&
+    Number.isFinite(event.kind) &&
+    Array.isArray(event.tags) &&
+    event.tags.every(isValidEventTag) &&
+    typeof event.content === "string" &&
+    typeof event.sig === "string"
+  );
+}
+
 export async function ensureFailedRelayPublishesTable(
   client: PoolClient
 ): Promise<void> {
@@ -28,11 +54,11 @@ export async function ensureFailedRelayPublishesTable(
 }
 
 // Initialize the database connection pool
-export function getDbPool(): Pool {
+export function getDbPool(): Pool | null {
   if (!pool) {
     const databaseUrl = process.env.DATABASE_URL;
     if (!databaseUrl) {
-      throw new Error("DATABASE_URL environment variable is not set");
+      return null;
     }
 
     // Use pooled connection for better performance
@@ -67,6 +93,10 @@ async function initializeTables(): Promise<void> {
   if (tablesInitialized) return;
 
   const dbPool = getDbPool();
+  if (!dbPool) {
+    initializingTables = false;
+    return;
+  }
   let client;
 
   try {
@@ -358,6 +388,10 @@ export async function cacheEvent(event: NostrEvent): Promise<void> {
   }
 
   const dbPool = getDbPool();
+  if (!dbPool) {
+    console.warn("Skipping cacheEvent because DATABASE_URL is not configured");
+    return;
+  }
   let client;
 
   try {
@@ -466,6 +500,27 @@ export async function cacheEvent(event: NostrEvent): Promise<void> {
 // Cache multiple events in a batch with retry logic for deadlocks
 export async function cacheEvents(events: NostrEvent[]): Promise<void> {
   if (events.length === 0) return;
+  if (!getDbPool()) {
+    console.warn("Skipping cacheEvents because DATABASE_URL is not configured");
+    return;
+  }
+  const validEvents = events.filter(isCacheableEvent);
+
+  if (validEvents.length !== events.length) {
+    console.warn("Skipping invalid events before cache", {
+      received: events.length,
+      valid: validEvents.length,
+      invalidIds: events
+        .filter((event) => !isCacheableEvent(event))
+        .map((event) => event?.id ?? "unknown")
+        .slice(0, 10),
+    });
+  }
+
+  if (validEvents.length === 0) {
+    console.warn("No valid events available to cache");
+    return;
+  }
 
   // Queue the operation to prevent overwhelming the pool
   return new Promise((resolve, reject) => {
@@ -476,7 +531,7 @@ export async function cacheEvents(events: NostrEvent[]): Promise<void> {
 
         while (attempt < maxRetries) {
           try {
-            await cacheEventsTransaction(events);
+            await cacheEventsTransaction(validEvents);
             resolve();
             return;
           } catch (error: any) {
@@ -512,7 +567,17 @@ async function cacheEventsTransaction(events: NostrEvent[]): Promise<void> {
         eventsByTable.set(table, []);
       }
       eventsByTable.get(table)!.push(event);
+    } else {
+      console.warn("Skipping event with unsupported kind during cache", {
+        eventId: event.id,
+        kind: event.kind,
+      });
     }
+  }
+
+  if (eventsByTable.size === 0) {
+    console.warn("No cacheable tables found for provided events");
+    return;
   }
 
   const dbPool = getDbPool();
@@ -660,7 +725,15 @@ async function cacheEventsTransaction(events: NostrEvent[]): Promise<void> {
         console.error("Failed to rollback transaction:", rollbackError);
       }
     }
-    console.error("Failed to cache events batch:", error);
+    console.error("Failed to cache events batch:", {
+      error,
+      eventCount: events.length,
+      sample: events.slice(0, 3).map((event) => ({
+        id: event.id,
+        kind: event.kind,
+        pubkey: event.pubkey,
+      })),
+    });
     throw error;
   } finally {
     if (client) {
@@ -683,6 +756,7 @@ export async function fetchCachedEvents(
   if (!table) return [];
 
   const dbPool = getDbPool();
+  if (!dbPool) return [];
   let client;
 
   try {
@@ -743,6 +817,7 @@ export async function deleteCachedEvent(
   if (!table) return;
 
   const dbPool = getDbPool();
+  if (!dbPool) return;
   let client;
 
   try {
@@ -764,6 +839,7 @@ export async function deleteCachedEventsByIds(
   if (eventIds.length === 0) return;
 
   const dbPool = getDbPool();
+  if (!dbPool) return;
   let client;
 
   // All tables that can store events
@@ -817,6 +893,7 @@ export async function fetchAllMessagesFromDb(
   pubkey?: string
 ): Promise<(NostrEvent & { is_read: boolean })[]> {
   const dbPool = getDbPool();
+  if (!dbPool) return [];
   let client;
 
   try {
@@ -860,6 +937,7 @@ export async function markMessagesAsRead(messageIds: string[]): Promise<void> {
   if (messageIds.length === 0) return;
 
   const dbPool = getDbPool();
+  if (!dbPool) return;
   let client;
 
   try {
@@ -880,6 +958,7 @@ export async function markMessagesAsRead(messageIds: string[]): Promise<void> {
 // Get unread message count for a user
 export async function getUnreadMessageCount(pubkey: string): Promise<number> {
   const dbPool = getDbPool();
+  if (!dbPool) return 0;
   let client;
 
   try {
@@ -906,6 +985,7 @@ export async function updateOrderStatus(
   messageId?: string
 ): Promise<void> {
   const dbPool = getDbPool();
+  if (!dbPool) return;
   let client;
 
   try {
@@ -938,6 +1018,7 @@ export async function getOrderStatuses(
   if (orderIds.length === 0) return {};
 
   const dbPool = getDbPool();
+  if (!dbPool) return {};
   let client;
 
   try {
@@ -972,6 +1053,7 @@ export async function getOrderStatuses(
 // Fetch all profiles from database (both user and shop profiles)
 export async function fetchAllProfilesFromDb(): Promise<NostrEvent[]> {
   const dbPool = getDbPool();
+  if (!dbPool) return [];
   let client;
 
   try {
@@ -1006,6 +1088,7 @@ export async function fetchAllWalletEventsFromDb(
   pubkey: string
 ): Promise<NostrEvent[]> {
   const dbPool = getDbPool();
+  if (!dbPool) return [];
   let client;
 
   try {
@@ -1063,6 +1146,7 @@ export async function addDiscountCode(
   expiration?: number
 ): Promise<void> {
   const dbPool = getDbPool();
+  if (!dbPool) return;
   let client;
 
   try {
@@ -1095,6 +1179,7 @@ export async function getDiscountCodesByPubkey(pubkey: string): Promise<
   }>
 > {
   const dbPool = getDbPool();
+  if (!dbPool) return [];
   let client;
 
   try {
@@ -1120,6 +1205,7 @@ export async function validateDiscountCode(
   pubkey: string
 ): Promise<{ valid: boolean; discount_percentage?: number }> {
   const dbPool = getDbPool();
+  if (!dbPool) return { valid: false };
   let client;
 
   try {
@@ -1157,6 +1243,7 @@ export async function deleteDiscountCode(
   pubkey: string
 ): Promise<void> {
   const dbPool = getDbPool();
+  if (!dbPool) return;
   let client;
 
   try {
@@ -1181,6 +1268,7 @@ export async function fetchMarketplaceStats(): Promise<{
   sellerCount: number;
 }> {
   const dbPool = getDbPool();
+  if (!dbPool) return { listingCount: 0, sellerCount: 0 };
   let client;
   try {
     client = await dbPool.connect();
@@ -1235,6 +1323,7 @@ export async function fetchProductByIdFromDb(
   id: string
 ): Promise<NostrEvent | null> {
   const dbPool = getDbPool();
+  if (!dbPool) return null;
   let client;
   try {
     client = await dbPool.connect();
@@ -1267,6 +1356,7 @@ export async function fetchProductByDTagAndPubkey(
   pubkey: string
 ): Promise<NostrEvent | null> {
   const dbPool = getDbPool();
+  if (!dbPool) return null;
   let client;
   try {
     client = await dbPool.connect();
@@ -1304,6 +1394,7 @@ export async function fetchProductByTitleSlug(
   slug: string
 ): Promise<NostrEvent | null> {
   const dbPool = getDbPool();
+  if (!dbPool) return null;
   let client;
   try {
     client = await dbPool.connect();
@@ -1343,6 +1434,7 @@ export async function fetchShopProfileByPubkeyFromDb(
   pubkey: string
 ): Promise<NostrEvent | null> {
   const dbPool = getDbPool();
+  if (!dbPool) return null;
   let client;
   try {
     client = await dbPool.connect();
@@ -1376,6 +1468,7 @@ export async function fetchProfilePubkeyByNameSlug(
   nameSlug: string
 ): Promise<string | null> {
   const dbPool = getDbPool();
+  if (!dbPool) return null;
   let client;
   try {
     client = await dbPool.connect();
@@ -1416,6 +1509,7 @@ export async function fetchShopPubkeyBySlug(
   slug: string
 ): Promise<string | null> {
   const dbPool = getDbPool();
+  if (!dbPool) return null;
   let client;
   try {
     client = await dbPool.connect();
@@ -1438,6 +1532,7 @@ export async function fetchCommunityByPubkeyAndIdentifier(
   identifier: string
 ): Promise<NostrEvent | null> {
   const dbPool = getDbPool();
+  if (!dbPool) return null;
   let client;
   try {
     client = await dbPool.connect();

@@ -1,8 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getDbPool } from "@/utils/db/db-service";
 
-const pool = getDbPool();
-
 function sanitizeSlug(input: string): string {
   return input
     .toLowerCase()
@@ -41,6 +39,15 @@ export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
+  const pool = getDbPool();
+  if (!pool) {
+    return res.status(200).json({
+      success: true,
+      skipped: true,
+      reason: "DATABASE_URL is not configured",
+    });
+  }
+
   if (req.method === "DELETE") {
     const { pubkey } = req.body;
     if (!pubkey) {
@@ -54,7 +61,7 @@ export default async function handler(
       return res.status(200).json({ success: true });
     } catch (error) {
       console.error("Delete slug error:", error);
-      return res.status(500).json({ error: "Internal server error" });
+      return res.status(200).json({ success: false, error: "Internal server error" });
     }
   }
 
@@ -94,6 +101,6 @@ export default async function handler(
       return res.status(409).json({ error: "This shop name is already taken" });
     }
     console.error("Register slug error:", error);
-    return res.status(500).json({ error: "Internal server error" });
+    return res.status(200).json({ success: false, error: "Internal server error" });
   }
 }

@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import {
   ensureFailedRelayPublishesTable,
   getDbPool,
+  isDatabaseConfigured,
 } from "@/utils/db/db-service";
 
 export default async function handler(
@@ -12,7 +13,14 @@ export default async function handler(
     return res.status(405).json({ error: "Method not allowed" });
   }
 
+  if (!isDatabaseConfigured()) {
+    return res.status(200).json([]);
+  }
+
   const dbPool = getDbPool();
+  if (!dbPool) {
+    return res.status(200).json([]);
+  }
   let client;
 
   try {
