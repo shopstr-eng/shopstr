@@ -2,6 +2,9 @@ import { nip19 } from "nostr-tools";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
 
 
+const escapeRegExp = (value: string) =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 export function productSatisfiesCategoryFilter(
   productData: ProductData,
   selectedCategories: Set<string>
@@ -27,12 +30,13 @@ export function productSatisfiesSearchFilter(
   productData: ProductData,
   selectedSearch: string
 ): boolean {
-  if (!selectedSearch) return true;
+  const normalizedSearch = selectedSearch.trim();
+  if (!normalizedSearch) return true;
   if (!productData.title) return false;
 
-  if (selectedSearch.includes("naddr")) {
+  if (normalizedSearch.includes("naddr")) {
     try {
-      const parsedNaddr = nip19.decode(selectedSearch);
+      const parsedNaddr = nip19.decode(normalizedSearch);
       if (parsedNaddr.type === "naddr") {
         return (
           productData.d === parsedNaddr.data.identifier &&
@@ -45,9 +49,9 @@ export function productSatisfiesSearchFilter(
     }
   }
 
-  if (selectedSearch.includes("npub")) {
+  if (normalizedSearch.includes("npub")) {
     try {
-      const parsedNpub = nip19.decode(selectedSearch);
+      const parsedNpub = nip19.decode(normalizedSearch);
       if (parsedNpub.type === "npub") {
         return parsedNpub.data === productData.pubkey;
       }
@@ -58,7 +62,7 @@ export function productSatisfiesSearchFilter(
   }
 
   try {
-    const re = new RegExp(selectedSearch, "gi");
+    const re = new RegExp(escapeRegExp(normalizedSearch), "i");
 
     const titleMatch = productData.title.match(re);
     if (titleMatch && titleMatch.length > 0) return true;
@@ -68,7 +72,7 @@ export function productSatisfiesSearchFilter(
       if (summaryMatch && summaryMatch.length > 0) return true;
     }
 
-    const numericSearch = parseFloat(selectedSearch);
+    const numericSearch = parseFloat(normalizedSearch);
     if (!isNaN(numericSearch) && productData.price === numericSearch) {
       return true;
     }
