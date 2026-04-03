@@ -104,6 +104,22 @@ async function initializeTables(): Promise<void> {
 
       CREATE INDEX IF NOT EXISTS idx_review_events_pubkey ON review_events(pubkey);
 
+      -- Reports table (kind 1984)
+      CREATE TABLE IF NOT EXISTS report_events (
+          id TEXT PRIMARY KEY,
+          pubkey TEXT NOT NULL,
+          created_at BIGINT NOT NULL,
+          kind INTEGER NOT NULL,
+          tags JSONB NOT NULL,
+          content TEXT NOT NULL,
+          sig TEXT NOT NULL,
+          cached_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          CONSTRAINT report_events_kind_check CHECK (kind = 1984)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_report_events_pubkey ON report_events(pubkey);
+      CREATE INDEX IF NOT EXISTS idx_report_events_created_at ON report_events(created_at DESC);
+
       -- Messages table (kind 1059 - gift wrapped DM)
       CREATE TABLE IF NOT EXISTS message_events (
           id TEXT PRIMARY KEY,
@@ -318,6 +334,9 @@ function getTableForKind(kind: number): string | null {
 
   // Reviews
   if (kind === 31555) return "review_events";
+
+  // Reports
+  if (kind === 1984) return "report_events";
 
   // Messages
   if (kind === 1059) return "message_events";
