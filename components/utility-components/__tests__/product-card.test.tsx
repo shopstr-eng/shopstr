@@ -82,6 +82,7 @@ const renderWithContext = (
     listingReports: reportContextOverrides?.listingReports || new Map(),
     isLoading: false,
     setReportsData: jest.fn(),
+    addNewlyCreatedReportEvent: jest.fn(),
   };
 
   return render(

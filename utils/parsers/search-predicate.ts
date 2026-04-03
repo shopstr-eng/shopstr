@@ -1,7 +1,6 @@
 import { nip19 } from "nostr-tools";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
 
-
 export function productSatisfiesCategoryFilter(
   productData: ProductData,
   selectedCategories: Set<string>
@@ -78,7 +77,6 @@ export function productSatisfiesSearchFilter(
     return false;
   }
 }
-
 
 export function productSatisfiesAllFilters(
   productData: ProductData,

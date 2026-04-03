@@ -128,6 +128,8 @@ describe("search + reporting integration", () => {
     const fetched = await fetchReports(
       reportsNostr,
       ["wss://relay.example"],
+      mergedListings,
+      ["seller-1"],
       jest.fn()
     );
 
