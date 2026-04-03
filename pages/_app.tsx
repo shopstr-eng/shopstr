@@ -68,6 +68,26 @@ import {
 import { retryFailedRelayPublishes } from "@/utils/nostr/retry-service";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
 
+const mergeReportEvents = (
+  existingReports: NostrEvent[],
+  nextReports: NostrEvent[]
+) => {
+  const mergedReports = new Map(
+    existingReports.map((event) => [event.id, event])
+  );
+
+  nextReports.forEach((reportEvent) => {
+    const existingReport = mergedReports.get(reportEvent.id);
+    if (!existingReport || reportEvent.created_at >= existingReport.created_at) {
+      mergedReports.set(reportEvent.id, reportEvent);
+    }
+  });
+
+  return Array.from(mergedReports.values()).sort(
+    (a, b) => b.created_at - a.created_at
+  );
+};
+
 function Shopstr({ props }: { props: AppProps }) {
   const { Component, pageProps } = props;
   const { nostr } = useContext(NostrContext);
@@ -111,21 +131,10 @@ function Shopstr({ props }: { props: AppProps }) {
       isLoading: true,
       addReportEvent: (reportEvent: NostrEvent) => {
         setReportsContext((reportsContext) => {
-          const reportEventsMap = new Map(
-            reportsContext.reportEvents.map((event) => [event.id, event])
-          );
-          const existingEvent = reportEventsMap.get(reportEvent.id);
-          if (
-            !existingEvent ||
-            reportEvent.created_at >= existingEvent.created_at
-          ) {
-            reportEventsMap.set(reportEvent.id, reportEvent);
-          }
-
           return {
-            reportEvents: Array.from(reportEventsMap.values()).sort(
-              (a, b) => b.created_at - a.created_at
-            ),
+            reportEvents: mergeReportEvents(reportsContext.reportEvents, [
+              reportEvent,
+            ]),
             isLoading: false,
             addReportEvent: reportsContext.addReportEvent,
           };
@@ -360,23 +369,10 @@ function Shopstr({ props }: { props: AppProps }) {
     if (nextReports.length === 0) return;
 
     setReportsContext((reportsContext) => {
-      const mergedReports = new Map(
-        reportsContext.reportEvents.map((event) => [event.id, event])
-      );
-
-      nextReports.forEach((reportEvent) => {
-        const existingReport = mergedReports.get(reportEvent.id);
-        if (
-          !existingReport ||
-          reportEvent.created_at >= existingReport.created_at
-        ) {
-          mergedReports.set(reportEvent.id, reportEvent);
-        }
-      });
-
       return {
-        reportEvents: Array.from(mergedReports.values()).sort(
-          (a, b) => b.created_at - a.created_at
+        reportEvents: mergeReportEvents(
+          reportsContext.reportEvents,
+          nextReports
         ),
         isLoading: false,
         addReportEvent: reportsContext.addReportEvent,

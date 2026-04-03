@@ -32,7 +32,6 @@ import {
 import {
   ReviewsContext,
   ProductContext,
-  ReportsContext,
   ShopMapContext,
 } from "@/utils/context/context";
 import FreeShippingNotification from "../free-shipping-notification";
@@ -40,19 +39,12 @@ import FailureModal from "../utility-components/failure-modal";
 import SuccessModal from "../utility-components/success-modal";
 import SignInModal from "../sign-in/SignInModal";
 import currencySelection from "../../public/currencySelection.json";
-import {
-  NostrContext,
-  SignerContext,
-} from "@/components/utility-components/nostr-context-provider";
+import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import VolumeSelector from "./volume-selector";
 import BulkSelector from "./bulk-selector";
 import ZapsnagButton from "@/components/ZapsnagButton";
 import { RawEventModal, EventIdModal } from "./modals/event-modals";
-import ReportEventModal from "./modals/report-event-modal";
-import {
-  publishReportEvent,
-  ReportType,
-} from "@/utils/nostr/nostr-helper-functions";
+import useReportEventFlow from "./use-report-event-flow";
 
 const SUMMARY_CHARACTER_LIMIT = 100;
 
@@ -73,9 +65,7 @@ export default function CheckoutCard({
   uniqueKey?: string;
   rawEvent?: Event;
 }) {
-  const reportsContext = useContext(ReportsContext);
-  const { nostr } = useContext(NostrContext);
-  const { pubkey: userPubkey, isLoggedIn, signer } = useContext(SignerContext);
+  const { pubkey: userPubkey, isLoggedIn } = useContext(SignerContext);
   const productEventContext = useContext(ProductContext);
   const shopMapContext = useContext(ShopMapContext);
   const { isOpen, onOpen, onClose } = useDisclosure();
@@ -83,9 +73,15 @@ export default function CheckoutCard({
     useState(false);
   const [showRawEventModal, setShowRawEventModal] = useState(false);
   const [showEventIdModal, setShowEventIdModal] = useState(false);
-  const [showReportModal, setShowReportModal] = useState(false);
 
   const router = useRouter();
+
+  const { openReportFlow, reportFlowUi } = useReportEventFlow({
+    targetLabel: "listing",
+    reportedPubkey: productData.pubkey,
+    reportedEventId: productData.id,
+    onRequireLogin: onOpen,
+  });
 
   const [isExpanded, setIsExpanded] = useState(false);
   const [isBeingPaid, setIsBeingPaid] = useState(false);
@@ -373,37 +369,6 @@ export default function CheckoutCard({
       setSuccessText("Listing URL copied to clipboard!");
       setShowSuccessModal(true);
     }
-  };
-
-  const openReportFlow = () => {
-    if (isLoggedIn) {
-      setShowReportModal(true);
-    } else {
-      onOpen();
-    }
-  };
-
-  const handleSubmitListingReport = async (
-    reportType: ReportType,
-    content: string
-  ) => {
-    if (!nostr || !signer) {
-      throw new Error("Missing nostr manager or signer");
-    }
-
-    const signedEvent = await publishReportEvent(nostr, signer, {
-      content,
-      reportType,
-      reportedPubkey: productData.pubkey,
-      reportedEventId: productData.id,
-    });
-
-    if (signedEvent) {
-      reportsContext.addReportEvent(signedEvent);
-    }
-
-    setSuccessText("Your report has been published.");
-    setShowSuccessModal(true);
   };
 
   const handleSendMessage = (pubkeyToOpenChatWith: string) => {
@@ -1026,12 +991,7 @@ export default function CheckoutCard({
           isOpen={showSuccessModal}
           onClose={() => setShowSuccessModal(false)}
         />
-        <ReportEventModal
-          isOpen={showReportModal}
-          onClose={() => setShowReportModal(false)}
-          targetLabel="listing"
-          onSubmit={handleSubmitListingReport}
-        />
+        {reportFlowUi}
         <RawEventModal
           isOpen={showRawEventModal}
           onClose={() => setShowRawEventModal(false)}

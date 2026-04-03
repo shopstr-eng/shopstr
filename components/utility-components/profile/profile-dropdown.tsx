@@ -1,9 +1,5 @@
 import { LogOut } from "@/utils/nostr/nostr-helper-functions";
-import {
-  ProfileMapContext,
-  ReportsContext,
-  ShopMapContext,
-} from "@/utils/context/context";
+import { ProfileMapContext, ShopMapContext } from "@/utils/context/context";
 import {
   Dropdown,
   DropdownItem,
@@ -28,17 +24,9 @@ import {
   UserIcon,
 } from "@heroicons/react/24/outline";
 import { useRouter } from "next/router";
-import {
-  NostrContext,
-  SignerContext,
-} from "@/components/utility-components/nostr-context-provider";
-import {
-  publishReportEvent,
-  ReportType,
-} from "@/utils/nostr/nostr-helper-functions";
-import ReportEventModal from "../modals/report-event-modal";
+import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import SignInModal from "../../sign-in/SignInModal";
-import SuccessModal from "../success-modal";
+import useReportEventFlow from "../use-report-event-flow";
 
 type DropDownKeys =
   | "shop"
@@ -70,12 +58,14 @@ export const ProfileWithDropdown = ({
   const shopMapContext = useContext(ShopMapContext);
   const npub = pubkey ? nip19.npubEncode(pubkey) : "";
   const router = useRouter();
-  const reportsContext = useContext(ReportsContext);
-  const { nostr } = useContext(NostrContext);
-  const { isLoggedIn, signer } = useContext(SignerContext);
+  const { isLoggedIn } = useContext(SignerContext);
   const { isOpen, onOpen, onClose } = useDisclosure();
-  const [showReportModal, setShowReportModal] = useState(false);
-  const [showSuccessModal, setShowSuccessModal] = useState(false);
+
+  const { openReportFlow, reportFlowUi } = useReportEventFlow({
+    targetLabel: "profile",
+    reportedPubkey: pubkey,
+    onRequireLogin: onOpen,
+  });
 
   useEffect(() => {
     const profileMap = profileContext.profileData;
@@ -159,13 +149,7 @@ export const ProfileWithDropdown = ({
       color: "danger",
       className: "text-light-text dark:text-dark-text",
       startContent: <ExclamationTriangleIcon className={"h-5 w-5"} />,
-      onClick: () => {
-        if (isLoggedIn) {
-          setShowReportModal(true);
-        } else {
-          onOpen();
-        }
-      },
+      onClick: openReportFlow,
       label: "Report Profile",
     },
     user_profile: {
@@ -220,27 +204,6 @@ export const ProfileWithDropdown = ({
     },
   };
 
-  const handleSubmitProfileReport = async (
-    reportType: ReportType,
-    content: string
-  ) => {
-    if (!nostr || !signer) {
-      throw new Error("Missing nostr manager or signer");
-    }
-
-    const signedEvent = await publishReportEvent(nostr, signer, {
-      content,
-      reportType,
-      reportedPubkey: pubkey,
-    });
-
-    if (signedEvent) {
-      reportsContext.addReportEvent(signedEvent);
-    }
-
-    setShowSuccessModal(true);
-  };
-
   return (
     <>
       <Dropdown placement="bottom-start">
@@ -282,17 +245,7 @@ export const ProfileWithDropdown = ({
           }}
         </DropdownMenu>
       </Dropdown>
-      <ReportEventModal
-        isOpen={showReportModal}
-        onClose={() => setShowReportModal(false)}
-        targetLabel="profile"
-        onSubmit={handleSubmitProfileReport}
-      />
-      <SuccessModal
-        bodyText="Your report has been published."
-        isOpen={showSuccessModal}
-        onClose={() => setShowSuccessModal(false)}
-      />
+      {reportFlowUi}
       <SignInModal isOpen={isOpen} onClose={onClose} />
     </>
   );

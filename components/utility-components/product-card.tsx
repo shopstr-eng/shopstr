@@ -23,19 +23,8 @@ import { ProductData } from "@/utils/parsers/product-parser-functions";
 import { ProfileWithDropdown } from "./profile/profile-dropdown";
 import { useRouter } from "next/router";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
-import {
-  NostrContext,
-} from "@/components/utility-components/nostr-context-provider";
-import {
-  ReportsContext,
-} from "@/utils/context/context";
-import {
-  publishReportEvent,
-  ReportType,
-} from "@/utils/nostr/nostr-helper-functions";
-import ReportEventModal from "./modals/report-event-modal";
-import SuccessModal from "./success-modal";
 import SignInModal from "../sign-in/SignInModal";
+import useReportEventFlow from "./use-report-event-flow";
 
 export default function ProductCard({
   productData,
@@ -48,15 +37,18 @@ export default function ProductCard({
 }) {
   const [showRawEventModal, setShowRawEventModal] = useState(false);
   const [showEventIdModal, setShowEventIdModal] = useState(false);
-  const [showReportModal, setShowReportModal] = useState(false);
-  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   const router = useRouter();
-  const reportsContext = useContext(ReportsContext);
-  const { nostr } = useContext(NostrContext);
-  const { pubkey: userPubkey, signer, isLoggedIn } = useContext(SignerContext);
+  const { pubkey: userPubkey } = useContext(SignerContext);
   const { isOpen, onOpen, onClose } = useDisclosure();
   if (!productData) return null;
+
+  const { openReportFlow, reportFlowUi } = useReportEventFlow({
+    targetLabel: "listing",
+    reportedPubkey: productData.pubkey,
+    reportedEventId: productData.id,
+    onRequireLogin: onOpen,
+  });
 
   const isZapsnag =
     productData.d === "zapsnag" || productData.categories?.includes("zapsnag");
@@ -86,36 +78,6 @@ export default function ProductCard({
     } catch (err) {
       // console.error("Failed to generate njump link", err);
     }
-  };
-
-  const openReportFlow = () => {
-    if (isLoggedIn) {
-      setShowReportModal(true);
-    } else {
-      onOpen();
-    }
-  };
-
-  const handleSubmitListingReport = async (
-    reportType: ReportType,
-    content: string
-  ) => {
-    if (!nostr || !signer) {
-      throw new Error("Missing nostr manager or signer");
-    }
-
-    const signedEvent = await publishReportEvent(nostr, signer, {
-      content,
-      reportType,
-      reportedPubkey: productData.pubkey,
-      reportedEventId: productData.id,
-    });
-
-    if (signedEvent) {
-      reportsContext.addReportEvent(signedEvent);
-    }
-
-    setShowSuccessModal(true);
   };
 
   const content = (
@@ -275,17 +237,7 @@ export default function ProductCard({
         onClose={() => setShowEventIdModal(false)}
         rawEvent={productData.rawEvent}
       />
-      <ReportEventModal
-        isOpen={showReportModal}
-        onClose={() => setShowReportModal(false)}
-        targetLabel="listing"
-        onSubmit={handleSubmitListingReport}
-      />
-      <SuccessModal
-        bodyText="Your report has been published."
-        isOpen={showSuccessModal}
-        onClose={() => setShowSuccessModal(false)}
-      />
+      {reportFlowUi}
       <SignInModal isOpen={isOpen} onClose={onClose} />
     </div>
   );

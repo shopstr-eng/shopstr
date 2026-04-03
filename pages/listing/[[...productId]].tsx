@@ -10,6 +10,7 @@ import {
   DropdownMenu,
   DropdownItem,
   Button,
+  useDisclosure,
 } from "@nextui-org/react";
 import {
   CheckCircleIcon,
@@ -38,20 +39,9 @@ import {
   fetchProductByTitleSlug,
 } from "@/utils/db/db-service";
 import { NostrEvent } from "@/utils/types/types";
-import {
-  NostrContext,
-  SignerContext,
-} from "@/components/utility-components/nostr-context-provider";
-import {
-  ReportsContext,
-} from "@/utils/context/context";
-import ReportEventModal from "@/components/utility-components/modals/report-event-modal";
-import SuccessModal from "@/components/utility-components/success-modal";
+import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import SignInModal from "@/components/sign-in/SignInModal";
-import {
-  publishReportEvent,
-  ReportType,
-} from "@/utils/nostr/nostr-helper-functions";
+import useReportEventFlow from "@/components/utility-components/use-report-event-flow";
 
 type ListingPageProps = {
   ogMeta: OgMetaProps;
@@ -125,9 +115,7 @@ export const getServerSideProps: GetServerSideProps<ListingPageProps> = async (
 
 const Listing = () => {
   const router = useRouter();
-  const { nostr } = useContext(NostrContext);
-  const reportsContext = useContext(ReportsContext);
-  const { signer, isLoggedIn, pubkey: userPubkey } = useContext(SignerContext);
+  const { pubkey: userPubkey } = useContext(SignerContext);
   const [productData, setProductData] = useState<ProductData | undefined>(
     undefined
   );
@@ -136,47 +124,21 @@ const Listing = () => {
   const [rawEvent, setRawEvent] = useState<Event | undefined>(undefined);
   const [showRawEventModal, setShowRawEventModal] = useState(false);
   const [showEventIdModal, setShowEventIdModal] = useState(false);
-  const [showReportModal, setShowReportModal] = useState(false);
-  const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [sfSellerPubkey, setSfSellerPubkey] = useState("");
 
   const [invoiceIsPaid, setInvoiceIsPaid] = useState(false);
   const [invoiceGenerationFailed, setInvoiceGenerationFailed] = useState(false);
   const [cashuPaymentSent, setCashuPaymentSent] = useState(false);
   const [cashuPaymentFailed, setCashuPaymentFailed] = useState(false);
-  const [showSignInModal, setShowSignInModal] = useState(false);
+  const { isOpen, onOpen, onClose } = useDisclosure();
 
   const productContext = useContext(ProductContext);
-
-  const openReportFlow = () => {
-    if (isLoggedIn) {
-      setShowReportModal(true);
-    } else {
-      setShowSignInModal(true);
-    }
-  };
-
-  const handleSubmitListingReport = async (
-    reportType: ReportType,
-    content: string
-  ) => {
-    if (!productData || !nostr || !signer) {
-      throw new Error("Missing product, nostr manager, or signer");
-    }
-
-    const signedEvent = await publishReportEvent(nostr, signer, {
-      content,
-      reportType,
-      reportedPubkey: productData.pubkey,
-      reportedEventId: productData.id,
-    });
-
-    if (signedEvent) {
-      reportsContext.addReportEvent(signedEvent);
-    }
-
-    setShowSuccessModal(true);
-  };
+  const { openReportFlow, reportFlowUi } = useReportEventFlow({
+    targetLabel: "listing",
+    reportedPubkey: productData?.pubkey,
+    reportedEventId: productData?.id,
+    onRequireLogin: onOpen,
+  });
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -335,21 +297,8 @@ const Listing = () => {
                 onClose={() => setShowEventIdModal(false)}
                 rawEvent={rawEvent}
               />
-              <ReportEventModal
-                isOpen={showReportModal}
-                onClose={() => setShowReportModal(false)}
-                targetLabel="listing"
-                onSubmit={handleSubmitListingReport}
-              />
-              <SuccessModal
-                bodyText="Your report has been published."
-                isOpen={showSuccessModal}
-                onClose={() => setShowSuccessModal(false)}
-              />
-              <SignInModal
-                isOpen={showSignInModal}
-                onClose={() => setShowSignInModal(false)}
-              />
+              {reportFlowUi}
+              <SignInModal isOpen={isOpen} onClose={onClose} />
             </div>
           ) : (
             <CheckoutCard
