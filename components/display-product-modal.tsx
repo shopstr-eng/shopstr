@@ -188,7 +188,7 @@ export default function DisplayProductModal({
             </div>
             <Divider />
             <span className="text-xl font-semibold">Summary: </span>
-            <span className="whitespace-break-spaces break-all">
+            <span className="whitespace-pre-wrap break-words">
               {productData.summary}
             </span>
             {productData.sizes && productData.sizes.length > 0 ? (
