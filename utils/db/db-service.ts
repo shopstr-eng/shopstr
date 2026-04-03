@@ -1315,69 +1315,84 @@ export async function fetchProductByTitleSlug(
        )
        ORDER BY created_at DESC`
     );
-    const pubkeySuffixMatch = slug.match(/^(.+)-([a-f0-9]{8})$/);
-    const baseSlug = pubkeySuffixMatch?.[1];
-    const pubkeyFragment = pubkeySuffixMatch?.[2];
-
-    let exactMatch: NostrEvent | null = null;
-    let exactMatchCount = 0;
-    let disambiguatedMatch: NostrEvent | null = null;
-
-    for (const row of result.rows) {
-      const tags: string[][] = row.tags;
-      const titleTag = tags.find((t) => t[0] === "title");
-      if (!titleTag || !titleTag[1]) continue;
-
-      const currentSlug = titleToSlug(titleTag[1]);
-
-      if (currentSlug === slug) {
-        exactMatchCount += 1;
-        if (exactMatchCount > 1) {
-          return null;
-        }
-
-        exactMatch = {
-          id: row.id,
-          pubkey: row.pubkey,
-          created_at: row.created_at,
-          kind: row.kind,
-          tags: row.tags,
-          content: row.content,
-          sig: row.sig,
-        };
-      }
-
-      if (
-        !exactMatch &&
-        !disambiguatedMatch &&
-        baseSlug &&
-        pubkeyFragment &&
-        currentSlug === baseSlug &&
-        row.pubkey.startsWith(pubkeyFragment)
-      ) {
-        disambiguatedMatch = {
-          id: row.id,
-          pubkey: row.pubkey,
-          created_at: row.created_at,
-          kind: row.kind,
-          tags: row.tags,
-          content: row.content,
-          sig: row.sig,
-        };
-      }
-    }
-
-    if (exactMatch) {
-      return exactMatch;
-    }
-
-    return disambiguatedMatch;
+    return resolveProductEventByTitleSlug(slug, result.rows);
   } catch (error) {
     console.error("Failed to fetch product by title slug:", error);
     return null;
   } finally {
     if (client) client.release();
   }
+}
+
+type ProductEventSlugLookupRow = Pick<
+  NostrEvent,
+  "id" | "pubkey" | "created_at" | "kind" | "tags" | "content" | "sig"
+>;
+
+function productEventRowToEvent(row: ProductEventSlugLookupRow): NostrEvent {
+  return {
+    id: row.id,
+    pubkey: row.pubkey,
+    created_at: row.created_at,
+    kind: row.kind,
+    tags: row.tags,
+    content: row.content,
+    sig: row.sig,
+  };
+}
+
+function getProductEventIdentity(row: ProductEventSlugLookupRow): string {
+  const dTag = row.tags.find((tag) => tag[0] === "d")?.[1];
+  return `${row.pubkey}:${dTag || row.id}`;
+}
+
+export function resolveProductEventByTitleSlug(
+  slug: string,
+  rows: ProductEventSlugLookupRow[]
+): NostrEvent | null {
+  const pubkeySuffixMatch = slug.match(/^(.+)-([a-f0-9]{8})$/);
+  const baseSlug = pubkeySuffixMatch?.[1];
+  const pubkeyFragment = pubkeySuffixMatch?.[2];
+
+  let exactMatch: NostrEvent | null = null;
+  let exactMatchIdentity: string | null = null;
+  let disambiguatedMatch: NostrEvent | null = null;
+
+  for (const row of rows) {
+    const titleTag = row.tags.find((tag) => tag[0] === "title");
+    if (!titleTag || !titleTag[1]) continue;
+
+    const currentSlug = titleToSlug(titleTag[1]);
+    const currentIdentity = getProductEventIdentity(row);
+
+    if (currentSlug === slug) {
+      if (exactMatchIdentity && exactMatchIdentity !== currentIdentity) {
+        return null;
+      }
+
+      if (!exactMatch) {
+        exactMatch = productEventRowToEvent(row);
+        exactMatchIdentity = currentIdentity;
+      }
+    }
+
+    if (
+      !exactMatch &&
+      !disambiguatedMatch &&
+      baseSlug &&
+      pubkeyFragment &&
+      currentSlug === baseSlug &&
+      row.pubkey.startsWith(pubkeyFragment)
+    ) {
+      disambiguatedMatch = productEventRowToEvent(row);
+    }
+  }
+
+  if (exactMatch) {
+    return exactMatch;
+  }
+
+  return disambiguatedMatch;
 }
 
 export async function fetchShopProfileByPubkeyFromDb(
