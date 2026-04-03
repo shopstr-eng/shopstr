@@ -29,7 +29,6 @@ import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
 const UserProfilePage = () => {
   const { nostr } = useContext(NostrContext);
   const [isUploadingProfile, setIsUploadingProfile] = useState(false);
-  const [isFetchingProfile, setIsFetchingProfile] = useState(false);
   const {
     signer,
     pubkey: userPubkey,
@@ -58,13 +57,16 @@ const UserProfilePage = () => {
 
   const watchBanner = watch("banner");
   const watchPicture = watch("picture");
+  const hasCurrentUserProfile =
+    !!userPubkey && profileContext.profileData.has(userPubkey);
+  const isFetchingProfile =
+    !userPubkey || (profileContext.isLoading && !hasCurrentUserProfile);
   const defaultImage = useMemo(() => {
     return "https://robohash.org/" + userPubkey;
   }, [userPubkey]);
 
   useEffect(() => {
-    if (!userPubkey) return;
-    setIsFetchingProfile(true);
+    if (!userPubkey || profileContext.isLoading) return;
     const profileMap = profileContext.profileData;
     const profile = profileMap.has(userPubkey)
       ? profileMap.get(userPubkey)
@@ -72,7 +74,6 @@ const UserProfilePage = () => {
     if (profile) {
       reset(profile.content);
     }
-    setIsFetchingProfile(false);
 
     if (signer instanceof NostrNSecSigner) {
       const nsecSigner = signer as NostrNSecSigner;
