@@ -182,6 +182,30 @@ describe("parseTags", () => {
     expect(result.volumePrices!.get("100g")).toBeUndefined();
   });
 
+  it("should parse weight tags into weights array and prices map", () => {
+    const event = {
+      ...baseEvent,
+      tags: [
+        ["weight", "1 oz", "10"],
+        ["weight", "1 lb", "80"],
+      ],
+    };
+    const result = parseTags(event)!;
+
+    expect(result.weights).toEqual(["1 oz", "1 lb"]);
+    expect(result.weightPrices).toBeInstanceOf(Map);
+    expect(result.weightPrices!.get("1 oz")).toBe(10);
+    expect(result.weightPrices!.get("1 lb")).toBe(80);
+  });
+
+  it("should handle a weight tag without a price", () => {
+    const event = { ...baseEvent, tags: [["weight", "1 oz"]] };
+    const result = parseTags(event)!;
+
+    expect(result.weights).toEqual(["1 oz"]);
+    expect(result.weightPrices!.get("1 oz")).toBeUndefined();
+  });
+
   it("should ignore L/l tags that are not for content-warning", () => {
     const event = {
       ...baseEvent,
