@@ -371,17 +371,23 @@ export const fetchProfile = async (
       }
 
       const mergedProfileMap = new Map(existingProfileMap);
-      const updateProfileIfNewer = (profile: ProfileData) => {
+      const mergeProfile = (profile: ProfileData) => {
         if (!profile?.pubkey) {
           return;
         }
 
         const existingProfile = mergedProfileMap.get(profile.pubkey);
-        if (
-          !existingProfile ||
-          (profile.created_at ?? 0) >= (existingProfile.created_at ?? 0)
-        ) {
+        if (!existingProfile || profile.created_at > existingProfile.created_at) {
           mergedProfileMap.set(profile.pubkey, profile);
+          return;
+        }
+
+        if (profile.created_at === existingProfile.created_at) {
+          mergedProfileMap.set(profile.pubkey, {
+            ...profile,
+            event: profile.event ?? existingProfile.event,
+            nip05Verified: profile.nip05Verified ?? false,
+          });
         }
       };
 
@@ -427,6 +433,12 @@ export const fetchProfile = async (
         console.error("Failed to fetch profiles from database: ", error);
       }
 
+      for (const profile of dbProfileMap.values()) {
+        mergeProfile(profile);
+      }
+
+      editProfileContext(new Map(mergedProfileMap), false);
+
       const subParams: { kinds: number[]; authors?: string[] } = {
         kinds: [0],
         authors: Array.from(pubkeyProfilesToFetch),
@@ -435,15 +447,9 @@ export const fetchProfile = async (
       const profileMap: Map<string, ProfileData | null> = new Map(
         Array.from(pubkeyProfilesToFetch).map((pubkey) => [
           pubkey,
-          dbProfileMap.get(pubkey) || mergedProfileMap.get(pubkey) || null,
+          mergedProfileMap.get(pubkey) || null,
         ])
       );
-
-      for (const profile of dbProfileMap.values()) {
-        updateProfileIfNewer(profile);
-      }
-
-      editProfileContext(new Map(mergedProfileMap), false);
 
       let fetchedEvents: NostrEvent[] = [];
       try {
@@ -460,12 +466,16 @@ export const fetchProfile = async (
           event.created_at >= existing.created_at
         ) {
           try {
-            profileMap.set(event.pubkey, {
+            const parsedProfile: ProfileData = {
               pubkey: event.pubkey,
               created_at: event.created_at,
               content: JSON.parse(event.content),
               nip05Verified: false,
-            });
+              event,
+            };
+
+            profileMap.set(event.pubkey, parsedProfile);
+            mergeProfile(parsedProfile);
           } catch (error) {
             console.error(
               `Failed parse profile for pubkey: ${event.pubkey}, ${event.content}`,
@@ -475,13 +485,7 @@ export const fetchProfile = async (
         }
       }
 
-      for (const profile of profileMap.values()) {
-        if (profile) {
-          updateProfileIfNewer(profile);
-        }
-      }
-
-      editProfileContext(mergedProfileMap, false);
+      editProfileContext(new Map(mergedProfileMap), false);
 
       // Cache profiles to database via API (reconstruct from fetched events)
       const validProfileEvents = fetchedEvents.filter(
@@ -495,15 +499,16 @@ export const fetchProfile = async (
 
       void (async () => {
         try {
-          const profilesToVerify = Array.from(mergedProfileMap.entries()).filter(
-            ([, profile]) => profile?.content?.nip05
-          );
+          const verificationBaseMap = new Map(mergedProfileMap);
+          const profilesToVerify = Array.from(
+            verificationBaseMap.entries()
+          ).filter(([, profile]) => profile?.content?.nip05);
 
           if (profilesToVerify.length === 0) {
             return;
           }
 
-          const verifiedProfileMap = new Map(mergedProfileMap);
+          const verifiedProfileMap = new Map(verificationBaseMap);
           let hasUpdates = false;
           const maxConcurrentVerifications = 5;
 
@@ -554,7 +559,7 @@ export const fetchProfile = async (
         }
       })();
 
-      resolve({ profileMap: mergedProfileMap });
+      resolve({ profileMap: new Map(mergedProfileMap) });
     } catch (error) {
       reject(error);
     }
