@@ -9,7 +9,10 @@ function isPrivateIPv4(address: string): boolean {
   const parts = address.split(".").map((part) => Number(part));
   if (parts.length !== 4 || parts.some((p) => Number.isNaN(p))) return true;
 
-  const [a, b] = parts;
+  const a = parts[0];
+  const b = parts[1];
+  if (a === undefined || b === undefined) return true;
+
   if (a === 10 || a === 127 || a === 0) return true;
   if (a === 169 && b === 254) return true;
   if (a === 172 && b >= 16 && b <= 31) return true;
@@ -139,7 +142,7 @@ export default async function handler(
 
     let response: Response;
     try {
-      response = await fetch(url, { signal: controller.signal });
+      response = await fetch(targetUrl, { signal: controller.signal });
     } finally {
       clearTimeout(timeoutId);
     }

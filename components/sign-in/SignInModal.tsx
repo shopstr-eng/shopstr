@@ -129,7 +129,7 @@ export default function SignInModal({
       onClose();
       router.push("/onboarding/user-profile");
     } 
-    catch (error) {
+    catch {
       router.push("/marketplace");
       setFailureText("Bunker sign-in failed!");
       setShowFailureModal(true);
@@ -169,7 +169,7 @@ export default function SignInModal({
           ? "/onboarding/user-type?preselect=seller"
           : "/onboarding/user-type"
       );
-    } catch (error) {
+    } catch {
       setFailureText("Bunker sign-up failed!");
       setShowFailureModal(true);
       setIsBunkerConnecting(false);
@@ -194,7 +194,7 @@ export default function SignInModal({
             );
             pubkey = getPublicKey(decryptedSecretKey);
             encryptedPrivKey = privateKey;
-          } catch (e) {
+          } catch {
             setNcryptsecError("Incorrect passphrase or invalid ncryptsec.");
             setFailureText(
               "Could not decrypt ncryptsec. Check your passphrase and try again."
