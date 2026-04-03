@@ -174,7 +174,7 @@ const PayButton = () => {
       setIsPaid(true);
       setIsRedeeming(false);
       handleTogglePayModal();
-      } catch {
+    } catch {
       setPaymentFailed(true);
       setIsRedeeming(false);
     }
@@ -248,7 +248,7 @@ const PayButton = () => {
                           onChange(newValue);
                           try {
                             await calculateFee(newValue);
-                            } catch {
+                          } catch {
                             setFeeReserveAmount("");
                           }
                         }}

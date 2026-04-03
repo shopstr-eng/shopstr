@@ -296,7 +296,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
       );
 
       setIsSendingDMLoading(false);
-      } catch {
+    } catch {
       setFailureText("Error sending inquiry.");
       setShowFailureModal(true);
       setIsSendingDMLoading(false);
