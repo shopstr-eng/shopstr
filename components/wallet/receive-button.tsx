@@ -123,7 +123,7 @@ const ReceiveButton = () => {
       } else {
         setIsSpent(true);
       }
-    } catch (_) {
+    } catch {
       setIsInvalidToken(true);
     }
   };
