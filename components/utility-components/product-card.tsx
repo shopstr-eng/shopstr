@@ -49,6 +49,26 @@ export default function ProductCard({
     ? Date.now() / 1000 > productData.expiration
     : false;
 
+  const handleCardClick = (e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    const isCarouselControl =
+      target.closest('button[title*="slide"]') ||
+      target.closest('li[role="button"]') ||
+      target.closest(".carousel-control");
+    const isDropdown =
+      target.closest('[role="menu"]') ||
+      target.closest('[data-slot="trigger"]') ||
+      target.closest('button[data-slot="trigger"]');
+    if (isCarouselControl || isDropdown) {
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+    if (onProductClick) {
+      onProductClick(productData, e);
+    }
+  };
+
   const handleNjumpClick = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -70,12 +90,7 @@ export default function ProductCard({
   };
 
   const content = (
-    <div
-      className="cursor-pointer"
-      onClick={(e) => {
-        onProductClick && onProductClick(productData, e);
-      }}
-    >
+    <div className="cursor-pointer" onClick={handleCardClick}>
       <div>
         <ImageCarousel
           images={productData.images}
