@@ -20,7 +20,7 @@ jobs:
     
     steps:
       - name: Check out code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           # For pull_request_target, we need to checkout the PR branch
           ref: ${{ github.event.pull_request.head.sha }}
