@@ -2,6 +2,24 @@ import { ShippingOptionsType } from "@/utils/STATIC-VARIABLES";
 import { calculateTotalCost } from "@/components/utility-components/display-monetary-info";
 import { NostrEvent } from "@/utils/types/types";
 
+type NostrMarketplaceShipping = {
+  id?: string;
+  cost?: number;
+};
+
+type NostrMarketplaceProductContent = {
+  id?: string;
+  stall_id?: string;
+  name?: string;
+  description?: string;
+  images?: string[];
+  currency?: string;
+  price?: number;
+  quantity?: number | null;
+  specs?: [string, string][];
+  shipping?: NostrMarketplaceShipping[];
+};
+
 export type ProductData = {
   id: string;
   pubkey: string;
@@ -40,7 +58,163 @@ export type ProductData = {
   rawEvent?: NostrEvent;
 };
 
+export function getMarketplaceEventDTag(event: NostrEvent): string | undefined {
+  return event.tags?.find((tag: string[]) => tag[0] === "d")?.[1];
+}
+
+export function getMarketplaceEventKey(event: NostrEvent): string {
+  if (event.kind === 30402 || event.kind === 30018) {
+    const dTag = getMarketplaceEventDTag(event);
+    if (dTag) return `${event.pubkey}:${dTag}`;
+  }
+
+  return event.id;
+}
+
+function mapNip15ShippingToShopstrShipping(
+  shipping?: NostrMarketplaceShipping[]
+): Pick<ProductData, "shippingType" | "shippingCost"> {
+  if (!shipping?.length) {
+    return {
+      shippingType: "N/A",
+      shippingCost: 0,
+    };
+  }
+
+  const firstZone = shipping[0];
+  const shippingCost = Number(firstZone?.cost || 0);
+
+  if (shippingCost <= 0) {
+    return {
+      shippingType: "Free",
+      shippingCost: 0,
+    };
+  }
+
+  return {
+    shippingType: "Added Cost",
+    shippingCost,
+  };
+}
+
+function applyNip15Specs(
+  parsedData: ProductData,
+  specs: [string, string][] = []
+) {
+  specs.forEach(([key, value]) => {
+    switch (key) {
+      case "location":
+        parsedData.location = value;
+        break;
+      case "condition":
+        parsedData.condition = value;
+        break;
+      case "status":
+        parsedData.status = value;
+        break;
+      case "required":
+        parsedData.required = value;
+        break;
+      case "restrictions":
+        parsedData.restrictions = value;
+        break;
+      case "size":
+        if (!parsedData.sizes) parsedData.sizes = [];
+        parsedData.sizes.push(value);
+        break;
+      case "size_quantity": {
+        const [size, quantity] = value.split(":");
+        if (size && quantity) {
+          if (!parsedData.sizeQuantities) {
+            parsedData.sizeQuantities = new Map<string, number>();
+          }
+          parsedData.sizeQuantities.set(size, Number(quantity));
+        }
+        break;
+      }
+      case "volume": {
+        const [volume, price] = value.split(":");
+        if (!parsedData.volumes) parsedData.volumes = [];
+        if (!parsedData.volumePrices) {
+          parsedData.volumePrices = new Map<string, number>();
+        }
+        if (volume) {
+          parsedData.volumes.push(volume);
+          if (price) {
+            parsedData.volumePrices.set(volume, Number(price));
+          }
+        }
+        break;
+      }
+      case "bulk": {
+        const [units, price] = value.split(":");
+        if (units && price) {
+          if (!parsedData.bulkPrices) {
+            parsedData.bulkPrices = new Map<number, number>();
+          }
+          parsedData.bulkPrices.set(Number(units), Number(price));
+        }
+        break;
+      }
+      case "pickup_location":
+        if (!parsedData.pickupLocations) parsedData.pickupLocations = [];
+        parsedData.pickupLocations.push(value);
+        break;
+      case "expiration":
+        parsedData.expiration = Number(value);
+        break;
+      default:
+        break;
+    }
+  });
+}
+
+function parseNip15ProductEvent(productEvent: NostrEvent) {
+  let content: NostrMarketplaceProductContent;
+  try {
+    content = JSON.parse(productEvent.content || "{}");
+  } catch {
+    return undefined;
+  }
+
+  const tags = productEvent.tags || [];
+
+  const parsedData: ProductData = {
+    id: productEvent.id,
+    pubkey: productEvent.pubkey,
+    createdAt: productEvent.created_at,
+    title: content.name || "",
+    summary: content.description || "",
+    publishedAt: String(productEvent.created_at),
+    images: content.images || [],
+    categories: tags
+      .filter((tag) => tag[0] === "t" && tag[1])
+      .map((tag) => tag[1]!),
+    location: "",
+    price: Number(content.price || 0),
+    currency: content.currency || "",
+    totalCost: 0,
+    d: getMarketplaceEventDTag(productEvent) || content.id,
+    quantity:
+      typeof content.quantity === "number" ? content.quantity : undefined,
+    rawEvent: productEvent,
+  };
+
+  const shipping = mapNip15ShippingToShopstrShipping(content.shipping);
+  parsedData.shippingType = shipping.shippingType;
+  parsedData.shippingCost = shipping.shippingCost;
+
+  applyNip15Specs(parsedData, content.specs);
+
+  parsedData.totalCost = calculateTotalCost(parsedData);
+  return parsedData;
+}
+
 export const parseTags = (productEvent: NostrEvent) => {
+  if (productEvent.kind === 30018) {
+    return parseNip15ProductEvent(productEvent);
+  }
+
   const parsedData: ProductData = {
     id: "",
     pubkey: "",
