@@ -23,6 +23,8 @@ import {
 } from "@/components/utility-components/nostr-context-provider";
 import { getListingSlug } from "@/utils/url-slugs";
 import { productSatisfiesAllFilters } from "@/utils/parsers/search-predicate";
+import { mergeAndDeduplicateProducts } from "@/utils/nostr/nip50-search";
+import { useNip50Search } from "@/components/hooks/use-nip50-search";
 
 const DisplayProducts = ({
   focusedPubkey,
@@ -63,6 +65,8 @@ const DisplayProducts = ({
 
   const { nostr } = useContext(NostrContext);
   const { signer, pubkey: userPubkey } = useContext(SignerContext);
+  const { results: nip50Results, isSearching: isNip50Searching } =
+    useNip50Search(selectedSearch);
 
   // Load saved page from session storage on mount
   useEffect(() => {
@@ -85,13 +89,25 @@ const DisplayProducts = ({
     if (!productEventContext) return;
     if (!productEventContext.isLoading && productEventContext.productEvents) {
       setIsProductLoading(true);
-      const sortedProductEvents = [
+      const sortedLocalProductEvents = [
         ...productEventContext.productEvents.sort(
           (a: NostrEvent, b: NostrEvent) => b.created_at - a.created_at
         ),
       ];
+
+      const normalizedSearch = selectedSearch.trim().toLowerCase();
+      const shouldMergeNip50 =
+        normalizedSearch.length >= 3 &&
+        !normalizedSearch.startsWith("npub") &&
+        !normalizedSearch.startsWith("naddr") &&
+        nip50Results.length > 0;
+
+      const mergedProductEvents = shouldMergeNip50
+        ? mergeAndDeduplicateProducts(sortedLocalProductEvents, nip50Results)
+        : sortedLocalProductEvents;
+
       const parsedProductData: ProductData[] = [];
-      sortedProductEvents.forEach((event) => {
+      mergedProductEvents.forEach((event) => {
         if (wotFilter) {
           if (!followsContext.isLoading && followsContext.followList) {
             const followList = followsContext.followList;
@@ -121,7 +137,7 @@ const DisplayProducts = ({
       setProductEvents(parsedProductData);
       setIsProductLoading(false);
     }
-  }, [productEventContext, wotFilter]);
+  }, [productEventContext, wotFilter, nip50Results, selectedSearch]);
 
   useEffect(() => {
     if (focusedPubkey && setCategories) {
@@ -140,13 +156,21 @@ const DisplayProducts = ({
 
     const filtered = productEvents.filter((product) => {
       if (focusedPubkey && product.pubkey !== focusedPubkey) return false;
-      if (!productSatisfiesAllFilters(product, selectedCategories, selectedLocation, selectedSearch)) return false;
+      if (
+        !productSatisfiesAllFilters(
+          product,
+          selectedCategories,
+          selectedLocation,
+          selectedSearch
+        )
+      )
+        return false;
       if (!product.currency) return false;
       if (product.images.length === 0) return false;
       if (product.contentWarning) return false;
       if (
         product.pubkey ===
-        "3da2082b7aa5b76a8f0c134deab3f7848c3b5e3a3079c65947d88422b69c1755" &&
+          "3da2082b7aa5b76a8f0c134deab3f7848c3b5e3a3079c65947d88422b69c1755" &&
         userPubkey !== product.pubkey
       ) {
         return false;
@@ -220,7 +244,7 @@ const DisplayProducts = ({
     try {
       await deleteEvent(nostr!, signer!, [productId]);
       productEventContext.removeDeletedProductEvent(productId);
-      } catch {
+    } catch {
       return;
     }
   };
@@ -260,7 +284,6 @@ const DisplayProducts = ({
       setShowModal(false);
     }
   };
-
   const productSatisfiesCategoryFilter = (productData: ProductData) => {
     if (selectedCategories.size === 0) return true;
     return Array.from(selectedCategories).some((selectedCategory) => {
@@ -359,9 +382,9 @@ const DisplayProducts = ({
     <>
       <div className="w-full md:pl-4">
         {!isMyListings &&
-          (profileMapContext.isLoading ||
-            productEventContext.isLoading ||
-            isProductsLoading) ? (
+        (profileMapContext.isLoading ||
+          productEventContext.isLoading ||
+          isProductsLoading) ? (
           <div className="mb-6 mt-6 flex items-center justify-center">
             <ShopstrSpinner />
           </div>
@@ -400,6 +423,12 @@ const DisplayProducts = ({
               {Math.min(filteredProducts.length, currentPage * itemsPerPage)} of{" "}
               {filteredProducts.length} products
             </div>
+
+            {isNip50Searching && (
+              <div className="mb-6 text-center text-xs text-light-text dark:text-dark-text">
+                Searching relays for additional results...
+              </div>
+            )}
           </>
         ) : (
           wotFilter &&
