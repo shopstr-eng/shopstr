@@ -132,7 +132,7 @@ export default function StorefrontProductGrid({
               }`,
             }}
             style={{
-              // @ts-ignore
+              // @ts-expect-error CSS custom property is intentionally injected for theming.
               "--nextui-primary": colors.accent,
             }}
           />

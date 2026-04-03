@@ -4,6 +4,7 @@ import "@testing-library/jest-dom";
 import ProductCard from "../product-card";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
+import { ReportsContext } from "@/utils/context/context";
 
 const mockRouter = {
   pathname: "/product-page",
@@ -20,6 +21,10 @@ jest.mock("../profile/profile-dropdown", () => ({
       data-keys={JSON.stringify(props.dropDownKeys)}
     ></div>
   ),
+}));
+jest.mock("@/components/utility-components/report-modal", () => ({
+  __esModule: true,
+  default: () => null,
 }));
 jest.mock(
   "../image-carousel",
@@ -65,14 +70,36 @@ const mockProductData: ProductData = {
 
 const renderWithContext = (
   ui: React.ReactElement,
-  userPubkey: string | null = null
+  userPubkey: string | null = null,
+  reportContextOverrides?: {
+    profileReports?: Map<string, Array<{ id: string; kind: number }>>;
+    listingReports?: Map<string, Array<{ id: string; kind: number }>>;
+  }
 ) => {
+  const reportsContextValue = {
+    reportEvents: [],
+    profileReports: reportContextOverrides?.profileReports || new Map(),
+    listingReports: reportContextOverrides?.listingReports || new Map(),
+    isLoading: false,
+    setReportsData: jest.fn(),
+    addNewlyCreatedReportEvent: jest.fn(),
+  };
+
   return render(
-    <SignerContext.Provider
-      value={{ pubkey: userPubkey, setPubkey: jest.fn() } as any}
+    <ReportsContext.Provider
+      value={reportsContextValue as React.ContextType<typeof ReportsContext>}
     >
-      {ui}
-    </SignerContext.Provider>
+      <SignerContext.Provider
+        value={
+          {
+            pubkey: userPubkey,
+            setPubkey: jest.fn(),
+          } as React.ContextType<typeof SignerContext>
+        }
+      >
+        {ui}
+      </SignerContext.Provider>
+    </ReportsContext.Provider>
   );
 };
 
@@ -124,7 +151,7 @@ describe("ProductCard", () => {
       );
       const dropdown = screen.getByTestId("profile-dropdown");
       const keys = JSON.parse(dropdown.getAttribute("data-keys")!);
-      expect(keys).toEqual(["shop", "inquiry", "copy_npub"]);
+      expect(keys).toEqual(["shop", "inquiry", "copy_npub", "report"]);
     });
 
     it("shows sold status correctly", () => {
@@ -132,6 +159,38 @@ describe("ProductCard", () => {
         <ProductCard productData={{ ...mockProductData, status: "sold" }} />
       );
       expect(screen.getByText("Sold")).toBeInTheDocument();
+    });
+
+    it("shows deduplicated report count badge", () => {
+      const profileReports = new Map([
+        [
+          "owner_pubkey",
+          [
+            { id: "r1", kind: 1984 },
+            { id: "r2", kind: 1984 },
+          ],
+        ],
+      ]);
+      const listingReports = new Map([
+        [
+          "30402:owner_pubkey:listing-d",
+          [
+            { id: "r2", kind: 1984 },
+            { id: "r3", kind: 1984 },
+          ],
+        ],
+      ]);
+
+      renderWithContext(
+        <ProductCard productData={{ ...mockProductData, d: "listing-d" }} />,
+        "other_user_pubkey",
+        {
+          profileReports,
+          listingReports,
+        }
+      );
+
+      expect(screen.getByText("Reports: 3")).toBeInTheDocument();
     });
   });
 });

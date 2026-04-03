@@ -17,6 +17,7 @@ import { getDecodedToken, CashuWallet } from "@cashu/cashu-ts";
 import {
   getLocalStorageData,
   publishProofEvent,
+  publishWalletEvent,
 } from "@/utils/nostr/nostr-helper-functions";
 import { NostrNIP46Signer } from "@/utils/nostr/signers/nostr-nip46-signer";
 
@@ -25,6 +26,7 @@ jest.setTimeout(15000);
 jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
   getLocalStorageData: jest.fn(),
   publishProofEvent: jest.fn(),
+  publishWalletEvent: jest.fn(),
 }));
 jest.mock("@cashu/cashu-ts", () => ({
   ...jest.requireActual("@cashu/cashu-ts"),
@@ -44,6 +46,7 @@ jest.mock("@heroicons/react/24/outline", () => ({
 const mockGetLocalStorageData = getLocalStorageData as jest.Mock;
 const mockGetDecodedToken = getDecodedToken as jest.Mock;
 const mockPublishProofEvent = publishProofEvent as jest.Mock;
+const mockPublishWalletEvent = publishWalletEvent as jest.Mock;
 const MockCashuWallet = CashuWallet as jest.Mock;
 const mockSigner = {
   connect: jest.fn(),
@@ -82,6 +85,7 @@ describe("ReceiveButton", () => {
       history: [],
     });
     mockPublishProofEvent.mockResolvedValue(undefined);
+    mockPublishWalletEvent.mockResolvedValue(undefined);
   });
 
   test("renders the receive button and opens/closes the modal", async () => {
@@ -93,7 +97,7 @@ describe("ReceiveButton", () => {
     const cancelButton = within(modal).getByRole("button", { name: /Cancel/i });
     fireEvent.click(cancelButton);
     await waitFor(() => {
-      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(screen.getByRole("dialog")).not.toBeVisible();
     });
   });
 
@@ -278,6 +282,6 @@ describe("ReceiveButton", () => {
       "If the token is taking a while to be received, make sure to check your bunker application to approve the transaction events.";
     expect(
       await within(modal).findByText(infoMessage, { exact: false })
-    ).toBeInTheDocument();
+    ).toBeVisible();
   });
 });

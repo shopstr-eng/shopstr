@@ -170,7 +170,7 @@ export function SignerContextProvider({ children }: { children: ReactNode }) {
     let signerObject: NostrSigner;
     try {
       signerObject = NostrManager.signerFrom(existingSigner!, challengeHandler);
-    } catch (e) {
+    } catch {
       const isExtension =
         existingSigner?.type === "nip07" || signInMethod === "extension";
       if (isExtension && retryCount < 10) {

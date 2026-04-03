@@ -22,7 +22,7 @@ import parseTags, {
 import { parseZapsnagNote } from "@/utils/parsers/zapsnag-parser";
 import CheckoutCard from "../../components/utility-components/checkout-card";
 import ZapsnagButton from "../../components/ZapsnagButton";
-import { ProductContext } from "../../utils/context/context";
+import { ProductContext, ReportsContext } from "../../utils/context/context";
 import { Event, nip19 } from "nostr-tools";
 import {
   RawEventModal,
@@ -127,6 +127,31 @@ const Listing = () => {
   const [cashuPaymentFailed, setCashuPaymentFailed] = useState(false);
 
   const productContext = useContext(ProductContext);
+  const reportsContext = useContext(ReportsContext);
+
+  const listingAddress =
+    productData && !isZapsnag && productData.d
+      ? `30402:${productData.pubkey}:${productData.d}`
+      : null;
+  const listingReportEventIds = new Set<string>();
+
+  if (productData && !isZapsnag) {
+    (reportsContext.profileReports.get(productData.pubkey) || []).forEach(
+      (event) => {
+        if (event.id) listingReportEventIds.add(event.id);
+      }
+    );
+
+    if (listingAddress) {
+      (reportsContext.listingReports.get(listingAddress) || []).forEach(
+        (event) => {
+          if (event.id) listingReportEventIds.add(event.id);
+        }
+      );
+    }
+  }
+
+  const listingReportCount = listingReportEventIds.size;
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -273,15 +298,23 @@ const Listing = () => {
               />
             </div>
           ) : (
-            <CheckoutCard
-              key={productData.id}
-              productData={productData}
-              setInvoiceIsPaid={setInvoiceIsPaid}
-              setInvoiceGenerationFailed={setInvoiceGenerationFailed}
-              setCashuPaymentSent={setCashuPaymentSent}
-              setCashuPaymentFailed={setCashuPaymentFailed}
-              rawEvent={rawEvent}
-            />
+            <>
+              {listingReportCount > 0 && (
+                <div className="mx-auto mb-3 w-full max-w-5xl rounded-md border border-yellow-500 bg-yellow-50 px-4 py-3 text-sm text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-300">
+                  Community signal: this listing has {listingReportCount} report
+                  {listingReportCount > 1 ? "s" : ""}.
+                </div>
+              )}
+              <CheckoutCard
+                key={productData.id}
+                productData={productData}
+                setInvoiceIsPaid={setInvoiceIsPaid}
+                setInvoiceGenerationFailed={setInvoiceGenerationFailed}
+                setCashuPaymentSent={setCashuPaymentSent}
+                setCashuPaymentFailed={setCashuPaymentFailed}
+                rawEvent={rawEvent}
+              />
+            </>
           ))}
         {invoiceIsPaid || cashuPaymentSent ? (
           <>

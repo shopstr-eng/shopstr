@@ -1,5 +1,6 @@
 import { createContext } from "react";
 import {
+  NostrEvent,
   NostrMessageEvent,
   ProfileData,
   ShopProfile,
@@ -73,6 +74,32 @@ export const ReviewsContext = createContext({
     _productReviewsData: Map<string, string[][]>
   ) => {},
 } as ReviewsContextInterface);
+
+export interface ReportsContextInterface {
+  reportEvents: NostrEvent[];
+  profileReports: Map<string, NostrEvent[]>;
+  listingReports: Map<string, NostrEvent[]>;
+  isLoading: boolean;
+  setReportsData: (
+    reportEvents: NostrEvent[],
+    profileReports: Map<string, NostrEvent[]>,
+    listingReports: Map<string, NostrEvent[]>
+  ) => void;
+  addNewlyCreatedReportEvent: (reportEvent: NostrEvent) => void;
+}
+
+export const ReportsContext = createContext({
+  reportEvents: [],
+  profileReports: new Map(),
+  listingReports: new Map(),
+  isLoading: true,
+  setReportsData: (
+    _reportEvents: NostrEvent[],
+    _profileReports: Map<string, NostrEvent[]>,
+    _listingReports: Map<string, NostrEvent[]>
+  ) => {},
+  addNewlyCreatedReportEvent: (_reportEvent: NostrEvent) => {},
+} as ReportsContextInterface);
 
 export interface CartContextInterface {
   cartAddresses: string[][];
