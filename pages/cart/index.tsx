@@ -165,7 +165,9 @@ export default function Component() {
           ? product.bulkPrice
           : product.volumePrice !== undefined
             ? product.volumePrice
-            : product.price;
+            : product.weightPrice !== undefined
+              ? product.weightPrice
+              : product.price;
       const qty = quantities[product.id] || 1;
       const discount = appliedDiscounts[product.pubkey] || 0;
       const discountedPrice =
@@ -415,7 +417,9 @@ export default function Component() {
         ? product.bulkPrice
         : product.volumePrice !== undefined
           ? product.volumePrice
-          : product.price;
+          : product.weightPrice !== undefined
+            ? product.weightPrice
+            : product.price;
 
     if (
       product.currency.toLowerCase() === "sats" ||
@@ -532,7 +536,9 @@ export default function Component() {
                                           ? `${product.bulkPrice} ${product.currency}`
                                           : product.volumePrice !== undefined
                                             ? `${product.volumePrice} ${product.currency}`
-                                            : `${product.price} ${product.currency}`}
+                                            : product.weightPrice !== undefined
+                                              ? `${product.weightPrice} ${product.currency}`
+                                              : `${product.price} ${product.currency}`}
                                       </p>
                                       {product.currency.toLowerCase() !==
                                         "sats" &&

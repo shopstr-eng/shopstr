@@ -127,6 +127,7 @@ export default function CartInvoiceCard({
     pickupLocation?: string;
     selectedSize?: string;
     selectedVolume?: string;
+    selectedWeight?: string;
     selectedBulkOption?: string;
   } | null>(null);
 
@@ -143,6 +144,7 @@ export default function CartInvoiceCard({
           pickupLocation: selectedPickupLocations[p.id] || undefined,
           selectedSize: p.selectedSize || undefined,
           selectedVolume: p.selectedVolume || undefined,
+          selectedWeight: p.selectedWeight || undefined,
           selectedBulkOption: p.selectedBulkOption
             ? String(p.selectedBulkOption)
             : undefined,
@@ -230,7 +232,9 @@ export default function CartInvoiceCard({
             ? product.bulkPrice
             : product.volumePrice !== undefined
               ? product.volumePrice
-              : product.price;
+              : product.weightPrice !== undefined
+                ? product.weightPrice
+                : product.price;
         const qty = quantities[product.id] || 1;
         const discountedPrice =
           discount > 0 ? basePrice * (1 - discount / 100) : basePrice;
@@ -640,6 +644,7 @@ export default function CartInvoiceCard({
         donationPercentage: donationPercentageValue,
         selectedSize: product.selectedSize,
         selectedVolume: product.selectedVolume,
+        selectedWeight: product.selectedWeight,
         selectedBulkOption: product.selectedBulkOption,
       };
     } else if (isReceipt) {
@@ -661,6 +666,7 @@ export default function CartInvoiceCard({
         donationPercentage: donationPercentageValue,
         selectedSize: product.selectedSize,
         selectedVolume: product.selectedVolume,
+        selectedWeight: product.selectedWeight,
         selectedBulkOption: product.selectedBulkOption,
       };
     } else if (isDonation) {
@@ -682,6 +688,7 @@ export default function CartInvoiceCard({
         donationPercentage: donationPercentageValue,
         selectedSize: product.selectedSize,
         selectedVolume: product.selectedVolume,
+        selectedWeight: product.selectedWeight,
         selectedBulkOption: product.selectedBulkOption,
       };
     }
@@ -829,6 +836,7 @@ export default function CartInvoiceCard({
           const parts = [p.title || p.productName];
           if (p.selectedSize) parts.push(`Size: ${p.selectedSize}`);
           if (p.selectedVolume) parts.push(`Volume: ${p.selectedVolume}`);
+          if (p.selectedWeight) parts.push(`Weight: ${p.selectedWeight}`);
           if (p.selectedBulkOption)
             parts.push(`Bundle: ${p.selectedBulkOption} units`);
           const qty = quantities[p.id];
@@ -1363,6 +1371,13 @@ export default function CartInvoiceCard({
                 productDetails += " in a " + product.selectedVolume;
               }
             }
+            if (product.selectedWeight) {
+              if (productDetails) {
+                productDetails += " and " + product.selectedWeight;
+              } else {
+                productDetails += " in " + product.selectedWeight;
+              }
+            }
             if (product.selectedBulkOption) {
               if (productDetails) {
                 productDetails +=
@@ -1489,6 +1504,13 @@ export default function CartInvoiceCard({
                 productDetails += " in a " + product.selectedVolume;
               }
             }
+            if (product.selectedWeight) {
+              if (productDetails) {
+                productDetails += " and " + product.selectedWeight;
+              } else {
+                productDetails += " in " + product.selectedWeight;
+              }
+            }
             if (product.selectedBulkOption) {
               if (productDetails) {
                 productDetails +=
@@ -1569,6 +1591,13 @@ export default function CartInvoiceCard({
             productDetails += " and a " + product.selectedVolume;
           } else {
             productDetails += " in a " + product.selectedVolume;
+          }
+        }
+        if (product.selectedWeight) {
+          if (productDetails) {
+            productDetails += " and " + product.selectedWeight;
+          } else {
+            productDetails += " in " + product.selectedWeight;
           }
         }
         if (product.selectedBulkOption) {
@@ -1739,6 +1768,13 @@ export default function CartInvoiceCard({
               productDetails += " in a " + product.selectedVolume;
             }
           }
+          if (product.selectedWeight) {
+            if (productDetails) {
+              productDetails += " and " + product.selectedWeight;
+            } else {
+              productDetails += " in " + product.selectedWeight;
+            }
+          }
           if (product.selectedBulkOption) {
             if (productDetails) {
               productDetails +=
@@ -1877,6 +1913,13 @@ export default function CartInvoiceCard({
             productDetails += " in a " + product.selectedVolume;
           }
         }
+        if (product.selectedWeight) {
+          if (productDetails) {
+            productDetails += " and " + product.selectedWeight;
+          } else {
+            productDetails += " in " + product.selectedWeight;
+          }
+        }
         if (product.selectedBulkOption) {
           if (productDetails) {
             productDetails +=
@@ -1942,6 +1985,13 @@ export default function CartInvoiceCard({
             productDetails += " and a " + product.selectedVolume;
           } else {
             productDetails += " in a " + product.selectedVolume;
+          }
+        }
+        if (product.selectedWeight) {
+          if (productDetails) {
+            productDetails += " and " + product.selectedWeight;
+          } else {
+            productDetails += " in " + product.selectedWeight;
           }
         }
         if (product.selectedBulkOption) {
@@ -2468,6 +2518,11 @@ export default function CartInvoiceCard({
                           Volume: {product.selectedVolume}
                         </p>
                       )}
+                      {product.selectedWeight && (
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                          Weight: {product.selectedWeight}
+                        </p>
+                      )}
                       {product.selectedBulkOption && (
                         <p className="text-sm text-gray-600 dark:text-gray-400">
                           Bundle: {product.selectedBulkOption} units
@@ -2494,7 +2549,9 @@ export default function CartInvoiceCard({
                           ? product.bulkPrice
                           : product.volumePrice !== undefined
                             ? product.volumePrice
-                            : product.price) * (quantities[product.id] || 1);
+                            : product.weightPrice !== undefined
+                              ? product.weightPrice
+                              : product.price) * (quantities[product.id] || 1);
                       const discountedPrice =
                         discount > 0
                           ? basePrice * (1 - discount / 100)
@@ -2689,6 +2746,11 @@ export default function CartInvoiceCard({
                         Volume: {product.selectedVolume}
                       </p>
                     )}
+                    {product.selectedWeight && (
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        Weight: {product.selectedWeight}
+                      </p>
+                    )}
                     {product.selectedBulkOption && (
                       <p className="text-sm text-gray-600 dark:text-gray-400">
                         Bundle: {product.selectedBulkOption} units
@@ -2715,7 +2777,9 @@ export default function CartInvoiceCard({
                         ? product.bulkPrice
                         : product.volumePrice !== undefined
                           ? product.volumePrice
-                          : product.price;
+                          : product.weightPrice !== undefined
+                            ? product.weightPrice
+                            : product.price;
                     const basePrice =
                       originalPrice * (quantities[product.id] || 1);
                     const discountedPrice =

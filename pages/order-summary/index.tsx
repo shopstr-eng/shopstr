@@ -27,6 +27,7 @@ interface OrderSummaryData {
   shippingCost?: string;
   selectedSize?: string;
   selectedVolume?: string;
+  selectedWeight?: string;
   selectedBulkOption?: string;
   shippingAddress?: string;
   pickupLocation?: string;
@@ -45,6 +46,7 @@ interface OrderSummaryData {
     pickupLocation?: string;
     selectedSize?: string;
     selectedVolume?: string;
+    selectedWeight?: string;
     selectedBulkOption?: string;
   }>;
 }
@@ -195,6 +197,9 @@ export default function OrderSummary() {
                           {item.selectedVolume && (
                             <span>Volume: {item.selectedVolume}</span>
                           )}
+                          {item.selectedWeight && (
+                            <span>Weight: {item.selectedWeight}</span>
+                          )}
                           {item.selectedBulkOption && (
                             <span>Bundle: {item.selectedBulkOption} units</span>
                           )}
@@ -235,6 +240,11 @@ export default function OrderSummary() {
                     {orderData.selectedVolume && (
                       <p className="text-sm text-gray-600 dark:text-gray-400">
                         Volume: {orderData.selectedVolume}
+                      </p>
+                    )}
+                    {orderData.selectedWeight && (
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        Weight: {orderData.selectedWeight}
                       </p>
                     )}
                     {orderData.selectedBulkOption && (
