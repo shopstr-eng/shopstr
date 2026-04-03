@@ -1,7 +1,6 @@
 import { nip19 } from "nostr-tools";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
 
-
 const escapeRegExp = (value: string) =>
   value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -82,7 +81,6 @@ export function productSatisfiesSearchFilter(
     return false;
   }
 }
-
 
 export function productSatisfiesAllFilters(
   productData: ProductData,

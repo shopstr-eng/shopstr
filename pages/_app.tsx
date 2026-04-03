@@ -220,7 +220,8 @@ function Shopstr({ props }: { props: AppProps }) {
         setReportsContext((reportsContext) => {
           const newEvents = [reportEvent, ...reportsContext.reportEvents];
           const newMerged = mergeAndDeduplicateReports(newEvents);
-          const { profileReports, listingReports } = buildReportIndexes(newMerged);
+          const { profileReports, listingReports } =
+            buildReportIndexes(newMerged);
           return {
             ...reportsContext,
             reportEvents: newMerged,
@@ -629,11 +630,27 @@ function Shopstr({ props }: { props: AppProps }) {
 
         try {
           await Promise.allSettled([
-            fetchProfile(nostr!, allRelays, pubkeysToFetchProfilesFor, editProfileContext),
-            fetchShopProfile(nostr!, allRelays, pubkeysToFetchProfilesFor, editShopContext),
+            fetchProfile(
+              nostr!,
+              allRelays,
+              pubkeysToFetchProfilesFor,
+              editProfileContext
+            ),
+            fetchShopProfile(
+              nostr!,
+              allRelays,
+              pubkeysToFetchProfilesFor,
+              editShopContext
+            ),
             fetchReviews(nostr!, allRelays, productEvents, editReviewsContext),
-            fetchReports(nostr!, allRelays, productEvents, pubkeysToFetchProfilesFor, editReportsContext),
-            fetchAllCommunities(nostr!, allRelays, editCommunityContext)
+            fetchReports(
+              nostr!,
+              allRelays,
+              productEvents,
+              pubkeysToFetchProfilesFor,
+              editReportsContext
+            ),
+            fetchAllCommunities(nostr!, allRelays, editCommunityContext),
           ]);
         } catch (error) {
           console.error("Error during concurrent fetches:", error);
