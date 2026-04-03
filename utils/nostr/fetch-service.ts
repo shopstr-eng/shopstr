@@ -201,7 +201,10 @@ export const fetchReports = async (
       };
 
       try {
-        const response = await fetch("/api/db/fetch-reports");
+        const params = new URLSearchParams();
+        Array.from(sellerPubkeys).forEach((pubkey) => params.append("p", pubkey));
+        Array.from(productIds).forEach((productId) => params.append("e", productId));
+        const response = await fetch(`/api/db/fetch-reports?${params.toString()}`);
         if (response.ok) {
           const reportsFromDb: NostrEvent[] = await response.json();
           reportsFromDb.forEach(upsertReportEvent);

@@ -93,7 +93,13 @@ describe("fetch-service report helpers", () => {
       ["reviewer-1"]
     );
 
-    expect(global.fetch).toHaveBeenCalledWith("/api/db/fetch-reports");
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining("/api/db/fetch-reports?")
+    );
+    const requestUrl = (global.fetch as jest.Mock).mock.calls[0][0] as string;
+    expect(requestUrl).toContain("p=seller-1");
+    expect(requestUrl).toContain("p=reviewer-1");
+    expect(requestUrl).toContain("e=listing-1");
     expect(nostr.fetch).toHaveBeenCalledWith(
       expect.arrayContaining([
         expect.objectContaining({

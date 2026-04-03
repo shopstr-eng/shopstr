@@ -1,5 +1,15 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { fetchCachedEvents } from "@/utils/db/db-service";
+import { fetchRelevantReportsFromDb } from "@/utils/db/db-service";
+
+function normalizeQueryParam(value: string | string[] | undefined): string[] {
+  if (!value) return [];
+
+  const values = Array.isArray(value) ? value : [value];
+  return values
+    .flatMap((entry) => entry.split(","))
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
 
 export default async function handler(
   req: NextApiRequest,
@@ -10,7 +20,9 @@ export default async function handler(
   }
 
   try {
-    const reports = await fetchCachedEvents(1984);
+    const productIds = normalizeQueryParam(req.query.e);
+    const profilePubkeys = normalizeQueryParam(req.query.p);
+    const reports = await fetchRelevantReportsFromDb(productIds, profilePubkeys);
     res.status(200).json(reports);
   } catch (error) {
     console.error("Failed to fetch reports from database:", error);
