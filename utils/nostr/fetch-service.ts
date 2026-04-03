@@ -847,6 +847,176 @@ export const fetchReviews = async (
   });
 };
 
+export function mergeAndDeduplicateReports(
+  ...reportLists: NostrEvent[][]
+): NostrEvent[] {
+  const mergedReports = new Map<string, NostrEvent>();
+
+  for (const reportList of reportLists) {
+    for (const event of reportList) {
+      if (!event?.id || event.kind !== 1984) continue;
+
+      const existing = mergedReports.get(event.id);
+      if (!existing || event.created_at >= existing.created_at) {
+        mergedReports.set(event.id, event);
+      }
+    }
+  }
+
+  return Array.from(mergedReports.values()).sort(
+    (a, b) => b.created_at - a.created_at
+  );
+}
+
+export function buildReportIndexes(reportEvents: NostrEvent[]): {
+  profileReports: Map<string, NostrEvent[]>;
+  listingReports: Map<string, NostrEvent[]>;
+} {
+  const profileReportsById = new Map<string, Map<string, NostrEvent>>();
+  const listingReportsById = new Map<string, Map<string, NostrEvent>>();
+
+  for (const event of reportEvents) {
+    if (event.kind !== 1984 || !event.id) continue;
+
+    const profileTag = event.tags.find(
+      (tag: string[]) => tag[0] === "p" && !!tag[1]
+    );
+    const listingTag = event.tags.find(
+      (tag: string[]) => tag[0] === "a" && !!tag[1]
+    );
+
+    const profilePubkey = profileTag?.[1];
+    if (profilePubkey) {
+      if (!profileReportsById.has(profilePubkey)) {
+        profileReportsById.set(profilePubkey, new Map());
+      }
+      profileReportsById.get(profilePubkey)!.set(event.id, event);
+    }
+
+    const listingAddress = listingTag?.[1];
+    if (listingAddress) {
+      if (!listingReportsById.has(listingAddress)) {
+        listingReportsById.set(listingAddress, new Map());
+      }
+      listingReportsById.get(listingAddress)!.set(event.id, event);
+    }
+  }
+
+  const profileReports = new Map<string, NostrEvent[]>();
+  profileReportsById.forEach((eventsById, pubkey) => {
+    profileReports.set(
+      pubkey,
+      Array.from(eventsById.values()).sort(
+        (a, b) => b.created_at - a.created_at
+      )
+    );
+  });
+
+  const listingReports = new Map<string, NostrEvent[]>();
+  listingReportsById.forEach((eventsById, listingAddress) => {
+    listingReports.set(
+      listingAddress,
+      Array.from(eventsById.values()).sort(
+        (a, b) => b.created_at - a.created_at
+      )
+    );
+  });
+
+  return { profileReports, listingReports };
+}
+
+export const fetchReports = async (
+  nostr: NostrManager,
+  relays: string[],
+  products: NostrEvent[],
+  profilePubkeys: string[],
+  editReportsContext: (
+    reportEvents: NostrEvent[],
+    profileReports: Map<string, NostrEvent[]>,
+    listingReports: Map<string, NostrEvent[]>,
+    isLoading: boolean
+  ) => void
+): Promise<{
+  reportEvents: NostrEvent[];
+  profileReports: Map<string, NostrEvent[]>;
+  listingReports: Map<string, NostrEvent[]>;
+}> => {
+  return new Promise(async function (resolve, reject) {
+    try {
+      let reportsFromDb: NostrEvent[] = [];
+
+      try {
+        const response = await fetch("/api/db/fetch-reports");
+        if (response.ok) {
+          reportsFromDb = await response.json();
+          const mergedDbReports = mergeAndDeduplicateReports(reportsFromDb);
+          if (mergedDbReports.length > 0) {
+            const { profileReports, listingReports } =
+              buildReportIndexes(mergedDbReports);
+            editReportsContext(
+              mergedDbReports,
+              profileReports,
+              listingReports,
+              false
+            );
+          }
+        }
+      } catch (error) {
+        console.error("Failed to fetch reports from database: ", error);
+      }
+
+      const addresses = products
+        .map((product) => {
+          const dTag = product.tags.find((tag: string[]) => tag[0] === "d")?.[1];
+          if (!dTag) return null;
+          return `30402:${product.pubkey}:${dTag}`;
+        })
+        .filter((address): address is string => address !== null);
+
+      const reportFilters: Filter[] = [];
+      if (profilePubkeys.length > 0) {
+        reportFilters.push({ kinds: [1984], "#p": profilePubkeys });
+      }
+      if (addresses.length > 0) {
+        reportFilters.push({ kinds: [1984], "#a": addresses });
+      }
+
+      let fetchedEvents: NostrEvent[] = [];
+      if (reportFilters.length > 0) {
+        fetchedEvents = await nostr.fetch(reportFilters, {}, relays);
+      }
+
+      const relayReports = fetchedEvents.filter((event) => event.kind === 1984);
+
+      const mergedReports = mergeAndDeduplicateReports(
+        reportsFromDb,
+        relayReports
+      );
+      const { profileReports, listingReports } =
+        buildReportIndexes(mergedReports);
+
+      editReportsContext(mergedReports, profileReports, listingReports, false);
+
+      const validReports = relayReports.filter(
+        (event) => event.id && event.sig && event.pubkey && event.kind === 1984
+      );
+      if (validReports.length > 0) {
+        cacheEventsToDatabase(validReports).catch((error) =>
+          console.error("Failed to cache reports to database:", error)
+        );
+      }
+
+      resolve({
+        reportEvents: mergedReports,
+        profileReports,
+        listingReports,
+      });
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
 export const fetchAllFollows = async (
   nostr: NostrManager,
   relays: string[],
