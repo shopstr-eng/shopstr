@@ -427,6 +427,10 @@ export const fetchProfile = async (
         console.error("Failed to fetch profiles from database: ", error);
       }
 
+      if (dbProfileMap.size > 0) {
+        editProfileContext(new Map(dbProfileMap), false);
+      }
+
       const subParams: { kinds: number[]; authors?: string[] } = {
         kinds: [0],
         authors: Array.from(pubkeyProfilesToFetch),

@@ -387,9 +387,6 @@ function Shopstr({ props }: { props: AppProps }) {
           mergedProfileData.set(pubkey, {
             ...existingProfile,
             ...incomingProfile,
-            nip05Verified: Boolean(
-              existingProfile.nip05Verified || incomingProfile.nip05Verified
-            ),
           });
         }
       });
