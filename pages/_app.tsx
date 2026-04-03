@@ -384,6 +384,24 @@ function Shopstr({ props }: { props: AppProps }) {
     });
   };
 
+  const getReviewerPubkeysFromReviewMap = (
+    productReviewsMap: Map<string, Map<string, Map<string, string[][]>>>
+  ) => {
+    const reviewerPubkeys = new Set<string>();
+
+    productReviewsMap.forEach((merchantProducts) => {
+      merchantProducts.forEach((productReviews) => {
+        productReviews.forEach((_, reviewerPubkey) => {
+          if (reviewerPubkey) {
+            reviewerPubkeys.add(reviewerPubkey);
+          }
+        });
+      });
+    });
+
+    return Array.from(reviewerPubkeys);
+  };
+
   const editProductContext = (
     productEvents: NostrEvent[],
     isLoading: boolean
@@ -666,20 +684,29 @@ function Shopstr({ props }: { props: AppProps }) {
           editShopContext(new Map(), false);
         }
 
+        let reviewerPubkeysFromReviews: string[] = [];
         try {
-          await fetchReviews(
+          const { productReviewsMap } = await fetchReviews(
             nostr!,
             allRelays,
             productEvents,
             editReviewsContext
           );
+          reviewerPubkeysFromReviews =
+            getReviewerPubkeysFromReviewMap(productReviewsMap);
         } catch (error) {
           console.error("Error fetching reviews:", error);
           editReviewsContext(new Map(), new Map(), false);
         }
 
         try {
-          await fetchReports(nostr!, allRelays, productEvents, editReportsContext);
+          await fetchReports(
+            nostr!,
+            allRelays,
+            productEvents,
+            editReportsContext,
+            reviewerPubkeysFromReviews
+          );
         } catch (error) {
           console.error("Error fetching reports:", error);
           editReportsContext([], false);

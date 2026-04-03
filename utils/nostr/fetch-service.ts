@@ -166,7 +166,8 @@ export const fetchReports = async (
   nostr: NostrManager,
   relays: string[],
   products: NostrEvent[],
-  editReportsContext: (reportEvents: NostrEvent[], isLoading: boolean) => void
+  editReportsContext: (reportEvents: NostrEvent[], isLoading: boolean) => void,
+  additionalProfilePubkeys: string[] = []
 ): Promise<{
   reportEvents: NostrEvent[];
 }> => {
@@ -174,7 +175,8 @@ export const fetchReports = async (
     try {
       const productIds = new Set(products.map((product) => product.id));
       const sellerPubkeys = new Set(
-        products.map((product) => product.pubkey).filter(Boolean)
+        [...products.map((product) => product.pubkey), ...additionalProfilePubkeys]
+          .filter(Boolean)
       );
 
       const reportEventsMap = new Map<string, NostrEvent>();

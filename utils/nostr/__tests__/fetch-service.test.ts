@@ -12,7 +12,7 @@ describe("fetch-service report helpers", () => {
     global.fetch = jest.fn();
   });
 
-  it("filters report fetches to loaded listings and sellers", async () => {
+  it("filters report fetches to loaded listings and related profiles", async () => {
     (global.fetch as jest.Mock).mockResolvedValue({
       ok: true,
       json: async () => [
@@ -36,6 +36,15 @@ describe("fetch-service report helpers", () => {
           tags: [["p", "seller-999", "spam"]],
           content: "other seller",
           sig: "sig-2",
+        },
+        {
+          id: "db-reviewer-report",
+          pubkey: "reporter-5",
+          created_at: 14,
+          kind: 1984,
+          tags: [["p", "reviewer-1", "spam"]],
+          content: "bad reviewer",
+          sig: "sig-5",
         },
       ],
     });
@@ -80,24 +89,30 @@ describe("fetch-service report helpers", () => {
       nostr as any,
       ["wss://relay.example"],
       products as any,
-      editReportsContext
+      editReportsContext,
+      ["reviewer-1"]
     );
 
     expect(global.fetch).toHaveBeenCalledWith("/api/db/fetch-reports");
     expect(nostr.fetch).toHaveBeenCalledWith(
       expect.arrayContaining([
-        expect.objectContaining({ kinds: [1984], "#p": ["seller-1"] }),
+        expect.objectContaining({
+          kinds: [1984],
+          "#p": expect.arrayContaining(["seller-1", "reviewer-1"]),
+        }),
         expect.objectContaining({ kinds: [1984], "#e": ["listing-1"] }),
       ]),
       {},
       ["wss://relay.example"]
     );
     expect(result.reportEvents.map((event) => event.id)).toEqual([
+      "db-reviewer-report",
       "relay-profile-report",
       "db-relevant",
     ]);
     expect(editReportsContext).toHaveBeenLastCalledWith(
       expect.arrayContaining([
+        expect.objectContaining({ id: "db-reviewer-report" }),
         expect.objectContaining({ id: "relay-profile-report" }),
         expect.objectContaining({ id: "db-relevant" }),
       ]),
