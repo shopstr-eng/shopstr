@@ -3717,22 +3717,21 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
             );
           }
 
-          try {
-            await dbPool.query(
-              `INSERT INTO custom_domains (pubkey, domain, shop_slug, verified)
-               VALUES ($1, $2, $3, false)
-               ON CONFLICT (pubkey) DO UPDATE SET domain = $2, shop_slug = $3, verified = false, updated_at = NOW()`,
-              [pubkey, cleanDomain, slugResult.rows[0].slug]
+          const result = await dbPool.query(
+            `INSERT INTO custom_domains (pubkey, domain, shop_slug, verified_at)
+             VALUES ($1, $2, $3, NOW())
+             ON CONFLICT (domain) DO UPDATE
+               SET shop_slug = EXCLUDED.shop_slug,
+                   verified_at = NOW()
+             WHERE custom_domains.pubkey = EXCLUDED.pubkey`,
+            [pubkey, cleanDomain, slugResult.rows[0].slug]
+          );
+          if (result.rowCount === 0) {
+            return errorResponse(
+              "Domain already registered",
+              `Domain ${cleanDomain} is already registered to another account.`,
+              startTime
             );
-          } catch (err: any) {
-            if (err?.code === "23505") {
-              return errorResponse(
-                "This domain is already registered by another seller",
-                cleanDomain,
-                startTime
-              );
-            }
-            throw err;
           }
 
           return successResponse(
