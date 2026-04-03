@@ -28,6 +28,7 @@ import {
   ArrowLongDownIcon,
   ArrowLongUpIcon,
   EllipsisVerticalIcon,
+  FlagIcon,
 } from "@heroicons/react/24/outline";
 import {
   ReviewsContext,
@@ -45,6 +46,7 @@ import WeightSelector from "./weight-selector";
 import BulkSelector from "./bulk-selector";
 import ZapsnagButton from "@/components/ZapsnagButton";
 import { RawEventModal, EventIdModal } from "./modals/event-modals";
+import ReportModal from "@/components/utility-components/report-modal";
 
 const SUMMARY_CHARACTER_LIMIT = 100;
 
@@ -73,6 +75,7 @@ export default function CheckoutCard({
     useState(false);
   const [showRawEventModal, setShowRawEventModal] = useState(false);
   const [showEventIdModal, setShowEventIdModal] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
 
   const router = useRouter();
 
@@ -120,6 +123,8 @@ export default function CheckoutCard({
 
   const isZapsnag =
     productData.d === "zapsnag" || productData.categories?.includes("zapsnag");
+  const canReportListing =
+    productData.pubkey !== userPubkey && !isZapsnag && !!productData.d;
 
   useEffect(() => {
     if (
@@ -560,7 +565,7 @@ export default function CheckoutCard({
                         dropDownKeys={
                           productData.pubkey === userPubkey
                             ? ["shop_profile"]
-                            : ["shop", "inquiry", "copy_npub"]
+                            : ["shop", "inquiry", "copy_npub", "report"]
                         }
                       />
                       {merchantQuality !== "" && (
@@ -629,6 +634,18 @@ export default function CheckoutCard({
                             onPress={() => setShowEventIdModal(true)}
                           >
                             View Event ID
+                          </DropdownItem>
+                          <DropdownItem
+                            key="report-listing"
+                            color="danger"
+                            className={canReportListing ? "" : "hidden"}
+                            startContent={<FlagIcon className="h-5 w-5" />}
+                            isDisabled={!canReportListing}
+                            onPress={() => {
+                              if (canReportListing) setShowReportModal(true);
+                            }}
+                          >
+                            Report Listing
                           </DropdownItem>
                         </DropdownMenu>
                       </Dropdown>
@@ -1009,6 +1026,14 @@ export default function CheckoutCard({
           isOpen={showEventIdModal}
           onClose={() => setShowEventIdModal(false)}
           rawEvent={rawEvent}
+        />
+        <ReportModal
+          isOpen={showReportModal}
+          onClose={() => setShowReportModal(false)}
+          targetType="listing"
+          pubkey={productData.pubkey}
+          dTag={productData.d}
+          productTitle={productData.title}
         />
         <FreeShippingNotification
           isVisible={showFreeShippingNotification}

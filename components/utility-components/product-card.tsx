@@ -11,6 +11,7 @@ import Link from "next/link";
 import {
   ArrowTopRightOnSquareIcon,
   EllipsisVerticalIcon,
+  FlagIcon,
 } from "@heroicons/react/24/outline";
 import { RawEventModal, EventIdModal } from "./modals/event-modals";
 import { nip19 } from "nostr-tools";
@@ -22,6 +23,8 @@ import { ProductData } from "@/utils/parsers/product-parser-functions";
 import { ProfileWithDropdown } from "./profile/profile-dropdown";
 import { useRouter } from "next/router";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
+import ReportModal from "@/components/utility-components/report-modal";
+import { ReportsContext } from "@/utils/context/context";
 
 export default function ProductCard({
   productData,
@@ -34,13 +37,36 @@ export default function ProductCard({
 }) {
   const [showRawEventModal, setShowRawEventModal] = useState(false);
   const [showEventIdModal, setShowEventIdModal] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
 
   const router = useRouter();
   const { pubkey: userPubkey } = useContext(SignerContext);
+  const reportsContext = useContext(ReportsContext);
   if (!productData) return null;
 
   const isZapsnag =
     productData.d === "zapsnag" || productData.categories?.includes("zapsnag");
+  const canReportListing =
+    productData.pubkey !== userPubkey && !isZapsnag && !!productData.d;
+
+  const listingAddress = productData.d
+    ? `30402:${productData.pubkey}:${productData.d}`
+    : null;
+
+  const reportEventIds = new Set<string>();
+  (reportsContext.profileReports.get(productData.pubkey) || []).forEach(
+    (event) => {
+      if (event.id) reportEventIds.add(event.id);
+    }
+  );
+  if (listingAddress) {
+    (reportsContext.listingReports.get(listingAddress) || []).forEach(
+      (event) => {
+        if (event.id) reportEventIds.add(event.id);
+      }
+    );
+  }
+  const reportCount = reportEventIds.size;
 
   const cardHoverStyle =
     "hover:shadow-purple-500/30 dark:hover:shadow-yellow-500/30 hover:scale-[1.01]";
@@ -135,6 +161,11 @@ export default function ProductCard({
                   Sold
                 </span>
               )}
+              {reportCount > 0 && (
+                <Chip color="warning" size="sm" variant="flat">
+                  Reports: {reportCount}
+                </Chip>
+              )}
               {productData.rawEvent && (
                 <Dropdown>
                   <DropdownTrigger>
@@ -164,6 +195,18 @@ export default function ProductCard({
                     >
                       View Event ID
                     </DropdownItem>
+                    <DropdownItem
+                      key="report-listing"
+                      color="danger"
+                      className={canReportListing ? "" : "hidden"}
+                      startContent={<FlagIcon className="h-5 w-5" />}
+                      isDisabled={!canReportListing}
+                      onPress={() => {
+                        if (canReportListing) setShowReportModal(true);
+                      }}
+                    >
+                      Report Listing
+                    </DropdownItem>
                   </DropdownMenu>
                 </Dropdown>
               )}
@@ -176,7 +219,7 @@ export default function ProductCard({
             dropDownKeys={
               productData.pubkey === userPubkey
                 ? ["shop_profile"]
-                : ["shop", "inquiry", "copy_npub"]
+                : ["shop", "inquiry", "copy_npub", "report"]
             }
           />
         </div>
@@ -226,6 +269,14 @@ export default function ProductCard({
         isOpen={showEventIdModal}
         onClose={() => setShowEventIdModal(false)}
         rawEvent={productData.rawEvent}
+      />
+      <ReportModal
+        isOpen={showReportModal}
+        onClose={() => setShowReportModal(false)}
+        targetType="listing"
+        pubkey={productData.pubkey}
+        dTag={productData.d}
+        productTitle={productData.title}
       />
     </div>
   );

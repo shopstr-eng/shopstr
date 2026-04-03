@@ -19,12 +19,14 @@ import {
   CheckIcon,
   ClipboardIcon,
   Cog6ToothIcon,
+  FlagIcon,
   GlobeAltIcon,
   UserIcon,
 } from "@heroicons/react/24/outline";
 import { useRouter } from "next/router";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import SignInModal from "../../sign-in/SignInModal";
+import ReportModal from "@/components/utility-components/report-modal";
 
 type DropDownKeys =
   | "shop"
@@ -34,7 +36,8 @@ type DropDownKeys =
   | "settings"
   | "user_profile"
   | "logout"
-  | "copy_npub";
+  | "copy_npub"
+  | "report";
 
 export const ProfileWithDropdown = ({
   pubkey,
@@ -57,6 +60,7 @@ export const ProfileWithDropdown = ({
   const router = useRouter();
   const { isLoggedIn } = useContext(SignerContext);
   const { isOpen, onOpen, onClose } = useDisclosure();
+  const [showReportModal, setShowReportModal] = useState(false);
 
   useEffect(() => {
     const profileMap = profileContext.profileData;
@@ -185,6 +189,14 @@ export const ProfileWithDropdown = ({
       },
       label: isNPubCopied ? "Copied!" : "Copy npub",
     },
+    report: {
+      key: "report",
+      color: "danger",
+      className: "text-red-500",
+      startContent: <FlagIcon className={"h-5 w-5"} />,
+      onClick: () => setShowReportModal(true),
+      label: "Report Seller",
+    },
   };
 
   return (
@@ -233,6 +245,12 @@ export const ProfileWithDropdown = ({
         </DropdownMenu>
       </Dropdown>
       <SignInModal isOpen={isOpen} onClose={onClose} />
+      <ReportModal
+        isOpen={showReportModal}
+        onClose={() => setShowReportModal(false)}
+        targetType="profile"
+        pubkey={pubkey}
+      />
     </>
   );
 };

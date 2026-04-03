@@ -1,4 +1,8 @@
 import { EventTemplate } from "nostr-tools";
+import { finalizeAndSendNostrEvent } from "@/utils/nostr/nostr-helper-functions";
+import { NostrManager } from "@/utils/nostr/nostr-manager";
+import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
+import { NostrEvent } from "@/utils/types/types";
 
 /**
  * Valid NIP-56 report reason types.
@@ -23,11 +27,10 @@ export const REPORT_REASONS: ReportReason[] = [
   "other",
 ];
 
-
 export function constructProfileReportTags(
   pubkey: string,
   reason: ReportReason,
-  content?: string  // for report purpose
+  content?: string // for report purpose
 ): { tags: string[][]; content: string } {
   const tags: string[][] = [["p", pubkey, reason]];
 
@@ -44,7 +47,7 @@ export function constructListingReportTags(
   content?: string
 ): { tags: string[][]; content: string } {
   const tags: string[][] = [
-    ["p", pubkey],  //p for author
+    ["p", pubkey], //p for author
     ["a", `30402:${pubkey}:${dTag}`, reason], // a for referencing the listing
   ];
 
@@ -80,4 +83,24 @@ export function constructReportEventTemplate(
     content: reportData.content,
     created_at: Math.floor(Date.now() / 1000),
   };
+}
+
+export async function publishReportEvent(
+  nostr: NostrManager,
+  signer: NostrSigner,
+  targetType: "profile" | "listing",
+  pubkey: string,
+  reason: ReportReason,
+  content?: string,
+  dTag?: string
+): Promise<NostrEvent> {
+  const template = constructReportEventTemplate(
+    targetType,
+    pubkey,
+    reason,
+    content,
+    dTag
+  );
+
+  return await finalizeAndSendNostrEvent(signer, nostr, template);
 }
