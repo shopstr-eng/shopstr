@@ -14,6 +14,7 @@ import {
 } from "@/utils/nostr/nostr-helper-functions";
 import {
   ProductData,
+  getMarketplaceEventKey,
   parseTags,
 } from "@/utils/parsers/product-parser-functions";
 import { parseCommunityEvent } from "../parsers/community-parser-functions";
@@ -64,7 +65,7 @@ export const fetchAllPosts = async (
       }
 
       const filter: Filter = {
-        kinds: [30402],
+        kinds: [30402, 30018],
       };
 
       const zapsnagFilter: Filter = {
@@ -89,7 +90,11 @@ export const fetchAllPosts = async (
 
       // Cache valid product events to database
       const validProductEvents = fetchedEvents.filter(
-        (e) => e.id && e.sig && e.pubkey && (e.kind === 30402 || e.kind === 1)
+        (e) =>
+          e.id &&
+          e.sig &&
+          e.pubkey &&
+          (e.kind === 30402 || e.kind === 30018 || e.kind === 1)
       );
       if (validProductEvents.length > 0) {
         cacheEventsToDatabase(validProductEvents).catch((error) =>
@@ -97,28 +102,37 @@ export const fetchAllPosts = async (
         );
       }
 
-      const getEventKey = (event: NostrEvent): string => {
-        if (event.kind === 30402) {
-          const dTag = event.tags?.find((tag: string[]) => tag[0] === "d")?.[1];
-          if (dTag) return `${event.pubkey}:${dTag}`;
-        }
-        return event.id;
-      };
-
       const mergedProductsMap = new Map<string, NostrEvent>();
+
+      const shouldReplaceProductEvent = (
+        existing: NostrEvent | undefined,
+        candidate: NostrEvent
+      ) => {
+        return (
+          !existing ||
+          candidate.created_at > existing.created_at ||
+          (candidate.created_at === existing.created_at &&
+            candidate.kind === 30402 &&
+            existing.kind !== 30402)
+        );
+      };
 
       for (const event of productArrayFromDb) {
         if (event && event.id) {
-          mergedProductsMap.set(getEventKey(event), event);
+          const key = getMarketplaceEventKey(event);
+          const existing = mergedProductsMap.get(key);
+          if (shouldReplaceProductEvent(existing, event)) {
+            mergedProductsMap.set(key, event);
+          }
         }
       }
 
       for (const event of fetchedEvents) {
         if (!event || !event.id) continue;
 
-        const key = getEventKey(event);
+        const key = getMarketplaceEventKey(event);
         const existing = mergedProductsMap.get(key);
-        if (!existing || event.created_at >= existing.created_at) {
+        if (shouldReplaceProductEvent(existing, event)) {
           mergedProductsMap.set(key, event);
         }
         profileSetFromProducts.add(event.pubkey);
