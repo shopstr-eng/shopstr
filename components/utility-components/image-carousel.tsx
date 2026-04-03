@@ -78,7 +78,12 @@ export default function ImageCarousel({
           <button
             className={`left-4 ${PREVNEXTBUTTONSTYLES}`}
             onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
               onClickHandler();
+            }}
+            onMouseDown={(e) => {
+              e.preventDefault();
               e.stopPropagation();
             }}
             title={label}
@@ -92,7 +97,12 @@ export default function ImageCarousel({
           <button
             className={`right-4 ${PREVNEXTBUTTONSTYLES}`}
             onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
               onClickHandler();
+            }}
+            onMouseDown={(e) => {
+              e.preventDefault();
               e.stopPropagation();
             }}
             title={label}
@@ -112,8 +122,9 @@ export default function ImageCarousel({
                 : `${base} bg-gray-300 hover:bg-gray-500`
             }
             onClick={(e) => {
-              onClickHandler(e);
+              e.preventDefault();
               e.stopPropagation();
+              onClickHandler(e);
             }}
             title={`${label} ${index + 1}`}
             role="button"
