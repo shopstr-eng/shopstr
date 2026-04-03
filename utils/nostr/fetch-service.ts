@@ -770,6 +770,15 @@ export const fetchReviews = async (
         })
         .filter((address): address is string => address !== null);
 
+      if (addresses.length === 0) {
+        editReviewsContext(new Map(), new Map(), false);
+        resolve({
+          merchantScoresMap: new Map(),
+          productReviewsMap: new Map(),
+        });
+        return;
+      }
+
       const productReviewsMap = new Map<
         string,
         Map<string, Map<string, string[][]>>

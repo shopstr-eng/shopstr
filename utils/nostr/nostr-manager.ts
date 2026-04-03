@@ -41,6 +41,23 @@ export type NostrManagerParams = {
   writable?: boolean;
 };
 
+function sanitizeNostrFilters(filters: NostrFilter[]): NostrFilter[] {
+  return filters
+    .filter(
+      (filter): filter is NostrFilter =>
+        !!filter && typeof filter === "object" && !Array.isArray(filter)
+    )
+    .map((filter) => {
+      const sanitizedEntries = Object.entries(filter).filter(([, value]) => {
+        if (value === undefined || value === null) return false;
+        if (Array.isArray(value)) return value.length > 0;
+        return true;
+      });
+
+      return Object.fromEntries(sanitizedEntries) as NostrFilter;
+    });
+}
+
 export class NostrManager {
   private readonly pool: SimplePool;
   private readonly params: NostrManagerParams;
@@ -126,6 +143,7 @@ export class NostrManager {
     relayUrls?: string[]
   ): Promise<NostrSub> {
     if (!this.params.readable) throw new Error("not readable");
+    const sanitizedFilters = sanitizeNostrFilters(filters);
 
     if (params?.onevent) {
       const onevent = params.onevent;
@@ -144,10 +162,18 @@ export class NostrManager {
     const relays = relayUrls
       ? this.relays.filter((r) => relayUrls.includes(r.url))
       : this.relays;
+
+    if (sanitizedFilters.length === 0) {
+      return {
+        _sub: { close: () => {} } as SubCloser,
+        close: async () => {},
+      };
+    }
+
     const sub: NostrSub = {
       _sub: this.pool.subscribeMany(
         relays.map((r) => r.url),
-        filters,
+        sanitizedFilters,
         params ?? {}
       ),
       close: async () => {
@@ -171,6 +197,11 @@ export class NostrManager {
     params?: SubscribeManyParams,
     relayUrls?: string[]
   ): Promise<NostrEvent[]> {
+    const sanitizedFilters = sanitizeNostrFilters(filters);
+    if (sanitizedFilters.length === 0) {
+      return [];
+    }
+
     return await newPromiseWithTimeout(async (resolve, _reject) => {
       if (!params) {
         params = {};
@@ -199,7 +230,7 @@ export class NostrManager {
         return onEose!();
       };
 
-      const sub = await this.subscribe(filters, params, relayUrls);
+      const sub = await this.subscribe(sanitizedFilters, params, relayUrls);
     });
   }
 

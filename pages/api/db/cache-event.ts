@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { cacheEvent } from "@/utils/db/db-service";
+import { cacheEvent, isDatabaseConfigured } from "@/utils/db/db-service";
 import { NostrEvent } from "@/utils/types/types";
 
 export default async function handler(
@@ -8,6 +8,14 @@ export default async function handler(
 ) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  if (!isDatabaseConfigured()) {
+    return res.status(200).json({
+      success: true,
+      skipped: true,
+      reason: "DATABASE_URL is not configured",
+    });
   }
 
   try {

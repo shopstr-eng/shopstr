@@ -1,12 +1,21 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getDbPool } from "@/utils/db/db-service";
 
-const pool = getDbPool();
-
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
+  const pool = getDbPool();
+  if (!pool) {
+    return res.status(200).json(
+      req.method === "GET" ? null : {
+        success: true,
+        skipped: true,
+        reason: "DATABASE_URL is not configured",
+      }
+    );
+  }
+
   if (req.method === "POST") {
     const { pubkey, domain } = req.body;
 
@@ -51,7 +60,7 @@ export default async function handler(
           .json({ error: "This domain is already registered" });
       }
       console.error("Custom domain error:", error);
-      return res.status(500).json({ error: "Internal server error" });
+      return res.status(200).json({ success: false, error: "Internal server error" });
     }
   }
 
@@ -72,7 +81,7 @@ export default async function handler(
       return res.status(200).json(null);
     } catch (error) {
       console.error("Custom domain lookup error:", error);
-      return res.status(500).json({ error: "Internal server error" });
+      return res.status(200).json(null);
     }
   }
 
@@ -89,7 +98,7 @@ export default async function handler(
       return res.status(200).json({ success: true });
     } catch (error) {
       console.error("Custom domain delete error:", error);
-      return res.status(500).json({ error: "Internal server error" });
+      return res.status(200).json({ success: false, error: "Internal server error" });
     }
   }
 

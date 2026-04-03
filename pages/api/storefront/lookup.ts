@@ -1,8 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getDbPool } from "@/utils/db/db-service";
 
-const pool = getDbPool();
-
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
@@ -12,6 +10,17 @@ export default async function handler(
   }
 
   const { slug, pubkey, domain } = req.query;
+  const pool = getDbPool();
+
+  if (!pool) {
+    return res.status(200).json(
+      pubkey && typeof pubkey === "string"
+        ? { pubkey, slug: null, shopConfig: null, createdAt: null }
+        : domain && typeof domain === "string"
+          ? { pubkey: null, shopConfig: null }
+          : { pubkey: null, shopConfig: null, createdAt: null }
+    );
+  }
 
   try {
     // Lookup by pubkey — used by the settings form to pre-load existing config
@@ -126,6 +135,6 @@ export default async function handler(
     return res.status(404).json({ pubkey: null, shopConfig: null });
   } catch (error) {
     console.error("Slug lookup error:", error);
-    return res.status(500).json({ error: "Internal server error" });
+    return res.status(200).json({ pubkey: null, shopConfig: null, createdAt: null });
   }
 }

@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { fetchCachedEvents } from "@/utils/db/db-service";
+import { fetchCachedEvents, isDatabaseConfigured } from "@/utils/db/db-service";
 
 export default async function handler(
   req: NextApiRequest,
@@ -7,6 +7,10 @@ export default async function handler(
 ) {
   if (req.method !== "GET") {
     return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  if (!isDatabaseConfigured()) {
+    return res.status(200).json([]);
   }
 
   try {

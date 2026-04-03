@@ -6,8 +6,6 @@ import { promisify } from "util";
 const resolveCname = promisify(dns.resolveCname);
 const resolve4 = promisify(dns.resolve4);
 
-const pool = getDbPool();
-
 const VALID_TARGETS = ["shopstr.market", "shopstr.store"];
 
 export default async function handler(
@@ -21,6 +19,14 @@ export default async function handler(
   const { pubkey } = req.body;
   if (!pubkey) {
     return res.status(400).json({ error: "pubkey is required" });
+  }
+
+  const pool = getDbPool();
+  if (!pool) {
+    return res.status(200).json({
+      verified: false,
+      message: "DATABASE_URL is not configured.",
+    });
   }
 
   try {
@@ -69,6 +75,6 @@ export default async function handler(
     });
   } catch (error) {
     console.error("Domain verification error:", error);
-    return res.status(500).json({ error: "Verification failed" });
+    return res.status(200).json({ verified: false, message: "Verification failed" });
   }
 }
