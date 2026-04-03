@@ -43,13 +43,15 @@ jest.mock("@nextui-org/react", () => {
     DropdownItem: ({
       children,
       onClick,
+      onPress,
       startContent,
     }: {
       children: React.ReactNode;
       onClick?: () => void;
+      onPress?: () => void;
       startContent?: React.ReactNode;
     }) => (
-      <button role="menuitem" onClick={onClick}>
+      <button role="menuitem" onClick={onPress || onClick}>
         {startContent}
         {children}
       </button>
@@ -119,6 +121,11 @@ describe("ProfileWithDropdown", () => {
     (navigator.clipboard.writeText as jest.Mock).mockClear();
   });
 
+  afterEach(() => {
+    jest.runOnlyPendingTimers();
+    jest.useRealTimers();
+  });
+
   it("renders with fallback data and correct dropdown items", () => {
     renderWithProviders(
       <ProfileWithDropdown pubkey={pubkey} dropDownKeys={["shop", "logout"]} />,
@@ -147,29 +154,41 @@ describe("ProfileWithDropdown", () => {
   });
 
   it('handles "Visit Seller" click', () => {
+    jest.useFakeTimers();
     renderWithProviders(
       <ProfileWithDropdown pubkey={pubkey} dropDownKeys={["shop"]} />,
       {}
     );
     fireEvent.click(screen.getByText("Visit Seller"));
+    act(() => {
+      jest.runOnlyPendingTimers();
+    });
     expect(mockRouterPush).toHaveBeenCalledWith(`/marketplace/${npub}`);
   });
 
   it('handles "Shop Profile" click', () => {
+    jest.useFakeTimers();
     renderWithProviders(
       <ProfileWithDropdown pubkey={pubkey} dropDownKeys={["shop_profile"]} />,
       {}
     );
     fireEvent.click(screen.getByText("Shop Profile"));
+    act(() => {
+      jest.runOnlyPendingTimers();
+    });
     expect(mockRouterPush).toHaveBeenCalledWith("/settings/shop-profile");
   });
 
   it('handles "Send Inquiry" click when logged in', () => {
+    jest.useFakeTimers();
     renderWithProviders(
       <ProfileWithDropdown pubkey={pubkey} dropDownKeys={["inquiry"]} />,
       { isLoggedIn: true }
     );
     fireEvent.click(screen.getByText("Send Inquiry"));
+    act(() => {
+      jest.runOnlyPendingTimers();
+    });
     expect(mockRouterPush).toHaveBeenCalledWith({
       pathname: "/orders",
       query: { pk: npub, isInquiry: true },
@@ -178,39 +197,55 @@ describe("ProfileWithDropdown", () => {
   });
 
   it('handles "Send Inquiry" click when logged out', () => {
+    jest.useFakeTimers();
     renderWithProviders(
       <ProfileWithDropdown pubkey={pubkey} dropDownKeys={["inquiry"]} />,
       { isLoggedIn: false }
     );
     fireEvent.click(screen.getByText("Send Inquiry"));
+    act(() => {
+      jest.runOnlyPendingTimers();
+    });
     expect(mockOnOpen).toHaveBeenCalled();
     expect(mockRouterPush).not.toHaveBeenCalled();
   });
 
   it('handles "Profile" click', () => {
+    jest.useFakeTimers();
     renderWithProviders(
       <ProfileWithDropdown pubkey={pubkey} dropDownKeys={["user_profile"]} />,
       {}
     );
     fireEvent.click(screen.getByText("Profile"));
+    act(() => {
+      jest.runOnlyPendingTimers();
+    });
     expect(mockRouterPush).toHaveBeenCalledWith("/settings/user-profile");
   });
 
   it('handles "Settings" click', () => {
+    jest.useFakeTimers();
     renderWithProviders(
       <ProfileWithDropdown pubkey={pubkey} dropDownKeys={["settings"]} />,
       {}
     );
     fireEvent.click(screen.getByText("Settings"));
+    act(() => {
+      jest.runOnlyPendingTimers();
+    });
     expect(mockRouterPush).toHaveBeenCalledWith("/settings");
   });
 
   it('handles "Log Out" click', () => {
+    jest.useFakeTimers();
     renderWithProviders(
       <ProfileWithDropdown pubkey={pubkey} dropDownKeys={["logout"]} />,
       {}
     );
     fireEvent.click(screen.getByText("Log Out"));
+    act(() => {
+      jest.runOnlyPendingTimers();
+    });
     expect(LogOut).toHaveBeenCalled();
     expect(mockRouterPush).toHaveBeenCalledWith("/marketplace");
   });
@@ -227,13 +262,16 @@ describe("ProfileWithDropdown", () => {
     expect(screen.queryByTestId("icon-check")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByText("Copy npub"));
+    act(() => {
+      jest.advanceTimersByTime(0);
+    });
 
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith(npub);
     expect(screen.queryByTestId("icon-clipboard")).not.toBeInTheDocument();
     expect(screen.getByTestId("icon-check")).toBeInTheDocument();
 
     act(() => {
-      jest.runAllTimers();
+      jest.advanceTimersByTime(2100);
     });
 
     expect(screen.getByTestId("icon-clipboard")).toBeInTheDocument();

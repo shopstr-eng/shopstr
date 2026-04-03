@@ -39,6 +39,11 @@ type DropDownKeys =
   | "logout"
   | "copy_npub";
 
+type DropdownActionItem = Omit<DropdownItemProps, "onClick" | "onPress"> & {
+  label: string;
+  onClick?: () => void;
+};
+
 export const ProfileWithDropdown = ({
   pubkey,
   baseClassname,
@@ -54,6 +59,7 @@ export const ProfileWithDropdown = ({
   const [displayName, setDisplayName] = useState("");
   const [isNPubCopied, setIsNPubCopied] = useState(false);
   const [isNip05Verified, setIsNip05Verified] = useState(false);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const profileContext = useContext(ProfileMapContext);
   const shopMapContext = useContext(ShopMapContext);
   const npub = pubkey ? nip19.npubEncode(pubkey) : "";
@@ -87,7 +93,7 @@ export const ProfileWithDropdown = ({
   }, [profileContext, pubkey, npub]);
 
   const DropDownItems: {
-    [key in DropDownKeys]: DropdownItemProps & { label: string };
+    [key in DropDownKeys]: DropdownActionItem;
   } = {
     shop: {
       key: "shop",
@@ -204,9 +210,20 @@ export const ProfileWithDropdown = ({
     },
   };
 
+  const handleDropdownAction = (item: DropdownActionItem) => {
+    setIsDropdownOpen(false);
+    window.setTimeout(() => {
+      item.onClick?.();
+    }, 0);
+  };
+
   return (
     <>
-      <Dropdown placement="bottom-start">
+      <Dropdown
+        placement="bottom-start"
+        isOpen={isDropdownOpen}
+        onOpenChange={setIsDropdownOpen}
+      >
         <DropdownTrigger>
           <User
             as="button"
@@ -228,6 +245,7 @@ export const ProfileWithDropdown = ({
         <DropdownMenu
           aria-label="User Actions"
           variant="flat"
+          closeOnSelect
           items={dropDownKeys.map((key) => DropDownItems[key])}
         >
           {(item) => {
@@ -237,7 +255,7 @@ export const ProfileWithDropdown = ({
                 color={item.color}
                 className={item.className}
                 startContent={item.startContent}
-                onClick={item.onClick}
+                onPress={() => handleDropdownAction(item)}
               >
                 {item.label}
               </DropdownItem>
