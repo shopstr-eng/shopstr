@@ -194,10 +194,164 @@ export async function PostListing(
   };
 
   const signedEvent = await finalizeAndSendNostrEvent(signer, nostr, event);
+  await publishNip15ListingCompatibilityEvent(
+    values,
+    signer,
+    nostr,
+    created_at
+  ).catch(
+    (error) =>
+    console.warn("Failed to publish NIP-15 compatibility events:", error)
+  );
   await finalizeAndSendNostrEvent(signer, nostr, recEvent);
   await finalizeAndSendNostrEvent(signer, nostr, handlerEvent);
 
   return signedEvent;
+}
+
+function getTagValue(
+  values: ProductFormValues,
+  key: string
+): string | undefined {
+  return values.find(([tagKey]) => tagKey === key)?.[1];
+}
+
+function getTagValues(values: ProductFormValues, key: string): string[] {
+  return values
+    .filter(([tagKey]) => tagKey === key)
+    .map(([, ...tagValues]) => tagValues[0]!)
+    .filter(Boolean);
+}
+
+function getTagTuples(values: ProductFormValues, key: string): string[][] {
+  return values
+    .filter(([tagKey]) => tagKey === key)
+    .map(([, ...tagValues]) => tagValues.filter(Boolean));
+}
+
+function buildNip15StallId(currency: string): string {
+  return `shopstr-${currency.toLowerCase()}`;
+}
+
+function buildNip15ShippingZoneId(shippingType?: string): string {
+  switch ((shippingType || "").toLowerCase()) {
+    case "pickup":
+    case "free/pickup":
+      return "pickup";
+    case "free":
+      return "free";
+    default:
+      return "standard";
+  }
+}
+
+function buildNip15Specs(values: ProductFormValues): [string, string][] {
+  const specs: [string, string][] = [];
+  const simpleSpecKeys = [
+    "location",
+    "condition",
+    "status",
+    "required",
+    "restrictions",
+  ];
+
+  simpleSpecKeys.forEach((key) => {
+    const value = getTagValue(values, key);
+    if (value) specs.push([key, value]);
+  });
+
+  getTagTuples(values, "size").forEach(([size, quantity]) => {
+    if (size) specs.push(["size", size]);
+    if (size && quantity) specs.push(["size_quantity", `${size}:${quantity}`]);
+  });
+
+  getTagTuples(values, "volume").forEach(([volume, price]) => {
+    if (volume) specs.push(["volume", `${volume}:${price || ""}`]);
+  });
+
+  getTagTuples(values, "bulk").forEach(([units, price]) => {
+    if (units && price) specs.push(["bulk", `${units}:${price}`]);
+  });
+
+  getTagValues(values, "pickup_location").forEach((location) => {
+    specs.push(["pickup_location", location]);
+  });
+
+  const expiration = getTagValue(values, "valid_until");
+  if (expiration) specs.push(["expiration", expiration]);
+
+  return specs;
+}
+
+async function publishNip15ListingCompatibilityEvent(
+  values: ProductFormValues,
+  signer: NostrSigner,
+  nostr: NostrManager,
+  createdAt: number
+) {
+  const dTag = getTagValue(values, "d");
+  const title = getTagValue(values, "title") || "";
+  const summary = getTagValue(values, "summary") || "";
+  const priceTuple = values.find(([key]) => key === "price");
+  const currency = priceTuple?.[2] || "";
+  const price = Number(priceTuple?.[1] || 0);
+  const images = getTagValues(values, "image");
+  const quantity = getTagValue(values, "quantity");
+  const shippingTuple = values.find(([key]) => key === "shipping");
+  const shippingType = shippingTuple?.[1];
+  const shippingCost = Number(shippingTuple?.[2] || 0);
+  const stallId = buildNip15StallId(currency || "sat");
+  const shippingZoneId = buildNip15ShippingZoneId(shippingType);
+  const categories = getTagValues(values, "t").filter((tag) => tag !== "shopstr");
+  const productId = dTag || uuidv4();
+
+  const stallEvent: EventTemplate = {
+    kind: 30017,
+    created_at: createdAt,
+    tags: [["d", stallId]],
+    content: JSON.stringify({
+      id: stallId,
+      name: "Shopstr Listings",
+      currency: currency || "SAT",
+      shipping: [
+        {
+          id: shippingZoneId,
+          name: shippingType || "Standard",
+          cost: 0,
+          regions: [],
+        },
+      ],
+    }),
+  };
+
+  const productEvent: EventTemplate = {
+    kind: 30018,
+    created_at: createdAt,
+    tags: [
+      ["d", productId],
+      ...categories.map((category) => ["t", category]),
+    ],
+    content: JSON.stringify({
+      id: productId,
+      stall_id: stallId,
+      name: title,
+      description: summary,
+      images,
+      currency: currency || "SAT",
+      price,
+      quantity: quantity ? Number(quantity) : null,
+      specs: buildNip15Specs(values),
+      shipping: [
+        {
+          id: shippingZoneId,
+          cost: shippingCost,
+        },
+      ],
+    }),
+  };
+
+  await finalizeAndSendNostrEvent(signer, nostr, stallEvent);
+  await finalizeAndSendNostrEvent(signer, nostr, productEvent);
 }
 
 export async function createNostrShopEvent(
