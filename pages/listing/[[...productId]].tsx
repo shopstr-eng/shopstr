@@ -91,6 +91,30 @@ async function fetchInitialProductEvent(
   return await fetchProductByTitleSlug(identifier);
 }
 
+function getListingStateFromEvent(event: NostrEvent | null) {
+  if (!event) {
+    return {
+      parsedProduct: undefined,
+      rawEvent: undefined,
+      isZapsnag: false,
+    };
+  }
+
+  if (event.kind === 1) {
+    return {
+      parsedProduct: parseZapsnagNote(event),
+      rawEvent: event as Event,
+      isZapsnag: true,
+    };
+  }
+
+  return {
+    parsedProduct: parseTags(event),
+    rawEvent: event as Event,
+    isZapsnag: false,
+  };
+}
+
 export const getServerSideProps: GetServerSideProps<ListingPageProps> = async (
   context
 ) => {
@@ -125,14 +149,17 @@ export const getServerSideProps: GetServerSideProps<ListingPageProps> = async (
   };
 };
 
-const Listing = () => {
+const Listing = ({ initialProductEvent }: ListingPageProps) => {
   const router = useRouter();
+  const initialListingState = getListingStateFromEvent(initialProductEvent);
   const [productData, setProductData] = useState<ProductData | undefined>(
-    undefined
+    initialListingState.parsedProduct
   );
-  const [isZapsnag, setIsZapsnag] = useState(false);
+  const [isZapsnag, setIsZapsnag] = useState(initialListingState.isZapsnag);
   const [productIdString, setProductIdString] = useState("");
-  const [rawEvent, setRawEvent] = useState<Event | undefined>(undefined);
+  const [rawEvent, setRawEvent] = useState<Event | undefined>(
+    initialListingState.rawEvent
+  );
   const [showRawEventModal, setShowRawEventModal] = useState(false);
   const [showEventIdModal, setShowEventIdModal] = useState(false);
   const [sfSellerPubkey, setSfSellerPubkey] = useState("");
@@ -163,6 +190,17 @@ const Listing = () => {
       }
     }
   }, [router]);
+
+  useEffect(() => {
+    if (!initialProductEvent) return;
+
+    const initialState = getListingStateFromEvent(initialProductEvent);
+    if (!initialState.parsedProduct) return;
+
+    setRawEvent(initialState.rawEvent);
+    setIsZapsnag(initialState.isZapsnag);
+    setProductData(initialState.parsedProduct);
+  }, [initialProductEvent]);
 
   useEffect(() => {
     if (!productContext.isLoading && productContext.productEvents) {
@@ -206,19 +244,13 @@ const Listing = () => {
           localStorage.removeItem("sf_seller_pubkey");
           localStorage.removeItem("sf_shop_slug");
         }
-        setRawEvent(matchingEvent);
-        let parsed;
-        if (matchingEvent.kind === 1) {
-          parsed = parseZapsnagNote(matchingEvent);
-          setIsZapsnag(true);
-        } else {
-          parsed = parseTags(matchingEvent);
-          setIsZapsnag(false);
-        }
-        setProductData(parsed);
+        const nextState = getListingStateFromEvent(matchingEvent);
+        setRawEvent(nextState.rawEvent);
+        setIsZapsnag(nextState.isZapsnag);
+        setProductData(nextState.parsedProduct);
 
-        if (parsed && parsed.title && matchingEvent.kind !== 1) {
-          const canonicalSlug = getListingSlug(parsed, allParsed);
+        if (nextState.parsedProduct && matchingEvent.kind !== 1) {
+          const canonicalSlug = getListingSlug(nextState.parsedProduct, allParsed);
           if (canonicalSlug && productIdString !== canonicalSlug) {
             router.replace(`/listing/${canonicalSlug}`, undefined, {
               shallow: true,
