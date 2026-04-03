@@ -366,12 +366,36 @@ function Shopstr({ props }: { props: AppProps }) {
   };
 
   const editProfileContext = (
-    profileData: Map<string, any>,
+    profileData: Map<string, ProfileData>,
     isLoading: boolean
   ) => {
     setProfileContext((profileContext) => {
+      const mergedProfileData = new Map(profileContext.profileData);
+
+      profileData.forEach((incomingProfile, pubkey) => {
+        const existingProfile = mergedProfileData.get(pubkey);
+
+        if (
+          !existingProfile ||
+          incomingProfile.created_at > existingProfile.created_at
+        ) {
+          mergedProfileData.set(pubkey, incomingProfile);
+          return;
+        }
+
+        if (incomingProfile.created_at === existingProfile.created_at) {
+          mergedProfileData.set(pubkey, {
+            ...existingProfile,
+            ...incomingProfile,
+            nip05Verified: Boolean(
+              existingProfile.nip05Verified || incomingProfile.nip05Verified
+            ),
+          });
+        }
+      });
+
       return {
-        profileData,
+        profileData: mergedProfileData,
         isLoading,
         updateProfileData: profileContext.updateProfileData,
       };

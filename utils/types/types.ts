@@ -223,6 +223,8 @@ export interface ProfileData {
     shopstr_donation?: number;
   };
   created_at: number;
+  nip05Verified?: boolean;
+  event?: NostrEvent;
 }
 
 export interface Transaction {

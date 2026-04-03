@@ -2,6 +2,7 @@ import { Filter } from "nostr-tools";
 import {
   NostrEvent,
   NostrMessageEvent,
+  ProfileData,
   ShopProfile,
   Community,
 } from "@/utils/types/types";
@@ -355,10 +356,10 @@ export const fetchProfile = async (
   nostr: NostrManager,
   relays: string[],
   pubkeyProfilesToFetch: string[],
-  editProfileContext: (productEvents: Map<any, any>, isLoading: boolean) => void,
-  existingProfileMap: Map<string, any> = new Map()
+  editProfileContext: (profileData: Map<string, ProfileData>, isLoading: boolean) => void,
+  existingProfileMap: Map<string, ProfileData> = new Map()
 ): Promise<{
-  profileMap: Map<string, any>;
+  profileMap: Map<string, ProfileData>;
 }> => {
   return new Promise(async function (resolve, reject) {
     try {
@@ -370,7 +371,7 @@ export const fetchProfile = async (
       }
 
       const mergedProfileMap = new Map(existingProfileMap);
-      const updateProfileIfNewer = (profile: any) => {
+      const updateProfileIfNewer = (profile: ProfileData) => {
         if (!profile?.pubkey) {
           return;
         }
@@ -384,7 +385,7 @@ export const fetchProfile = async (
         }
       };
 
-      const dbProfileMap = new Map<string, any>();
+      const dbProfileMap = new Map<string, ProfileData>();
       try {
         const response = await fetch("/api/db/fetch-profiles");
         if (response.ok) {
@@ -392,7 +393,11 @@ export const fetchProfile = async (
           const latestDbEvents = new Map<string, NostrEvent>();
 
           for (const event of profilesFromDb) {
-            if (!pubkeyProfilesToFetch.includes(event.pubkey)) {
+            if (
+              event.kind !== 0 ||
+              !event.pubkey ||
+              !pubkeyProfilesToFetch.includes(event.pubkey)
+            ) {
               continue;
             }
 
@@ -427,7 +432,7 @@ export const fetchProfile = async (
         authors: Array.from(pubkeyProfilesToFetch),
       };
 
-      const profileMap: Map<string, any> = new Map(
+      const profileMap: Map<string, ProfileData | null> = new Map(
         Array.from(pubkeyProfilesToFetch).map((pubkey) => [
           pubkey,
           dbProfileMap.get(pubkey) || mergedProfileMap.get(pubkey) || null,
@@ -509,7 +514,7 @@ export const fetchProfile = async (
               verificationBatch.map(async ([pubkey, profile]) => ({
                 pubkey,
                 verified: await verifyNip05Identifier(
-                  profile.content.nip05,
+                  profile.content.nip05 as string,
                   pubkey
                 ),
               }))

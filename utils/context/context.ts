@@ -9,7 +9,7 @@ import {
 import { Proof } from "@cashu/cashu-ts";
 
 export interface ProfileContextInterface {
-  profileData: Map<string, any>;
+  profileData: Map<string, ProfileData>;
   isLoading: boolean;
   updateProfileData: (profileData: ProfileData) => void;
 }
