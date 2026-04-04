@@ -102,7 +102,11 @@ export default function OrderSummary() {
           }
         } catch {}
       }
-      const shuffled = products.sort(() => Math.random() - 0.5).slice(0, 4);
+      for (let i = products.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [products[i], products[j]] = [products[j], products[i]];
+      }
+      const shuffled = products.slice(0, 4);
       setLatestProducts(shuffled);
     }
   }, [productContext.isLoading, productContext.productEvents, orderData]);
