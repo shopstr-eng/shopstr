@@ -101,7 +101,11 @@ export default function StorefrontOrderConfirmation({
     }
     for (let i = products.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
-      [products[i], products[j]] = [products[j], products[i]];
+      const current = products[i];
+      const random = products[j];
+      if (!current || !random) continue;
+      products[i] = random;
+      products[j] = current;
     }
     return products.slice(0, 4);
   }, [productContext.productEvents, shopPubkey]);
