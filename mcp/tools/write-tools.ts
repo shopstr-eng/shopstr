@@ -1847,9 +1847,11 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         const { updateMcpOrderStatus } = await import(
           "@/mcp/tools/purchase-tools"
         );
-        await updateMcpOrderStatus(params.orderId, "shipped").catch(
-          console.error
-        );
+        await updateMcpOrderStatus(
+          params.orderId,
+          "shipped",
+          apiKey.pubkey
+        ).catch(console.error);
 
         return successResponse(
           {
@@ -1912,13 +1914,14 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         );
         const updatedOrder = await updateMcpOrderStatus(
           params.orderId,
-          params.status
+          params.status,
+          apiKey.pubkey
         );
 
         if (!updatedOrder) {
           return errorResponse(
             "Order not found",
-            `No order found with ID "${params.orderId}"`,
+            `No order found with ID "${params.orderId}" for your account`,
             startTime
           );
         }

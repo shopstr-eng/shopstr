@@ -150,15 +150,20 @@ export async function updateMcpOrderPayment(
 
 export async function updateMcpOrderStatus(
   orderId: string,
-  orderStatus: string
+  orderStatus: string,
+  actorPubkey: string
 ): Promise<McpOrder | null> {
   const pool = getDbPool();
   let client;
   try {
     client = await pool.connect();
     const result = await client.query(
-      `UPDATE mcp_orders SET order_status = $1, updated_at = CURRENT_TIMESTAMP WHERE order_id = $2 RETURNING *`,
-      [orderStatus, orderId]
+      `UPDATE mcp_orders
+       SET order_status = $1, updated_at = CURRENT_TIMESTAMP
+       WHERE order_id = $2
+         AND (buyer_pubkey = $3 OR seller_pubkey = $3)
+       RETURNING *`,
+      [orderStatus, orderId, actorPubkey]
     );
     if (result.rows.length === 0) return null;
     return result.rows[0];
