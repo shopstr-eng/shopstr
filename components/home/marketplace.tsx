@@ -51,6 +51,27 @@ import {
   isNpub,
 } from "@/utils/url-slugs";
 
+export function normalizeNpub(
+  npub: string | string[] | undefined
+): string | null {
+  if (typeof npub === "string") {
+    const normalized = npub.trim();
+    return normalized.length > 0 ? normalized : null;
+  }
+
+  if (Array.isArray(npub)) {
+    const firstValue = npub[0];
+    if (typeof firstValue !== "string") {
+      return null;
+    }
+
+    const normalized = firstValue.trim();
+    return normalized.length > 0 ? normalized : null;
+  }
+
+  return null;
+}
+
 function MarketplacePage({
   focusedPubkey,
   setFocusedPubkey,
@@ -103,50 +124,49 @@ function MarketplacePage({
   const searchBarRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const npub = router.query.npub;
-    if (npub && typeof npub[0] === "string") {
-      const slug = npub[0];
-      let pubkey: string | undefined;
+    const slug = normalizeNpub(router.query.npub);
 
-      if (isNpub(slug)) {
-        try {
-          const { data } = nip19.decode(slug);
-          pubkey = data as string;
-        } catch {
-          return;
-        }
-      } else {
-        pubkey = findPubkeyByProfileSlug(slug, profileMapContext.profileData);
-      }
+    if (!slug) return;
 
-      if (pubkey) {
-        setFocusedPubkey(pubkey);
-        setSelectedSection("shop");
+    let pubkey: string | undefined;
+
+    if (isNpub(slug)) {
+      try {
+        const { data } = nip19.decode(slug);
+        pubkey = data as string;
+      } catch {
+        return;
       }
+    } else {
+      pubkey = findPubkeyByProfileSlug(slug, profileMapContext.profileData);
+    }
+
+    if (pubkey) {
+      setFocusedPubkey(pubkey);
+      setSelectedSection("shop");
     }
   }, [router.query.npub, profileMapContext.profileData]);
 
   useEffect(() => {
-    if (
-      focusedPubkey &&
-      !profileMapContext.isLoading &&
-      router.query.npub?.[0]
-    ) {
-      const currentSlug = router.query.npub[0] as string;
-      const canonicalSlug = getProfileSlug(
-        focusedPubkey,
-        profileMapContext.profileData
-      );
-      if (canonicalSlug && currentSlug !== canonicalSlug) {
-        router.replace(`/marketplace/${canonicalSlug}`, undefined, {
-          shallow: true,
-        });
-      }
+    const currentSlug = normalizeNpub(router.query.npub);
+
+    if (!focusedPubkey || profileMapContext.isLoading || !currentSlug) return;
+
+    const canonicalSlug = getProfileSlug(
+      focusedPubkey,
+      profileMapContext.profileData
+    );
+
+    if (canonicalSlug && currentSlug !== canonicalSlug) {
+      router.replace(`/marketplace/${canonicalSlug}`, undefined, {
+        shallow: true,
+      });
     }
   }, [
     focusedPubkey,
     profileMapContext.isLoading,
     profileMapContext.profileData,
+    router.query.npub,
   ]);
 
   useEffect(() => {
