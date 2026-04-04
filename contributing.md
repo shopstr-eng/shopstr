@@ -215,6 +215,41 @@ npm run test:watch
 - Use descriptive test names
 - Follow existing test patterns
 
+## Git Hooks & Pre-commit Checks
+
+This project uses [Husky](https://typicode.github.io/husky/) with [lint-staged](https://github.com/okonet/lint-staged) to run automated checks before commits to ensure code quality.
+
+### Automatic Pre-commit Checks
+
+When you commit changes, the following checks run automatically:
+
+1. **Type Checking**: `npm run type-check` (runs on entire project)
+2. **Lint-staged checks** (runs in parallel on staged files only):
+   - **ESLint**: Automatically fixes linting issues
+   - **Prettier**: Automatically formats code
+   - **Jest**: Runs tests related to changed files
+
+If any check fails, the commit will be blocked until issues are resolved.
+
+### Bypassing Pre-commit Hooks
+
+⚠️ **Use sparingly and only when necessary!**
+
+If you need to bypass pre-commit hooks (e.g., for work-in-progress commits), use:
+
+```bash
+git commit -m "your commit message" -n
+# or
+git commit -m "your commit message" --no-verify
+```
+
+**Note**: Pull requests will still require all checks to pass, so it's recommended to run checks manually:
+
+```bash
+# Run all quality checks manually
+npm run lint-all && npm test
+```
+
 ## Creating a Pull Request
 
 Before creating a pull request, ensure your code meets quality standards by running:
