@@ -37,7 +37,6 @@ const resolveCname = promisify(dns.resolveCname);
 const resolve4 = promisify(dns.resolve4);
 import { getDefaultFlowSteps } from "@/utils/email/flow-email-templates";
 import { v4 as uuidv4 } from "uuid";
-import { registerTool } from "./register-tool";
 
 function noSignerError() {
   return {
@@ -1923,7 +1922,9 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           );
         }
 
-        if (!canActorSendShippingUpdate(order, apiKey.pubkey, params.buyerPubkey)) {
+        if (
+          !canActorSendShippingUpdate(order, apiKey.pubkey, params.buyerPubkey)
+        ) {
           return errorResponse(
             "Unauthorized order update",
             "Only the seller for this order can send shipping updates to the recorded buyer.",
@@ -2127,7 +2128,9 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           );
         }
 
-        if (!canActorUpdateMcpOrderStatus(order, params.status, apiKey.pubkey)) {
+        if (
+          !canActorUpdateMcpOrderStatus(order, params.status, apiKey.pubkey)
+        ) {
           return errorResponse(
             "Unauthorized order update",
             params.status === "cancelled"
@@ -3867,7 +3870,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
               [pubkey]
             );
           }
-          
+
           return successResponse(
             {
               domain,

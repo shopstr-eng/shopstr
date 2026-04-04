@@ -80,7 +80,9 @@ describe("SignInModal", () => {
     const { user, push } = renderModal();
     const btn = screen.getAllByRole("button", { name: /sign up/i })[0]!;
     await user.click(btn);
-        await user.click(screen.getByRole("button", { name: /create new account/i }));
+    await user.click(
+      screen.getByRole("button", { name: /create new account/i })
+    );
     await waitFor(() =>
       expect(push).toHaveBeenCalledWith("/onboarding/new-account")
     );

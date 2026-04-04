@@ -602,7 +602,9 @@ export default function Component() {
 
         // Save to localStorage
         const storedDiscounts = localStorage.getItem("cartDiscounts");
-        let discounts: { [pubkey: string]: { code: string; percentage: number } } = {};
+        let discounts: {
+          [pubkey: string]: { code: string; percentage: number };
+        } = {};
         try {
           if (storedDiscounts) discounts = JSON.parse(storedDiscounts);
         } catch {

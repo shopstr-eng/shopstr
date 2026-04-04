@@ -159,7 +159,10 @@ export async function updateMcpOrderStatus(
   actorPubkey: string
 ): Promise<McpOrder | null> {
   const order = await getMcpOrder(orderId);
-  if (!order || !canActorUpdateMcpOrderStatus(order, orderStatus, actorPubkey)) {
+  if (
+    !order ||
+    !canActorUpdateMcpOrderStatus(order, orderStatus, actorPubkey)
+  ) {
     return null;
   }
 
