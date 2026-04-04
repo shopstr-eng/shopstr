@@ -20,7 +20,20 @@ jest.mock("@/utils/url-slugs", () => ({
 jest.mock(
   "../../display-products",
   () =>
-    function MockDisplayProducts() {
+    function MockDisplayProducts({
+      selectedSearch,
+    }: {
+      selectedSearch?: string;
+    }) {
+      if (selectedSearch === "no-results") {
+        return (
+          <div>
+            <p>No products found...</p>
+            <p>Try changing your search or clearing some filters.</p>
+          </div>
+        );
+      }
+
       return <div data-testid="mock-display-products" />;
     }
 );
@@ -158,6 +171,14 @@ describe("MarketplacePage Component", () => {
     expect(screen.queryByTestId("mock-side-shop-nav")).not.toBeInTheDocument();
   });
 
+  it("uses the correct marketplace search placeholder text", () => {
+    renderComponent({});
+
+    expect(
+      screen.getByPlaceholderText("Title, summary, price, naddr1..., npub...")
+    ).toBeInTheDocument();
+  });
+
   it("renders shop-specific view when a shop is focused", () => {
     renderComponent({ focusedPubkey: "shop1" });
     expect(screen.getByTestId("mock-side-shop-nav")).toBeInTheDocument();
@@ -205,5 +226,19 @@ describe("MarketplacePage Component", () => {
     });
     await userEvent.click(screen.getByRole("button", { name: "Message" }));
     expect(mockOnOpen).toHaveBeenCalled();
+  });
+
+  it("shows the empty state when marketplace search returns no results", async () => {
+    renderComponent({});
+
+    await userEvent.type(
+      screen.getByPlaceholderText("Title, summary, price, naddr1..., npub..."),
+      "no-results"
+    );
+
+    expect(screen.getByText("No products found...")).toBeInTheDocument();
+    expect(
+      screen.getByText("Try changing your search or clearing some filters.")
+    ).toBeInTheDocument();
   });
 });
