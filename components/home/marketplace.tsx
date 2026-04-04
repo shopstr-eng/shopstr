@@ -155,7 +155,7 @@ function MarketplacePage({
       focusedPubkey &&
       reviewsContext.merchantReviewsData.has(focusedPubkey) &&
       typeof reviewsContext.merchantReviewsData.get(focusedPubkey) !=
-        "undefined" &&
+      "undefined" &&
       reviewsContext.productReviewsData.has(focusedPubkey) &&
       typeof reviewsContext.productReviewsData.get(focusedPubkey) != "undefined"
     ) {
@@ -316,11 +316,10 @@ function MarketplacePage({
                               return (
                                 <Chip
                                   key={index}
-                                  className={`text-light-text dark:text-dark-text ${
-                                    value === "1"
+                                  className={`text-light-text dark:text-dark-text ${value === "1"
                                       ? "bg-green-500"
                                       : "bg-red-500"
-                                  }`}
+                                    }`}
                                 >
                                   {`overall: ${value === "1" ? "👍" : "👎"}`}
                                 </Chip>
@@ -329,15 +328,13 @@ function MarketplacePage({
                               return (
                                 <Chip
                                   key={index}
-                                  className={`text-light-text dark:text-dark-text ${
-                                    value === "1"
+                                  className={`text-light-text dark:text-dark-text ${value === "1"
                                       ? "bg-green-500"
                                       : "bg-red-500"
-                                  }`}
+                                    }`}
                                 >
-                                  {`${category}: ${
-                                    value === "1" ? "👍" : "👎"
-                                  }`}
+                                  {`${category}: ${value === "1" ? "👍" : "👎"
+                                    }`}
                                 </Chip>
                               );
                             }
@@ -456,7 +453,7 @@ function MarketplacePage({
               <Input
                 className="mt-2 text-light-text dark:text-dark-text"
                 isClearable
-                placeholder="Listing title, naddr1..., npub..."
+                placeholder="Title, summary, price, naddr1..., npub..."
                 value={selectedSearch}
                 startContent={<MagnifyingGlassIcon height={"1em"} />}
                 onChange={(event) => {
@@ -520,17 +517,17 @@ function MarketplacePage({
         )}
         {((selectedSection === "shop" && focusedPubkey !== "") ||
           selectedSection === "") && (
-          <DisplayProducts
-            focusedPubkey={focusedPubkey}
-            selectedCategories={selectedCategories}
-            selectedLocation={selectedLocation}
-            selectedSearch={selectedSearch}
-            wotFilter={wotFilter}
-            setCategories={setCategories}
-            onFilteredProductsChange={handleFilteredProductsChange}
-            searchBarRef={searchBarRef}
-          />
-        )}
+            <DisplayProducts
+              focusedPubkey={focusedPubkey}
+              selectedCategories={selectedCategories}
+              selectedLocation={selectedLocation}
+              selectedSearch={selectedSearch}
+              wotFilter={wotFilter}
+              setCategories={setCategories}
+              onFilteredProductsChange={handleFilteredProductsChange}
+              searchBarRef={searchBarRef}
+            />
+          )}
         {selectedSection === "about" && shopAbout && (
           <div className="flex w-full flex-col justify-start bg-transparent px-4 py-8 text-light-text dark:text-dark-text">
             <h2 className="pb-2 text-2xl font-bold">About</h2>
@@ -549,11 +546,10 @@ function MarketplacePage({
                   {merchantReview && merchantReview >= 0.5 ? (
                     <>
                       <FaceSmileIcon
-                        className={`h-10 w-10 p-1 ${
-                          merchantReview >= 0.75
+                        className={`h-10 w-10 p-1 ${merchantReview >= 0.75
                             ? "text-green-500"
                             : "text-green-300"
-                        }`}
+                          }`}
                       />
                       <span className="mr-2 whitespace-nowrap text-sm text-light-text dark:text-dark-text">
                         {merchantQuality}
@@ -562,11 +558,10 @@ function MarketplacePage({
                   ) : (
                     <>
                       <FaceFrownIcon
-                        className={`h-10 w-10 p-1 ${
-                          merchantReview >= 0.25
+                        className={`h-10 w-10 p-1 ${merchantReview >= 0.25
                             ? "text-red-300"
                             : "text-red-500"
-                        }`}
+                          }`}
                       />
                       <span className="mr-2 whitespace-nowrap text-sm text-light-text dark:text-dark-text">
                         {merchantQuality}
