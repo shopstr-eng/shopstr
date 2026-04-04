@@ -1571,36 +1571,23 @@ export async function verifyNip05Identifier(
     const [username, domain] = parts;
     if (!username || !domain) return false;
 
-    let url;
     try {
-      url = `https://${domain}/.well-known/nostr.json?name=${username}`;
-    } catch {
-      return false;
-    }
-
-    try {
-      // Use a timeout to prevent hanging requests
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
-
-      const response = await fetch(url, { signal: controller.signal });
-      clearTimeout(timeoutId);
+      const response = await fetch(
+        `/api/nostr/verify-nip05?nip05=${encodeURIComponent(
+          nip05
+        )}&pubkey=${encodeURIComponent(pubkey)}`
+      );
 
       if (!response.ok) return false;
 
-      let data;
+      let data: { verified?: boolean };
       try {
         data = await response.json();
       } catch {
         return false;
       }
 
-      if (!data || typeof data !== "object") return false;
-
-      const names = data.names || {};
-      return (
-        names[username] === pubkey || names[username.toLowerCase()] === pubkey
-      );
+      return data.verified === true;
     } catch {
       // This will catch fetch errors, timeout errors, etc.
       return false;
