@@ -646,7 +646,7 @@ export default function ProductInvoiceCard({
       } else {
         await handleLightningPayment(price, paymentData);
       }
-    } catch (error) {
+    } catch {
       setCashuPaymentFailed(true);
     }
   };
@@ -833,7 +833,7 @@ export default function ProductInvoiceCard({
         data.shippingCountry ? data.shippingCountry : undefined,
         data.additionalInfo ? data.additionalInfo : undefined
       );
-    } catch (error) {
+    } catch {
       setInvoiceGenerationFailed(true);
       setShowInvoiceCard(false);
       setInvoice("");
@@ -1714,7 +1714,7 @@ export default function ProductInvoiceCard({
       );
       setCashuPaymentSent(true);
       setPaymentConfirmed(true);
-    } catch (error) {
+    } catch {
       setCashuPaymentFailed(true);
     }
   };

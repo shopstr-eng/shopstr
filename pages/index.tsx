@@ -293,7 +293,7 @@ export default function Landing() {
                 </a>
               </Link>{" "}
               — an open protocol that no company controls. You do not need an
-              account, ID, or anyone's permission to buy or sell. Your listings
+              account, ID, or anyone&apos;s permission to buy or sell. Your listings
               live on a decentralized network and cannot be taken down.
             </p>
             <p>
