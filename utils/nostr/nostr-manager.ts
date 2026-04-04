@@ -189,6 +189,15 @@ export class NostrManager {
       const onEvent = params.onevent;
       const onEose = params.oneose;
       const fetchedEvents: Array<NostrEvent> = [];
+      let sub: NostrSub | undefined;
+      let didCloseSub = false;
+      let didResolve = false;
+
+      const closeSubIfNeeded = async () => {
+        if (!sub || didCloseSub) return;
+        didCloseSub = true;
+        await sub.close();
+      };
 
       params.onevent = (event: NostrEvent) => {
         fetchedEvents.push(event);
@@ -196,12 +205,15 @@ export class NostrManager {
       };
 
       params.oneose = () => {
-        sub!.close();
-        resolve(fetchedEvents);
+        closeSubIfNeeded().catch(console.error);
+        if (!didResolve) {
+          didResolve = true;
+          resolve(fetchedEvents);
+        }
         return onEose!();
       };
 
-      const sub = await this.subscribe(filters, params, relayUrls);
+      sub = await this.subscribe(filters, params, relayUrls);
     });
   }
 
