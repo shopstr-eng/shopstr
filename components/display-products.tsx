@@ -87,11 +87,10 @@ const DisplayProducts = ({
     if (!productEventContext) return;
     if (!productEventContext.isLoading && productEventContext.productEvents) {
       setIsProductLoading(true);
-      const sortedProductEvents = [
-        ...productEventContext.productEvents.sort(
-          (a: NostrEvent, b: NostrEvent) => b.created_at - a.created_at
-        ),
-      ];
+            const sortedProductEvents = [...productEventContext.productEvents].sort(
+        (a: NostrEvent, b: NostrEvent) => b.created_at - a.created_at
+      );
+
       const parsedProductData: ProductData[] = [];
       sortedProductEvents.forEach((event) => {
         if (wotFilter) {
