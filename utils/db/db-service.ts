@@ -1231,15 +1231,6 @@ function profileNameToSlug(name: string): string {
     .replace(/^-|-$/g, "");
 }
 
-function getLogicalListingKey(event: {
-  id: string;
-  pubkey: string;
-  tags: string[][];
-}): string {
-  const dTag = event.tags.find((tag) => tag[0] === "d")?.[1];
-  return dTag ? `${event.pubkey}:${dTag}` : event.id;
-}
-
 export async function fetchProductByIdFromDb(
   id: string
 ): Promise<NostrEvent | null> {
@@ -1324,35 +1315,22 @@ export async function fetchProductByTitleSlug(
        )
        ORDER BY created_at DESC`
     );
-    const matchesByListingKey = new Map<string, typeof result.rows[0]>();
-
     for (const row of result.rows) {
       const tags: string[][] = row.tags;
       const titleTag = tags.find((t) => t[0] === "title");
       if (titleTag && titleTag[1] && titleToSlug(titleTag[1]) === slug) {
-        const listingKey = getLogicalListingKey({
+        return {
           id: row.id,
           pubkey: row.pubkey,
-          tags,
-        });
-        if (!matchesByListingKey.has(listingKey)) {
-          matchesByListingKey.set(listingKey, row);
-        }
+          created_at: row.created_at,
+          kind: row.kind,
+          tags: row.tags,
+          content: row.content,
+          sig: row.sig,
+        };
       }
     }
-    if (matchesByListingKey.size !== 1) {
-      return null;
-    }
-    const row = Array.from(matchesByListingKey.values())[0]!;
-    return {
-      id: row.id,
-      pubkey: row.pubkey,
-      created_at: row.created_at,
-      kind: row.kind,
-      tags: row.tags,
-      content: row.content,
-      sig: row.sig,
-    };
+    return null;
   } catch (error) {
     console.error("Failed to fetch product by title slug:", error);
     return null;
