@@ -45,6 +45,7 @@ import WeightSelector from "./weight-selector";
 import BulkSelector from "./bulk-selector";
 import ZapsnagButton from "@/components/ZapsnagButton";
 import { RawEventModal, EventIdModal } from "./modals/event-modals";
+import { getLocalStorageJson } from "@/utils/safe-json";
 
 const SUMMARY_CHARACTER_LIMIT = 100;
 
@@ -177,9 +178,10 @@ export default function CheckoutCard({
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const cartList = localStorage.getItem("cart")
-        ? JSON.parse(localStorage.getItem("cart") as string)
-        : [];
+      const cartList = getLocalStorageJson<ProductData[]>("cart", [], {
+        removeOnError: true,
+        validate: Array.isArray,
+      });
       if (cartList && cartList.length > 0) {
         setCart(cartList);
       }

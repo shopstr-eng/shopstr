@@ -24,6 +24,7 @@ import {
   deleteEventsFromDatabase,
 } from "@/utils/db/db-client";
 import { newPromiseWithTimeout } from "@/utils/timeout";
+import { getLocalStorageJson } from "@/utils/safe-json";
 
 function containsRelay(relays: string[], relay: string): boolean {
   return relays.some((r) => r.includes(relay));
@@ -1306,21 +1307,27 @@ export interface LocalStorageInterface {
   writeRelays: string[];
   mints: string[];
   blossomServers: string[];
-  tokens: [];
-  history: [];
+  tokens: any[];
+  history: any[];
   wot: number;
   encryptedPrivateKey?: string;
   clientPrivkey?: string;
   bunkerRemotePubkey?: string;
   bunkerRelays?: string[];
   bunkerSecret?: string;
-  signer?: { [key: string]: string };
+  signer?: { [key: string]: any };
   nwcString?: string | null;
   nwcInfo?: string | null;
   migrationComplete?: boolean;
 }
 
 export const getLocalStorageData = (): LocalStorageInterface => {
+  const isStringArray = (value: unknown): value is string[] =>
+    Array.isArray(value) && value.every((entry) => typeof entry === "string");
+  const isArray = (value: unknown): value is unknown[] => Array.isArray(value);
+  const isObject = (value: unknown): value is Record<string, unknown> =>
+    typeof value === "object" && value !== null && !Array.isArray(value);
+
   let signInMethod;
   let encryptedPrivateKey;
   let relays;
@@ -1355,8 +1362,10 @@ export const getLocalStorageData = (): LocalStorageInterface => {
       localStorage.removeItem("cashuWalletRelays");
     }
 
-    const relaysString = localStorage.getItem(LOCALSTORAGECONSTANTS.relays);
-    relays = relaysString ? (JSON.parse(relaysString) as string[]) : [];
+    relays = getLocalStorageJson<string[]>(LOCALSTORAGECONSTANTS.relays, [], {
+      removeOnError: true,
+      validate: isStringArray,
+    });
 
     const defaultRelays = getDefaultRelays();
 
@@ -1374,36 +1383,44 @@ export const getLocalStorageData = (): LocalStorageInterface => {
       }
     }
 
-    readRelays = localStorage.getItem(LOCALSTORAGECONSTANTS.readRelays)
-      ? (
-          JSON.parse(
-            localStorage.getItem(LOCALSTORAGECONSTANTS.readRelays) as string
-          ) as string[]
-        ).filter((r) => r)
-      : [];
+    readRelays = getLocalStorageJson<string[]>(
+      LOCALSTORAGECONSTANTS.readRelays,
+      [],
+      {
+        removeOnError: true,
+        validate: isStringArray,
+      }
+    ).filter((r) => r);
 
-    writeRelays = localStorage.getItem(LOCALSTORAGECONSTANTS.writeRelays)
-      ? (
-          JSON.parse(
-            localStorage.getItem(LOCALSTORAGECONSTANTS.writeRelays) as string
-          ) as string[]
-        ).filter((r) => r)
-      : [];
+    writeRelays = getLocalStorageJson<string[]>(
+      LOCALSTORAGECONSTANTS.writeRelays,
+      [],
+      {
+        removeOnError: true,
+        validate: isStringArray,
+      }
+    ).filter((r) => r);
 
-    mints = localStorage.getItem(LOCALSTORAGECONSTANTS.mints)
-      ? JSON.parse(localStorage.getItem("mints") as string)
-      : null;
+    mints = getLocalStorageJson<string[]>(LOCALSTORAGECONSTANTS.mints, [], {
+      removeOnError: true,
+      validate: isStringArray,
+    });
 
-    if (mints === null) {
+    if (mints.length === 0) {
       mints = [getDefaultMint()];
       localStorage.setItem(LOCALSTORAGECONSTANTS.mints, JSON.stringify(mints));
     }
 
-    blossomServers = localStorage.getItem(LOCALSTORAGECONSTANTS.blossomServers)
-      ? JSON.parse(localStorage.getItem("blossomServers") as string)
-      : null;
+    blossomServers = getLocalStorageJson<string[]>(
+      LOCALSTORAGECONSTANTS.blossomServers,
+      [],
+      {
+        removeOnError: true,
+        validate: isStringArray,
+      }
+    );
 
-    if (blossomServers === null) {
+    if (blossomServers.length === 0) {
       blossomServers = [getDefaultBlossomServer()];
       localStorage.setItem(
         LOCALSTORAGECONSTANTS.blossomServers,
@@ -1411,13 +1428,24 @@ export const getLocalStorageData = (): LocalStorageInterface => {
       );
     }
 
-    tokens = localStorage.getItem(LOCALSTORAGECONSTANTS.tokens)
-      ? JSON.parse(localStorage.getItem("tokens") as string)
-      : localStorage.setItem(LOCALSTORAGECONSTANTS.tokens, JSON.stringify([]));
+    tokens = getLocalStorageJson<unknown[]>(LOCALSTORAGECONSTANTS.tokens, [], {
+      removeOnError: true,
+      validate: isArray,
+    });
+    if (tokens.length === 0 && !localStorage.getItem(LOCALSTORAGECONSTANTS.tokens)) {
+      localStorage.setItem(LOCALSTORAGECONSTANTS.tokens, JSON.stringify([]));
+    }
 
-    history = localStorage.getItem(LOCALSTORAGECONSTANTS.history)
-      ? JSON.parse(localStorage.getItem("history") as string)
-      : localStorage.setItem(LOCALSTORAGECONSTANTS.history, JSON.stringify([]));
+    history = getLocalStorageJson<unknown[]>(LOCALSTORAGECONSTANTS.history, [], {
+      removeOnError: true,
+      validate: isArray,
+    });
+    if (
+      history.length === 0 &&
+      !localStorage.getItem(LOCALSTORAGECONSTANTS.history)
+    ) {
+      localStorage.setItem(LOCALSTORAGECONSTANTS.history, JSON.stringify([]));
+    }
 
     wot = localStorage.getItem(LOCALSTORAGECONSTANTS.wot)
       ? Number(localStorage.getItem(LOCALSTORAGECONSTANTS.wot))
@@ -1431,23 +1459,27 @@ export const getLocalStorageData = (): LocalStorageInterface => {
     )
       ? localStorage.getItem(LOCALSTORAGECONSTANTS.bunkerRemotePubkey)
       : undefined;
-    bunkerRelays = localStorage.getItem(LOCALSTORAGECONSTANTS.bunkerRelays)
-      ? (
-          JSON.parse(
-            localStorage.getItem(LOCALSTORAGECONSTANTS.bunkerRelays) as string
-          ) as string[]
-        ).filter((r) => r)
-      : [];
+    bunkerRelays = getLocalStorageJson<string[]>(
+      LOCALSTORAGECONSTANTS.bunkerRelays,
+      [],
+      {
+        removeOnError: true,
+        validate: isStringArray,
+      }
+    ).filter((r) => r);
     bunkerSecret = localStorage.getItem(LOCALSTORAGECONSTANTS.bunkerSecret)
       ? localStorage.getItem(LOCALSTORAGECONSTANTS.bunkerSecret)
       : undefined;
 
-    const signerData: string | null = localStorage.getItem(
-      LOCALSTORAGECONSTANTS.signer
+    signer = getLocalStorageJson<Record<string, unknown> | undefined>(
+      LOCALSTORAGECONSTANTS.signer,
+      undefined,
+      {
+        removeOnError: true,
+        validate: (value): value is Record<string, unknown> => isObject(value),
+      }
     );
-    if (signerData) {
-      signer = JSON.parse(signerData);
-    } else {
+    if (!signer) {
       switch (signInMethod) {
         case "extension":
           signer = {
@@ -1490,7 +1522,7 @@ export const getLocalStorageData = (): LocalStorageInterface => {
     relays: relays || [],
     readRelays: readRelays || [],
     writeRelays: writeRelays || [],
-    mints,
+    mints: mints || [],
     blossomServers: blossomServers || [],
     tokens: tokens || [],
     history: history || [],
