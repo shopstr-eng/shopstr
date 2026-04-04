@@ -10,7 +10,7 @@ import {
 import { TrashIcon } from "@heroicons/react/24/outline";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
-import ConfirmActionDropdown from "../utility-components/dropdowns/confirm-action-dropdown";
+import ConfirmActionModal from "../utility-components/modals/confirm-action-modal";
 
 interface DiscountCode {
   code: string;
@@ -218,15 +218,15 @@ export default function DiscountCodes() {
                       </p>
                     )}
                   </div>
-                  <ConfirmActionDropdown
-                    helpText="Are you sure you want to delete this discount code?"
-                    buttonLabel="Delete Code"
+                  <ConfirmActionModal
+                    description="Are you sure you want to delete this discount code?"
+                    confirmLabel="Delete Code"
                     onConfirm={() => handleDeleteCode(code.code)}
                   >
                     <Button isIconOnly color="danger" variant="light" size="sm">
                       <TrashIcon className="h-5 w-5" />
                     </Button>
-                  </ConfirmActionDropdown>
+                  </ConfirmActionModal>
                 </div>
               </CardBody>
             </Card>
