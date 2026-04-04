@@ -72,8 +72,14 @@ const renderWithContext = (
   ui: React.ReactElement,
   userPubkey: string | null = null,
   reportContextOverrides?: {
-    profileReports?: Map<string, Array<{ id: string; kind: number }>>;
-    listingReports?: Map<string, Array<{ id: string; kind: number }>>;
+    profileReports?: Map<
+      string,
+      Array<{ id: string; kind: number; pubkey: string }>
+    >;
+    listingReports?: Map<
+      string,
+      Array<{ id: string; kind: number; pubkey: string }>
+    >;
   }
 ) => {
   const reportsContextValue = {
@@ -161,13 +167,13 @@ describe("ProductCard", () => {
       expect(screen.getByText("Sold")).toBeInTheDocument();
     });
 
-    it("shows deduplicated report count badge", () => {
+    it("shows additive seller and product report count badge", () => {
       const profileReports = new Map([
         [
           "owner_pubkey",
           [
-            { id: "r1", kind: 1984 },
-            { id: "r2", kind: 1984 },
+            { id: "r1", kind: 1984, pubkey: "reporter-1" },
+            { id: "r2", kind: 1984, pubkey: "reporter-2" },
           ],
         ],
       ]);
@@ -175,8 +181,8 @@ describe("ProductCard", () => {
         [
           "30402:owner_pubkey:listing-d",
           [
-            { id: "r2", kind: 1984 },
-            { id: "r3", kind: 1984 },
+            { id: "r2", kind: 1984, pubkey: "reporter-2" },
+            { id: "r3", kind: 1984, pubkey: "reporter-3" },
           ],
         ],
       ]);
@@ -190,7 +196,7 @@ describe("ProductCard", () => {
         }
       );
 
-      expect(screen.getByText("Reports: 3")).toBeInTheDocument();
+      expect(screen.getByText("Reports: 4")).toBeInTheDocument();
     });
   });
 });

@@ -53,20 +53,23 @@ export default function ProductCard({
     ? `30402:${productData.pubkey}:${productData.d}`
     : null;
 
-  const reportEventIds = new Set<string>();
+  const sellerReporters = new Set<string>();
   (reportsContext.profileReports.get(productData.pubkey) || []).forEach(
     (event) => {
-      if (event.id) reportEventIds.add(event.id);
+      if (event.pubkey) sellerReporters.add(event.pubkey);
     }
   );
+
+  const productReporters = new Set<string>();
   if (listingAddress) {
     (reportsContext.listingReports.get(listingAddress) || []).forEach(
       (event) => {
-        if (event.id) reportEventIds.add(event.id);
+        if (event.pubkey) productReporters.add(event.pubkey);
       }
     );
   }
-  const reportCount = reportEventIds.size;
+
+  const reportCount = sellerReporters.size + productReporters.size;
 
   const cardHoverStyle =
     "hover:shadow-purple-500/30 dark:hover:shadow-yellow-500/30 hover:scale-[1.01]";
@@ -161,11 +164,6 @@ export default function ProductCard({
                   Sold
                 </span>
               )}
-              {reportCount > 0 && (
-                <Chip color="warning" size="sm" variant="flat">
-                  Reports: {reportCount}
-                </Chip>
-              )}
               {productData.rawEvent && (
                 <Dropdown>
                   <DropdownTrigger>
@@ -213,15 +211,22 @@ export default function ProductCard({
             </div>
           </div>
         )}
-        <div className="mb-3">
-          <ProfileWithDropdown
-            pubkey={productData.pubkey}
-            dropDownKeys={
-              productData.pubkey === userPubkey
-                ? ["shop_profile"]
-                : ["shop", "inquiry", "copy_npub", "report"]
-            }
-          />
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <ProfileWithDropdown
+              pubkey={productData.pubkey}
+              dropDownKeys={
+                productData.pubkey === userPubkey
+                  ? ["shop_profile"]
+                  : ["shop", "inquiry", "copy_npub", "report"]
+              }
+            />
+          </div>
+          {router.pathname !== "/" && reportCount > 0 && (
+            <Chip color="warning" size="sm" variant="flat">
+              Reports: {reportCount}
+            </Chip>
+          )}
         </div>
         {router.pathname !== "/" && (
           <div className="mt-1 flex items-center justify-between">
@@ -274,6 +279,7 @@ export default function ProductCard({
         isOpen={showReportModal}
         onClose={() => setShowReportModal(false)}
         targetType="listing"
+        listingReportMode="seller-and-listing"
         pubkey={productData.pubkey}
         dTag={productData.d}
         productTitle={productData.title}

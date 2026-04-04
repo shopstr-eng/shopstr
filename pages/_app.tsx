@@ -533,6 +533,7 @@ function Shopstr({ props }: { props: AppProps }) {
         const relays = getLocalStorageData().relays || [];
         const readRelays = getLocalStorageData().readRelays || [];
         let allRelays = [...relays, ...readRelays];
+        console.log(allRelays)
 
         if (allRelays.length === 0) {
           allRelays = getDefaultRelays();

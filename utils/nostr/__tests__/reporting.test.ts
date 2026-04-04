@@ -96,6 +96,18 @@ describe("NIP-56 Reporting Helpers", () => {
         expect(aTag![2]).toBe(reason);
       }
     });
+
+    it("should omit seller p-tag when listing-only mode is requested", () => {
+      const { tags } = constructListingReportTags(
+        testPubkey,
+        testDTag,
+        "spam",
+        undefined,
+        "listing-only"
+      );
+
+      expect(tags).toEqual([["a", `30402:${testPubkey}:${testDTag}`, "spam"]]);
+    });
   });
 
   describe("constructReportEventTemplate", () => {
@@ -128,6 +140,21 @@ describe("NIP-56 Reporting Helpers", () => {
         ["a", `30402:${testPubkey}:${testDTag}`, "illegal"],
       ]);
       expect(template.content).toBe("Prohibited item");
+    });
+
+    it("should build listing-only report template when listing-only mode is requested", () => {
+      const template = constructReportEventTemplate(
+        "listing",
+        testPubkey,
+        "spam",
+        "Listing-only signal",
+        testDTag,
+        { listingReportMode: "listing-only" }
+      );
+
+      expect(template.tags).toEqual([
+        ["a", `30402:${testPubkey}:${testDTag}`, "spam"],
+      ]);
     });
 
     it("should throw an error if dTag is missing for a listing report", () => {

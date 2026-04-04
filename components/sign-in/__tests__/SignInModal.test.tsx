@@ -146,7 +146,9 @@ describe("SignInModal", () => {
       await user.type(input, "bunker://valid-token");
 
       await user.click(screen.getByTestId("bunker-submit-btn"));
-      await waitFor(() => expect(push).toHaveBeenCalledWith("/marketplace"));
+      await waitFor(() =>
+        expect(push).toHaveBeenCalledWith("/onboarding/user-profile")
+      );
     });
 
     it("shows a failure modal on connection error", async () => {

@@ -133,25 +133,28 @@ const Listing = () => {
     productData && !isZapsnag && productData.d
       ? `30402:${productData.pubkey}:${productData.d}`
       : null;
-  const listingReportEventIds = new Set<string>();
+  const sellerReporters = new Set<string>();
+  const productReporters = new Set<string>();
 
   if (productData && !isZapsnag) {
     (reportsContext.profileReports.get(productData.pubkey) || []).forEach(
       (event) => {
-        if (event.id) listingReportEventIds.add(event.id);
+        if (event.pubkey) sellerReporters.add(event.pubkey);
       }
     );
 
     if (listingAddress) {
       (reportsContext.listingReports.get(listingAddress) || []).forEach(
         (event) => {
-          if (event.id) listingReportEventIds.add(event.id);
+          if (event.pubkey) productReporters.add(event.pubkey);
         }
       );
     }
   }
 
-  const listingReportCount = listingReportEventIds.size;
+  const sellerReportCount = sellerReporters.size;
+  const productReportCount = productReporters.size;
+  const showReportSummary = sellerReportCount > 0 || productReportCount > 0;
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -299,10 +302,16 @@ const Listing = () => {
             </div>
           ) : (
             <>
-              {listingReportCount > 0 && (
+              {showReportSummary && (
                 <div className="mx-auto mb-3 w-full max-w-5xl rounded-md border border-yellow-500 bg-yellow-50 px-4 py-3 text-sm text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-300">
-                  Community signal: this listing has {listingReportCount} report
-                  {listingReportCount > 1 ? "s" : ""}.
+                  <p>
+                    Community signal: Seller Reports: {sellerReportCount} unique
+                    reporter{sellerReportCount === 1 ? "" : "s"}
+                  </p>
+                  <p>
+                    Community signal: Product Reports: {productReportCount} unique
+                    reporter{productReportCount === 1 ? "" : "s"}
+                  </p>
                 </div>
               )}
               <CheckoutCard

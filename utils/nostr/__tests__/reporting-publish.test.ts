@@ -67,4 +67,27 @@ describe("publishReportEvent", () => {
       content: "Listing violates policy",
     });
   });
+
+  it("publishes a listing-only report when listing-only mode is requested", async () => {
+    const nostr = {} as any;
+    const signer = {} as any;
+
+    await publishReportEvent(
+      nostr,
+      signer,
+      "listing",
+      "target-pubkey",
+      "spam",
+      "Listing-specific report",
+      "listing-d",
+      { listingReportMode: "listing-only" }
+    );
+
+    const [, , template] = mockFinalizeAndSendNostrEvent.mock.calls[0];
+    expect(template).toMatchObject({
+      kind: 1984,
+      tags: [["a", "30402:target-pubkey:listing-d", "spam"]],
+      content: "Listing-specific report",
+    });
+  });
 });

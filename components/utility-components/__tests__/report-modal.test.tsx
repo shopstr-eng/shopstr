@@ -141,10 +141,47 @@ describe("ReportModal", () => {
         "target-pubkey",
         "illegal",
         "Prohibited item details",
-        "listing-d"
+        "listing-d",
+        { listingReportMode: "seller-and-listing" }
       );
     });
 
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it("keeps the selected reason when select emits an empty value", async () => {
+    mockPublishReportEvent.mockResolvedValue(undefined);
+
+    renderWithProviders(
+      <ReportModal
+        isOpen={true}
+        onClose={jest.fn()}
+        targetType="listing"
+        pubkey="target-pubkey"
+        dTag="listing-d"
+        productTitle="Vintage Camera"
+      />
+    );
+
+    fireEvent.change(screen.getByLabelText("Reason"), {
+      target: { value: "illegal" },
+    });
+    fireEvent.change(screen.getByLabelText("Reason"), {
+      target: { value: "" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Submit" }));
+
+    await waitFor(() => {
+      expect(mockPublishReportEvent).toHaveBeenCalledWith(
+        expect.any(Object),
+        expect.any(Object),
+        "listing",
+        "target-pubkey",
+        "illegal",
+        undefined,
+        "listing-d",
+        { listingReportMode: "seller-and-listing" }
+      );
+    });
   });
 });

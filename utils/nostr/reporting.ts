@@ -17,6 +17,8 @@ export type ReportReason =
   | "impersonation"
   | "other";
 
+export type ListingReportMode = "seller-and-listing" | "listing-only";
+
 export const REPORT_REASONS: ReportReason[] = [
   "nudity",
   "malware",
@@ -44,12 +46,17 @@ export function constructListingReportTags(
   pubkey: string,
   dTag: string,
   reason: ReportReason,
-  content?: string
+  content?: string,
+  listingReportMode: ListingReportMode = "seller-and-listing"
 ): { tags: string[][]; content: string } {
-  const tags: string[][] = [
-    ["p", pubkey], //p for author
-    ["a", `30402:${pubkey}:${dTag}`, reason], // a for referencing the listing
-  ];
+  const listingTag: string[] = ["a", `30402:${pubkey}:${dTag}`, reason];
+  const tags: string[][] =
+    listingReportMode === "listing-only"
+      ? [listingTag]
+      : [
+          ["p", pubkey], // p for author
+          listingTag, // a for referencing the listing
+        ];
 
   return {
     tags,
@@ -62,7 +69,10 @@ export function constructReportEventTemplate(
   pubkey: string,
   reason: ReportReason,
   content?: string,
-  dTag?: string // required when targetType is "listing"
+  dTag?: string, // required when targetType is "listing"
+  options?: {
+    listingReportMode?: ListingReportMode;
+  }
 ): EventTemplate {
   let reportData: { tags: string[][]; content: string };
 
@@ -72,7 +82,13 @@ export function constructReportEventTemplate(
         "dTag is required when reporting a listing (addressable event)"
       );
     }
-    reportData = constructListingReportTags(pubkey, dTag, reason, content);
+    reportData = constructListingReportTags(
+      pubkey,
+      dTag,
+      reason,
+      content,
+      options?.listingReportMode ?? "seller-and-listing"
+    );
   } else {
     reportData = constructProfileReportTags(pubkey, reason, content);
   }
@@ -92,14 +108,18 @@ export async function publishReportEvent(
   pubkey: string,
   reason: ReportReason,
   content?: string,
-  dTag?: string
+  dTag?: string,
+  options?: {
+    listingReportMode?: ListingReportMode;
+  }
 ): Promise<NostrEvent> {
   const template = constructReportEventTemplate(
     targetType,
     pubkey,
     reason,
     content,
-    dTag
+    dTag,
+    options
   );
 
   return await finalizeAndSendNostrEvent(signer, nostr, template);

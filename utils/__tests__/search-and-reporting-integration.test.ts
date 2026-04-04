@@ -20,25 +20,26 @@ jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
 const mockFinalizeAndSendNostrEvent = finalizeAndSendNostrEvent as jest.Mock;
 
 function computeListingReportCount(
-  profileReports: Map<string, Array<{ id: string }>>,
-  listingReports: Map<string, Array<{ id: string }>>,
+  profileReports: Map<string, Array<{ id: string; pubkey: string }>>,
+  listingReports: Map<string, Array<{ id: string; pubkey: string }>>,
   sellerPubkey: string,
   dTag?: string
 ): number {
   const listingAddress = dTag ? `30402:${sellerPubkey}:${dTag}` : null;
-  const reportIds = new Set<string>();
+  const sellerReporters = new Set<string>();
+  const listingReporters = new Set<string>();
 
   (profileReports.get(sellerPubkey) || []).forEach((event) => {
-    if (event.id) reportIds.add(event.id);
+    if (event.pubkey) sellerReporters.add(event.pubkey);
   });
 
   if (listingAddress) {
     (listingReports.get(listingAddress) || []).forEach((event) => {
-      if (event.id) reportIds.add(event.id);
+      if (event.pubkey) listingReporters.add(event.pubkey);
     });
   }
 
-  return reportIds.size;
+  return sellerReporters.size + listingReporters.size;
 }
 
 describe("search + reporting integration", () => {
@@ -68,10 +69,18 @@ describe("search + reporting integration", () => {
     };
 
     const searchNostr = {
-      fetch: jest.fn().mockResolvedValue([remoteListing]),
+      subscribe: jest.fn().mockImplementation(async (_filters, params) => {
+        params.onevent?.(remoteListing as NostrEvent);
+        params.oneose?.();
+        return { close: jest.fn().mockResolvedValue(undefined) };
+      }),
     } as unknown as NostrManager;
 
-    const searchResults = await searchListingsNip50(searchNostr, "camera");
+    const searchResults = await searchListingsNip50(searchNostr, "camera", {
+      relayUrls: ["wss://relay.example"],
+      hardTimeoutMs: 200,
+      eoseGraceMs: 0,
+    });
     const mergedListings = mergeAndDeduplicateProducts(
       [localListing as NostrEvent],
       searchResults
@@ -134,12 +143,12 @@ describe("search + reporting integration", () => {
     );
 
     const reportCount = computeListingReportCount(
-      fetched.profileReports as Map<string, Array<{ id: string }>>,
-      fetched.listingReports as Map<string, Array<{ id: string }>>,
+      fetched.profileReports as Map<string, Array<{ id: string; pubkey: string }>>,
+      fetched.listingReports as Map<string, Array<{ id: string; pubkey: string }>>,
       "seller-1",
       "camera-1"
     );
 
-    expect(reportCount).toBe(1);
+    expect(reportCount).toBe(2);
   });
 });
