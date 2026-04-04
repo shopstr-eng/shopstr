@@ -103,51 +103,64 @@ function MarketplacePage({
   const searchBarRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const npub = router.query.npub;
-    if (npub && typeof npub[0] === "string") {
-      const slug = npub[0];
-      let pubkey: string | undefined;
+  const npubQuery = router.query.npub;
 
-      if (isNpub(slug)) {
-        try {
-          const { data } = nip19.decode(slug);
-          pubkey = data as string;
-        } catch {
-          return;
-        }
-      } else {
-        pubkey = findPubkeyByProfileSlug(slug, profileMapContext.profileData);
-      }
+  const slug =
+    typeof npubQuery === "string"
+      ? npubQuery
+      : Array.isArray(npubQuery)
+        ? npubQuery[0]
+        : "";
 
-      if (pubkey) {
-        setFocusedPubkey(pubkey);
-        setSelectedSection("shop");
-      }
+  if (!slug || typeof slug !== "string" || slug.trim().length === 0) return;
+
+  let pubkey: string | undefined;
+
+  if (isNpub(slug)) {
+    try {
+      const { data } = nip19.decode(slug);
+      pubkey = data as string;
+    } catch {
+      return;
     }
-  }, [router.query.npub, profileMapContext.profileData]);
+  } else {
+    pubkey = findPubkeyByProfileSlug(slug, profileMapContext.profileData);
+  }
+
+  if (pubkey) {
+    setFocusedPubkey(pubkey);
+    setSelectedSection("shop");
+  }
+}, [router.query.npub, profileMapContext.profileData]);
 
   useEffect(() => {
-    if (
-      focusedPubkey &&
-      !profileMapContext.isLoading &&
-      router.query.npub?.[0]
-    ) {
-      const currentSlug = router.query.npub[0] as string;
-      const canonicalSlug = getProfileSlug(
-        focusedPubkey,
-        profileMapContext.profileData
-      );
-      if (canonicalSlug && currentSlug !== canonicalSlug) {
-        router.replace(`/marketplace/${canonicalSlug}`, undefined, {
-          shallow: true,
-        });
-      }
-    }
-  }, [
+  const npubQuery = router.query.npub;
+
+  const currentSlug =
+    typeof npubQuery === "string"
+      ? npubQuery.trim()
+      : Array.isArray(npubQuery) && typeof npubQuery[0] === "string"
+        ? npubQuery[0].trim()
+        : "";
+
+  if (!focusedPubkey || profileMapContext.isLoading || !currentSlug) return;
+
+  const canonicalSlug = getProfileSlug(
     focusedPubkey,
-    profileMapContext.isLoading,
-    profileMapContext.profileData,
-  ]);
+    profileMapContext.profileData
+  );
+
+  if (canonicalSlug && currentSlug !== canonicalSlug) {
+    router.replace(`/marketplace/${canonicalSlug}`, undefined, {
+      shallow: true,
+    });
+  }
+}, [
+  focusedPubkey,
+  profileMapContext.isLoading,
+  profileMapContext.profileData,
+  router.query.npub,
+]);
 
   useEffect(() => {
     setIsFetchingReviews(true);
@@ -166,7 +179,9 @@ function MarketplacePage({
         for (const [pubkey, scores] of merchantScoresMap.entries()) {
           if (pubkey === focusedPubkey) {
             const averageScore =
-              scores.reduce((a, b) => a + b, 0) / scores.length;
+              Array.isArray(scores) && scores.length > 0
+    ? scores.reduce((a, b) => a + b, 0) / scores.length
+    : 0;
             setMerchantReview(averageScore);
           }
         }
