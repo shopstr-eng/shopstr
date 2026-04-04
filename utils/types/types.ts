@@ -26,7 +26,7 @@ export type {
 
 export type ItemType = "products" | "profiles" | "chats" | "communities";
 
-export interface NostrEvent extends Event {}
+export type NostrEvent = Event;
 
 export interface NostrMessageEvent extends NostrEvent {
   read: boolean;

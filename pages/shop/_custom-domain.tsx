@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
+import Link from "next/link";
 import StorefrontLayout from "@/components/storefront/storefront-layout";
 import MilkMarketSpinner from "@/components/utility-components/mm-spinner";
 
@@ -49,12 +50,12 @@ export default function CustomDomainPage() {
         <p className="mt-4 text-gray-500">
           This domain is not connected to any shop.
         </p>
-        <a
+        <Link
           href="https://milk.market"
           className="mt-6 rounded-lg bg-primary-blue px-6 py-3 font-bold text-white"
         >
           Visit Milk Market
-        </a>
+        </Link>
       </div>
     );
   }

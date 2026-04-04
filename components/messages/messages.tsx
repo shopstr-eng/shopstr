@@ -186,8 +186,9 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
               subject === "zapsnag-order")) ||
           (!isPayment && subject && subject === "listing-inquiry")
         ) {
-          plainText &&
+          if (plainText) {
             decryptedChat.push({ ...messageEvent, content: plainText });
+          }
         }
       }
       if (decryptedChat.length > 0) {
@@ -317,7 +318,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
       }).catch(() => {});
 
       setIsSendingDMLoading(false);
-    } catch (_) {
+    } catch {
       setFailureText("Error sending inquiry.");
       setShowFailureModal(true);
       setIsSendingDMLoading(false);

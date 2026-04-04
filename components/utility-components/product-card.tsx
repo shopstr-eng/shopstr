@@ -63,8 +63,8 @@ export default function ProductCard({
         relays: targetRelays,
       });
       window.open(`https://njump.me/${nevent}`, "_blank");
-    } catch (err) {
-      // console.error("Failed to generate njump link", err);
+    } catch {
+      // console.error("Failed to generate njump link");
     }
   };
 

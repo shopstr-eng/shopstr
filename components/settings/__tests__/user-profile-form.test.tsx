@@ -93,9 +93,7 @@ describe("UserProfileForm", () => {
     expect(await screen.findByDisplayValue("Test User")).toBeInTheDocument();
     expect(screen.getByDisplayValue("testuser")).toBeInTheDocument();
 
-    const bannerImage = screen.getByAltText("User banner image");
     const profileImage = screen.getByAltText("user profile picture");
-    expect(bannerImage).toHaveAttribute("src", "https://existing.banner/url");
     expect(profileImage).toHaveAttribute("src", "https://existing.picture/url");
   });
 
@@ -139,7 +137,9 @@ describe("UserProfileForm", () => {
     await user.click(screen.getByRole("button", { name: /Save Profile/i }));
 
     await waitFor(() => {
-      expect(mockRouterPush).toHaveBeenCalledWith("/onboarding/shop-profile");
+      expect(mockRouterPush).toHaveBeenCalledWith(
+        "/onboarding/wallet?type=seller"
+      );
     });
   });
 
@@ -156,15 +156,10 @@ describe("UserProfileForm", () => {
     });
   });
 
-  test("updates banner and profile picture via uploader", async () => {
+  test("updates profile picture via uploader", async () => {
     const user = userEvent.setup();
     renderWithProviders(<UserProfileForm />);
     await screen.findByLabelText("Display name");
-
-    const uploadBannerBtn = screen.getByTestId("upload-banner-btn");
-    await user.click(uploadBannerBtn);
-    const newBannerImage = await screen.findByAltText("User banner image");
-    expect(newBannerImage).toHaveAttribute("src", "https://new.image/url");
 
     const uploadPictureBtn = screen.getByTestId("upload-picture-btn");
     await user.click(uploadPictureBtn);

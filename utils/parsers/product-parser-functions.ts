@@ -106,20 +106,7 @@ export const parseTags = (productEvent: NostrEvent) => {
           parsedData.shippingCost = Number(cost);
           break;
         }
-        // TODO Deprecate Below after 11/07/2023
-        else if (values.length === 2) {
-          // [cost, currency]
-          const [cost, _currency] = values;
-          parsedData.shippingType = "Added Cost";
-          parsedData.shippingCost = Number(cost);
-          break;
-        } else if (values.length === 1) {
-          // [type]
-          const [shippingType] = values;
-          parsedData.shippingType = shippingType as ShippingOptionsType;
-          parsedData.shippingCost = 0;
-          break;
-        }
+
         break;
       case "d":
         parsedData.d = values[0];

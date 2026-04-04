@@ -78,21 +78,7 @@ describe("parseTags", () => {
     expect(result.shippingCost).toBe(10);
   });
 
-  it("should parse the legacy 2-value shipping tag", () => {
-    const event = { ...baseEvent, tags: [["shipping", "5", "USD"]] };
-    const result = parseTags(event)!;
 
-    expect(result.shippingType).toBe("Added Cost");
-    expect(result.shippingCost).toBe(5);
-  });
-
-  it("should parse the simple 1-value shipping tag", () => {
-    const event = { ...baseEvent, tags: [["shipping", "Free"]] };
-    const result = parseTags(event)!;
-
-    expect(result.shippingType).toBe("Free");
-    expect(result.shippingCost).toBe(0);
-  });
 
   it("should parse various content-warning tags as true", () => {
     const event1 = { ...baseEvent, tags: [["content-warning"]] };

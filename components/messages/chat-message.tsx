@@ -41,7 +41,7 @@ function isDecodableToken(token: string): boolean {
   try {
     getDecodedToken(token);
     return true;
-  } catch (e) {
+  } catch {
     return false;
   }
 }
@@ -143,7 +143,7 @@ const ChatMessage = ({
         orderData = parsed;
       }
     }
-  } catch (e) {}
+  } catch {}
 
   const handleCopyToken = (token: string) => {
     navigator.clipboard.writeText(token);
