@@ -32,7 +32,7 @@
     "chart.js": "4.5.1",
     "crypto-js": "4.2.0",
     "dexie": "3.2.4",
-    "dexie-react-hooks": "1.1.7",
+    "dexie-react-hooks": "4.4.0",
     "eslint": "8.57.0",
     "eslint-config-next": "13.3.0",
     "framer-motion": "10.16.4",
