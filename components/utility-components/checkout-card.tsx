@@ -48,6 +48,7 @@ import { RawEventModal, EventIdModal } from "./modals/event-modals";
 import { getLocalStorageJson } from "@/utils/safe-json";
 
 const SUMMARY_CHARACTER_LIMIT = 100;
+type CartDiscountsMap = Record<string, { code: string; percentage: number }>;
 
 export default function CheckoutCard({
   productData,
@@ -347,8 +348,11 @@ export default function CheckoutCard({
 
       // Store discount code if applied
       if (appliedDiscount > 0 && discountCode) {
-        const storedDiscounts = localStorage.getItem("cartDiscounts");
-        const discounts = storedDiscounts ? JSON.parse(storedDiscounts) : {};
+        const discounts = getLocalStorageJson<CartDiscountsMap>(
+          "cartDiscounts",
+          {},
+          { removeOnError: true }
+        );
         discounts[productData.pubkey] = {
           code: discountCode,
           percentage: appliedDiscount,

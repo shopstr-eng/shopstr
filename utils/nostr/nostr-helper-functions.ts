@@ -1315,18 +1315,56 @@ export interface LocalStorageInterface {
   bunkerRemotePubkey?: string;
   bunkerRelays?: string[];
   bunkerSecret?: string;
-  signer?: { [key: string]: any };
+  signer?:
+    | { type: "nip07" }
+    | { type: "nip46"; bunker: string; appPrivKey?: string }
+    | { type: "nsec"; encryptedPrivKey: string; pubkey?: string };
   nwcString?: string | null;
   nwcInfo?: string | null;
   migrationComplete?: boolean;
+}
+
+function isStoredSignerData(
+  value: unknown
+): value is NonNullable<LocalStorageInterface["signer"]> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+
+  const candidate = value as {
+    type?: unknown;
+    bunker?: unknown;
+    appPrivKey?: unknown;
+    encryptedPrivKey?: unknown;
+    pubkey?: unknown;
+  };
+
+  if (candidate.type === "nip07") {
+    return true;
+  }
+
+  if (candidate.type === "nip46") {
+    return (
+      typeof candidate.bunker === "string" &&
+      (candidate.appPrivKey === undefined ||
+        typeof candidate.appPrivKey === "string")
+    );
+  }
+
+  if (candidate.type === "nsec") {
+    return (
+      typeof candidate.encryptedPrivKey === "string" &&
+      (candidate.pubkey === undefined || typeof candidate.pubkey === "string")
+    );
+  }
+
+  return false;
 }
 
 export const getLocalStorageData = (): LocalStorageInterface => {
   const isStringArray = (value: unknown): value is string[] =>
     Array.isArray(value) && value.every((entry) => typeof entry === "string");
   const isArray = (value: unknown): value is unknown[] => Array.isArray(value);
-  const isObject = (value: unknown): value is Record<string, unknown> =>
-    typeof value === "object" && value !== null && !Array.isArray(value);
 
   let signInMethod;
   let encryptedPrivateKey;
@@ -1342,7 +1380,7 @@ export const getLocalStorageData = (): LocalStorageInterface => {
   let bunkerRemotePubkey;
   let bunkerRelays;
   let bunkerSecret;
-  let signer;
+  let signer: LocalStorageInterface["signer"] | undefined;
   let migrationComplete;
   let nwcString;
   let nwcInfo;
@@ -1471,12 +1509,12 @@ export const getLocalStorageData = (): LocalStorageInterface => {
       ? localStorage.getItem(LOCALSTORAGECONSTANTS.bunkerSecret)
       : undefined;
 
-    signer = getLocalStorageJson<Record<string, unknown> | undefined>(
+    signer = getLocalStorageJson<LocalStorageInterface["signer"] | undefined>(
       LOCALSTORAGECONSTANTS.signer,
       undefined,
       {
         removeOnError: true,
-        validate: (value): value is Record<string, unknown> => isObject(value),
+        validate: isStoredSignerData,
       }
     );
     if (!signer) {
@@ -1495,14 +1533,17 @@ export const getLocalStorageData = (): LocalStorageInterface => {
           signer = {
             type: "nip46",
             bunker: bunker,
-            appPrivKey: clientPrivkey,
+            appPrivKey:
+              typeof clientPrivkey === "string" ? clientPrivkey : undefined,
           };
           break;
         case "nsec":
-          signer = {
-            type: "nsec",
-            encryptedPrivKey: encryptedPrivateKey,
-          };
+          if (typeof encryptedPrivateKey === "string") {
+            signer = {
+              type: "nsec",
+              encryptedPrivKey: encryptedPrivateKey,
+            };
+          }
           break;
       }
     }

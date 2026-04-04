@@ -44,4 +44,30 @@ describe("getLocalStorageData", () => {
     expect(data.history).toEqual([]);
     expect(data.bunkerRelays).toEqual([]);
   });
+
+  it("falls back to signInMethod signer when stored signer shape is invalid", () => {
+    localStorage.setItem("signInMethod", "extension");
+    localStorage.setItem("signer", JSON.stringify({ type: "nip46" }));
+
+    const data = getLocalStorageData();
+
+    expect(data.signer).toEqual({ type: "nip07" });
+  });
+
+  it("keeps valid stored signer shape", () => {
+    localStorage.setItem(
+      "signer",
+      JSON.stringify({
+        type: "nsec",
+        encryptedPrivKey: "ncryptsec1mock",
+      })
+    );
+
+    const data = getLocalStorageData();
+
+    expect(data.signer).toEqual({
+      type: "nsec",
+      encryptedPrivKey: "ncryptsec1mock",
+    });
+  });
 });
