@@ -872,51 +872,68 @@ export function buildReportIndexes(reportEvents: NostrEvent[]): {
   profileReports: Map<string, NostrEvent[]>;
   listingReports: Map<string, NostrEvent[]>;
 } {
-  const profileReportsById = new Map<string, Map<string, NostrEvent>>();
-  const listingReportsById = new Map<string, Map<string, NostrEvent>>();
+  const profileReportsByReporter = new Map<string, Map<string, NostrEvent>>();
+  const listingReportsByReporter = new Map<string, Map<string, NostrEvent>>();
 
   for (const event of reportEvents) {
-    if (event.kind !== 1984 || !event.id) continue;
+    if (event.kind !== 1984 || !event.pubkey) continue;
 
-    const profileTag = event.tags.find(
-      (tag: string[]) => tag[0] === "p" && !!tag[1]
-    );
-    const listingTag = event.tags.find(
-      (tag: string[]) => tag[0] === "a" && !!tag[1]
-    );
+    const tags = Array.isArray(event.tags) ? event.tags : [];
 
-    const profilePubkey = profileTag?.[1];
-    if (profilePubkey) {
-      if (!profileReportsById.has(profilePubkey)) {
-        profileReportsById.set(profilePubkey, new Map());
+    const profileTargets = tags
+      .filter(
+        (tag: string[]): tag is [string, string, ...string[]] =>
+          tag[0] === "p" && typeof tag[1] === "string" && tag[1].length > 0
+      )
+      .map((tag) => tag[1]);
+
+    const listingTargets = tags
+      .filter(
+        (tag: string[]): tag is [string, string, ...string[]] =>
+          tag[0] === "a" && typeof tag[1] === "string" && tag[1].length > 0
+      )
+      .map((tag) => tag[1]);
+
+    for (const profilePubkey of profileTargets) {
+      if (!profileReportsByReporter.has(profilePubkey)) {
+        profileReportsByReporter.set(profilePubkey, new Map());
       }
-      profileReportsById.get(profilePubkey)!.set(event.id, event);
+
+      const reportsByReporter = profileReportsByReporter.get(profilePubkey)!;
+      const existing = reportsByReporter.get(event.pubkey);
+      if (!existing || event.created_at >= existing.created_at) {
+        reportsByReporter.set(event.pubkey, event);
+      }
     }
 
-    const listingAddress = listingTag?.[1];
-    if (listingAddress) {
-      if (!listingReportsById.has(listingAddress)) {
-        listingReportsById.set(listingAddress, new Map());
+    for (const listingAddress of listingTargets) {
+      if (!listingReportsByReporter.has(listingAddress)) {
+        listingReportsByReporter.set(listingAddress, new Map());
       }
-      listingReportsById.get(listingAddress)!.set(event.id, event);
+
+      const reportsByReporter = listingReportsByReporter.get(listingAddress)!;
+      const existing = reportsByReporter.get(event.pubkey);
+      if (!existing || event.created_at >= existing.created_at) {
+        reportsByReporter.set(event.pubkey, event);
+      }
     }
   }
 
   const profileReports = new Map<string, NostrEvent[]>();
-  profileReportsById.forEach((eventsById, pubkey) => {
+  profileReportsByReporter.forEach((eventsByReporter, pubkey) => {
     profileReports.set(
       pubkey,
-      Array.from(eventsById.values()).sort(
+      Array.from(eventsByReporter.values()).sort(
         (a, b) => b.created_at - a.created_at
       )
     );
   });
 
   const listingReports = new Map<string, NostrEvent[]>();
-  listingReportsById.forEach((eventsById, listingAddress) => {
+  listingReportsByReporter.forEach((eventsByReporter, listingAddress) => {
     listingReports.set(
       listingAddress,
-      Array.from(eventsById.values()).sort(
+      Array.from(eventsByReporter.values()).sort(
         (a, b) => b.created_at - a.created_at
       )
     );
@@ -989,7 +1006,7 @@ export const fetchReports = async (
       }
 
       const relayReports = fetchedEvents.filter((event) => event.kind === 1984);
-
+      console.log("Relay Reports:",relayReports);
       const mergedReports = mergeAndDeduplicateReports(
         reportsFromDb,
         relayReports

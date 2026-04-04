@@ -2,7 +2,12 @@ import { ReactNode } from "react";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { useNip50Search } from "../use-nip50-search";
 import { NostrContext } from "@/components/utility-components/nostr-context-provider";
-import { searchListingsNip50 } from "@/utils/nostr/nip50-search";
+import {
+  NIP50_EOSE_GRACE_MS,
+  NIP50_SEARCH_RELAYS,
+  NIP50_SEARCH_TIMEOUT_MS,
+  searchListingsNip50,
+} from "@/utils/nostr/nip50-search";
 import { cacheEventsToDatabase } from "@/utils/db/db-client";
 
 jest.mock("@/utils/nostr/nip50-search", () => ({
@@ -54,7 +59,13 @@ describe("useNip50Search", () => {
       expect(mockSearchListingsNip50).toHaveBeenCalledWith(
         mockNostr,
         "camera",
-        "wss://relay.nostr.band"
+        expect.objectContaining({
+          relayUrls: NIP50_SEARCH_RELAYS,
+          hardTimeoutMs: NIP50_SEARCH_TIMEOUT_MS,
+          eoseGraceMs: NIP50_EOSE_GRACE_MS,
+          signal: expect.any(AbortSignal),
+          onUpdate: expect.any(Function),
+        })
       );
     });
   });
@@ -113,5 +124,64 @@ describe("useNip50Search", () => {
     expect(mockCacheEventsToDatabase).toHaveBeenCalledWith([
       expect.objectContaining({ id: "valid-1", kind: 30402 }),
     ]);
+  });
+
+  it("ignores stale results when query changes quickly", async () => {
+    let resolveFirst: ((events: any[]) => void) | undefined;
+    mockSearchListingsNip50.mockImplementationOnce(
+      () =>
+        new Promise<any[]>((resolve) => {
+          resolveFirst = resolve;
+        })
+    );
+    mockSearchListingsNip50.mockResolvedValueOnce([
+      {
+        id: "new-1",
+        pubkey: "pub-new",
+        sig: "sig-new",
+        kind: 30402,
+        created_at: 5,
+        tags: [["d", "new-listing"]],
+      },
+    ]);
+
+    const { rerender, result } = renderHook(
+      ({ query }) => useNip50Search(query, 10),
+      {
+        wrapper,
+        initialProps: { query: "camera" },
+      }
+    );
+
+    act(() => {
+      jest.advanceTimersByTime(10);
+    });
+
+    rerender({ query: "camera pro" });
+
+    act(() => {
+      jest.advanceTimersByTime(10);
+    });
+
+    await waitFor(() => {
+      expect(mockSearchListingsNip50).toHaveBeenCalledTimes(2);
+    });
+
+    resolveFirst?.([
+      {
+        id: "stale-1",
+        pubkey: "pub-stale",
+        sig: "sig-stale",
+        kind: 30402,
+        created_at: 1,
+        tags: [["d", "stale-listing"]],
+      },
+    ]);
+
+    await waitFor(() => {
+      expect(result.current.results).toEqual([
+        expect.objectContaining({ id: "new-1" }),
+      ]);
+    });
   });
 });

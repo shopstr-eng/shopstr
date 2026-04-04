@@ -12,6 +12,7 @@ import {
 } from "@nextui-org/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
+  ListingReportMode,
   publishReportEvent,
   REPORT_REASONS,
   ReportReason,
@@ -35,6 +36,7 @@ export default function ReportModal({
   pubkey,
   dTag,
   productTitle,
+  listingReportMode = "seller-and-listing",
 }: {
   isOpen: boolean;
   onClose: () => void;
@@ -42,6 +44,7 @@ export default function ReportModal({
   pubkey: string;
   dTag?: string;
   productTitle?: string;
+  listingReportMode?: ListingReportMode;
 }) {
   const {
     signer,
@@ -108,7 +111,8 @@ export default function ReportModal({
         pubkey,
         selectedReason,
         details.trim() || undefined,
-        dTag
+        dTag,
+        { listingReportMode }
       );
       if (event) {
         addNewlyCreatedReportEvent(event);
@@ -148,9 +152,12 @@ export default function ReportModal({
             <Select
               label="Reason"
               selectedKeys={[selectedReason]}
-              onChange={(e) =>
-                setSelectedReason(e.target.value as ReportReason)
-              }
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val) {
+                  setSelectedReason(val as ReportReason);
+                }
+              }}
               className="text-light-text dark:text-dark-text"
               data-testid="report-reason-select"
             >

@@ -993,6 +993,7 @@ export default function CheckoutCard({
           isOpen={showReportModal}
           onClose={() => setShowReportModal(false)}
           targetType="listing"
+          listingReportMode="listing-only"
           pubkey={productData.pubkey}
           dTag={productData.d}
           productTitle={productData.title}

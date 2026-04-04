@@ -89,6 +89,75 @@ describe("buildReportIndexes", () => {
     expect(profileReports.size).toBe(0);
     expect(listingReports.size).toBe(0);
   });
+
+  it("keeps only the latest report from the same reporter for the same seller", () => {
+    const older = makeReportEvent({
+      id: "seller-old",
+      reporterPubkey: "reporter-1",
+      targetPubkey: "seller-1",
+      reason: "spam",
+      createdAt: 10,
+    });
+
+    const newer = makeReportEvent({
+      id: "seller-new",
+      reporterPubkey: "reporter-1",
+      targetPubkey: "seller-1",
+      reason: "illegal",
+      createdAt: 20,
+    });
+
+    const { profileReports } = buildReportIndexes([older, newer]);
+    const sellerReports = profileReports.get("seller-1") || [];
+
+    expect(sellerReports).toHaveLength(1);
+    expect(sellerReports[0]?.id).toBe("seller-new");
+  });
+
+  it("keeps only the latest report from the same reporter for the same listing", () => {
+    const older = makeReportEvent({
+      id: "listing-old",
+      reporterPubkey: "reporter-2",
+      targetPubkey: "seller-1",
+      reason: "spam",
+      createdAt: 10,
+      listingAddress: "30402:seller-1:listing-d",
+    });
+
+    const newer = makeReportEvent({
+      id: "listing-new",
+      reporterPubkey: "reporter-2",
+      targetPubkey: "seller-1",
+      reason: "illegal",
+      createdAt: 30,
+      listingAddress: "30402:seller-1:listing-d",
+    });
+
+    const { listingReports } = buildReportIndexes([older, newer]);
+    const listingEvents = listingReports.get("30402:seller-1:listing-d") || [];
+
+    expect(listingEvents).toHaveLength(1);
+    expect(listingEvents[0]?.id).toBe("listing-new");
+  });
+
+  it("does not increment seller index when report has only a listing target", () => {
+    const listingOnlyReport: NostrEvent = {
+      id: "listing-only-1",
+      pubkey: "reporter-3",
+      created_at: 40,
+      kind: 1984,
+      tags: [["a", "30402:seller-1:listing-d", "spam"]],
+      content: "listing only",
+      sig: "sig",
+    } as NostrEvent;
+
+    const { profileReports, listingReports } = buildReportIndexes([
+      listingOnlyReport,
+    ]);
+
+    expect(profileReports.get("seller-1")).toBeUndefined();
+    expect(listingReports.get("30402:seller-1:listing-d")?.length).toBe(1);
+  });
 });
 
 describe("fetchReports", () => {
