@@ -54,6 +54,7 @@ import {
 } from "../utils/types/types";
 import { Proof } from "@cashu/cashu-ts";
 import TopNav from "@/components/nav-top";
+import PageLoadingBar from "@/components/page-loading-bar";
 import DynamicHead from "../components/dynamic-meta-head";
 import StructuredData from "../components/structured-data";
 import {
@@ -692,6 +693,7 @@ function Shopstr({ props }: { props: AppProps }) {
         ssrOgMeta={pageProps.ogMeta ?? null}
       />
       <StructuredData />
+      <PageLoadingBar />
       <CommunityContext.Provider value={communityContext}>
         <RelaysContext.Provider value={relaysContext}>
           <BlossomContext.Provider value={blossomContext}>
