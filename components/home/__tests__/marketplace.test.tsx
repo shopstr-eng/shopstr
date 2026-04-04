@@ -5,10 +5,15 @@ import {
   ShopMapContext,
   ReviewsContext,
   FollowsContext,
+  ProfileMapContext,
 } from "@/utils/context/context";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import { nip19 } from "nostr-tools";
 import { useRouter } from "next/router";
+import {
+  findPubkeyByProfileSlug,
+  isNpub,
+} from "@/utils/url-slugs";
 
 jest.mock("@/utils/url-slugs", () => ({
   getListingSlug: jest.fn(),
@@ -64,13 +69,18 @@ const renderComponent = ({
   isLoggedIn?: boolean;
 }) => {
   const mockRouterPush = jest.fn();
+  const mockRouterReplace = jest.fn();
   (useRouter as jest.Mock).mockReturnValue({
     push: mockRouterPush,
+    replace: mockRouterReplace,
     query: routerQuery,
     pathname: "/marketplace",
     asPath: "/marketplace",
   });
-  if (routerQuery.npub) {
+  if (
+    typeof routerQuery.npub === "string" ||
+    (Array.isArray(routerQuery.npub) && typeof routerQuery.npub[0] === "string")
+  ) {
     (nip19.decode as jest.Mock).mockReturnValue({ data: "decoded-pubkey" });
   }
 
@@ -106,35 +116,49 @@ const renderComponent = ({
           updateShopData: jest.fn(),
         }}
       >
-        <ReviewsContext.Provider
+        <ProfileMapContext.Provider
           value={{
-            merchantReviewsData: new Map(),
-            productReviewsData: new Map(),
+            profileData: new Map(),
             isLoading: false,
-            updateMerchantReviewsData: jest.fn(),
-            updateProductReviewsData: jest.fn(),
+            updateProfileData: jest.fn(),
           }}
         >
-          <FollowsContext.Provider
+          <ReviewsContext.Provider
             value={{
-              followList: [],
-              firstDegreeFollowsLength: 0,
+              merchantReviewsData: new Map(),
+              productReviewsData: new Map(),
               isLoading: false,
+              updateMerchantReviewsData: jest.fn(),
+              updateProductReviewsData: jest.fn(),
             }}
           >
-            <MarketplacePage
-              focusedPubkey={focusedPubkey}
-              setFocusedPubkey={setFocusedPubkey}
-              selectedSection={focusedPubkey ? "shop" : ""}
-              setSelectedSection={setSelectedSection}
-            />
-          </FollowsContext.Provider>
-        </ReviewsContext.Provider>
+            <FollowsContext.Provider
+              value={{
+                followList: [],
+                firstDegreeFollowsLength: 0,
+                isLoading: false,
+              }}
+            >
+              <MarketplacePage
+                focusedPubkey={focusedPubkey}
+                setFocusedPubkey={setFocusedPubkey}
+                selectedSection={focusedPubkey ? "shop" : ""}
+                setSelectedSection={setSelectedSection}
+              />
+            </FollowsContext.Provider>
+          </ReviewsContext.Provider>
+        </ProfileMapContext.Provider>
       </ShopMapContext.Provider>
     </SignerContext.Provider>
   );
 
-  return { setFocusedPubkey, setSelectedSection, mockRouterPush, mockOnOpen };
+  return {
+    setFocusedPubkey,
+    setSelectedSection,
+    mockRouterPush,
+    mockRouterReplace,
+    mockOnOpen,
+  };
 };
 
 describe("MarketplacePage Component", () => {
@@ -150,6 +174,9 @@ describe("MarketplacePage Component", () => {
 
   beforeEach(() => {
     (nip19.decode as jest.Mock).mockClear();
+    (findPubkeyByProfileSlug as jest.Mock).mockReset();
+    (isNpub as jest.Mock).mockReset();
+    (isNpub as jest.Mock).mockReturnValue(true);
   });
 
   it("renders general view when no shop is focused", () => {
@@ -206,4 +233,33 @@ describe("MarketplacePage Component", () => {
     await userEvent.click(screen.getByRole("button", { name: "Message" }));
     expect(mockOnOpen).toHaveBeenCalled();
   });
+
+  it.each([
+    { label: "undefined", npub: undefined },
+    { label: "empty string", npub: "" },
+    { label: "string value", npub: "not-an-npub" },
+    { label: "string[]", npub: ["not-an-npub", "extra-segment"] },
+  ])(
+    "handles malformed npub query safely for %s",
+    ({ npub }) => {
+      (isNpub as jest.Mock).mockReturnValue(false);
+      (findPubkeyByProfileSlug as jest.Mock).mockReturnValue(undefined);
+
+      const renderSafely = () => {
+        renderComponent({
+          routerQuery: npub === undefined ? {} : { npub },
+        });
+      };
+
+      expect(renderSafely).not.toThrow();
+      expect(nip19.decode).not.toHaveBeenCalled();
+      expect(findPubkeyByProfileSlug).toHaveBeenCalledTimes(
+        typeof npub === "string" && npub.trim().length > 0
+          ? 1
+          : Array.isArray(npub) && typeof npub[0] === "string" && npub[0].trim().length > 0
+            ? 1
+            : 0
+      );
+    }
+  );
 });
