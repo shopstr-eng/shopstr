@@ -27,6 +27,7 @@ interface OrderSummaryData {
   shippingCost?: string;
   selectedSize?: string;
   selectedVolume?: string;
+  selectedWeight?: string;
   selectedBulkOption?: string;
   shippingAddress?: string;
   pickupLocation?: string;
@@ -45,6 +46,7 @@ interface OrderSummaryData {
     pickupLocation?: string;
     selectedSize?: string;
     selectedVolume?: string;
+    selectedWeight?: string;
     selectedBulkOption?: string;
   }>;
 }
@@ -100,7 +102,11 @@ export default function OrderSummary() {
           }
         } catch {}
       }
-      const shuffled = products.sort(() => Math.random() - 0.5).slice(0, 4);
+      for (let i = products.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [products[i], products[j]] = [products[j], products[i]];
+      }
+      const shuffled = products.slice(0, 4);
       setLatestProducts(shuffled);
     }
   }, [productContext.isLoading, productContext.productEvents, orderData]);
@@ -195,6 +201,9 @@ export default function OrderSummary() {
                           {item.selectedVolume && (
                             <span>Volume: {item.selectedVolume}</span>
                           )}
+                          {item.selectedWeight && (
+                            <span>Weight: {item.selectedWeight}</span>
+                          )}
                           {item.selectedBulkOption && (
                             <span>Bundle: {item.selectedBulkOption} units</span>
                           )}
@@ -235,6 +244,11 @@ export default function OrderSummary() {
                     {orderData.selectedVolume && (
                       <p className="text-sm text-gray-600 dark:text-gray-400">
                         Volume: {orderData.selectedVolume}
+                      </p>
+                    )}
+                    {orderData.selectedWeight && (
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        Weight: {orderData.selectedWeight}
                       </p>
                     )}
                     {orderData.selectedBulkOption && (

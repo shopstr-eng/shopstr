@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useContext } from "react";
 import { useRouter } from "next/router";
+import Link from "next/link";
 import {
   Button,
   Modal,
@@ -164,7 +165,9 @@ export default function Component() {
           ? product.bulkPrice
           : product.volumePrice !== undefined
             ? product.volumePrice
-            : product.price;
+            : product.weightPrice !== undefined
+              ? product.weightPrice
+              : product.price;
       const qty = quantities[product.id] || 1;
       const discount = appliedDiscounts[product.pubkey] || 0;
       const discountedPrice =
@@ -193,9 +196,13 @@ export default function Component() {
         sessionStorage.getItem("sf_seller_pubkey") ||
         localStorage.getItem("sf_seller_pubkey") ||
         "";
-      const fullCart: ProductData[] = localStorage.getItem("cart")
-        ? JSON.parse(localStorage.getItem("cart") as string)
-        : [];
+      let fullCart: ProductData[] = [];
+      try {
+        const raw = localStorage.getItem("cart");
+        if (raw) fullCart = JSON.parse(raw);
+      } catch {
+        localStorage.removeItem("cart");
+      }
 
       let cartList = fullCart;
       if (sfPk) {
@@ -219,7 +226,13 @@ export default function Component() {
       // Load saved discount codes
       const storedDiscounts = localStorage.getItem("cartDiscounts");
       if (storedDiscounts) {
-        const discounts = JSON.parse(storedDiscounts);
+        let discounts;
+        try {
+          discounts = JSON.parse(storedDiscounts);
+        } catch {
+          localStorage.removeItem("cartDiscounts");
+          return;
+        }
         const codes: { [pubkey: string]: string } = {};
         const applied: { [pubkey: string]: number } = {};
 
@@ -323,9 +336,13 @@ export default function Component() {
   };
 
   const handleRemoveFromCart = (productId: string) => {
-    const cartContent = localStorage.getItem("cart")
-      ? JSON.parse(localStorage.getItem("cart") as string)
-      : [];
+    let cartContent: ProductData[] = [];
+    try {
+      const raw = localStorage.getItem("cart");
+      if (raw) cartContent = JSON.parse(raw);
+    } catch {
+      localStorage.removeItem("cart");
+    }
     if (cartContent.length > 0) {
       const updatedCart = cartContent.filter(
         (obj: ProductData) => obj.id !== productId
@@ -371,7 +388,12 @@ export default function Component() {
 
         // Save to localStorage
         const storedDiscounts = localStorage.getItem("cartDiscounts");
-        const discounts = storedDiscounts ? JSON.parse(storedDiscounts) : {};
+        let discounts: { [pubkey: string]: { code: string; percentage: number } } = {};
+        try {
+          if (storedDiscounts) discounts = JSON.parse(storedDiscounts);
+        } catch {
+          localStorage.removeItem("cartDiscounts");
+        }
         discounts[pubkey] = {
           code: code,
           percentage: result.discount_percentage,
@@ -402,7 +424,13 @@ export default function Component() {
     // Remove from localStorage
     const storedDiscounts = localStorage.getItem("cartDiscounts");
     if (storedDiscounts) {
-      const discounts = JSON.parse(storedDiscounts);
+      let discounts;
+      try {
+        discounts = JSON.parse(storedDiscounts);
+      } catch {
+        localStorage.removeItem("cartDiscounts");
+        return;
+      }
       delete discounts[pubkey];
       localStorage.setItem("cartDiscounts", JSON.stringify(discounts));
     }
@@ -414,7 +442,9 @@ export default function Component() {
         ? product.bulkPrice
         : product.volumePrice !== undefined
           ? product.volumePrice
-          : product.price;
+          : product.weightPrice !== undefined
+            ? product.weightPrice
+            : product.price;
 
     if (
       product.currency.toLowerCase() === "sats" ||
@@ -488,9 +518,9 @@ export default function Component() {
             <div className="rounded-lg border-2 border-yellow-400 bg-yellow-50 p-3 text-sm text-yellow-800 dark:border-yellow-600 dark:bg-yellow-900/20 dark:text-yellow-200">
               {excludedItemCount} item(s) from other sellers are not shown
               because you are checking out from a storefront. Visit your{" "}
-              <a href="/cart" className="font-bold underline">
+              <Link href="/cart" className="font-bold underline">
                 full cart
-              </a>{" "}
+              </Link>{" "}
               to see all items.
             </div>
           </div>
@@ -531,7 +561,9 @@ export default function Component() {
                                           ? `${product.bulkPrice} ${product.currency}`
                                           : product.volumePrice !== undefined
                                             ? `${product.volumePrice} ${product.currency}`
-                                            : `${product.price} ${product.currency}`}
+                                            : product.weightPrice !== undefined
+                                              ? `${product.weightPrice} ${product.currency}`
+                                              : `${product.price} ${product.currency}`}
                                       </p>
                                       {product.currency.toLowerCase() !==
                                         "sats" &&

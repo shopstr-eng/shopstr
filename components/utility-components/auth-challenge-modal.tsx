@@ -15,7 +15,7 @@ function sanitizeURL(s: string) {
     if (url.protocol !== "https:" && url.protocol !== "http:")
       throw new Error("invalid protocol");
     return url.href;
-  } catch (e) {
+  } catch {
     return null;
   }
 }
@@ -42,9 +42,11 @@ export default function AuthChallengeModal({
   const onCancel = () => {
     if (actionOnCancel) actionOnCancel();
     setIsOpen(false);
-    onCancelRouteTo
-      ? router.push(onCancelRouteTo)
-      : router.push("/marketplace");
+    if (onCancelRouteTo) {
+      router.push(onCancelRouteTo);
+    } else {
+      router.push("/marketplace");
+    }
   };
 
   return (
