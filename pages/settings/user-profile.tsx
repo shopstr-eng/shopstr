@@ -1,4 +1,4 @@
-import { useEffect, useState, useContext, useMemo } from "react";
+import { useEffect, useRef, useState, useContext, useMemo } from "react";
 import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs";
 import { ProfileMapContext } from "@/utils/context/context";
 import { useForm, Controller } from "react-hook-form";
@@ -62,30 +62,32 @@ const UserProfilePage = () => {
     return "https://robohash.org/" + userPubkey;
   }, [userPubkey]);
 
+  const contextLoadedRef = useRef(false);
   useEffect(() => {
     if (!userPubkey) return;
+    if (contextLoadedRef.current) return;
     setIsFetchingProfile(true);
-    const profileMap = profileContext.profileData;
-    const profile = profileMap.has(userPubkey)
-      ? profileMap.get(userPubkey)
-      : undefined;
-    if (profile) {
-      reset(profile.content);
-    }
-    setIsFetchingProfile(false);
+    fetch(`/api/db/fetch-profile?pubkey=${encodeURIComponent(userPubkey)}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (contextLoadedRef.current) return;
+        if (data?.profile?.content) reset(data.profile.content);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!contextLoadedRef.current) setIsFetchingProfile(false);
+      });
+  }, [userPubkey, reset]);
 
-    if (signer instanceof NostrNSecSigner) {
-      const nsecSigner = signer as NostrNSecSigner;
-      nsecSigner._getNSec().then(
-        (nsec) => {
-          setUserNSec(nsec);
-        },
-        (err: unknown) => {
-          console.error(err);
-        }
-      );
-    }
-  }, [profileContext, userPubkey, signer, reset]);
+  useEffect(() => {
+    if (!userPubkey) return;
+    const profile = profileContext.profileData.get(userPubkey);
+    if (!profile) return;
+    contextLoadedRef.current = true;
+    setIsFetchingProfile(true);
+    reset(profile.content);
+    setIsFetchingProfile(false);
+  }, [profileContext, userPubkey, reset]);
 
   const onSubmit = async (data: { [x: string]: string }) => {
     if (!userPubkey) throw new Error("pubkey is undefined");
@@ -223,7 +225,16 @@ const UserProfilePage = () => {
                   ) : (
                     <EyeIcon
                       className="h-6 w-6 flex-shrink-0 px-1 text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-yellow-700"
-                      onClick={() => {
+                      onClick={async () => {
+                        // Only decrypt nsec when user explicitly asks to see it.
+                        if (!userNSec && signer instanceof NostrNSecSigner) {
+                          try {
+                            const nsec = await (signer as NostrNSecSigner)._getNSec();
+                            setUserNSec(nsec);
+                          } catch (err) {
+                            console.error(err);
+                          }
+                        }
                         setViewState("shown");
                       }}
                     />

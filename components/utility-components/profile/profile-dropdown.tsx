@@ -59,6 +59,23 @@ export const ProfileWithDropdown = ({
   const { isOpen, onOpen, onClose } = useDisclosure();
 
   useEffect(() => {
+    if (!pubkey) return;
+    fetch(`/api/db/fetch-profile?pubkey=${encodeURIComponent(pubkey)}`)
+      .then((r) => r.json())
+      .then((data) => {
+        const content = data?.profile?.content;
+        if (!content) return;
+        setDisplayName(() => {
+          let name = content.name || npub;
+          name = name.length > 15 ? name.slice(0, 15) + "..." : name;
+          return name;
+        });
+        if (content.picture) setPfp(content.picture);
+      })
+      .catch(() => {});
+  }, [pubkey, npub]);
+
+  useEffect(() => {
     const profileMap = profileContext.profileData;
     const profile = profileMap.has(pubkey) ? profileMap.get(pubkey) : undefined;
     setDisplayName(() => {
