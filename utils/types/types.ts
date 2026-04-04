@@ -5,7 +5,7 @@ export type ItemType = "products" | "profiles" | "chats" | "communities";
 type ProductFormValue = [key: string, ...values: string[]];
 export type ProductFormValues = ProductFormValue[];
 
-export interface NostrEvent extends Event {}
+export type NostrEvent = Event;
 
 export interface NostrMessageEvent extends NostrEvent {
   read: boolean;
