@@ -5,7 +5,6 @@ import { deleteEvent } from "@/utils/nostr/nostr-helper-functions";
 import { NostrEvent } from "../utils/types/types";
 import {
   ProductContext,
-  ProfileMapContext,
   FollowsContext,
 } from "../utils/context/context";
 import ProductCard from "./utility-components/product-card";
@@ -51,7 +50,6 @@ const DisplayProducts = ({
   const [productEvents, setProductEvents] = useState<ProductData[]>([]);
   const [isProductsLoading, setIsProductLoading] = useState(true);
   const productEventContext = useContext(ProductContext);
-  const profileMapContext = useContext(ProfileMapContext);
   const followsContext = useContext(FollowsContext);
   const [focusedProduct, setFocusedProduct] = useState<ProductData>();
   const [showModal, setShowModal] = useState(false);
@@ -120,7 +118,11 @@ const DisplayProducts = ({
         }
       });
       setProductEvents(parsedProductData);
-      setIsProductLoading(false);
+      if (parsedProductData.length >= itemsPerPage) {
+        setIsProductLoading(false);
+      } else if (!productEventContext.isLoading) {
+        setIsProductLoading(false);
+      }
     }
   }, [productEventContext, wotFilter]);
 
@@ -361,10 +363,7 @@ const DisplayProducts = ({
   return (
     <>
       <div className="w-full bg-white px-4 md:pl-4">
-        {!isMyListings &&
-        (profileMapContext.isLoading ||
-          productEventContext.isLoading ||
-          isProductsLoading) ? (
+        {!isMyListings && isProductsLoading ? (
           <div className="mb-6 mt-6 flex items-center justify-center">
             <MilkMarketSpinner />
           </div>
