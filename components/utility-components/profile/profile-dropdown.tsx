@@ -198,6 +198,10 @@ export const ProfileWithDropdown = ({
               src: pfp,
             }}
             className={"transition-transform"}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
             classNames={{
               name: `overflow-hidden text-ellipsis whitespace-nowrap text-light-text dark:text-dark-text hidden ${nameClassname} ${
                 isNip05Verified

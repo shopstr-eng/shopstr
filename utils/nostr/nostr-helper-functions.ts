@@ -50,11 +50,13 @@ export async function generateKeys(): Promise<{ nsec: string; npub: string }> {
 export async function deleteEvent(
   nostr: NostrManager,
   signer: NostrSigner,
-  event_ids_to_delete: string[]
+  event_ids_to_delete: string[],
+  deletedKind?: number
 ) {
   const deletionEvent = createNostrDeleteEvent(
     event_ids_to_delete,
-    "Shopstr deletion request"
+    "Shopstr deletion request",
+    deletedKind
   );
 
   await finalizeAndSendNostrEvent(signer, nostr, deletionEvent);
@@ -67,12 +69,16 @@ export async function deleteEvent(
 
 export function createNostrDeleteEvent(
   event_ids: string[],
-  content: string
+  content: string,
+  deletedKind?: number
 ): EventTemplate {
   const msg: EventTemplate = {
     kind: 5,
     content: content,
-    tags: event_ids.map((id) => ["e", id]),
+    tags: [
+      ...event_ids.map((id) => ["e", id]),
+      ...(deletedKind !== undefined ? [["k", deletedKind.toString()]] : []),
+    ],
     created_at: Math.floor(Date.now() / 1000),
   };
 
@@ -264,6 +270,7 @@ export async function constructGiftWrappedEvent(
     donationPercentage?: number;
     selectedSize?: string;
     selectedVolume?: string;
+    selectedWeight?: string;
     selectedBulkOption?: number;
   } = {}
 ): Promise<GiftWrappedMessageEvent> {
@@ -292,6 +299,7 @@ export async function constructGiftWrappedEvent(
     donationPercentage,
     selectedSize,
     selectedVolume,
+    selectedWeight,
     selectedBulkOption,
   } = options;
 
@@ -326,6 +334,7 @@ export async function constructGiftWrappedEvent(
     if (pickup) tags.push(["pickup", pickup]);
     if (selectedSize) tags.push(["size", selectedSize]);
     if (selectedVolume) tags.push(["volume", selectedVolume]);
+    if (selectedWeight) tags.push(["weight", selectedWeight]);
     if (selectedBulkOption) tags.push(["bulk", selectedBulkOption.toString()]);
     if (
       donationAmount &&
@@ -660,7 +669,7 @@ export async function publishSavedForLaterEvent(
     };
 
     await finalizeAndSendNostrEvent(signer, nostr, cartEvent);
-  } catch (_) {
+  } catch {
     return;
   }
 }
@@ -699,7 +708,7 @@ export async function publishWalletEvent(
         console.error("Failed to cache wallet event to database:", error)
       );
     }
-  } catch (_) {
+  } catch {
     return;
   }
 }
@@ -720,6 +729,7 @@ export async function publishProofEvent(
     if (proofs.length > 0) {
       const tokenArray = {
         mint: mint,
+        unit: "sat",
         proofs: proofs,
         ...(deletedEventsArray ? { del: deletedEventsArray } : {}),
       };
@@ -736,7 +746,7 @@ export async function publishProofEvent(
       );
     }
     if (deletedEventsArray && deletedEventsArray.length > 0) {
-      await deleteEvent(nostr!, signer!, deletedEventsArray);
+      await deleteEvent(nostr!, signer!, deletedEventsArray, 7375);
     }
 
     await publishSpendingHistoryEvent(
@@ -747,7 +757,7 @@ export async function publishProofEvent(
       signedEvent && signedEvent.id ? signedEvent.id : "",
       deletedEventsArray
     );
-  } catch (_) {
+  } catch {
     return;
   }
 }
@@ -767,6 +777,7 @@ export async function publishSpendingHistoryEvent(
     const eventContent = [
       ["direction", direction],
       ["amount", amount],
+      ["unit", "sat"],
     ];
     const userPubkey = await signer?.getPubKey?.();
     if (sentEventIds && sentEventIds.length > 0) {
@@ -786,7 +797,7 @@ export async function publishSpendingHistoryEvent(
       created_at: Math.floor(Date.now() / 1000),
     };
     await finalizeAndSendNostrEvent(signer!, nostr!, cashuSpendingHistoryEvent);
-  } catch (_) {
+  } catch {
     return;
   }
 }

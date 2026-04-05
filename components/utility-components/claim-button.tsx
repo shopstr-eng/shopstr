@@ -19,6 +19,7 @@ import {
   generateKeys,
   getLocalStorageData,
   publishProofEvent,
+  publishWalletEvent,
   constructGiftWrappedEvent,
   constructMessageSeal,
   constructMessageGiftWrap,
@@ -203,6 +204,7 @@ export default function ClaimButton({ token }: { token: string }) {
         if (!mints.includes(tokenMint)) {
           const updatedMints = [...mints, tokenMint];
           localStorage.setItem("mints", JSON.stringify(updatedMints));
+          await publishWalletEvent(nostr!, signer!);
         }
         if (isInvalid) {
           setIsInvalidSuccess(true);
@@ -225,7 +227,7 @@ export default function ClaimButton({ token }: { token: string }) {
         setIsSpent(true);
         setIsRedeeming(false);
       }
-    } catch (_) {
+    } catch {
       setIsInvalidToken(true);
       setIsRedeeming(false);
     }
@@ -310,7 +312,7 @@ export default function ClaimButton({ token }: { token: string }) {
       } else {
         throw new Error("Wallet not initialized");
       }
-    } catch (_) {
+    } catch {
       setIsPaid(false);
       setOpenRedemptionModal(true);
       setIsRedeeming(false);

@@ -41,6 +41,7 @@ import SignInModal from "../sign-in/SignInModal";
 import currencySelection from "../../public/currencySelection.json";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import VolumeSelector from "./volume-selector";
+import WeightSelector from "./weight-selector";
 import BulkSelector from "./bulk-selector";
 import ZapsnagButton from "@/components/ZapsnagButton";
 import { RawEventModal, EventIdModal } from "./modals/event-modals";
@@ -99,6 +100,7 @@ export default function CheckoutCard({
 
   const [cart, setCart] = useState<ProductData[]>([]);
   const [selectedVolume, setSelectedVolume] = useState<string>("");
+  const [selectedWeight, setSelectedWeight] = useState<string>("");
   const [selectedBulkOption, setSelectedBulkOption] = useState<string>("1");
   const [currentPrice, setCurrentPrice] = useState(productData.price);
   const [discountCode, setDiscountCode] = useState("");
@@ -108,6 +110,7 @@ export default function CheckoutCard({
   const reviewsContext = useContext(ReviewsContext);
 
   const hasVolumes = productData.volumes && productData.volumes.length > 0;
+  const hasWeights = productData.weights && productData.weights.length > 0;
   const hasBulkPrices =
     productData.bulkPrices && productData.bulkPrices.size > 0;
 
@@ -135,14 +138,21 @@ export default function CheckoutCard({
       if (volumePrice !== undefined) {
         setCurrentPrice(volumePrice);
       }
+    } else if (selectedWeight && productData.weightPrices) {
+      const weightPrice = productData.weightPrices.get(selectedWeight);
+      if (weightPrice !== undefined) {
+        setCurrentPrice(weightPrice);
+      }
     } else {
       setCurrentPrice(productData.price);
     }
   }, [
     selectedVolume,
+    selectedWeight,
     selectedBulkOption,
     productData.price,
     productData.volumePrices,
+    productData.weightPrices,
     productData.bulkPrices,
   ]);
 
@@ -296,6 +306,15 @@ export default function CheckoutCard({
           const volumePrice = productData.volumePrices.get(selectedVolume);
           if (volumePrice !== undefined) {
             productToAdd.volumePrice = volumePrice;
+          }
+        }
+      }
+      if (selectedWeight) {
+        productToAdd.selectedWeight = selectedWeight;
+        if (productData.weightPrices) {
+          const weightPrice = productData.weightPrices.get(selectedWeight);
+          if (weightPrice !== undefined) {
+            productToAdd.weightPrice = weightPrice;
           }
         }
       }
@@ -454,6 +473,10 @@ export default function CheckoutCard({
     volumePrice:
       selectedVolume && productData.volumePrices
         ? productData.volumePrices.get(selectedVolume)
+        : undefined,
+    weightPrice:
+      selectedWeight && productData.weightPrices
+        ? productData.weightPrices.get(selectedWeight)
         : undefined,
     selectedBulkOption:
       selectedBulkOption && selectedBulkOption !== "1"
@@ -637,7 +660,7 @@ export default function CheckoutCard({
                     </div>
                   )}
                   <div className="hidden sm:block">
-                    <p className="mt-4 w-full text-left text-lg text-light-text dark:text-dark-text">
+                    <p className="mt-4 w-full whitespace-pre-wrap break-words text-left text-lg text-light-text dark:text-dark-text">
                       {renderSummary()}
                     </p>
                     {productData.summary.length > SUMMARY_CHARACTER_LIMIT && (
@@ -656,6 +679,16 @@ export default function CheckoutCard({
                       currency={productData.currency}
                       selectedVolume={selectedVolume}
                       onVolumeChange={setSelectedVolume}
+                      isRequired={true}
+                    />
+                  )}
+                  {hasWeights && (
+                    <WeightSelector
+                      weights={productData.weights!}
+                      weightPrices={productData.weightPrices!}
+                      currency={productData.currency}
+                      selectedWeight={selectedWeight}
+                      onWeightChange={setSelectedWeight}
                       isRequired={true}
                     />
                   )}
@@ -745,7 +778,8 @@ export default function CheckoutCard({
                               <Button
                                 className={`min-w-fit bg-gradient-to-tr from-purple-700 via-purple-500 to-purple-700 text-dark-text shadow-lg dark:from-yellow-700 dark:via-yellow-500 dark:to-yellow-700 dark:text-light-text ${
                                   (hasSizes && !selectedSize) ||
-                                  (hasVolumes && !selectedVolume)
+                                  (hasVolumes && !selectedVolume) ||
+                                  (hasWeights && !selectedWeight)
                                     ? "cursor-not-allowed opacity-50"
                                     : ""
                                 }`}
@@ -753,6 +787,7 @@ export default function CheckoutCard({
                                 disabled={
                                   (hasSizes && !selectedSize) ||
                                   (hasVolumes && !selectedVolume) ||
+                                  (hasWeights && !selectedWeight) ||
                                   isExpired
                                 }
                               >
@@ -762,7 +797,8 @@ export default function CheckoutCard({
                                 className={`${SHOPSTRBUTTONCLASSNAMES} ${
                                   isAdded ||
                                   (hasSizes && !selectedSize) ||
-                                  (hasVolumes && !selectedVolume)
+                                  (hasVolumes && !selectedVolume) ||
+                                  (hasWeights && !selectedWeight)
                                     ? "cursor-not-allowed opacity-50"
                                     : ""
                                 }`}
@@ -771,6 +807,7 @@ export default function CheckoutCard({
                                   isAdded ||
                                   (hasSizes && !selectedSize) ||
                                   (hasVolumes && !selectedVolume) ||
+                                  (hasWeights && !selectedWeight) ||
                                   isExpired
                                 }
                               >
@@ -814,8 +851,8 @@ export default function CheckoutCard({
                   )}
                 </div>
               </div>
-              <div className="max-w-screen mx-3 my-3 max-w-full overflow-hidden whitespace-normal break-words sm:hidden">
-                <p className="break-words-all w-full text-left text-lg text-light-text dark:text-dark-text">
+              <div className="max-w-screen mx-3 my-3 max-w-full overflow-hidden sm:hidden">
+                <p className="w-full whitespace-pre-wrap break-words text-left text-lg text-light-text dark:text-dark-text">
                   {renderSummary()}
                 </p>
                 {productData.summary.length > SUMMARY_CHARACTER_LIMIT && (
@@ -940,6 +977,7 @@ export default function CheckoutCard({
               setCashuPaymentFailed={setCashuPaymentFailed}
               selectedSize={selectedSize}
               selectedVolume={selectedVolume}
+              selectedWeight={selectedWeight}
               selectedBulkOption={
                 selectedBulkOption ? parseInt(selectedBulkOption) : undefined
               }

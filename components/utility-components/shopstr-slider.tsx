@@ -11,8 +11,13 @@ const ShopstrSlider = () => {
 
   const followsContext = useContext(FollowsContext);
 
-  const [wot, setWot] = useState(getLocalStorageData().wot);
+  const [wot, setWot] = useState(3);
   const [wotIsChanged, setWotIsChanged] = useState(false);
+
+  useEffect(() => {
+    const savedWot = getLocalStorageData().wot;
+    setWot(savedWot);
+  }, []);
 
   useEffect(() => {
     localStorage.setItem("wot", String(wot));
@@ -38,7 +43,7 @@ const ShopstrSlider = () => {
               : wot
           }
           minValue={1}
-          defaultValue={wot}
+          value={wot}
           className="max-w-md text-light-text dark:text-dark-text"
           onChangeEnd={(value) => {
             if (Array.isArray(value)) {

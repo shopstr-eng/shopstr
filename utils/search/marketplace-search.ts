@@ -1,16 +1,21 @@
 import { nip19 } from "nostr-tools";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
 
+const escapeRegExp = (value: string) =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 export function productMatchesMarketplaceSearch(
   product: ProductData,
   searchTerm: string
 ) {
-  if (!searchTerm) return true;
+  const normalizedSearch = searchTerm.trim();
+
+  if (!normalizedSearch) return true;
   if (!product.title) return false;
 
-  if (searchTerm.includes("naddr")) {
+  if (normalizedSearch.includes("naddr")) {
     try {
-      const parsedNaddr = nip19.decode(searchTerm);
+      const parsedNaddr = nip19.decode(normalizedSearch);
       if (parsedNaddr.type === "naddr") {
         return (
           product.d === parsedNaddr.data.identifier &&
@@ -23,9 +28,9 @@ export function productMatchesMarketplaceSearch(
     }
   }
 
-  if (searchTerm.includes("npub")) {
+  if (normalizedSearch.includes("npub")) {
     try {
-      const parsedNpub = nip19.decode(searchTerm);
+      const parsedNpub = nip19.decode(normalizedSearch);
       if (parsedNpub.type === "npub") {
         return parsedNpub.data === product.pubkey;
       }
@@ -36,7 +41,7 @@ export function productMatchesMarketplaceSearch(
   }
 
   try {
-    const re = new RegExp(searchTerm, "gi");
+    const re = new RegExp(escapeRegExp(normalizedSearch), "i");
 
     const titleMatch = product.title.match(re);
     if (titleMatch && titleMatch.length > 0) return true;
@@ -46,7 +51,7 @@ export function productMatchesMarketplaceSearch(
       if (summaryMatch && summaryMatch.length > 0) return true;
     }
 
-    const numericSearch = parseFloat(searchTerm);
+    const numericSearch = parseFloat(normalizedSearch);
     if (!isNaN(numericSearch) && product.price === numericSearch) {
       return true;
     }
@@ -56,4 +61,3 @@ export function productMatchesMarketplaceSearch(
     return false;
   }
 }
-
