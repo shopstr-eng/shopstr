@@ -471,6 +471,7 @@ export const fetchProfile = async (
         );
       }
 
+      editProfileContext(profileMap, false);
       resolve({ profileMap });
     } catch (error) {
       reject(error);
