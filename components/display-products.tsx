@@ -365,7 +365,7 @@ const DisplayProducts = ({
             <ShopstrSpinner />
           </div>
         ) : null}
-        {filteredProducts.length > 0 ? (
+        {filteredProducts.length > 0 && (
           <>
             <div className="grid max-w-full grid-cols-[repeat(auto-fill,minmax(300px,1fr))] justify-items-center gap-4 overflow-x-hidden">
               {getCurrentPageProducts().map(
@@ -400,25 +400,9 @@ const DisplayProducts = ({
               {filteredProducts.length} products
             </div>
           </>
-        ) : (
-          wotFilter &&
-          !isProductsLoading && (
-            <div className="mt-20 flex flex-grow items-center justify-center py-10">
-              <div className="w-full max-w-lg rounded-lg bg-light-fg p-8 text-center shadow-lg dark:bg-dark-fg">
-                <p className="text-3xl font-semibold text-light-text dark:text-dark-text">
-                  No products found...
-                </p>
-                <p className="mt-4 text-lg text-light-text dark:text-dark-text">
-                  Try turning off the trust filter!
-                </p>
-              </div>
-            </div>
-          )
         )}
         {!isProductsLoading &&
-          filteredProducts.length === 0 &&
-          !wotFilter &&
-          !isMyListings && (
+          filteredProducts.length === 0 && (
             <div className="mt-20 flex flex-grow items-center justify-center py-10">
               <div className="w-full max-w-lg rounded-lg bg-light-fg p-8 text-center shadow-lg dark:bg-dark-fg">
                 <p className="text-3xl font-semibold text-light-text dark:text-dark-text">
