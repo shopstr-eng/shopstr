@@ -76,6 +76,7 @@ export default function CheckoutCard({
   const [showRawEventModal, setShowRawEventModal] = useState(false);
   const [showEventIdModal, setShowEventIdModal] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
+  const [isEventDropdownOpen, setIsEventDropdownOpen] = useState(false);
 
   const router = useRouter();
 
@@ -611,7 +612,10 @@ export default function CheckoutCard({
                       )}
                     </h2>
                     {rawEvent && (
-                      <Dropdown>
+                      <Dropdown
+                        isOpen={isEventDropdownOpen}
+                        onOpenChange={setIsEventDropdownOpen}
+                      >
                         <DropdownTrigger>
                           <Button
                             isIconOnly
@@ -625,13 +629,19 @@ export default function CheckoutCard({
                         <DropdownMenu aria-label="Event Actions">
                           <DropdownItem
                             key="view-raw"
-                            onPress={() => setShowRawEventModal(true)}
+                            onPress={() => {
+                              setIsEventDropdownOpen(false);
+                              setShowRawEventModal(true);
+                            }}
                           >
                             View Raw Event
                           </DropdownItem>
                           <DropdownItem
                             key="view-id"
-                            onPress={() => setShowEventIdModal(true)}
+                            onPress={() => {
+                              setIsEventDropdownOpen(false);
+                              setShowEventIdModal(true);
+                            }}
                           >
                             View Event ID
                           </DropdownItem>
@@ -642,6 +652,7 @@ export default function CheckoutCard({
                             startContent={<FlagIcon className="h-5 w-5" />}
                             isDisabled={!canReportListing}
                             onPress={() => {
+                              setIsEventDropdownOpen(false);
                               if (canReportListing) setShowReportModal(true);
                             }}
                           >

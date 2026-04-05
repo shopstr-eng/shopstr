@@ -61,6 +61,7 @@ export const ProfileWithDropdown = ({
   const { isLoggedIn } = useContext(SignerContext);
   const { isOpen, onOpen, onClose } = useDisclosure();
   const [showReportModal, setShowReportModal] = useState(false);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
   useEffect(() => {
     const profileMap = profileContext.profileData;
@@ -194,14 +195,21 @@ export const ProfileWithDropdown = ({
       color: "danger",
       className: "text-red-500",
       startContent: <FlagIcon className={"h-5 w-5"} />,
-      onClick: () => setShowReportModal(true),
+      onClick: () => {
+        setIsDropdownOpen(false);
+        setShowReportModal(true);
+      },
       label: "Report Seller",
     },
   };
 
   return (
     <>
-      <Dropdown placement="bottom-start">
+      <Dropdown
+        placement="bottom-start"
+        isOpen={isDropdownOpen}
+        onOpenChange={setIsDropdownOpen}
+      >
         <DropdownTrigger>
           <User
             as="button"
@@ -227,6 +235,7 @@ export const ProfileWithDropdown = ({
         <DropdownMenu
           aria-label="User Actions"
           variant="flat"
+          onAction={() => setIsDropdownOpen(false)}
           items={dropDownKeys.map((key) => DropDownItems[key])}
         >
           {(item) => {
