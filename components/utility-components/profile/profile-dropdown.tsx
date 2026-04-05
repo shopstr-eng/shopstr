@@ -51,12 +51,18 @@ export const ProfileWithDropdown = ({
   const [displayName, setDisplayName] = useState("");
   const [isNPubCopied, setIsNPubCopied] = useState(false);
   const [isNip05Verified, setIsNip05Verified] = useState(false);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const profileContext = useContext(ProfileMapContext);
   const shopMapContext = useContext(ShopMapContext);
   const npub = pubkey ? nip19.npubEncode(pubkey) : "";
   const router = useRouter();
   const { isLoggedIn } = useContext(SignerContext);
   const { isOpen, onOpen, onClose } = useDisclosure();
+
+  const handleDropdownAction = (action: () => void) => {
+    setIsDropdownOpen(false);
+    action();
+  };
 
   useEffect(() => {
     const profileMap = profileContext.profileData;
@@ -85,9 +91,11 @@ export const ProfileWithDropdown = ({
       color: "default",
       className: "text-light-text dark:text-dark-text",
       startContent: <BuildingStorefrontIcon className={"h-5 w-5"} />,
-      onClick: () => {
-        const slug = getProfileSlug(pubkey, profileContext.profileData);
-        router.push(`/marketplace/${slug}`);
+      onPress: () => {
+        handleDropdownAction(() => {
+          const slug = getProfileSlug(pubkey, profileContext.profileData);
+          router.push(`/marketplace/${slug}`);
+        });
       },
       label: "Visit Seller",
     },
@@ -96,15 +104,17 @@ export const ProfileWithDropdown = ({
       color: "default",
       className: "text-light-text dark:text-dark-text",
       startContent: <GlobeAltIcon className={"h-5 w-5"} />,
-      onClick: () => {
-        const shopData = shopMapContext.shopData.get(pubkey);
-        const shopSlug = shopData?.content?.storefront?.shopSlug;
-        if (shopSlug) {
-          router.push(`/shop/${shopSlug}`);
-        } else {
-          const slug = getProfileSlug(pubkey, profileContext.profileData);
-          router.push(`/marketplace/${slug}`);
-        }
+      onPress: () => {
+        handleDropdownAction(() => {
+          const shopData = shopMapContext.shopData.get(pubkey);
+          const shopSlug = shopData?.content?.storefront?.shopSlug;
+          if (shopSlug) {
+            router.push(`/shop/${shopSlug}`);
+          } else {
+            const slug = getProfileSlug(pubkey, profileContext.profileData);
+            router.push(`/marketplace/${slug}`);
+          }
+        });
       },
       label: "Visit Storefront",
     },
@@ -113,8 +123,10 @@ export const ProfileWithDropdown = ({
       color: "default",
       className: "text-light-text dark:text-dark-text",
       startContent: <BuildingStorefrontIcon className={"h-5 w-5"} />,
-      onClick: () => {
-        router.push("/settings/shop-profile");
+      onPress: () => {
+        handleDropdownAction(() => {
+          router.push("/settings/shop-profile");
+        });
       },
       label: "Shop Profile",
     },
@@ -123,15 +135,17 @@ export const ProfileWithDropdown = ({
       color: "default",
       className: "text-light-text dark:text-dark-text",
       startContent: <ChatBubbleBottomCenterIcon className={"h-5 w-5"} />,
-      onClick: () => {
-        if (isLoggedIn) {
-          router.push({
-            pathname: "/orders",
-            query: { pk: npub, isInquiry: true },
-          });
-        } else {
-          onOpen();
-        }
+      onPress: () => {
+        handleDropdownAction(() => {
+          if (isLoggedIn) {
+            router.push({
+              pathname: "/orders",
+              query: { pk: npub, isInquiry: true },
+            });
+          } else {
+            onOpen();
+          }
+        });
       },
       label: "Send Inquiry",
     },
@@ -140,8 +154,10 @@ export const ProfileWithDropdown = ({
       color: "default",
       className: "text-light-text dark:text-dark-text",
       startContent: <UserIcon className={"h-5 w-5"} />,
-      onClick: () => {
-        router.push("/settings/user-profile");
+      onPress: () => {
+        handleDropdownAction(() => {
+          router.push("/settings/user-profile");
+        });
       },
       label: "Profile",
     },
@@ -150,8 +166,10 @@ export const ProfileWithDropdown = ({
       color: "default",
       className: "text-light-text dark:text-dark-text",
       startContent: <Cog6ToothIcon className={"h-5 w-5"} />,
-      onClick: () => {
-        router.push("/settings");
+      onPress: () => {
+        handleDropdownAction(() => {
+          router.push("/settings");
+        });
       },
       label: "Settings",
     },
@@ -160,9 +178,11 @@ export const ProfileWithDropdown = ({
       color: "danger",
       className: "text-light-text dark:text-dark-text",
       startContent: <ArrowRightStartOnRectangleIcon className={"h-5 w-5"} />,
-      onClick: () => {
-        LogOut();
-        router.push("/marketplace");
+      onPress: () => {
+        handleDropdownAction(() => {
+          LogOut();
+          router.push("/marketplace");
+        });
       },
       label: "Log Out",
     },
@@ -175,13 +195,15 @@ export const ProfileWithDropdown = ({
       ) : (
         <ClipboardIcon className="h-5 w-5" />
       ),
-      onClick: () => {
-        const npub = nip19.npubEncode(pubkey);
-        navigator.clipboard.writeText(npub);
-        setIsNPubCopied(true);
-        setTimeout(() => {
-          setIsNPubCopied(false);
-        }, 2100);
+      onPress: () => {
+        handleDropdownAction(() => {
+          const npub = nip19.npubEncode(pubkey);
+          navigator.clipboard.writeText(npub);
+          setIsNPubCopied(true);
+          setTimeout(() => {
+            setIsNPubCopied(false);
+          }, 2100);
+        });
       },
       label: isNPubCopied ? "Copied!" : "Copy npub",
     },
@@ -189,7 +211,11 @@ export const ProfileWithDropdown = ({
 
   return (
     <>
-      <Dropdown placement="bottom-start">
+      <Dropdown
+        placement="bottom-start"
+        isOpen={isDropdownOpen}
+        onOpenChange={setIsDropdownOpen}
+      >
         <DropdownTrigger>
           <User
             as="button"
@@ -197,10 +223,6 @@ export const ProfileWithDropdown = ({
               src: pfp,
             }}
             className={"transition-transform"}
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-            }}
             classNames={{
               name: `overflow-hidden text-ellipsis whitespace-nowrap text-light-text dark:text-dark-text hidden ${nameClassname} ${
                 isNip05Verified
@@ -224,7 +246,7 @@ export const ProfileWithDropdown = ({
                 color={item.color}
                 className={item.className}
                 startContent={item.startContent}
-                onClick={item.onClick}
+                onPress={item.onPress}
               >
                 {item.label}
               </DropdownItem>

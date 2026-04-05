@@ -42,14 +42,14 @@ jest.mock("@nextui-org/react", () => {
     }) => <div role="menu">{items.map((item) => children(item))}</div>,
     DropdownItem: ({
       children,
-      onClick,
+      onPress,
       startContent,
     }: {
       children: React.ReactNode;
-      onClick?: () => void;
+      onPress?: () => void;
       startContent?: React.ReactNode;
     }) => (
-      <button role="menuitem" onClick={onClick}>
+      <button role="menuitem" onClick={() => onPress?.()}>
         {startContent}
         {children}
       </button>
@@ -63,6 +63,7 @@ jest.mock("@heroicons/react/24/outline", () => ({
   ChatBubbleBottomCenterIcon: () => <div data-testid="icon-chat" />,
   UserIcon: () => <div data-testid="icon-user" />,
   Cog6ToothIcon: () => <div data-testid="icon-settings" />,
+  GlobeAltIcon: () => <div data-testid="icon-globe" />,
   ArrowRightStartOnRectangleIcon: () => <div data-testid="icon-logout" />,
   ClipboardIcon: () => <div data-testid="icon-clipboard" />,
   CheckIcon: () => <div data-testid="icon-check" />,
