@@ -293,7 +293,9 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
         if (contextLoadedRef.current) return; // relay beat us to it
         if (data?.shopConfig) applyShopConfig(data.shopConfig);
       })
-      .catch(() => {})
+      .catch((error) => {
+        console.error("Failed to fetch storefront lookup data:", error);
+      })
       .finally(() => {
         if (!contextLoadedRef.current) setIsFetchingShop(false);
       });
@@ -305,7 +307,9 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
       .then((data) => {
         if (data?.domain) setCustomDomain(data.domain);
       })
-      .catch(() => {});
+      .catch((error) => {
+        console.error("Failed to fetch storefront custom domain:", error);
+      });
   }, [userPubkey, applyShopConfig]);
 
   // ── Slow path: override with authoritative relay-context data when ready ───
