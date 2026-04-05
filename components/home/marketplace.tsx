@@ -132,8 +132,12 @@ function MarketplacePage({
 
     if (isNpub(slug)) {
       try {
-        const { data } = nip19.decode(slug);
-        pubkey = data as string;
+        const decoded = nip19.decode(slug);
+        if (decoded.type === "npub" && typeof decoded.data === "string") {
+          pubkey = decoded.data;
+        } else {
+          return;
+        }
       } catch {
         return;
       }
