@@ -13,7 +13,11 @@ jest.mock("next/router", () => ({
 }));
 
 jest.mock("next/link", () => {
-  return ({ children }: { children: React.ReactNode }) => <>{children}</>;
+  const MockNextLink = ({ children }: { children: React.ReactNode }) => (
+    <>{children}</>
+  );
+  MockNextLink.displayName = "MockNextLink";
+  return MockNextLink;
 });
 
 jest.mock("../profile/profile-dropdown", () => ({
@@ -58,8 +62,8 @@ jest.mock("@heroicons/react/24/outline", () => ({
 }));
 
 jest.mock("@nextui-org/react", () => {
-  const React = require("react");
-  const DropdownContext = React.createContext({
+  const ReactActual = jest.requireActual("react") as typeof import("react");
+  const DropdownContext = ReactActual.createContext({
     isOpen: false,
     onOpenChange: (_next: boolean) => {},
   });
@@ -88,8 +92,8 @@ jest.mock("@nextui-org/react", () => {
       </DropdownContext.Provider>
     ),
     DropdownTrigger: ({ children }: { children: React.ReactElement }) => {
-      const ctx = React.useContext(DropdownContext);
-      return React.cloneElement(children, {
+      const ctx = ReactActual.useContext(DropdownContext);
+      return ReactActual.cloneElement(children, {
         onClick: (e: React.MouseEvent<HTMLButtonElement>) => {
           children.props.onClick?.(e);
           ctx.onOpenChange(!ctx.isOpen);
@@ -97,7 +101,7 @@ jest.mock("@nextui-org/react", () => {
       });
     },
     DropdownMenu: ({ children }: { children: React.ReactNode }) => {
-      const ctx = React.useContext(DropdownContext);
+      const ctx = ReactActual.useContext(DropdownContext);
       if (!ctx.isOpen) return null;
       return <div role="menu">{children}</div>;
     },
