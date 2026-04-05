@@ -37,7 +37,73 @@ function getUniqueProofs(proofs: Proof[]): Proof[] {
 function isHexString(value: string): boolean {
   return /^[0-9a-fA-F]{64}$/.test(value);
 }
+export function getMarketplaceEventKey(event: NostrEvent): string {
+  if (event.kind === 30402) {
+    const dTag = event.tags?.find((tag: string[]) => tag[0] === "d")?.[1];
+    if (dTag) return `${event.kind}:${event.pubkey}:${dTag}`;
+  }
 
+  return `${event.kind}:${event.id}`;
+}
+
+export const searchMarketplaceProducts = async (
+  nostr: NostrManager,
+  relays: string[],
+  query: string
+): Promise<NostrEvent[]> => {
+  const trimmedQuery = query.trim();
+  if (!trimmedQuery) return [];
+
+  try {
+    const fetchedEvents = await nostr.fetch(
+      [
+        {
+          kinds: [30402],
+          search: trimmedQuery,
+          limit: 100,
+        },
+        {
+          kinds: [1],
+          "#t": ["shopstr-zapsnag", "zapsnag"],
+          search: trimmedQuery,
+          limit: 50,
+        },
+      ],
+      {},
+      relays
+    );
+
+    const validMarketplaceEvents = fetchedEvents.filter(
+      (event) =>
+        event.id &&
+        event.sig &&
+        event.pubkey &&
+        (event.kind === 30402 || event.kind === 1)
+    );
+
+    if (validMarketplaceEvents.length > 0) {
+      cacheEventsToDatabase(validMarketplaceEvents).catch((error) =>
+        console.error("Failed to cache searched marketplace events:", error)
+      );
+    }
+
+    const dedupedEvents = new Map<string, NostrEvent>();
+    for (const event of validMarketplaceEvents) {
+      const key = getMarketplaceEventKey(event);
+      const existing = dedupedEvents.get(key);
+      if (!existing || event.created_at >= existing.created_at) {
+        dedupedEvents.set(key, event);
+      }
+    }
+
+    return Array.from(dedupedEvents.values()).sort(
+      (a, b) => b.created_at - a.created_at
+    );
+  } catch (error) {
+    console.error("Failed to search marketplace products from relays:", error);
+    return [];
+  }
+};
 export const fetchAllPosts = async (
   nostr: NostrManager,
   relays: string[],
@@ -96,26 +162,18 @@ export const fetchAllPosts = async (
         );
       }
 
-      const getEventKey = (event: NostrEvent): string => {
-        if (event.kind === 30402) {
-          const dTag = event.tags?.find((tag: string[]) => tag[0] === "d")?.[1];
-          if (dTag) return `${event.pubkey}:${dTag}`;
-        }
-        return event.id;
-      };
-
       const mergedProductsMap = new Map<string, NostrEvent>();
 
       for (const event of productArrayFromDb) {
         if (event && event.id) {
-          mergedProductsMap.set(getEventKey(event), event);
+          mergedProductsMap.set(getMarketplaceEventKey(event), event);
         }
       }
 
       for (const event of fetchedEvents) {
         if (!event || !event.id) continue;
 
-        const key = getEventKey(event);
+        const key = getMarketplaceEventKey(event);
         const existing = mergedProductsMap.get(key);
         if (!existing || event.created_at >= existing.created_at) {
           mergedProductsMap.set(key, event);
@@ -146,6 +204,7 @@ export const fetchAllPosts = async (
     }
   });
 };
+
 
 export const fetchCart = async (
   nostr: NostrManager,

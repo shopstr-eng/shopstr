@@ -22,6 +22,11 @@ import {
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
 import { getListingSlug } from "@/utils/url-slugs";
+import {
+  getDefaultRelays,
+  getLocalStorageData,
+} from "@/utils/nostr/nostr-helper-functions";
+import { searchMarketplaceProducts } from "@/utils/nostr/fetch-service";
 
 const escapeRegExp = (value: string) =>
   value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -60,11 +65,23 @@ const DisplayProducts = ({
   const [filteredProducts, setFilteredProducts] = useState<ProductData[]>([]);
   const [totalPages, setTotalPages] = useState(1);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [isSearchingRelays, setIsSearchingRelays] = useState(false);
 
   const router = useRouter();
 
   const { nostr } = useContext(NostrContext);
   const { signer, pubkey: userPubkey } = useContext(SignerContext);
+
+  const shouldUseRelaySearch = (searchValue: string) => {
+    const trimmedSearch = searchValue.trim();
+    if (trimmedSearch.length < 2) return false;
+    if (trimmedSearch.includes("naddr") || trimmedSearch.includes("npub")) {
+      return false;
+    }
+    if (/^[0-9a-fA-F]{64}$/.test(trimmedSearch)) return false;
+    if (!Number.isNaN(Number(trimmedSearch))) return false;
+    return true;
+  };
 
   // Load saved page from session storage on mount
   useEffect(() => {
@@ -191,6 +208,47 @@ const DisplayProducts = ({
     selectedCategories,
     focusedPubkey,
     isInitialized,
+  ]);
+
+  useEffect(() => {
+    if (!nostr || !shouldUseRelaySearch(selectedSearch)) {
+      setIsSearchingRelays(false);
+      return;
+    }
+
+    let isActive = true;
+    setIsSearchingRelays(true);
+
+    const timeoutId = window.setTimeout(async () => {
+      const { relays, readRelays } = getLocalStorageData();
+      const targetRelays = [
+        ...new Set([...(relays || []), ...(readRelays || [])]),
+      ];
+      const effectiveRelays =
+        targetRelays.length > 0 ? targetRelays : getDefaultRelays();
+
+      const fetchedEvents = await searchMarketplaceProducts(
+        nostr,
+        effectiveRelays,
+        selectedSearch
+      );
+
+      if (!isActive) return;
+
+      fetchedEvents.forEach((event) => {
+        productEventContext.addNewlyCreatedProductEvent(event);
+      });
+      setIsSearchingRelays(false);
+    }, 350);
+
+    return () => {
+      isActive = false;
+      window.clearTimeout(timeoutId);
+    };
+  }, [
+    nostr,
+    productEventContext.addNewlyCreatedProductEvent,
+    selectedSearch,
   ]);
 
   // Scroll effect only on page change
@@ -366,6 +424,11 @@ const DisplayProducts = ({
           isProductsLoading) ? (
           <div className="mb-6 mt-6 flex items-center justify-center">
             <ShopstrSpinner />
+          </div>
+        ) : null}
+        {isSearchingRelays && selectedSearch.trim() ? (
+          <div className="mb-4 text-center text-sm text-light-text dark:text-dark-text">
+            Searching connected relays for more listings...
           </div>
         ) : null}
         {filteredProducts.length > 0 ? (
