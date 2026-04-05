@@ -50,7 +50,7 @@ export const parseTags = (productEvent: NostrEvent) => {
     pubkey: "",
     createdAt: 0,
     title: "",
-    summary: "",
+    summary: productEvent.content || "",
     publishedAt: "",
     images: [],
     categories: [],
@@ -72,7 +72,11 @@ export const parseTags = (productEvent: NostrEvent) => {
         parsedData.title = values[0]!;
         break;
       case "summary":
-        parsedData.summary = values[0]!;
+        // NIP-99 uses event content as primary description.
+        // Keep summary tag as backward-compatible fallback when content is empty.
+        if (!parsedData.summary.trim()) {
+          parsedData.summary = values[0]!;
+        }
         break;
       case "published_at":
         parsedData.publishedAt = values[0]!;
