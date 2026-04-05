@@ -1356,7 +1356,14 @@ export const getLocalStorageData = (): LocalStorageInterface => {
     }
 
     const relaysString = localStorage.getItem(LOCALSTORAGECONSTANTS.relays);
-    relays = relaysString ? (JSON.parse(relaysString) as string[]) : [];
+    relays = [];
+    try {
+      if (relaysString) {
+        relays = JSON.parse(relaysString) as string[];
+      }
+    } catch {
+      relays = [];
+    }
 
     const defaultRelays = getDefaultRelays();
 
@@ -1374,34 +1381,56 @@ export const getLocalStorageData = (): LocalStorageInterface => {
       }
     }
 
-    readRelays = localStorage.getItem(LOCALSTORAGECONSTANTS.readRelays)
-      ? (
-          JSON.parse(
-            localStorage.getItem(LOCALSTORAGECONSTANTS.readRelays) as string
-          ) as string[]
-        ).filter((r) => r)
-      : [];
+    readRelays = [];
+    try {
+      const rawReadRelays = localStorage.getItem(
+        LOCALSTORAGECONSTANTS.readRelays
+      );
+      if (rawReadRelays) {
+        readRelays = (JSON.parse(rawReadRelays) as string[]).filter((r) => r);
+      }
+    } catch {
+      readRelays = [];
+    }
 
-    writeRelays = localStorage.getItem(LOCALSTORAGECONSTANTS.writeRelays)
-      ? (
-          JSON.parse(
-            localStorage.getItem(LOCALSTORAGECONSTANTS.writeRelays) as string
-          ) as string[]
-        ).filter((r) => r)
-      : [];
+    writeRelays = [];
+    try {
+      const rawWriteRelays = localStorage.getItem(
+        LOCALSTORAGECONSTANTS.writeRelays
+      );
+      if (rawWriteRelays) {
+        writeRelays = (JSON.parse(rawWriteRelays) as string[]).filter(
+          (r) => r
+        );
+      }
+    } catch {
+      writeRelays = [];
+    }
 
-    mints = localStorage.getItem(LOCALSTORAGECONSTANTS.mints)
-      ? JSON.parse(localStorage.getItem("mints") as string)
-      : null;
+    mints = null;
+    try {
+      const rawMints = localStorage.getItem("mints");
+      if (rawMints) {
+        mints = JSON.parse(rawMints);
+      }
+    } catch {
+      mints = null;
+    }
 
     if (mints === null) {
       mints = [getDefaultMint()];
       localStorage.setItem(LOCALSTORAGECONSTANTS.mints, JSON.stringify(mints));
     }
 
-    blossomServers = localStorage.getItem(LOCALSTORAGECONSTANTS.blossomServers)
-      ? JSON.parse(localStorage.getItem("blossomServers") as string)
-      : null;
+    blossomServers = null;
+    try {
+      const rawBlossomServers = localStorage.getItem("blossomServers");
+      if (rawBlossomServers) {
+        blossomServers = JSON.parse(rawBlossomServers);
+      }
+    } catch {
+      blossomServers = null;
+    }
 
     if (blossomServers === null) {
       blossomServers = [getDefaultBlossomServer()];
@@ -1411,13 +1440,29 @@ export const getLocalStorageData = (): LocalStorageInterface => {
       );
     }
 
-    tokens = localStorage.getItem(LOCALSTORAGECONSTANTS.tokens)
-      ? JSON.parse(localStorage.getItem("tokens") as string)
-      : localStorage.setItem(LOCALSTORAGECONSTANTS.tokens, JSON.stringify([]));
+    tokens = [];
+    try {
+      const rawTokens = localStorage.getItem("tokens");
+      if (rawTokens) {
+        tokens = JSON.parse(rawTokens);
+      } else {
+        localStorage.setItem(LOCALSTORAGECONSTANTS.tokens, JSON.stringify([]));
+      }
+    } catch {
+      tokens = [];
+    }
 
-    history = localStorage.getItem(LOCALSTORAGECONSTANTS.history)
-      ? JSON.parse(localStorage.getItem("history") as string)
-      : localStorage.setItem(LOCALSTORAGECONSTANTS.history, JSON.stringify([]));
+    history = [];
+    try {
+      const rawHistory = localStorage.getItem("history");
+      if (rawHistory) {
+        history = JSON.parse(rawHistory);
+      } else {
+        localStorage.setItem(LOCALSTORAGECONSTANTS.history, JSON.stringify([]));
+      }
+    } catch {
+      history = [];
+    }
 
     wot = localStorage.getItem(LOCALSTORAGECONSTANTS.wot)
       ? Number(localStorage.getItem(LOCALSTORAGECONSTANTS.wot))
@@ -1431,13 +1476,19 @@ export const getLocalStorageData = (): LocalStorageInterface => {
     )
       ? localStorage.getItem(LOCALSTORAGECONSTANTS.bunkerRemotePubkey)
       : undefined;
-    bunkerRelays = localStorage.getItem(LOCALSTORAGECONSTANTS.bunkerRelays)
-      ? (
-          JSON.parse(
-            localStorage.getItem(LOCALSTORAGECONSTANTS.bunkerRelays) as string
-          ) as string[]
-        ).filter((r) => r)
-      : [];
+    bunkerRelays = [];
+    try {
+      const rawBunkerRelays = localStorage.getItem(
+        LOCALSTORAGECONSTANTS.bunkerRelays
+      );
+      if (rawBunkerRelays) {
+        bunkerRelays = (JSON.parse(rawBunkerRelays) as string[]).filter(
+          (r) => r
+        );
+      }
+    } catch {
+      bunkerRelays = [];
+    }
     bunkerSecret = localStorage.getItem(LOCALSTORAGECONSTANTS.bunkerSecret)
       ? localStorage.getItem(LOCALSTORAGECONSTANTS.bunkerSecret)
       : undefined;
@@ -1446,7 +1497,11 @@ export const getLocalStorageData = (): LocalStorageInterface => {
       LOCALSTORAGECONSTANTS.signer
     );
     if (signerData) {
-      signer = JSON.parse(signerData);
+      try {
+        signer = JSON.parse(signerData);
+      } catch {
+        signer = undefined;
+      }
     } else {
       switch (signInMethod) {
         case "extension":
