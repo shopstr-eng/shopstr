@@ -1560,53 +1560,43 @@ export function getDefaultBlossomServer(): string {
 
 export async function verifyNip05Identifier(
   nip05: string,
-  pubkey: string
+  pubkey: string,
+  options?: { baseUrl?: string }
 ): Promise<boolean> {
   try {
     if (!nip05 || !pubkey) return false;
 
-    const parts = nip05.split("@");
-    if (parts.length !== 2) return false;
+    const params = new URLSearchParams({ nip05, pubkey });
+    const path = `/api/nostr/verify-nip05?${params.toString()}`;
 
-    const [username, domain] = parts;
-    if (!username || !domain) return false;
+    let requestUrl = path;
+    const runtimeBaseUrl =
+      options?.baseUrl ||
+      (typeof window !== "undefined" ? window.location.origin : undefined);
 
-    let url;
-    try {
-      url = `https://${domain}/.well-known/nostr.json?name=${username}`;
-    } catch {
+    // Node/SSR fetch generally needs an absolute URL.
+    if (runtimeBaseUrl) {
+      requestUrl = new URL(path, runtimeBaseUrl).toString();
+    } else if (typeof window === "undefined") {
       return false;
     }
 
+    // Use a timeout to prevent hanging requests
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    let response: Response;
     try {
-      // Use a timeout to prevent hanging requests
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
-
-      const response = await fetch(url, { signal: controller.signal });
+      response = await fetch(requestUrl, { signal: controller.signal });
+    } finally {
       clearTimeout(timeoutId);
-
-      if (!response.ok) return false;
-
-      let data;
-      try {
-        data = await response.json();
-      } catch {
-        return false;
-      }
-
-      if (!data || typeof data !== "object") return false;
-
-      const names = data.names || {};
-      return (
-        names[username] === pubkey || names[username.toLowerCase()] === pubkey
-      );
-    } catch {
-      // This will catch fetch errors, timeout errors, etc.
-      return false;
     }
+
+    if (!response.ok) return false;
+
+    const data = await response.json();
+    return !!data.verified;
   } catch {
-    // Catch any unexpected errors
+    // Catch any unexpected errors (e.g., timeout, network failure)
     return false;
   }
 }
