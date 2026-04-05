@@ -196,13 +196,20 @@ export const ProfileWithDropdown = ({
         <ClipboardIcon className="h-5 w-5" />
       ),
       onPress: () => {
-        handleDropdownAction(() => {
-          const npub = nip19.npubEncode(pubkey);
-          navigator.clipboard.writeText(npub);
-          setIsNPubCopied(true);
-          setTimeout(() => {
-            setIsNPubCopied(false);
-          }, 2100);
+        handleDropdownAction(async () => {
+          try {
+            const npub = nip19.npubEncode(pubkey);
+            if (!navigator.clipboard?.writeText) {
+              throw new Error("Clipboard API is not available");
+            }
+            await navigator.clipboard.writeText(npub);
+            setIsNPubCopied(true);
+            setTimeout(() => {
+              setIsNPubCopied(false);
+            }, 2100);
+          } catch (error) {
+            console.error("Failed to copy npub to clipboard", error);
+          }
         });
       },
       label: isNPubCopied ? "Copied!" : "Copy npub",
