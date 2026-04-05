@@ -7,11 +7,9 @@ import SendButton from "../../components/wallet/send-button";
 import PayButton from "../../components/wallet/pay-button";
 import Transactions from "../../components/wallet/transactions";
 import { CashuMint, CashuWallet, MintKeyset, Proof } from "@cashu/cashu-ts";
-import SignInModal from "@/components/sign-in/SignInModal";
-import { useAuthGuard } from "@/components/hooks/use-auth-guard";
+import ProtectedRoute from "@/components/utility-components/protected-route";
 
 const Wallet = () => {
-  const { isLoggedIn, isOpen, handleClose } = useAuthGuard();
   const [totalBalance, setTotalBalance] = useState(0);
   const [walletBalance, setWalletBalance] = useState(0);
   const [mint, setMint] = useState("");
@@ -103,12 +101,8 @@ const Wallet = () => {
     router.push("/settings/preferences");
   };
 
-  if (!isLoggedIn) {
-    return <SignInModal isOpen={isOpen} onClose={handleClose} />;
-  }
-
   return (
-    <>
+    <ProtectedRoute>
       <div className="flex min-h-screen flex-col bg-light-bg px-4 pt-[8rem] dark:bg-dark-bg">
         <div className="mx-auto w-full max-w-3xl">
           <div className="mb-8 rounded-lg bg-white p-6 shadow-md dark:bg-gray-800">
@@ -142,7 +136,7 @@ const Wallet = () => {
           </div>
         </div>
       </div>
-    </>
+    </ProtectedRoute>
   );
 };
 

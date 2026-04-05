@@ -32,11 +32,9 @@ import {
   NostrContext,
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
-import SignInModal from "@/components/sign-in/SignInModal";
-import { useAuthGuard } from "@/components/hooks/use-auth-guard";
+import ProtectedRoute from "@/components/utility-components/protected-route";
 
 const PreferencesPage = () => {
-  const { isLoggedIn, isOpen, handleClose } = useAuthGuard();
   const { nostr } = useContext(NostrContext);
   const [relays, setRelays] = useState(Array<string>(0));
   const [readRelays, setReadRelays] = useState(Array<string>(0));
@@ -261,12 +259,8 @@ const PreferencesPage = () => {
     setBlossomServersAreChanged(false);
   };
 
-  if (!isLoggedIn) {
-    return <SignInModal isOpen={isOpen} onClose={handleClose} />;
-  }
-
   return (
-    <>
+    <ProtectedRoute>
       <div className="flex min-h-screen flex-col bg-light-bg pb-6 pt-24 dark:bg-dark-bg">
         <div className="mx-auto px-4">
           <SettingsBreadCrumbs />
@@ -1002,7 +996,7 @@ const PreferencesPage = () => {
           setFailureText("");
         }}
       />
-    </>
+    </ProtectedRoute>
   );
 };
 

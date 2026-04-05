@@ -11,11 +11,9 @@ import {
 import { useRouter } from "next/router";
 import { LogOut } from "@/utils/nostr/nostr-helper-functions";
 import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs";
-import SignInModal from "@/components/sign-in/SignInModal";
-import { useAuthGuard } from "@/components/hooks/use-auth-guard";
+import ProtectedRoute from "@/components/utility-components/protected-route";
 
 const SettingsPage = () => {
-  const { isLoggedIn, isOpen, handleClose } = useAuthGuard();
   const router = useRouter();
   const listBoxSectionClassnames = {
     heading: "text-light-text dark:text-dark-text text-lg font-bold",
@@ -26,15 +24,12 @@ const SettingsPage = () => {
   };
   const startIconClassnames = "h-6 w-6 text-light-text dark:text-dark-text";
 
-  if (!isLoggedIn) {
-    return <SignInModal isOpen={isOpen} onClose={handleClose} />;
-  }
-
   return (
-    <div className="flex h-full flex-col bg-light-bg pt-24 dark:bg-dark-bg">
-      <div className="bg mx-auto h-screen w-full lg:w-1/2 lg:pl-4">
-        <SettingsBreadCrumbs />
-        <Listbox variant="flat" aria-label="Listbox menu with sections">
+    <ProtectedRoute>
+      <div className="flex h-full flex-col bg-light-bg pt-24 dark:bg-dark-bg">
+        <div className="bg mx-auto h-screen w-full lg:w-1/2 lg:pl-4">
+          <SettingsBreadCrumbs />
+          <Listbox variant="flat" aria-label="Listbox menu with sections">
           <ListboxSection
             title="Account"
             showDivider
@@ -131,9 +126,10 @@ const SettingsPage = () => {
               Log out
             </ListboxItem>
           </ListboxSection>
-        </Listbox>
+          </Listbox>
+        </div>
       </div>
-    </div>
+    </ProtectedRoute>
   );
 };
 

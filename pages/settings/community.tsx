@@ -23,11 +23,9 @@ import {
 import CreateCommunityForm from "@/components/communities/CreateCommunityForm";
 import { Community } from "@/utils/types/types";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
-import SignInModal from "@/components/sign-in/SignInModal";
-import { useAuthGuard } from "@/components/hooks/use-auth-guard";
+import ProtectedRoute from "@/components/utility-components/protected-route";
 
 const CommunityManagementPage = () => {
-  const { isLoggedIn, isOpen, handleClose } = useAuthGuard();
   const { signer, pubkey } = useContext(SignerContext);
   const { nostr } = useContext(NostrContext);
   const { communities, isLoading } = useContext(CommunityContext);
@@ -92,14 +90,11 @@ const CommunityManagementPage = () => {
     }
   };
 
-  if (!isLoggedIn) {
-    return <SignInModal isOpen={isOpen} onClose={handleClose} />;
-  }
-
   return (
-    <div className="flex h-full flex-col bg-light-bg pt-24 dark:bg-dark-bg">
-      <div className="mx-auto h-screen w-full lg:w-1/2 lg:pl-4">
-        <SettingsBreadCrumbs />
+    <ProtectedRoute>
+      <div className="flex h-full flex-col bg-light-bg pt-24 dark:bg-dark-bg">
+        <div className="mx-auto h-screen w-full lg:w-1/2 lg:pl-4">
+          <SettingsBreadCrumbs />
 
         {communityToEdit ? (
           // Show the Form for Creating or Editing
@@ -177,8 +172,9 @@ const CommunityManagementPage = () => {
             </CardBody>
           </Card>
         )}
+        </div>
       </div>
-    </div>
+    </ProtectedRoute>
   );
 };
 

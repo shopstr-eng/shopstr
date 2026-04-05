@@ -30,8 +30,7 @@ import currencySelection from "../../public/currencySelection.json";
 import { ShopMapContext, ProfileMapContext } from "@/utils/context/context";
 import { nip19 } from "nostr-tools";
 import StorefrontThemeWrapper from "@/components/storefront/storefront-theme-wrapper";
-import SignInModal from "@/components/sign-in/SignInModal";
-import { useAuthGuard } from "@/components/hooks/use-auth-guard";
+import ProtectedRoute from "@/components/utility-components/protected-route";
 
 interface QuantitySelectorProps {
   value: number;
@@ -83,7 +82,6 @@ function QuantitySelector({
 }
 
 export default function Component() {
-  const { isLoggedIn, isOpen, handleClose } = useAuthGuard();
   const shopContext = useContext(ShopMapContext);
   const profileContext = useContext(ProfileMapContext);
 
@@ -513,13 +511,9 @@ export default function Component() {
     return cost;
   };
 
-  if (!isLoggedIn) {
-    return <SignInModal isOpen={isOpen} onClose={handleClose} />;
-  }
-
   return (
-    <StorefrontThemeWrapper sellerPubkey={sfSellerPubkey}>
-      <>
+    <ProtectedRoute>
+      <StorefrontThemeWrapper sellerPubkey={sfSellerPubkey}>
         {excludedItemCount > 0 && sfSellerPubkey && (
           <div className="mx-auto mt-20 max-w-4xl px-4">
             <div className="rounded-lg border-2 border-yellow-400 bg-yellow-50 p-3 text-sm text-yellow-800 dark:border-yellow-600 dark:bg-yellow-900/20 dark:text-yellow-200">
@@ -944,7 +938,7 @@ export default function Component() {
             </Modal>
           </>
         ) : null}
-      </>
-    </StorefrontThemeWrapper>
+      </StorefrontThemeWrapper>
+    </ProtectedRoute>
   );
 }

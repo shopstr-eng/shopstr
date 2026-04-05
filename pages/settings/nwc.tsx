@@ -20,11 +20,9 @@ import {
 } from "@heroicons/react/24/outline";
 import { webln } from "@getalby/sdk";
 import { formatWithCommas } from "@/components/utility-components/display-monetary-info";
-import SignInModal from "@/components/sign-in/SignInModal";
-import { useAuthGuard } from "@/components/hooks/use-auth-guard";
+import ProtectedRoute from "@/components/utility-components/protected-route";
 
 const NWCSettingsPage = () => {
-  const { isLoggedIn, isOpen, handleClose } = useAuthGuard();
   const [nwcString, setNwcString] = useState("");
   const [walletInfo, setWalletInfo] = useState<any>(null);
   const [balance, setBalance] = useState<number | null>(null);
@@ -145,15 +143,12 @@ const NWCSettingsPage = () => {
     localStorage.removeItem("nwcInfo");
   };
 
-  if (!isLoggedIn) {
-    return <SignInModal isOpen={isOpen} onClose={handleClose} />;
-  }
-
   return (
-    <div className="flex h-full flex-col bg-light-bg pt-24 dark:bg-dark-bg">
-      <div className="bg mx-auto h-screen w-full lg:w-1/2 lg:pl-4">
-        <SettingsBreadCrumbs />
-        <div className="p-4">
+    <ProtectedRoute>
+      <div className="flex h-full flex-col bg-light-bg pt-24 dark:bg-dark-bg">
+        <div className="bg mx-auto h-screen w-full lg:w-1/2 lg:pl-4">
+          <SettingsBreadCrumbs />
+          <div className="p-4">
           <h2 className="mb-4 text-xl font-bold text-light-text dark:text-dark-text">
             NWC Connection
           </h2>
@@ -241,9 +236,10 @@ const NWCSettingsPage = () => {
               </CardBody>
             </Card>
           )}
+          </div>
         </div>
       </div>
-    </div>
+    </ProtectedRoute>
   );
 };
 
