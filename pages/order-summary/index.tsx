@@ -15,7 +15,8 @@ import parseTags, {
 } from "@/utils/parsers/product-parser-functions";
 import ProductCard from "@/components/utility-components/product-card";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
-import { SignerContext } from "@/components/utility-components/nostr-context-provider";
+import SignInModal from "@/components/sign-in/SignInModal";
+import { useAuthGuard } from "@/components/hooks/use-auth-guard";
 
 interface OrderSummaryData {
   productTitle: string;
@@ -52,12 +53,12 @@ interface OrderSummaryData {
 }
 
 export default function OrderSummary() {
+  const { isLoggedIn, isOpen, handleClose } = useAuthGuard();
   const router = useRouter();
   const [orderData, setOrderData] = useState<OrderSummaryData | null>(null);
   const [latestProducts, setLatestProducts] = useState<ProductData[]>([]);
   const [sfSellerPubkey, setSfSellerPubkey] = useState("");
   const [sfShopSlug, setSfShopSlug] = useState("");
-  const { isLoggedIn } = useContext(SignerContext);
   const productContext = useContext(ProductContext);
 
   useEffect(() => {
@@ -137,6 +138,10 @@ export default function OrderSummary() {
       return null;
     }
   };
+
+  if (!isLoggedIn) {
+    return <SignInModal isOpen={isOpen} onClose={handleClose} />;
+  }
 
   if (!orderData) {
     return (

@@ -23,8 +23,11 @@ import {
 import CreateCommunityForm from "@/components/communities/CreateCommunityForm";
 import { Community } from "@/utils/types/types";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import SignInModal from "@/components/sign-in/SignInModal";
+import { useAuthGuard } from "@/components/hooks/use-auth-guard";
 
 const CommunityManagementPage = () => {
+  const { isLoggedIn, isOpen, handleClose } = useAuthGuard();
   const { signer, pubkey } = useContext(SignerContext);
   const { nostr } = useContext(NostrContext);
   const { communities, isLoading } = useContext(CommunityContext);
@@ -88,6 +91,10 @@ const CommunityManagementPage = () => {
       }
     }
   };
+
+  if (!isLoggedIn) {
+    return <SignInModal isOpen={isOpen} onClose={handleClose} />;
+  }
 
   return (
     <div className="flex h-full flex-col bg-light-bg pt-24 dark:bg-dark-bg">

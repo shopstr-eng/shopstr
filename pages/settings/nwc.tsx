@@ -20,8 +20,11 @@ import {
 } from "@heroicons/react/24/outline";
 import { webln } from "@getalby/sdk";
 import { formatWithCommas } from "@/components/utility-components/display-monetary-info";
+import SignInModal from "@/components/sign-in/SignInModal";
+import { useAuthGuard } from "@/components/hooks/use-auth-guard";
 
 const NWCSettingsPage = () => {
+  const { isLoggedIn, isOpen, handleClose } = useAuthGuard();
   const [nwcString, setNwcString] = useState("");
   const [walletInfo, setWalletInfo] = useState<any>(null);
   const [balance, setBalance] = useState<number | null>(null);
@@ -141,6 +144,10 @@ const NWCSettingsPage = () => {
     saveNWCString("");
     localStorage.removeItem("nwcInfo");
   };
+
+  if (!isLoggedIn) {
+    return <SignInModal isOpen={isOpen} onClose={handleClose} />;
+  }
 
   return (
     <div className="flex h-full flex-col bg-light-bg pt-24 dark:bg-dark-bg">

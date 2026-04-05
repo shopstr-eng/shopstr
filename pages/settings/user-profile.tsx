@@ -25,8 +25,11 @@ import { NostrNSecSigner } from "@/utils/nostr/signers/nostr-nsec-signer";
 import { createNostrProfileEvent } from "@/utils/nostr/nostr-helper-functions";
 import { FileUploaderButton } from "@/components/utility-components/file-uploader";
 import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
+import SignInModal from "@/components/sign-in/SignInModal";
+import { useAuthGuard } from "@/components/hooks/use-auth-guard";
 
 const UserProfilePage = () => {
+  const { isLoggedIn, isOpen, handleClose } = useAuthGuard();
   const { nostr } = useContext(NostrContext);
   const [isUploadingProfile, setIsUploadingProfile] = useState(false);
   const [isFetchingProfile, setIsFetchingProfile] = useState(false);
@@ -98,6 +101,10 @@ const UserProfilePage = () => {
     });
     setIsUploadingProfile(false);
   };
+
+  if (!isLoggedIn) {
+    return <SignInModal isOpen={isOpen} onClose={handleClose} />;
+  }
 
   return (
     <>
