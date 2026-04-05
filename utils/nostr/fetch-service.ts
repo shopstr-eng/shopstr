@@ -127,16 +127,6 @@ export const fetchAllPosts = async (
 
       editProductContext(mergedProductArray, false);
 
-      // Cache fetched products to database via API (only valid events with signatures)
-      const validProducts = fetchedEvents.filter(
-        (e) => e.id && e.sig && e.pubkey
-      );
-      if (validProducts.length > 0) {
-        cacheEventsToDatabase(validProducts).catch((error) =>
-          console.error("Failed to cache products to database:", error)
-        );
-      }
-
       resolve({
         productEvents: mergedProductArray,
         profileSetFromProducts,
@@ -471,6 +461,7 @@ export const fetchProfile = async (
         );
       }
 
+      editProfileContext(profileMap, false);
       resolve({ profileMap });
     } catch (error) {
       reject(error);
