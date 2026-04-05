@@ -1315,28 +1315,84 @@ export async function fetchProductByTitleSlug(
        )
        ORDER BY created_at DESC`
     );
-    for (const row of result.rows) {
-      const tags: string[][] = row.tags;
-      const titleTag = tags.find((t) => t[0] === "title");
-      if (titleTag && titleTag[1] && titleToSlug(titleTag[1]) === slug) {
-        return {
-          id: row.id,
-          pubkey: row.pubkey,
-          created_at: row.created_at,
-          kind: row.kind,
-          tags: row.tags,
-          content: row.content,
-          sig: row.sig,
-        };
-      }
-    }
-    return null;
+    return resolveProductEventByTitleSlug(slug, result.rows);
   } catch (error) {
     console.error("Failed to fetch product by title slug:", error);
     return null;
   } finally {
     if (client) client.release();
   }
+}
+
+type ProductEventSlugLookupRow = Pick<
+  NostrEvent,
+  "id" | "pubkey" | "created_at" | "kind" | "tags" | "content" | "sig"
+>;
+
+function productEventRowToEvent(row: ProductEventSlugLookupRow): NostrEvent {
+  return {
+    id: row.id,
+    pubkey: row.pubkey,
+    created_at: row.created_at,
+    kind: row.kind,
+    tags: row.tags,
+    content: row.content,
+    sig: row.sig,
+  };
+}
+
+function getProductEventIdentity(row: ProductEventSlugLookupRow): string {
+  const dTag = row.tags.find((tag) => tag[0] === "d")?.[1];
+  return `${row.pubkey}:${dTag || row.id}`;
+}
+
+export function resolveProductEventByTitleSlug(
+  slug: string,
+  rows: ProductEventSlugLookupRow[]
+): NostrEvent | null {
+  const pubkeySuffixMatch = slug.match(/^(.+)-([a-f0-9]{8})$/);
+  const baseSlug = pubkeySuffixMatch?.[1];
+  const pubkeyFragment = pubkeySuffixMatch?.[2];
+
+  let exactMatch: NostrEvent | null = null;
+  let exactMatchIdentity: string | null = null;
+  let disambiguatedMatch: NostrEvent | null = null;
+
+  for (const row of rows) {
+    const titleTag = row.tags.find((tag) => tag[0] === "title");
+    if (!titleTag || !titleTag[1]) continue;
+
+    const currentSlug = titleToSlug(titleTag[1]);
+    const currentIdentity = getProductEventIdentity(row);
+
+    if (currentSlug === slug) {
+      if (exactMatchIdentity && exactMatchIdentity !== currentIdentity) {
+        return null;
+      }
+
+      if (!exactMatch) {
+        exactMatch = productEventRowToEvent(row);
+        exactMatchIdentity = currentIdentity;
+      }
+    }
+
+    if (
+      !exactMatch &&
+      !disambiguatedMatch &&
+      baseSlug &&
+      pubkeyFragment &&
+      currentSlug === baseSlug &&
+      row.pubkey.startsWith(pubkeyFragment)
+    ) {
+      disambiguatedMatch = productEventRowToEvent(row);
+    }
+  }
+
+  if (exactMatch) {
+    return exactMatch;
+  }
+
+  return disambiguatedMatch;
 }
 
 export async function fetchShopProfileByPubkeyFromDb(
@@ -1383,6 +1439,13 @@ export async function fetchProfilePubkeyByNameSlug(
       `SELECT pubkey, content FROM profile_events WHERE kind = 0 ORDER BY created_at DESC`
     );
     const pubkeySuffixMatch = nameSlug.match(/^(.+)-([a-f0-9]{8})$/);
+    const baseSlug = pubkeySuffixMatch?.[1];
+    const pubkeyFragment = pubkeySuffixMatch?.[2];
+
+    let exactMatch: string | null = null;
+    let exactMatchCount = 0;
+    let disambiguatedMatch: string | null = null;
+
     for (const row of result.rows) {
       let profileName: string | undefined;
       try {
@@ -1393,17 +1456,33 @@ export async function fetchProfilePubkeyByNameSlug(
       }
       if (!profileName) continue;
       const slug = profileNameToSlug(profileName);
-      if (pubkeySuffixMatch) {
-        const baseSlug = pubkeySuffixMatch[1]!;
-        const pubkeyFragment = pubkeySuffixMatch[2]!;
-        if (slug === baseSlug && row.pubkey.startsWith(pubkeyFragment)) {
-          return row.pubkey;
+
+      if (slug === nameSlug) {
+        exactMatchCount += 1;
+        if (exactMatchCount > 1) {
+          return null;
         }
-      } else if (slug === nameSlug) {
-        return row.pubkey;
+
+        exactMatch = row.pubkey;
+      }
+
+      if (
+        !exactMatch &&
+        !disambiguatedMatch &&
+        baseSlug &&
+        pubkeyFragment &&
+        slug === baseSlug &&
+        row.pubkey.startsWith(pubkeyFragment)
+      ) {
+        disambiguatedMatch = row.pubkey;
       }
     }
-    return null;
+
+    if (exactMatch) {
+      return exactMatch;
+    }
+
+    return disambiguatedMatch;
   } catch (error) {
     console.error("Failed to fetch profile pubkey by name slug:", error);
     return null;
