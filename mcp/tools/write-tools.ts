@@ -2414,8 +2414,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
       try {
         const fileBuffer = Buffer.from(params.fileBase64, "base64");
-        const binaryData: BinaryLike = Uint8Array.from(fileBuffer);
-        const { createHash: cryptoCreateHash } = await import("crypto");
+        const binaryData: BinaryLike = new Uint8Array(fileBuffer.buffer, fileBuffer.byteOffset, fileBuffer.byteLength);
+        const { createHash: cryptoCreateHash } = await import("node:crypto");
         const hash = cryptoCreateHash("sha256")
           .update(binaryData)
           .digest("hex");
