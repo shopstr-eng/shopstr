@@ -55,7 +55,7 @@ describe("safe-json helpers", () => {
       expect(removeItemSpy).toHaveBeenCalledWith("cart");
     });
 
-    it("removes invalid key when validator fails and removeOnError is enabled", () => {
+    it("does not remove key on validation mismatch by default", () => {
       localStorage.setItem("relays", "[1,2,3]");
       const removeItemSpy = jest.spyOn(Storage.prototype, "removeItem");
 
@@ -66,7 +66,46 @@ describe("safe-json helpers", () => {
       });
 
       expect(parsed).toEqual([]);
+      expect(removeItemSpy).not.toHaveBeenCalled();
+      expect(localStorage.getItem("relays")).toBe("[1,2,3]");
+    });
+
+    it("removes invalid key when removeOnValidationError is enabled", () => {
+      localStorage.setItem("relays", "[1,2,3]");
+      const removeItemSpy = jest.spyOn(Storage.prototype, "removeItem");
+
+      const parsed = getLocalStorageJson<string[]>("relays", [], {
+        removeOnValidationError: true,
+        validate: (value): value is string[] =>
+          Array.isArray(value) && value.every((item) => typeof item === "string"),
+      });
+
+      expect(parsed).toEqual([]);
       expect(removeItemSpy).toHaveBeenCalledWith("relays");
+    });
+
+    it("emits diagnostic context for parse and validation errors", () => {
+      const onError = jest.fn();
+
+      localStorage.setItem("cart", "{bad-json");
+      getLocalStorageJson("cart", [] as string[], {
+        removeOnError: true,
+        onError,
+      });
+
+      localStorage.setItem("relays", "[1,2,3]");
+      getLocalStorageJson<string[]>("relays", [], {
+        validate: (value): value is string[] =>
+          Array.isArray(value) && value.every((item) => typeof item === "string"),
+        onError,
+      });
+
+      expect(onError).toHaveBeenCalledWith(
+        expect.objectContaining({ reason: "parse_error", key: "cart" })
+      );
+      expect(onError).toHaveBeenCalledWith(
+        expect.objectContaining({ reason: "validation_mismatch", key: "relays" })
+      );
     });
   });
 });
