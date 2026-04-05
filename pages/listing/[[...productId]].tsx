@@ -10,6 +10,7 @@ import {
   DropdownMenu,
   DropdownItem,
   Button,
+  useDisclosure,
 } from "@nextui-org/react";
 import {
   CheckCircleIcon,
@@ -38,6 +39,9 @@ import {
   fetchProductByTitleSlug,
 } from "@/utils/db/db-service";
 import { NostrEvent } from "@/utils/types/types";
+import { SignerContext } from "@/components/utility-components/nostr-context-provider";
+import SignInModal from "@/components/sign-in/SignInModal";
+import useReportEventFlow from "@/components/utility-components/use-report-event-flow";
 
 type ListingPageProps = {
   ogMeta: OgMetaProps;
@@ -111,6 +115,7 @@ export const getServerSideProps: GetServerSideProps<ListingPageProps> = async (
 
 const Listing = () => {
   const router = useRouter();
+  const { pubkey: userPubkey } = useContext(SignerContext);
   const [productData, setProductData] = useState<ProductData | undefined>(
     undefined
   );
@@ -125,8 +130,15 @@ const Listing = () => {
   const [invoiceGenerationFailed, setInvoiceGenerationFailed] = useState(false);
   const [cashuPaymentSent, setCashuPaymentSent] = useState(false);
   const [cashuPaymentFailed, setCashuPaymentFailed] = useState(false);
+  const { isOpen, onOpen, onClose } = useDisclosure();
 
   const productContext = useContext(ProductContext);
+  const { openReportFlow, reportFlowUi } = useReportEventFlow({
+    targetLabel: "listing",
+    reportedPubkey: productData?.pubkey,
+    reportedEventId: productData?.id,
+    onRequireLogin: onOpen,
+  });
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -237,18 +249,32 @@ const Listing = () => {
                           </Button>
                         </DropdownTrigger>
                         <DropdownMenu aria-label="Event Actions">
-                          <DropdownItem
-                            key="view-raw"
-                            onPress={() => setShowRawEventModal(true)}
-                          >
-                            View Raw Event
-                          </DropdownItem>
-                          <DropdownItem
-                            key="view-id"
-                            onPress={() => setShowEventIdModal(true)}
-                          >
-                            View Event ID
-                          </DropdownItem>
+                          {[
+                            <DropdownItem
+                              key="view-raw"
+                              onPress={() => setShowRawEventModal(true)}
+                            >
+                              View Raw Event
+                            </DropdownItem>,
+                            <DropdownItem
+                              key="view-id"
+                              onPress={() => setShowEventIdModal(true)}
+                            >
+                              View Event ID
+                            </DropdownItem>,
+                            ...(productData.pubkey !== userPubkey
+                              ? [
+                                  <DropdownItem
+                                    key="report-listing"
+                                    color="danger"
+                                    className="text-danger"
+                                    onPress={openReportFlow}
+                                  >
+                                    Report Listing
+                                  </DropdownItem>,
+                                ]
+                              : []),
+                          ]}
                         </DropdownMenu>
                       </Dropdown>
                     )}
@@ -271,6 +297,8 @@ const Listing = () => {
                 onClose={() => setShowEventIdModal(false)}
                 rawEvent={rawEvent}
               />
+              {reportFlowUi}
+              <SignInModal isOpen={isOpen} onClose={onClose} />
             </div>
           ) : (
             <CheckoutCard

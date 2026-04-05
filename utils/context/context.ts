@@ -5,6 +5,7 @@ import {
   ShopProfile,
   Community,
   CommunityPost,
+  NostrEvent,
 } from "../types/types";
 import { Proof } from "@cashu/cashu-ts";
 
@@ -73,6 +74,18 @@ export const ReviewsContext = createContext({
     _productReviewsData: Map<string, string[][]>
   ) => {},
 } as ReviewsContextInterface);
+
+export interface ReportsContextInterface {
+  reportEvents: NostrEvent[];
+  isLoading: boolean;
+  addReportEvent: (reportEvent: NostrEvent) => void;
+}
+
+export const ReportsContext = createContext({
+  reportEvents: [],
+  isLoading: true,
+  addReportEvent: (_reportEvent: NostrEvent) => {},
+} as ReportsContextInterface);
 
 export interface CartContextInterface {
   cartAddresses: string[][];

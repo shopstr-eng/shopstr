@@ -303,7 +303,7 @@ function MarketplacePage({
                           dropDownKeys={
                             reviewerPubkey === userPubkey
                               ? ["shop_profile"]
-                              : ["shop", "inquiry", "copy_npub"]
+                              : ["shop", "inquiry", "copy_npub", "report_profile"]
                           }
                         />
                       </div>

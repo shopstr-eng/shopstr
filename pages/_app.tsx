@@ -1,7 +1,7 @@
 import "tailwindcss/tailwind.css";
 import type { AppProps } from "next/app";
 import "../styles/globals.css";
-import { useState, useEffect, useCallback, useContext } from "react";
+import { useState, useEffect, useCallback, useContext, useRef } from "react";
 import { useRouter } from "next/router";
 import {
   ProfileMapContext,
@@ -15,6 +15,8 @@ import {
   ChatsMap,
   ReviewsContextInterface,
   ReviewsContext,
+  ReportsContextInterface,
+  ReportsContext,
   FollowsContextInterface,
   FollowsContext,
   RelaysContextInterface,
@@ -44,6 +46,7 @@ import {
   fetchCashuWallet,
   fetchAllCommunities,
   fetchGiftWrappedChatsAndMessages,
+  fetchReports,
 } from "@/utils/nostr/fetch-service";
 import {
   NostrEvent,
@@ -65,6 +68,26 @@ import {
 import { retryFailedRelayPublishes } from "@/utils/nostr/retry-service";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
 
+const mergeReportEvents = (
+  existingReports: NostrEvent[],
+  nextReports: NostrEvent[]
+) => {
+  const mergedReports = new Map(
+    existingReports.map((event) => [event.id, event])
+  );
+
+  nextReports.forEach((reportEvent) => {
+    const existingReport = mergedReports.get(reportEvent.id);
+    if (!existingReport || reportEvent.created_at >= existingReport.created_at) {
+      mergedReports.set(reportEvent.id, reportEvent);
+    }
+  });
+
+  return Array.from(mergedReports.values()).sort(
+    (a, b) => b.created_at - a.created_at
+  );
+};
+
 function Shopstr({ props }: { props: AppProps }) {
   const { Component, pageProps } = props;
   const { nostr } = useContext(NostrContext);
@@ -76,9 +99,8 @@ function Shopstr({ props }: { props: AppProps }) {
       isLoading: true,
       addNewlyCreatedProductEvent: (productEvent: any) => {
         setProductContext((productContext) => {
-          const productEvents = [...productContext.productEvents, productEvent];
           return {
-            productEvents: productEvents,
+            productEvents: [...productContext.productEvents, productEvent],
             isLoading: false,
             addNewlyCreatedProductEvent:
               productContext.addNewlyCreatedProductEvent,
@@ -97,6 +119,24 @@ function Shopstr({ props }: { props: AppProps }) {
             addNewlyCreatedProductEvent:
               productContext.addNewlyCreatedProductEvent,
             removeDeletedProductEvent: productContext.removeDeletedProductEvent,
+          };
+        });
+      },
+    }
+  );
+
+  const [reportsContext, setReportsContext] = useState<ReportsContextInterface>(
+    {
+      reportEvents: [],
+      isLoading: true,
+      addReportEvent: (reportEvent: NostrEvent) => {
+        setReportsContext((reportsContext) => {
+          return {
+            reportEvents: mergeReportEvents(reportsContext.reportEvents, [
+              reportEvent,
+            ]),
+            isLoading: false,
+            addReportEvent: reportsContext.addReportEvent,
           };
         });
       },
@@ -321,6 +361,42 @@ function Shopstr({ props }: { props: AppProps }) {
       cashuProofs: [],
       isLoading: true,
     });
+  const hydratedMarketplaceProductIdsRef = useRef<Set<string>>(new Set());
+  const pendingMarketplaceProductIdsRef = useRef<Set<string>>(new Set());
+  const didCompleteInitialMarketplaceHydrationRef = useRef(false);
+
+  const mergeReportsContext = (nextReports: NostrEvent[]) => {
+    if (nextReports.length === 0) return;
+
+    setReportsContext((reportsContext) => {
+      return {
+        reportEvents: mergeReportEvents(
+          reportsContext.reportEvents,
+          nextReports
+        ),
+        isLoading: false,
+        addReportEvent: reportsContext.addReportEvent,
+      };
+    });
+  };
+
+  const getReviewerPubkeysFromReviewMap = (
+    productReviewsMap: Map<string, Map<string, Map<string, string[][]>>>
+  ) => {
+    const reviewerPubkeys = new Set<string>();
+
+    productReviewsMap.forEach((merchantProducts) => {
+      merchantProducts.forEach((productReviews) => {
+        productReviews.forEach((_, reviewerPubkey) => {
+          if (reviewerPubkey) {
+            reviewerPubkeys.add(reviewerPubkey);
+          }
+        });
+      });
+    });
+
+    return Array.from(reviewerPubkeys);
+  };
 
   const editProductContext = (
     productEvents: NostrEvent[],
@@ -348,6 +424,19 @@ function Shopstr({ props }: { props: AppProps }) {
         isLoading,
         updateMerchantReviewsData: reviewsContext.updateMerchantReviewsData,
         updateProductReviewsData: reviewsContext.updateProductReviewsData,
+      };
+    });
+  };
+
+  const editReportsContext = (
+    reportEvents: NostrEvent[],
+    isLoading: boolean
+  ) => {
+    setReportsContext((reportsContext) => {
+      return {
+        reportEvents,
+        isLoading,
+        addReportEvent: reportsContext.addReportEvent,
       };
     });
   };
@@ -449,6 +538,7 @@ function Shopstr({ props }: { props: AppProps }) {
   /** FETCH initial FOLLOWS, RELAYS, PRODUCTS, and PROFILES **/
   useEffect(() => {
     async function fetchData() {
+      let fetchedProductEvents: NostrEvent[] = [];
       try {
         // Check login status
         if (getLocalStorageData().signInMethod === "amber") {
@@ -521,6 +611,7 @@ function Shopstr({ props }: { props: AppProps }) {
             editProductContext
           );
           productEvents = result.productEvents;
+          fetchedProductEvents = result.productEvents;
           profileSetFromProducts = result.profileSetFromProducts;
         } catch (error) {
           console.error("Error fetching products:", error);
@@ -589,17 +680,38 @@ function Shopstr({ props }: { props: AppProps }) {
           editShopContext(new Map(), false);
         }
 
+        let reviewerPubkeysFromReviews: string[] = [];
         try {
-          await fetchReviews(
+          const { productReviewsMap } = await fetchReviews(
             nostr!,
             allRelays,
             productEvents,
             editReviewsContext
           );
+          reviewerPubkeysFromReviews =
+            getReviewerPubkeysFromReviewMap(productReviewsMap);
         } catch (error) {
           console.error("Error fetching reviews:", error);
           editReviewsContext(new Map(), new Map(), false);
         }
+
+        try {
+          await fetchReports(
+            nostr!,
+            allRelays,
+            productEvents,
+            editReportsContext,
+            reviewerPubkeysFromReviews
+          );
+        } catch (error) {
+          console.error("Error fetching reports:", error);
+          editReportsContext([], false);
+        }
+
+        hydratedMarketplaceProductIdsRef.current = new Set(
+          fetchedProductEvents.map((event) => event.id).filter(Boolean)
+        );
+        didCompleteInitialMarketplaceHydrationRef.current = true;
 
         try {
           await fetchAllCommunities(nostr!, allRelays, editCommunityContext);
@@ -652,6 +764,7 @@ function Shopstr({ props }: { props: AppProps }) {
         console.error("Critical error during app initialization:", error);
         editProductContext([], false);
         editReviewsContext(new Map(), new Map(), false);
+        editReportsContext([], false);
         editShopContext(new Map(), false);
         editProfileContext(new Map(), false);
         editChatContext(new Map(), false);
@@ -660,6 +773,8 @@ function Shopstr({ props }: { props: AppProps }) {
         editBlossomContext([], false);
         editCashuWalletContext([], [], [], false);
         editCommunityContext(new Map(), false);
+      } finally {
+        didCompleteInitialMarketplaceHydrationRef.current = true;
       }
     }
 
@@ -667,6 +782,74 @@ function Shopstr({ props }: { props: AppProps }) {
     window.addEventListener("storage", fetchData);
     return () => window.removeEventListener("storage", fetchData);
   }, [nostr, signer, isLoggedIn]);
+
+  useEffect(() => {
+    if (
+      !nostr ||
+      !didCompleteInitialMarketplaceHydrationRef.current ||
+      productContext.isLoading ||
+      !Array.isArray(productContext.productEvents)
+    ) {
+      return;
+    }
+
+    const allRelays = [
+      ...new Set([...relaysContext.relayList, ...relaysContext.readRelayList]),
+    ];
+    const effectiveRelays = allRelays.length > 0 ? allRelays : getDefaultRelays();
+
+    const nextProducts = (productContext.productEvents as NostrEvent[]).filter(
+      (event) =>
+        event.id &&
+        !hydratedMarketplaceProductIdsRef.current.has(event.id) &&
+        !pendingMarketplaceProductIdsRef.current.has(event.id)
+    );
+
+    if (nextProducts.length === 0) return;
+
+    nextProducts.forEach((event) => {
+      pendingMarketplaceProductIdsRef.current.add(event.id);
+    });
+
+    let isActive = true;
+
+    const hydrateReportDelta = async () => {
+      try {
+        const { reportEvents } = await fetchReports(
+          nostr,
+          effectiveRelays,
+          nextProducts,
+          () => {}
+        );
+
+        if (!isActive) return;
+
+        mergeReportsContext(reportEvents);
+
+        nextProducts.forEach((event) => {
+          hydratedMarketplaceProductIdsRef.current.add(event.id);
+        });
+      } catch (error) {
+        console.error("Failed to hydrate report data for new listings:", error);
+      } finally {
+        nextProducts.forEach((event) => {
+          pendingMarketplaceProductIdsRef.current.delete(event.id);
+        });
+      }
+    };
+
+    hydrateReportDelta();
+
+    return () => {
+      isActive = false;
+    };
+  }, [
+    nostr,
+    productContext.isLoading,
+    productContext.productEvents,
+    relaysContext.readRelayList,
+    relaysContext.relayList,
+  ]);
 
   useEffect(() => {
     if ("serviceWorker" in navigator) {
@@ -699,47 +882,49 @@ function Shopstr({ props }: { props: AppProps }) {
               <FollowsContext.Provider value={followsContext}>
                 <ProductContext.Provider value={productContext}>
                   <ReviewsContext.Provider value={reviewsContext}>
-                    <ProfileMapContext.Provider value={profileContext}>
-                      <ShopMapContext.Provider value={shopContext}>
-                        <ChatsContext.Provider
-                          value={
-                            {
-                              chatsMap: chatsMap,
-                              isLoading: isChatLoading,
-                              addNewlyCreatedMessageEvent:
-                                addNewlyCreatedMessageEvent,
-                              markAllMessagesAsRead: markAllMessagesAsRead,
-                              newOrderIds: newOrderIds,
-                            } as ChatsContextInterface
-                          }
-                        >
-                          {![
-                            "/",
-                            "/about",
-                            "/contact",
-                            "/faq",
-                            "/terms",
-                            "/privacy",
-                          ].includes(router.pathname) && (
-                            <TopNav
-                              setFocusedPubkey={setFocusedPubkey}
-                              setSelectedSection={setSelectedSection}
-                            />
-                          )}
-                          <div className="flex">
-                            <main className="flex-1">
-                              <Component
-                                {...pageProps}
-                                focusedPubkey={focusedPubkey}
+                    <ReportsContext.Provider value={reportsContext}>
+                      <ProfileMapContext.Provider value={profileContext}>
+                        <ShopMapContext.Provider value={shopContext}>
+                          <ChatsContext.Provider
+                            value={
+                              {
+                                chatsMap: chatsMap,
+                                isLoading: isChatLoading,
+                                addNewlyCreatedMessageEvent:
+                                  addNewlyCreatedMessageEvent,
+                                markAllMessagesAsRead: markAllMessagesAsRead,
+                                newOrderIds: newOrderIds,
+                              } as ChatsContextInterface
+                            }
+                          >
+                            {![
+                              "/",
+                              "/about",
+                              "/contact",
+                              "/faq",
+                              "/terms",
+                              "/privacy",
+                            ].includes(router.pathname) && (
+                              <TopNav
                                 setFocusedPubkey={setFocusedPubkey}
-                                selectedSection={selectedSection}
                                 setSelectedSection={setSelectedSection}
                               />
-                            </main>
-                          </div>
-                        </ChatsContext.Provider>
-                      </ShopMapContext.Provider>
-                    </ProfileMapContext.Provider>
+                            )}
+                            <div className="flex">
+                              <main className="flex-1">
+                                <Component
+                                  {...pageProps}
+                                  focusedPubkey={focusedPubkey}
+                                  setFocusedPubkey={setFocusedPubkey}
+                                  selectedSection={selectedSection}
+                                  setSelectedSection={setSelectedSection}
+                                />
+                              </main>
+                            </div>
+                          </ChatsContext.Provider>
+                        </ShopMapContext.Provider>
+                      </ProfileMapContext.Provider>
+                    </ReportsContext.Provider>
                   </ReviewsContext.Provider>
                 </ProductContext.Provider>
               </FollowsContext.Provider>
