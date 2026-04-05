@@ -307,8 +307,8 @@ export const FileUploaderButton = ({
     hiddenFileInput.current?.click();
   };
 
-  const handleChange = async (e: React.FormEvent<HTMLInputElement>) => {
-    const files = e.currentTarget.files;
+  const handleChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
     setLoading(true);
     if (files) {
       const uploadedImages = await uploadImages(files);
@@ -322,7 +322,6 @@ export const FileUploaderButton = ({
     }
   };
 
-  // Drag and drop handlers
   const handleDragEnter = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -399,22 +398,23 @@ export const FileUploaderButton = ({
         )}
 
         {!isPlaceholder && (
-          /* Full-width upload button - only show when not in placeholder mode */
           <Button
             isLoading={loading}
             onClick={handleClick}
-            isIconOnly={isIconOnly}
+            isIconOnly={isIconOnly || loading}
             disabled={disabled || loading}
             className={`${
               isProductUpload && "w-full"
             } ${className} transition-all`}
             startContent={
-              <motion.div
-                animate={loading ? {} : { scale: [1, 1.05, 1] }}
-                transition={{ duration: 2, repeat: Infinity }}
-              >
-                <ArrowUpTrayIcon className="h-6 w-6" />
-              </motion.div>
+              loading ? undefined : (
+                <motion.div
+                  animate={{ scale: [1, 1.05, 1] }}
+                  transition={{ duration: 2, repeat: Infinity }}
+                >
+                  <ArrowUpTrayIcon className="h-6 w-6" />
+                </motion.div>
+              )
             }
           >
             {children ||
@@ -431,7 +431,7 @@ export const FileUploaderButton = ({
           accept={ALLOWED_TYPES.join(",")}
           multiple
           ref={hiddenFileInput}
-          onInput={handleChange}
+          onChange={handleChange}
           className="hidden"
         />
 

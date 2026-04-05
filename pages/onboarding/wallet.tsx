@@ -12,12 +12,17 @@ import { webln } from "@getalby/sdk";
 
 const OnboardingWallet = () => {
   const router = useRouter();
+  const { type } = router.query;
   const [nwcString, setNwcString] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleNext = () => {
-    router.push("/onboarding/shop-profile");
+    if (type === "seller") {
+      router.push("/onboarding/shop-profile");
+    } else {
+      router.push("/marketplace");
+    }
   };
 
   const handleConnect = async () => {
@@ -72,7 +77,7 @@ const OnboardingWallet = () => {
             </div>
             <div className="mb-6 text-center">
               <h2 className="text-2xl font-bold text-light-text dark:text-dark-text">
-                Step 3: Connect Wallet
+                Step 4: Connect Wallet
               </h2>
               <p className="text-light-text dark:text-dark-text">
                 Connect your NWC-enabled Lightning wallet to pay invoices

@@ -24,11 +24,10 @@ import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 import { cacheEventsToDatabase } from "@/utils/db/db-client";
 
 function getUniqueProofs(proofs: Proof[]): Proof[] {
-  const uniqueProofs = new Set<string>();
+  const seenSecrets = new Set<string>();
   return proofs.filter((proof) => {
-    const serializedProof = JSON.stringify(proof);
-    if (!uniqueProofs.has(serializedProof)) {
-      uniqueProofs.add(serializedProof);
+    if (!seenSecrets.has(proof.secret)) {
+      seenSecrets.add(proof.secret);
       return true;
     }
     return false;
@@ -127,16 +126,6 @@ export const fetchAllPosts = async (
       const mergedProductArray = Array.from(mergedProductsMap.values());
 
       editProductContext(mergedProductArray, false);
-
-      // Cache fetched products to database via API (only valid events with signatures)
-      const validProducts = fetchedEvents.filter(
-        (e) => e.id && e.sig && e.pubkey
-      );
-      if (validProducts.length > 0) {
-        cacheEventsToDatabase(validProducts).catch((error) =>
-          console.error("Failed to cache products to database:", error)
-        );
-      }
 
       resolve({
         productEvents: mergedProductArray,
@@ -472,6 +461,7 @@ export const fetchProfile = async (
         );
       }
 
+      editProfileContext(profileMap, false);
       resolve({ profileMap });
     } catch (error) {
       reject(error);
@@ -601,7 +591,7 @@ export const fetchGiftWrappedChatsAndMessages = async (
             );
             return;
           }
-          let cachedMessage = chatMessagesFromCache.get(event.id);
+          const cachedMessage = chatMessagesFromCache.get(event.id);
           let chatMessage: NostrMessageEvent;
           if (cachedMessage) {
             chatMessage = {
@@ -1238,15 +1228,26 @@ export const fetchCashuWallet = async (
 
         for (const event of walletEventsFromDb) {
           if (event.kind === 17375) {
-            const mints = event.tags.filter(
-              (tag: string[]) => tag[0] === "mint"
-            );
-            mints.forEach((tag: string[]) => {
-              if (tag[1] && !cashuMintSet.has(tag[1])) {
-                cashuMintSet.add(tag[1]);
-                cashuMints.push(tag[1]);
-              }
-            });
+            try {
+              const decrypted = await signer!.decrypt(
+                userPubkey,
+                event.content
+              );
+              const walletContent: string[][] = JSON.parse(decrypted);
+              walletContent
+                .filter((entry) => entry[0] === "mint")
+                .forEach((entry) => {
+                  if (entry[1] && !cashuMintSet.has(entry[1])) {
+                    cashuMintSet.add(entry[1]);
+                    cashuMints.push(entry[1]);
+                  }
+                });
+            } catch (error) {
+              console.error(
+                `Failed to decrypt wallet config event from DB ${event.id}:`,
+                error
+              );
+            }
           } else if (event.kind === 37375) {
             if (
               !mostRecentWalletEvent ||
@@ -1349,16 +1350,27 @@ export const fetchCashuWallet = async (
       for (const event of hEvents) {
         try {
           if (event.kind === 17375) {
-            // Extract mints from configuration events
-            const mints = event.tags.filter(
-              (tag: string[]) => tag[0] === "mint"
-            );
-            mints.forEach((tag) => {
-              if (tag[1] && !cashuMintSet.has(tag[1])) {
-                cashuMintSet.add(tag[1]);
-                cashuMints.push(tag[1]);
-              }
-            });
+            // Mints are stored in the encrypted content, not in tags
+            try {
+              const decrypted = await signer!.decrypt(
+                userPubkey,
+                event.content
+              );
+              const walletContent: string[][] = JSON.parse(decrypted);
+              walletContent
+                .filter((entry) => entry[0] === "mint")
+                .forEach((entry) => {
+                  if (entry[1] && !cashuMintSet.has(entry[1])) {
+                    cashuMintSet.add(entry[1]);
+                    cashuMints.push(entry[1]);
+                  }
+                });
+            } catch (decryptError) {
+              console.error(
+                `Failed to decrypt wallet config event ${event.id}:`,
+                decryptError
+              );
+            }
           } else if (event.kind === 37375) {
             // Find the most recent wallet state event
             if (
@@ -1505,11 +1517,13 @@ export const fetchCashuWallet = async (
                 .map((state) => state.Y)
             );
 
-            // Remove spent proofs
-            cashuProofs = cashuProofs.filter((proof, _index) => {
-              if (mintProofs.includes(proof)) {
-                const proofIndex = mintProofs.indexOf(proof);
-                return proofIndex === -1 || !spentYs.has(Ys[proofIndex]!);
+            // Remove spent proofs (compare by secret, not reference)
+            cashuProofs = cashuProofs.filter((proof) => {
+              const mintProofIndex = mintProofs.findIndex(
+                (mp) => mp.secret === proof.secret
+              );
+              if (mintProofIndex !== -1) {
+                return !spentYs.has(Ys[mintProofIndex]!);
               }
               return true;
             });
@@ -1538,13 +1552,12 @@ export const fetchCashuWallet = async (
           .filter((eventTags) =>
             eventTags.some((tag) => tag[0] === "direction" && tag[1] === "out")
           )
-          .map((eventTags) => {
-            const destroyedTag = eventTags.find(
-              (tag) => tag[0] === "e" && tag[3] === "destroyed"
-            );
-            return destroyedTag ? destroyedTag[1] : "";
-          })
-          .filter((eventId) => eventId !== "");
+          .flatMap((eventTags) =>
+            eventTags
+              .filter((tag) => tag[0] === "e" && tag[3] === "destroyed")
+              .map((tag) => tag[1])
+          )
+          .filter((eventId) => eventId !== "") as string[];
 
         const inProofIds = incomingSpendingHistory
           .filter((eventTags) =>
@@ -1559,7 +1572,7 @@ export const fetchCashuWallet = async (
             );
             return createdTag ? createdTag[1] : "";
           })
-          .filter((eventId) => eventId !== "");
+          .filter((eventId) => eventId !== "") as string[];
 
         // Remove proofs from events that were spent (out direction)
         const destroyedProofs = proofEvents
@@ -1569,8 +1582,7 @@ export const fetchCashuWallet = async (
         cashuProofs = cashuProofs.filter(
           (proof) =>
             !destroyedProofs.some(
-              (destroyed: Proof) =>
-                JSON.stringify(proof) === JSON.stringify(destroyed)
+              (destroyed: Proof) => destroyed.secret === proof.secret
             )
         );
 

@@ -80,14 +80,12 @@ export class NostrNIP46Signer implements NostrSigner {
       [
         {
           kinds: [24133],
-          since: Math.floor(Date.now() / 1000),
-          authors: [this.bunker.bunkerPubkey],
           "#p": [this.appPubKey],
         },
       ],
       {
         onevent: (event) => {
-          this.onEvent(event);
+          this.onEvent(event).catch(() => {});
         },
       }
     );
@@ -116,17 +114,23 @@ export class NostrNIP46Signer implements NostrSigner {
   }
 
   private async onEvent(event: NostrEvent) {
-    const conversationKey = nip44.getConversationKey(
-      this.appPrivKey,
-      event.pubkey
-    );
-    event.content = nip44.decrypt(event.content, conversationKey);
-    const content: any = JSON.parse(event.content);
+    let content: any;
+    try {
+      const conversationKey = nip44.getConversationKey(
+        this.appPrivKey,
+        event.pubkey
+      );
+      const decrypted = nip44.decrypt(event.content, conversationKey);
+      content = JSON.parse(decrypted);
+      event.content = decrypted;
+    } catch {
+      return;
+    }
 
     const id = content.id;
     const error = content.error;
     const result = content.result;
-    if (!id) throw new Error("invalid event content");
+    if (!id) return;
 
     if (result === "auth_url") {
       const abortController = new AbortController();

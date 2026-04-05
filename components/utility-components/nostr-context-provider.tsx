@@ -116,7 +116,7 @@ export function SignerContextProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const loadSigner = useCallback(() => {
+  const loadSigner = useCallback((retryCount = 0) => {
     let existingSigner;
     const { signer, signInMethod } = getLocalStorageData();
 
@@ -167,10 +167,18 @@ export function SignerContextProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    const signerObject: NostrSigner = NostrManager.signerFrom(
-      existingSigner!,
-      challengeHandler
-    );
+    let signerObject: NostrSigner;
+    try {
+      signerObject = NostrManager.signerFrom(existingSigner!, challengeHandler);
+    } catch {
+      const isExtension =
+        existingSigner?.type === "nip07" || signInMethod === "extension";
+      if (isExtension && retryCount < 10) {
+        setTimeout(() => loadSigner(retryCount + 1), 500);
+      }
+      return;
+    }
+
     if (!signerObject) return;
 
     setSigner(signerObject);

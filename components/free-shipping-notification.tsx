@@ -34,7 +34,8 @@ export default function FreeShippingNotification({
 
     const sellerTotals = new Map<string, number>();
     for (const item of cart) {
-      const effectivePrice = item.bulkPrice ?? item.volumePrice ?? item.price;
+      const effectivePrice =
+        item.bulkPrice ?? item.volumePrice ?? item.weightPrice ?? item.price;
       const prev = sellerTotals.get(item.pubkey) || 0;
       sellerTotals.set(item.pubkey, prev + effectivePrice);
     }

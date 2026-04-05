@@ -188,7 +188,7 @@ describe("MintButton Component", () => {
     renderComponent();
     clickMintButton();
     await waitFor(() => expect(screen.getByRole("dialog")).toBeVisible());
-    fireEvent.click(getMintDialogScope().getByRole("button", { name: /Cancel/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Cancel/i }));
     act(() => {
       jest.runOnlyPendingTimers();
     });
