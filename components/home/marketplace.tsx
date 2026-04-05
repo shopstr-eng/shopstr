@@ -376,7 +376,7 @@ function MarketplacePage({
             <div ref={searchBarRef} className="w-full sm:order-2 sm:w-auto">
               <Input
                 className="text-light-text dark:text-dark-text"
-                placeholder="Listing title, naddr1..., npub..."
+                placeholder="Title, summary, price, naddr1..., npub..."
                 value={selectedSearch}
                 startContent={<MagnifyingGlassIcon height={"1em"} />}
                 onChange={(event) => {
