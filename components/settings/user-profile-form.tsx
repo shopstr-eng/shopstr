@@ -1,4 +1,4 @@
-import { useEffect, useState, useContext, useMemo } from "react";
+import { useEffect, useRef, useState, useContext, useMemo } from "react";
 import { useRouter } from "next/router";
 import { useForm, Controller } from "react-hook-form";
 import {
@@ -141,90 +141,49 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
     return "https://robohash.org/" + userPubkey;
   }, [userPubkey]);
 
+  const contextLoadedRef = useRef(false);
   useEffect(() => {
     if (!userPubkey) return;
+    if (contextLoadedRef.current) return;
     setIsFetchingProfile(true);
-
-    const localFallback = parseLocalProfileFallback(
-      localStorage.getItem(getLocalUserProfileKey(userPubkey))
-    );
-
-    const profileMap = profileContext.profileData;
-    const profile = profileMap.has(userPubkey)
-      ? profileMap.get(userPubkey)
-      : undefined;
-
-    if (profile) {
-      const profileCreatedAt = profile.created_at || 0;
-      const shouldUseLocalFallback =
-        !!localFallback &&
-        localFallback.updatedAt > profileCreatedAt &&
-        isProfileContentPopulated(localFallback.content);
-
-      if (shouldUseLocalFallback) {
-        reset(localFallback.content);
-      } else {
-        reset(profile.content);
-      }
-
-      try {
-        localStorage.setItem(
-          getLocalUserProfileKey(userPubkey),
-          JSON.stringify({
-            content: shouldUseLocalFallback
-              ? localFallback!.content
-              : profile.content,
-            updatedAt: shouldUseLocalFallback
-              ? localFallback!.updatedAt
-              : profileCreatedAt,
-          })
-        );
-      } catch (error) {
-        console.error("Failed to persist profile fallback locally:", error);
-      }
-    } else {
-      try {
-        if (localFallback?.content) {
-          reset(localFallback.content);
-        }
-      } catch (error) {
-        console.error("Failed to read local profile fallback:", error);
-      }
-    }
-    setIsFetchingProfile(false);
-
-    if (signer instanceof NostrNSecSigner) {
-      const nsecSigner = signer as NostrNSecSigner;
-      nsecSigner._getNSec().then(
-        (nsec) => {
-          setUserNSec(nsec);
-        },
-        (err: unknown) => {
-          console.error(err);
-        }
-      );
-      const encKey = nsecSigner.getEncryptedPrivKey();
-      if (encKey && encKey.startsWith("ncryptsec")) {
-        setUserNcryptsec(encKey);
-      }
-    }
-
-    if (userPubkey) {
-      fetch("/api/auth/check-recovery", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pubkey: userPubkey }),
+    fetch(`/api/db/fetch-profile?pubkey=${encodeURIComponent(userPubkey)}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (contextLoadedRef.current) return;
+        if (data?.profile?.content) reset(data.profile.content);
       })
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.hasRecovery) {
-            setHasRecoverySetup(true);
-            setMaskedRecoveryEmail(data.maskedEmail || "");
-          }
-        })
-        .catch(() => {});
-    }
-  }, [profileContext, userPubkey, signer, reset]);
+      .catch(() => {})
+      .finally(() => {
+        if (!contextLoadedRef.current) setIsFetchingProfile(false);
+      });
+  }, [userPubkey, reset]);
+
+  useEffect(() => {
+    if (!userPubkey) return;
+    const profile = profileContext.profileData.get(userPubkey);
+    if (!profile) return;
+    contextLoadedRef.current = true;
+    setIsFetchingProfile(true);
+    reset(profile.content);
+    setIsFetchingProfile(false);
+  }, [profileContext, userPubkey, reset]);
+
+  useEffect(() => {
+    if (!userPubkey) return;
+    fetch("/api/auth/check-recovery", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pubkey: userPubkey }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.hasRecovery) {
+          setHasRecoverySetup(true);
+          setMaskedRecoveryEmail(data.maskedEmail || "");
+        }
+      })
+      .catch(() => {});
+  }, [userPubkey]);
 
   const onSubmit = async (data: { [x: string]: string }) => {
     if (!userPubkey) {
@@ -346,7 +305,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
       )}
 
       {/* NSec Display */}
-      {!isOnboarding && userNSec ? (
+      {!isOnboarding && (userNSec || signer instanceof NostrNSecSigner) ? (
         <div className="mb-4 flex items-center justify-between gap-2 overflow-hidden rounded-md border-3 border-black bg-white p-3">
           <p className="break-all font-mono text-sm font-medium text-black">
             {isNSecVisible
@@ -365,7 +324,17 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
                 isIconOnly
                 variant="light"
                 className="h-6 w-6 min-w-0 p-0 text-black"
-                onClick={() => setIsNSecVisible(!isNSecVisible)}
+                onClick={async () => {
+                  if (!userNSec && signer instanceof NostrNSecSigner) {
+                    try {
+                      const nsec = await (signer as NostrNSecSigner)._getNSec();
+                      setUserNSec(nsec);
+                    } catch (err) {
+                      console.error(err);
+                    }
+                  }
+                  setIsNSecVisible(!isNSecVisible);
+                }}
               >
                 {isNSecVisible ? "👁️⃠" : "👁️"}
               </Button>
@@ -397,7 +366,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
       ) : null}
 
       {/* NCryptsec Display */}
-      {!isOnboarding && userNcryptsec ? (
+      {!isOnboarding && (userNcryptsec || signer instanceof NostrNSecSigner) ? (
         <div className="mb-12 flex items-center justify-between gap-2 overflow-hidden rounded-md border-3 border-black bg-white p-3">
           <div className="min-w-0 flex-1">
             <p className="mb-1 text-xs font-bold text-gray-500">ncryptsec</p>
@@ -419,7 +388,16 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
                 isIconOnly
                 variant="light"
                 className="h-6 w-6 min-w-0 p-0 text-black"
-                onClick={() => setIsNcryptsecVisible(!isNcryptsecVisible)}
+                onClick={() => {
+                  if (!userNcryptsec && signer instanceof NostrNSecSigner) {
+                    const nsecSigner = signer as NostrNSecSigner;
+                    const encKey = nsecSigner.getEncryptedPrivKey();
+                    if (encKey && encKey.startsWith("ncryptsec")) {
+                      setUserNcryptsec(encKey);
+                    }
+                  }
+                  setIsNcryptsecVisible(!isNcryptsecVisible);
+                }}
               >
                 {isNcryptsecVisible ? "👁️⃠" : "👁️"}
               </Button>
@@ -458,7 +436,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
         </p>
       )}
 
-      {!isOnboarding && userNSec && (
+      {!isOnboarding && (userNSec || signer instanceof NostrNSecSigner) && (
         <div className="mb-8 rounded-md border-3 border-black bg-white p-4">
           <div className="mb-3 flex items-center gap-2">
             <ShieldCheckIcon className="h-5 w-5 text-black" />

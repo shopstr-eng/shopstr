@@ -18,8 +18,20 @@ export default async function handler(
     const event = events[0];
     if (!event) return res.status(200).json({ profile: null });
     let content: Record<string, any> = {};
-    try { content = JSON.parse(event.content); } catch { return res.status(200).json({ profile: null }); }
-    return res.status(200).json({ profile: { pubkey: event.pubkey, content, created_at: event.created_at } });
+    try {
+      content = JSON.parse(event.content);
+    } catch {
+      return res.status(200).json({ profile: null });
+    }
+    return res
+      .status(200)
+      .json({
+        profile: {
+          pubkey: event.pubkey,
+          content,
+          created_at: event.created_at,
+        },
+      });
   } catch (error) {
     console.error("Failed to fetch profile:", error);
     return res.status(500).json({ error: "Failed to fetch profile" });
