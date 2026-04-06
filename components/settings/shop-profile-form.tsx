@@ -295,6 +295,82 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
   const watchPicture = watch("picture");
   const defaultImage = "/milk-market.png";
 
+  // Tracks whether relay-context data has been applied so DB pre-load doesn't
+  // override more authoritative data that arrived later.
+  const contextLoadedRef = useRef(false);
+
+  const applyShopConfig = useCallback(
+    (config: any) => {
+      if (!config) return;
+      reset({
+        name: config.name || "",
+        about: config.about || "",
+        picture: config.ui?.picture || "",
+        banner: config.ui?.banner || "",
+      });
+      if (
+        config.freeShippingThreshold !== undefined &&
+        config.freeShippingThreshold > 0
+      ) {
+        setFreeShippingThreshold(String(config.freeShippingThreshold));
+      }
+      if (config.freeShippingCurrency) {
+        setFreeShippingCurrency(config.freeShippingCurrency);
+      }
+      if (config.storefront) {
+        const sf = config.storefront;
+        if (sf.colorScheme) setColors({ ...DEFAULT_COLORS, ...sf.colorScheme });
+        if (sf.shopSlug) {
+          setShopSlug(sf.shopSlug);
+          setSlugInput(sf.shopSlug);
+        }
+        if (sf.productLayout) setProductLayout(sf.productLayout);
+        if (sf.landingPageStyle) setLandingPageStyle(sf.landingPageStyle);
+        if (sf.fontHeading) setFontHeading(sf.fontHeading);
+        if (sf.fontBody) setFontBody(sf.fontBody);
+        if (sf.sections) setSections(sf.sections);
+        if (sf.pages) setPages(sf.pages);
+        if (sf.footer) setFooter(sf.footer);
+        if (sf.navLinks) setNavLinks(sf.navLinks);
+        if (sf.showCommunityPage) setShowCommunityPage(sf.showCommunityPage);
+        if (sf.showWalletPage) setShowWalletPage(sf.showWalletPage);
+        if (sf.contactEmail) setContactEmail(sf.contactEmail);
+      }
+    },
+    [reset]
+  );
+
+  // ── Fast path: seed the form immediately from the DB on mount ──────────────
+  useEffect(() => {
+    if (!userPubkey) return;
+    if (contextLoadedRef.current) return; // relay already loaded — skip DB fetch
+    setIsFetchingShop(true);
+    fetch(`/api/storefront/lookup?pubkey=${encodeURIComponent(userPubkey)}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (contextLoadedRef.current) return; // relay beat us to it
+        if (data?.shopConfig) applyShopConfig(data.shopConfig);
+      })
+      .catch((error) => {
+        console.error("Failed to fetch storefront lookup data:", error);
+      })
+      .finally(() => {
+        if (!contextLoadedRef.current) setIsFetchingShop(false);
+      });
+
+    fetch(
+      `/api/storefront/custom-domain?pubkey=${encodeURIComponent(userPubkey)}`
+    )
+      .then((r) => r.json())
+      .then((data) => {
+        if (data?.domain) setCustomDomain(data.domain);
+      })
+      .catch((error) => {
+        console.error("Failed to fetch storefront custom domain:", error);
+      });
+  }, [userPubkey, applyShopConfig]);
+
+  // ── Slow path: override with authoritative relay-context data when ready ───
   useEffect(() => {
     if (hasLoadedShopRef.current) return;
     const shopMap = shopContext.shopData;

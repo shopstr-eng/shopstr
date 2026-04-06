@@ -85,8 +85,10 @@ export const ProfileWithDropdown = ({
   useEffect(() => {
     const profileMap = profileContext.profileData;
     const profile = profileMap.has(pubkey) ? profileMap.get(pubkey) : undefined;
+    const npubFallback = pubkey ? nip19.npubEncode(pubkey) : "";
     setDisplayName(() => {
-      let name = profile && profile.content.name ? profile.content.name : npub;
+      let name =
+        profile && profile.content.name ? profile.content.name : npubFallback;
       if (profile?.content?.nip05 && profile.nip05Verified) {
         name = profile.content.nip05;
       }
@@ -99,7 +101,7 @@ export const ProfileWithDropdown = ({
         : `https://robohash.org/${pubkey}`
     );
     setIsNip05Verified(profile?.nip05Verified || false);
-  }, [profileContext, pubkey, npub]);
+  }, [profileContext, pubkey]);
 
   const DropDownItems: {
     [key in DropDownKeys]: DropdownItemProps & { label: string };
