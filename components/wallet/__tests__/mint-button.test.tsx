@@ -155,7 +155,9 @@ describe("MintButton Component", () => {
       jest.runOnlyPendingTimers();
     });
     await waitFor(() => {
-      const opacity = Number(dialog.parentElement?.style.opacity ?? 1);
+      const opacityValue = dialog.parentElement?.style.opacity;
+      const opacity =
+        opacityValue === "" || opacityValue == null ? 1 : Number(opacityValue);
       expect(opacity).toBeLessThan(1);
     });
   });
