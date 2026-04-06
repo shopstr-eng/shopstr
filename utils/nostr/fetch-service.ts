@@ -355,7 +355,10 @@ export const fetchProfile = async (
   nostr: NostrManager,
   relays: string[],
   pubkeyProfilesToFetch: string[],
-  editProfileContext: (productEvents: Map<any, any>, isLoading: boolean) => void,
+  editProfileContext: (
+    productEvents: Map<any, any>,
+    isLoading: boolean
+  ) => void,
   existingProfileMap: Map<string, any> = new Map()
 ): Promise<{
   profileMap: Map<string, any>;
@@ -419,7 +422,10 @@ export const fetchProfile = async (
               dbProfileMap.set(pubkey, profile);
               updateProfileIfNewer(profile);
             } catch (error) {
-              console.error(`Failed to parse profile from DB: ${pubkey}`, error);
+              console.error(
+                `Failed to parse profile from DB: ${pubkey}`,
+                error
+              );
             }
           }
 

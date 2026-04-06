@@ -446,11 +446,15 @@ export default function Component() {
     setDiscountErrors({ ...discountErrors, [pubkey]: "" });
 
     // Remove from localStorage
-    const discounts = getLocalStorageJson<CartDiscountsMap>("cartDiscounts", {}, {
-      removeOnError: true,
-      removeOnValidationError: true,
-      validate: isCartDiscountsMap,
-    });
+    const discounts = getLocalStorageJson<CartDiscountsMap>(
+      "cartDiscounts",
+      {},
+      {
+        removeOnError: true,
+        removeOnValidationError: true,
+        validate: isCartDiscountsMap,
+      }
+    );
     if (Object.keys(discounts).length > 0) {
       delete discounts[pubkey];
       localStorage.setItem("cartDiscounts", JSON.stringify(discounts));

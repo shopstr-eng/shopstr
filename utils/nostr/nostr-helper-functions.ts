@@ -1470,14 +1470,21 @@ export const getLocalStorageData = (): LocalStorageInterface => {
       removeOnError: true,
       validate: isArray,
     });
-    if (tokens.length === 0 && !localStorage.getItem(LOCALSTORAGECONSTANTS.tokens)) {
+    if (
+      tokens.length === 0 &&
+      !localStorage.getItem(LOCALSTORAGECONSTANTS.tokens)
+    ) {
       localStorage.setItem(LOCALSTORAGECONSTANTS.tokens, JSON.stringify([]));
     }
 
-    history = getLocalStorageJson<unknown[]>(LOCALSTORAGECONSTANTS.history, [], {
-      removeOnError: true,
-      validate: isArray,
-    });
+    history = getLocalStorageJson<unknown[]>(
+      LOCALSTORAGECONSTANTS.history,
+      [],
+      {
+        removeOnError: true,
+        validate: isArray,
+      }
+    );
     if (
       history.length === 0 &&
       !localStorage.getItem(LOCALSTORAGECONSTANTS.history)

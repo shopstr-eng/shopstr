@@ -8,10 +8,9 @@ describe("safe-json helpers", () => {
 
   describe("parseJsonWithFallback", () => {
     it("returns parsed value for valid JSON", () => {
-      const parsed = parseJsonWithFallback<{ ok: boolean }>(
-        '{"ok":true}',
-        { ok: false }
-      );
+      const parsed = parseJsonWithFallback<{ ok: boolean }>('{"ok":true}', {
+        ok: false,
+      });
 
       expect(parsed).toEqual({ ok: true });
     });
@@ -23,14 +22,11 @@ describe("safe-json helpers", () => {
     });
 
     it("returns fallback when validator fails", () => {
-      const parsed = parseJsonWithFallback<string[]>(
-        "[1,2,3]",
-        [],
-        {
-          validate: (value): value is string[] =>
-            Array.isArray(value) && value.every((item) => typeof item === "string"),
-        }
-      );
+      const parsed = parseJsonWithFallback<string[]>("[1,2,3]", [], {
+        validate: (value): value is string[] =>
+          Array.isArray(value) &&
+          value.every((item) => typeof item === "string"),
+      });
 
       expect(parsed).toEqual([]);
     });
@@ -62,7 +58,8 @@ describe("safe-json helpers", () => {
       const parsed = getLocalStorageJson<string[]>("relays", [], {
         removeOnError: true,
         validate: (value): value is string[] =>
-          Array.isArray(value) && value.every((item) => typeof item === "string"),
+          Array.isArray(value) &&
+          value.every((item) => typeof item === "string"),
       });
 
       expect(parsed).toEqual([]);
@@ -77,7 +74,8 @@ describe("safe-json helpers", () => {
       const parsed = getLocalStorageJson<string[]>("relays", [], {
         removeOnValidationError: true,
         validate: (value): value is string[] =>
-          Array.isArray(value) && value.every((item) => typeof item === "string"),
+          Array.isArray(value) &&
+          value.every((item) => typeof item === "string"),
       });
 
       expect(parsed).toEqual([]);
@@ -96,7 +94,8 @@ describe("safe-json helpers", () => {
       localStorage.setItem("relays", "[1,2,3]");
       getLocalStorageJson<string[]>("relays", [], {
         validate: (value): value is string[] =>
-          Array.isArray(value) && value.every((item) => typeof item === "string"),
+          Array.isArray(value) &&
+          value.every((item) => typeof item === "string"),
         onError,
       });
 
@@ -104,7 +103,10 @@ describe("safe-json helpers", () => {
         expect.objectContaining({ reason: "parse_error", key: "cart" })
       );
       expect(onError).toHaveBeenCalledWith(
-        expect.objectContaining({ reason: "validation_mismatch", key: "relays" })
+        expect.objectContaining({
+          reason: "validation_mismatch",
+          key: "relays",
+        })
       );
     });
   });
