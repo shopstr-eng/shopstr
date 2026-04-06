@@ -270,6 +270,7 @@ export async function constructGiftWrappedEvent(
     donationPercentage?: number;
     selectedSize?: string;
     selectedVolume?: string;
+    selectedWeight?: string;
     selectedBulkOption?: number;
   } = {}
 ): Promise<GiftWrappedMessageEvent> {
@@ -298,6 +299,7 @@ export async function constructGiftWrappedEvent(
     donationPercentage,
     selectedSize,
     selectedVolume,
+    selectedWeight,
     selectedBulkOption,
   } = options;
 
@@ -332,6 +334,7 @@ export async function constructGiftWrappedEvent(
     if (pickup) tags.push(["pickup", pickup]);
     if (selectedSize) tags.push(["size", selectedSize]);
     if (selectedVolume) tags.push(["volume", selectedVolume]);
+    if (selectedWeight) tags.push(["weight", selectedWeight]);
     if (selectedBulkOption) tags.push(["bulk", selectedBulkOption.toString()]);
     if (
       donationAmount &&
@@ -666,7 +669,7 @@ export async function publishSavedForLaterEvent(
     };
 
     await finalizeAndSendNostrEvent(signer, nostr, cartEvent);
-  } catch (_) {
+  } catch {
     return;
   }
 }
@@ -705,7 +708,7 @@ export async function publishWalletEvent(
         console.error("Failed to cache wallet event to database:", error)
       );
     }
-  } catch (_) {
+  } catch {
     return;
   }
 }
@@ -754,7 +757,7 @@ export async function publishProofEvent(
       signedEvent && signedEvent.id ? signedEvent.id : "",
       deletedEventsArray
     );
-  } catch (_) {
+  } catch {
     return;
   }
 }
@@ -794,7 +797,7 @@ export async function publishSpendingHistoryEvent(
       created_at: Math.floor(Date.now() / 1000),
     };
     await finalizeAndSendNostrEvent(signer!, nostr!, cashuSpendingHistoryEvent);
-  } catch (_) {
+  } catch {
     return;
   }
 }
