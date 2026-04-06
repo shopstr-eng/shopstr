@@ -93,22 +93,22 @@ export default function RecoveryKeyModal({
       <ModalContent>
         <ModalBody>
           <div className="flex flex-col items-center gap-4">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
-              <ShieldCheckIcon className="h-8 w-8 text-green-600 dark:text-green-400" />
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
+              <ShieldCheckIcon className="h-8 w-8 text-green-600" />
             </div>
 
             <h2 className="text-center text-xl font-bold">
               Save Your Recovery Key
             </h2>
 
-            <p className="text-light-text dark:text-dark-text text-center text-sm opacity-70">
+            <p className="text-light-text text-center text-sm opacity-70">
               This key is the <strong>only way</strong> to recover your account
               if you forget your password or passphrase. Save it somewhere safe
               — it will not be shown again.
             </p>
 
-            <div className="w-full rounded-lg border border-yellow-200 bg-yellow-50 p-4 dark:border-yellow-800 dark:bg-yellow-900/20">
-              <p className="select-all break-all text-center font-mono text-lg font-bold tracking-wider text-yellow-800 dark:text-yellow-200">
+            <div className="w-full rounded-lg border border-yellow-200 bg-yellow-50 p-4">
+              <p className="select-all break-all text-center font-mono text-lg font-bold tracking-wider text-yellow-800">
                 {recoveryKey}
               </p>
             </div>
@@ -152,7 +152,7 @@ export default function RecoveryKeyModal({
             </div>
 
             <Button
-              className="w-full bg-black font-semibold text-white dark:bg-white dark:text-black"
+              className="w-full bg-black font-semibold text-white"
               isDisabled={!acknowledged}
               onPress={onClose}
               size="lg"

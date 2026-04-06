@@ -48,7 +48,7 @@ import SubscriptionPricingCards from "./subscription-pricing-cards";
 import SellerReviewReply from "./seller-review-reply";
 import { getLocalStorageJson } from "@/utils/safe-json";
 
-const SUMMARY_CHARACTER_LIMIT = 100;
+const SUMMARY_CHARACTER_LIMIT = 200;
 type CartDiscountsMap = Record<string, { code: string; percentage: number }>;
 
 const isCartDiscountsMap = (value: unknown): value is CartDiscountsMap => {
