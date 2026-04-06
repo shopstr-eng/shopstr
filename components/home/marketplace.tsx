@@ -50,6 +50,7 @@ import {
   findPubkeyByProfileSlug,
   isNpub,
 } from "@/utils/url-slugs";
+import { useDebounce } from "@/utils/hooks/useDebounce";
 
 function MarketplacePage({
   focusedPubkey,
@@ -68,6 +69,7 @@ function MarketplacePage({
   );
   const [selectedLocation, setSelectedLocation] = useState("");
   const [selectedSearch, setSelectedSearch] = useState("");
+  const debouncedSearch = useDebounce(selectedSearch, 300);
   const { isOpen, onOpen, onClose } = useDisclosure();
 
   const [wotFilter, setWotFilter] = useState(false);
@@ -525,7 +527,7 @@ function MarketplacePage({
             focusedPubkey={focusedPubkey}
             selectedCategories={selectedCategories}
             selectedLocation={selectedLocation}
-            selectedSearch={selectedSearch}
+            selectedSearch={debouncedSearch}
             wotFilter={wotFilter}
             setCategories={setCategories}
             onFilteredProductsChange={handleFilteredProductsChange}
