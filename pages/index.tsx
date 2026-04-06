@@ -43,7 +43,9 @@ export default function Landing() {
         if (typeof data.sellerCount === "number")
           setSellerCount(data.sellerCount);
       })
-      .catch(() => {});
+      .catch((error) => {
+        console.error("Failed to fetch marketplace stats:", error);
+      });
   }, []);
   useEffect(() => {
     if (router.pathname === "/" && signerContext.isLoggedIn) {
