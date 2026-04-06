@@ -81,6 +81,7 @@ const renderWithProviders = (
 describe("UserProfileForm", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    localStorage.clear();
   });
 
   test("displays the form after initial data load", async () => {
@@ -156,7 +157,7 @@ describe("UserProfileForm", () => {
     });
   });
 
-  test("updates profile picture via uploader", async () => {
+  test("updates the profile picture via uploader", async () => {
     const user = userEvent.setup();
     renderWithProviders(<UserProfileForm />);
     await screen.findByLabelText("Display name");

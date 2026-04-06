@@ -34,6 +34,7 @@ import currencySelection from "../../public/currencySelection.json";
 import { ShopMapContext, ProfileMapContext } from "@/utils/context/context";
 import { nip19 } from "nostr-tools";
 import StorefrontThemeWrapper from "@/components/storefront/storefront-theme-wrapper";
+import { getLocalStorageJson } from "@/utils/safe-json";
 
 interface QuantitySelectorProps {
   value: number;
@@ -43,6 +44,26 @@ interface QuantitySelectorProps {
   min: number;
   max: number;
 }
+
+type CartDiscountsMap = Record<string, { code: string; percentage: number }>;
+
+const isCartDiscountsMap = (value: unknown): value is CartDiscountsMap => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+
+  return Object.values(value).every((entry) => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+      return false;
+    }
+
+    const candidate = entry as { code?: unknown; percentage?: unknown };
+    return (
+      typeof candidate.code === "string" &&
+      typeof candidate.percentage === "number"
+    );
+  });
+};
 
 function QuantitySelector({
   value,
@@ -305,13 +326,10 @@ export default function Component() {
         sessionStorage.getItem("sf_seller_pubkey") ||
         localStorage.getItem("sf_seller_pubkey") ||
         "";
-      let fullCart: ProductData[] = [];
-      try {
-        const raw = localStorage.getItem("cart");
-        if (raw) fullCart = JSON.parse(raw);
-      } catch {
-        localStorage.removeItem("cart");
-      }
+      const fullCart = getLocalStorageJson<ProductData[]>("cart", [], {
+        removeOnError: true,
+        validate: Array.isArray,
+      });
 
       let cartList = fullCart;
       if (sfPk) {
@@ -357,21 +375,28 @@ export default function Component() {
       }
 
       // Load saved discount codes
-      const storedDiscounts = localStorage.getItem("cartDiscounts");
-      if (storedDiscounts) {
-        let discounts;
-        try {
-          discounts = JSON.parse(storedDiscounts);
-        } catch {
-          localStorage.removeItem("cartDiscounts");
-          return;
+      const discounts = getLocalStorageJson<CartDiscountsMap>(
+        "cartDiscounts",
+        {},
+        {
+          removeOnError: true,
+          removeOnValidationError: true,
+          validate: isCartDiscountsMap,
         }
+      );
+      if (Object.keys(discounts).length > 0) {
         const codes: { [pubkey: string]: string } = {};
         const applied: { [pubkey: string]: number } = {};
 
-        Object.entries(discounts).forEach(([pubkey, data]: [string, any]) => {
-          codes[pubkey] = data.code;
-          applied[pubkey] = data.percentage;
+        Object.entries(discounts).forEach(([pubkey, data]) => {
+          if (!data || typeof data !== "object") return;
+          const code = (data as { code?: unknown }).code;
+          const percentage = (data as { percentage?: unknown }).percentage;
+          if (typeof code !== "string" || typeof percentage !== "number") {
+            return;
+          }
+          codes[pubkey] = code;
+          applied[pubkey] = percentage;
         });
 
         setDiscountCodes(codes);
@@ -540,13 +565,10 @@ export default function Component() {
   };
 
   const handleRemoveFromCart = (productId: string) => {
-    let cartContent: ProductData[] = [];
-    try {
-      const raw = localStorage.getItem("cart");
-      if (raw) cartContent = JSON.parse(raw);
-    } catch {
-      localStorage.removeItem("cart");
-    }
+    const cartContent = getLocalStorageJson<ProductData[]>("cart", [], {
+      removeOnError: true,
+      validate: Array.isArray,
+    });
     if (cartContent.length > 0) {
       const updatedCart = cartContent.filter(
         (obj: ProductData) => obj.id !== productId
@@ -601,15 +623,15 @@ export default function Component() {
         setDiscountErrors({ ...discountErrors, [pubkey]: "" });
 
         // Save to localStorage
-        const storedDiscounts = localStorage.getItem("cartDiscounts");
-        let discounts: {
-          [pubkey: string]: { code: string; percentage: number };
-        } = {};
-        try {
-          if (storedDiscounts) discounts = JSON.parse(storedDiscounts);
-        } catch {
-          localStorage.removeItem("cartDiscounts");
-        }
+        const discounts = getLocalStorageJson<CartDiscountsMap>(
+          "cartDiscounts",
+          {},
+          {
+            removeOnError: true,
+            removeOnValidationError: true,
+            validate: isCartDiscountsMap,
+          }
+        );
         discounts[pubkey] = {
           code: code,
           percentage: result.discount_percentage,
@@ -638,15 +660,16 @@ export default function Component() {
     setDiscountErrors({ ...discountErrors, [pubkey]: "" });
 
     // Remove from localStorage
-    const storedDiscounts = localStorage.getItem("cartDiscounts");
-    if (storedDiscounts) {
-      let discounts;
-      try {
-        discounts = JSON.parse(storedDiscounts);
-      } catch {
-        localStorage.removeItem("cartDiscounts");
-        return;
+    const discounts = getLocalStorageJson<CartDiscountsMap>(
+      "cartDiscounts",
+      {},
+      {
+        removeOnError: true,
+        removeOnValidationError: true,
+        validate: isCartDiscountsMap,
       }
+    );
+    if (Object.keys(discounts).length > 0) {
       delete discounts[pubkey];
       localStorage.setItem("cartDiscounts", JSON.stringify(discounts));
     }

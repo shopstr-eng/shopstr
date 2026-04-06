@@ -8,29 +8,35 @@ export async function cacheEventToDatabase(event: NostrEvent): Promise<void> {
       body: JSON.stringify(event),
     });
     if (!response.ok) {
-      throw new Error("Failed to cache event to database");
+      console.error("Failed to cache event to database");
     }
   } catch (error) {
     console.error("Failed to cache event to database:", error);
-    throw error;
   }
 }
+
+const CACHE_EVENTS_CHUNK_SIZE = 50;
 
 export async function cacheEventsToDatabase(
   events: NostrEvent[]
 ): Promise<void> {
   try {
-    const response = await fetch("/api/db/cache-events", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(events),
-    });
-    if (!response.ok) {
-      throw new Error("Failed to cache events to database");
+    const chunks: NostrEvent[][] = [];
+    for (let i = 0; i < events.length; i += CACHE_EVENTS_CHUNK_SIZE) {
+      chunks.push(events.slice(i, i + CACHE_EVENTS_CHUNK_SIZE));
+    }
+    for (const chunk of chunks) {
+      const response = await fetch("/api/db/cache-events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(chunk),
+      });
+      if (!response.ok) {
+        console.error("Failed to cache events to database");
+      }
     }
   } catch (error) {
     console.error("Failed to cache events to database:", error);
-    throw error;
   }
 }
 
@@ -77,7 +83,8 @@ export async function getFailedRelayPublishes(): Promise<
   try {
     const response = await fetch("/api/db/get-failed-publishes");
     if (!response.ok) {
-      throw new Error("Failed to fetch failed relay publishes");
+      console.error("Failed to fetch failed relay publishes");
+      return [];
     }
     return await response.json();
   } catch (error) {

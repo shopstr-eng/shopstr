@@ -34,6 +34,59 @@ interface UserProfileFormProps {
   isOnboarding?: boolean;
 }
 
+const getLocalUserProfileKey = (pubkey: string) =>
+  `shopstr:user-profile:${pubkey}`;
+
+interface LocalProfileFallback {
+  content: Record<string, unknown>;
+  updatedAt: number;
+}
+
+const isProfileContentPopulated = (content: Record<string, unknown>) =>
+  Object.values(content).some(
+    (value) => value !== "" && value !== null && value !== undefined
+  );
+
+const parseLocalProfileFallback = (
+  raw: string | null
+): LocalProfileFallback | null => {
+  if (!raw) return null;
+
+  try {
+    const parsed = JSON.parse(raw);
+
+    // Backward compatibility: previously we stored content directly.
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      !Array.isArray(parsed) &&
+      !("content" in parsed)
+    ) {
+      return {
+        content: parsed as Record<string, unknown>,
+        updatedAt: 0,
+      };
+    }
+
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      !Array.isArray(parsed) &&
+      "content" in parsed
+    ) {
+      const fallback = parsed as LocalProfileFallback;
+      return {
+        content: fallback.content || {},
+        updatedAt: fallback.updatedAt || 0,
+      };
+    }
+  } catch (error) {
+    console.error("Failed to parse local profile fallback:", error);
+  }
+
+  return null;
+};
+
 const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
   const router = useRouter();
   const { nostr } = useContext(NostrContext);
@@ -91,12 +144,52 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
   useEffect(() => {
     if (!userPubkey) return;
     setIsFetchingProfile(true);
+
+    const localFallback = parseLocalProfileFallback(
+      localStorage.getItem(getLocalUserProfileKey(userPubkey))
+    );
+
     const profileMap = profileContext.profileData;
     const profile = profileMap.has(userPubkey)
       ? profileMap.get(userPubkey)
       : undefined;
+
     if (profile) {
-      reset(profile.content);
+      const profileCreatedAt = profile.created_at || 0;
+      const shouldUseLocalFallback =
+        !!localFallback &&
+        localFallback.updatedAt > profileCreatedAt &&
+        isProfileContentPopulated(localFallback.content);
+
+      if (shouldUseLocalFallback) {
+        reset(localFallback.content);
+      } else {
+        reset(profile.content);
+      }
+
+      try {
+        localStorage.setItem(
+          getLocalUserProfileKey(userPubkey),
+          JSON.stringify({
+            content: shouldUseLocalFallback
+              ? localFallback!.content
+              : profile.content,
+            updatedAt: shouldUseLocalFallback
+              ? localFallback!.updatedAt
+              : profileCreatedAt,
+          })
+        );
+      } catch (error) {
+        console.error("Failed to persist profile fallback locally:", error);
+      }
+    } else {
+      try {
+        if (localFallback?.content) {
+          reset(localFallback.content);
+        }
+      } catch (error) {
+        console.error("Failed to read local profile fallback:", error);
+      }
     }
     setIsFetchingProfile(false);
 
@@ -134,34 +227,54 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
   }, [profileContext, userPubkey, signer, reset]);
 
   const onSubmit = async (data: { [x: string]: string }) => {
-    if (!userPubkey) throw new Error("pubkey is undefined");
-    setIsUploadingProfile(true);
-
-    const profileMap = profileContext.profileData;
-    const existingProfile = profileMap.has(userPubkey)
-      ? profileMap.get(userPubkey)
-      : undefined;
-    const existingContent = existingProfile?.content || {};
-
-    const mergedData: { [key: string]: any } = { ...existingContent };
-    for (const [key, value] of Object.entries(data)) {
-      if (value !== "" && value !== undefined && value !== null) {
-        mergedData[key] = value;
-      }
+    if (!userPubkey) {
+      console.error("Cannot save profile: pubkey is undefined");
+      return;
     }
 
-    await createNostrProfileEvent(nostr!, signer!, JSON.stringify(mergedData));
-    profileContext.updateProfileData({
-      pubkey: userPubkey!,
-      content: mergedData,
-      created_at: 0,
-    });
-    setIsUploadingProfile(false);
-    setIsSaved(true);
-    setTimeout(() => setIsSaved(false), 3000);
+    setIsUploadingProfile(true);
+    try {
+      const profileMap = profileContext.profileData;
+      const existingProfile = profileMap.has(userPubkey)
+        ? profileMap.get(userPubkey)?.content
+        : {};
 
-    if (isOnboarding) {
-      router.push("/onboarding/shop-profile");
+      const updatedData = {
+        ...existingProfile,
+        ...data,
+      };
+
+      try {
+        localStorage.setItem(
+          getLocalUserProfileKey(userPubkey),
+          JSON.stringify({
+            content: updatedData,
+            updatedAt: Math.floor(Date.now() / 1000),
+          })
+        );
+      } catch (error) {
+        console.error("Failed to save local profile fallback:", error);
+      }
+
+      await createNostrProfileEvent(
+        nostr!,
+        signer!,
+        JSON.stringify(updatedData)
+      );
+      profileContext.updateProfileData({
+        pubkey: userPubkey,
+        content: updatedData,
+        created_at: Math.floor(Date.now() / 1000),
+      });
+
+      if (isOnboarding) {
+        router.push("/onboarding/wallet?type=seller");
+      }
+    } catch (error) {
+      console.error("Failed to save user profile:", error);
+    } finally {
+      setIsUploadingProfile(false);
+      setIsSaved(true);
     }
   };
 

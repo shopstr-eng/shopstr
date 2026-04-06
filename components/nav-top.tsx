@@ -9,6 +9,7 @@ import { useRouter } from "next/router";
 import SignInModal from "./sign-in/SignInModal";
 import { ProfileWithDropdown } from "./utility-components/profile/profile-dropdown";
 import { ShopProfile } from "../utils/types/types";
+import { getLocalStorageJson } from "@/utils/safe-json";
 
 const TopNav = ({
   setFocusedPubkey,
@@ -44,11 +45,14 @@ const TopNav = ({
 
   useEffect(() => {
     const fetchAndUpdateCartQuantity = async () => {
-      const cartList = localStorage.getItem("cart")
-        ? JSON.parse(localStorage.getItem("cart") as string)
-        : [];
-      if (cartList) {
+      const cartList = getLocalStorageJson<unknown[]>("cart", [], {
+        removeOnError: true,
+        validate: Array.isArray,
+      });
+      if (cartList.length > 0) {
         setCartQuantity(cartList.length);
+      } else {
+        setCartQuantity(0);
       }
     };
 

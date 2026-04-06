@@ -46,8 +46,28 @@ import ZapsnagButton from "@/components/ZapsnagButton";
 import { RawEventModal, EventIdModal } from "./modals/event-modals";
 import SubscriptionPricingCards from "./subscription-pricing-cards";
 import SellerReviewReply from "./seller-review-reply";
+import { getLocalStorageJson } from "@/utils/safe-json";
 
-const SUMMARY_CHARACTER_LIMIT = 200;
+const SUMMARY_CHARACTER_LIMIT = 100;
+type CartDiscountsMap = Record<string, { code: string; percentage: number }>;
+
+const isCartDiscountsMap = (value: unknown): value is CartDiscountsMap => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+
+  return Object.values(value).every((entry) => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+      return false;
+    }
+
+    const candidate = entry as { code?: unknown; percentage?: unknown };
+    return (
+      typeof candidate.code === "string" &&
+      typeof candidate.percentage === "number"
+    );
+  });
+};
 
 export default function CheckoutCard({
   productData,
@@ -225,9 +245,10 @@ export default function CheckoutCard({
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const cartList = localStorage.getItem("cart")
-        ? JSON.parse(localStorage.getItem("cart") as string)
-        : [];
+      const cartList = getLocalStorageJson<ProductData[]>("cart", [], {
+        removeOnError: true,
+        validate: Array.isArray,
+      });
       if (cartList && cartList.length > 0) {
         setCart(cartList);
       }
@@ -373,6 +394,26 @@ export default function CheckoutCard({
       sellerShop.content.freeShippingThreshold > 0
     ) {
       setShowFreeShippingNotification(true);
+      
+      // Store discount code if applied
+      if (appliedDiscount > 0 && discountCode) {
+        const discounts = getLocalStorageJson<CartDiscountsMap>(
+          "cartDiscounts",
+          {},
+          {
+            removeOnError: true,
+            removeOnValidationError: true,
+            validate: isCartDiscountsMap,
+          }
+        );
+        discounts[productData.pubkey] = {
+          code: discountCode,
+          percentage: appliedDiscount,
+        };
+        localStorage.setItem("cartDiscounts", JSON.stringify(discounts));
+      }
+    } else {
+      onOpen();
     }
   };
 
