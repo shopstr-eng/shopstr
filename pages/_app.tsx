@@ -370,8 +370,32 @@ function Shopstr({ props }: { props: AppProps }) {
     isLoading: boolean
   ) => {
     setProfileContext((profileContext) => {
+      const mergedProfileData = new Map(profileContext.profileData);
+
+      profileData.forEach((incomingProfile, pubkey) => {
+        const existingProfile = mergedProfileData.get(pubkey);
+        if (
+          !existingProfile ||
+          (incomingProfile?.created_at ?? 0) >
+            (existingProfile?.created_at ?? 0)
+        ) {
+          mergedProfileData.set(pubkey, incomingProfile);
+          return;
+        }
+
+        if (
+          (incomingProfile?.created_at ?? 0) ===
+          (existingProfile?.created_at ?? 0)
+        ) {
+          mergedProfileData.set(pubkey, {
+            ...existingProfile,
+            ...incomingProfile,
+          });
+        }
+      });
+
       return {
-        profileData,
+        profileData: mergedProfileData,
         isLoading,
         updateProfileData: profileContext.updateProfileData,
       };
