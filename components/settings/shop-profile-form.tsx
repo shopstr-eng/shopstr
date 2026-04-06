@@ -1,4 +1,11 @@
-import { useEffect, useState, useContext, useMemo, useRef } from "react";
+import {
+  useCallback,
+  useEffect,
+  useState,
+  useContext,
+  useMemo,
+  useRef,
+} from "react";
 import { useRouter } from "next/router";
 import { useForm, Controller } from "react-hook-form";
 import {
@@ -319,10 +326,10 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
       }
       if (config.storefront) {
         const sf = config.storefront;
-        if (sf.colorScheme) setColors({ ...DEFAULT_COLORS, ...sf.colorScheme });
+        if (sf.colorScheme)
+          setColorScheme({ ...DEFAULT_COLORS, ...sf.colorScheme });
         if (sf.shopSlug) {
           setShopSlug(sf.shopSlug);
-          setSlugInput(sf.shopSlug);
         }
         if (sf.productLayout) setProductLayout(sf.productLayout);
         if (sf.landingPageStyle) setLandingPageStyle(sf.landingPageStyle);
@@ -334,7 +341,6 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
         if (sf.navLinks) setNavLinks(sf.navLinks);
         if (sf.showCommunityPage) setShowCommunityPage(sf.showCommunityPage);
         if (sf.showWalletPage) setShowWalletPage(sf.showWalletPage);
-        if (sf.contactEmail) setContactEmail(sf.contactEmail);
       }
     },
     [reset]
@@ -356,17 +362,6 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
       })
       .finally(() => {
         if (!contextLoadedRef.current) setIsFetchingShop(false);
-      });
-
-    fetch(
-      `/api/storefront/custom-domain?pubkey=${encodeURIComponent(userPubkey)}`
-    )
-      .then((r) => r.json())
-      .then((data) => {
-        if (data?.domain) setCustomDomain(data.domain);
-      })
-      .catch((error) => {
-        console.error("Failed to fetch storefront custom domain:", error);
       });
   }, [userPubkey, applyShopConfig]);
 
