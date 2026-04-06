@@ -229,7 +229,9 @@ const UserProfilePage = () => {
                         // Only decrypt nsec when user explicitly asks to see it.
                         if (!userNSec && signer instanceof NostrNSecSigner) {
                           try {
-                            const nsec = await (signer as NostrNSecSigner)._getNSec();
+                            const nsec = await (
+                              signer as NostrNSecSigner
+                            )._getNSec();
                             setUserNSec(nsec);
                           } catch (err) {
                             console.error(err);
