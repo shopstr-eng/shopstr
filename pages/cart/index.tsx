@@ -43,6 +43,24 @@ interface QuantitySelectorProps {
 
 type CartDiscountsMap = Record<string, { code: string; percentage: number }>;
 
+const isCartDiscountsMap = (value: unknown): value is CartDiscountsMap => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+
+  return Object.values(value).every((entry) => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+      return false;
+    }
+
+    const candidate = entry as { code?: unknown; percentage?: unknown };
+    return (
+      typeof candidate.code === "string" &&
+      typeof candidate.percentage === "number"
+    );
+  });
+};
+
 function QuantitySelector({
   value,
   onDecrease,
@@ -227,7 +245,11 @@ export default function Component() {
       const discounts = getLocalStorageJson<CartDiscountsMap>(
         "cartDiscounts",
         {},
-        { removeOnError: true }
+        {
+          removeOnError: true,
+          removeOnValidationError: true,
+          validate: isCartDiscountsMap,
+        }
       );
       if (Object.keys(discounts).length > 0) {
         const codes: { [pubkey: string]: string } = {};
@@ -390,7 +412,11 @@ export default function Component() {
         const discounts = getLocalStorageJson<CartDiscountsMap>(
           "cartDiscounts",
           {},
-          { removeOnError: true }
+          {
+            removeOnError: true,
+            removeOnValidationError: true,
+            validate: isCartDiscountsMap,
+          }
         );
         discounts[pubkey] = {
           code: code,
@@ -422,6 +448,8 @@ export default function Component() {
     // Remove from localStorage
     const discounts = getLocalStorageJson<CartDiscountsMap>("cartDiscounts", {}, {
       removeOnError: true,
+      removeOnValidationError: true,
+      validate: isCartDiscountsMap,
     });
     if (Object.keys(discounts).length > 0) {
       delete discounts[pubkey];
