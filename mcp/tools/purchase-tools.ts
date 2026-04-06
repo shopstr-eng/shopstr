@@ -1,4 +1,5 @@
 import { getDbPool } from "@/utils/db/db-service";
+import { canActorUpdateMcpOrderStatus } from "./order-status-auth";
 
 export interface CreateOrderInput {
   productId: string;
@@ -150,15 +151,28 @@ export async function updateMcpOrderPayment(
 
 export async function updateMcpOrderStatus(
   orderId: string,
-  orderStatus: string
+  orderStatus: string,
+  actorPubkey: string
 ): Promise<McpOrder | null> {
+  const order = await getMcpOrder(orderId);
+  if (!order || !canActorUpdateMcpOrderStatus(order, orderStatus, actorPubkey)) {
+    return null;
+  }
+
+  const ownerColumn =
+    actorPubkey === order.seller_pubkey ? "seller_pubkey" : "buyer_pubkey";
+
   const pool = getDbPool();
   let client;
   try {
     client = await pool.connect();
     const result = await client.query(
-      `UPDATE mcp_orders SET order_status = $1, updated_at = CURRENT_TIMESTAMP WHERE order_id = $2 RETURNING *`,
-      [orderStatus, orderId]
+      `UPDATE mcp_orders
+       SET order_status = $1, updated_at = CURRENT_TIMESTAMP
+       WHERE order_id = $2
+         AND ${ownerColumn} = $3
+       RETURNING *`,
+      [orderStatus, orderId, actorPubkey]
     );
     if (result.rows.length === 0) return null;
     return result.rows[0];
