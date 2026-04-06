@@ -394,7 +394,7 @@ export default function CheckoutCard({
       sellerShop.content.freeShippingThreshold > 0
     ) {
       setShowFreeShippingNotification(true);
-      
+
       // Store discount code if applied
       if (appliedDiscount > 0 && discountCode) {
         const discounts = getLocalStorageJson<CartDiscountsMap>(
