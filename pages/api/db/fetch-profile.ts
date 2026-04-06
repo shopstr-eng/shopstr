@@ -23,15 +23,13 @@ export default async function handler(
     } catch {
       return res.status(200).json({ profile: null });
     }
-    return res
-      .status(200)
-      .json({
-        profile: {
-          pubkey: event.pubkey,
-          content,
-          created_at: event.created_at,
-        },
-      });
+    return res.status(200).json({
+      profile: {
+        pubkey: event.pubkey,
+        content,
+        created_at: event.created_at,
+      },
+    });
   } catch (error) {
     console.error("Failed to fetch profile:", error);
     return res.status(500).json({ error: "Failed to fetch profile" });

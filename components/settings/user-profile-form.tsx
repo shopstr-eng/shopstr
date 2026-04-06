@@ -37,56 +37,6 @@ interface UserProfileFormProps {
 const getLocalUserProfileKey = (pubkey: string) =>
   `shopstr:user-profile:${pubkey}`;
 
-interface LocalProfileFallback {
-  content: Record<string, unknown>;
-  updatedAt: number;
-}
-
-const isProfileContentPopulated = (content: Record<string, unknown>) =>
-  Object.values(content).some(
-    (value) => value !== "" && value !== null && value !== undefined
-  );
-
-const parseLocalProfileFallback = (
-  raw: string | null
-): LocalProfileFallback | null => {
-  if (!raw) return null;
-
-  try {
-    const parsed = JSON.parse(raw);
-
-    // Backward compatibility: previously we stored content directly.
-    if (
-      parsed &&
-      typeof parsed === "object" &&
-      !Array.isArray(parsed) &&
-      !("content" in parsed)
-    ) {
-      return {
-        content: parsed as Record<string, unknown>,
-        updatedAt: 0,
-      };
-    }
-
-    if (
-      parsed &&
-      typeof parsed === "object" &&
-      !Array.isArray(parsed) &&
-      "content" in parsed
-    ) {
-      const fallback = parsed as LocalProfileFallback;
-      return {
-        content: fallback.content || {},
-        updatedAt: fallback.updatedAt || 0,
-      };
-    }
-  } catch (error) {
-    console.error("Failed to parse local profile fallback:", error);
-  }
-
-  return null;
-};
-
 const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
   const router = useRouter();
   const { nostr } = useContext(NostrContext);
