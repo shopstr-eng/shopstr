@@ -10,26 +10,9 @@ permissions:
   pull-requests: write
 
 jobs:
-  vercel-precheck:
-    name: Vercel Secrets Precheck
-    runs-on: ubuntu-latest
-    outputs:
-      can_deploy: ${{ steps.precheck.outputs.can_deploy }}
-    steps:
-      - name: Check required Vercel secrets
-        id: precheck
-        run: |
-          if [ -n "${{ secrets.VERCEL_TOKEN }}" ] && [ -n "${{ secrets.VERCEL_ORG_ID }}" ] && [ -n "${{ secrets.VERCEL_PROJECT_ID }}" ]; then
-            echo "can_deploy=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "can_deploy=false" >> "$GITHUB_OUTPUT"
-            echo "Vercel secrets are missing; preview deployment will be skipped." >> "$GITHUB_STEP_SUMMARY"
-          fi
-
   deploy-preview:
     name: Deploy Preview to Vercel
-    needs: vercel-precheck
-    if: needs.vercel-precheck.outputs.can_deploy == 'true'
+    if: ${{ !github.event.pull_request.head.repo.fork }}
     runs-on: ubuntu-latest
     
     # Add manual approval requirement for external PRs
@@ -53,8 +36,19 @@ jobs:
           
       - name: Install dependencies
         run: npm ci
+
+      - name: Check required Vercel secrets
+        id: vercel_precheck
+        run: |
+          if [ -n "${{ secrets.VERCEL_TOKEN }}" ] && [ -n "${{ secrets.VERCEL_ORG_ID }}" ] && [ -n "${{ secrets.VERCEL_PROJECT_ID }}" ]; then
+            echo "can_deploy=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "can_deploy=false" >> "$GITHUB_OUTPUT"
+            echo "Vercel secrets are missing; preview deployment will be skipped." >> "$GITHUB_STEP_SUMMARY"
+          fi
         
       - name: Deploy to Vercel
+        if: steps.vercel_precheck.outputs.can_deploy == 'true'
         id: vercel_deploy
         continue-on-error: true
         uses: amondnet/vercel-action@v25
@@ -68,6 +62,6 @@ jobs:
             shopstr-pr-${{ github.event.number }}.vercel.app
 
       - name: Record non-blocking deployment failure
-        if: steps.vercel_deploy.outcome == 'failure'
+        if: steps.vercel_precheck.outputs.can_deploy == 'true' && steps.vercel_deploy.outcome == 'failure'
         run: |
           echo "Vercel preview deployment failed, but this workflow is non-blocking by design." >> "$GITHUB_STEP_SUMMARY"
