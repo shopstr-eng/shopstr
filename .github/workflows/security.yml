@@ -295,7 +295,7 @@ jobs:
           
           ## Reporting a Vulnerability
           
-          If you discover a security vulnerability in Shopstr, please report it by creating a new issue in our GitHub repository with the "security" label.
+          If you discover a security vulnerability in Milk Market, please report it by creating a new issue in our GitHub repository with the "security" label.
           
           **Please do not disclose security vulnerabilities publicly until they have been addressed.**
           
@@ -312,7 +312,7 @@ jobs:
           - We will provide a detailed response within 7 days
           - We will work on a fix and coordinate disclosure
           
-          Thank you for helping keep Shopstr secure!
+          Thank you for helping keep Milk Market secure!
           EOF
             echo "📝 Created basic security policy template at .github/SECURITY.md"
           fi

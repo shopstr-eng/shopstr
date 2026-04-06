@@ -189,10 +189,10 @@ jobs:
       - name: Create build artifacts
         run: |
           # Create a tarball of the built application
-          tar -czf shopstr-build.tar.gz .next/ public/ package.json package-lock.json
+          tar -czf milk-market-build.tar.gz .next/ public/ package.json package-lock.json
           
           # Create a source code tarball
-          git archive --format=tar.gz --prefix=shopstr-src/ HEAD > shopstr-source.tar.gz
+          git archive --format=tar.gz --prefix=milk-market-src/ HEAD > milk-market-source.tar.gz
 
       - name: Get version and changelog
         id: release_info
@@ -244,8 +244,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./shopstr-build.tar.gz
-          asset_name: shopstr-build-${{ steps.release_info.outputs.version }}.tar.gz
+          asset_path: ./milk-market-build.tar.gz
+          asset_name: milk-market-build-${{ steps.release_info.outputs.version }}.tar.gz
           asset_content_type: application/gzip
 
       - name: Upload source artifacts to release
@@ -254,8 +254,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./shopstr-source.tar.gz
-          asset_name: shopstr-source-${{ steps.release_info.outputs.version }}.tar.gz
+          asset_path: ./milk-market-source.tar.gz
+          asset_name: milk-market-source-${{ steps.release_info.outputs.version }}.tar.gz
           asset_content_type: application/gzip
 
   publish-npm:
