@@ -4,10 +4,11 @@ import { useDisclosure } from "@nextui-org/react";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 
 export function useAuthGuard() {
-  const { isLoggedIn } = useContext(SignerContext);
+  const { isLoggedIn, isAuthStateResolved } = useContext(SignerContext);
   const router = useRouter();
   const { isOpen, onOpen, onClose } = useDisclosure();
-  const isGuarded = isLoggedIn === false;
+  const hasResolvedAuthState = isAuthStateResolved ?? true;
+  const isGuarded = hasResolvedAuthState && isLoggedIn === false;
 
   useEffect(() => {
     if (isGuarded) {
@@ -20,6 +21,12 @@ export function useAuthGuard() {
     router.replace("/marketplace");
   };
 
-  return { isLoggedIn, isGuarded, isOpen, handleClose };
+  return {
+    isLoggedIn,
+    isAuthResolved: hasResolvedAuthState,
+    isGuarded,
+    isOpen,
+    handleClose,
+  };
 }
 
