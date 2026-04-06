@@ -17,9 +17,19 @@ import {
   verifyNostrAuth,
 } from "@/utils/mcp/auth";
 
+const FIXED_NOW_MS = Date.UTC(2026, 0, 1, 0, 0, 0);
+const FIXED_NOW_SECONDS = Math.floor(FIXED_NOW_MS / 1000);
+
 describe("MCP auth helpers", () => {
+  let dateNowSpy: jest.SpyInstance<number, []>;
+
   beforeEach(() => {
     verifyEventMock.mockReset();
+    dateNowSpy = jest.spyOn(Date, "now").mockReturnValue(FIXED_NOW_MS);
+  });
+
+  afterEach(() => {
+    dateNowSpy.mockRestore();
   });
 
   describe("generateApiKey", () => {
@@ -86,6 +96,12 @@ describe("MCP auth helpers", () => {
   });
 
   describe("verifyNostrAuth", () => {
+    const baseAuthEvent = {
+      kind: 27235,
+      pubkey: "f".repeat(64),
+      created_at: FIXED_NOW_SECONDS,
+    };
+
     it("rejects missing signed events", () => {
       expect(verifyNostrAuth(undefined)).toEqual({
         valid: false,
@@ -97,9 +113,8 @@ describe("MCP auth helpers", () => {
     it("rejects events with the wrong auth kind", () => {
       expect(
         verifyNostrAuth({
+          ...baseAuthEvent,
           kind: 1,
-          pubkey: "a".repeat(64),
-          created_at: Math.floor(Date.now() / 1000),
         })
       ).toEqual({
         valid: false,
@@ -112,11 +127,7 @@ describe("MCP auth helpers", () => {
       verifyEventMock.mockReturnValue(false);
 
       expect(
-        verifyNostrAuth({
-          kind: 27235,
-          pubkey: "b".repeat(64),
-          created_at: Math.floor(Date.now() / 1000),
-        })
+        verifyNostrAuth(baseAuthEvent)
       ).toEqual({
         valid: false,
         pubkey: "",
@@ -128,9 +139,9 @@ describe("MCP auth helpers", () => {
       verifyEventMock.mockReturnValue(true);
 
       const result = verifyNostrAuth({
-        kind: 27235,
+        ...baseAuthEvent,
         pubkey: "c".repeat(64),
-        created_at: Math.floor(Date.now() / 1000) - 3600,
+        created_at: FIXED_NOW_SECONDS - 3600,
       });
 
       expect(result).toEqual({
@@ -145,9 +156,8 @@ describe("MCP auth helpers", () => {
 
       const result = verifyNostrAuth(
         {
-          kind: 27235,
+          ...baseAuthEvent,
           pubkey: "d".repeat(64),
-          created_at: Math.floor(Date.now() / 1000),
         },
         "e".repeat(64)
       );
@@ -159,14 +169,20 @@ describe("MCP auth helpers", () => {
       });
     });
 
+    it("propagates unexpected verification errors", () => {
+      verifyEventMock.mockImplementation(() => {
+        throw new Error("verification exploded");
+      });
+
+      expect(() => verifyNostrAuth(baseAuthEvent)).toThrow(
+        "verification exploded"
+      );
+    });
+
     it("accepts fresh valid auth events", () => {
       verifyEventMock.mockReturnValue(true);
 
-      const result = verifyNostrAuth({
-        kind: 27235,
-        pubkey: "f".repeat(64),
-        created_at: Math.floor(Date.now() / 1000),
-      });
+      const result = verifyNostrAuth(baseAuthEvent);
 
       expect(result).toEqual({
         valid: true,
