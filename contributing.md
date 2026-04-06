@@ -91,9 +91,11 @@ This application requires a PostgreSQL database. You can run it locally using Do
    docker compose up -d
    ```
 
-2. Create a `.env` file in the root directory. You can copy from the template:
+2. Create a `.env` file in the root directory. If the repository includes an environment template, copy whichever template file exists:
 
    ```bash
+   cp .env.example .env
+   # or, in some setups:
    cp env.example .env
    ```
 
