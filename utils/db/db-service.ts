@@ -912,6 +912,65 @@ export async function getUnreadMessageCount(pubkey: string): Promise<number> {
   }
 }
 
+export async function getOrderParticipants(
+  orderId: string,
+  messageId?: string
+): Promise<{
+  buyerPubkey: string | null;
+  sellerPubkey: string | null;
+}> {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    const result = await client.query<{ tags: string[][] }>(
+      `SELECT tags
+       FROM message_events
+       WHERE order_id = $1 OR ($2 IS NOT NULL AND id = $2)
+       ORDER BY created_at DESC`,
+      [orderId, messageId || null] as any[]
+    );
+
+    let buyerPubkey: string | null = null;
+    let sellerPubkey: string | null = null;
+
+    for (const row of result.rows) {
+      const tags = Array.isArray(row.tags) ? (row.tags as string[][]) : [];
+
+      if (!buyerPubkey) {
+        const buyerTag = tags.find((tag) => tag[0] === "b");
+        if (buyerTag?.[1]) {
+          buyerPubkey = buyerTag[1];
+        }
+      }
+
+      if (!sellerPubkey) {
+        const itemTag = tags.find((tag) => tag[0] === "item");
+        const productAddress =
+          tags.find((tag) => tag[0] === "a")?.[1] || itemTag?.[1];
+        const addressParts = productAddress?.split(":");
+        if (addressParts && addressParts.length >= 2 && addressParts[1]) {
+          sellerPubkey = addressParts[1];
+        }
+      }
+
+      if (buyerPubkey && sellerPubkey) {
+        break;
+      }
+    }
+
+    return { buyerPubkey, sellerPubkey };
+  } catch (error) {
+    console.error("Failed to get order participants:", error);
+    return { buyerPubkey: null, sellerPubkey: null };
+  } finally {
+    if (client) {
+      client.release();
+    }
+  }
+}
+
 // Update order status in database
 export async function updateOrderStatus(
   orderId: string,

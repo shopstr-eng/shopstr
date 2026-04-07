@@ -1,6 +1,36 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { updateOrderStatus } from "@/utils/db/db-service";
+import {
+  getOrderParticipants,
+  updateOrderStatus,
+} from "@/utils/db/db-service";
 import { verifyNip98Request } from "@/utils/nostr/nip98-auth";
+
+const SELLER_MANAGED_STATUSES = new Set(["confirmed", "shipped", "completed"]);
+const BUYER_MANAGED_STATUSES = new Set(["canceled"]);
+const PARTICIPANT_MANAGED_STATUSES = new Set(["pending"]);
+
+function canActorUpdateOrderStatus(
+  actorPubkey: string,
+  buyerPubkey: string | null,
+  sellerPubkey: string | null,
+  status: string
+): boolean {
+  if (actorPubkey === sellerPubkey) {
+    return (
+      SELLER_MANAGED_STATUSES.has(status) ||
+      PARTICIPANT_MANAGED_STATUSES.has(status)
+    );
+  }
+
+  if (actorPubkey === buyerPubkey) {
+    return (
+      BUYER_MANAGED_STATUSES.has(status) ||
+      PARTICIPANT_MANAGED_STATUSES.has(status)
+    );
+  }
+
+  return false;
+}
 
 export default async function handler(
   req: NextApiRequest,
@@ -37,6 +67,31 @@ export default async function handler(
   }
 
   try {
+    const { buyerPubkey, sellerPubkey } = await getOrderParticipants(
+      orderId,
+      messageId
+    );
+
+    if (!buyerPubkey || !sellerPubkey) {
+      return res.status(404).json({
+        error: "Could not resolve order participants for this order.",
+      });
+    }
+
+    if (
+      !canActorUpdateOrderStatus(
+        authResult.pubkey,
+        buyerPubkey,
+        sellerPubkey,
+        status
+      )
+    ) {
+      return res.status(403).json({
+        error:
+          "You are not allowed to set this order status for the current order role.",
+      });
+    }
+
     await updateOrderStatus(orderId, status, authResult.pubkey, messageId);
     return res.status(200).json({ success: true, orderId, status });
   } catch (error) {
