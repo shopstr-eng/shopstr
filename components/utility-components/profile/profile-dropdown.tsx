@@ -258,63 +258,69 @@ export const ProfileWithDropdown = ({
 
   return (
     <>
-      <Dropdown
-        isOpen={isDropdownOpen}
-        onOpenChange={setIsDropdownOpen}
-        className="rounded-md border-4 border-black bg-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]"
-        placement="bottom-start"
-        classNames={{
-          content:
-            "bg-white border-4 border-black rounded-md p-0 min-w-[200px]",
-        }}
+      <div
+        onClick={(e) => e.stopPropagation()}
+        onPointerDown={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
       >
-        <DropdownTrigger>
-          <User
-            as="button"
-            data-slot="trigger"
-            avatarProps={{
-              src: pfp,
-              className: "border-2 border-black",
-            }}
-            className={"transition-transform"}
-            classNames={{
-              name: `overflow-hidden text-ellipsis whitespace-nowrap ${
-                bg && bg === "dark" ? "text-white" : "text-black"
-              } hidden ${nameClassname} ${
-                isNip05Verified ? "text-primary-yellow" : ""
-              }`,
-              base: `${baseClassname}`,
-            }}
-            name={displayName}
-          />
-        </DropdownTrigger>
-        <DropdownMenu
-          aria-label="User Actions"
-          variant="flat"
-          items={dropDownKeys.map((key) => DropDownItems[key])}
+        <Dropdown
+          isOpen={isDropdownOpen}
+          onOpenChange={setIsDropdownOpen}
+          className="rounded-md border-4 border-black bg-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]"
+          placement="bottom-start"
           classNames={{
-            base: "bg-white p-1",
-            list: "bg-white gap-1",
-          }}
-          itemClasses={{
-            base: "!text-black data-[hover=true]:!bg-blue-400 data-[hover=true]:!text-white rounded-md",
+            content:
+              "bg-white border-4 border-black rounded-md p-0 min-w-[200px]",
           }}
         >
-          {(item) => {
-            return (
-              <DropdownItem
-                key={item.key}
-                color={item.color}
-                className={item.className}
-                startContent={item.startContent}
-                onPress={item.onPress}
-              >
-                {item.label}
-              </DropdownItem>
-            );
-          }}
-        </DropdownMenu>
-      </Dropdown>
+          <DropdownTrigger>
+            <User
+              as="button"
+              data-slot="trigger"
+              avatarProps={{
+                src: pfp,
+                className: "border-2 border-black",
+              }}
+              className={"transition-transform"}
+              classNames={{
+                name: `overflow-hidden text-ellipsis whitespace-nowrap ${
+                  bg && bg === "dark" ? "text-white" : "text-black"
+                } hidden ${nameClassname} ${
+                  isNip05Verified ? "text-primary-yellow" : ""
+                }`,
+                base: `${baseClassname}`,
+              }}
+              name={displayName}
+            />
+          </DropdownTrigger>
+          <DropdownMenu
+            aria-label="User Actions"
+            variant="flat"
+            items={dropDownKeys.map((key) => DropDownItems[key])}
+            classNames={{
+              base: "bg-white p-1",
+              list: "bg-white gap-1",
+            }}
+            itemClasses={{
+              base: "!text-black data-[hover=true]:!bg-blue-400 data-[hover=true]:!text-white rounded-md",
+            }}
+          >
+            {(item) => {
+              return (
+                <DropdownItem
+                  key={item.key}
+                  color={item.color}
+                  className={item.className}
+                  startContent={item.startContent}
+                  onPress={item.onPress}
+                >
+                  {item.label}
+                </DropdownItem>
+              );
+            }}
+          </DropdownMenu>
+        </Dropdown>
+      </div>
       <SignInModal isOpen={isOpen} onClose={onClose} />
     </>
   );
