@@ -403,7 +403,7 @@ function MarketplacePage({
               <Input
                 className="text-light-text dark:text-dark-text"
                 isClearable
-                placeholder="Listing title, naddr1..., npub..."
+                placeholder="Title, summary, price, naddr1..., npub..."
                 value={selectedSearch}
                 startContent={<MagnifyingGlassIcon height={"1em"} />}
                 onChange={(event) => {
