@@ -237,49 +237,55 @@ export const ProfileWithDropdown = ({
 
   return (
     <>
-      <Dropdown
-        placement="bottom-start"
-        isOpen={isDropdownOpen}
-        onOpenChange={setIsDropdownOpen}
+      <div
+        onClick={(e) => e.stopPropagation()}
+        onPointerDown={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
       >
-        <DropdownTrigger>
-          <User
-            as="button"
-            avatarProps={{
-              src: pfp,
-            }}
-            className={"transition-transform"}
-            classNames={{
-              name: `overflow-hidden text-ellipsis whitespace-nowrap text-light-text dark:text-dark-text hidden ${nameClassname} ${
-                isNip05Verified
-                  ? "text-shopstr-purple dark:text-shopstr-yellow"
-                  : ""
-              }`,
-              base: `${baseClassname}`,
-            }}
-            name={displayName}
-          />
-        </DropdownTrigger>
-        <DropdownMenu
-          aria-label="User Actions"
-          variant="flat"
-          items={dropDownKeys.map((key) => DropDownItems[key])}
+        <Dropdown
+          placement="bottom-start"
+          isOpen={isDropdownOpen}
+          onOpenChange={setIsDropdownOpen}
         >
-          {(item) => {
-            return (
-              <DropdownItem
-                key={item.key}
-                color={item.color}
-                className={item.className}
-                startContent={item.startContent}
-                onPress={item.onPress}
-              >
-                {item.label}
-              </DropdownItem>
-            );
-          }}
-        </DropdownMenu>
-      </Dropdown>
+          <DropdownTrigger>
+            <User
+              as="button"
+              avatarProps={{
+                src: pfp,
+              }}
+              className={"transition-transform"}
+              classNames={{
+                name: `overflow-hidden text-ellipsis whitespace-nowrap text-light-text dark:text-dark-text hidden ${nameClassname} ${
+                  isNip05Verified
+                    ? "text-shopstr-purple dark:text-shopstr-yellow"
+                    : ""
+                }`,
+                base: `${baseClassname}`,
+              }}
+              name={displayName}
+            />
+          </DropdownTrigger>
+          <DropdownMenu
+            aria-label="User Actions"
+            variant="flat"
+            items={dropDownKeys.map((key) => DropDownItems[key])}
+          >
+            {(item) => {
+              return (
+                <DropdownItem
+                  key={item.key}
+                  color={item.color}
+                  className={item.className}
+                  startContent={item.startContent}
+                  onPress={item.onPress}
+                >
+                  {item.label}
+                </DropdownItem>
+              );
+            }}
+          </DropdownMenu>
+        </Dropdown>
+      </div>
       <SignInModal isOpen={isOpen} onClose={onClose} />
     </>
   );
