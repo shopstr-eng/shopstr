@@ -20,6 +20,21 @@ describe("verifySignedHttpRequestProof", () => {
     verifyEventMock.mockReturnValue(true);
   });
 
+  it("rejects missing signed proofs", () => {
+    const proof = buildDiscountCodeCreateProof({
+      code: "SUMMER20",
+      pubkey: "f".repeat(64),
+      discountPercentage: 20,
+    });
+
+    expect(verifySignedHttpRequestProof(undefined, proof)).toEqual({
+      ok: false,
+      status: 401,
+      error:
+        "A signed Nostr request proof is required to prove pubkey ownership.",
+    });
+  });
+
   it("accepts a fresh matching signed proof", () => {
     const proof = buildDiscountCodeCreateProof({
       code: "SUMMER20",
@@ -70,6 +85,56 @@ describe("verifySignedHttpRequestProof", () => {
       ok: false,
       status: 401,
       error: "Signed request proof does not match this operation.",
+    });
+  });
+
+  it("rejects signed proofs with invalid signatures", () => {
+    verifyEventMock.mockReturnValue(false);
+
+    const proof = buildDiscountCodeCreateProof({
+      code: "SUMMER20",
+      pubkey: "f".repeat(64),
+      discountPercentage: 20,
+    });
+    const template = buildSignedHttpRequestProofTemplate(proof);
+    const signedEvent = {
+      id: "proof-invalid-signature",
+      pubkey: proof.pubkey,
+      kind: template.kind,
+      created_at: Math.floor(Date.now() / 1000),
+      tags: template.tags,
+      content: "",
+      sig: "invalid",
+    };
+
+    expect(verifySignedHttpRequestProof(signedEvent as any, proof)).toEqual({
+      ok: false,
+      status: 401,
+      error: "Invalid signed request proof or pubkey mismatch.",
+    });
+  });
+
+  it("rejects signed proofs whose pubkey does not match the proof pubkey", () => {
+    const proof = buildDiscountCodeCreateProof({
+      code: "SUMMER20",
+      pubkey: "f".repeat(64),
+      discountPercentage: 20,
+    });
+    const template = buildSignedHttpRequestProofTemplate(proof);
+    const signedEvent = {
+      id: "proof-pubkey-mismatch",
+      pubkey: "e".repeat(64),
+      kind: template.kind,
+      created_at: Math.floor(Date.now() / 1000),
+      tags: template.tags,
+      content: "",
+      sig: "valid",
+    };
+
+    expect(verifySignedHttpRequestProof(signedEvent as any, proof)).toEqual({
+      ok: false,
+      status: 401,
+      error: "Invalid signed request proof or pubkey mismatch.",
     });
   });
 
