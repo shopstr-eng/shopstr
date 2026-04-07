@@ -365,7 +365,7 @@ const DisplayProducts = ({
             <MilkMarketSpinner />
           </div>
         ) : null}
-        {filteredProducts.length > 0 ? (
+        {filteredProducts.length > 0 && (
           <>
             <div className="grid max-w-full grid-cols-[repeat(auto-fill,minmax(280px,1fr))] justify-items-stretch gap-4 overflow-x-hidden pb-6">
               {getCurrentPageProducts().map(
@@ -404,21 +404,21 @@ const DisplayProducts = ({
               {filteredProducts.length} products
             </div>
           </>
-        ) : (
-          wotFilter &&
-          !isProductsLoading && (
+        )}
+        {!isMyListings &&
+          !isProductsLoading &&
+          filteredProducts.length === 0 && (
             <div className="mt-20 flex flex-grow items-center justify-center py-10">
               <div className="w-full max-w-lg rounded-lg border-4 border-black bg-primary-blue p-8 text-center shadow-neo">
                 <p className="text-3xl font-bold text-white">
                   No products found...
                 </p>
                 <p className="mt-4 text-lg text-white">
-                  Try turning off the trust filter!
+                  Try changing your search or clearing some filters.
                 </p>
               </div>
             </div>
-          )
-        )}
+          )}
         {isMyListings &&
           !isProductsLoading &&
           !productEvents.some((product) => product.pubkey === userPubkey) && (

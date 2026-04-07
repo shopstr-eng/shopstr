@@ -75,7 +75,7 @@ function MilkMarket({ props }: { props: AppProps }) {
     {
       productEvents: [],
       isLoading: true,
-      addNewlyCreatedProductEvent: (productEvent: any) => {
+      addNewlyCreatedProductEvent: (productEvent: NostrEvent) => {
         setProductContext((productContext) => {
           const productEvents = [...productContext.productEvents, productEvent];
           return {
