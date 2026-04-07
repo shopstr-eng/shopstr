@@ -3,21 +3,19 @@ import { useRouter } from "next/router";
 
 export default function PageLoadingBar() {
   const router = useRouter();
-  const [loading, setLoading] = useState(false);
   const [width, setWidth] = useState(0);
   const [visible, setVisible] = useState(false);
   const [fadeOut, setFadeOut] = useState(false);
 
   useEffect(() => {
-    let progressTimer: ReturnType<typeof setInterval> | null = null;
-    let hideTimer: ReturnType<typeof setTimeout> | null = null;
+    let progressTimer: number | null = null;
+    let hideTimer: number | null = null;
 
     const start = () => {
       if (hideTimer) clearTimeout(hideTimer);
       if (progressTimer) clearInterval(progressTimer);
       setFadeOut(false);
       setVisible(true);
-      setLoading(true);
       setWidth(0);
 
       // Quickly advance to ~15% then slowly crawl toward 85%
@@ -27,7 +25,7 @@ export default function PageLoadingBar() {
 
       // Slowly inch toward 85% to signal "still loading"
       let current = 55;
-      progressTimer = setInterval(() => {
+      progressTimer = window.setInterval(() => {
         if (current < 85) {
           current += Math.random() * 3;
           setWidth(Math.min(current, 85));
@@ -38,11 +36,10 @@ export default function PageLoadingBar() {
     const done = () => {
       if (progressTimer) clearInterval(progressTimer);
       setWidth(100);
-      setLoading(false);
 
-      hideTimer = setTimeout(() => {
+      hideTimer = window.setTimeout(() => {
         setFadeOut(true);
-        hideTimer = setTimeout(() => {
+        hideTimer = window.setTimeout(() => {
           setVisible(false);
           setWidth(0);
           setFadeOut(false);
@@ -69,28 +66,21 @@ export default function PageLoadingBar() {
 
   return (
     <div
+      className="pointer-events-none fixed left-0 right-0 top-0 z-[9999] h-[3px]"
       style={{
-        position: "fixed",
-        top: 0,
-        left: 0,
-        right: 0,
-        zIndex: 9999,
-        height: "3px",
         opacity: fadeOut ? 0 : 1,
         transition: fadeOut ? "opacity 0.3s ease" : "none",
-        pointerEvents: "none",
       }}
     >
       <div
+        className="h-full bg-gradient-to-r from-orange-500 to-orange-400"
         style={{
-          height: "100%",
           width: `${width}%`,
-          background: "linear-gradient(90deg, #f97316, #fb923c)",
+          boxShadow: "0 0 8px rgba(249, 115, 22, 0.7)",
           transition:
             width === 100
               ? "width 0.2s ease"
               : "width 0.4s cubic-bezier(0.4, 0, 0.2, 1)",
-          boxShadow: "0 0 8px rgba(249, 115, 22, 0.7)",
         }}
       />
     </div>
