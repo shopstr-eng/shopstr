@@ -99,7 +99,8 @@ export async function initializeApiKeysTable(): Promise<void> {
         event_id TEXT PRIMARY KEY,
         pubkey TEXT NOT NULL,
         action TEXT NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (event_id)
       );
       CREATE INDEX IF NOT EXISTS idx_mcp_request_proofs_created_at ON mcp_request_proofs(created_at);
 
