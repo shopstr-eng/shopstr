@@ -460,13 +460,9 @@ export const fetchProfile = async (
           }
 
           for (const [pubkey, event] of latestDbEvents.entries()) {
-            const content = parseJsonSafely<Record<string, any>>(
-              event.content
-            );
+            const content = parseJsonSafely<Record<string, any>>(event.content);
             if (!content) {
-              console.warn(
-                `Skipping invalid profile JSON from DB: ${pubkey}`
-              );
+              console.warn(`Skipping invalid profile JSON from DB: ${pubkey}`);
               continue;
             }
 
