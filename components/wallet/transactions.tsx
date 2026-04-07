@@ -12,7 +12,7 @@ import { Transaction } from "@/utils/types/types";
 // add found proofs as nutsack deposit with different icon
 
 const Transactions = () => {
-  const [history, setHistory] = useState([]);
+  const [history, setHistory] = useState<Transaction[]>([]);
 
   useEffect(() => {
     // Function to fetch and update transactions

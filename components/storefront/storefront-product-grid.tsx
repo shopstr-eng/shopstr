@@ -132,7 +132,7 @@ export default function StorefrontProductGrid({
               }`,
             }}
             style={{
-              // @ts-ignore
+              // @ts-expect-error CSS custom property for NextUI theme color
               "--nextui-primary": colors.accent,
             }}
           />
