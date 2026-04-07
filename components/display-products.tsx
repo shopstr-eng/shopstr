@@ -2,10 +2,7 @@ import { useState, useEffect, useContext } from "react";
 import { nip19 } from "nostr-tools";
 import { deleteEvent } from "@/utils/nostr/nostr-helper-functions";
 import { NostrEvent } from "../utils/types/types";
-import {
-  ProductContext,
-  FollowsContext,
-} from "../utils/context/context";
+import { ProductContext, FollowsContext } from "../utils/context/context";
 import ProductCard from "./utility-components/product-card";
 import DisplayProductModal from "./display-product-modal";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
@@ -367,7 +364,7 @@ const DisplayProducts = ({
             <ShopstrSpinner />
           </div>
         ) : null}
-        {filteredProducts.length > 0 ? (
+        {filteredProducts.length > 0 && (
           <>
             <div className="grid max-w-full grid-cols-[repeat(auto-fill,minmax(280px,1fr))] justify-items-stretch gap-4 overflow-x-hidden">
               {getCurrentPageProducts().map(
@@ -402,21 +399,21 @@ const DisplayProducts = ({
               {filteredProducts.length} products
             </div>
           </>
-        ) : (
-          wotFilter &&
-          !isProductsLoading && (
+        )}
+        {!isMyListings &&
+          !isProductsLoading &&
+          filteredProducts.length === 0 && (
             <div className="mt-20 flex flex-grow items-center justify-center py-10">
               <div className="w-full max-w-lg rounded-lg bg-light-fg p-8 text-center shadow-lg dark:bg-dark-fg">
                 <p className="text-3xl font-semibold text-light-text dark:text-dark-text">
                   No products found...
                 </p>
                 <p className="mt-4 text-lg text-light-text dark:text-dark-text">
-                  Try turning off the trust filter!
+                  Try changing your search or clearing some filters.
                 </p>
               </div>
             </div>
-          )
-        )}
+          )}
         {isMyListings &&
           !isProductsLoading &&
           !productEvents.some((product) => product.pubkey === userPubkey) && (
