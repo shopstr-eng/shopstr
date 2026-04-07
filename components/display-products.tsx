@@ -401,7 +401,8 @@ const DisplayProducts = ({
             </div>
           </>
         )}
-        {!isProductsLoading &&
+        {!isMyListings &&
+          !isProductsLoading &&
           filteredProducts.length === 0 && (
             <div className="mt-20 flex flex-grow items-center justify-center py-10">
               <div className="w-full max-w-lg rounded-lg bg-light-fg p-8 text-center shadow-lg dark:bg-dark-fg">
