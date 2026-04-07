@@ -20,11 +20,6 @@
     "out",
     "apps",
     "packages",
-    "**/__tests__/**",
-    "**/*.test.ts",
-    "**/*.test.tsx",
-    "**/*.spec.ts",
-    "**/*.spec.tsx",
     "mcp",
     "pages/api/mcp"
   ]
