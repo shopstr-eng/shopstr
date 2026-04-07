@@ -96,82 +96,82 @@ const CommunityManagementPage = () => {
         <div className="mx-auto h-screen w-full lg:w-1/2 lg:pl-4">
           <SettingsBreadCrumbs />
 
-        {communityToEdit ? (
-          // Show the Form for Creating or Editing
-          <Card>
-            <CardBody>
-              <h2 className="text-2xl font-bold text-light-text dark:text-dark-text">
-                {communityToEdit === "new"
-                  ? "Create Your Community"
-                  : `Editing: ${communityToEdit.name}`}
-              </h2>
-              <p className="mb-4 text-light-text/80 dark:text-dark-text/80">
-                Create a space for your customers to gather and get updates.
-              </p>
-              <Divider className="my-4" />
-              <CreateCommunityForm
-                existingCommunity={
-                  communityToEdit === "new" ? null : communityToEdit
-                }
-                onSave={handleSave}
-                onCancel={() => setCommunityToEdit(null)}
-              />
-            </CardBody>
-          </Card>
-        ) : (
-          // Show the List of Communities
-          <Card>
-            <CardHeader>
-              <div className="flex w-full items-center justify-between">
+          {communityToEdit ? (
+            // Show the Form for Creating or Editing
+            <Card>
+              <CardBody>
                 <h2 className="text-2xl font-bold text-light-text dark:text-dark-text">
-                  Your Communities
+                  {communityToEdit === "new"
+                    ? "Create Your Community"
+                    : `Editing: ${communityToEdit.name}`}
                 </h2>
-                <Button
-                  className={SHOPSTRBUTTONCLASSNAMES}
-                  onClick={() => setCommunityToEdit("new")}
-                >
-                  Create New
-                </Button>
-              </div>
-            </CardHeader>
-            <CardBody>
-              {isLoading && myCommunities.length === 0 ? (
-                <Spinner label="Loading your communities..." />
-              ) : myCommunities.length > 0 ? (
-                <div className="space-y-2">
-                  {myCommunities.map((community) => (
-                    <div
-                      key={community.id}
-                      className="flex items-center justify-between rounded-lg bg-light-fg p-3 dark:bg-dark-fg"
-                    >
-                      <span className="font-semibold">{community.name}</span>
-                      <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          onClick={() => setCommunityToEdit(community)}
-                        >
-                          Edit
-                        </Button>
-                        <Button
-                          size="sm"
-                          color="danger"
-                          variant="flat"
-                          onClick={() => handleDelete(community.id)}
-                        >
-                          Delete
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-center text-light-text/80 dark:text-dark-text/80">
-                  You haven&apos;t created any communities yet.
+                <p className="mb-4 text-light-text/80 dark:text-dark-text/80">
+                  Create a space for your customers to gather and get updates.
                 </p>
-              )}
-            </CardBody>
-          </Card>
-        )}
+                <Divider className="my-4" />
+                <CreateCommunityForm
+                  existingCommunity={
+                    communityToEdit === "new" ? null : communityToEdit
+                  }
+                  onSave={handleSave}
+                  onCancel={() => setCommunityToEdit(null)}
+                />
+              </CardBody>
+            </Card>
+          ) : (
+            // Show the List of Communities
+            <Card>
+              <CardHeader>
+                <div className="flex w-full items-center justify-between">
+                  <h2 className="text-2xl font-bold text-light-text dark:text-dark-text">
+                    Your Communities
+                  </h2>
+                  <Button
+                    className={SHOPSTRBUTTONCLASSNAMES}
+                    onClick={() => setCommunityToEdit("new")}
+                  >
+                    Create New
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardBody>
+                {isLoading && myCommunities.length === 0 ? (
+                  <Spinner label="Loading your communities..." />
+                ) : myCommunities.length > 0 ? (
+                  <div className="space-y-2">
+                    {myCommunities.map((community) => (
+                      <div
+                        key={community.id}
+                        className="flex items-center justify-between rounded-lg bg-light-fg p-3 dark:bg-dark-fg"
+                      >
+                        <span className="font-semibold">{community.name}</span>
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            onClick={() => setCommunityToEdit(community)}
+                          >
+                            Edit
+                          </Button>
+                          <Button
+                            size="sm"
+                            color="danger"
+                            variant="flat"
+                            onClick={() => handleDelete(community.id)}
+                          >
+                            Delete
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-center text-light-text/80 dark:text-dark-text/80">
+                    You haven&apos;t created any communities yet.
+                  </p>
+                )}
+              </CardBody>
+            </Card>
+          )}
         </div>
       </div>
     </ProtectedRoute>

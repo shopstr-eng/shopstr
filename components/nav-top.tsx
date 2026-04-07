@@ -78,7 +78,7 @@ const TopNav = ({
   useEffect(() => {
     const npub = router.pathname
       .split("/")
-      .find((segment) => segment.includes("npub"));
+      .find((segment) => segment.includes("npub1"));
     if (
       npub &&
       shopMapContext.shopData.has(npub) &&

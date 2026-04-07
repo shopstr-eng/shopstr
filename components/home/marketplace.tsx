@@ -403,7 +403,7 @@ function MarketplacePage({
               <Input
                 className="text-light-text dark:text-dark-text"
                 isClearable
-                placeholder="Title, summary, price, naddr1..., npub..."
+                placeholder="Title, summary, price, naddr1..., npub1..."
                 value={selectedSearch}
                 startContent={<MagnifyingGlassIcon height={"1em"} />}
                 onChange={(event) => {
@@ -483,7 +483,7 @@ function MarketplacePage({
               <Input
                 className="mt-2 text-light-text dark:text-dark-text"
                 isClearable
-                placeholder="Listing title, naddr1..., npub..."
+                placeholder="Title, summary, price, naddr1..., npub1..."
                 value={selectedSearch}
                 startContent={<MagnifyingGlassIcon height={"1em"} />}
                 onChange={(event) => {
@@ -619,7 +619,7 @@ function MarketplacePage({
         )}
       </div>
       {router.pathname.includes("marketplace") &&
-        !router.asPath.includes("npub") && (
+        !router.asPath.includes("npub1") && (
           <Button
             radius="full"
             className={`${SHOPSTRBUTTONCLASSNAMES} fixed bottom-24 right-8 z-50 h-16 w-16`}

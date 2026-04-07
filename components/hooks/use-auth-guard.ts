@@ -29,4 +29,3 @@ export function useAuthGuard() {
     handleClose,
   };
 }
-

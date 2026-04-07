@@ -281,7 +281,7 @@ const DisplayProducts = ({
     if (!normalizedSearch) return true;
     if (!productData.title) return false;
 
-    if (normalizedSearch.includes("naddr")) {
+    if (normalizedSearch.includes("naddr1")) {
       try {
         const parsedNaddr = nip19.decode(normalizedSearch);
         if (parsedNaddr.type === "naddr") {
@@ -296,7 +296,7 @@ const DisplayProducts = ({
       }
     }
 
-    if (normalizedSearch.includes("npub")) {
+    if (normalizedSearch.includes("npub1")) {
       try {
         const parsedNpub = nip19.decode(normalizedSearch);
         if (parsedNpub.type === "npub") {

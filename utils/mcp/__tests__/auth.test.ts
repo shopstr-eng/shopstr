@@ -126,9 +126,7 @@ describe("MCP auth helpers", () => {
     it("rejects events with invalid signatures", () => {
       verifyEventMock.mockReturnValue(false);
 
-      expect(
-        verifyNostrAuth(baseAuthEvent)
-      ).toEqual({
+      expect(verifyNostrAuth(baseAuthEvent)).toEqual({
         valid: false,
         pubkey: "",
         error: "Invalid event signature",
