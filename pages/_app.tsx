@@ -1,7 +1,7 @@
 import "tailwindcss/tailwind.css";
 import type { AppProps } from "next/app";
 import "../styles/globals.css";
-import { useState, useEffect, useCallback, useContext } from "react";
+import { useState, useEffect, useCallback, useContext, useRef } from "react";
 import { useRouter } from "next/router";
 import {
   ProfileMapContext,
@@ -44,6 +44,7 @@ import {
   fetchCashuWallet,
   fetchAllCommunities,
   fetchGiftWrappedChatsAndMessages,
+  getMarketplaceEventKey,
 } from "@/utils/nostr/fetch-service";
 import {
   NostrEvent,
@@ -76,9 +77,23 @@ function Shopstr({ props }: { props: AppProps }) {
       isLoading: true,
       addNewlyCreatedProductEvent: (productEvent: any) => {
         setProductContext((productContext) => {
-          const productEvents = [...productContext.productEvents, productEvent];
+          const productEventsMap = new Map<string, NostrEvent>();
+
+          productContext.productEvents.forEach((event: NostrEvent) => {
+            productEventsMap.set(getMarketplaceEventKey(event), event);
+          });
+
+          const nextKey = getMarketplaceEventKey(productEvent);
+          const existingEvent = productEventsMap.get(nextKey);
+          if (
+            !existingEvent ||
+            productEvent.created_at >= existingEvent.created_at
+          ) {
+            productEventsMap.set(nextKey, productEvent);
+          }
+
           return {
-            productEvents: productEvents,
+            productEvents: Array.from(productEventsMap.values()),
             isLoading: false,
             addNewlyCreatedProductEvent:
               productContext.addNewlyCreatedProductEvent,
@@ -321,6 +336,101 @@ function Shopstr({ props }: { props: AppProps }) {
       cashuProofs: [],
       isLoading: true,
     });
+  const hydratedMarketplaceProductKeysRef = useRef<Set<string>>(new Set());
+  const hydratedMarketplaceSellerPubkeysRef = useRef<Set<string>>(new Set());
+  const pendingMarketplaceProductKeysRef = useRef<Set<string>>(new Set());
+  const pendingMarketplaceSellerPubkeysRef = useRef<Set<string>>(new Set());
+  const didCompleteInitialMarketplaceHydrationRef = useRef(false);
+
+  const mergeProfileContext = (nextProfiles: Map<string, any>) => {
+    if (nextProfiles.size === 0) return;
+
+    setProfileContext((profileContext) => {
+      const mergedProfiles = new Map(profileContext.profileData);
+      nextProfiles.forEach((profile, pubkey) => {
+        if (!profile) return;
+
+        const existingProfile = mergedProfiles.get(pubkey);
+        if (
+          !existingProfile ||
+          (profile.created_at || 0) >= (existingProfile.created_at || 0)
+        ) {
+          mergedProfiles.set(pubkey, profile);
+        }
+      });
+
+      return {
+        profileData: mergedProfiles,
+        isLoading: false,
+        updateProfileData: profileContext.updateProfileData,
+      };
+    });
+  };
+
+  const mergeShopContext = (nextShops: Map<string, ShopProfile>) => {
+    if (nextShops.size === 0) return;
+
+    setShopContext((shopContext) => {
+      const mergedShops = new Map(shopContext.shopData);
+      nextShops.forEach((shopProfile, pubkey) => {
+        if (!shopProfile) return;
+
+        const existingShop = mergedShops.get(pubkey);
+        if (
+          !existingShop ||
+          (shopProfile.created_at || 0) >= (existingShop.created_at || 0)
+        ) {
+          mergedShops.set(pubkey, shopProfile);
+        }
+      });
+
+      return {
+        shopData: mergedShops,
+        isLoading: false,
+        updateShopData: shopContext.updateShopData,
+      };
+    });
+  };
+
+  const mergeReviewsContext = (
+    nextMerchantReviews: Map<string, number[]>,
+    nextProductReviews: Map<string, Map<string, Map<string, string[][]>>>
+  ) => {
+    if (nextMerchantReviews.size === 0 && nextProductReviews.size === 0) return;
+
+    setReviewsContext((reviewsContext) => {
+      const mergedMerchantReviews = new Map(reviewsContext.merchantReviewsData);
+      nextMerchantReviews.forEach((scores, merchantPubkey) => {
+        if (scores.length === 0) return;
+
+        mergedMerchantReviews.set(merchantPubkey, [
+          ...(mergedMerchantReviews.get(merchantPubkey) || []),
+          ...scores,
+        ]);
+      });
+
+      const mergedProductReviews = new Map(reviewsContext.productReviewsData);
+      nextProductReviews.forEach((merchantProducts, merchantPubkey) => {
+        const mergedMerchantProducts = new Map(
+          mergedProductReviews.get(merchantPubkey) || []
+        );
+
+        merchantProducts.forEach((productReviews, productDTag) => {
+          mergedMerchantProducts.set(productDTag, new Map(productReviews));
+        });
+
+        mergedProductReviews.set(merchantPubkey, mergedMerchantProducts);
+      });
+
+      return {
+        merchantReviewsData: mergedMerchantReviews,
+        productReviewsData: mergedProductReviews,
+        isLoading: false,
+        updateMerchantReviewsData: reviewsContext.updateMerchantReviewsData,
+        updateProductReviewsData: reviewsContext.updateProductReviewsData,
+      };
+    });
+  };
 
   const editProductContext = (
     productEvents: NostrEvent[],
@@ -473,6 +583,7 @@ function Shopstr({ props }: { props: AppProps }) {
   /** FETCH initial FOLLOWS, RELAYS, PRODUCTS, and PROFILES **/
   useEffect(() => {
     async function fetchData() {
+      let fetchedProductEvents: NostrEvent[] = [];
       try {
         // Check login status
         if (getLocalStorageData().signInMethod === "amber") {
@@ -545,6 +656,7 @@ function Shopstr({ props }: { props: AppProps }) {
             editProductContext
           );
           productEvents = result.productEvents;
+          fetchedProductEvents = result.productEvents;
           profileSetFromProducts = result.profileSetFromProducts;
         } catch (error) {
           console.error("Error fetching products:", error);
@@ -626,6 +738,14 @@ function Shopstr({ props }: { props: AppProps }) {
           editReviewsContext(new Map(), new Map(), false);
         }
 
+        hydratedMarketplaceProductKeysRef.current = new Set(
+          fetchedProductEvents.map((event) => getMarketplaceEventKey(event))
+        );
+        hydratedMarketplaceSellerPubkeysRef.current = new Set(
+          fetchedProductEvents.map((event) => event.pubkey).filter(Boolean)
+        );
+        didCompleteInitialMarketplaceHydrationRef.current = true;
+
         try {
           await fetchAllCommunities(nostr!, allRelays, editCommunityContext);
         } catch (error) {
@@ -685,6 +805,8 @@ function Shopstr({ props }: { props: AppProps }) {
         editBlossomContext([], false);
         editCashuWalletContext([], [], [], false);
         editCommunityContext(new Map(), false);
+      } finally {
+        didCompleteInitialMarketplaceHydrationRef.current = true;
       }
     }
 
@@ -692,6 +814,118 @@ function Shopstr({ props }: { props: AppProps }) {
     window.addEventListener("storage", fetchData);
     return () => window.removeEventListener("storage", fetchData);
   }, [nostr, signer, isLoggedIn]);
+
+  useEffect(() => {
+    if (
+      !nostr ||
+      !didCompleteInitialMarketplaceHydrationRef.current ||
+      productContext.isLoading ||
+      !Array.isArray(productContext.productEvents)
+    ) {
+      return;
+    }
+
+    const allRelays = [
+      ...new Set([...relaysContext.relayList, ...relaysContext.readRelayList]),
+    ];
+    const effectiveRelays = allRelays.length > 0 ? allRelays : getDefaultRelays();
+
+    const nextProducts = (productContext.productEvents as NostrEvent[]).filter(
+      (event) =>
+        !hydratedMarketplaceProductKeysRef.current.has(
+          getMarketplaceEventKey(event)
+        ) &&
+        !pendingMarketplaceProductKeysRef.current.has(
+          getMarketplaceEventKey(event)
+        )
+    );
+
+    if (nextProducts.length === 0) return;
+
+    nextProducts.forEach((event) => {
+      pendingMarketplaceProductKeysRef.current.add(
+        getMarketplaceEventKey(event)
+      );
+    });
+
+    const nextSellerPubkeys = Array.from(
+      new Set(
+        nextProducts
+          .map((event) => event.pubkey)
+          .filter(
+            (pubkey): pubkey is string =>
+              Boolean(pubkey) &&
+              !hydratedMarketplaceSellerPubkeysRef.current.has(pubkey) &&
+              !pendingMarketplaceSellerPubkeysRef.current.has(pubkey)
+          )
+      )
+    );
+
+    nextSellerPubkeys.forEach((pubkey) => {
+      pendingMarketplaceSellerPubkeysRef.current.add(pubkey);
+    });
+
+    let isActive = true;
+
+    const hydrateMarketplaceDelta = async () => {
+      try {
+        if (nextSellerPubkeys.length > 0) {
+          const [{ profileMap }, { shopProfileMap }] = await Promise.all([
+            fetchProfile(nostr, effectiveRelays, nextSellerPubkeys, () => {}),
+            fetchShopProfile(nostr, effectiveRelays, nextSellerPubkeys, () => {}),
+          ]);
+
+          if (!isActive) return;
+
+          mergeProfileContext(profileMap);
+          mergeShopContext(shopProfileMap);
+        }
+
+        const { merchantScoresMap, productReviewsMap } = await fetchReviews(
+          nostr,
+          effectiveRelays,
+          nextProducts,
+          () => {}
+        );
+
+        if (!isActive) return;
+
+        mergeReviewsContext(merchantScoresMap, productReviewsMap);
+
+        nextProducts.forEach((event) => {
+          hydratedMarketplaceProductKeysRef.current.add(
+            getMarketplaceEventKey(event)
+          );
+        });
+        nextSellerPubkeys.forEach((pubkey) => {
+          hydratedMarketplaceSellerPubkeysRef.current.add(pubkey);
+        });
+      } catch (error) {
+        console.error("Failed to hydrate marketplace relay results:", error);
+      } finally {
+        nextProducts.forEach((event) => {
+          pendingMarketplaceProductKeysRef.current.delete(
+            getMarketplaceEventKey(event)
+          );
+        });
+        nextSellerPubkeys.forEach((pubkey) => {
+          pendingMarketplaceSellerPubkeysRef.current.delete(pubkey);
+        });
+      }
+    };
+
+    hydrateMarketplaceDelta();
+
+    return () => {
+      isActive = false;
+    };
+  }, [
+    nostr,
+    productContext.isLoading,
+    productContext.productEvents,
+    relaysContext.readRelayList,
+    relaysContext.relayList,
+  ]);
 
   useEffect(() => {
     if ("serviceWorker" in navigator) {
