@@ -401,7 +401,6 @@ export const FileUploaderButton = ({
             className={`${
               !isPlaceholder && "absolute inset-0"
             } z-10 flex flex-col items-center justify-center rounded-xl`}
-            onClick={handleDropZoneClick}
             initial={{ opacity: isPlaceholder ? 1 : 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
