@@ -101,7 +101,13 @@ export default function ProductCard({
       <div className="flex min-h-0 flex-1 flex-col space-y-3 bg-white p-4">
         {/* Profile Section */}
         <div className="flex min-w-0 items-center justify-between gap-2">
-          <div className="min-w-0 flex-1 overflow-hidden">
+          <div
+            className="min-w-0 flex-1 overflow-hidden"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+          >
             <ProfileWithDropdown
               pubkey={productData.pubkey}
               dropDownKeys={
