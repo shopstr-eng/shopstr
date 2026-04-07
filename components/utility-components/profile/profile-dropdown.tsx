@@ -54,17 +54,19 @@ export const ProfileWithDropdown = ({
   const [displayName, setDisplayName] = useState("");
   const [isNPubCopied, setIsNPubCopied] = useState(false);
   const [isNip05Verified, setIsNip05Verified] = useState(false);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const profileContext = useContext(ProfileMapContext);
   const shopMapContext = useContext(ShopMapContext);
   const npub = pubkey ? nip19.npubEncode(pubkey) : "";
   const router = useRouter();
   const { isLoggedIn } = useContext(SignerContext);
   const { isOpen, onOpen, onClose } = useDisclosure();
-  const {
-    isOpen: isDropdownOpen,
-    onClose: onDropdownClose,
-    onOpenChange: onDropdownOpenChange,
-  } = useDisclosure();
+
+  const handleDropdownAction = (action: () => void) => {
+    setIsDropdownOpen(false);
+    action();
+  };
+
   useEffect(() => {
     if (!pubkey) return;
     fetch(`/api/db/fetch-profile?pubkey=${encodeURIComponent(pubkey)}`)
@@ -114,9 +116,11 @@ export const ProfileWithDropdown = ({
       startContent: (
         <BuildingStorefrontIcon className={"h-5 w-5 !text-black"} />
       ),
-      onClick: () => {
-        const slug = getProfileSlug(pubkey, profileContext.profileData);
-        router.push(`/marketplace/${slug}`);
+      onPress: () => {
+        handleDropdownAction(() => {
+          const slug = getProfileSlug(pubkey, profileContext.profileData);
+          router.push(`/marketplace/${slug}`);
+        });
       },
       label: "Visit Seller",
     },
@@ -126,15 +130,17 @@ export const ProfileWithDropdown = ({
       className:
         "!text-black hover:!bg-blue-400 hover:!text-white font-bold data-[hover=true]:!bg-blue-400 data-[hover=true]:!text-white",
       startContent: <GlobeAltIcon className={"h-5 w-5 !text-black"} />,
-      onClick: () => {
-        const shopData = shopMapContext.shopData.get(pubkey);
-        const shopSlug = shopData?.content?.storefront?.shopSlug;
-        if (shopSlug) {
-          router.push(`/shop/${shopSlug}`);
-        } else {
-          const slug = getProfileSlug(pubkey, profileContext.profileData);
-          router.push(`/marketplace/${slug}`);
-        }
+      onPress: () => {
+        handleDropdownAction(() => {
+          const shopData = shopMapContext.shopData.get(pubkey);
+          const shopSlug = shopData?.content?.storefront?.shopSlug;
+          if (shopSlug) {
+            router.push(`/shop/${shopSlug}`);
+          } else {
+            const slug = getProfileSlug(pubkey, profileContext.profileData);
+            router.push(`/marketplace/${slug}`);
+          }
+        });
       },
       label: "Visit Storefront",
     },
@@ -146,9 +152,10 @@ export const ProfileWithDropdown = ({
       startContent: (
         <BuildingStorefrontIcon className={"h-5 w-5 !text-black"} />
       ),
-      onClick: () => {
-        onDropdownClose();
-        router.push("/settings/shop-profile");
+      onPress: () => {
+        handleDropdownAction(() => {
+          router.push("/settings/shop-profile");
+        });
       },
       label: "Shop Profile",
     },
@@ -160,16 +167,17 @@ export const ProfileWithDropdown = ({
       startContent: (
         <ChatBubbleBottomCenterIcon className={"h-5 w-5 !text-black"} />
       ),
-      onClick: () => {
-        onDropdownClose();
-        if (isLoggedIn) {
-          router.push({
-            pathname: "/orders",
-            query: { pk: npub, isInquiry: true },
-          });
-        } else {
-          onOpen();
-        }
+      onPress: () => {
+        handleDropdownAction(() => {
+          if (isLoggedIn) {
+            router.push({
+              pathname: "/orders",
+              query: { pk: npub, isInquiry: true },
+            });
+          } else {
+            onOpen();
+          }
+        });
       },
       label: "Send Inquiry",
     },
@@ -179,9 +187,10 @@ export const ProfileWithDropdown = ({
       className:
         "!text-black hover:!bg-blue-400 hover:!text-white font-bold data-[hover=true]:!bg-blue-400 data-[hover=true]:!text-white",
       startContent: <UserIcon className={"h-5 w-5 !text-black"} />,
-      onClick: () => {
-        onDropdownClose();
-        router.push("/settings/user-profile");
+      onPress: () => {
+        handleDropdownAction(() => {
+          router.push("/settings/user-profile");
+        });
       },
       label: "Profile",
     },
@@ -191,9 +200,10 @@ export const ProfileWithDropdown = ({
       className:
         "!text-black hover:!bg-blue-400 hover:!text-white font-bold data-[hover=true]:!bg-blue-400 data-[hover=true]:!text-white",
       startContent: <Cog6ToothIcon className={"h-5 w-5 !text-black"} />,
-      onClick: () => {
-        onDropdownClose();
-        router.push("/settings");
+      onPress: () => {
+        handleDropdownAction(() => {
+          router.push("/settings");
+        });
       },
       label: "Settings",
     },
@@ -207,10 +217,11 @@ export const ProfileWithDropdown = ({
           className={"h-5 w-5 !text-red-600 group-hover:!text-white"}
         />
       ),
-      onClick: () => {
-        onDropdownClose();
-        LogOut();
-        router.push("/marketplace");
+      onPress: () => {
+        handleDropdownAction(() => {
+          LogOut();
+          router.push("/marketplace");
+        });
       },
       label: "Log Out",
     },
@@ -224,13 +235,22 @@ export const ProfileWithDropdown = ({
       ) : (
         <ClipboardIcon className="h-5 w-5 !text-black" />
       ),
-      onClick: () => {
-        const npub = nip19.npubEncode(pubkey);
-        navigator.clipboard.writeText(npub);
-        setIsNPubCopied(true);
-        setTimeout(() => {
-          setIsNPubCopied(false);
-        }, 2100);
+      onPress: () => {
+        handleDropdownAction(async () => {
+          try {
+            const npub = nip19.npubEncode(pubkey);
+            if (!navigator.clipboard?.writeText) {
+              throw new Error("Clipboard API is not available");
+            }
+            await navigator.clipboard.writeText(npub);
+            setIsNPubCopied(true);
+            setTimeout(() => {
+              setIsNPubCopied(false);
+            }, 2100);
+          } catch (error) {
+            console.error("Failed to copy npub to clipboard", error);
+          }
+        });
       },
       label: isNPubCopied ? "Copied!" : "Copy npub",
     },
@@ -240,7 +260,7 @@ export const ProfileWithDropdown = ({
     <>
       <Dropdown
         isOpen={isDropdownOpen}
-        onOpenChange={onDropdownOpenChange}
+        onOpenChange={setIsDropdownOpen}
         className="rounded-md border-4 border-black bg-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]"
         placement="bottom-start"
         classNames={{
@@ -257,10 +277,6 @@ export const ProfileWithDropdown = ({
               className: "border-2 border-black",
             }}
             className={"transition-transform"}
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-            }}
             classNames={{
               name: `overflow-hidden text-ellipsis whitespace-nowrap ${
                 bg && bg === "dark" ? "text-white" : "text-black"
@@ -291,7 +307,7 @@ export const ProfileWithDropdown = ({
                 color={item.color}
                 className={item.className}
                 startContent={item.startContent}
-                onClick={item.onClick}
+                onPress={item.onPress}
               >
                 {item.label}
               </DropdownItem>

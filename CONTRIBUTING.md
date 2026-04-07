@@ -105,10 +105,18 @@ This application requires a PostgreSQL database. You can run it locally using Do
 1. Start PostgreSQL:
 
    ```bash
-   docker-compose up -d
+   docker compose up -d
    ```
 
-2. Create a `.env` file in the root directory with the following:
+2. Create a `.env` file in the root directory. If the repository includes an environment template, copy whichever template file exists:
+
+   ```bash
+   cp .env.example .env
+   # or, in some setups:
+   cp env.example .env
+   ```
+
+   Or create it manually with:
 
    ```
    DATABASE_URL=postgresql://milkmarket:milkmarket@localhost:5432/milkmarket
@@ -119,15 +127,15 @@ This application requires a PostgreSQL database. You can run it locally using Do
 4. To stop the database:
 
    ```bash
-   docker-compose down
+   docker compose down
    ```
 
 5. To remove all data and start fresh:
    ```bash
-   docker-compose down -v
+   docker compose down -v
    ```
 
-The website will be available at `http://localhost:5000`
+The application will be available at `http://localhost:5000`
 
 ### 5. Verify Installation
 

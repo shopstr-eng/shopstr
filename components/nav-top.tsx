@@ -138,7 +138,10 @@ const TopNav = ({
         className={`w-full bg-transparent ${
           isCommunitiesActive ? "text-primary-yellow" : "text-white"
         } hover:text-primary-yellow`}
-        onClick={() => router.push("/communities")}
+        onClick={() => {
+          router.push("/communities");
+          setIsMobileMenuOpen(false);
+        }}
       >
         Communities
       </Button>

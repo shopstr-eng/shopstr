@@ -31,6 +31,7 @@ import {
 } from "@/utils/STATIC-VARIABLES";
 import FailureModal from "@/components/utility-components/failure-modal";
 import SuccessModal from "@/components/utility-components/success-modal";
+import ProtectedRoute from "@/components/utility-components/protected-route";
 
 // Dev mode flag for localhost
 const IS_DEV_MODE = process.env.NODE_ENV === "development";
@@ -193,168 +194,170 @@ const CommunityManagementPage = () => {
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-white pt-24 md:pb-20">
-      <div className="mx-auto h-full w-full px-4 lg:w-1/2 xl:w-2/5">
-        <SettingsBreadCrumbs />
+    <ProtectedRoute>
+      <div className="flex min-h-screen flex-col bg-white pt-24 md:pb-20">
+        <div className="mx-auto h-full w-full px-4 lg:w-1/2 xl:w-2/5">
+          <SettingsBreadCrumbs />
 
-        {communityToEdit ? (
-          // Neo-brutalist card container for form
-          <div className="rounded-md border-4 border-black bg-white p-8 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
-            <h2 className="mb-2 text-3xl font-bold text-black">
-              {communityToEdit === "new"
-                ? "Create Your Community"
-                : `Editing: ${communityToEdit.name}`}
-            </h2>
-            <p className="mb-6 text-black/70">
-              Create a space for your customers to gather and get updates.
-            </p>
-            <CreateCommunityForm
-              existingCommunity={
-                communityToEdit === "new" ? null : communityToEdit
-              }
-              onSave={handleSave}
-              onCancel={() => setCommunityToEdit(null)}
-            />
-          </div>
-        ) : (
-          // Show the List of Communities
-          <>
-            <div className="mb-6 flex w-full items-center justify-between">
-              <h2 className="text-3xl font-bold text-black">
-                Your Communities
+          {communityToEdit ? (
+            // Neo-brutalist card container for form
+            <div className="rounded-md border-4 border-black bg-white p-8 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
+              <h2 className="mb-2 text-3xl font-bold text-black">
+                {communityToEdit === "new"
+                  ? "Create Your Community"
+                  : `Editing: ${communityToEdit.name}`}
               </h2>
-              <Button
-                className={BLUEBUTTONCLASSNAMES}
-                onClick={handleCreateNewCommunity}
-              >
-                Create New
-              </Button>
-            </div>
-
-            {isLoading && myCommunities.length === 0 ? (
-              <MilkMarketSpinner label="Loading your communities..." />
-            ) : myCommunities.length > 0 ? (
-              <div className="space-y-4">
-                {myCommunities.map((community) => (
-                  <div
-                    key={community.id}
-                    className="flex items-center justify-between rounded-md border-3 border-black bg-white p-4 shadow-neo"
-                  >
-                    <span className="text-lg font-bold text-black">
-                      {community.name}
-                    </span>
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        className={WHITEBUTTONCLASSNAMES}
-                        onClick={() => setCommunityToEdit(community)}
-                      >
-                        Edit
-                      </Button>
-                      <Button
-                        size="sm"
-                        className="transform rounded-md border-2 border-black bg-red-500 px-4 py-2 font-bold text-white shadow-neo transition-transform hover:-translate-y-0.5 active:translate-y-0.5"
-                        onClick={() => handleDelete(community.id)}
-                      >
-                        Delete
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="rounded-md border-4 border-black bg-white p-8 text-center shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
-                <p className="text-black/70">
-                  You haven&apos;t created any communities yet.
-                </p>
-              </div>
-            )}
-          </>
-        )}
-
-        <Modal
-          backdrop="blur"
-          isOpen={showPasswordModal}
-          onClose={handlePasswordModalClose}
-          classNames={{
-            body: "py-6 bg-white",
-            backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-            header: "border-b-4 border-black bg-white rounded-t-md",
-            footer: "border-t-4 border-black bg-white rounded-b-md",
-            closeButton: "hover:bg-black/5 active:bg-white/10",
-            wrapper: "items-center justify-center",
-            base: "border-4 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] rounded-md",
-          }}
-          scrollBehavior={"outside"}
-          size="md"
-          isDismissable={true}
-        >
-          <ModalContent>
-            <ModalHeader className="flex flex-col gap-1 text-xl font-bold text-black">
-              Enter Seller Password
-            </ModalHeader>
-            <ModalBody>
-              <Input
-                className="text-black"
-                classNames={{
-                  input: "border-2 border-black",
-                  inputWrapper:
-                    "border-2 border-black shadow-neo bg-white rounded-md",
-                }}
-                autoFocus
-                variant="bordered"
-                label="Password"
-                labelPlacement="inside"
-                type="password"
-                value={passwordInput}
-                onChange={(e) => setPasswordInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                isInvalid={!!passwordError}
-                errorMessage={passwordError}
+              <p className="mb-6 text-black/70">
+                Create a space for your customers to gather and get updates.
+              </p>
+              <CreateCommunityForm
+                existingCommunity={
+                  communityToEdit === "new" ? null : communityToEdit
+                }
+                onSave={handleSave}
+                onCancel={() => setCommunityToEdit(null)}
               />
-              {passwordError && (
-                <div className="mt-2 text-sm font-semibold text-red-500">
-                  {passwordError}
+            </div>
+          ) : (
+            // Show the List of Communities
+            <>
+              <div className="mb-6 flex w-full items-center justify-between">
+                <h2 className="text-3xl font-bold text-black">
+                  Your Communities
+                </h2>
+                <Button
+                  className={BLUEBUTTONCLASSNAMES}
+                  onClick={handleCreateNewCommunity}
+                >
+                  Create New
+                </Button>
+              </div>
+
+              {isLoading && myCommunities.length === 0 ? (
+                <MilkMarketSpinner label="Loading your communities..." />
+              ) : myCommunities.length > 0 ? (
+                <div className="space-y-4">
+                  {myCommunities.map((community) => (
+                    <div
+                      key={community.id}
+                      className="flex items-center justify-between rounded-md border-3 border-black bg-white p-4 shadow-neo"
+                    >
+                      <span className="text-lg font-bold text-black">
+                        {community.name}
+                      </span>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          className={WHITEBUTTONCLASSNAMES}
+                          onClick={() => setCommunityToEdit(community)}
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          size="sm"
+                          className="transform rounded-md border-2 border-black bg-red-500 px-4 py-2 font-bold text-white shadow-neo transition-transform hover:-translate-y-0.5 active:translate-y-0.5"
+                          onClick={() => handleDelete(community.id)}
+                        >
+                          Delete
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-md border-4 border-black bg-white p-8 text-center shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
+                  <p className="text-black/70">
+                    You haven&apos;t created any communities yet.
+                  </p>
                 </div>
               )}
-            </ModalBody>
-            <ModalFooter>
-              <Button
-                className="transform rounded-md border-2 border-black bg-white px-4 py-2 font-bold text-black shadow-neo transition-transform hover:-translate-y-0.5 active:translate-y-0.5"
-                onClick={handlePasswordModalClose}
-              >
-                Cancel
-              </Button>
-              <Button
-                className={BLUEBUTTONCLASSNAMES}
-                onClick={handlePasswordSubmit}
-                isDisabled={!passwordInput.trim()}
-              >
-                Submit
-              </Button>
-            </ModalFooter>
-          </ModalContent>
-        </Modal>
+            </>
+          )}
 
-        <SuccessModal
-          bodyText={successMessage}
-          isOpen={showSuccessModal}
-          onClose={() => {
-            setShowSuccessModal(false);
-            setSuccessMessage("");
-          }}
-        />
+          <Modal
+            backdrop="blur"
+            isOpen={showPasswordModal}
+            onClose={handlePasswordModalClose}
+            classNames={{
+              body: "py-6 bg-white",
+              backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+              header: "border-b-4 border-black bg-white rounded-t-md",
+              footer: "border-t-4 border-black bg-white rounded-b-md",
+              closeButton: "hover:bg-black/5 active:bg-white/10",
+              wrapper: "items-center justify-center",
+              base: "border-4 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] rounded-md",
+            }}
+            scrollBehavior={"outside"}
+            size="md"
+            isDismissable={true}
+          >
+            <ModalContent>
+              <ModalHeader className="flex flex-col gap-1 text-xl font-bold text-black">
+                Enter Seller Password
+              </ModalHeader>
+              <ModalBody>
+                <Input
+                  className="text-black"
+                  classNames={{
+                    input: "border-2 border-black",
+                    inputWrapper:
+                      "border-2 border-black shadow-neo bg-white rounded-md",
+                  }}
+                  autoFocus
+                  variant="bordered"
+                  label="Password"
+                  labelPlacement="inside"
+                  type="password"
+                  value={passwordInput}
+                  onChange={(e) => setPasswordInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  isInvalid={!!passwordError}
+                  errorMessage={passwordError}
+                />
+                {passwordError && (
+                  <div className="mt-2 text-sm font-semibold text-red-500">
+                    {passwordError}
+                  </div>
+                )}
+              </ModalBody>
+              <ModalFooter>
+                <Button
+                  className="transform rounded-md border-2 border-black bg-white px-4 py-2 font-bold text-black shadow-neo transition-transform hover:-translate-y-0.5 active:translate-y-0.5"
+                  onClick={handlePasswordModalClose}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  className={BLUEBUTTONCLASSNAMES}
+                  onClick={handlePasswordSubmit}
+                  isDisabled={!passwordInput.trim()}
+                >
+                  Submit
+                </Button>
+              </ModalFooter>
+            </ModalContent>
+          </Modal>
 
-        <FailureModal
-          bodyText={failureMessage}
-          isOpen={showFailureModal}
-          onClose={() => {
-            setShowFailureModal(false);
-            setFailureMessage("");
-          }}
-        />
+          <SuccessModal
+            bodyText={successMessage}
+            isOpen={showSuccessModal}
+            onClose={() => {
+              setShowSuccessModal(false);
+              setSuccessMessage("");
+            }}
+          />
+
+          <FailureModal
+            bodyText={failureMessage}
+            isOpen={showFailureModal}
+            onClose={() => {
+              setShowFailureModal(false);
+              setFailureMessage("");
+            }}
+          />
+        </div>
       </div>
-    </div>
+    </ProtectedRoute>
   );
 };
 

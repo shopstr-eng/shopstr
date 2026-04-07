@@ -20,6 +20,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { webln } from "@getalby/sdk";
 import { formatWithCommas } from "@/components/utility-components/display-monetary-info";
+import ProtectedRoute from "@/components/utility-components/protected-route";
 
 const NWCSettingsPage = () => {
   const [nwcString, setNwcString] = useState("");
@@ -143,101 +144,105 @@ const NWCSettingsPage = () => {
   };
 
   return (
-    <div className="flex h-full flex-col bg-white pt-24">
-      <div className="bg mx-auto h-screen w-full lg:w-1/2 lg:pl-4">
-        <SettingsBreadCrumbs />
-        <div className="p-4">
-          <h2 className="mb-4 text-xl font-bold text-black">NWC Connection</h2>
-          <p className="mb-4 text-sm text-black/70">
-            Connect your wallet using a Nostr Wallet Connect (NIP-47) connection
-            string (e.g., from Alby, Mutiny, or Umbrel). This allows Milk Market
-            to request payments directly from your wallet.
-          </p>
+    <ProtectedRoute>
+      <div className="flex h-full flex-col bg-white pt-24">
+        <div className="bg mx-auto h-screen w-full lg:w-1/2 lg:pl-4">
+          <SettingsBreadCrumbs />
+          <div className="p-4">
+            <h2 className="mb-4 text-xl font-bold text-black">
+              NWC Connection
+            </h2>
+            <p className="mb-4 text-sm text-black/70">
+              Connect your wallet using a Nostr Wallet Connect (NIP-47)
+              connection string (e.g., from Alby, Mutiny, or Umbrel). This
+              allows Milk Market to request payments directly from your wallet.
+            </p>
 
-          <Input
-            isClearable
-            label="Nostr Wallet Connect String"
-            placeholder="nostr+walletconnect://..."
-            value={nwcString}
-            onValueChange={setNwcString}
-            className="mb-4"
-            classNames={{
-              label: "text-black",
-              input: "!text-black",
-              inputWrapper:
-                "rounded-md border-2 border-black bg-white shadow-neo data-[hover=true]:bg-white data-[focus=true]:bg-white group-data-[focus=true]:bg-white",
-              innerWrapper: "text-black",
-            }}
-          />
+            <Input
+              isClearable
+              label="Nostr Wallet Connect String"
+              placeholder="nostr+walletconnect://..."
+              value={nwcString}
+              onValueChange={setNwcString}
+              className="mb-4"
+              classNames={{
+                label: "text-black",
+                input: "!text-black",
+                inputWrapper:
+                  "rounded-md border-2 border-black bg-white shadow-neo data-[hover=true]:bg-white data-[focus=true]:bg-white group-data-[focus=true]:bg-white",
+                innerWrapper: "text-black",
+              }}
+            />
 
-          {error && (
-            <div className="mb-4 flex items-center rounded-md border-2 border-black bg-red-100 p-3 text-red-700 shadow-neo">
-              <ExclamationCircleIcon className="mr-2 h-5 w-5" />
-              <span className="text-sm">{error}</span>
+            {error && (
+              <div className="mb-4 flex items-center rounded-md border-2 border-black bg-red-100 p-3 text-red-700 shadow-neo">
+                <ExclamationCircleIcon className="mr-2 h-5 w-5" />
+                <span className="text-sm">{error}</span>
+              </div>
+            )}
+
+            {isSaved && !error && (
+              <div className="mb-4 flex items-center rounded-md border-2 border-black bg-green-100 p-3 text-green-700 shadow-neo">
+                <CheckCircleIcon className="mr-2 h-5 w-5" />
+                <span className="text-sm">Wallet connected successfully!</span>
+              </div>
+            )}
+
+            <div className="flex items-center">
+              <Button
+                className={BLUEBUTTONCLASSNAMES}
+                onClick={handleSave}
+                isLoading={isLoading}
+              >
+                {isLoading
+                  ? "Connecting..."
+                  : isSaved
+                    ? "Saved!"
+                    : "Save Connection"}
+              </Button>
+
+              {walletInfo && (
+                <Button
+                  color="danger"
+                  variant="light"
+                  className="ml-4"
+                  onClick={handleRemove}
+                >
+                  Disconnect Wallet
+                </Button>
+              )}
             </div>
-          )}
-
-          {isSaved && !error && (
-            <div className="mb-4 flex items-center rounded-md border-2 border-black bg-green-100 p-3 text-green-700 shadow-neo">
-              <CheckCircleIcon className="mr-2 h-5 w-5" />
-              <span className="text-sm">Wallet connected successfully!</span>
-            </div>
-          )}
-
-          <div className="flex items-center">
-            <Button
-              className={BLUEBUTTONCLASSNAMES}
-              onClick={handleSave}
-              isLoading={isLoading}
-            >
-              {isLoading
-                ? "Connecting..."
-                : isSaved
-                  ? "Saved!"
-                  : "Save Connection"}
-            </Button>
 
             {walletInfo && (
-              <Button
-                color="danger"
-                variant="light"
-                className="ml-4"
-                onClick={handleRemove}
-              >
-                Disconnect Wallet
-              </Button>
+              <Card className="mt-6 rounded-md border-2 border-black bg-white shadow-neo">
+                <CardHeader className="border-b-2 border-black">
+                  <WalletIcon className="mr-2 h-5 w-5 text-black" />
+                  <h3 className="font-bold text-black">
+                    Connected Wallet: {walletInfo.alias || "Unknown"}
+                  </h3>
+                </CardHeader>
+                <CardBody>
+                  {balance !== null ? (
+                    <p className="text-black">
+                      Balance: {formatWithCommas(balance, "sats")}
+                    </p>
+                  ) : walletInfo.methods.includes("get_balance") ? (
+                    <Spinner size="sm" />
+                  ) : (
+                    <p className="text-sm text-gray-600">
+                      Balance: Not available
+                    </p>
+                  )}
+                  <p className="mt-2 text-sm text-gray-600">
+                    Supports: {walletInfo.methods.join(", ")}
+                  </p>
+                </CardBody>
+              </Card>
             )}
           </div>
-
-          {walletInfo && (
-            <Card className="mt-6 rounded-md border-2 border-black bg-white shadow-neo">
-              <CardHeader className="border-b-2 border-black">
-                <WalletIcon className="mr-2 h-5 w-5 text-black" />
-                <h3 className="font-bold text-black">
-                  Connected Wallet: {walletInfo.alias || "Unknown"}
-                </h3>
-              </CardHeader>
-              <CardBody>
-                {balance !== null ? (
-                  <p className="text-black">
-                    Balance: {formatWithCommas(balance, "sats")}
-                  </p>
-                ) : walletInfo.methods.includes("get_balance") ? (
-                  <Spinner size="sm" />
-                ) : (
-                  <p className="text-sm text-gray-600">
-                    Balance: Not available
-                  </p>
-                )}
-                <p className="mt-2 text-sm text-gray-600">
-                  Supports: {walletInfo.methods.join(", ")}
-                </p>
-              </CardBody>
-            </Card>
-          )}
         </div>
       </div>
-    </div>
+    </ProtectedRoute>
   );
 };
 

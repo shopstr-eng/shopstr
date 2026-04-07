@@ -33,6 +33,7 @@ import {
   NostrContext,
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
+import ProtectedRoute from "@/components/utility-components/protected-route";
 
 const PreferencesPage = () => {
   const { nostr } = useContext(NostrContext);
@@ -257,7 +258,7 @@ const PreferencesPage = () => {
   };
 
   return (
-    <>
+    <ProtectedRoute>
       <div className="flex min-h-screen flex-col bg-white pb-20 pt-24">
         <div className="mx-auto w-full px-4 lg:w-1/2 xl:w-2/5">
           <SettingsBreadCrumbs />
@@ -797,7 +798,7 @@ const PreferencesPage = () => {
           setFailureText("");
         }}
       />
-    </>
+    </ProtectedRoute>
   );
 };
 

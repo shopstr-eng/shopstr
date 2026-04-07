@@ -158,7 +158,7 @@ const MyListingsPage = () => {
         {/* Navigation Tabs */}
         <div className="mb-6 flex items-center justify-between border-b-4 border-black pb-2">
           <div className="flex items-center gap-2">
-            <div className="relative md:hidden" ref={menuRef}>
+            <div className="relative sm:hidden" ref={menuRef}>
               <Button
                 className="bg-transparent p-1"
                 onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -205,7 +205,7 @@ const MyListingsPage = () => {
         </div>
 
         {/* Mobile buttons - shown at top on mobile */}
-        <div className="mb-4 flex gap-2 md:hidden">
+        <div className="mb-4 flex gap-2 sm:hidden">
           <Button
             className={`${BLUEBUTTONCLASSNAMES} flex-1`}
             onClick={() => handleCreateNewListing()}

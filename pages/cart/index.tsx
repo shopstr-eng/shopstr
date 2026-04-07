@@ -34,6 +34,7 @@ import currencySelection from "../../public/currencySelection.json";
 import { ShopMapContext, ProfileMapContext } from "@/utils/context/context";
 import { nip19 } from "nostr-tools";
 import StorefrontThemeWrapper from "@/components/storefront/storefront-theme-wrapper";
+import ProtectedRoute from "@/components/utility-components/protected-route";
 import { getLocalStorageJson } from "@/utils/safe-json";
 
 interface QuantitySelectorProps {
@@ -750,7 +751,7 @@ export default function Component() {
   };
 
   const cartContent = (
-    <>
+    <ProtectedRoute>
       {!isBeingPaid ? (
         <div className="flex min-h-screen flex-col bg-white p-4 text-black">
           <div className="mx-auto w-full max-w-4xl pt-20">
@@ -1354,7 +1355,7 @@ export default function Component() {
           </Modal>
         </>
       ) : null}
-    </>
+    </ProtectedRoute>
   );
 
   if (sfSellerPubkey) {

@@ -331,7 +331,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
   };
 
   return (
-    <div className="bg-light-bg h-full text-gray-800">
+    <div className="bg-white h-full text-gray-800">
       <div className="container mx-auto h-full px-4">
         {chatsMap.size === 0 ? (
           <div className="flex h-[66vh] items-center justify-center">
@@ -386,7 +386,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
             <div
               className={`
                 ${currentChatPubkey ? "hidden" : "block"}
-                bg-light-bg h-[85vh] w-full overflow-y-auto rounded-md pb-12 md:block
+                bg-white h-[85vh] w-full overflow-y-auto rounded-md pb-12 md:block
                 md:w-[450px] md:max-w-[33%] md:flex-shrink-0 md:pb-0 lg:pb-0
               `}
             >

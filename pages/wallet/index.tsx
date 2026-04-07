@@ -7,6 +7,7 @@ import SendButton from "../../components/wallet/send-button";
 import PayButton from "../../components/wallet/pay-button";
 import Transactions from "../../components/wallet/transactions";
 import { CashuMint, CashuWallet, MintKeyset, Proof } from "@cashu/cashu-ts";
+import ProtectedRoute from "@/components/utility-components/protected-route";
 
 const Wallet = () => {
   const [totalBalance, setTotalBalance] = useState(0);
@@ -101,7 +102,7 @@ const Wallet = () => {
   };
 
   return (
-    <>
+    <ProtectedRoute>
       <div className="flex min-h-screen flex-col bg-white px-4 pb-8 pt-[8rem]">
         <div className="mx-auto w-full max-w-3xl space-y-6">
           {/* Balance Card with Neo-brutalist Design */}
@@ -137,7 +138,7 @@ const Wallet = () => {
           </div>
         </div>
       </div>
-    </>
+    </ProtectedRoute>
   );
 };
 

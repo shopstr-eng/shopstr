@@ -398,7 +398,7 @@ const ChatPanel = ({
 
   if (!currentChatPubkey)
     return (
-      <div className="bg-light-bg absolute z-20 hidden h-[85vh] w-full flex-col overflow-clip px-2 md:relative md:flex">
+      <div className="bg-white absolute z-20 hidden h-[85vh] w-full flex-col overflow-clip px-2 md:relative md:flex">
         <div className="mt-10 flex flex-grow items-center justify-center py-10">
           <div className="w-full max-w-xl rounded-lg border-2 border-black bg-[#2C3E50] p-10 text-center shadow-neo">
             <ChatBubbleLeftIcon className="mx-auto mb-5 h-20 w-20 text-white" />
@@ -422,7 +422,7 @@ const ChatPanel = ({
   };
 
   return (
-    <div className="bg-light-bg absolute flex h-full w-full flex-col overflow-clip px-2 pb-20 md:relative md:h-[85vh] md:pb-0 lg:pb-0">
+    <div className="bg-white absolute flex h-full w-full flex-col overflow-clip px-2 pb-20 md:relative md:h-[85vh] md:pb-0 lg:pb-0">
       <h2 className="flex h-[60px] w-full flex-row items-center overflow-clip border-b-2 border-black bg-white align-middle">
         <ArrowUturnLeftIcon
           onClick={handleGoBack}
