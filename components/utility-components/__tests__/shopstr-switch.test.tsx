@@ -15,17 +15,32 @@ jest.mock("next/router", () => ({
 }));
 
 jest.mock("@nextui-org/react", () => ({
+  __esModule: true,
   Switch: (props: {
     onValueChange: (value: boolean) => void;
     isSelected: boolean;
     color: string;
-  }) => (
-    <button
-      role="switch"
-      onClick={() => props.onValueChange(!props.isSelected)}
-      data-color={props.color}
-    />
-  ),
+  }) => {
+    const React = jest.requireActual("react");
+    const [selected, setSelected] = React.useState(props.isSelected);
+
+    React.useEffect(() => {
+      setSelected(props.isSelected);
+    }, [props.isSelected]);
+
+    return (
+      <button
+        role="switch"
+        aria-checked={selected}
+        onClick={() => {
+          const nextValue = !selected;
+          setSelected(nextValue);
+          props.onValueChange(nextValue);
+        }}
+        data-color={props.color}
+      />
+    );
+  },
 }));
 
 describe("ShopstrSwitch", () => {
@@ -69,5 +84,17 @@ describe("ShopstrSwitch", () => {
     const switchControl = screen.getByRole("switch");
 
     expect(switchControl).toHaveAttribute("data-color", "warning");
+  });
+
+  it("should toggle values across multiple clicks", () => {
+    render(<ShopstrSwitch wotFilter={false} setWotFilter={mockSetWotFilter} />);
+    const switchControl = screen.getByRole("switch");
+
+    fireEvent.click(switchControl);
+    fireEvent.click(switchControl);
+
+    expect(mockSetWotFilter).toHaveBeenNthCalledWith(1, true);
+    expect(mockSetWotFilter).toHaveBeenNthCalledWith(2, false);
+    expect(switchControl).toHaveAttribute("aria-checked", "false");
   });
 });
