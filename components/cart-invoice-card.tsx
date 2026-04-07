@@ -127,6 +127,7 @@ export default function CartInvoiceCard({
     pickupLocation?: string;
     selectedSize?: string;
     selectedVolume?: string;
+    selectedWeight?: string;
     selectedBulkOption?: string;
   } | null>(null);
 
@@ -143,6 +144,7 @@ export default function CartInvoiceCard({
           pickupLocation: selectedPickupLocations[p.id] || undefined,
           selectedSize: p.selectedSize || undefined,
           selectedVolume: p.selectedVolume || undefined,
+          selectedWeight: p.selectedWeight || undefined,
           selectedBulkOption: p.selectedBulkOption
             ? String(p.selectedBulkOption)
             : undefined,
@@ -230,7 +232,9 @@ export default function CartInvoiceCard({
             ? product.bulkPrice
             : product.volumePrice !== undefined
               ? product.volumePrice
-              : product.price;
+              : product.weightPrice !== undefined
+                ? product.weightPrice
+                : product.price;
         const qty = quantities[product.id] || 1;
         const discountedPrice =
           discount > 0 ? basePrice * (1 - discount / 100) : basePrice;
@@ -503,7 +507,7 @@ export default function CartInvoiceCard({
         receiverNpub: npubForReceiver,
         receiverNsec: nsecForReceiver,
       };
-    } catch (_) {
+    } catch {
       return null;
     }
   };
@@ -640,6 +644,7 @@ export default function CartInvoiceCard({
         donationPercentage: donationPercentageValue,
         selectedSize: product.selectedSize,
         selectedVolume: product.selectedVolume,
+        selectedWeight: product.selectedWeight,
         selectedBulkOption: product.selectedBulkOption,
       };
     } else if (isReceipt) {
@@ -661,6 +666,7 @@ export default function CartInvoiceCard({
         donationPercentage: donationPercentageValue,
         selectedSize: product.selectedSize,
         selectedVolume: product.selectedVolume,
+        selectedWeight: product.selectedWeight,
         selectedBulkOption: product.selectedBulkOption,
       };
     } else if (isDonation) {
@@ -682,6 +688,7 @@ export default function CartInvoiceCard({
         donationPercentage: donationPercentageValue,
         selectedSize: product.selectedSize,
         selectedVolume: product.selectedVolume,
+        selectedWeight: product.selectedWeight,
         selectedBulkOption: product.selectedBulkOption,
       };
     }
@@ -829,6 +836,7 @@ export default function CartInvoiceCard({
           const parts = [p.title || p.productName];
           if (p.selectedSize) parts.push(`Size: ${p.selectedSize}`);
           if (p.selectedVolume) parts.push(`Volume: ${p.selectedVolume}`);
+          if (p.selectedWeight) parts.push(`Weight: ${p.selectedWeight}`);
           if (p.selectedBulkOption)
             parts.push(`Bundle: ${p.selectedBulkOption} units`);
           const qty = quantities[p.id];
@@ -859,7 +867,7 @@ export default function CartInvoiceCard({
       } else {
         await handleLightningPayment(price, paymentData);
       }
-    } catch (error) {
+    } catch {
       setFailureText("Payment failed. Please try again.");
       setShowFailureModal(true);
     }
@@ -1027,7 +1035,7 @@ export default function CartInvoiceCard({
         }
       }
       await invoiceHasBeenPaid(wallet, totalCost, hash, data);
-    } catch (error) {
+    } catch {
       if (setInvoiceGenerationFailed) {
         setInvoiceGenerationFailed(true);
       } else {
@@ -1363,6 +1371,13 @@ export default function CartInvoiceCard({
                 productDetails += " in a " + product.selectedVolume;
               }
             }
+            if (product.selectedWeight) {
+              if (productDetails) {
+                productDetails += " and " + product.selectedWeight;
+              } else {
+                productDetails += " in " + product.selectedWeight;
+              }
+            }
             if (product.selectedBulkOption) {
               if (productDetails) {
                 productDetails +=
@@ -1489,6 +1504,13 @@ export default function CartInvoiceCard({
                 productDetails += " in a " + product.selectedVolume;
               }
             }
+            if (product.selectedWeight) {
+              if (productDetails) {
+                productDetails += " and " + product.selectedWeight;
+              } else {
+                productDetails += " in " + product.selectedWeight;
+              }
+            }
             if (product.selectedBulkOption) {
               if (productDetails) {
                 productDetails +=
@@ -1569,6 +1591,13 @@ export default function CartInvoiceCard({
             productDetails += " and a " + product.selectedVolume;
           } else {
             productDetails += " in a " + product.selectedVolume;
+          }
+        }
+        if (product.selectedWeight) {
+          if (productDetails) {
+            productDetails += " and " + product.selectedWeight;
+          } else {
+            productDetails += " in " + product.selectedWeight;
           }
         }
         if (product.selectedBulkOption) {
@@ -1739,6 +1768,13 @@ export default function CartInvoiceCard({
               productDetails += " in a " + product.selectedVolume;
             }
           }
+          if (product.selectedWeight) {
+            if (productDetails) {
+              productDetails += " and " + product.selectedWeight;
+            } else {
+              productDetails += " in " + product.selectedWeight;
+            }
+          }
           if (product.selectedBulkOption) {
             if (productDetails) {
               productDetails +=
@@ -1877,6 +1913,13 @@ export default function CartInvoiceCard({
             productDetails += " in a " + product.selectedVolume;
           }
         }
+        if (product.selectedWeight) {
+          if (productDetails) {
+            productDetails += " and " + product.selectedWeight;
+          } else {
+            productDetails += " in " + product.selectedWeight;
+          }
+        }
         if (product.selectedBulkOption) {
           if (productDetails) {
             productDetails +=
@@ -1942,6 +1985,13 @@ export default function CartInvoiceCard({
             productDetails += " and a " + product.selectedVolume;
           } else {
             productDetails += " in a " + product.selectedVolume;
+          }
+        }
+        if (product.selectedWeight) {
+          if (productDetails) {
+            productDetails += " and " + product.selectedWeight;
+          } else {
+            productDetails += " in " + product.selectedWeight;
           }
         }
         if (product.selectedBulkOption) {
@@ -2055,7 +2105,7 @@ export default function CartInvoiceCard({
       const filteredProofs = tokens.filter(
         (p: Proof) =>
           mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
-      );
+      ) as Proof[];
       const { keep, send } = await wallet.send(price, filteredProofs, {
         includeFees: true,
       });
@@ -2065,8 +2115,7 @@ export default function CartInvoiceCard({
             .filter((event) =>
               event.proofs.some((proof: Proof) =>
                 filteredProofs.some(
-                  (filteredProof) =>
-                    JSON.stringify(proof) === JSON.stringify(filteredProof)
+                  (filteredProof) => filteredProof.secret === proof.secret
                 )
               )
             )
@@ -2074,20 +2123,14 @@ export default function CartInvoiceCard({
           ...walletContext.proofEvents
             .filter((event) =>
               event.proofs.some((proof: Proof) =>
-                keep.some(
-                  (keepProof) =>
-                    JSON.stringify(proof) === JSON.stringify(keepProof)
-                )
+                keep.some((keepProof) => keepProof.secret === proof.secret)
               )
             )
             .map((event) => event.id),
           ...walletContext.proofEvents
             .filter((event) =>
               event.proofs.some((proof: Proof) =>
-                send.some(
-                  (sendProof) =>
-                    JSON.stringify(proof) === JSON.stringify(sendProof)
-                )
+                send.some((sendProof) => sendProof.secret === proof.secret)
               )
             )
             .map((event) => event.id),
@@ -2097,8 +2140,8 @@ export default function CartInvoiceCard({
       const changeProofs = keep;
       const remainingProofs = tokens.filter(
         (p: Proof) =>
-          mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id !== p.id)
-      );
+          !mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
+      ) as Proof[];
       let proofArray;
       if (changeProofs.length >= 1 && changeProofs) {
         proofArray = [...remainingProofs, ...changeProofs];
@@ -2128,7 +2171,7 @@ export default function CartInvoiceCard({
       if (setCashuPaymentSent) {
         setCashuPaymentSent(true);
       }
-    } catch (error) {
+    } catch {
       if (setCashuPaymentFailed) {
         setCashuPaymentFailed(true);
       } else {
@@ -2475,6 +2518,11 @@ export default function CartInvoiceCard({
                           Volume: {product.selectedVolume}
                         </p>
                       )}
+                      {product.selectedWeight && (
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                          Weight: {product.selectedWeight}
+                        </p>
+                      )}
                       {product.selectedBulkOption && (
                         <p className="text-sm text-gray-600 dark:text-gray-400">
                           Bundle: {product.selectedBulkOption} units
@@ -2501,7 +2549,9 @@ export default function CartInvoiceCard({
                           ? product.bulkPrice
                           : product.volumePrice !== undefined
                             ? product.volumePrice
-                            : product.price) * (quantities[product.id] || 1);
+                            : product.weightPrice !== undefined
+                              ? product.weightPrice
+                              : product.price) * (quantities[product.id] || 1);
                       const discountedPrice =
                         discount > 0
                           ? basePrice * (1 - discount / 100)
@@ -2696,6 +2746,11 @@ export default function CartInvoiceCard({
                         Volume: {product.selectedVolume}
                       </p>
                     )}
+                    {product.selectedWeight && (
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        Weight: {product.selectedWeight}
+                      </p>
+                    )}
                     {product.selectedBulkOption && (
                       <p className="text-sm text-gray-600 dark:text-gray-400">
                         Bundle: {product.selectedBulkOption} units
@@ -2722,7 +2777,9 @@ export default function CartInvoiceCard({
                         ? product.bulkPrice
                         : product.volumePrice !== undefined
                           ? product.volumePrice
-                          : product.price;
+                          : product.weightPrice !== undefined
+                            ? product.weightPrice
+                            : product.price;
                     const basePrice =
                       originalPrice * (quantities[product.id] || 1);
                     const discountedPrice =

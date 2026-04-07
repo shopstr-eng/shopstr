@@ -23,12 +23,18 @@ import { NostrManager } from "@/utils/nostr/nostr-manager";
 import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 import { cacheEventsToDatabase } from "@/utils/db/db-client";
 
+interface NipProfile {
+  pubkey: string;
+  created_at: number;
+  content: { nip05?: string; [key: string]: any };
+  nip05Verified: boolean;
+}
+
 function getUniqueProofs(proofs: Proof[]): Proof[] {
-  const uniqueProofs = new Set<string>();
+  const seenSecrets = new Set<string>();
   return proofs.filter((proof) => {
-    const serializedProof = JSON.stringify(proof);
-    if (!uniqueProofs.has(serializedProof)) {
-      uniqueProofs.add(serializedProof);
+    if (!seenSecrets.has(proof.secret)) {
+      seenSecrets.add(proof.secret);
       return true;
     }
     return false;
@@ -127,16 +133,6 @@ export const fetchAllPosts = async (
       const mergedProductArray = Array.from(mergedProductsMap.values());
 
       editProductContext(mergedProductArray, false);
-
-      // Cache fetched products to database via API (only valid events with signatures)
-      const validProducts = fetchedEvents.filter(
-        (e) => e.id && e.sig && e.pubkey
-      );
-      if (validProducts.length > 0) {
-        cacheEventsToDatabase(validProducts).catch((error) =>
-          console.error("Failed to cache products to database:", error)
-        );
-      }
 
       resolve({
         productEvents: mergedProductArray,
@@ -479,54 +475,113 @@ export const fetchShopProfile = async (
   });
 };
 
+async function verifyProfilesNip05(
+  profileMap: Map<string, NipProfile | null>,
+  concurrency = 8
+): Promise<void> {
+  const profiles = Array.from(profileMap.values()).filter(
+    (profile): profile is NipProfile =>
+      profile !== null && !!profile?.content?.nip05
+  );
+
+  for (let i = 0; i < profiles.length; i += concurrency) {
+    await Promise.all(
+      profiles.slice(i, i + concurrency).map(async (profile) => {
+        const nip05 = profile.content.nip05!;
+        const pubkey: string = profile.pubkey;
+        const host = nip05.includes("@") ? nip05.split("@")[1] : undefined;
+        try {
+          profile.nip05Verified = await verifyNip05Identifier(nip05, pubkey);
+        } catch (error) {
+          profile.nip05Verified = false;
+          console.error("Failed to verify NIP-05 identifier", {
+            host,
+            pubkey,
+            nip05,
+            error,
+          });
+        }
+      })
+    );
+  }
+}
+
 export const fetchProfile = async (
   nostr: NostrManager,
   relays: string[],
   pubkeyProfilesToFetch: string[],
-  editProfileContext: (productEvents: Map<any, any>, isLoading: boolean) => void
+  editProfileContext: (
+    profileMap: Map<string, NipProfile | null>,
+    isLoading: boolean
+  ) => void,
+  existingProfileMap: Map<string, any> = new Map()
 ): Promise<{
-  profileMap: Map<string, any>;
+  profileMap: Map<string, NipProfile | null>;
 }> => {
   return new Promise(async function (resolve, reject) {
     try {
       if (!pubkeyProfilesToFetch.length) {
-        editProfileContext(new Map(), false);
-        resolve({ profileMap: new Map() });
+        const preservedProfileMap = new Map(existingProfileMap);
+        editProfileContext(preservedProfileMap, false);
+        resolve({ profileMap: preservedProfileMap });
         return;
       }
 
-      const dbProfileMap = new Map<string, any>();
+      const mergedProfileMap = new Map(existingProfileMap);
+      const updateProfileIfNewer = (profile: any) => {
+        if (!profile?.pubkey) return;
+
+        const existingProfile = mergedProfileMap.get(profile.pubkey);
+        if (
+          !existingProfile ||
+          (profile.created_at ?? 0) >= (existingProfile.created_at ?? 0)
+        ) {
+          mergedProfileMap.set(profile.pubkey, profile);
+        }
+      };
+
+      const dbProfileMap = new Map<string, NipProfile>();
       try {
         const response = await fetch("/api/db/fetch-profiles");
         if (response.ok) {
           const profilesFromDb = await response.json();
+          const latestDbEvents = new Map<string, NostrEvent>();
+
           for (const event of profilesFromDb) {
-            if (pubkeyProfilesToFetch.includes(event.pubkey)) {
-              try {
-                const content = JSON.parse(event.content);
-                const profile = {
-                  pubkey: event.pubkey,
-                  created_at: event.created_at,
-                  content: content,
-                  nip05Verified: false,
-                };
-                if (content.nip05) {
-                  profile.nip05Verified = await verifyNip05Identifier(
-                    content.nip05,
-                    event.pubkey
-                  );
-                }
-                dbProfileMap.set(event.pubkey, profile);
-              } catch (error) {
-                console.error(
-                  `Failed to parse profile from DB: ${event.pubkey}`,
-                  error
-                );
+            if (
+              event.kind === 0 &&
+              pubkeyProfilesToFetch.includes(event.pubkey)
+            ) {
+              const existing = latestDbEvents.get(event.pubkey);
+              if (!existing || event.created_at > existing.created_at) {
+                latestDbEvents.set(event.pubkey, event);
               }
             }
           }
+
+          for (const [pubkey, event] of latestDbEvents.entries()) {
+            try {
+              const content = JSON.parse(event.content);
+              const profile: NipProfile = {
+                pubkey: event.pubkey,
+                created_at: event.created_at,
+                content,
+                nip05Verified: false,
+              };
+              dbProfileMap.set(pubkey, profile);
+              updateProfileIfNewer(profile);
+            } catch (error) {
+              console.error(
+                `Failed to parse profile from DB: ${pubkey}`,
+                error
+              );
+            }
+          }
+
           if (dbProfileMap.size > 0) {
-            editProfileContext(dbProfileMap, false);
+            editProfileContext(new Map(mergedProfileMap), false);
+            await verifyProfilesNip05(dbProfileMap);
+            editProfileContext(new Map(mergedProfileMap), false);
           }
         }
       } catch (error) {
@@ -538,16 +593,18 @@ export const fetchProfile = async (
         authors: Array.from(pubkeyProfilesToFetch),
       };
 
-      const profileMap: Map<string, any> = new Map(
+      const profileMap: Map<string, NipProfile | null> = new Map(
         Array.from(pubkeyProfilesToFetch).map((pubkey) => [
           pubkey,
-          dbProfileMap.get(pubkey) || null,
+          mergedProfileMap.get(pubkey) || dbProfileMap.get(pubkey) || null,
         ])
       );
+      const updatedProfiles = new Map<string, NipProfile | null>();
 
       const fetchedEvents = await nostr.fetch([subParams], {}, relays);
 
       for (const event of fetchedEvents) {
+        if (event.kind !== 0) continue;
         const existing = profileMap.get(event.pubkey);
         if (
           existing === null ||
@@ -556,20 +613,15 @@ export const fetchProfile = async (
         ) {
           try {
             const content = JSON.parse(event.content);
-            const profile = {
+            const profile: NipProfile = {
               pubkey: event.pubkey,
               created_at: event.created_at,
-              content: content,
+              content,
               nip05Verified: false,
             };
-            if (content.nip05) {
-              profile.nip05Verified = await verifyNip05Identifier(
-                content.nip05,
-                event.pubkey
-              );
-            }
-
             profileMap.set(event.pubkey, profile);
+            updatedProfiles.set(event.pubkey, profile);
+            updateProfileIfNewer(profile);
           } catch (error) {
             console.error(
               `Failed parse profile for pubkey: ${event.pubkey}, ${event.content}`,
@@ -578,6 +630,8 @@ export const fetchProfile = async (
           }
         }
       }
+
+      await verifyProfilesNip05(updatedProfiles);
 
       // Cache profiles to database via API (reconstruct from fetched events)
       const validProfileEvents = fetchedEvents.filter(
@@ -589,7 +643,9 @@ export const fetchProfile = async (
         );
       }
 
-      resolve({ profileMap });
+      editProfileContext(new Map(mergedProfileMap), false);
+
+      resolve({ profileMap: mergedProfileMap });
     } catch (error) {
       reject(error);
     }
@@ -718,7 +774,7 @@ export const fetchGiftWrappedChatsAndMessages = async (
             );
             return;
           }
-          let cachedMessage = chatMessagesFromCache.get(event.id);
+          const cachedMessage = chatMessagesFromCache.get(event.id);
           let chatMessage: NostrMessageEvent;
           if (cachedMessage) {
             chatMessage = {
@@ -1355,15 +1411,26 @@ export const fetchCashuWallet = async (
 
         for (const event of walletEventsFromDb) {
           if (event.kind === 17375) {
-            const mints = event.tags.filter(
-              (tag: string[]) => tag[0] === "mint"
-            );
-            mints.forEach((tag: string[]) => {
-              if (tag[1] && !cashuMintSet.has(tag[1])) {
-                cashuMintSet.add(tag[1]);
-                cashuMints.push(tag[1]);
-              }
-            });
+            try {
+              const decrypted = await signer!.decrypt(
+                userPubkey,
+                event.content
+              );
+              const walletContent: string[][] = JSON.parse(decrypted);
+              walletContent
+                .filter((entry) => entry[0] === "mint")
+                .forEach((entry) => {
+                  if (entry[1] && !cashuMintSet.has(entry[1])) {
+                    cashuMintSet.add(entry[1]);
+                    cashuMints.push(entry[1]);
+                  }
+                });
+            } catch (error) {
+              console.error(
+                `Failed to decrypt wallet config event from DB ${event.id}:`,
+                error
+              );
+            }
           } else if (event.kind === 37375) {
             if (
               !mostRecentWalletEvent ||
@@ -1466,16 +1533,27 @@ export const fetchCashuWallet = async (
       for (const event of hEvents) {
         try {
           if (event.kind === 17375) {
-            // Extract mints from configuration events
-            const mints = event.tags.filter(
-              (tag: string[]) => tag[0] === "mint"
-            );
-            mints.forEach((tag) => {
-              if (tag[1] && !cashuMintSet.has(tag[1])) {
-                cashuMintSet.add(tag[1]);
-                cashuMints.push(tag[1]);
-              }
-            });
+            // Mints are stored in the encrypted content, not in tags
+            try {
+              const decrypted = await signer!.decrypt(
+                userPubkey,
+                event.content
+              );
+              const walletContent: string[][] = JSON.parse(decrypted);
+              walletContent
+                .filter((entry) => entry[0] === "mint")
+                .forEach((entry) => {
+                  if (entry[1] && !cashuMintSet.has(entry[1])) {
+                    cashuMintSet.add(entry[1]);
+                    cashuMints.push(entry[1]);
+                  }
+                });
+            } catch (decryptError) {
+              console.error(
+                `Failed to decrypt wallet config event ${event.id}:`,
+                decryptError
+              );
+            }
           } else if (event.kind === 37375) {
             // Find the most recent wallet state event
             if (
@@ -1622,11 +1700,13 @@ export const fetchCashuWallet = async (
                 .map((state) => state.Y)
             );
 
-            // Remove spent proofs
-            cashuProofs = cashuProofs.filter((proof, _index) => {
-              if (mintProofs.includes(proof)) {
-                const proofIndex = mintProofs.indexOf(proof);
-                return proofIndex === -1 || !spentYs.has(Ys[proofIndex]!);
+            // Remove spent proofs (compare by secret, not reference)
+            cashuProofs = cashuProofs.filter((proof) => {
+              const mintProofIndex = mintProofs.findIndex(
+                (mp) => mp.secret === proof.secret
+              );
+              if (mintProofIndex !== -1) {
+                return !spentYs.has(Ys[mintProofIndex]!);
               }
               return true;
             });
@@ -1655,13 +1735,12 @@ export const fetchCashuWallet = async (
           .filter((eventTags) =>
             eventTags.some((tag) => tag[0] === "direction" && tag[1] === "out")
           )
-          .map((eventTags) => {
-            const destroyedTag = eventTags.find(
-              (tag) => tag[0] === "e" && tag[3] === "destroyed"
-            );
-            return destroyedTag ? destroyedTag[1] : "";
-          })
-          .filter((eventId) => eventId !== "");
+          .flatMap((eventTags) =>
+            eventTags
+              .filter((tag) => tag[0] === "e" && tag[3] === "destroyed")
+              .map((tag) => tag[1])
+          )
+          .filter((eventId) => eventId !== "") as string[];
 
         const inProofIds = incomingSpendingHistory
           .filter((eventTags) =>
@@ -1676,7 +1755,7 @@ export const fetchCashuWallet = async (
             );
             return createdTag ? createdTag[1] : "";
           })
-          .filter((eventId) => eventId !== "");
+          .filter((eventId) => eventId !== "") as string[];
 
         // Remove proofs from events that were spent (out direction)
         const destroyedProofs = proofEvents
@@ -1686,8 +1765,7 @@ export const fetchCashuWallet = async (
         cashuProofs = cashuProofs.filter(
           (proof) =>
             !destroyedProofs.some(
-              (destroyed: Proof) =>
-                JSON.stringify(proof) === JSON.stringify(destroyed)
+              (destroyed: Proof) => destroyed.secret === proof.secret
             )
         );
 

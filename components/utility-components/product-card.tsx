@@ -60,6 +60,26 @@ export default function ProductCard({
     ? Date.now() / 1000 > productData.expiration
     : false;
 
+  const handleCardClick = (e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    const isCarouselControl =
+      target.closest('button[title*="slide"]') ||
+      target.closest('li[role="button"]') ||
+      target.closest(".carousel-control");
+    const isDropdown =
+      target.closest('[role="menu"]') ||
+      target.closest('[data-slot="trigger"]') ||
+      target.closest('button[data-slot="trigger"]');
+    if (isCarouselControl || isDropdown) {
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+    if (onProductClick) {
+      onProductClick(productData, e);
+    }
+  };
+
   const handleNjumpClick = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -75,18 +95,13 @@ export default function ProductCard({
         relays: targetRelays,
       });
       window.open(`https://njump.me/${nevent}`, "_blank");
-    } catch (err) {
-      // console.error("Failed to generate njump link", err);
+    } catch {
+      // console.error("Failed to generate njump link");
     }
   };
 
   const content = (
-    <div
-      className="cursor-pointer"
-      onClick={(e) => {
-        onProductClick && onProductClick(productData, e);
-      }}
-    >
+    <div className="cursor-pointer" onClick={handleCardClick}>
       <div>
         <ImageCarousel
           images={productData.images}
@@ -98,8 +113,8 @@ export default function ProductCard({
       <div className="flex flex-col p-4">
         {router.pathname !== "/" && (
           <div className="mb-2 flex items-center justify-between">
-            <div className="flex max-w-[80%] items-center gap-2">
-              <h2 className="truncate text-xl font-semibold text-light-text dark:text-dark-text">
+            <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
+              <h2 className="min-w-0 truncate text-xl font-semibold text-light-text dark:text-dark-text">
                 {productData.title}
               </h2>
               {isZapsnag && productData.pubkey === userPubkey && (
@@ -216,9 +231,9 @@ export default function ProductCard({
 
   return (
     <div
-      className={`${cardHoverStyle} mx-2 my-4 rounded-2xl bg-white shadow-md duration-300 transition-all dark:bg-neutral-900`}
+      className={`${cardHoverStyle} my-4 w-full rounded-2xl bg-white shadow-md duration-300 transition-all dark:bg-neutral-900`}
     >
-      <div className="w-80 overflow-hidden rounded-2xl">
+      <div className="w-full overflow-hidden rounded-2xl">
         {href ? (
           <Link href={href} className="block">
             {content}

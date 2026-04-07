@@ -302,6 +302,7 @@ const Listing = () => {
             </div>
           ) : (
             <CheckoutCard
+              key={productData.id}
               productData={productData}
               setInvoiceIsPaid={setInvoiceIsPaid}
               setInvoiceGenerationFailed={setInvoiceGenerationFailed}

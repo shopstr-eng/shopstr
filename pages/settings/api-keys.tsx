@@ -2,7 +2,17 @@ import { useState, useEffect, useContext, useCallback } from "react";
 import { Button, Input, Select, SelectItem, Spinner } from "@nextui-org/react";
 import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
+import ProtectedRoute from "@/components/utility-components/protected-route";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import { NostrEventTemplate } from "@/utils/nostr/nostr-manager";
+import {
+  buildApiKeyCreateProof,
+  buildApiKeyRevokeProof,
+  buildApiKeysListProof,
+  buildMcpRequestProofTemplate,
+  MCP_SIGNED_EVENT_HEADER,
+  normalizeApiKeysPermission,
+} from "@/utils/mcp/request-proof";
 import {
   ClipboardDocumentIcon,
   KeyIcon,
@@ -23,7 +33,7 @@ interface ApiKeyItem {
 }
 
 const ApiKeysPage = () => {
-  const { pubkey, isLoggedIn } = useContext(SignerContext);
+  const { pubkey, signer } = useContext(SignerContext);
   const [apiKeys, setApiKeys] = useState<ApiKeyItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
@@ -34,44 +44,81 @@ const ApiKeysPage = () => {
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
+  const signProof = useCallback(
+    async (template: NostrEventTemplate) => {
+      if (!signer) {
+        throw new Error("A Nostr signer is required to manage API keys.");
+      }
+
+      return signer.sign(template);
+    },
+    [signer]
+  );
+
   const fetchKeys = useCallback(async () => {
-    if (!pubkey) return;
+    if (!pubkey || !signer) return;
     setIsLoading(true);
+    setError(null);
     try {
-      const res = await fetch(`/api/mcp/api-keys?pubkey=${pubkey}`);
+      const signedEvent = await signProof(
+        buildMcpRequestProofTemplate(buildApiKeysListProof(pubkey))
+      );
+      const res = await fetch(`/api/mcp/api-keys?pubkey=${pubkey}`, {
+        headers: {
+          [MCP_SIGNED_EVENT_HEADER]: JSON.stringify(signedEvent),
+        },
+      });
       const data = await res.json();
       if (data.keys) {
         setApiKeys(data.keys);
+      } else {
+        setError(data.error || "Failed to load API keys.");
       }
     } catch {
       setError("Failed to load API keys.");
     } finally {
       setIsLoading(false);
     }
-  }, [pubkey]);
+  }, [pubkey, signer, signProof]);
 
   useEffect(() => {
-    if (pubkey) {
+    if (pubkey && signer) {
       fetchKeys();
     }
-  }, [pubkey, fetchKeys]);
+  }, [pubkey, signer, fetchKeys]);
 
   const handleCreate = async () => {
     if (!newKeyName.trim()) {
       setError("Please enter a name for your API key.");
       return;
     }
+    if (!pubkey || !signer) {
+      setError("Please sign in with a Nostr signer to manage API keys.");
+      return;
+    }
     setIsCreating(true);
     setError(null);
     setCreatedKey(null);
     try {
+      const trimmedName = newKeyName.trim();
+      const permissions = normalizeApiKeysPermission(newKeyPermission);
+      const signedEvent = await signProof(
+        buildMcpRequestProofTemplate(
+          buildApiKeyCreateProof({
+            name: trimmedName,
+            permissions,
+            pubkey,
+          })
+        )
+      );
       const res = await fetch("/api/mcp/api-keys", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: newKeyName.trim(),
-          permissions: newKeyPermission,
+          name: trimmedName,
+          permissions,
           pubkey,
+          signedEvent,
         }),
       });
       const data = await res.json();
@@ -91,13 +138,25 @@ const ApiKeysPage = () => {
   };
 
   const handleRevoke = async (id: number) => {
+    if (!pubkey || !signer) {
+      setError("Please sign in with a Nostr signer to manage API keys.");
+      return;
+    }
     setError(null);
     setSuccessMessage(null);
     try {
+      const signedEvent = await signProof(
+        buildMcpRequestProofTemplate(
+          buildApiKeyRevokeProof({
+            id,
+            pubkey,
+          })
+        )
+      );
       const res = await fetch("/api/mcp/api-keys", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, pubkey }),
+        body: JSON.stringify({ id, pubkey, signedEvent }),
       });
       const data = await res.json();
       if (data.success) {
@@ -133,25 +192,11 @@ const ApiKeysPage = () => {
       ? `${window.location.origin}/api/mcp`
       : "/api/mcp";
 
-  if (!isLoggedIn) {
-    return (
+  return (
+    <ProtectedRoute>
       <div className="flex h-full flex-col bg-light-bg pt-24 dark:bg-dark-bg">
         <div className="mx-auto w-full px-4 lg:w-1/2 xl:w-2/5">
           <SettingsBreadCrumbs />
-          <div className="mt-8 rounded-lg bg-light-fg p-6 dark:bg-dark-fg">
-            <p className="text-center text-lg font-bold text-light-text dark:text-dark-text">
-              Please sign in to manage API keys.
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex h-full flex-col bg-light-bg pt-24 dark:bg-dark-bg">
-      <div className="mx-auto w-full px-4 lg:w-1/2 xl:w-2/5">
-        <SettingsBreadCrumbs />
 
         <div className="mb-8 p-4">
           <h2 className="mb-2 text-2xl font-bold text-light-text dark:text-dark-text">
@@ -351,8 +396,9 @@ const ApiKeysPage = () => {
             </div>
           )}
         </div>
+        </div>
       </div>
-    </div>
+    </ProtectedRoute>
   );
 };
 

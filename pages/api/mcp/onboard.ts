@@ -8,6 +8,14 @@ import {
 } from "@/utils/mcp/auth";
 import { encryptNsec } from "@/utils/mcp/nostr-signing";
 import { checkOnboardRateLimit } from "@/utils/mcp/metrics";
+import {
+  buildOnboardExistingPubkeyProof,
+  normalizeOnboardPermission,
+} from "@/utils/mcp/request-proof";
+import {
+  extractSignedEventFromRequest,
+  verifyAndConsumeSignedRequestProof,
+} from "@/utils/mcp/request-proof-server";
 
 let tablesReady = false;
 
@@ -54,8 +62,7 @@ export default async function handler(
           name: "(required) string - Name for this agent/integration",
           permissions:
             '(optional) "read" | "read_write" | "full_access" - defaults to "read"',
-          contact:
-            "(optional) string - Contact URL or identifier for this agent",
+          contact: "(optional) string - Contact email or URL for this agent",
           pubkey:
             "(optional) string - Existing Nostr pubkey (hex or npub1...). If omitted, a new keypair is generated.",
           nsec: "(optional) string - Nostr secret key (nsec1... or hex). Required for full_access with an existing pubkey. Stored encrypted.",
@@ -92,12 +99,15 @@ export default async function handler(
     }
   }
 
-  let perm: ApiKeyPermission = "read";
-  if (permissions === "full_access") {
-    perm = "full_access";
-  } else if (permissions === "read_write") {
-    perm = "read_write";
-  }
+  const trimmedName = name.trim();
+  const trimmedContact =
+    typeof contact === "string" && contact.trim().length > 0
+      ? contact.trim()
+      : undefined;
+
+  const perm: ApiKeyPermission = normalizeOnboardPermission(
+    typeof permissions === "string" ? permissions : undefined
+  );
 
   try {
     await ensureTables();
@@ -143,6 +153,29 @@ export default async function handler(
             }`,
           });
         }
+      } else {
+        if (perm === "full_access") {
+          return res.status(400).json({
+            error:
+              "A matching nsec is required when onboarding an existing pubkey with full_access permissions.",
+          });
+        }
+
+        const proofResult = await verifyAndConsumeSignedRequestProof(
+          extractSignedEventFromRequest(req),
+          buildOnboardExistingPubkeyProof({
+            name: trimmedName,
+            permissions: perm,
+            contact: trimmedContact,
+            pubkey,
+          })
+        );
+
+        if (!proofResult.ok) {
+          return res.status(proofResult.status).json({
+            error: proofResult.error,
+          });
+        }
       }
     } else {
       const sk = generateSecretKey();
@@ -153,7 +186,9 @@ export default async function handler(
       encryptedNsecValue = encryptNsec(nsecStr);
     }
 
-    const agentName = contact ? `${name.trim()} (${contact})` : name.trim();
+    const agentName = trimmedContact
+      ? `${trimmedName} (${trimmedContact})`
+      : trimmedName;
 
     const result = await createApiKey(
       agentName,
@@ -181,7 +216,7 @@ export default async function handler(
           curl_initialize: `curl -X POST ${baseUrl}/api/mcp \\
   -H "Authorization: Bearer ${result.key}" \\
   -H "Content-Type: application/json" \\
-  -d '{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"${name.trim()}","version":"1.0.0"}},"id":1}'`,
+  -d '{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"${trimmedName}","version":"1.0.0"}},"id":1}'`,
           curl_list_tools: `curl -X POST ${baseUrl}/api/mcp \\
   -H "Authorization: Bearer ${result.key}" \\
   -H "Content-Type: application/json" \\

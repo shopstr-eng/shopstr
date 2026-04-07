@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, act } from "@testing-library/react";
+import { render, screen, fireEvent, act, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import { ProfileWithDropdown } from "../profile-dropdown";
 import { ProfileMapContext } from "@/utils/context/context";
@@ -22,6 +22,12 @@ jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
 const mockOnOpen = jest.fn();
 jest.mock("@nextui-org/react", () => {
   const originalModule = jest.requireActual("@nextui-org/react");
+  const React = jest.requireActual("react");
+  const DropdownContext = React.createContext({
+    isOpen: false,
+    onOpenChange: (_isOpen: boolean) => {},
+  });
+
   return {
     ...originalModule,
     useDisclosure: () => ({
@@ -29,29 +35,63 @@ jest.mock("@nextui-org/react", () => {
       onOpen: mockOnOpen,
       onClose: jest.fn(),
     }),
-    Dropdown: ({ children }: { children: React.ReactNode }) => (
-      <div>{children}</div>
+    Dropdown: ({
+      children,
+      isOpen,
+      onOpenChange,
+    }: {
+      children: React.ReactNode;
+      isOpen?: boolean;
+      onOpenChange?: (isOpen: boolean) => void;
+    }) => (
+      <DropdownContext.Provider
+        value={{
+          isOpen: Boolean(isOpen),
+          onOpenChange: onOpenChange || (() => {}),
+        }}
+      >
+        <div>{children}</div>
+      </DropdownContext.Provider>
     ),
-    DropdownTrigger: ({ children }: { children: React.ReactNode }) => children,
+    DropdownTrigger: ({ children }: { children: React.ReactNode }) => {
+      const { isOpen, onOpenChange } = React.useContext(DropdownContext);
+
+      return (
+        <button
+          type="button"
+          data-testid="dropdown-trigger"
+          aria-expanded={isOpen}
+          onClick={() => onOpenChange(!isOpen)}
+        >
+          {children}
+        </button>
+      );
+    },
     DropdownMenu: ({
       items,
       children,
     }: {
       items: any[];
       children: (item: any) => React.ReactNode;
-    }) => <div role="menu">{items.map((item) => children(item))}</div>,
+    }) => {
+      const { isOpen } = React.useContext(DropdownContext);
+
+      if (!isOpen) {
+        return null;
+      }
+
+      return <div role="menu">{items.map((item) => children(item))}</div>;
+    },
     DropdownItem: ({
       children,
-      onClick,
       onPress,
       startContent,
     }: {
       children: React.ReactNode;
-      onClick?: () => void;
       onPress?: () => void;
       startContent?: React.ReactNode;
     }) => (
-      <button role="menuitem" onClick={onPress || onClick}>
+      <button role="menuitem" onClick={() => onPress?.()}>
         {startContent}
         {children}
       </button>
@@ -65,6 +105,7 @@ jest.mock("@heroicons/react/24/outline", () => ({
   ChatBubbleBottomCenterIcon: () => <div data-testid="icon-chat" />,
   UserIcon: () => <div data-testid="icon-user" />,
   Cog6ToothIcon: () => <div data-testid="icon-settings" />,
+  GlobeAltIcon: () => <div data-testid="icon-globe" />,
   ArrowRightStartOnRectangleIcon: () => <div data-testid="icon-logout" />,
   ClipboardIcon: () => <div data-testid="icon-clipboard" />,
   CheckIcon: () => <div data-testid="icon-check" />,
@@ -100,6 +141,10 @@ const renderWithProviders = (
   );
 };
 
+const openDropdownMenu = () => {
+  fireEvent.click(screen.getByTestId("dropdown-trigger"));
+};
+
 describe("ProfileWithDropdown", () => {
   const pubkey =
     "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2";
@@ -119,6 +164,9 @@ describe("ProfileWithDropdown", () => {
     mockOnOpen.mockClear();
     (LogOut as jest.Mock).mockClear();
     (navigator.clipboard.writeText as jest.Mock).mockClear();
+    global.fetch = jest.fn().mockResolvedValue({
+      json: async () => ({ profile: null }),
+    }) as typeof global.fetch;
   });
 
   afterEach(() => {
@@ -133,6 +181,9 @@ describe("ProfileWithDropdown", () => {
     );
 
     expect(screen.getByText(npub.slice(0, 15) + "...")).toBeInTheDocument();
+
+    openDropdownMenu();
+
     expect(screen.getByText("Visit Seller")).toBeInTheDocument();
     expect(screen.getByText("Log Out")).toBeInTheDocument();
     expect(screen.queryByText("Send Inquiry")).not.toBeInTheDocument();
@@ -159,11 +210,15 @@ describe("ProfileWithDropdown", () => {
       <ProfileWithDropdown pubkey={pubkey} dropDownKeys={["shop"]} />,
       {}
     );
+
+    openDropdownMenu();
+
     fireEvent.click(screen.getByText("Visit Seller"));
     act(() => {
       jest.runOnlyPendingTimers();
     });
     expect(mockRouterPush).toHaveBeenCalledWith(`/marketplace/${npub}`);
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
   });
 
   it('handles "Shop Profile" click', () => {
@@ -172,6 +227,9 @@ describe("ProfileWithDropdown", () => {
       <ProfileWithDropdown pubkey={pubkey} dropDownKeys={["shop_profile"]} />,
       {}
     );
+
+    openDropdownMenu();
+
     fireEvent.click(screen.getByText("Shop Profile"));
     act(() => {
       jest.runOnlyPendingTimers();
@@ -185,6 +243,9 @@ describe("ProfileWithDropdown", () => {
       <ProfileWithDropdown pubkey={pubkey} dropDownKeys={["inquiry"]} />,
       { isLoggedIn: true }
     );
+
+    openDropdownMenu();
+
     fireEvent.click(screen.getByText("Send Inquiry"));
     act(() => {
       jest.runOnlyPendingTimers();
@@ -202,6 +263,9 @@ describe("ProfileWithDropdown", () => {
       <ProfileWithDropdown pubkey={pubkey} dropDownKeys={["inquiry"]} />,
       { isLoggedIn: false }
     );
+
+    openDropdownMenu();
+
     fireEvent.click(screen.getByText("Send Inquiry"));
     act(() => {
       jest.runOnlyPendingTimers();
@@ -216,6 +280,9 @@ describe("ProfileWithDropdown", () => {
       <ProfileWithDropdown pubkey={pubkey} dropDownKeys={["user_profile"]} />,
       {}
     );
+
+    openDropdownMenu();
+
     fireEvent.click(screen.getByText("Profile"));
     act(() => {
       jest.runOnlyPendingTimers();
@@ -229,6 +296,9 @@ describe("ProfileWithDropdown", () => {
       <ProfileWithDropdown pubkey={pubkey} dropDownKeys={["settings"]} />,
       {}
     );
+
+    openDropdownMenu();
+
     fireEvent.click(screen.getByText("Settings"));
     act(() => {
       jest.runOnlyPendingTimers();
@@ -242,6 +312,9 @@ describe("ProfileWithDropdown", () => {
       <ProfileWithDropdown pubkey={pubkey} dropDownKeys={["logout"]} />,
       {}
     );
+
+    openDropdownMenu();
+
     fireEvent.click(screen.getByText("Log Out"));
     act(() => {
       jest.runOnlyPendingTimers();
@@ -250,13 +323,15 @@ describe("ProfileWithDropdown", () => {
     expect(mockRouterPush).toHaveBeenCalledWith("/marketplace");
   });
 
-  it('handles "Copy npub" click and icon change with timeout', () => {
+  it('handles "Copy npub" click and icon change with timeout', async () => {
     jest.useFakeTimers();
 
     renderWithProviders(
       <ProfileWithDropdown pubkey={pubkey} dropDownKeys={["copy_npub"]} />,
       {}
     );
+
+    openDropdownMenu();
 
     expect(screen.getByTestId("icon-clipboard")).toBeInTheDocument();
     expect(screen.queryByTestId("icon-check")).not.toBeInTheDocument();
@@ -267,8 +342,14 @@ describe("ProfileWithDropdown", () => {
     });
 
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith(npub);
-    expect(screen.queryByTestId("icon-clipboard")).not.toBeInTheDocument();
-    expect(screen.getByTestId("icon-check")).toBeInTheDocument();
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+
+    openDropdownMenu();
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("icon-clipboard")).not.toBeInTheDocument();
+      expect(screen.getByTestId("icon-check")).toBeInTheDocument();
+    });
 
     act(() => {
       jest.advanceTimersByTime(2100);
@@ -285,6 +366,8 @@ describe("ProfileWithDropdown", () => {
       <ProfileWithDropdown pubkey={pubkey} dropDownKeys={["report_profile"]} />,
       { isLoggedIn: true }
     );
+
+    openDropdownMenu();
 
     expect(screen.getByText("Report Profile")).toBeInTheDocument();
     expect(screen.getByTestId("icon-report")).toBeInTheDocument();
