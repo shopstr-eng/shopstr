@@ -362,11 +362,21 @@ export const FileUploaderButton = ({
     }
   };
 
+  const isHandlingDropZoneClickRef = useRef(false);
+
   const handleDropZoneClick = () => {
     // Placeholder mode should behave like the button: click anywhere in the box opens picker.
-    if (isPlaceholder) {
-      handleClick();
+    // Guard against duplicate invocations from nested click handlers bubbling to the drop zone.
+    if (!isPlaceholder || isHandlingDropZoneClickRef.current) {
+      return;
     }
+
+    isHandlingDropZoneClickRef.current = true;
+    handleClick();
+
+    setTimeout(() => {
+      isHandlingDropZoneClickRef.current = false;
+    }, 0);
   };
 
   return (
