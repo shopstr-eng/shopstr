@@ -21,9 +21,8 @@ const ShopstrSwitch = ({
       <Switch
         size={"lg"}
         color={theme === "dark" ? "warning" : "secondary"}
-        onClick={() => {
-          setWotFilter(!wotFilter);
-        }}
+        isSelected={wotFilter}
+        onValueChange={setWotFilter}
       />
       <span>
         <p

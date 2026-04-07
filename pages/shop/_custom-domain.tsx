@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
+import Link from "next/link";
 import StorefrontLayout from "@/components/storefront/storefront-layout";
 import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
 
@@ -56,12 +57,12 @@ export default function CustomDomainPage() {
         <p className="mt-4 text-gray-500">
           This domain is not connected to any shop.
         </p>
-        <a
+        <Link
           href="/"
           className="mt-6 rounded-lg bg-shopstr-purple px-6 py-3 font-bold text-white"
         >
           Visit Shopstr
-        </a>
+        </Link>
       </div>
     );
   }

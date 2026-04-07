@@ -100,6 +100,7 @@ async function handleCreateOrder(
     shippingAddress,
     selectedSize,
     selectedVolume,
+    selectedWeight,
     selectedBulkUnits,
     discountCode,
     paymentMethod = "lightning",
@@ -108,6 +109,7 @@ async function handleCreateOrder(
   } = req.body as CreateOrderInput & {
     selectedSize?: string;
     selectedVolume?: string;
+    selectedWeight?: string;
     selectedBulkUnits?: number;
     discountCode?: string;
     paymentMethod?: PaymentMethod;
@@ -189,6 +191,21 @@ async function handleCreateOrder(
       }
       selectedSpecs.volume = selectedVolume;
       selectedSpecs.volumePrice = unitPrice;
+    }
+
+    if (selectedWeight) {
+      if (!product.weights || !product.weights.includes(selectedWeight)) {
+        return res.status(400).json({
+          error: `Invalid weight selection: "${selectedWeight}"`,
+          availableWeights: product.weights || [],
+        });
+      }
+      const weightPrice = product.weightPrices?.get(selectedWeight);
+      if (weightPrice !== undefined) {
+        unitPrice = weightPrice;
+      }
+      selectedSpecs.weight = selectedWeight;
+      selectedSpecs.weightPrice = unitPrice;
     }
 
     let effectiveQuantity = quantity;

@@ -8,6 +8,30 @@ Shopstr is a global, permissionless marketplace built on the Nostr protocol, ena
 
 Preferred communication style: Simple, everyday language.
 
+## Recent Changes
+
+### Onboarding Flow Redesign
+
+- **Step 1 (keys.tsx)**: Simplified to only show a passphrase input. Removed public/private key display and copy handlers. Now redirects to user-type selection after completion.
+- **Step 2 (user-type.tsx)**: New page for user role selection (Buyer or Seller). Routes to user-profile with a `?type=` query param.
+- **Step 3 (user-profile.tsx)**: Now conditionally renders `BuyerProfileForm` (for buyers) or `UserProfileForm` (for sellers). Buyers finish onboarding here; sellers proceed to shop profile.
+- **Step 4 (shop-profile.tsx)**: Updated button text to "Finish (or skip)".
+- **New component (buyer-profile-form.tsx)**: Simplified profile form for buyers with only display_name, name, about, banner, and picture fields. Preserves existing profile data on save.
+
+### SignInModal Redesign
+
+- Added `sellerFlow?: boolean` prop to pre-select seller role during sign-up.
+- New landing view with distinct Sign Up / Sign In flows.
+- Sign-in (existing key) → routes to `/marketplace`.
+- Sign-up (existing key) → routes to `/onboarding/user-type` (or with `?preselect=seller` when `sellerFlow` is true).
+- "Create New Account" → routes to `/onboarding/keys`.
+- Added eye toggle for password/passphrase visibility in nsec flows.
+
+### File Uploader Fix
+
+- Fixed `isIconOnly` prop to include loading state: `isIconOnly={isIconOnly || loading}`.
+- `startContent` is now `undefined` when loading (prevents icon/spinner overlap).
+
 ## System Architecture
 
 ### Frontend

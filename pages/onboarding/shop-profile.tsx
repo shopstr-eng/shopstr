@@ -12,7 +12,7 @@ const OnboardingShopProfile = () => {
   };
 
   return (
-    <div className="flex h-[100vh] flex-col bg-light-bg pt-24 dark:bg-dark-bg">
+    <div className="flex min-h-screen flex-col bg-light-bg pt-24 dark:bg-dark-bg">
       <div className="mx-auto w-full max-w-2xl px-4 py-6">
         <Card>
           <CardBody>
@@ -30,11 +30,10 @@ const OnboardingShopProfile = () => {
             </div>
             <div className="mb-4 text-center">
               <h2 className="text-2xl font-bold text-light-text dark:text-dark-text">
-                Step 4: Setup Your Shop
+                Step 4: Set Up Your Shop
               </h2>
               <p className="text-light-text dark:text-dark-text">
-                Set up your shop details or, if you&apos;re not a seller, skip
-                this step to finish onboarding.
+                Set up your shop details or skip this step to finish onboarding.
               </p>
             </div>
 
@@ -45,7 +44,8 @@ const OnboardingShopProfile = () => {
                 className={SHOPSTRBUTTONCLASSNAMES}
                 onClick={handleFinish}
               >
-                Finish <ArrowLeftEndOnRectangleIcon className="h-5 w-5" />
+                Finish (or skip){" "}
+                <ArrowLeftEndOnRectangleIcon className="ml-1 h-5 w-5" />
               </Button>
             </div>
           </CardBody>

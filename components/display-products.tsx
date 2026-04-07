@@ -2,11 +2,7 @@ import { useState, useEffect, useContext } from "react";
 import { nip19 } from "nostr-tools";
 import { deleteEvent } from "@/utils/nostr/nostr-helper-functions";
 import { NostrEvent } from "../utils/types/types";
-import {
-  ProductContext,
-  ProfileMapContext,
-  FollowsContext,
-} from "../utils/context/context";
+import { ProductContext, FollowsContext } from "../utils/context/context";
 import ProductCard from "./utility-components/product-card";
 import DisplayProductModal from "./display-product-modal";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
@@ -27,6 +23,9 @@ import {
   getLocalStorageData,
 } from "@/utils/nostr/nostr-helper-functions";
 import { searchMarketplaceProducts } from "@/utils/nostr/fetch-service";
+
+const escapeRegExp = (value: string) =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 const DisplayProducts = ({
   focusedPubkey,
@@ -52,7 +51,6 @@ const DisplayProducts = ({
   const [productEvents, setProductEvents] = useState<ProductData[]>([]);
   const [isProductsLoading, setIsProductLoading] = useState(true);
   const productEventContext = useContext(ProductContext);
-  const profileMapContext = useContext(ProfileMapContext);
   const followsContext = useContext(FollowsContext);
   const [focusedProduct, setFocusedProduct] = useState<ProductData>();
   const [showModal, setShowModal] = useState(false);
@@ -101,11 +99,9 @@ const DisplayProducts = ({
     if (!productEventContext) return;
     if (!productEventContext.isLoading && productEventContext.productEvents) {
       setIsProductLoading(true);
-      const sortedProductEvents = [
-        ...productEventContext.productEvents.sort(
-          (a: NostrEvent, b: NostrEvent) => b.created_at - a.created_at
-        ),
-      ];
+      const sortedProductEvents = [...productEventContext.productEvents].sort(
+        (a: NostrEvent, b: NostrEvent) => b.created_at - a.created_at
+      );
       const parsedProductData: ProductData[] = [];
       sortedProductEvents.forEach((event) => {
         if (wotFilter) {
@@ -135,7 +131,11 @@ const DisplayProducts = ({
         }
       });
       setProductEvents(parsedProductData);
-      setIsProductLoading(false);
+      if (parsedProductData.length >= itemsPerPage) {
+        setIsProductLoading(false);
+      } else if (!productEventContext.isLoading) {
+        setIsProductLoading(false);
+      }
     }
   }, [productEventContext, wotFilter]);
 
@@ -277,7 +277,7 @@ const DisplayProducts = ({
     try {
       await deleteEvent(nostr!, signer!, [productId]);
       productEventContext.removeDeletedProductEvent(productId);
-    } catch (_) {
+    } catch {
       return;
     }
   };
@@ -334,12 +334,14 @@ const DisplayProducts = ({
   };
 
   const productSatisfiesSearchFilter = (productData: ProductData) => {
-    if (!selectedSearch) return true;
+    const normalizedSearch = selectedSearch.trim();
+
+    if (!normalizedSearch) return true;
     if (!productData.title) return false;
 
-    if (selectedSearch.includes("naddr")) {
+    if (normalizedSearch.includes("naddr")) {
       try {
-        const parsedNaddr = nip19.decode(selectedSearch);
+        const parsedNaddr = nip19.decode(normalizedSearch);
         if (parsedNaddr.type === "naddr") {
           return (
             productData.d === parsedNaddr.data.identifier &&
@@ -347,25 +349,25 @@ const DisplayProducts = ({
           );
         }
         return false;
-      } catch (_) {
+      } catch {
         return false;
       }
     }
 
-    if (selectedSearch.includes("npub")) {
+    if (normalizedSearch.includes("npub")) {
       try {
-        const parsedNpub = nip19.decode(selectedSearch);
+        const parsedNpub = nip19.decode(normalizedSearch);
         if (parsedNpub.type === "npub") {
           return parsedNpub.data === productData.pubkey;
         }
         return false;
-      } catch (_) {
+      } catch {
         return false;
       }
     }
 
     try {
-      const re = new RegExp(selectedSearch, "gi");
+      const re = new RegExp(escapeRegExp(normalizedSearch), "i");
 
       const titleMatch = productData.title.match(re);
       if (titleMatch && titleMatch.length > 0) return true;
@@ -375,13 +377,13 @@ const DisplayProducts = ({
         if (summaryMatch && summaryMatch.length > 0) return true;
       }
 
-      const numericSearch = parseFloat(selectedSearch);
+      const numericSearch = parseFloat(normalizedSearch);
       if (!isNaN(numericSearch) && productData.price === numericSearch) {
         return true;
       }
 
       return false;
-    } catch (_) {
+    } catch {
       return false;
     }
   };
@@ -415,10 +417,7 @@ const DisplayProducts = ({
   return (
     <>
       <div className="w-full md:pl-4">
-        {!isMyListings &&
-        (profileMapContext.isLoading ||
-          productEventContext.isLoading ||
-          isProductsLoading) ? (
+        {!isMyListings && isProductsLoading ? (
           <div className="mb-6 mt-6 flex items-center justify-center">
             <ShopstrSpinner />
           </div>
@@ -430,7 +429,7 @@ const DisplayProducts = ({
         ) : null}
         {filteredProducts.length > 0 ? (
           <>
-            <div className="grid max-w-full grid-cols-[repeat(auto-fill,minmax(300px,1fr))] justify-items-center gap-4 overflow-x-hidden">
+            <div className="grid max-w-full grid-cols-[repeat(auto-fill,minmax(280px,1fr))] justify-items-stretch gap-4 overflow-x-hidden">
               {getCurrentPageProducts().map(
                 (productData: ProductData, index) => (
                   <ProductCard

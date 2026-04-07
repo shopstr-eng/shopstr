@@ -108,6 +108,10 @@ export default function ProductForm({
           "Volume Prices": oldValues.volumePrices
             ? oldValues.volumePrices
             : new Map<string, number>(),
+          Weights: oldValues.weights ? oldValues.weights.join(",") : "",
+          "Weight Prices": oldValues.weightPrices
+            ? oldValues.weightPrices
+            : new Map<string, number>(),
           "Bulk Pricing Enabled": oldValues.bulkPrices
             ? oldValues.bulkPrices.size > 0
             : false,
@@ -220,6 +224,17 @@ export default function ProductForm({
         const price =
           (data["Volume Prices"] as Map<string, number>).get(volume) || 0;
         tags.push(["volume", volume, price.toString()]);
+      });
+    }
+
+    if (data["Weights"]) {
+      const weightsArray = Array.isArray(data["Weights"])
+        ? data["Weights"]
+        : (data["Weights"] as string).split(",").filter(Boolean);
+      weightsArray.forEach((weight) => {
+        const price =
+          (data["Weight Prices"] as Map<string, number>).get(weight) || 0;
+        tags.push(["weight", weight, price.toString()]);
       });
     }
 
@@ -382,8 +397,8 @@ export default function ProductForm({
                 return (
                   <Input
                     className="text-light-text dark:text-dark-text"
-                    autoFocus
                     variant="bordered"
+                    autoFocus
                     fullWidth={true}
                     label="Product name"
                     labelPlacement="inside"
@@ -591,7 +606,6 @@ export default function ProductForm({
                   <Input
                     className="text-light-text dark:text-dark-text"
                     type="number"
-                    autoFocus
                     variant="flat"
                     label="Price"
                     labelPlacement="inside"
@@ -672,7 +686,6 @@ export default function ProductForm({
                   : "";
                 return (
                   <LocationDropdown
-                    autoFocus
                     variant="bordered"
                     aria-label="Select Location"
                     label="Location"
@@ -705,7 +718,6 @@ export default function ProductForm({
                 return (
                   <Select
                     className="text-light-text dark:text-dark-text"
-                    autoFocus
                     variant="bordered"
                     aria-label="Shipping Option"
                     label="Shipping option"
@@ -886,7 +898,6 @@ export default function ProductForm({
                   <Select
                     variant="bordered"
                     isMultiline={true}
-                    autoFocus
                     aria-label="Category"
                     label="Categories"
                     labelPlacement="inside"
@@ -1345,6 +1356,153 @@ export default function ProductForm({
                         {volumeArray.length > 0 && (
                           <div className="w-full text-xs text-light-text opacity-75 dark:text-dark-text">
                             Note: Volume prices will override the main product
+                            price when selected.
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }}
+                />
+
+                <Controller
+                  name="Weights"
+                  control={control}
+                  render={({
+                    field: { onChange, onBlur, value },
+                    fieldState: { error },
+                  }) => {
+                    const isErrored = error !== undefined;
+                    const errorMessage = error?.message || "";
+
+                    const selectedWeights = Array.isArray(value)
+                      ? value
+                      : typeof value === "string"
+                        ? value.split(",").filter(Boolean)
+                        : [];
+
+                    const handleWeightChange = (
+                      newValue: string | string[]
+                    ) => {
+                      const newWeights = Array.isArray(newValue)
+                        ? newValue
+                        : newValue.split(",").filter(Boolean);
+                      onChange(newWeights);
+                    };
+
+                    return (
+                      <Select
+                        variant="bordered"
+                        isMultiline={true}
+                        autoFocus
+                        aria-label="Weights"
+                        label="Weights"
+                        labelPlacement="inside"
+                        selectionMode="multiple"
+                        isInvalid={isErrored}
+                        errorMessage={errorMessage}
+                        onChange={(e) => handleWeightChange(e.target.value)}
+                        onBlur={onBlur}
+                        value={selectedWeights}
+                        defaultSelectedKeys={new Set(selectedWeights)}
+                        classNames={{
+                          base: "mt-4",
+                          trigger: "min-h-unit-12 py-2",
+                        }}
+                      >
+                        <SelectSection className="text-light-text dark:text-dark-text">
+                          <SelectItem key="1 oz" value="1 oz">
+                            1 oz
+                          </SelectItem>
+                          <SelectItem key="2 oz" value="2 oz">
+                            2 oz
+                          </SelectItem>
+                          <SelectItem key="4 oz" value="4 oz">
+                            4 oz
+                          </SelectItem>
+                          <SelectItem key="8 oz" value="8 oz">
+                            8 oz
+                          </SelectItem>
+                          <SelectItem key="12 oz" value="12 oz">
+                            12 oz
+                          </SelectItem>
+                          <SelectItem key="1 lb" value="1 lb">
+                            1 lb
+                          </SelectItem>
+                          <SelectItem key="2 lb" value="2 lb">
+                            2 lb
+                          </SelectItem>
+                          <SelectItem key="5 lb" value="5 lb">
+                            5 lb
+                          </SelectItem>
+                          <SelectItem key="10 lb" value="10 lb">
+                            10 lb
+                          </SelectItem>
+                          <SelectItem key="25 lb" value="25 lb">
+                            25 lb
+                          </SelectItem>
+                        </SelectSection>
+                      </Select>
+                    );
+                  }}
+                />
+
+                <Controller
+                  name="Weight Prices"
+                  control={control}
+                  render={({
+                    field: { onChange, value = new Map<string, number>() },
+                  }) => {
+                    const handlePriceChange = (
+                      weight: string,
+                      price: number
+                    ) => {
+                      const newPrices = new Map(value);
+                      newPrices.set(weight, price);
+                      onChange(newPrices);
+                    };
+
+                    const weights = watch("Weights");
+                    const weightArray = Array.isArray(weights)
+                      ? weights
+                      : typeof weights === "string"
+                        ? weights
+                            .split(",")
+                            .filter(Boolean)
+                            .map((w) => w.trim())
+                        : [];
+
+                    return (
+                      <div className="mt-4 flex flex-wrap gap-4">
+                        {weightArray.map((weight: string) => (
+                          <div key={weight} className="flex items-center">
+                            <span className="mr-2 text-light-text dark:text-dark-text">
+                              {weight}:
+                            </span>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={(value.get(weight) || 0).toString()}
+                              onChange={(e) =>
+                                handlePriceChange(
+                                  weight,
+                                  parseFloat(e.target.value) || 0
+                                )
+                              }
+                              className="w-32"
+                              endContent={
+                                <div className="flex items-center">
+                                  <span className="text-small text-default-400">
+                                    {watchCurrency}
+                                  </span>
+                                </div>
+                              }
+                            />
+                          </div>
+                        ))}
+                        {weightArray.length > 0 && (
+                          <div className="w-full text-xs text-light-text opacity-75 dark:text-dark-text">
+                            Note: Weight prices will override the main product
                             price when selected.
                           </div>
                         )}
