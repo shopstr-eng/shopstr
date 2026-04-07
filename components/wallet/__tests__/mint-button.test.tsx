@@ -4,6 +4,7 @@ import {
   fireEvent,
   waitFor,
   act,
+  within,
 } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import MintButton from "../mint-button";
@@ -14,6 +15,33 @@ import {
 import { CashuMint, CashuWallet } from "@cashu/cashu-ts";
 import * as NostrHelper from "@/utils/nostr/nostr-helper-functions";
 import QRCode from "qrcode";
+
+jest.mock("@nextui-org/react", () => {
+  const actual = jest.requireActual("@nextui-org/react");
+
+  return {
+    ...actual,
+    Modal: ({
+      isOpen,
+      children,
+    }: {
+      isOpen: boolean;
+      children: React.ReactNode;
+    }) => (isOpen ? <div role="dialog">{children}</div> : null),
+    ModalContent: ({ children }: { children: React.ReactNode }) => (
+      <div>{children}</div>
+    ),
+    ModalHeader: ({ children }: { children: React.ReactNode }) => (
+      <div>{children}</div>
+    ),
+    ModalBody: ({ children }: { children: React.ReactNode }) => (
+      <div>{children}</div>
+    ),
+    ModalFooter: ({ children }: { children: React.ReactNode }) => (
+      <div>{children}</div>
+    ),
+  };
+});
 
 jest.mock("@cashu/cashu-ts");
 const mockCreateMintQuote = jest.fn();
@@ -102,6 +130,17 @@ const mockWebLN = {
   sendPayment: jest.fn(),
 };
 
+const getMintDialog = () => screen.getByRole("dialog");
+
+const getMintDialogScope = () => within(getMintDialog());
+
+const clickMintButton = () => {
+  const dialog = screen.queryByRole("dialog");
+  const scope = dialog ? within(dialog) : screen;
+
+  fireEvent.click(scope.getByRole("button", { name: /^Mint$/i }));
+};
+
 describe("MintButton Component", () => {
   beforeEach(() => {
     jest.useFakeTimers();
@@ -139,7 +178,7 @@ describe("MintButton Component", () => {
 
   it("should render the Mint button and open the modal on click", async () => {
     renderComponent();
-    fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
+    clickMintButton();
     await waitFor(() => {
       expect(screen.getByRole("dialog")).toBeVisible();
     });
@@ -147,9 +186,9 @@ describe("MintButton Component", () => {
 
   it("should close the modal when Cancel is clicked", async () => {
     renderComponent();
-    fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
+    clickMintButton();
     await waitFor(() => expect(screen.getByRole("dialog")).toBeVisible());
-    fireEvent.click(screen.getByRole("button", { name: /Cancel/i }));
+    fireEvent.click(getMintDialogScope().getByRole("button", { name: /Cancel/i }));
     act(() => {
       jest.runOnlyPendingTimers();
     });
@@ -160,11 +199,11 @@ describe("MintButton Component", () => {
 
   it("should show validation error for invalid input", async () => {
     renderComponent();
-    fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
+    clickMintButton();
     await waitFor(() => expect(screen.getByRole("dialog")).toBeVisible());
     const input = screen.getByLabelText(/Token amount in sats/i);
-    const submitButton = screen.getByRole("button", {
-      name: /Mint/i,
+    const submitButton = getMintDialogScope().getByRole("button", {
+      name: /^Mint$/i,
     });
     fireEvent.change(input, { target: { value: "abc" } });
     fireEvent.click(submitButton);
@@ -187,12 +226,12 @@ describe("MintButton Component", () => {
     mockMintProofs.mockResolvedValue(mockProofs);
 
     renderComponent();
-    fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
+    clickMintButton();
     await waitFor(() => expect(screen.getByRole("dialog")).toBeVisible());
     fireEvent.change(screen.getByLabelText(/Token amount in sats/i), {
       target: { value: satsToMint },
     });
-    fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
+    clickMintButton();
 
     await waitFor(() => {
       expect(mockCreateMintQuote).toHaveBeenCalledWith(satsToMint);
@@ -215,12 +254,12 @@ describe("MintButton Component", () => {
     );
 
     renderComponent();
-    fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
+    clickMintButton();
     await waitFor(() => expect(screen.getByRole("dialog")).toBeVisible());
     fireEvent.change(screen.getByLabelText(/Token amount in sats/i), {
       target: { value: satsToMint },
     });
-    fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
+    clickMintButton();
 
     await waitFor(
       () => {
@@ -250,12 +289,12 @@ describe("MintButton Component", () => {
     });
 
     renderComponent();
-    fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
+    clickMintButton();
     await waitFor(() => expect(screen.getByRole("dialog")).toBeVisible());
     fireEvent.change(screen.getByLabelText(/Token amount in sats/i), {
       target: { value: satsToMint },
     });
-    fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
+    clickMintButton();
 
     expect(await screen.findByText("Lightning Invoice")).toBeVisible();
 
@@ -290,12 +329,12 @@ describe("MintButton Component", () => {
     });
 
     renderComponent();
-    fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
+    clickMintButton();
     await waitFor(() => expect(screen.getByRole("dialog")).toBeVisible());
     fireEvent.change(screen.getByLabelText(/Token amount in sats/i), {
       target: { value: "10" },
     });
-    fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
+    clickMintButton();
 
     const clipboardIcon = await screen.findByTestId("clipboard-icon");
     fireEvent.click(clipboardIcon);
@@ -322,12 +361,12 @@ describe("MintButton Component", () => {
     mockToDataURL.mockRejectedValue(new Error("QR generation failed"));
 
     renderComponent();
-    fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
+    clickMintButton();
     await waitFor(() => expect(screen.getByRole("dialog")).toBeVisible());
     fireEvent.change(screen.getByLabelText(/Token amount in sats/i), {
       target: { value: satsToMint },
     });
-    fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
+    clickMintButton();
 
     await waitFor(() => {
       expect(console.error).toHaveBeenCalledWith("ERROR", expect.any(Error));
@@ -353,12 +392,12 @@ describe("MintButton Component", () => {
     mockMintProofs.mockResolvedValue(mockProofs);
 
     renderComponent();
-    fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
+    clickMintButton();
     await waitFor(() => expect(screen.getByRole("dialog")).toBeVisible());
     fireEvent.change(screen.getByLabelText(/Token amount in sats/i), {
       target: { value: satsToMint },
     });
-    fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
+    clickMintButton();
 
     await waitFor(() => {
       expect(mockWebLN.enable).toHaveBeenCalled();
@@ -381,12 +420,12 @@ describe("MintButton Component", () => {
     });
 
     renderComponent();
-    fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
+    clickMintButton();
     await waitFor(() => expect(screen.getByRole("dialog")).toBeVisible());
     fireEvent.change(screen.getByLabelText(/Token amount in sats/i), {
       target: { value: satsToMint },
     });
-    fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
+    clickMintButton();
 
     await waitFor(() => {
       expect(console.error).toHaveBeenCalledWith(expect.any(Error));
@@ -408,12 +447,12 @@ describe("MintButton Component", () => {
     });
 
     renderComponent();
-    fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
+    clickMintButton();
     await waitFor(() => expect(screen.getByRole("dialog")).toBeVisible());
     fireEvent.change(screen.getByLabelText(/Token amount in sats/i), {
       target: { value: satsToMint },
     });
-    fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
+    clickMintButton();
 
     await waitFor(() => {
       expect(mockWebLN.enable).toHaveBeenCalled();
@@ -438,12 +477,12 @@ describe("MintButton Component", () => {
     });
 
     renderComponent();
-    fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
+    clickMintButton();
     await waitFor(() => expect(screen.getByRole("dialog")).toBeVisible());
     fireEvent.change(screen.getByLabelText(/Token amount in sats/i), {
       target: { value: satsToMint },
     });
-    fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
+    clickMintButton();
 
     await waitFor(() => {
       expect(console.error).toHaveBeenCalledWith(expect.any(Error));
@@ -466,12 +505,12 @@ describe("MintButton Component", () => {
     });
 
     renderComponent();
-    fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
+    clickMintButton();
     await waitFor(() => expect(screen.getByRole("dialog")).toBeVisible());
     fireEvent.change(screen.getByLabelText(/Token amount in sats/i), {
       target: { value: satsToMint },
     });
-    fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
+    clickMintButton();
 
     await waitFor(() => {
       expect(console.error).toHaveBeenCalledWith(expect.any(Error));
@@ -490,12 +529,12 @@ describe("MintButton Component", () => {
     mockCheckMintQuote.mockResolvedValue({ state: "ISSUED" });
 
     renderComponent();
-    fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
+    clickMintButton();
     await waitFor(() => expect(screen.getByRole("dialog")).toBeVisible());
     fireEvent.change(screen.getByLabelText(/Token amount in sats/i), {
       target: { value: satsToMint },
     });
-    fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
+    clickMintButton();
 
     await waitFor(() => {
       expect(screen.getByText("Payment confirmed!")).toBeVisible();
@@ -525,12 +564,12 @@ describe("MintButton Component", () => {
     mockMintProofs.mockRejectedValue(new Error("Token already issued"));
 
     renderComponent();
-    fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
+    clickMintButton();
     await waitFor(() => expect(screen.getByRole("dialog")).toBeVisible());
     fireEvent.change(screen.getByLabelText(/Token amount in sats/i), {
       target: { value: satsToMint },
     });
-    fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
+    clickMintButton();
 
     await waitFor(() => {
       expect(screen.getByText("Payment confirmed!")).toBeVisible();
@@ -558,12 +597,12 @@ describe("MintButton Component", () => {
     );
 
     renderComponent();
-    fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
+    clickMintButton();
     await waitFor(() => expect(screen.getByRole("dialog")).toBeVisible());
     fireEvent.change(screen.getByLabelText(/Token amount in sats/i), {
       target: { value: satsToMint },
     });
-    fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
+    clickMintButton();
 
     await waitFor(() => {
       expect(screen.getByTestId("failure-modal")).toBeVisible();
@@ -600,12 +639,12 @@ describe("MintButton Component", () => {
     mockMintProofs.mockResolvedValue(mockProofs);
 
     renderComponent();
-    fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
+    clickMintButton();
     await waitFor(() => expect(screen.getByRole("dialog")).toBeVisible());
     fireEvent.change(screen.getByLabelText(/Token amount in sats/i), {
       target: { value: satsToMint },
     });
-    fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
+    clickMintButton();
 
     expect(await screen.findByText("Lightning Invoice")).toBeVisible();
 

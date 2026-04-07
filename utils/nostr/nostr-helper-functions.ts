@@ -174,7 +174,7 @@ export async function PostListing(
   const handlerDTag = uuidv4();
 
   const origin =
-    window && typeof window !== undefined
+    typeof window !== "undefined"
       ? window.location.origin
       : "https://shopstr.market";
 
