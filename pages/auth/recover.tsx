@@ -178,7 +178,7 @@ export default function RecoverPage() {
   };
 
   return (
-    <div className="bg-white flex min-h-screen items-center justify-center p-4">
+    <div className="flex min-h-screen items-center justify-center bg-white p-4">
       <div className="w-full max-w-md rounded-xl border-3 border-black bg-white p-8 shadow-lg">
         <div className="mb-6 text-center">
           <h1 className="text-2xl font-bold text-black">Account Recovery</h1>

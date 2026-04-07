@@ -90,7 +90,7 @@ const MessageFeed = ({
         </div>
       </div>
 
-      <div className="bg-white flex w-full flex-1 flex-col pt-4">
+      <div className="flex w-full flex-1 flex-col bg-white pt-4">
         {showSpinner ? null : framer.selectedTab!.children}
       </div>
     </div>

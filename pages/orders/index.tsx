@@ -9,7 +9,7 @@ export default function MessageView() {
 
   return (
     <ProtectedRoute>
-      <div className="bg-white flex min-h-screen flex-col pt-16">
+      <div className="flex min-h-screen flex-col bg-white pt-16">
         <div className="px-4 pt-4">
           <StripeConnectBanner
             returnPath="/orders?stripe=success"

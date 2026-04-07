@@ -58,7 +58,7 @@ const MilkMarketSlider = () => {
         />
       </div>
       {wotIsChanged && (
-        <div className="bg-white flex h-fit flex-row justify-between px-3 py-[15px]">
+        <div className="flex h-fit flex-row justify-between bg-white px-3 py-[15px]">
           <Button className={BLUEBUTTONCLASSNAMES} onClick={refreshPage}>
             Refresh to Apply
           </Button>
