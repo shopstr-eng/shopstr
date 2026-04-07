@@ -7,11 +7,23 @@ import {
   MCP_SIGNED_EVENT_HEADER,
 } from "@/utils/mcp/request-proof";
 
+jest.mock("next/router", () => ({
+  useRouter: () => ({
+    replace: jest.fn(),
+    push: jest.fn(),
+  }),
+}));
+
 jest.mock("@/components/settings/settings-bread-crumbs", () => ({
   SettingsBreadCrumbs: () => <div data-testid="breadcrumbs" />,
 }));
 
 jest.mock("@nextui-org/react", () => ({
+  useDisclosure: () => ({
+    isOpen: false,
+    onOpen: jest.fn(),
+    onClose: jest.fn(),
+  }),
   Button: ({ children, onClick, isDisabled, type }: any) => (
     <button disabled={isDisabled} onClick={onClick} type={type || "button"}>
       {children}

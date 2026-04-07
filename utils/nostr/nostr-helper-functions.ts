@@ -24,6 +24,7 @@ import {
   deleteEventsFromDatabase,
 } from "@/utils/db/db-client";
 import { newPromiseWithTimeout } from "@/utils/timeout";
+import { getLocalStorageJson } from "@/utils/safe-json";
 
 function containsRelay(relays: string[], relay: string): boolean {
   return relays.some((r) => r.includes(relay));
@@ -173,7 +174,7 @@ export async function PostListing(
   const handlerDTag = uuidv4();
 
   const origin =
-    window && typeof window !== undefined
+    typeof window !== "undefined"
       ? window.location.origin
       : "https://shopstr.market";
 
@@ -1306,21 +1307,65 @@ export interface LocalStorageInterface {
   writeRelays: string[];
   mints: string[];
   blossomServers: string[];
-  tokens: [];
-  history: [];
+  tokens: any[];
+  history: any[];
   wot: number;
   encryptedPrivateKey?: string;
   clientPrivkey?: string;
   bunkerRemotePubkey?: string;
   bunkerRelays?: string[];
   bunkerSecret?: string;
-  signer?: { [key: string]: string };
+  signer?:
+    | { type: "nip07" }
+    | { type: "nip46"; bunker: string; appPrivKey?: string }
+    | { type: "nsec"; encryptedPrivKey: string; pubkey?: string };
   nwcString?: string | null;
   nwcInfo?: string | null;
   migrationComplete?: boolean;
 }
 
+function isStoredSignerData(
+  value: unknown
+): value is NonNullable<LocalStorageInterface["signer"]> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+
+  const candidate = value as {
+    type?: unknown;
+    bunker?: unknown;
+    appPrivKey?: unknown;
+    encryptedPrivKey?: unknown;
+    pubkey?: unknown;
+  };
+
+  if (candidate.type === "nip07") {
+    return true;
+  }
+
+  if (candidate.type === "nip46") {
+    return (
+      typeof candidate.bunker === "string" &&
+      (candidate.appPrivKey === undefined ||
+        typeof candidate.appPrivKey === "string")
+    );
+  }
+
+  if (candidate.type === "nsec") {
+    return (
+      typeof candidate.encryptedPrivKey === "string" &&
+      (candidate.pubkey === undefined || typeof candidate.pubkey === "string")
+    );
+  }
+
+  return false;
+}
+
 export const getLocalStorageData = (): LocalStorageInterface => {
+  const isStringArray = (value: unknown): value is string[] =>
+    Array.isArray(value) && value.every((entry) => typeof entry === "string");
+  const isArray = (value: unknown): value is unknown[] => Array.isArray(value);
+
   let signInMethod;
   let encryptedPrivateKey;
   let relays;
@@ -1335,7 +1380,7 @@ export const getLocalStorageData = (): LocalStorageInterface => {
   let bunkerRemotePubkey;
   let bunkerRelays;
   let bunkerSecret;
-  let signer;
+  let signer: LocalStorageInterface["signer"] | undefined;
   let migrationComplete;
   let nwcString;
   let nwcInfo;
@@ -1355,15 +1400,10 @@ export const getLocalStorageData = (): LocalStorageInterface => {
       localStorage.removeItem("cashuWalletRelays");
     }
 
-    const relaysString = localStorage.getItem(LOCALSTORAGECONSTANTS.relays);
-    relays = [];
-    try {
-      if (relaysString) {
-        relays = JSON.parse(relaysString) as string[];
-      }
-    } catch {
-      relays = [];
-    }
+    relays = getLocalStorageJson<string[]>(LOCALSTORAGECONSTANTS.relays, [], {
+      removeOnError: true,
+      validate: isStringArray,
+    });
 
     const defaultRelays = getDefaultRelays();
 
@@ -1381,58 +1421,44 @@ export const getLocalStorageData = (): LocalStorageInterface => {
       }
     }
 
-    readRelays = [];
-    try {
-      const rawReadRelays = localStorage.getItem(
-        LOCALSTORAGECONSTANTS.readRelays
-      );
-      if (rawReadRelays) {
-        readRelays = (JSON.parse(rawReadRelays) as string[]).filter((r) => r);
+    readRelays = getLocalStorageJson<string[]>(
+      LOCALSTORAGECONSTANTS.readRelays,
+      [],
+      {
+        removeOnError: true,
+        validate: isStringArray,
       }
-    } catch {
-      readRelays = [];
-    }
+    ).filter((r) => r);
 
-    writeRelays = [];
-    try {
-      const rawWriteRelays = localStorage.getItem(
-        LOCALSTORAGECONSTANTS.writeRelays
-      );
-      if (rawWriteRelays) {
-        writeRelays = (JSON.parse(rawWriteRelays) as string[]).filter(
-          (r) => r
-        );
+    writeRelays = getLocalStorageJson<string[]>(
+      LOCALSTORAGECONSTANTS.writeRelays,
+      [],
+      {
+        removeOnError: true,
+        validate: isStringArray,
       }
-    } catch {
-      writeRelays = [];
-    }
+    ).filter((r) => r);
 
-    mints = null;
-    try {
-      const rawMints = localStorage.getItem("mints");
-      if (rawMints) {
-        mints = JSON.parse(rawMints);
-      }
-    } catch {
-      mints = null;
-    }
+    mints = getLocalStorageJson<string[]>(LOCALSTORAGECONSTANTS.mints, [], {
+      removeOnError: true,
+      validate: isStringArray,
+    });
 
-    if (mints === null) {
+    if (mints.length === 0) {
       mints = [getDefaultMint()];
       localStorage.setItem(LOCALSTORAGECONSTANTS.mints, JSON.stringify(mints));
     }
 
-    blossomServers = null;
-    try {
-      const rawBlossomServers = localStorage.getItem("blossomServers");
-      if (rawBlossomServers) {
-        blossomServers = JSON.parse(rawBlossomServers);
+    blossomServers = getLocalStorageJson<string[]>(
+      LOCALSTORAGECONSTANTS.blossomServers,
+      [],
+      {
+        removeOnError: true,
+        validate: isStringArray,
       }
-    } catch {
-      blossomServers = null;
-    }
+    );
 
-    if (blossomServers === null) {
+    if (blossomServers.length === 0) {
       blossomServers = [getDefaultBlossomServer()];
       localStorage.setItem(
         LOCALSTORAGECONSTANTS.blossomServers,
@@ -1440,28 +1466,30 @@ export const getLocalStorageData = (): LocalStorageInterface => {
       );
     }
 
-    tokens = [];
-    try {
-      const rawTokens = localStorage.getItem("tokens");
-      if (rawTokens) {
-        tokens = JSON.parse(rawTokens);
-      } else {
-        localStorage.setItem(LOCALSTORAGECONSTANTS.tokens, JSON.stringify([]));
-      }
-    } catch {
-      tokens = [];
+    tokens = getLocalStorageJson<unknown[]>(LOCALSTORAGECONSTANTS.tokens, [], {
+      removeOnError: true,
+      validate: isArray,
+    });
+    if (
+      tokens.length === 0 &&
+      !localStorage.getItem(LOCALSTORAGECONSTANTS.tokens)
+    ) {
+      localStorage.setItem(LOCALSTORAGECONSTANTS.tokens, JSON.stringify([]));
     }
 
-    history = [];
-    try {
-      const rawHistory = localStorage.getItem("history");
-      if (rawHistory) {
-        history = JSON.parse(rawHistory);
-      } else {
-        localStorage.setItem(LOCALSTORAGECONSTANTS.history, JSON.stringify([]));
+    history = getLocalStorageJson<unknown[]>(
+      LOCALSTORAGECONSTANTS.history,
+      [],
+      {
+        removeOnError: true,
+        validate: isArray,
       }
-    } catch {
-      history = [];
+    );
+    if (
+      history.length === 0 &&
+      !localStorage.getItem(LOCALSTORAGECONSTANTS.history)
+    ) {
+      localStorage.setItem(LOCALSTORAGECONSTANTS.history, JSON.stringify([]));
     }
 
     wot = localStorage.getItem(LOCALSTORAGECONSTANTS.wot)
@@ -1476,33 +1504,27 @@ export const getLocalStorageData = (): LocalStorageInterface => {
     )
       ? localStorage.getItem(LOCALSTORAGECONSTANTS.bunkerRemotePubkey)
       : undefined;
-    bunkerRelays = [];
-    try {
-      const rawBunkerRelays = localStorage.getItem(
-        LOCALSTORAGECONSTANTS.bunkerRelays
-      );
-      if (rawBunkerRelays) {
-        bunkerRelays = (JSON.parse(rawBunkerRelays) as string[]).filter(
-          (r) => r
-        );
+    bunkerRelays = getLocalStorageJson<string[]>(
+      LOCALSTORAGECONSTANTS.bunkerRelays,
+      [],
+      {
+        removeOnError: true,
+        validate: isStringArray,
       }
-    } catch {
-      bunkerRelays = [];
-    }
+    ).filter((r) => r);
     bunkerSecret = localStorage.getItem(LOCALSTORAGECONSTANTS.bunkerSecret)
       ? localStorage.getItem(LOCALSTORAGECONSTANTS.bunkerSecret)
       : undefined;
 
-    const signerData: string | null = localStorage.getItem(
-      LOCALSTORAGECONSTANTS.signer
-    );
-    if (signerData) {
-      try {
-        signer = JSON.parse(signerData);
-      } catch {
-        signer = undefined;
+    signer = getLocalStorageJson<LocalStorageInterface["signer"] | undefined>(
+      LOCALSTORAGECONSTANTS.signer,
+      undefined,
+      {
+        removeOnError: true,
+        validate: isStoredSignerData,
       }
-    } else {
+    );
+    if (!signer) {
       switch (signInMethod) {
         case "extension":
           signer = {
@@ -1518,14 +1540,17 @@ export const getLocalStorageData = (): LocalStorageInterface => {
           signer = {
             type: "nip46",
             bunker: bunker,
-            appPrivKey: clientPrivkey,
+            appPrivKey:
+              typeof clientPrivkey === "string" ? clientPrivkey : undefined,
           };
           break;
         case "nsec":
-          signer = {
-            type: "nsec",
-            encryptedPrivKey: encryptedPrivateKey,
-          };
+          if (typeof encryptedPrivateKey === "string") {
+            signer = {
+              type: "nsec",
+              encryptedPrivKey: encryptedPrivateKey,
+            };
+          }
           break;
       }
     }
@@ -1545,7 +1570,7 @@ export const getLocalStorageData = (): LocalStorageInterface => {
     relays: relays || [],
     readRelays: readRelays || [],
     writeRelays: writeRelays || [],
-    mints,
+    mints: mints || [],
     blossomServers: blossomServers || [],
     tokens: tokens || [],
     history: history || [],
