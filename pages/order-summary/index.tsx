@@ -15,7 +15,7 @@ import parseTags, {
 } from "@/utils/parsers/product-parser-functions";
 import ProductCard from "@/components/utility-components/product-card";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
-import { SignerContext } from "@/components/utility-components/nostr-context-provider";
+import ProtectedRoute from "@/components/utility-components/protected-route";
 
 interface OrderSummaryData {
   productTitle: string;
@@ -57,7 +57,6 @@ export default function OrderSummary() {
   const [latestProducts, setLatestProducts] = useState<ProductData[]>([]);
   const [sfSellerPubkey, setSfSellerPubkey] = useState("");
   const [sfShopSlug, setSfShopSlug] = useState("");
-  const { isLoggedIn } = useContext(SignerContext);
   const productContext = useContext(ProductContext);
 
   useEffect(() => {
@@ -102,7 +101,15 @@ export default function OrderSummary() {
           }
         } catch {}
       }
-      const shuffled = products.sort(() => Math.random() - 0.5).slice(0, 4);
+      for (let i = products.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        const current = products[i];
+        const random = products[j];
+        if (!current || !random) continue;
+        products[i] = random;
+        products[j] = current;
+      }
+      const shuffled = products.slice(0, 4);
       setLatestProducts(shuffled);
     }
   }, [productContext.isLoading, productContext.productEvents, orderData]);
@@ -132,22 +139,25 @@ export default function OrderSummary() {
 
   if (!orderData) {
     return (
-      <StorefrontThemeWrapper sellerPubkey={sfSellerPubkey}>
-        <div className="flex min-h-screen items-center justify-center bg-light-bg dark:bg-dark-bg">
-          <div className="text-center">
-            <p className="text-lg text-gray-600 dark:text-gray-400">
-              Loading order details...
-            </p>
+      <ProtectedRoute>
+        <StorefrontThemeWrapper sellerPubkey={sfSellerPubkey}>
+          <div className="flex min-h-screen items-center justify-center bg-light-bg dark:bg-dark-bg">
+            <div className="text-center">
+              <p className="text-lg text-gray-600 dark:text-gray-400">
+                Loading order details...
+              </p>
+            </div>
           </div>
-        </div>
-      </StorefrontThemeWrapper>
+        </StorefrontThemeWrapper>
+      </ProtectedRoute>
     );
   }
 
   return (
-    <StorefrontThemeWrapper sellerPubkey={sfSellerPubkey}>
-      <div className="min-h-screen bg-light-bg dark:bg-dark-bg">
-        <div className="mx-auto max-w-4xl px-4 pb-8 pt-24 sm:px-6 lg:px-8">
+    <ProtectedRoute>
+      <StorefrontThemeWrapper sellerPubkey={sfSellerPubkey}>
+        <div className="min-h-screen bg-light-bg dark:bg-dark-bg">
+          <div className="mx-auto max-w-4xl px-4 pb-8 pt-24 sm:px-6 lg:px-8">
           <div className="mb-8 rounded-lg border border-gray-200 bg-light-fg p-6 shadow-md dark:border-gray-700 dark:bg-dark-fg sm:p-8">
             <div className="mb-6 flex flex-col items-center border-b border-gray-200 pb-6 dark:border-gray-700">
               <div className="mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
@@ -457,39 +467,31 @@ export default function OrderSummary() {
               >
                 Continue Shopping
               </Button>
-              {isLoggedIn && (
-                <>
-                  <Button
-                    className="flex-1 bg-gray-200 text-light-text dark:bg-gray-700 dark:text-dark-text"
-                    onClick={() => router.push("/orders")}
-                    size="lg"
-                    startContent={
-                      <ClipboardDocumentListIcon className="h-5 w-5" />
-                    }
-                  >
-                    Check Order Status
-                  </Button>
-                  <Button
-                    className="flex-1 bg-gray-200 text-light-text dark:bg-gray-700 dark:text-dark-text"
-                    onClick={() => {
-                      const npub = orderData?.sellerPubkey
-                        ? nip19.npubEncode(orderData.sellerPubkey)
-                        : null;
-                      router.push(
-                        npub
-                          ? `/orders?pk=${npub}&isInquiry=true`
-                          : "/orders?isInquiry=true"
-                      );
-                    }}
-                    size="lg"
-                    startContent={
-                      <ChatBubbleLeftRightIcon className="h-5 w-5" />
-                    }
-                  >
-                    Contact Merchant
-                  </Button>
-                </>
-              )}
+              <Button
+                className="flex-1 bg-gray-200 text-light-text dark:bg-gray-700 dark:text-dark-text"
+                onClick={() => router.push("/orders")}
+                size="lg"
+                startContent={<ClipboardDocumentListIcon className="h-5 w-5" />}
+              >
+                Check Order Status
+              </Button>
+              <Button
+                className="flex-1 bg-gray-200 text-light-text dark:bg-gray-700 dark:text-dark-text"
+                onClick={() => {
+                  const npub = orderData?.sellerPubkey
+                    ? nip19.npubEncode(orderData.sellerPubkey)
+                    : null;
+                  router.push(
+                    npub
+                      ? `/orders?pk=${npub}&isInquiry=true`
+                      : "/orders?isInquiry=true"
+                  );
+                }}
+                size="lg"
+                startContent={<ChatBubbleLeftRightIcon className="h-5 w-5" />}
+              >
+                Contact Merchant
+              </Button>
             </div>
           </div>
 
@@ -513,8 +515,9 @@ export default function OrderSummary() {
               </div>
             </div>
           )}
+          </div>
         </div>
-      </div>
-    </StorefrontThemeWrapper>
+      </StorefrontThemeWrapper>
+    </ProtectedRoute>
   );
 }
