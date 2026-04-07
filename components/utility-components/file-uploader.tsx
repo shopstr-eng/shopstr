@@ -459,6 +459,7 @@ export const FileUploaderButton = ({
           ref={hiddenFileInput}
           onChange={handleChange}
           className="hidden"
+          disabled={disabled || loading}
         />
       </div>
 
