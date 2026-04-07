@@ -856,7 +856,10 @@ export async function fetchAllMessagesFromDb(
 }
 
 // Mark messages as read in database
-export async function markMessagesAsRead(messageIds: string[]): Promise<void> {
+export async function markMessagesAsRead(
+  messageIds: string[],
+  pubkey: string
+): Promise<void> {
   if (messageIds.length === 0) return;
 
   const dbPool = getDbPool();
@@ -865,8 +868,18 @@ export async function markMessagesAsRead(messageIds: string[]): Promise<void> {
   try {
     client = await dbPool.connect();
     await client.query(
-      `UPDATE message_events SET is_read = TRUE WHERE id = ANY($1)`,
-      [messageIds]
+      `UPDATE message_events
+       SET is_read = TRUE
+       WHERE id = ANY($1)
+       AND (
+         pubkey = $2
+         OR EXISTS (
+           SELECT 1
+           FROM jsonb_array_elements(tags) elem
+           WHERE elem->>0 = 'p' AND elem->>1 = $2
+         )
+       )`,
+      [messageIds, pubkey] as any[]
     );
   } catch (error) {
     console.error("Failed to mark messages as read:", error);
@@ -903,6 +916,7 @@ export async function getUnreadMessageCount(pubkey: string): Promise<number> {
 export async function updateOrderStatus(
   orderId: string,
   status: string,
+  pubkey: string,
   messageId?: string
 ): Promise<void> {
   const dbPool = getDbPool();
@@ -913,14 +927,34 @@ export async function updateOrderStatus(
 
     if (messageId) {
       await client.query(
-        `UPDATE message_events SET order_status = $1, order_id = $2 WHERE id = $3`,
-        [status, orderId, messageId]
+        `UPDATE message_events
+         SET order_status = $1, order_id = $2
+         WHERE id = $3
+         AND (
+           pubkey = $4
+           OR EXISTS (
+             SELECT 1
+             FROM jsonb_array_elements(tags) elem
+             WHERE elem->>0 = 'p' AND elem->>1 = $4
+           )
+         )`,
+        [status, orderId, messageId, pubkey]
       );
     }
 
     await client.query(
-      `UPDATE message_events SET order_status = $1 WHERE order_id = $2`,
-      [status, orderId]
+      `UPDATE message_events
+       SET order_status = $1
+       WHERE order_id = $2
+       AND (
+         pubkey = $3
+         OR EXISTS (
+           SELECT 1
+           FROM jsonb_array_elements(tags) elem
+           WHERE elem->>0 = 'p' AND elem->>1 = $3
+         )
+       )`,
+      [status, orderId, pubkey]
     );
   } catch (error) {
     console.error("Failed to update order status:", error);

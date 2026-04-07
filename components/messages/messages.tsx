@@ -23,6 +23,7 @@ import {
 } from "@/components/utility-components/nostr-context-provider";
 import SignInModal from "../sign-in/SignInModal";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import { createNip98AuthorizationHeader } from "@/utils/nostr/nip98-auth";
 
 const Messages = ({ isPayment }: { isPayment: boolean }) => {
   const router = useRouter();
@@ -216,13 +217,24 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
           }
         });
         if (wrappedIdsToMark.length > 0) {
-          fetch("/api/db/mark-messages-read", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ messageIds: wrappedIdsToMark }),
-          }).catch((err) =>
-            console.error("Failed to mark messages as read:", err)
-          );
+          createNip98AuthorizationHeader(
+            signer!,
+            `${window.location.origin}/api/db/mark-messages-read`,
+            "POST"
+          )
+            .then((authHeader) =>
+              fetch("/api/db/mark-messages-read", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: authHeader,
+                },
+                body: JSON.stringify({ messageIds: wrappedIdsToMark }),
+              })
+            )
+            .catch((err) =>
+              console.error("Failed to mark messages as read:", err)
+            );
         }
         const newChatMap = new Map(prevChatMap);
         newChatMap.set(pubkeyOfChat, updatedChat);

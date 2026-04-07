@@ -31,6 +31,7 @@ import {
   getDefaultRelays,
   LogOut,
 } from "@/utils/nostr/nostr-helper-functions";
+import { createNip98AuthorizationHeader } from "@/utils/nostr/nip98-auth";
 import { NextUIProvider } from "@nextui-org/react";
 import { ThemeProvider as NextThemesProvider } from "next-themes";
 import {
@@ -248,9 +249,17 @@ function Shopstr({ props }: { props: AppProps }) {
       try {
         const idsForDb =
           wrappedEventIds.length > 0 ? wrappedEventIds : unreadMessageIds;
+        const authHeader = await createNip98AuthorizationHeader(
+          signer!,
+          `${window.location.origin}/api/db/mark-messages-read`,
+          "POST"
+        );
         await fetch("/api/db/mark-messages-read", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: authHeader,
+          },
           body: JSON.stringify({ messageIds: idsForDb }),
         });
 
@@ -273,7 +282,7 @@ function Shopstr({ props }: { props: AppProps }) {
     }
 
     return unreadMessageIds;
-  }, [chatsMap]);
+  }, [chatsMap, signer]);
 
   const [followsContext, setFollowsContext] = useState<FollowsContextInterface>(
     {

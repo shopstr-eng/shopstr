@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { updateOrderStatus } from "@/utils/db/db-service";
+import { verifyNip98Request } from "@/utils/nostr/nip98-auth";
 
 export default async function handler(
   req: NextApiRequest,
@@ -7,6 +8,11 @@ export default async function handler(
 ) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  const authResult = verifyNip98Request(req, "POST");
+  if (!authResult.ok) {
+    return res.status(401).json({ error: authResult.error });
   }
 
   const { orderId, status, messageId } = req.body;
@@ -31,7 +37,7 @@ export default async function handler(
   }
 
   try {
-    await updateOrderStatus(orderId, status, messageId);
+    await updateOrderStatus(orderId, status, authResult.pubkey, messageId);
     return res.status(200).json({ success: true, orderId, status });
   } catch (error) {
     console.error("Failed to update order status:", error);
