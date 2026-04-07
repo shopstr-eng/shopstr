@@ -188,7 +188,7 @@ export default function DisplayProductModal({
             </div>
             <Divider />
             <span className="text-xl font-semibold">Summary: </span>
-            <span className="whitespace-break-spaces break-all">
+            <span className="whitespace-pre-wrap break-words">
               {productData.summary}
             </span>
             {productData.sizes && productData.sizes.length > 0 ? (
@@ -219,6 +219,24 @@ export default function DisplayProductModal({
                           className="mb-2 mr-4 text-light-text dark:text-dark-text"
                         >
                           {volume}: {productData.volumePrices?.get(volume) || 0}{" "}
+                          {productData.currency}
+                        </span>
+                      ))
+                    : null}
+                </div>
+              </>
+            ) : null}
+            {productData.weights && productData.weights.length > 0 ? (
+              <>
+                <span className="text-xl font-semibold">Weights: </span>
+                <div className="flex flex-wrap items-center">
+                  {productData.weights && productData.weights.length > 0
+                    ? productData.weights.map((weight: string) => (
+                        <span
+                          key={weight}
+                          className="mb-2 mr-4 text-light-text dark:text-dark-text"
+                        >
+                          {weight}: {productData.weightPrices?.get(weight) || 0}{" "}
                           {productData.currency}
                         </span>
                       ))

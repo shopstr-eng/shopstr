@@ -3,7 +3,6 @@ import { useRouter } from "next/router";
 import { useForm, Controller } from "react-hook-form";
 import {
   Button,
-  Textarea,
   Input,
   Image,
   Select,
@@ -24,6 +23,59 @@ import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
 interface UserProfileFormProps {
   isOnboarding?: boolean;
 }
+
+const getLocalUserProfileKey = (pubkey: string) =>
+  `shopstr:user-profile:${pubkey}`;
+
+interface LocalProfileFallback {
+  content: Record<string, unknown>;
+  updatedAt: number;
+}
+
+const isProfileContentPopulated = (content: Record<string, unknown>) =>
+  Object.values(content).some(
+    (value) => value !== "" && value !== null && value !== undefined
+  );
+
+const parseLocalProfileFallback = (
+  raw: string | null
+): LocalProfileFallback | null => {
+  if (!raw) return null;
+
+  try {
+    const parsed = JSON.parse(raw);
+
+    // Backward compatibility: previously we stored content directly.
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      !Array.isArray(parsed) &&
+      !("content" in parsed)
+    ) {
+      return {
+        content: parsed as Record<string, unknown>,
+        updatedAt: 0,
+      };
+    }
+
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      !Array.isArray(parsed) &&
+      "content" in parsed
+    ) {
+      const fallback = parsed as LocalProfileFallback;
+      return {
+        content: fallback.content || {},
+        updatedAt: fallback.updatedAt || 0,
+      };
+    }
+  } catch (error) {
+    console.error("Failed to parse local profile fallback:", error);
+  }
+
+  return null;
+};
 
 const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
   const router = useRouter();
@@ -60,7 +112,6 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
     },
   });
 
-  const watchBanner = watch("banner");
   const watchPicture = watch("picture");
   const defaultImage = useMemo(() => {
     return "https://robohash.org/" + userPubkey;
@@ -69,12 +120,52 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
   useEffect(() => {
     if (!userPubkey) return;
     setIsFetchingProfile(true);
+
+    const localFallback = parseLocalProfileFallback(
+      localStorage.getItem(getLocalUserProfileKey(userPubkey))
+    );
+
     const profileMap = profileContext.profileData;
     const profile = profileMap.has(userPubkey)
       ? profileMap.get(userPubkey)
       : undefined;
+
     if (profile) {
-      reset(profile.content);
+      const profileCreatedAt = profile.created_at || 0;
+      const shouldUseLocalFallback =
+        !!localFallback &&
+        localFallback.updatedAt > profileCreatedAt &&
+        isProfileContentPopulated(localFallback.content);
+
+      if (shouldUseLocalFallback) {
+        reset(localFallback.content);
+      } else {
+        reset(profile.content);
+      }
+
+      try {
+        localStorage.setItem(
+          getLocalUserProfileKey(userPubkey),
+          JSON.stringify({
+            content: shouldUseLocalFallback
+              ? localFallback!.content
+              : profile.content,
+            updatedAt: shouldUseLocalFallback
+              ? localFallback!.updatedAt
+              : profileCreatedAt,
+          })
+        );
+      } catch (error) {
+        console.error("Failed to persist profile fallback locally:", error);
+      }
+    } else {
+      try {
+        if (localFallback?.content) {
+          reset(localFallback.content);
+        }
+      } catch (error) {
+        console.error("Failed to read local profile fallback:", error);
+      }
     }
     setIsFetchingProfile(false);
 
@@ -96,18 +187,53 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
   }, [profileContext, userPubkey, signer, reset]);
 
   const onSubmit = async (data: { [x: string]: string }) => {
-    if (!userPubkey) throw new Error("pubkey is undefined");
-    setIsUploadingProfile(true);
-    await createNostrProfileEvent(nostr!, signer!, JSON.stringify(data));
-    profileContext.updateProfileData({
-      pubkey: userPubkey!,
-      content: data,
-      created_at: 0,
-    });
-    setIsUploadingProfile(false);
+    if (!userPubkey) {
+      console.error("Cannot save profile: pubkey is undefined");
+      return;
+    }
 
-    if (isOnboarding) {
-      router.push("/onboarding/shop-profile");
+    setIsUploadingProfile(true);
+    try {
+      const profileMap = profileContext.profileData;
+      const existingProfile = profileMap.has(userPubkey)
+        ? profileMap.get(userPubkey)?.content
+        : {};
+
+      const updatedData = {
+        ...existingProfile,
+        ...data,
+      };
+
+      try {
+        localStorage.setItem(
+          getLocalUserProfileKey(userPubkey),
+          JSON.stringify({
+            content: updatedData,
+            updatedAt: Math.floor(Date.now() / 1000),
+          })
+        );
+      } catch (error) {
+        console.error("Failed to save local profile fallback:", error);
+      }
+
+      await createNostrProfileEvent(
+        nostr!,
+        signer!,
+        JSON.stringify(updatedData)
+      );
+      profileContext.updateProfileData({
+        pubkey: userPubkey,
+        content: updatedData,
+        created_at: Math.floor(Date.now() / 1000),
+      });
+
+      if (isOnboarding) {
+        router.push("/onboarding/wallet?type=seller");
+      }
+    } catch (error) {
+      console.error("Failed to save user profile:", error);
+    } finally {
+      setIsUploadingProfile(false);
     }
   };
 
@@ -117,45 +243,26 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
 
   return (
     <>
-      <div className="mb-20 h-40 rounded-lg bg-light-fg dark:bg-dark-fg">
-        <div className="relative flex h-40 items-center justify-center rounded-lg bg-shopstr-purple-light dark:bg-dark-fg">
-          {watchBanner && (
+      <div className="mb-8 flex items-center justify-center">
+        <div className="relative h-24 w-24">
+          <FileUploaderButton
+            isIconOnly
+            className={`absolute bottom-[-0.5rem] right-[-0.5rem] z-20 ${SHOPSTRBUTTONCLASSNAMES}`}
+            imgCallbackOnUpload={(imgUrl) => setValue("picture", imgUrl)}
+          />
+          {watchPicture ? (
             <Image
-              alt={"User banner image"}
-              src={watchBanner}
-              className="h-40 w-full rounded-lg object-cover object-fill"
+              src={watchPicture}
+              alt="user profile picture"
+              className="rounded-full"
+            />
+          ) : (
+            <Image
+              src={defaultImage}
+              alt="user profile picture"
+              className="rounded-full"
             />
           )}
-          <FileUploaderButton
-            className={`absolute bottom-5 right-5 z-20 border-2 border-white bg-shopstr-purple shadow-md ${SHOPSTRBUTTONCLASSNAMES}`}
-            imgCallbackOnUpload={(imgUrl) => setValue("banner", imgUrl)}
-          >
-            Upload Banner
-          </FileUploaderButton>
-        </div>
-        <div className="flex items-center justify-center">
-          <div className="relative z-20 mt-[-3rem] h-24 w-24">
-            <div className="">
-              <FileUploaderButton
-                isIconOnly
-                className={`absolute bottom-[-0.5rem] right-[-0.5rem] z-20 ${SHOPSTRBUTTONCLASSNAMES}`}
-                imgCallbackOnUpload={(imgUrl) => setValue("picture", imgUrl)}
-              />
-              {watchPicture ? (
-                <Image
-                  src={watchPicture}
-                  alt="user profile picture"
-                  className="rounded-full"
-                />
-              ) : (
-                <Image
-                  src={defaultImage}
-                  alt="user profile picture"
-                  className="rounded-full"
-                />
-              )}
-            </div>
-          </div>
         </div>
       </div>
 
@@ -347,95 +454,37 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
           }}
         />
 
-        <Controller
-          name="about"
-          control={control}
-          render={({
-            field: { onChange, onBlur, value },
-            fieldState: { error },
-          }) => {
-            const isErrored = error !== undefined;
-            const errorMessage: string = error?.message ? error.message : "";
-            return (
-              <Textarea
-                className="pb-4 text-light-text dark:text-dark-text"
-                classNames={{
-                  label: "text-light-text dark:text-dark-text text-lg",
-                }}
-                variant="bordered"
-                fullWidth={true}
-                placeholder="Add something about yourself . . ."
-                isInvalid={isErrored}
-                errorMessage={errorMessage}
-                label="About"
-                labelPlacement="outside"
-                onChange={onChange}
-                onBlur={onBlur}
-                value={value}
-              />
-            );
-          }}
-        />
-
-        <Controller
-          name="website"
-          control={control}
-          render={({
-            field: { onChange, onBlur, value },
-            fieldState: { error },
-          }) => {
-            const isErrored = error !== undefined;
-            const errorMessage: string = error?.message ? error.message : "";
-            return (
-              <Input
-                className="pb-4 text-light-text dark:text-dark-text"
-                classNames={{
-                  label: "text-light-text dark:text-dark-text text-lg",
-                }}
-                variant="bordered"
-                fullWidth={true}
-                label="Website"
-                labelPlacement="outside"
-                isInvalid={isErrored}
-                errorMessage={errorMessage}
-                placeholder="Add your website URL . . ."
-                onChange={onChange}
-                onBlur={onBlur}
-                value={value}
-              />
-            );
-          }}
-        />
-
-        <Controller
-          name="nip05"
-          control={control}
-          render={({
-            field: { onChange, onBlur, value },
-            fieldState: { error },
-          }) => {
-            const isErrored = error !== undefined;
-            const errorMessage: string = error?.message ? error.message : "";
-            return (
-              <Input
-                className="pb-4 text-light-text dark:text-dark-text"
-                classNames={{
-                  label: "text-light-text dark:text-dark-text text-lg",
-                }}
-                variant="bordered"
-                fullWidth={true}
-                label="Nostr address"
-                labelPlacement="outside"
-                isInvalid={isErrored}
-                errorMessage={errorMessage}
-                placeholder="Add your NIP-05 address . . ."
-                onChange={onChange}
-                onBlur={onBlur}
-                value={value}
-              />
-            );
-          }}
-        />
+        {!isOnboarding && (
+          <Controller
+            name="nip05"
+            control={control}
+            render={({
+              field: { onChange, onBlur, value },
+              fieldState: { error },
+            }) => {
+              const isErrored = error !== undefined;
+              const errorMessage: string = error?.message ? error.message : "";
+              return (
+                <Input
+                  className="pb-4 text-light-text dark:text-dark-text"
+                  classNames={{
+                    label: "text-light-text dark:text-dark-text text-lg",
+                  }}
+                  variant="bordered"
+                  fullWidth={true}
+                  label="Nostr address"
+                  labelPlacement="outside"
+                  isInvalid={isErrored}
+                  errorMessage={errorMessage}
+                  placeholder="Add your NIP-05 address . . ."
+                  onChange={onChange}
+                  onBlur={onBlur}
+                  value={value}
+                />
+              );
+            }}
+          />
+        )}
 
         <Controller
           name="lud16"

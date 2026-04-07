@@ -1315,11 +1315,47 @@ export async function fetchProductByTitleSlug(
        )
        ORDER BY created_at DESC`
     );
+    const pubkeySuffixMatch = slug.match(/^(.+)-([a-f0-9]{8})$/);
+    const baseSlug = pubkeySuffixMatch?.[1];
+    const pubkeyFragment = pubkeySuffixMatch?.[2];
+
+    let exactMatch: NostrEvent | null = null;
+    let exactMatchCount = 0;
+    let disambiguatedMatch: NostrEvent | null = null;
+
     for (const row of result.rows) {
       const tags: string[][] = row.tags;
       const titleTag = tags.find((t) => t[0] === "title");
-      if (titleTag && titleTag[1] && titleToSlug(titleTag[1]) === slug) {
-        return {
+      if (!titleTag || !titleTag[1]) continue;
+
+      const currentSlug = titleToSlug(titleTag[1]);
+
+      if (currentSlug === slug) {
+        exactMatchCount += 1;
+        if (exactMatchCount > 1) {
+          return null;
+        }
+
+        exactMatch = {
+          id: row.id,
+          pubkey: row.pubkey,
+          created_at: row.created_at,
+          kind: row.kind,
+          tags: row.tags,
+          content: row.content,
+          sig: row.sig,
+        };
+      }
+
+      if (
+        !exactMatch &&
+        !disambiguatedMatch &&
+        baseSlug &&
+        pubkeyFragment &&
+        currentSlug === baseSlug &&
+        row.pubkey.startsWith(pubkeyFragment)
+      ) {
+        disambiguatedMatch = {
           id: row.id,
           pubkey: row.pubkey,
           created_at: row.created_at,
@@ -1330,7 +1366,12 @@ export async function fetchProductByTitleSlug(
         };
       }
     }
-    return null;
+
+    if (exactMatch) {
+      return exactMatch;
+    }
+
+    return disambiguatedMatch;
   } catch (error) {
     console.error("Failed to fetch product by title slug:", error);
     return null;
@@ -1383,6 +1424,13 @@ export async function fetchProfilePubkeyByNameSlug(
       `SELECT pubkey, content FROM profile_events WHERE kind = 0 ORDER BY created_at DESC`
     );
     const pubkeySuffixMatch = nameSlug.match(/^(.+)-([a-f0-9]{8})$/);
+    const baseSlug = pubkeySuffixMatch?.[1];
+    const pubkeyFragment = pubkeySuffixMatch?.[2];
+
+    let exactMatch: string | null = null;
+    let exactMatchCount = 0;
+    let disambiguatedMatch: string | null = null;
+
     for (const row of result.rows) {
       let profileName: string | undefined;
       try {
@@ -1393,17 +1441,33 @@ export async function fetchProfilePubkeyByNameSlug(
       }
       if (!profileName) continue;
       const slug = profileNameToSlug(profileName);
-      if (pubkeySuffixMatch) {
-        const baseSlug = pubkeySuffixMatch[1]!;
-        const pubkeyFragment = pubkeySuffixMatch[2]!;
-        if (slug === baseSlug && row.pubkey.startsWith(pubkeyFragment)) {
-          return row.pubkey;
+
+      if (slug === nameSlug) {
+        exactMatchCount += 1;
+        if (exactMatchCount > 1) {
+          return null;
         }
-      } else if (slug === nameSlug) {
-        return row.pubkey;
+
+        exactMatch = row.pubkey;
+      }
+
+      if (
+        !exactMatch &&
+        !disambiguatedMatch &&
+        baseSlug &&
+        pubkeyFragment &&
+        slug === baseSlug &&
+        row.pubkey.startsWith(pubkeyFragment)
+      ) {
+        disambiguatedMatch = row.pubkey;
       }
     }
-    return null;
+
+    if (exactMatch) {
+      return exactMatch;
+    }
+
+    return disambiguatedMatch;
   } catch (error) {
     console.error("Failed to fetch profile pubkey by name slug:", error);
     return null;

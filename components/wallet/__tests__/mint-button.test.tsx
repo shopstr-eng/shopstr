@@ -150,6 +150,9 @@ describe("MintButton Component", () => {
     fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
     await waitFor(() => expect(screen.getByRole("dialog")).toBeVisible());
     fireEvent.click(screen.getByRole("button", { name: /Cancel/i }));
+    act(() => {
+      jest.runOnlyPendingTimers();
+    });
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
