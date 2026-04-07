@@ -26,6 +26,18 @@ import {
 import { newPromiseWithTimeout } from "@/utils/timeout";
 import { getLocalStorageJson } from "@/utils/safe-json";
 
+export const REPORT_TYPES = [
+  "nudity",
+  "malware",
+  "profanity",
+  "illegal",
+  "spam",
+  "impersonation",
+  "other",
+] as const;
+
+export type ReportType = (typeof REPORT_TYPES)[number];
+
 function containsRelay(relays: string[], relay: string): boolean {
   return relays.some((r) => r.includes(relay));
 }
@@ -516,6 +528,55 @@ export async function publishReviewEvent(
         console.error("Failed to cache review event to database:", error)
       );
     }
+  } catch (error) {
+    console.error(error);
+    throw error;
+  }
+}
+
+export async function publishReportEvent(
+  nostr: NostrManager,
+  signer: NostrSigner,
+  {
+    content,
+    reportType,
+    reportedPubkey,
+    reportedEventId,
+  }: {
+    content: string;
+    reportType: ReportType;
+    reportedPubkey: string;
+    reportedEventId?: string;
+  }
+) {
+  try {
+    const reportTags = reportedEventId
+      ? [
+          ["e", reportedEventId, reportType],
+          ["p", reportedPubkey],
+        ]
+      : [["p", reportedPubkey, reportType]];
+
+    const reportEvent: EventTemplate = {
+      created_at: Math.floor(Date.now() / 1000),
+      content,
+      kind: 1984,
+      tags: reportTags,
+    };
+
+    const signedEvent = await finalizeAndSendNostrEvent(
+      signer,
+      nostr,
+      reportEvent
+    );
+
+    if (signedEvent) {
+      await cacheEventToDatabase(signedEvent).catch((error) =>
+        console.error("Failed to cache report event to database:", error)
+      );
+    }
+
+    return signedEvent;
   } catch (error) {
     console.error(error);
     throw error;

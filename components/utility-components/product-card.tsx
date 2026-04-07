@@ -6,6 +6,7 @@ import {
   DropdownMenu,
   DropdownItem,
   Button,
+  useDisclosure,
 } from "@nextui-org/react";
 import Link from "next/link";
 import {
@@ -22,6 +23,8 @@ import { ProductData } from "@/utils/parsers/product-parser-functions";
 import { ProfileWithDropdown } from "./profile/profile-dropdown";
 import { useRouter } from "next/router";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
+import SignInModal from "../sign-in/SignInModal";
+import useReportEventFlow from "./use-report-event-flow";
 
 export default function ProductCard({
   productData,
@@ -37,7 +40,15 @@ export default function ProductCard({
 
   const router = useRouter();
   const { pubkey: userPubkey } = useContext(SignerContext);
+  const { isOpen, onOpen, onClose } = useDisclosure();
   if (!productData) return null;
+
+  const { openReportFlow, reportFlowUi } = useReportEventFlow({
+    targetLabel: "listing",
+    reportedPubkey: productData.pubkey,
+    reportedEventId: productData.id,
+    onRequireLogin: onOpen,
+  });
 
   const isZapsnag =
     productData.d === "zapsnag" || productData.categories?.includes("zapsnag");
@@ -152,18 +163,32 @@ export default function ProductCard({
                     </Button>
                   </DropdownTrigger>
                   <DropdownMenu aria-label="Event Actions">
-                    <DropdownItem
-                      key="view-raw"
-                      onPress={() => setShowRawEventModal(true)}
-                    >
-                      View Raw Event
-                    </DropdownItem>
-                    <DropdownItem
-                      key="view-id"
-                      onPress={() => setShowEventIdModal(true)}
-                    >
-                      View Event ID
-                    </DropdownItem>
+                    {[
+                      <DropdownItem
+                        key="view-raw"
+                        onPress={() => setShowRawEventModal(true)}
+                      >
+                        View Raw Event
+                      </DropdownItem>,
+                      <DropdownItem
+                        key="view-id"
+                        onPress={() => setShowEventIdModal(true)}
+                      >
+                        View Event ID
+                      </DropdownItem>,
+                      ...(productData.pubkey !== userPubkey
+                        ? [
+                            <DropdownItem
+                              key="report-listing"
+                              className="text-danger"
+                              color="danger"
+                              onPress={openReportFlow}
+                            >
+                              Report Listing
+                            </DropdownItem>,
+                          ]
+                        : []),
+                    ]}
                   </DropdownMenu>
                 </Dropdown>
               )}
@@ -176,7 +201,7 @@ export default function ProductCard({
             dropDownKeys={
               productData.pubkey === userPubkey
                 ? ["shop_profile"]
-                : ["shop", "inquiry", "copy_npub"]
+                : ["shop", "inquiry", "copy_npub", "report_profile"]
             }
           />
         </div>
@@ -227,6 +252,8 @@ export default function ProductCard({
         onClose={() => setShowEventIdModal(false)}
         rawEvent={productData.rawEvent}
       />
+      {reportFlowUi}
+      <SignInModal isOpen={isOpen} onClose={onClose} />
     </div>
   );
 }

@@ -144,6 +144,123 @@ export const fetchAllPosts = async (
   });
 };
 
+function getReportTargetIdentifiers(event: NostrEvent): {
+  referencedPubkeys: string[];
+  referencedEventIds: string[];
+} {
+  const referencedPubkeys = event.tags
+    .filter((tag: string[]) => tag[0] === "p" && tag[1])
+    .map((tag: string[]) => tag[1]!);
+  const referencedEventIds = event.tags
+    .filter((tag: string[]) => tag[0] === "e" && tag[1])
+    .map((tag: string[]) => tag[1]!);
+
+  return { referencedPubkeys, referencedEventIds };
+}
+
+export const fetchReports = async (
+  nostr: NostrManager,
+  relays: string[],
+  products: NostrEvent[],
+  editReportsContext: (reportEvents: NostrEvent[], isLoading: boolean) => void,
+  additionalProfilePubkeys: string[] = []
+): Promise<{
+  reportEvents: NostrEvent[];
+}> => {
+  return new Promise(async function (resolve, reject) {
+    try {
+      const productIds = new Set(products.map((product) => product.id));
+      const sellerPubkeys = new Set(
+        [...products.map((product) => product.pubkey), ...additionalProfilePubkeys]
+          .filter(Boolean)
+      );
+
+      const reportEventsMap = new Map<string, NostrEvent>();
+
+      const isRelevantReportEvent = (event: NostrEvent): boolean => {
+        const { referencedPubkeys, referencedEventIds } =
+          getReportTargetIdentifiers(event);
+
+        return (
+          referencedEventIds.some((eventId) => productIds.has(eventId)) ||
+          referencedPubkeys.some((pubkey) => sellerPubkeys.has(pubkey))
+        );
+      };
+
+      const upsertReportEvent = (event: NostrEvent) => {
+        if (!isRelevantReportEvent(event)) return;
+
+        const existing = reportEventsMap.get(event.id);
+        if (!existing || event.created_at >= existing.created_at) {
+          reportEventsMap.set(event.id, event);
+        }
+      };
+
+      try {
+        const params = new URLSearchParams();
+        Array.from(sellerPubkeys).forEach((pubkey) => params.append("p", pubkey));
+        Array.from(productIds).forEach((productId) => params.append("e", productId));
+        const response = await fetch(`/api/db/fetch-reports?${params.toString()}`);
+        if (response.ok) {
+          const reportsFromDb: NostrEvent[] = await response.json();
+          reportsFromDb.forEach(upsertReportEvent);
+
+          if (reportEventsMap.size > 0) {
+            editReportsContext(
+              Array.from(reportEventsMap.values()).sort(
+                (a, b) => b.created_at - a.created_at
+              ),
+              false
+            );
+          }
+        }
+      } catch (error) {
+        console.error("Failed to fetch reports from database: ", error);
+      }
+
+      const reportFilters: Filter[] = [];
+      if (sellerPubkeys.size > 0) {
+        reportFilters.push({
+          kinds: [1984],
+          "#p": Array.from(sellerPubkeys),
+        });
+      }
+      if (productIds.size > 0) {
+        reportFilters.push({
+          kinds: [1984],
+          "#e": Array.from(productIds),
+        });
+      }
+
+      if (reportFilters.length === 0) {
+        editReportsContext([], false);
+        resolve({ reportEvents: [] });
+        return;
+      }
+
+      const fetchedEvents = await nostr.fetch(reportFilters, {}, relays);
+      fetchedEvents.forEach(upsertReportEvent);
+
+      const reportEvents = Array.from(reportEventsMap.values()).sort(
+        (a, b) => b.created_at - a.created_at
+      );
+      editReportsContext(reportEvents, false);
+
+      const validReports = fetchedEvents.filter(
+        (event) => event.id && event.sig && event.pubkey && event.kind === 1984
+      );
+      if (validReports.length > 0) {
+        cacheEventsToDatabase(validReports).catch((error) =>
+          console.error("Failed to cache reports to database:", error)
+        );
+      }
+
+      resolve({ reportEvents });
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
 export const fetchCart = async (
   nostr: NostrManager,
   signer: NostrSigner | undefined,

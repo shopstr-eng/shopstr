@@ -20,21 +20,29 @@ import {
   ClipboardIcon,
   Cog6ToothIcon,
   GlobeAltIcon,
+  ExclamationTriangleIcon,
   UserIcon,
 } from "@heroicons/react/24/outline";
 import { useRouter } from "next/router";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import SignInModal from "../../sign-in/SignInModal";
+import useReportEventFlow from "../use-report-event-flow";
 
 type DropDownKeys =
   | "shop"
   | "shop_profile"
   | "storefront"
   | "inquiry"
+  | "report_profile"
   | "settings"
   | "user_profile"
   | "logout"
   | "copy_npub";
+
+type DropdownActionItem = Omit<DropdownItemProps, "onClick" | "onPress"> & {
+  label: string;
+  onClick?: () => void;
+};
 
 export const ProfileWithDropdown = ({
   pubkey,
@@ -58,6 +66,12 @@ export const ProfileWithDropdown = ({
   const router = useRouter();
   const { isLoggedIn } = useContext(SignerContext);
   const { isOpen, onOpen, onClose } = useDisclosure();
+
+  const { openReportFlow, reportFlowUi } = useReportEventFlow({
+    targetLabel: "profile",
+    reportedPubkey: pubkey,
+    onRequireLogin: onOpen,
+  });
 
   const handleDropdownAction = (action: () => void) => {
     setIsDropdownOpen(false);
@@ -103,7 +117,7 @@ export const ProfileWithDropdown = ({
   }, [profileContext, pubkey]);
 
   const DropDownItems: {
-    [key in DropDownKeys]: DropdownItemProps & { label: string };
+    [key in DropDownKeys]: DropdownActionItem;
   } = {
     shop: {
       key: "shop",
@@ -167,6 +181,14 @@ export const ProfileWithDropdown = ({
         });
       },
       label: "Send Inquiry",
+    },
+    report_profile: {
+      key: "report_profile",
+      color: "danger",
+      className: "text-light-text dark:text-dark-text",
+      startContent: <ExclamationTriangleIcon className={"h-5 w-5"} />,
+      onClick: openReportFlow,
+      label: "Report Profile",
     },
     user_profile: {
       key: "user_profile",
@@ -235,6 +257,13 @@ export const ProfileWithDropdown = ({
     },
   };
 
+  const handleReportDropdownAction = (item: DropdownActionItem) => {
+    setIsDropdownOpen(false);
+    window.setTimeout(() => {
+      item.onClick?.();
+    }, 0);
+  };
+
   return (
     <>
       <Dropdown
@@ -263,6 +292,7 @@ export const ProfileWithDropdown = ({
         <DropdownMenu
           aria-label="User Actions"
           variant="flat"
+          closeOnSelect
           items={dropDownKeys.map((key) => DropDownItems[key])}
         >
           {(item) => {
@@ -272,7 +302,11 @@ export const ProfileWithDropdown = ({
                 color={item.color}
                 className={item.className}
                 startContent={item.startContent}
-                onPress={item.onPress}
+                onPress={
+                  item.onClick
+                    ? () => handleReportDropdownAction(item)
+                    : item.onPress
+                }
               >
                 {item.label}
               </DropdownItem>
@@ -280,6 +314,7 @@ export const ProfileWithDropdown = ({
           }}
         </DropdownMenu>
       </Dropdown>
+      {reportFlowUi}
       <SignInModal isOpen={isOpen} onClose={onClose} />
     </>
   );
