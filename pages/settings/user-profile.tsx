@@ -67,26 +67,16 @@ const UserProfilePage = () => {
 
   useEffect(() => {
     if (!userPubkey || profileContext.isLoading) return;
-    const profileMap = profileContext.profileData;
-    const profile = profileMap.has(userPubkey)
-      ? profileMap.get(userPubkey)
-      : undefined;
+    const profile = profileContext.profileData.get(userPubkey);
     if (profile) {
       reset(profile.content);
     }
-
-    if (signer instanceof NostrNSecSigner) {
-      const nsecSigner = signer as NostrNSecSigner;
-      nsecSigner._getNSec().then(
-        (nsec) => {
-          setUserNSec(nsec);
-        },
-        (err: unknown) => {
-          console.error(err);
-        }
-      );
-    }
-  }, [profileContext, userPubkey, signer, reset]);
+  }, [
+    userPubkey,
+    profileContext.isLoading,
+    profileContext.profileData,
+    reset,
+  ]);
 
   const onSubmit = async (data: { [x: string]: string }) => {
     if (!userPubkey) throw new Error("pubkey is undefined");
@@ -224,7 +214,18 @@ const UserProfilePage = () => {
                   ) : (
                     <EyeIcon
                       className="h-6 w-6 flex-shrink-0 px-1 text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-yellow-700"
-                      onClick={() => {
+                      onClick={async () => {
+                        // Only decrypt nsec when user explicitly asks to see it.
+                        if (!userNSec && signer instanceof NostrNSecSigner) {
+                          try {
+                            const nsec = await (
+                              signer as NostrNSecSigner
+                            )._getNSec();
+                            setUserNSec(nsec);
+                          } catch (err) {
+                            console.error(err);
+                          }
+                        }
                         setViewState("shown");
                       }}
                     />

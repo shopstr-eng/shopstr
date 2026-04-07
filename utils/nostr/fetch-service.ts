@@ -23,6 +23,13 @@ import { NostrManager } from "@/utils/nostr/nostr-manager";
 import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 import { cacheEventsToDatabase } from "@/utils/db/db-client";
 
+interface NipProfile {
+  pubkey: string;
+  created_at: number;
+  content: { nip05?: string; [key: string]: any };
+  nip05Verified: boolean;
+}
+
 function getUniqueProofs(proofs: Proof[]): Proof[] {
   const seenSecrets = new Set<string>();
   return proofs.filter((proof) => {
@@ -126,16 +133,6 @@ export const fetchAllPosts = async (
       const mergedProductArray = Array.from(mergedProductsMap.values());
 
       editProductContext(mergedProductArray, false);
-
-      // Cache fetched products to database via API (only valid events with signatures)
-      const validProducts = fetchedEvents.filter(
-        (e) => e.id && e.sig && e.pubkey
-      );
-      if (validProducts.length > 0) {
-        cacheEventsToDatabase(validProducts).catch((error) =>
-          console.error("Failed to cache products to database:", error)
-        );
-      }
 
       resolve({
         productEvents: mergedProductArray,
@@ -361,54 +358,113 @@ export const fetchShopProfile = async (
   });
 };
 
+async function verifyProfilesNip05(
+  profileMap: Map<string, NipProfile | null>,
+  concurrency = 8
+): Promise<void> {
+  const profiles = Array.from(profileMap.values()).filter(
+    (profile): profile is NipProfile =>
+      profile !== null && !!profile?.content?.nip05
+  );
+
+  for (let i = 0; i < profiles.length; i += concurrency) {
+    await Promise.all(
+      profiles.slice(i, i + concurrency).map(async (profile) => {
+        const nip05 = profile.content.nip05!;
+        const pubkey: string = profile.pubkey;
+        const host = nip05.includes("@") ? nip05.split("@")[1] : undefined;
+        try {
+          profile.nip05Verified = await verifyNip05Identifier(nip05, pubkey);
+        } catch (error) {
+          profile.nip05Verified = false;
+          console.error("Failed to verify NIP-05 identifier", {
+            host,
+            pubkey,
+            nip05,
+            error,
+          });
+        }
+      })
+    );
+  }
+}
+
 export const fetchProfile = async (
   nostr: NostrManager,
   relays: string[],
   pubkeyProfilesToFetch: string[],
-  editProfileContext: (productEvents: Map<any, any>, isLoading: boolean) => void
+  editProfileContext: (
+    profileMap: Map<string, NipProfile | null>,
+    isLoading: boolean
+  ) => void,
+  existingProfileMap: Map<string, any> = new Map()
 ): Promise<{
-  profileMap: Map<string, any>;
+  profileMap: Map<string, NipProfile | null>;
 }> => {
   return new Promise(async function (resolve, reject) {
     try {
       if (!pubkeyProfilesToFetch.length) {
-        editProfileContext(new Map(), false);
-        resolve({ profileMap: new Map() });
+        const preservedProfileMap = new Map(existingProfileMap);
+        editProfileContext(preservedProfileMap, false);
+        resolve({ profileMap: preservedProfileMap });
         return;
       }
 
-      const dbProfileMap = new Map<string, any>();
+      const mergedProfileMap = new Map(existingProfileMap);
+      const updateProfileIfNewer = (profile: any) => {
+        if (!profile?.pubkey) return;
+
+        const existingProfile = mergedProfileMap.get(profile.pubkey);
+        if (
+          !existingProfile ||
+          (profile.created_at ?? 0) >= (existingProfile.created_at ?? 0)
+        ) {
+          mergedProfileMap.set(profile.pubkey, profile);
+        }
+      };
+
+      const dbProfileMap = new Map<string, NipProfile>();
       try {
         const response = await fetch("/api/db/fetch-profiles");
         if (response.ok) {
           const profilesFromDb = await response.json();
+          const latestDbEvents = new Map<string, NostrEvent>();
+
           for (const event of profilesFromDb) {
-            if (pubkeyProfilesToFetch.includes(event.pubkey)) {
-              try {
-                const content = JSON.parse(event.content);
-                const profile = {
-                  pubkey: event.pubkey,
-                  created_at: event.created_at,
-                  content: content,
-                  nip05Verified: false,
-                };
-                if (content.nip05) {
-                  profile.nip05Verified = await verifyNip05Identifier(
-                    content.nip05,
-                    event.pubkey
-                  );
-                }
-                dbProfileMap.set(event.pubkey, profile);
-              } catch (error) {
-                console.error(
-                  `Failed to parse profile from DB: ${event.pubkey}`,
-                  error
-                );
+            if (
+              event.kind === 0 &&
+              pubkeyProfilesToFetch.includes(event.pubkey)
+            ) {
+              const existing = latestDbEvents.get(event.pubkey);
+              if (!existing || event.created_at > existing.created_at) {
+                latestDbEvents.set(event.pubkey, event);
               }
             }
           }
+
+          for (const [pubkey, event] of latestDbEvents.entries()) {
+            try {
+              const content = JSON.parse(event.content);
+              const profile: NipProfile = {
+                pubkey: event.pubkey,
+                created_at: event.created_at,
+                content,
+                nip05Verified: false,
+              };
+              dbProfileMap.set(pubkey, profile);
+              updateProfileIfNewer(profile);
+            } catch (error) {
+              console.error(
+                `Failed to parse profile from DB: ${pubkey}`,
+                error
+              );
+            }
+          }
+
           if (dbProfileMap.size > 0) {
-            editProfileContext(dbProfileMap, false);
+            editProfileContext(new Map(mergedProfileMap), false);
+            await verifyProfilesNip05(dbProfileMap);
+            editProfileContext(new Map(mergedProfileMap), false);
           }
         }
       } catch (error) {
@@ -420,16 +476,18 @@ export const fetchProfile = async (
         authors: Array.from(pubkeyProfilesToFetch),
       };
 
-      const profileMap: Map<string, any> = new Map(
+      const profileMap: Map<string, NipProfile | null> = new Map(
         Array.from(pubkeyProfilesToFetch).map((pubkey) => [
           pubkey,
-          dbProfileMap.get(pubkey) || null,
+          mergedProfileMap.get(pubkey) || dbProfileMap.get(pubkey) || null,
         ])
       );
+      const updatedProfiles = new Map<string, NipProfile | null>();
 
       const fetchedEvents = await nostr.fetch([subParams], {}, relays);
 
       for (const event of fetchedEvents) {
+        if (event.kind !== 0) continue;
         const existing = profileMap.get(event.pubkey);
         if (
           existing === null ||
@@ -438,20 +496,15 @@ export const fetchProfile = async (
         ) {
           try {
             const content = JSON.parse(event.content);
-            const profile = {
+            const profile: NipProfile = {
               pubkey: event.pubkey,
               created_at: event.created_at,
-              content: content,
+              content,
               nip05Verified: false,
             };
-            if (content.nip05) {
-              profile.nip05Verified = await verifyNip05Identifier(
-                content.nip05,
-                event.pubkey
-              );
-            }
-
             profileMap.set(event.pubkey, profile);
+            updatedProfiles.set(event.pubkey, profile);
+            updateProfileIfNewer(profile);
           } catch (error) {
             console.error(
               `Failed parse profile for pubkey: ${event.pubkey}, ${event.content}`,
@@ -460,6 +513,8 @@ export const fetchProfile = async (
           }
         }
       }
+
+      await verifyProfilesNip05(updatedProfiles);
 
       // Cache profiles to database via API (reconstruct from fetched events)
       const validProfileEvents = fetchedEvents.filter(
@@ -471,7 +526,9 @@ export const fetchProfile = async (
         );
       }
 
-      resolve({ profileMap });
+      editProfileContext(new Map(mergedProfileMap), false);
+
+      resolve({ profileMap: mergedProfileMap });
     } catch (error) {
       reject(error);
     }
@@ -600,7 +657,7 @@ export const fetchGiftWrappedChatsAndMessages = async (
             );
             return;
           }
-          let cachedMessage = chatMessagesFromCache.get(event.id);
+          const cachedMessage = chatMessagesFromCache.get(event.id);
           let chatMessage: NostrMessageEvent;
           if (cachedMessage) {
             chatMessage = {
