@@ -11,7 +11,7 @@ const isValidEmail = (email: string): boolean => {
 };
 
 const isValidNostrPub = (npub: string): boolean => {
-  return npub.startsWith("npub") && npub.length === 63;
+  return npub.startsWith("npub1") && npub.length === 63;
 };
 
 export default async function handler(

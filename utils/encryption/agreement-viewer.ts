@@ -9,7 +9,7 @@ async function decryptFileWithSigner(
   try {
     // Get seller's pubkey
     let sellerPubkey: string;
-    if (sellerNpub.startsWith("npub")) {
+    if (sellerNpub.startsWith("npub1")) {
       const { data } = nip19.decode(sellerNpub);
       sellerPubkey = data as string;
     } else {

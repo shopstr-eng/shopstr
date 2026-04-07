@@ -10,7 +10,7 @@ export async function getEncryptionKeys(
 ): Promise<EncryptionKeys> {
   // Get user's pubkey from npub or use as pubkey directly if it's already in hex format
   let encryptionPubkey: string;
-  if (encryptionNpub.startsWith("npub")) {
+  if (encryptionNpub.startsWith("npub1")) {
     const { data } = nip19.decode(encryptionNpub);
     encryptionPubkey = data as string;
   } else {
@@ -71,7 +71,7 @@ export async function encryptFileWithNip44(
 
       // Get seller's pubkey
       let sellerPubkey: string;
-      if (encryptionNpub.startsWith("npub")) {
+      if (encryptionNpub.startsWith("npub1")) {
         const { data } = nip19.decode(encryptionNpub);
         sellerPubkey = data as string;
       } else {

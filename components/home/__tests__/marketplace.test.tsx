@@ -10,10 +10,7 @@ import {
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import { nip19 } from "nostr-tools";
 import { useRouter } from "next/router";
-import {
-  findPubkeyByProfileSlug,
-  isNpub,
-} from "@/utils/url-slugs";
+import { findPubkeyByProfileSlug, isNpub } from "@/utils/url-slugs";
 
 jest.mock("@/utils/url-slugs", () => ({
   getListingSlug: jest.fn(),

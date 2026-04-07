@@ -194,7 +194,7 @@ export default function StandaloneLanding() {
   };
 
   const isValidNostrPub = (npub: string) => {
-    return npub.startsWith("npub") && npub.length === 63;
+    return npub.startsWith("npub1") && npub.length === 63;
   };
 
   const isValidContact =
@@ -753,7 +753,7 @@ export default function StandaloneLanding() {
                   value={contact}
                   onChange={(e) => setContact(e.target.value)}
                   placeholder={
-                    contactType === "email" ? "your@email.com" : "npub..."
+                    contactType === "email" ? "your@email.com" : "npub1..."
                   }
                   className="w-full rounded-lg border-2 border-black p-3 shadow-neo focus:outline-none"
                   style={{ backgroundColor: "#f0f0f0" }}

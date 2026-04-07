@@ -412,7 +412,7 @@ function MarketplacePage({
                   mainWrapper: "bg-white",
                 }}
                 isClearable
-                placeholder="Title, summary, price, naddr1..., npub..."
+                placeholder="Title, summary, price, naddr1..., npub1..."
                 value={selectedSearch}
                 startContent={
                   <MagnifyingGlassIcon className="h-5 w-5 text-black" />
@@ -505,7 +505,7 @@ function MarketplacePage({
                     mainWrapper: "bg-white",
                   }}
                   isClearable
-                  placeholder="Listing title, naddr, npub..."
+                  placeholder="Title, summary, price, naddr1..., npub1..."
                   value={selectedSearch}
                   startContent={
                     <MagnifyingGlassIcon className="h-5 w-5 text-black" />
@@ -644,7 +644,7 @@ function MarketplacePage({
 
       {/* Floating Add Button */}
       {router.pathname.includes("marketplace") &&
-        !router.asPath.includes("npub") && (
+        !router.asPath.includes("npub1") && (
           <Button
             radius="full"
             className={`${BLUEBUTTONCLASSNAMES} fixed bottom-8 right-8 z-50 h-16 w-16`}
