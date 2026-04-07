@@ -2,10 +2,7 @@ import { useState, useEffect, useContext } from "react";
 import { nip19 } from "nostr-tools";
 import { deleteEvent } from "@/utils/nostr/nostr-helper-functions";
 import { NostrEvent } from "../utils/types/types";
-import {
-  ProductContext,
-  FollowsContext,
-} from "../utils/context/context";
+import { ProductContext, FollowsContext } from "../utils/context/context";
 import ProductCard from "./utility-components/product-card";
 import DisplayProductModal from "./display-product-modal";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
