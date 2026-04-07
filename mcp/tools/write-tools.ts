@@ -12,6 +12,10 @@ import { v4 as uuidv4 } from "uuid";
 import dns from "dns";
 import { promisify } from "util";
 import { registerTool } from "./register-tool";
+import {
+  canActorSendShippingUpdate,
+  canActorUpdateMcpOrderStatus,
+} from "./order-status-auth";
 
 const resolveCname = promisify(dns.resolveCname);
 const resolve4 = promisify(dns.resolve4);
@@ -1731,6 +1735,29 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
       if (!signer) return noSignerError();
 
       try {
+        const { getMcpOrder, updateMcpOrderStatus } = await import(
+          "@/mcp/tools/purchase-tools"
+        );
+        const order = await getMcpOrder(params.orderId);
+
+        if (!order) {
+          return errorResponse(
+            "Order not found",
+            `No order found with ID "${params.orderId}"`,
+            startTime
+          );
+        }
+
+        if (
+          !canActorSendShippingUpdate(order, apiKey.pubkey, params.buyerPubkey)
+        ) {
+          return errorResponse(
+            "Unauthorized order update",
+            "Only the seller for this order can send shipping updates to the recorded buyer.",
+            startTime
+          );
+        }
+
         const { generateSecretKey, finalizeEvent, getEventHash, nip44 } =
           await import("nostr-tools");
         const { getDefaultRelays, withBlastr } = await import(
@@ -1763,10 +1790,10 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           : `Your order is expected to arrive on ${humanReadableDate}. Your ${params.shippingCarrier} tracking number is: ${params.trackingNumber}`;
 
         const innerTags: string[][] = [
-          ["p", params.buyerPubkey, relayHint],
+          ["p", order.buyer_pubkey, relayHint],
           ["subject", "shipping-info"],
           ["order", params.orderId],
-          ["b", params.buyerPubkey],
+          ["b", order.buyer_pubkey],
           ["type", "4"],
           ["status", "shipped"],
           ["tracking", params.trackingNumber],
@@ -1833,7 +1860,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           );
         }
 
-        const buyerWrap = await createWrap(params.buyerPubkey);
+        const buyerWrap = await createWrap(order.buyer_pubkey);
 
         const relayManager = new McpRelayManager(withBlastr(defaultRelays));
 
@@ -1844,17 +1871,24 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           relayManager.close();
         }
 
-        const { updateMcpOrderStatus } = await import(
-          "@/mcp/tools/purchase-tools"
+        const updatedOrder = await updateMcpOrderStatus(
+          params.orderId,
+          "shipped",
+          apiKey.pubkey
         );
-        await updateMcpOrderStatus(params.orderId, "shipped").catch(
-          console.error
-        );
+
+        if (!updatedOrder) {
+          return errorResponse(
+            "Unauthorized order update",
+            "Unable to mark this order as shipped for your account.",
+            startTime
+          );
+        }
 
         return successResponse(
           {
             orderId: params.orderId,
-            buyerPubkey: params.buyerPubkey,
+            buyerPubkey: order.buyer_pubkey,
             trackingNumber: params.trackingNumber,
             carrier: params.shippingCarrier,
             estimatedDelivery: humanReadableDate,
@@ -1907,15 +1941,12 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
       if (!signer) return noSignerError();
 
       try {
-        const { updateMcpOrderStatus } = await import(
+        const { getMcpOrder, updateMcpOrderStatus } = await import(
           "@/mcp/tools/purchase-tools"
         );
-        const updatedOrder = await updateMcpOrderStatus(
-          params.orderId,
-          params.status
-        );
+        const order = await getMcpOrder(params.orderId);
 
-        if (!updatedOrder) {
+        if (!order) {
           return errorResponse(
             "Order not found",
             `No order found with ID "${params.orderId}"`,
@@ -1923,7 +1954,42 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           );
         }
 
+        if (
+          !canActorUpdateMcpOrderStatus(order, params.status, apiKey.pubkey)
+        ) {
+          return errorResponse(
+            "Unauthorized order update",
+            params.status === "cancelled"
+              ? "Only the buyer for this order can cancel it."
+              : `Only the seller for this order can mark it as ${params.status}.`,
+            startTime
+          );
+        }
+
+        if (params.buyerPubkey && params.buyerPubkey !== order.buyer_pubkey) {
+          return errorResponse(
+            "Buyer mismatch",
+            `Provided buyer pubkey does not match order "${params.orderId}"`,
+            startTime
+          );
+        }
+
+        const updatedOrder = await updateMcpOrderStatus(
+          params.orderId,
+          params.status,
+          apiKey.pubkey
+        );
+
+        if (!updatedOrder) {
+          return errorResponse(
+            "Unauthorized order update",
+            `Unable to update order "${params.orderId}" for your account`,
+            startTime
+          );
+        }
+
         let notificationSent = false;
+        const buyerPubkey = order.buyer_pubkey;
 
         if (params.buyerPubkey && params.message) {
           try {
@@ -1949,11 +2015,11 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
             };
 
             const innerTags: string[][] = [
-              ["p", params.buyerPubkey, relayHint],
+              ["p", order.buyer_pubkey, relayHint],
               ["subject", subjectMap[params.status] || "order-info"],
               ["order", params.orderId],
               ["status", params.status],
-              ["b", params.buyerPubkey],
+              ["b", order.buyer_pubkey],
             ];
             if (params.productAddress) {
               innerTags.push(["item", params.productAddress, "1"]);
@@ -1976,7 +2042,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
             const stringifiedInner = JSON.stringify(fullInnerEvent);
             const conversationKey = nip44.getConversationKey(
               randomPrivKey,
-              params.buyerPubkey
+              buyerPubkey
             );
             const encryptedContent = nip44.encrypt(
               stringifiedInner,
@@ -1995,7 +2061,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
             const wrapPrivKey = generateSecretKey();
             const wrapConversationKey = nip44.getConversationKey(
               wrapPrivKey,
-              params.buyerPubkey
+              buyerPubkey
             );
             const wrapContent = nip44.encrypt(
               JSON.stringify(signedSeal),
@@ -2006,7 +2072,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
               {
                 created_at: now - Math.floor(Math.random() * 172800),
                 kind: 1059,
-                tags: [["p", params.buyerPubkey]],
+                tags: [["p", buyerPubkey]],
                 content: wrapContent,
               },
               wrapPrivKey

@@ -2,6 +2,7 @@ import { useState, useEffect, useContext, useCallback } from "react";
 import { Button, Input, Select, SelectItem, Spinner } from "@nextui-org/react";
 import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
+import ProtectedRoute from "@/components/utility-components/protected-route";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { NostrEventTemplate } from "@/utils/nostr/nostr-manager";
 import {
@@ -32,7 +33,7 @@ interface ApiKeyItem {
 }
 
 const ApiKeysPage = () => {
-  const { pubkey, isLoggedIn, signer } = useContext(SignerContext);
+  const { pubkey, signer } = useContext(SignerContext);
   const [apiKeys, setApiKeys] = useState<ApiKeyItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
@@ -191,25 +192,11 @@ const ApiKeysPage = () => {
       ? `${window.location.origin}/api/mcp`
       : "/api/mcp";
 
-  if (!isLoggedIn) {
-    return (
+  return (
+    <ProtectedRoute>
       <div className="flex h-full flex-col bg-light-bg pt-24 dark:bg-dark-bg">
         <div className="mx-auto w-full px-4 lg:w-1/2 xl:w-2/5">
           <SettingsBreadCrumbs />
-          <div className="mt-8 rounded-lg bg-light-fg p-6 dark:bg-dark-fg">
-            <p className="text-center text-lg font-bold text-light-text dark:text-dark-text">
-              Please sign in to manage API keys.
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex h-full flex-col bg-light-bg pt-24 dark:bg-dark-bg">
-      <div className="mx-auto w-full px-4 lg:w-1/2 xl:w-2/5">
-        <SettingsBreadCrumbs />
 
         <div className="mb-8 p-4">
           <h2 className="mb-2 text-2xl font-bold text-light-text dark:text-dark-text">
@@ -409,8 +396,9 @@ const ApiKeysPage = () => {
             </div>
           )}
         </div>
+        </div>
       </div>
-    </div>
+    </ProtectedRoute>
   );
 };
 
