@@ -84,6 +84,7 @@ const UserProfilePage = () => {
     if (!userPubkey) return;
     const profile = profileContext.profileData.get(userPubkey);
     if (!profile) return;
+    if (contextLoadedRef.current) return;
     contextLoadedRef.current = true;
     setIsFetchingProfile(true);
     reset(profile.content);
@@ -498,7 +499,7 @@ const UserProfilePage = () => {
                       labelPlacement="outside"
                       onChange={onChange}
                       onBlur={onBlur}
-                      value={value.toString()}
+                      value={value?.toString() || ""}
                     />
                   )}
                 />

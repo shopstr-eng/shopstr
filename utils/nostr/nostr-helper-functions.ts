@@ -1129,18 +1129,47 @@ export async function blossomUploadImages(
       }
 
       const response = await res.json();
+      // Normalize Blossom responses across top-level and NIP-94 tag formats so uploads always yield a usable URL and metadata.
+      let currentResponseUrl = response.url;
+      let responseType = response.type;
+      let responseSha256 = response.sha256;
+      let responseSize = response.size;
 
-      responseUrl = response.url;
+      if (response.nip94_event && response.nip94_event.tags) {
+        const findTag = (tagName: string) => {
+          const tag = response.nip94_event.tags.find(
+            (t: string[]) => t[0] === tagName
+          );
+          return tag ? tag[1] : undefined;
+        };
+        currentResponseUrl = currentResponseUrl || findTag("url");
+        responseSha256 = responseSha256 || findTag("ox") || findTag("x");
+        responseSize = responseSize || findTag("size");
+        responseType = responseType || findTag("m");
+      }
+
+      if (!currentResponseUrl && responseSha256) {
+        currentResponseUrl = new URL(`/${responseSha256}`, server).toString();
+      }
+
+      responseUrl = currentResponseUrl || "";
+
+      if (!responseUrl) {
+        throw new Error(
+          "Server successfully responded but didn't provide a media URL. Check your configured server URL. Raw response: " +
+            JSON.stringify(response)
+        );
+      }
 
       tags = [
         ["url", responseUrl],
-        ["x", response.sha256],
-        ["ox", response.sha256],
-        ["size", response.size.toString()],
+        ["x", responseSha256 || ""],
+        ["ox", responseSha256 || ""],
+        ["size", responseSize ? responseSize.toString() : "0"],
       ];
 
-      if (response.type) {
-        tags.push(["m", response.type]);
+      if (responseType) {
+        tags.push(["m", responseType]);
       }
     } else {
       const url = new URL("/mirror", server);

@@ -1,5 +1,5 @@
 import { useContext, useRef, useState } from "react";
-import { Button, Input, Progress } from "@nextui-org/react";
+import { Button, Progress } from "@nextui-org/react";
 import {
   blossomUploadImages,
   getLocalStorageData,
@@ -271,7 +271,7 @@ export const FileUploaderButton = ({
           }
           return null;
         })
-        .filter((url) => url !== null);
+        .filter((url) => Boolean(url));
 
       setTimeout(() => {
         setProgress(null);
@@ -309,14 +309,14 @@ export const FileUploaderButton = ({
 
   const handleChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    setLoading(true);
-    if (files) {
+    if (files && files.length > 0) {
+      setLoading(true);
       const uploadedImages = await uploadImages(files);
       uploadedImages
-        .filter((imgUrl): imgUrl is string => imgUrl !== null)
+        .filter((imgUrl): imgUrl is string => Boolean(imgUrl))
         .forEach((imgUrl) => imgCallbackOnUpload(imgUrl));
+      setLoading(false);
     }
-    setLoading(false);
     if (hiddenFileInput.current) {
       hiddenFileInput.current.value = "";
     }
@@ -399,6 +399,7 @@ export const FileUploaderButton = ({
 
         {!isPlaceholder && (
           <Button
+            type="button"
             isLoading={loading}
             onClick={handleClick}
             isIconOnly={isIconOnly || loading}
@@ -426,7 +427,7 @@ export const FileUploaderButton = ({
           </Button>
         )}
 
-        <Input
+        <input
           type="file"
           accept={ALLOWED_TYPES.join(",")}
           multiple

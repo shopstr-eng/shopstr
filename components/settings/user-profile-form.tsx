@@ -570,7 +570,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
               labelPlacement="outside"
               onChange={onChange}
               onBlur={onBlur}
-              value={value.toString()}
+              value={value?.toString() || ""}
             />
           )}
         />
