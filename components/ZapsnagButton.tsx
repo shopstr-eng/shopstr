@@ -103,7 +103,9 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
       let lud16 = "";
 
       if (events.length > 0) {
-        const kind0 = events.sort((a, b) => b.created_at - a.created_at)[0];
+        const kind0 = [...events].sort(
+          (a, b) => b.created_at - a.created_at
+        )[0];
         if (kind0) {
           try {
             const content = JSON.parse(kind0.content || "{}");
