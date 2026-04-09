@@ -140,9 +140,11 @@ const Listing = () => {
   useEffect(() => {
     if (router.isReady) {
       const { productId } = router.query;
-      const productIdString = productId ? productId[0] : "";
-      setProductIdString(productIdString!);
-      if (!productIdString) {
+      const resolvedProductId = Array.isArray(productId)
+        ? productId[0] || ""
+        : productId || "";
+      setProductIdString(resolvedProductId);
+      if (!resolvedProductId) {
         router.push("/marketplace");
       }
     }
