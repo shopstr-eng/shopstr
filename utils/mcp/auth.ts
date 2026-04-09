@@ -96,7 +96,7 @@ export async function initializeApiKeysTable(): Promise<void> {
       CREATE INDEX IF NOT EXISTS idx_mcp_api_keys_pubkey ON mcp_api_keys(pubkey);
 
       CREATE TABLE IF NOT EXISTS mcp_request_proofs (
-        event_id TEXT PRIMARY KEY,
+        event_id TEXT NOT NULL,
         pubkey TEXT NOT NULL,
         action TEXT NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
