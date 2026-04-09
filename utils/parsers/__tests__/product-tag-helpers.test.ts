@@ -1,5 +1,6 @@
 import {
   getEffectiveShippingCost,
+  parseShippingFromTags,
   parseShippingTag,
 } from "../product-tag-helpers";
 
@@ -53,5 +54,19 @@ describe("getEffectiveShippingCost", () => {
 
   it("returns the parsed cost for paid shipping", () => {
     expect(getEffectiveShippingCost("Added Cost", 15)).toBe(15);
+  });
+});
+
+describe("parseShippingFromTags", () => {
+  it("accepts a later valid modern shipping tag after legacy tags", () => {
+    expect(
+      parseShippingFromTags([
+        ["shipping", "5", "USD"],
+        ["shipping", "Added Cost", "12", "USD"],
+      ])
+    ).toEqual({
+      shippingType: "Added Cost",
+      shippingCost: 12,
+    });
   });
 });

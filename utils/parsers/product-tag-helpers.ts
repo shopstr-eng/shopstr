@@ -40,16 +40,30 @@ export function parseShippingTag(
   };
 }
 
+export function parseShippingFromTags(
+  tags: string[][]
+): ParsedShippingTag | undefined {
+  let parsedShipping: ParsedShippingTag | undefined;
+
+  for (const tag of tags) {
+    if (tag[0] !== "shipping") continue;
+
+    const parsed = parseShippingTag(tag);
+    if (parsed) {
+      parsedShipping = parsed;
+    }
+  }
+
+  return parsedShipping;
+}
+
 export function getEffectiveShippingCost(
   shippingType?: string,
   shippingCost?: number
 ): number | null {
-  if (
-    !shippingType
-  ) {
+  if (!shippingType) {
     return null;
   }
-
   if (
     shippingType === "Free" ||
     shippingType === "Free/Pickup" ||

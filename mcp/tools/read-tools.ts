@@ -9,7 +9,7 @@ import {
 } from "@/utils/db/db-service";
 import {
   getEffectiveShippingCost,
-  parseShippingTag,
+  parseShippingFromTags,
 } from "@/utils/parsers/product-tag-helpers";
 import { NostrEvent } from "@/utils/types/types";
 import { registerTool } from "./register-tool";
@@ -64,8 +64,7 @@ function buildPricingBlock(
 function parseProductEvent(event: NostrEvent) {
   const tags = event.tags || [];
   const priceTag = tags.find((t) => t[0] === "price");
-  const shippingTag = tags.find((t) => t[0] === "shipping");
-  const parsedShipping = parseShippingTag(shippingTag);
+  const parsedShipping = parseShippingFromTags(tags);
 
   const price = priceTag ? Number(priceTag[1]) : 0;
   const currency = priceTag ? priceTag[2] || "" : "";
