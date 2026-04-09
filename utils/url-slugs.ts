@@ -53,6 +53,11 @@ export function findListingBySlug<T extends ListingSlugCandidate>(
     if (match) return match;
   }
 
+  const plainMatches = allProducts.filter((p) => titleToSlug(p.title) === slug);
+  if (plainMatches.length >= 1) {
+    return plainMatches[0];
+  }
+
   return undefined;
 }
 
