@@ -264,10 +264,9 @@ function MarketplacePage({
     }
   };
 
-  const handleTitleClick = (product: ProductData) => {
+  const getProductHref = (product: ProductData) => {
     if (product.d === "zapsnag" || product.categories?.includes("zapsnag")) {
-      router.push(`/listing/${product.id}`);
-      return;
+      return `/listing/${product.id}`;
     }
 
     const allParsed = productEventContext.productEvents
@@ -277,10 +276,14 @@ function MarketplacePage({
 
     const slug = getListingSlug(product, allParsed);
     if (slug) {
-      router.push(`/listing/${slug}`);
-    } else {
-      router.push(`/listing/${product.id}`);
+      return `/listing/${slug}`;
     }
+
+    return `/listing/${product.id}`;
+  };
+
+  const handleTitleClick = (product: ProductData) => {
+    router.push(getProductHref(product));
   };
 
   const renderProductScores = () => {
