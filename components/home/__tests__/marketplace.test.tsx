@@ -78,7 +78,10 @@ const renderComponent = ({
     typeof routerQuery.npub === "string" ||
     (Array.isArray(routerQuery.npub) && typeof routerQuery.npub[0] === "string")
   ) {
-    (nip19.decode as jest.Mock).mockReturnValue({ data: "decoded-pubkey" });
+    (nip19.decode as jest.Mock).mockReturnValue({
+      type: "npub",
+      data: "decoded-pubkey",
+    });
   }
 
   const mockOnOpen = jest.fn();

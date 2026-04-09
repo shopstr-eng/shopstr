@@ -13,6 +13,9 @@ import { LogOut } from "@/utils/nostr/nostr-helper-functions";
 import { nip19 } from "nostr-tools";
 import React from "react";
 
+const mockFetch = jest.fn();
+global.fetch = mockFetch as unknown as typeof fetch;
+
 const mockRouterPush = jest.fn();
 jest.mock("next/router", () => ({
   useRouter: () => ({
@@ -167,6 +170,9 @@ describe("ProfileWithDropdown", () => {
     mockOnOpen.mockClear();
     (LogOut as jest.Mock).mockClear();
     (navigator.clipboard.writeText as jest.Mock).mockClear();
+    mockFetch.mockResolvedValue({
+      json: jest.fn().mockResolvedValue({ profile: { content: null } }),
+    });
   });
 
   it("renders with fallback data and correct dropdown items", () => {
