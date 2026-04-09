@@ -75,7 +75,7 @@ const MyListingsPage = () => {
 
   const handleEditShop = () => {
     if (usersPubkey) {
-      router.push("settings/shop-profile");
+      router.push("/settings/shop-profile");
     } else {
       onOpen();
     }
