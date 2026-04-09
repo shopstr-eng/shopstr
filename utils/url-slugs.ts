@@ -1,6 +1,12 @@
-import { ProductData } from "@/utils/parsers/product-parser-functions";
-import { ProfileData } from "@/utils/types/types";
+import type { ProductData } from "@/utils/parsers/product-parser-functions";
+import type { ProfileData } from "@/utils/types/types";
 import { nip19 } from "nostr-tools";
+
+export interface ListingSlugCandidate {
+  id: string;
+  title: string;
+  pubkey: string;
+}
 
 export function titleToSlug(title: string): string {
   if (!title) return "";
@@ -13,8 +19,8 @@ export function titleToSlug(title: string): string {
 }
 
 export function getListingSlug(
-  product: ProductData,
-  allProducts: ProductData[]
+  product: ListingSlugCandidate,
+  allProducts: ListingSlugCandidate[]
 ): string {
   const baseSlug = titleToSlug(product.title);
   if (!baseSlug) {
@@ -32,10 +38,10 @@ export function getListingSlug(
   return `${baseSlug}-${product.pubkey.substring(0, 8)}`;
 }
 
-export function findProductBySlug(
+export function findListingBySlug<T extends ListingSlugCandidate>(
   slug: string,
-  allProducts: ProductData[]
-): ProductData | undefined {
+  allProducts: T[]
+): T | undefined {
   const pubkeySuffixMatch = slug.match(/^(.+)-([a-f0-9]{8})$/);
   if (pubkeySuffixMatch) {
     const baseSlug = pubkeySuffixMatch[1]!;
@@ -57,6 +63,13 @@ export function findProductBySlug(
   }
 
   return undefined;
+}
+
+export function findProductBySlug(
+  slug: string,
+  allProducts: ProductData[]
+): ProductData | undefined {
+  return findListingBySlug(slug, allProducts);
 }
 
 export function profileNameToSlug(name: string): string {
