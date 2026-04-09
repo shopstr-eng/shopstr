@@ -153,6 +153,17 @@ describe("ProfileWithDropdown", () => {
     "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2";
   const npub = nip19.npubEncode(pubkey);
   let consoleWarnSpy: jest.SpyInstance;
+  let fetchSpy: jest.SpyInstance;
+
+  beforeAll(() => {
+    if (typeof (globalThis as any).fetch !== "function") {
+      Object.defineProperty(globalThis, "fetch", {
+        value: jest.fn(),
+        writable: true,
+        configurable: true,
+      });
+    }
+  });
 
   beforeAll(() => {
     consoleWarnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
@@ -162,11 +173,18 @@ describe("ProfileWithDropdown", () => {
     consoleWarnSpy.mockRestore();
   });
 
+  afterEach(() => {
+    fetchSpy.mockRestore();
+  });
+
   beforeEach(() => {
     mockRouterPush.mockClear();
     mockOnOpen.mockClear();
     (LogOut as jest.Mock).mockClear();
     (navigator.clipboard.writeText as jest.Mock).mockClear();
+    fetchSpy = jest.spyOn(globalThis as any, "fetch").mockResolvedValue({
+      json: async () => ({}),
+    });
   });
 
   it("renders with fallback data and correct dropdown items", () => {
