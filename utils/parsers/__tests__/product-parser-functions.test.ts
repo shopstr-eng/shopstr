@@ -136,6 +136,23 @@ describe("parseTags", () => {
     expect(result.totalCost).toBe(50);
   });
 
+  it("should ignore malformed modern shipping tags with negative cost", () => {
+    mockedCalculateTotalCost.mockImplementation(totalCostWithoutShipping);
+
+    const event = {
+      ...baseEvent,
+      tags: [
+        ["price", "50", "USD"],
+        ["shipping", "Added Cost", "-10", "USD"],
+      ],
+    };
+    const result = parseTags(event)!;
+
+    expect(result.shippingType).toBeUndefined();
+    expect(result.shippingCost).toBeUndefined();
+    expect(result.totalCost).toBe(50);
+  });
+
 
 
   it("should parse various content-warning tags as true", () => {

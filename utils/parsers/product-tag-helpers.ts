@@ -30,7 +30,7 @@ export function parseShippingTag(
   }
 
   const shippingCost = Number(rawShippingCost);
-  if (!Number.isFinite(shippingCost)) {
+  if (!Number.isFinite(shippingCost) || shippingCost < 0) {
     return;
   }
 
@@ -43,9 +43,14 @@ export function parseShippingTag(
 export function getEffectiveShippingCost(
   shippingType?: string,
   shippingCost?: number
-) {
+): number | null {
   if (
-    !shippingType ||
+    !shippingType
+  ) {
+    return null;
+  }
+
+  if (
     shippingType === "Free" ||
     shippingType === "Free/Pickup" ||
     shippingType === "Pickup" ||
@@ -54,5 +59,13 @@ export function getEffectiveShippingCost(
     return 0;
   }
 
-  return Number.isFinite(shippingCost) ? shippingCost : 0;
+  if (
+    typeof shippingCost !== "number" ||
+    !Number.isFinite(shippingCost) ||
+    shippingCost < 0
+  ) {
+    return null;
+  }
+
+  return shippingCost;
 }

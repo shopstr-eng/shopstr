@@ -26,11 +26,17 @@ describe("parseShippingTag", () => {
       parseShippingTag(["shipping", "Added Cost", "not-a-number", "USD"])
     ).toBeUndefined();
   });
+
+  it("ignores malformed shipping tags with negative cost", () => {
+    expect(
+      parseShippingTag(["shipping", "Added Cost", "-10", "USD"])
+    ).toBeUndefined();
+  });
 });
 
 describe("getEffectiveShippingCost", () => {
-  it("returns zero when shipping metadata is missing", () => {
-    expect(getEffectiveShippingCost(undefined, undefined)).toBe(0);
+  it("returns null when shipping metadata is missing", () => {
+    expect(getEffectiveShippingCost(undefined, undefined)).toBeNull();
   });
 
   it("returns zero for non-paid shipping types", () => {
@@ -40,8 +46,9 @@ describe("getEffectiveShippingCost", () => {
     expect(getEffectiveShippingCost("N/A", 15)).toBe(0);
   });
 
-  it("returns zero when a paid shipping cost is invalid", () => {
-    expect(getEffectiveShippingCost("Added Cost", Number.NaN)).toBe(0);
+  it("returns null when a paid shipping cost is invalid", () => {
+    expect(getEffectiveShippingCost("Added Cost", Number.NaN)).toBeNull();
+    expect(getEffectiveShippingCost("Added Cost", -15)).toBeNull();
   });
 
   it("returns the parsed cost for paid shipping", () => {

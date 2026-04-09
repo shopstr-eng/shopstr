@@ -49,13 +49,14 @@ function buildPricingBlock(
     shippingType,
     shippingCost
   );
+  const shippingCostForTotal = effectiveShippingCost ?? 0;
   return {
     amount: price,
     currency: currency || "sats",
     unit: "per item",
     shippingCost: effectiveShippingCost,
     shippingType: shippingType || "N/A",
-    totalEstimate: price * quantity + effectiveShippingCost,
+    totalEstimate: price * quantity + shippingCostForTotal,
     paymentMethods: paymentMethods || ["lightning", "cashu"],
   };
 }

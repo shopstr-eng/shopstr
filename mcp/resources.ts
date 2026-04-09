@@ -32,6 +32,7 @@ function buildCatalogEntry(event: NostrEvent) {
     shippingType,
     shippingCost
   );
+  const shippingCostForTotal = effectiveShippingCost ?? 0;
 
   return {
     id: event.id,
@@ -48,7 +49,7 @@ function buildCatalogEntry(event: NostrEvent) {
       unit: "per item",
       shippingCost: effectiveShippingCost,
       shippingType: shippingType || "N/A",
-      totalEstimate: price + effectiveShippingCost,
+      totalEstimate: price + shippingCostForTotal,
       paymentMethods: ["lightning", "cashu"],
     },
   };
