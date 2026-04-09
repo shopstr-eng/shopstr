@@ -116,6 +116,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
   const defaultImage = useMemo(() => {
     return "https://robohash.org/" + userPubkey;
   }, [userPubkey]);
+  const profileImageSrc = watchPicture || defaultImage;
 
   useEffect(() => {
     if (!userPubkey) return;
@@ -250,19 +251,12 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
             className={`absolute bottom-[-0.5rem] right-[-0.5rem] z-20 ${SHOPSTRBUTTONCLASSNAMES}`}
             imgCallbackOnUpload={(imgUrl) => setValue("picture", imgUrl)}
           />
-          {watchPicture ? (
-            <Image
-              src={watchPicture}
-              alt="user profile picture"
-              className="rounded-full"
-            />
-          ) : (
-            <Image
-              src={defaultImage}
-              alt="user profile picture"
-              className="rounded-full"
-            />
-          )}
+          <Image
+            key={profileImageSrc}
+            src={profileImageSrc}
+            alt="user profile picture"
+            className="rounded-full"
+          />
         </div>
       </div>
 

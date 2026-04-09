@@ -271,7 +271,7 @@ export const FileUploaderButton = ({
           }
           return null;
         })
-        .filter((url) => Boolean(url));
+        .filter((url): url is string => typeof url === "string" && url.length > 0);
 
       setTimeout(() => {
         setProgress(null);
@@ -311,11 +311,17 @@ export const FileUploaderButton = ({
     const files = e.target.files;
     if (files && files.length > 0) {
       setLoading(true);
-      const uploadedImages = await uploadImages(files);
-      uploadedImages
-        .filter((imgUrl): imgUrl is string => Boolean(imgUrl))
-        .forEach((imgUrl) => imgCallbackOnUpload(imgUrl));
-      setLoading(false);
+      try {
+        const uploadedImages = await uploadImages(files);
+        uploadedImages
+          .filter(
+            (imgUrl): imgUrl is string =>
+              typeof imgUrl === "string" && imgUrl.length > 0
+          )
+          .forEach((imgUrl) => imgCallbackOnUpload(imgUrl));
+      } finally {
+        setLoading(false);
+      }
     }
     if (hiddenFileInput.current) {
       hiddenFileInput.current.value = "";
@@ -347,11 +353,17 @@ export const FileUploaderButton = ({
     const files = e.dataTransfer.files;
     if (files && files.length > 0) {
       setLoading(true);
-      const uploadedImages = await uploadImages(files);
-      uploadedImages
-        .filter((imgUrl): imgUrl is string => imgUrl !== null)
-        .forEach((imgUrl) => imgCallbackOnUpload(imgUrl));
-      setLoading(false);
+      try {
+        const uploadedImages = await uploadImages(files);
+        uploadedImages
+          .filter(
+            (imgUrl): imgUrl is string =>
+              typeof imgUrl === "string" && imgUrl.length > 0
+          )
+          .forEach((imgUrl) => imgCallbackOnUpload(imgUrl));
+      } finally {
+        setLoading(false);
+      }
     }
   };
 

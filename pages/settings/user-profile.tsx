@@ -62,6 +62,7 @@ const UserProfilePage = () => {
   const defaultImage = useMemo(() => {
     return "https://robohash.org/" + userPubkey;
   }, [userPubkey]);
+  const profileImageSrc = watchPicture || defaultImage;
 
   const contextLoadedRef = useRef(false);
   useEffect(() => {
@@ -138,19 +139,13 @@ const UserProfilePage = () => {
                           setValue("picture", imgUrl)
                         }
                       />
-                      {watchPicture ? (
-                        <Image
-                          src={watchPicture}
-                          alt="user profile picture"
-                          className="rounded-full"
-                        />
-                      ) : (
-                        <Image
-                          src={defaultImage}
-                          alt="user profile picture"
-                          className="rounded-full"
-                        />
-                      )}
+                      <Image
+                        key={profileImageSrc}
+                        src={profileImageSrc}
+                        alt="user profile picture"
+                        radius="full"
+                        className="h-24 w-24 object-cover"
+                      />
                     </div>
                   </div>
                 </div>

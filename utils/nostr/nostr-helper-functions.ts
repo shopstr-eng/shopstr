@@ -1155,18 +1155,28 @@ export async function blossomUploadImages(
       responseUrl = currentResponseUrl || "";
 
       if (!responseUrl) {
+        console.error("Blossom upload response missing media URL", {
+          server,
+          responseType,
+          responseSha256,
+          responseSize,
+          hasNip94Tags: Boolean(response.nip94_event?.tags),
+          response,
+        });
         throw new Error(
-          "Server successfully responded but didn't provide a media URL. Check your configured server URL. Raw response: " +
-            JSON.stringify(response)
+          "Server successfully responded but didn't provide a media URL. Check your configured server URL."
         );
       }
 
-      tags = [
-        ["url", responseUrl],
-        ["x", responseSha256 || ""],
-        ["ox", responseSha256 || ""],
-        ["size", responseSize ? responseSize.toString() : "0"],
-      ];
+      tags = [["url", responseUrl]];
+
+      if (responseSha256) {
+        tags.push(["x", responseSha256], ["ox", responseSha256]);
+      }
+
+      if (responseSize !== undefined && responseSize !== null && responseSize !== "") {
+        tags.push(["size", responseSize.toString()]);
+      }
 
       if (responseType) {
         tags.push(["m", responseType]);
