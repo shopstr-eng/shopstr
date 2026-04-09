@@ -16,7 +16,7 @@ export const productSatisfiesCategoryFilter = (
 ) => {
   if (selectedCategories.size === 0) return true;
   return Array.from(selectedCategories).some((selectedCategory) => {
-    const re = new RegExp(selectedCategory, "gi");
+    const re = new RegExp(escapeRegExp(selectedCategory), "gi");
     return productData?.categories?.some((category) => {
       const match = category.match(re);
       return match && match.length > 0;
@@ -98,7 +98,7 @@ export const productSatisfiesSearchFilter = (
 
     // Match numeric price
     const numericSearch = parseFloat(normalizedSearch);
-    if (!isNaN(numericSearch) && productData.price === numericSearch) {
+    if (!isNaN(numericSearch) && Math.abs(productData.price - numericSearch) < 0.001) {
       return true;
     }
 

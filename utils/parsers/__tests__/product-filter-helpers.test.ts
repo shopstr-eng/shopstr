@@ -39,6 +39,16 @@ describe("product-filter-helpers", () => {
     it("should return false if product matches none of the selected categories", () => {
       expect(productSatisfiesCategoryFilter(mockProduct, new Set(["Electronics"]))).toBe(false);
     });
+
+    it("should handle special regex characters in category names correctly", () => {
+      const productWithSpecialCategory = { 
+        ...mockProduct, 
+        categories: ["A.B", "C*D", "E(F)"] 
+      };
+      expect(productSatisfiesCategoryFilter(productWithSpecialCategory, new Set(["A.B"]))).toBe(true);
+      expect(productSatisfiesCategoryFilter(productWithSpecialCategory, new Set(["C*D"]))).toBe(true);
+      expect(productSatisfiesCategoryFilter(productWithSpecialCategory, new Set(["E(F)"]))).toBe(true);
+    });
   });
 
   describe("productSatisfiesLocationFilter", () => {
@@ -69,9 +79,14 @@ describe("product-filter-helpers", () => {
       expect(productSatisfiesSearchFilter(mockProduct, "hydrated")).toBe(true);
     });
 
-    it("should match by numeric price", () => {
+    it("should match by numeric price with precision tolerance", () => {
       expect(productSatisfiesSearchFilter(mockProduct, "25")).toBe(true);
-      expect(productSatisfiesSearchFilter(mockProduct, "25.0")).toBe(true);
+      expect(productSatisfiesSearchFilter(mockProduct, "25.0001")).toBe(true);
+      expect(productSatisfiesSearchFilter(mockProduct, "24.9999")).toBe(true);
+    });
+
+    it("should return false if price is outside tolerance", () => {
+      expect(productSatisfiesSearchFilter(mockProduct, "25.01")).toBe(false);
     });
 
     it("should return false if no match found", () => {
