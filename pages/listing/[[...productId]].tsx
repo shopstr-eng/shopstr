@@ -1,4 +1,4 @@
-import { useState, useEffect, useContext } from "react";
+import { useState, useEffect, useContext, useMemo } from "react";
 import { useRouter } from "next/router";
 import {
   Modal,
@@ -23,7 +23,7 @@ import { parseZapsnagNote } from "@/utils/parsers/zapsnag-parser";
 import CheckoutCard from "../../components/utility-components/checkout-card";
 import ZapsnagButton from "../../components/ZapsnagButton";
 import { ProductContext } from "../../utils/context/context";
-import { Event, nip19 } from "nostr-tools";
+import { nip19 } from "nostr-tools";
 import {
   RawEventModal,
   EventIdModal,
@@ -35,13 +35,59 @@ import { OgMetaProps, DEFAULT_OG } from "@/components/og-head";
 import {
   fetchProductByIdFromDb,
   fetchProductByDTagAndPubkey,
-  fetchProductByTitleSlug,
+  fetchProductByListingSlug,
 } from "@/utils/db/db-service";
 import { NostrEvent } from "@/utils/types/types";
+import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
 
 type ListingPageProps = {
   ogMeta: OgMetaProps;
+  initialProductEvent: NostrEvent | null;
 };
+
+type ResolvedListingState = {
+  productData: ProductData;
+  rawEvent: NostrEvent;
+  isZapsnag: boolean;
+};
+
+function getListingIdentifier(
+  productId: string | string[] | undefined
+): string {
+  return Array.isArray(productId) ? productId[0] || "" : productId || "";
+}
+
+function resolveListingStateFromEvent(
+  event: NostrEvent | null | undefined
+): ResolvedListingState | undefined {
+  if (!event) {
+    return;
+  }
+
+  if (event.kind === 1) {
+    const productData = parseZapsnagNote(event);
+    if (!productData) {
+      return;
+    }
+
+    return {
+      productData,
+      rawEvent: event,
+      isZapsnag: true,
+    };
+  }
+
+  const productData = parseTags(event);
+  if (!productData) {
+    return;
+  }
+
+  return {
+    productData,
+    rawEvent: event,
+    isZapsnag: false,
+  };
+}
 
 function eventToOgMeta(event: NostrEvent, urlPath: string): OgMetaProps {
   const productData = parseTags(event);
@@ -71,10 +117,10 @@ export const getServerSideProps: GetServerSideProps<ListingPageProps> = async (
   context
 ) => {
   const { productId } = context.query;
-  const identifier = Array.isArray(productId) ? productId[0] : productId;
+  const identifier = getListingIdentifier(productId);
 
   if (!identifier) {
-    return { props: { ogMeta: LISTING_FALLBACK } };
+    return { props: { ogMeta: LISTING_FALLBACK, initialProductEvent: null } };
   }
 
   const urlPath = `/listing/${identifier}`;
@@ -88,38 +134,73 @@ export const getServerSideProps: GetServerSideProps<ListingPageProps> = async (
             decoded.data.identifier,
             decoded.data.pubkey
           );
-          if (event)
-            return { props: { ogMeta: eventToOgMeta(event, urlPath) } };
+          if (event) {
+            return {
+              props: {
+                ogMeta: eventToOgMeta(event, urlPath),
+                initialProductEvent: event,
+              },
+            };
+          }
         }
       } catch {}
-      return { props: { ogMeta: { ...LISTING_FALLBACK, url: urlPath } } };
+      return {
+        props: {
+          ogMeta: { ...LISTING_FALLBACK, url: urlPath },
+          initialProductEvent: null,
+        },
+      };
     }
 
     const eventById = await fetchProductByIdFromDb(identifier);
-    if (eventById)
-      return { props: { ogMeta: eventToOgMeta(eventById, urlPath) } };
+    if (eventById) {
+      return {
+        props: {
+          ogMeta: eventToOgMeta(eventById, urlPath),
+          initialProductEvent: eventById,
+        },
+      };
+    }
 
-    const eventBySlug = await fetchProductByTitleSlug(identifier);
-    if (eventBySlug)
-      return { props: { ogMeta: eventToOgMeta(eventBySlug, urlPath) } };
+    const eventBySlug = await fetchProductByListingSlug(identifier);
+    if (eventBySlug) {
+      return {
+        props: {
+          ogMeta: eventToOgMeta(eventBySlug, urlPath),
+          initialProductEvent: eventBySlug,
+        },
+      };
+    }
   } catch (error) {
     console.error("SSR OG fetch error for listing:", error);
   }
 
-  return { props: { ogMeta: { ...LISTING_FALLBACK, url: urlPath } } };
+  return {
+    props: {
+      ogMeta: { ...LISTING_FALLBACK, url: urlPath },
+      initialProductEvent: null,
+    },
+  };
 };
 
-const Listing = () => {
+const Listing = ({ initialProductEvent }: ListingPageProps) => {
   const router = useRouter();
-  const [productData, setProductData] = useState<ProductData | undefined>(
-    undefined
+  const seededListing = useMemo(
+    () => resolveListingStateFromEvent(initialProductEvent),
+    [initialProductEvent]
   );
-  const [isZapsnag, setIsZapsnag] = useState(false);
+  const [productData, setProductData] = useState<ProductData | undefined>(
+    seededListing?.productData
+  );
+  const [isZapsnag, setIsZapsnag] = useState(seededListing?.isZapsnag ?? false);
   const [productIdString, setProductIdString] = useState("");
-  const [rawEvent, setRawEvent] = useState<Event | undefined>(undefined);
+  const [rawEvent, setRawEvent] = useState<NostrEvent | undefined>(
+    seededListing?.rawEvent
+  );
   const [showRawEventModal, setShowRawEventModal] = useState(false);
   const [showEventIdModal, setShowEventIdModal] = useState(false);
   const [sfSellerPubkey, setSfSellerPubkey] = useState("");
+  const [isListingNotFound, setIsListingNotFound] = useState(false);
 
   const [invoiceIsPaid, setInvoiceIsPaid] = useState(false);
   const [invoiceGenerationFailed, setInvoiceGenerationFailed] = useState(false);
@@ -148,40 +229,65 @@ const Listing = () => {
         router.push("/marketplace");
       }
     }
-  }, [router]);
+  }, [router, router.isReady, router.query.productId]);
 
   useEffect(() => {
+    if (seededListing) {
+      setProductData(seededListing.productData);
+      setRawEvent(seededListing.rawEvent);
+      setIsZapsnag(seededListing.isZapsnag);
+    } else {
+      setProductData(undefined);
+      setRawEvent(undefined);
+      setIsZapsnag(false);
+    }
+    setIsListingNotFound(false);
+  }, [seededListing]);
+
+  useEffect(() => {
+    if (!router.isReady || !productIdString) {
+      return;
+    }
+
+    if (productContext.isLoading || !productContext.productEvents) {
+      setIsListingNotFound(false);
+      return;
+    }
+
     if (!productContext.isLoading && productContext.productEvents) {
       const allParsed = productContext.productEvents
-        .filter((e: Event) => e.kind !== 1)
-        .map((e: Event) => parseTags(e))
+        .filter((e: NostrEvent) => e.kind !== 1)
+        .map((e: NostrEvent) => parseTags(e))
         .filter((p: ProductData | undefined): p is ProductData => !!p);
 
-      let matchingEvent: Event | undefined;
+      let matchingEvent: NostrEvent | undefined;
 
       const slugMatch = findProductBySlug(productIdString, allParsed);
       if (slugMatch) {
         matchingEvent = productContext.productEvents.find(
-          (e: Event) => e.id === slugMatch.id
+          (e: NostrEvent) => e.id === slugMatch.id
         );
       }
 
       if (!matchingEvent) {
-        matchingEvent = productContext.productEvents.find((event: Event) => {
-          const naddrMatch =
-            nip19.naddrEncode({
-              identifier:
-                event.tags.find((tag: string[]) => tag[0] === "d")?.[1] || "",
-              pubkey: event.pubkey,
-              kind: event.kind,
-            }) === productIdString;
+        matchingEvent = productContext.productEvents.find(
+          (event: NostrEvent) => {
+            const naddrMatch =
+              nip19.naddrEncode({
+                identifier:
+                  event.tags.find((tag: string[]) => tag[0] === "d")?.[1] ||
+                  "",
+                pubkey: event.pubkey,
+                kind: event.kind,
+              }) === productIdString;
 
-          const dTagMatch =
-            event.tags.find((tag: string[]) => tag[0] === "d")?.[1] ===
-            productIdString;
-          const idMatch = event.id === productIdString;
-          return naddrMatch || dTagMatch || idMatch;
-        });
+            const dTagMatch =
+              event.tags.find((tag: string[]) => tag[0] === "d")?.[1] ===
+              productIdString;
+            const idMatch = event.id === productIdString;
+            return naddrMatch || dTagMatch || idMatch;
+          }
+        );
       }
 
       if (matchingEvent) {
@@ -192,34 +298,85 @@ const Listing = () => {
           localStorage.removeItem("sf_seller_pubkey");
           localStorage.removeItem("sf_shop_slug");
         }
-        setRawEvent(matchingEvent);
-        let parsed;
-        if (matchingEvent.kind === 1) {
-          parsed = parseZapsnagNote(matchingEvent);
-          setIsZapsnag(true);
-        } else {
-          parsed = parseTags(matchingEvent);
-          setIsZapsnag(false);
+        const resolvedListing = resolveListingStateFromEvent(matchingEvent);
+        if (resolvedListing) {
+          setRawEvent(resolvedListing.rawEvent);
+          setProductData(resolvedListing.productData);
+          setIsZapsnag(resolvedListing.isZapsnag);
+          setIsListingNotFound(false);
+          return;
         }
-        setProductData(parsed);
 
-        if (parsed && parsed.title && matchingEvent.kind !== 1) {
-          const canonicalSlug = getListingSlug(parsed, allParsed);
-          if (canonicalSlug && productIdString !== canonicalSlug) {
-            router.replace(`/listing/${canonicalSlug}`, undefined, {
-              shallow: true,
-            });
-          }
-        }
+        setRawEvent(matchingEvent);
+        setProductData(undefined);
+        setIsZapsnag(false);
+        setIsListingNotFound(!seededListing);
+      } else if (!seededListing) {
+        setRawEvent(undefined);
+        setProductData(undefined);
+        setIsZapsnag(false);
+        setIsListingNotFound(true);
       }
     }
-  }, [productContext.isLoading, productContext.productEvents, productIdString]);
+  }, [
+    productContext.isLoading,
+    productContext.productEvents,
+    productIdString,
+    router,
+    router.isReady,
+    seededListing,
+    sfSellerPubkey,
+  ]);
+
+  useEffect(() => {
+    if (
+      !router.isReady ||
+      !productIdString ||
+      !productData ||
+      isZapsnag ||
+      productContext.isLoading
+    ) {
+      return;
+    }
+
+    const allParsed = productContext.productEvents
+      .filter((event: NostrEvent) => event.kind !== 1)
+      .map((event: NostrEvent) => parseTags(event))
+      .filter((parsed: ProductData | undefined): parsed is ProductData => !!parsed);
+
+    if (
+      rawEvent &&
+      rawEvent.kind !== 1 &&
+      !allParsed.some((parsed: ProductData) => parsed.id === rawEvent.id)
+    ) {
+      const parsedRawEvent = parseTags(rawEvent);
+      if (parsedRawEvent) {
+        allParsed.push(parsedRawEvent);
+      }
+    }
+
+    const canonicalSlug = getListingSlug(productData, allParsed);
+    if (canonicalSlug && productIdString !== canonicalSlug) {
+      router.replace(`/listing/${canonicalSlug}`, undefined, {
+        shallow: true,
+      });
+    }
+  }, [
+    productContext.isLoading,
+    productContext.productEvents,
+    productData,
+    productIdString,
+    rawEvent,
+    router,
+    router.isReady,
+    isZapsnag,
+  ]);
 
   return (
     <StorefrontThemeWrapper sellerPubkey={sfSellerPubkey}>
       <div className="flex h-full min-h-screen flex-col bg-light-bg pt-20 dark:bg-dark-bg">
-        {productData &&
-          (isZapsnag ? (
+        {productData ? (
+          isZapsnag ? (
             <div className="mx-auto w-full max-w-2xl p-6">
               <div className="overflow-hidden rounded-xl bg-white shadow-lg dark:bg-neutral-900">
                 <img
@@ -284,7 +441,29 @@ const Listing = () => {
               setCashuPaymentFailed={setCashuPaymentFailed}
               rawEvent={rawEvent}
             />
-          ))}
+          )
+        ) : isListingNotFound ? (
+          <div className="flex min-h-[60vh] flex-col items-center justify-center px-6 text-center">
+            <h1 className="text-3xl font-bold text-light-text dark:text-dark-text">
+              Listing Not Found
+            </h1>
+            <p className="mt-4 max-w-lg text-gray-500 dark:text-gray-400">
+              This listing doesn&apos;t exist, hasn&apos;t synced yet, or is no
+              longer available from your current data sources.
+            </p>
+            <Button
+              className="mt-6"
+              color="secondary"
+              onPress={() => router.push("/marketplace")}
+            >
+              View marketplace
+            </Button>
+          </div>
+        ) : (
+          <div className="flex min-h-[60vh] items-center justify-center">
+            <ShopstrSpinner />
+          </div>
+        )}
         {invoiceIsPaid || cashuPaymentSent ? (
           <>
             <Modal
