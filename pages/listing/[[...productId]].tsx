@@ -220,9 +220,12 @@ const Listing = ({ initialProductEvent }: ListingPageProps) => {
 
   useEffect(() => {
     if (router.isReady) {
-      const identifier = getListingIdentifier(router.query.productId);
-      setProductIdString(identifier);
-      if (!identifier) {
+      const { productId } = router.query;
+      const resolvedProductId = Array.isArray(productId)
+        ? productId[0] || ""
+        : productId || "";
+      setProductIdString(resolvedProductId);
+      if (!resolvedProductId) {
         router.push("/marketplace");
       }
     }
