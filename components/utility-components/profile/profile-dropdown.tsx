@@ -42,13 +42,41 @@ const inFlightProfileRequests = new Map<
   string,
   Promise<ProfileData["content"] | null>
 >();
+const MAX_PROFILE_CACHE_ENTRIES = 100;
+
+const trimProfileContentCache = () => {
+  while (fetchedProfileContentCache.size > MAX_PROFILE_CACHE_ENTRIES) {
+    const oldestKey = fetchedProfileContentCache.keys().next().value;
+    if (!oldestKey) break;
+    fetchedProfileContentCache.delete(oldestKey);
+  }
+};
+
+const clearProfileRequestCaches = () => {
+  fetchedProfileContentCache.clear();
+  inFlightProfileRequests.clear();
+};
 
 const fetchProfileContent = async (pubkey: string) => {
-  const response = await fetch(
-    `/api/db/fetch-profile?pubkey=${encodeURIComponent(pubkey)}`
-  );
-  const data = await response.json();
-  return (data?.profile?.content || null) as ProfileData["content"] | null;
+  try {
+    const response = await fetch(
+      `/api/db/fetch-profile?pubkey=${encodeURIComponent(pubkey)}`
+    );
+    if (!response.ok) return null;
+
+    const responseText = await response.text();
+    if (!responseText) return null;
+
+    const data = JSON.parse(responseText) as {
+      profile?: {
+        content?: ProfileData["content"];
+      };
+    };
+
+    return data?.profile?.content || null;
+  } catch {
+    return null;
+  }
 };
 
 export const ProfileWithDropdown = ({
@@ -103,6 +131,7 @@ export const ProfileWithDropdown = ({
         .then((content) => {
           if (content) {
             fetchedProfileContentCache.set(pubkey, content);
+            trimProfileContentCache();
           }
           return content;
         })
@@ -122,11 +151,9 @@ export const ProfileWithDropdown = ({
     return () => {
       isCancelled = true;
     };
-  }, [pubkey, npub, profileContext.profileData]);
+  }, [pubkey, profileContext.profileData]);
 
-  const profile = profileContext.isLoading
-    ? undefined
-    : profileContext.profileData.get(pubkey);
+  const profile = profileContext.profileData.get(pubkey);
   const profileContent = profile?.content ?? fetchedProfileContent;
   const displayName = (() => {
     let name =
@@ -236,6 +263,7 @@ export const ProfileWithDropdown = ({
       startContent: <ArrowRightStartOnRectangleIcon className={"h-5 w-5"} />,
       onPress: () => {
         handleDropdownAction(() => {
+          clearProfileRequestCaches();
           LogOut();
           router.push("/marketplace");
         });
