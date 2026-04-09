@@ -36,6 +36,15 @@ export function findProductBySlug(
   slug: string,
   allProducts: ProductData[]
 ): ProductData | undefined {
+  const exactMatches = allProducts.filter((p) => titleToSlug(p.title) === slug);
+  if (exactMatches.length === 1) {
+    return exactMatches[0];
+  }
+
+  if (exactMatches.length > 1) {
+    return undefined;
+  }
+
   const pubkeySuffixMatch = slug.match(/^(.+)-([a-f0-9]{8})$/);
   if (pubkeySuffixMatch) {
     const baseSlug = pubkeySuffixMatch[1]!;
@@ -45,15 +54,6 @@ export function findProductBySlug(
         titleToSlug(p.title) === baseSlug && p.pubkey.startsWith(pubkeyFragment)
     );
     if (match) return match;
-  }
-
-  const exactMatches = allProducts.filter((p) => titleToSlug(p.title) === slug);
-  if (exactMatches.length === 1) {
-    return exactMatches[0];
-  }
-
-  if (exactMatches.length > 1) {
-    return exactMatches[0];
   }
 
   return undefined;
@@ -99,6 +99,24 @@ export function findPubkeyByProfileSlug(
   slug: string,
   profileData: Map<string, ProfileData>
 ): string | undefined {
+  const matches: string[] = [];
+  for (const [pubkey, profile] of profileData.entries()) {
+    if (
+      profile.content?.name &&
+      profileNameToSlug(profile.content.name) === slug
+    ) {
+      matches.push(pubkey);
+    }
+  }
+
+  if (matches.length === 1) {
+    return matches[0];
+  }
+
+  if (matches.length > 1) {
+    return undefined;
+  }
+
   const pubkeySuffixMatch = slug.match(/^(.+)-([a-f0-9]{8})$/);
   if (pubkeySuffixMatch) {
     const baseSlug = pubkeySuffixMatch[1]!;
@@ -112,20 +130,6 @@ export function findPubkeyByProfileSlug(
         return pubkey;
       }
     }
-  }
-
-  const matches: string[] = [];
-  for (const [pubkey, profile] of profileData.entries()) {
-    if (
-      profile.content?.name &&
-      profileNameToSlug(profile.content.name) === slug
-    ) {
-      matches.push(pubkey);
-    }
-  }
-
-  if (matches.length >= 1) {
-    return matches[0];
   }
 
   return undefined;

@@ -170,7 +170,13 @@ export default function ProductCard({
             </div>
           </div>
         )}
-        <div className="mb-3">
+        <div
+          className="mb-3"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+        >
           <ProfileWithDropdown
             pubkey={productData.pubkey}
             dropDownKeys={

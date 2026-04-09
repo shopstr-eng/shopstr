@@ -16,6 +16,13 @@ import {
   canActorSendShippingUpdate,
   canActorUpdateMcpOrderStatus,
 } from "./order-status-auth";
+import {
+  buildDiscountCodeCreateProof,
+  buildDiscountCodeDeleteProof,
+  buildDiscountCodesListProof,
+  buildSignedHttpRequestProofTemplate,
+  SIGNED_EVENT_HEADER,
+} from "@/utils/nostr/request-auth";
 
 const resolveCname = promisify(dns.resolveCname);
 const resolve4 = promisify(dns.resolve4);
@@ -1748,7 +1755,9 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           );
         }
 
-        if (!canActorSendShippingUpdate(order, apiKey.pubkey, params.buyerPubkey)) {
+        if (
+          !canActorSendShippingUpdate(order, apiKey.pubkey, params.buyerPubkey)
+        ) {
           return errorResponse(
             "Unauthorized order update",
             "Only the seller for this order can send shipping updates to the recorded buyer.",
@@ -1952,7 +1961,9 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           );
         }
 
-        if (!canActorUpdateMcpOrderStatus(order, params.status, apiKey.pubkey)) {
+        if (
+          !canActorUpdateMcpOrderStatus(order, params.status, apiKey.pubkey)
+        ) {
           return errorResponse(
             "Unauthorized order update",
             params.status === "cancelled"
@@ -2500,9 +2511,22 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
       try {
         const pubkey = signer.getPubKey();
+        const signedEvent = signer.sign(
+          buildSignedHttpRequestProofTemplate(
+            buildDiscountCodeCreateProof({
+              code: params.code,
+              pubkey,
+              discountPercentage: params.discountPercentage,
+              expiration: params.expiration,
+            })
+          )
+        );
         const res = await fetch(`${baseUrl}/api/db/discount-codes`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            [SIGNED_EVENT_HEADER]: JSON.stringify(signedEvent),
+          },
           body: JSON.stringify({
             code: params.code,
             pubkey,
@@ -2551,9 +2575,20 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
       try {
         const pubkey = signer.getPubKey();
+        const signedEvent = signer.sign(
+          buildSignedHttpRequestProofTemplate(
+            buildDiscountCodeDeleteProof({
+              code: params.code,
+              pubkey,
+            })
+          )
+        );
         const res = await fetch(`${baseUrl}/api/db/discount-codes`, {
           method: "DELETE",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            [SIGNED_EVENT_HEADER]: JSON.stringify(signedEvent),
+          },
           body: JSON.stringify({ code: params.code, pubkey }),
         });
         const data = await res.json();
@@ -2588,8 +2623,18 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
       try {
         const pubkey = signer.getPubKey();
+        const signedEvent = signer.sign(
+          buildSignedHttpRequestProofTemplate(
+            buildDiscountCodesListProof(pubkey)
+          )
+        );
         const res = await fetch(
-          `${baseUrl}/api/db/discount-codes?pubkey=${pubkey}`
+          `${baseUrl}/api/db/discount-codes?pubkey=${pubkey}`,
+          {
+            headers: {
+              [SIGNED_EVENT_HEADER]: JSON.stringify(signedEvent),
+            },
+          }
         );
         const data = await res.json();
         return successResponse(
