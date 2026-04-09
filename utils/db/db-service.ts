@@ -1401,6 +1401,13 @@ export async function fetchProfilePubkeyByNameSlug(
       `SELECT pubkey, content FROM profile_events WHERE kind = 0 ORDER BY created_at DESC`
     );
     const pubkeySuffixMatch = nameSlug.match(/^(.+)-([a-f0-9]{8})$/);
+    const baseSlug = pubkeySuffixMatch?.[1];
+    const pubkeyFragment = pubkeySuffixMatch?.[2];
+
+    let exactMatch: string | null = null;
+    let exactMatchCount = 0;
+    let disambiguatedMatch: string | null = null;
+
     for (const row of result.rows) {
       let profileName: string | undefined;
       try {
@@ -1411,17 +1418,33 @@ export async function fetchProfilePubkeyByNameSlug(
       }
       if (!profileName) continue;
       const slug = profileNameToSlug(profileName);
-      if (pubkeySuffixMatch) {
-        const baseSlug = pubkeySuffixMatch[1]!;
-        const pubkeyFragment = pubkeySuffixMatch[2]!;
-        if (slug === baseSlug && row.pubkey.startsWith(pubkeyFragment)) {
-          return row.pubkey;
+
+      if (slug === nameSlug) {
+        exactMatchCount += 1;
+        if (exactMatchCount > 1) {
+          return null;
         }
-      } else if (slug === nameSlug) {
-        return row.pubkey;
+
+        exactMatch = row.pubkey;
+      }
+
+      if (
+        !exactMatch &&
+        !disambiguatedMatch &&
+        baseSlug &&
+        pubkeyFragment &&
+        slug === baseSlug &&
+        row.pubkey.startsWith(pubkeyFragment)
+      ) {
+        disambiguatedMatch = row.pubkey;
       }
     }
-    return null;
+
+    if (exactMatch) {
+      return exactMatch;
+    }
+
+    return disambiguatedMatch;
   } catch (error) {
     console.error("Failed to fetch profile pubkey by name slug:", error);
     return null;

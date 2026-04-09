@@ -9,6 +9,7 @@ import { useRouter } from "next/router";
 import SignInModal from "./sign-in/SignInModal";
 import { ProfileWithDropdown } from "./utility-components/profile/profile-dropdown";
 import { ShopProfile } from "../utils/types/types";
+import { getLocalStorageJson } from "@/utils/safe-json";
 
 const TopNav = ({
   setFocusedPubkey,
@@ -44,11 +45,14 @@ const TopNav = ({
 
   useEffect(() => {
     const fetchAndUpdateCartQuantity = async () => {
-      const cartList = localStorage.getItem("cart")
-        ? JSON.parse(localStorage.getItem("cart") as string)
-        : [];
-      if (cartList) {
+      const cartList = getLocalStorageJson<unknown[]>("cart", [], {
+        removeOnError: true,
+        validate: Array.isArray,
+      });
+      if (cartList.length > 0) {
         setCartQuantity(cartList.length);
+      } else {
+        setCartQuantity(0);
       }
     };
 
@@ -74,7 +78,7 @@ const TopNav = ({
   useEffect(() => {
     const npub = router.pathname
       .split("/")
-      .find((segment) => segment.includes("npub"));
+      .find((segment) => segment.includes("npub1"));
     if (
       npub &&
       shopMapContext.shopData.has(npub) &&
@@ -130,7 +134,10 @@ const TopNav = ({
       </Button>
       <Button
         className="w-full bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
-        onClick={() => router.push("/communities")}
+        onClick={() => {
+          router.push("/communities");
+          setIsMobileMenuOpen(false);
+        }}
       >
         Communities
       </Button>

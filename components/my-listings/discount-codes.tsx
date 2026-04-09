@@ -10,6 +10,13 @@ import {
 import { TrashIcon } from "@heroicons/react/24/outline";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
+import {
+  buildDiscountCodeCreateProof,
+  buildDiscountCodeDeleteProof,
+  buildDiscountCodesListProof,
+  buildSignedHttpRequestProofTemplate,
+  SIGNED_EVENT_HEADER,
+} from "@/utils/nostr/request-auth";
 import ConfirmActionDropdown from "../utility-components/dropdowns/confirm-action-dropdown";
 
 interface DiscountCode {
@@ -19,7 +26,7 @@ interface DiscountCode {
 }
 
 export default function DiscountCodes() {
-  const { pubkey } = useContext(SignerContext);
+  const { pubkey, signer } = useContext(SignerContext);
   const [codes, setCodes] = useState<DiscountCode[]>([]);
   const [newCode, setNewCode] = useState("");
   const [newDiscount, setNewDiscount] = useState("");
@@ -28,17 +35,24 @@ export default function DiscountCodes() {
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    if (pubkey) {
+    if (pubkey && signer) {
       fetchCodes();
     }
-  }, [pubkey]);
+  }, [pubkey, signer]);
 
   const fetchCodes = async () => {
-    if (!pubkey) return;
+    if (!pubkey || !signer) return;
 
     setIsLoading(true);
     try {
-      const response = await fetch(`/api/db/discount-codes?pubkey=${pubkey}`);
+      const signedEvent = await signer.sign(
+        buildSignedHttpRequestProofTemplate(buildDiscountCodesListProof(pubkey))
+      );
+      const response = await fetch(`/api/db/discount-codes?pubkey=${pubkey}`, {
+        headers: {
+          [SIGNED_EVENT_HEADER]: JSON.stringify(signedEvent),
+        },
+      });
       if (response.ok) {
         const data = await response.json();
         setCodes(data);
@@ -51,7 +65,7 @@ export default function DiscountCodes() {
   };
 
   const handleAddCode = async () => {
-    if (!pubkey || !newCode || !newDiscount) return;
+    if (!pubkey || !signer || !newCode || !newDiscount) return;
 
     const discount = parseFloat(newDiscount);
     if (discount <= 0 || discount > 100) {
@@ -61,15 +75,29 @@ export default function DiscountCodes() {
 
     setIsSaving(true);
     try {
+      const normalizedCode = newCode.toUpperCase();
       const expiration = newExpiration
         ? Math.floor(new Date(newExpiration).getTime() / 1000)
         : undefined;
+      const signedEvent = await signer.sign(
+        buildSignedHttpRequestProofTemplate(
+          buildDiscountCodeCreateProof({
+            code: normalizedCode,
+            pubkey,
+            discountPercentage: discount,
+            expiration,
+          })
+        )
+      );
 
       const response = await fetch("/api/db/discount-codes", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          [SIGNED_EVENT_HEADER]: JSON.stringify(signedEvent),
+        },
         body: JSON.stringify({
-          code: newCode.toUpperCase(),
+          code: normalizedCode,
           pubkey,
           discountPercentage: discount,
           expiration,
@@ -93,12 +121,20 @@ export default function DiscountCodes() {
   };
 
   const handleDeleteCode = async (code: string) => {
-    if (!pubkey) return;
+    if (!pubkey || !signer) return;
 
     try {
+      const signedEvent = await signer.sign(
+        buildSignedHttpRequestProofTemplate(
+          buildDiscountCodeDeleteProof({ code, pubkey })
+        )
+      );
       const response = await fetch("/api/db/discount-codes", {
         method: "DELETE",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          [SIGNED_EVENT_HEADER]: JSON.stringify(signedEvent),
+        },
         body: JSON.stringify({ code, pubkey }),
       });
 
