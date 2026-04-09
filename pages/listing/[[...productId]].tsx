@@ -275,8 +275,7 @@ const Listing = ({ initialProductEvent }: ListingPageProps) => {
             const naddrMatch =
               nip19.naddrEncode({
                 identifier:
-                  event.tags.find((tag: string[]) => tag[0] === "d")?.[1] ||
-                  "",
+                  event.tags.find((tag: string[]) => tag[0] === "d")?.[1] || "",
                 pubkey: event.pubkey,
                 kind: event.kind,
               }) === productIdString;
@@ -311,7 +310,7 @@ const Listing = ({ initialProductEvent }: ListingPageProps) => {
         setProductData(undefined);
         setIsZapsnag(false);
         setIsListingNotFound(!seededListing);
-      } else if (!seededListing) {
+      } else if (!seededListing && productContext.productEvents.length > 0) {
         setRawEvent(undefined);
         setProductData(undefined);
         setIsZapsnag(false);
@@ -342,7 +341,9 @@ const Listing = ({ initialProductEvent }: ListingPageProps) => {
     const allParsed = productContext.productEvents
       .filter((event: NostrEvent) => event.kind !== 1)
       .map((event: NostrEvent) => parseTags(event))
-      .filter((parsed: ProductData | undefined): parsed is ProductData => !!parsed);
+      .filter(
+        (parsed: ProductData | undefined): parsed is ProductData => !!parsed
+      );
 
     if (
       rawEvent &&

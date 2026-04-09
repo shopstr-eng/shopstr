@@ -83,7 +83,9 @@ const mockShopDataContextEmpty = {
   updateShopData: jest.fn(),
 };
 
-type SignerContextValue = ComponentProps<typeof SignerContext.Provider>["value"];
+type SignerContextValue = ComponentProps<
+  typeof SignerContext.Provider
+>["value"];
 type ShopContextValue = ComponentProps<typeof ShopMapContext.Provider>["value"];
 
 const renderComponent = (

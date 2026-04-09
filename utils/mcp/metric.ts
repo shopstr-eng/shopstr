@@ -1,5 +1,1 @@
-export {
-  checkOnboardRateLimit,
-  getMetrics,
-  recordRequest,
-} from "./metrics";
+export { checkOnboardRateLimit, getMetrics, recordRequest } from "./metrics";

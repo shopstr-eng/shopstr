@@ -90,8 +90,9 @@ export const ProfileWithDropdown = ({
   pubkey: string;
   dropDownKeys: DropDownKeys[];
 }) => {
-  const [fetchedProfileContent, setFetchedProfileContent] =
-    useState<ProfileData["content"] | null>(null);
+  const [fetchedProfileContent, setFetchedProfileContent] = useState<
+    ProfileData["content"] | null
+  >(null);
   const [isNPubCopied, setIsNPubCopied] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const profileContext = useContext(ProfileMapContext);
@@ -112,7 +113,8 @@ export const ProfileWithDropdown = ({
     if (!pubkey) return;
     if (typeof fetch !== "function") return;
 
-    const contextProfileContent = profileContext.profileData.get(pubkey)?.content;
+    const contextProfileContent =
+      profileContext.profileData.get(pubkey)?.content;
     if (contextProfileContent) {
       setFetchedProfileContent(contextProfileContent);
       return;
