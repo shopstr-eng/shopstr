@@ -1,9 +1,11 @@
+import { useAtom } from "jotai";
 import { useContext, useRef, useState } from "react";
-import { Button, Input, Progress } from "@nextui-org/react";
+import { Button, Progress } from "@nextui-org/react";
 import {
   blossomUploadImages,
   getLocalStorageData,
 } from "@/utils/nostr/nostr-helper-functions";
+import { loadingAtom } from "@/atoms/loadingAtom";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -34,7 +36,7 @@ export const FileUploaderButton = ({
   isPlaceholder?: boolean;
   isProductUpload?: boolean;
 }) => {
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useAtom(loadingAtom);
   const [progress, setProgress] = useState<number | null>(null);
   const [showFailureModal, setShowFailureModal] = useState(false);
   const [failureText, setFailureText] = useState("");
@@ -426,7 +428,7 @@ export const FileUploaderButton = ({
           </Button>
         )}
 
-        <Input
+        <input
           type="file"
           accept={ALLOWED_TYPES.join(",")}
           multiple
