@@ -1005,10 +1005,19 @@ const PreferencesPage = () => {
                 onEdit={handleEditAddress}
                 onDelete={handleDeleteAddress}
               />
+              <Button
+                className={`${SHOPSTRBUTTONCLASSNAMES} mt-4`}
+                onClick={() => {
+                  setEditingAddress(null);
+                  setShowEditAddressModal(true);
+                }}
+              >
+                Add New Address
+              </Button>
             </div>
           )}
 
-          {/* Edit Address Modal */}
+          {/* Edit/Add Address Modal */}
           <Modal
             backdrop="blur"
             isOpen={showEditAddressModal}
@@ -1028,7 +1037,7 @@ const PreferencesPage = () => {
           >
             <ModalContent>
               <ModalHeader className="text-light-text dark:text-dark-text flex flex-col gap-1">
-                Edit Address
+                {editingAddress ? "Edit Address" : "Add New Address"}
               </ModalHeader>
               {editingAddress && (
                 <EditAddressForm

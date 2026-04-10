@@ -4,9 +4,10 @@ import { ModalBody, ModalFooter, Button, Input } from "@nextui-org/react";
 import { SavedAddress } from "@/utils/types/types";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { getSavedAddresses } from "@/utils/nostr/nostr-helper-functions";
+import { v4 as uuidv4 } from "uuid";
 
 interface EditAddressFormProps {
-  address: SavedAddress;
+  address: SavedAddress | null;
   onSave: (address: SavedAddress) => void;
   onClose: () => void;
 }
@@ -16,10 +17,27 @@ export default function EditAddressForm({
   onSave,
   onClose,
 }: EditAddressFormProps) {
+  // Create default new address if none provided
+  const defaultAddress: SavedAddress = address || {
+    id: uuidv4(),
+    label: "",
+    name: "",
+    address: "",
+    unit: "",
+    city: "",
+    state: "",
+    zip: "",
+    country: "",
+    isDefault: false,
+  };
+
+  const isNewAddress = !address;
+  const pageTitle = isNewAddress ? "Add New Address" : "Edit Address";
+
   const { control, handleSubmit } = useForm<SavedAddress>({
     defaultValues: {
-      ...address,
-      isDefault: address.isDefault,
+      ...defaultAddress,
+      isDefault: defaultAddress.isDefault,
     },
   });
 
@@ -31,7 +49,8 @@ export default function EditAddressForm({
   );
 
   // If this is the only default and currently default, it cannot be unchecked
-  const isOnlyDefault = address.isDefault && defaultAddressCount === 1;
+  const isOnlyDefault =
+    defaultAddress.isDefault && defaultAddressCount === 1 && !isNewAddress;
 
   const onSubmit = (data: SavedAddress) => {
     onSave(data);
