@@ -963,7 +963,7 @@ export async function getOrderParticipants(
     return { buyerPubkey, sellerPubkey };
   } catch (error) {
     console.error("Failed to get order participants:", error);
-    return { buyerPubkey: null, sellerPubkey: null };
+    throw error;
   } finally {
     if (client) {
       client.release();
