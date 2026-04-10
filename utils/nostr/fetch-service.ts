@@ -788,15 +788,15 @@ export const fetchReviews = async (
         if (
           !existingReview ||
           createdAt >
-            Number(existingReview.find((item) => item[0] === "created_at")?.[1])
+          Number(existingReview.find((item) => item[0] === "created_at")?.[1])
         ) {
           const updatedReview = existingReview
             ? existingReview.map((item) => {
-                if (item[0] === "created_at") {
-                  return ["created_at", createdAt.toString()];
-                }
-                return item;
-              })
+              if (item[0] === "created_at") {
+                return ["created_at", createdAt.toString()];
+              }
+              return item;
+            })
             : [...ratingTags, ["created_at", createdAt.toString()]];
 
           productReviews.set(event.pubkey, updatedReview);

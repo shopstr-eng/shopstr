@@ -51,12 +51,14 @@ html {
   height: 100%;
   overflow: hidden;
   position: relative;
+  scrollbar-gutter: stable;
 }
 
 body {
   height: 100%;
   overflow: auto;
   position: relative;
+  scrollbar-gutter: stable;
 }
 
 .text-xxs {

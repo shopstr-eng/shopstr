@@ -319,6 +319,8 @@ export const ProfileWithDropdown = ({
               as="button"
               avatarProps={{
                 src: pfp,
+                size: "sm",
+                className: "rounded-full flex-shrink-0",
               }}
               className={"transition-transform"}
               classNames={{
