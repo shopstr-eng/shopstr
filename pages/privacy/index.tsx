@@ -104,7 +104,7 @@ export default function PrivacyPolicy() {
                   {section.title}
                 </span>
                 <ChevronDownIcon
-                  className={`ml-4 h-5 w-5 flex-shrink-0 text-light-text/60 duration-200 transition-transform dark:text-dark-text/60 ${
+                  className={`ml-4 h-5 w-5 flex-shrink-0 text-light-text/60 transition-transform duration-200 dark:text-dark-text/60 ${
                     openItems.includes(i) ? "rotate-180" : ""
                   }`}
                 />

@@ -147,7 +147,7 @@ const TopNav = ({
       >
         Orders
         {unreadMsgCount > 0 && (
-          <span className="min-w-5 ml-1 inline-flex h-5 items-center justify-center rounded-full bg-shopstr-purple px-1.5 text-xs font-bold text-white dark:bg-shopstr-yellow dark:text-dark-bg">
+          <span className="ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-shopstr-purple px-1.5 text-xs font-bold text-white dark:bg-shopstr-yellow dark:text-dark-bg">
             {unreadMsgCount}
           </span>
         )}
@@ -170,7 +170,7 @@ const TopNav = ({
       >
         Cart
         {cartQuantity > 0 && (
-          <span className="min-w-5 ml-1 inline-flex h-5 items-center justify-center rounded-full bg-shopstr-purple px-1.5 text-xs font-bold text-white dark:bg-shopstr-yellow dark:text-dark-bg">
+          <span className="ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-shopstr-purple px-1.5 text-xs font-bold text-white dark:bg-shopstr-yellow dark:text-dark-bg">
             {cartQuantity}
           </span>
         )}
@@ -264,7 +264,7 @@ const TopNav = ({
           >
             Orders
             {unreadMsgCount > 0 && (
-              <span className="min-w-5 ml-1 inline-flex h-5 items-center justify-center rounded-full bg-shopstr-purple px-1.5 text-xs font-bold text-white dark:bg-shopstr-yellow dark:text-dark-bg">
+              <span className="ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-shopstr-purple px-1.5 text-xs font-bold text-white dark:bg-shopstr-yellow dark:text-dark-bg">
                 {unreadMsgCount}
               </span>
             )}
@@ -299,7 +299,7 @@ const TopNav = ({
           >
             Cart
             {cartQuantity > 0 && (
-              <span className="min-w-5 ml-1 inline-flex h-5 items-center justify-center rounded-full bg-shopstr-purple px-1.5 text-xs font-bold text-white dark:bg-shopstr-yellow dark:text-dark-bg">
+              <span className="ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-shopstr-purple px-1.5 text-xs font-bold text-white dark:bg-shopstr-yellow dark:text-dark-bg">
                 {cartQuantity}
               </span>
             )}

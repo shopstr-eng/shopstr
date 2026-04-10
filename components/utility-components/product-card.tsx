@@ -142,7 +142,7 @@ export default function ProductCard({
                       isIconOnly
                       variant="light"
                       size="sm"
-                      className="min-w-8 h-8"
+                      className="h-8 min-w-8"
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
@@ -212,7 +212,7 @@ export default function ProductCard({
 
   return (
     <div
-      className={`${cardHoverStyle} my-4 w-full rounded-2xl bg-white shadow-md duration-300 transition-all dark:bg-neutral-900`}
+      className={`${cardHoverStyle} my-4 w-full rounded-2xl bg-white shadow-md transition-all duration-300 dark:bg-neutral-900`}
     >
       <div className="w-full overflow-hidden rounded-2xl">
         {href ? (

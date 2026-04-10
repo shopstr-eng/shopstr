@@ -66,7 +66,7 @@ const Tabs = ({
           <button
             key={i}
             className={classNames(
-              "relative z-20 flex h-10 w-full cursor-pointer select-none items-center  justify-center bg-transparent px-4 py-8 text-lg duration-200 transition-colors hover:bg-white/10",
+              "relative z-20 flex h-10 w-full cursor-pointer select-none items-center  justify-center bg-transparent px-4 py-8 text-lg transition-colors duration-200 hover:bg-white/10",
               {
                 "text-light-text/60 dark:text-dark-text/60": !isActive, // Default color for non-active tabs
                 "font-bold text-light-text/90 dark:text-dark-text/90": isActive, // Color for active tabs

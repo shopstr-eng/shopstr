@@ -753,7 +753,7 @@ export default function Component() {
                                 </div>
                                 <div className="h-3 w-full overflow-hidden rounded-full border border-gray-300 bg-gray-200 dark:border-gray-600 dark:bg-gray-700">
                                   <div
-                                    className={`h-full rounded-full duration-500 transition-all ${
+                                    className={`h-full rounded-full transition-all duration-500 ${
                                       isFreeShipping
                                         ? "bg-green-500"
                                         : "bg-shopstr-purple dark:bg-shopstr-yellow"

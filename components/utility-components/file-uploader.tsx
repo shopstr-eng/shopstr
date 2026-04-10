@@ -364,7 +364,7 @@ export const FileUploaderButton = ({
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        className={`relative w-full duration-300 transition-all ${
+        className={`relative w-full transition-all duration-300 ${
           isPlaceholder
             ? "flex h-full min-h-[250px] items-center justify-center rounded-xl border-2 border-dashed border-shopstr-purple p-6 dark:border-shopstr-yellow"
             : !isDragging && "border-2 border-dashed border-transparent"

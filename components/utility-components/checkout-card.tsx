@@ -640,7 +640,7 @@ export default function CheckoutCard({
                             isIconOnly
                             variant="light"
                             size="sm"
-                            className="min-w-8 h-8"
+                            className="h-8 min-w-8"
                           >
                             <EllipsisVerticalIcon className="h-6 w-6 text-gray-500" />
                           </Button>

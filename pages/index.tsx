@@ -97,7 +97,7 @@ export default function Landing() {
         </p>
         <div className="flex flex-col items-center gap-4 sm:flex-row">
           <Button
-            className={`${SHOPSTRBUTTONCLASSNAMES} flex items-center gap-2 px-10 py-7 text-lg shadow-lg duration-300 transition-all hover:shadow-xl md:px-12 md:text-xl`}
+            className={`${SHOPSTRBUTTONCLASSNAMES} flex items-center gap-2 px-10 py-7 text-lg shadow-lg transition-all duration-300 hover:shadow-xl md:px-12 md:text-xl`}
             onClick={() => router.push("/marketplace")}
             startContent={<ShoppingCartIcon className="mr-2 h-6 w-6" />}
           >
@@ -141,7 +141,7 @@ export default function Landing() {
               {parsedProducts.slice(0, 21).map((product, index) => (
                 <div
                   key={`${product.id}-${index}`}
-                  className="min-w-[270px] transform duration-300 transition-transform hover:scale-105 md:min-w-[300px]"
+                  className="min-w-[270px] transform transition-transform duration-300 hover:scale-105 md:min-w-[300px]"
                 >
                   <ProductCard
                     key={product.id + "-" + index}
@@ -182,12 +182,12 @@ export default function Landing() {
         </div>
         <div className="grid gap-6 sm:gap-8 md:grid-cols-2 lg:grid-cols-3 lg:gap-10">
           {/* Feature 1 */}
-          <div className="group rounded-xl border border-transparent bg-light-fg p-6 shadow-lg duration-300 transition-all hover:border-shopstr-purple/20 hover:shadow-xl dark:bg-dark-fg dark:hover:border-shopstr-yellow/20 md:p-8">
+          <div className="group rounded-xl border border-transparent bg-light-fg p-6 shadow-lg transition-all duration-300 hover:border-shopstr-purple/20 hover:shadow-xl dark:bg-dark-fg dark:hover:border-shopstr-yellow/20 md:p-8">
             <div className="mb-5 flex flex-col items-center">
               <div className="rounded-full bg-shopstr-purple/10 p-3 dark:bg-shopstr-yellow/10">
                 <ShieldCheckIcon className="h-8 w-8 text-shopstr-purple dark:text-shopstr-yellow" />
               </div>
-              <h3 className="mt-3 text-center text-xl font-semibold text-shopstr-purple duration-300 transition-transform group-hover:translate-x-1 dark:text-shopstr-yellow md:text-2xl">
+              <h3 className="mt-3 text-center text-xl font-semibold text-shopstr-purple transition-transform duration-300 group-hover:translate-x-1 dark:text-shopstr-yellow md:text-2xl">
                 <span className="block">No Account</span>
                 <span className="block">Suspensions</span>
               </h3>
@@ -208,12 +208,12 @@ export default function Landing() {
           </div>
 
           {/* Feature 2 */}
-          <div className="group rounded-xl border border-transparent bg-light-fg p-6 shadow-lg duration-300 transition-all hover:border-shopstr-purple/20 hover:shadow-xl dark:bg-dark-fg dark:hover:border-shopstr-yellow/20 md:p-8">
+          <div className="group rounded-xl border border-transparent bg-light-fg p-6 shadow-lg transition-all duration-300 hover:border-shopstr-purple/20 hover:shadow-xl dark:bg-dark-fg dark:hover:border-shopstr-yellow/20 md:p-8">
             <div className="mb-5 flex flex-col items-center">
               <div className="rounded-full bg-shopstr-purple/10 p-3 dark:bg-shopstr-yellow/10">
                 <BoltIcon className="h-8 w-8 text-shopstr-purple dark:text-shopstr-yellow" />
               </div>
-              <h3 className="mt-3 text-center text-xl font-semibold text-shopstr-purple duration-300 transition-transform group-hover:translate-x-1 dark:text-shopstr-yellow md:text-2xl">
+              <h3 className="mt-3 text-center text-xl font-semibold text-shopstr-purple transition-transform duration-300 group-hover:translate-x-1 dark:text-shopstr-yellow md:text-2xl">
                 <span className="block">Get Paid</span>
                 <span className="block">Instantly</span>
               </h3>
@@ -245,12 +245,12 @@ export default function Landing() {
           </div>
 
           {/* Feature 3 */}
-          <div className="group rounded-xl border border-transparent bg-light-fg p-6 shadow-lg duration-300 transition-all hover:border-shopstr-purple/20 hover:shadow-xl dark:bg-dark-fg dark:hover:border-shopstr-yellow/20 md:p-8">
+          <div className="group rounded-xl border border-transparent bg-light-fg p-6 shadow-lg transition-all duration-300 hover:border-shopstr-purple/20 hover:shadow-xl dark:bg-dark-fg dark:hover:border-shopstr-yellow/20 md:p-8">
             <div className="mb-5 flex flex-col items-center">
               <div className="rounded-full bg-shopstr-purple/10 p-3 dark:bg-shopstr-yellow/10">
                 <UserCircleIcon className="h-8 w-8 text-shopstr-purple dark:text-shopstr-yellow" />
               </div>
-              <h3 className="mt-3 text-center text-xl font-semibold text-shopstr-purple duration-300 transition-transform group-hover:translate-x-1 dark:text-shopstr-yellow md:text-2xl">
+              <h3 className="mt-3 text-center text-xl font-semibold text-shopstr-purple transition-transform duration-300 group-hover:translate-x-1 dark:text-shopstr-yellow md:text-2xl">
                 <span className="block">Your Business</span>
                 <span className="block">is Private</span>
               </h3>
@@ -426,13 +426,13 @@ export default function Landing() {
           <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4 lg:gap-8">
             <div className="group text-center">
               <div className="flex flex-col items-center">
-                <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-shopstr-purple/10 text-2xl font-bold text-shopstr-purple duration-300 transition-transform group-hover:scale-110 dark:bg-shopstr-yellow/10 dark:text-shopstr-yellow md:text-3xl">
+                <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-shopstr-purple/10 text-2xl font-bold text-shopstr-purple transition-transform duration-300 group-hover:scale-110 dark:bg-shopstr-yellow/10 dark:text-shopstr-yellow md:text-3xl">
                   1
                 </div>
                 <p className="mb-8 text-light-text dark:text-dark-text md:text-lg">
                   Generate new Nostr keys or sign in with an existing pair
                 </p>
-                <div className="relative overflow-hidden rounded-xl shadow-lg duration-300 transition-all hover:shadow-xl">
+                <div className="relative overflow-hidden rounded-xl shadow-lg transition-all duration-300 hover:shadow-xl">
                   <Image
                     alt="Sign in to Shopstr using Nostr cryptographic keys — dark mode"
                     src="/sign-in-step-dark.png"
@@ -449,19 +449,19 @@ export default function Landing() {
                     loading="lazy"
                     className="mx-auto flex rounded-xl dark:hidden"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent opacity-0 duration-300 transition-opacity group-hover:opacity-100"></div>
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100"></div>
                 </div>
               </div>
             </div>
             <div className="group text-center">
               <div className="flex flex-col items-center">
-                <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-shopstr-purple/10 text-2xl font-bold text-shopstr-purple duration-300 transition-transform group-hover:scale-110 dark:bg-shopstr-yellow/10 dark:text-shopstr-yellow md:text-3xl">
+                <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-shopstr-purple/10 text-2xl font-bold text-shopstr-purple transition-transform duration-300 group-hover:scale-110 dark:bg-shopstr-yellow/10 dark:text-shopstr-yellow md:text-3xl">
                   2
                 </div>
                 <p className="mb-8 text-light-text dark:text-dark-text md:text-lg">
                   Set up your profile
                 </p>
-                <div className="relative mt-6 overflow-hidden rounded-xl shadow-lg duration-300 transition-all hover:shadow-xl">
+                <div className="relative mt-6 overflow-hidden rounded-xl shadow-lg transition-all duration-300 hover:shadow-xl">
                   <Image
                     alt="Set up your Shopstr seller profile on Nostr — dark mode"
                     src="/profile-step-dark.png"
@@ -478,19 +478,19 @@ export default function Landing() {
                     loading="lazy"
                     className="mx-auto flex rounded-xl dark:hidden"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent opacity-0 duration-300 transition-opacity group-hover:opacity-100"></div>
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100"></div>
                 </div>
               </div>
             </div>
             <div className="group text-center">
               <div className="flex flex-col items-center">
-                <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-shopstr-purple/10 text-2xl font-bold text-shopstr-purple duration-300 transition-transform group-hover:scale-110 dark:bg-shopstr-yellow/10 dark:text-shopstr-yellow md:text-3xl">
+                <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-shopstr-purple/10 text-2xl font-bold text-shopstr-purple transition-transform duration-300 group-hover:scale-110 dark:bg-shopstr-yellow/10 dark:text-shopstr-yellow md:text-3xl">
                   3
                 </div>
                 <p className="mb-8 text-light-text dark:text-dark-text md:text-lg">
                   List your products
                 </p>
-                <div className="relative mt-6 overflow-hidden rounded-xl shadow-lg duration-300 transition-all hover:shadow-xl">
+                <div className="relative mt-6 overflow-hidden rounded-xl shadow-lg transition-all duration-300 hover:shadow-xl">
                   <Image
                     alt="Create and publish a Bitcoin product listing on Shopstr — dark mode"
                     src="/listing-step-dark.png"
@@ -507,19 +507,19 @@ export default function Landing() {
                     loading="lazy"
                     className="mx-auto flex rounded-xl dark:hidden"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent opacity-0 duration-300 transition-opacity group-hover:opacity-100"></div>
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100"></div>
                 </div>
               </div>
             </div>
             <div className="group text-center">
               <div className="flex flex-col items-center">
-                <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-shopstr-purple/10 text-2xl font-bold text-shopstr-purple duration-300 transition-transform group-hover:scale-110 dark:bg-shopstr-yellow/10 dark:text-shopstr-yellow md:text-3xl">
+                <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-shopstr-purple/10 text-2xl font-bold text-shopstr-purple transition-transform duration-300 group-hover:scale-110 dark:bg-shopstr-yellow/10 dark:text-shopstr-yellow md:text-3xl">
                   4
                 </div>
                 <p className="mb-8 text-light-text dark:text-dark-text md:text-lg">
                   Start buying and selling
                 </p>
-                <div className="relative  mt-6 overflow-hidden rounded-xl shadow-lg duration-300 transition-all hover:shadow-xl">
+                <div className="relative  mt-6 overflow-hidden rounded-xl shadow-lg transition-all duration-300 hover:shadow-xl">
                   <Image
                     alt="Complete a Bitcoin Lightning Network payment on Shopstr — dark mode"
                     src="/payment-step-dark.png"
@@ -536,7 +536,7 @@ export default function Landing() {
                     loading="lazy"
                     className="mx-auto flex rounded-xl dark:hidden"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent opacity-0 duration-300 transition-opacity group-hover:opacity-100"></div>
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100"></div>
                 </div>
               </div>
             </div>
@@ -599,7 +599,7 @@ export default function Landing() {
             never be taken away from them.
           </p>
           <Button
-            className={`${SHOPSTRBUTTONCLASSNAMES} px-10 py-7 text-lg shadow-lg duration-300 transition-all hover:shadow-xl md:px-12 md:text-xl`}
+            className={`${SHOPSTRBUTTONCLASSNAMES} px-10 py-7 text-lg shadow-lg transition-all duration-300 hover:shadow-xl md:px-12 md:text-xl`}
             onClick={() => router.push("/marketplace")}
             startContent={<UserGroupIcon className="mr-2 h-6 w-6" />}
           >
