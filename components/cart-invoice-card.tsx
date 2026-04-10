@@ -49,6 +49,7 @@ import { v4 as uuidv4 } from "uuid";
 import { nip19 } from "nostr-tools";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
 import { webln } from "@getalby/sdk";
+import { createSellerActionAuthEventTemplate } from "@milk-market/nostr";
 import { formatWithCommas } from "./utility-components/display-monetary-info";
 import { BLUEBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import SignInModal from "./sign-in/SignInModal";
@@ -462,18 +463,35 @@ export default function CartInvoiceCard({
   }, [paymentConfirmed, stripePaymentConfirmed]);
 
   useEffect(() => {
-    if (isLoggedIn && userPubkey && !buyerEmailAutoFilled) {
-      fetch(`/api/email/notification-email?pubkey=${userPubkey}&role=buyer`)
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.email) {
+    if (isLoggedIn && userPubkey && signer?.sign && !buyerEmailAutoFilled) {
+      const loadBuyerEmail = async () => {
+        try {
+          const signedEvent = await signer.sign(
+            createSellerActionAuthEventTemplate(
+              userPubkey,
+              "notification-email-read"
+            )
+          );
+          const res = await fetch("/api/email/notification-email/read", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              pubkey: userPubkey,
+              role: "buyer",
+              signedEvent,
+            }),
+          });
+          const data = await res.json();
+          if (res.ok && data.email) {
             setBuyerEmail(data.email);
             setBuyerEmailAutoFilled(true);
           }
-        })
-        .catch(() => {});
+        } catch {}
+      };
+
+      loadBuyerEmail();
     }
-  }, [isLoggedIn, userPubkey, buyerEmailAutoFilled]);
+  }, [buyerEmailAutoFilled, isLoggedIn, signer, userPubkey]);
 
   const cartReportedRef = useRef(false);
 

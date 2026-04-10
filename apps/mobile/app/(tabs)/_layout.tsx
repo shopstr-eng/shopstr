@@ -1,8 +1,21 @@
-import { Tabs } from "expo-router";
+import { Redirect, Tabs, type Href } from "expo-router";
 
+import LoadingScreen from "@/components/loading-screen";
+import { useSessionStore } from "@/stores/session-store";
 import { sellerThemeTokens } from "@/theme/tokens";
 
 export default function SellerTabsLayout() {
+  const hydrated = useSessionStore((state) => state.hydrated);
+  const session = useSessionStore((state) => state.session);
+
+  if (!hydrated) {
+    return <LoadingScreen message="Loading seller workspace..." />;
+  }
+
+  if (!session) {
+    return <Redirect href={"/sign-in" as Href} />;
+  }
+
   return (
     <Tabs
       screenOptions={{

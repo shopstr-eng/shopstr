@@ -23,6 +23,17 @@ export default async function handler(
   try {
     await client.connect();
 
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS email_auth (
+        id SERIAL PRIMARY KEY,
+        email VARCHAR(255) NOT NULL UNIQUE,
+        password_hash VARCHAR(255) NOT NULL,
+        pubkey VARCHAR(64) NOT NULL,
+        encrypted_nsec TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
     const passwordHash = CryptoJS.SHA256(email + password).toString();
 
     // Get user from database

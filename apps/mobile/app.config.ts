@@ -15,6 +15,8 @@ const config: ExpoConfig = {
         launchMode: "most-recent",
       },
     ],
+    "expo-secure-store",
+    "expo-web-browser"
   ],
   experiments: {
     typedRoutes: true,

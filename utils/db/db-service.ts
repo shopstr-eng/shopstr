@@ -259,6 +259,32 @@ async function initializeTables(): Promise<void> {
       CREATE UNIQUE INDEX IF NOT EXISTS idx_notification_emails_seller_unique ON notification_emails(pubkey) WHERE role = 'seller';
       CREATE UNIQUE INDEX IF NOT EXISTS idx_notification_emails_buyer_order_unique ON notification_emails(order_id) WHERE role = 'buyer';
 
+      -- Shop slug registry for storefront URLs
+      CREATE TABLE IF NOT EXISTS shop_slugs (
+          id SERIAL PRIMARY KEY,
+          pubkey TEXT NOT NULL UNIQUE,
+          slug TEXT NOT NULL UNIQUE,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_shop_slugs_slug ON shop_slugs(slug);
+      CREATE INDEX IF NOT EXISTS idx_shop_slugs_pubkey ON shop_slugs(pubkey);
+
+      -- Custom domain mappings for seller storefronts
+      CREATE TABLE IF NOT EXISTS custom_domains (
+          id SERIAL PRIMARY KEY,
+          pubkey TEXT NOT NULL UNIQUE,
+          domain TEXT NOT NULL UNIQUE,
+          shop_slug TEXT NOT NULL,
+          verified BOOLEAN DEFAULT FALSE,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_custom_domains_domain ON custom_domains(domain);
+      CREATE INDEX IF NOT EXISTS idx_custom_domains_pubkey ON custom_domains(pubkey);
+
       -- Subscriptions table for recurring product subscriptions
       CREATE TABLE IF NOT EXISTS subscriptions (
           id SERIAL PRIMARY KEY,
