@@ -14,6 +14,7 @@ import {
   CommunityRelays,
   NostrEvent,
   ProductFormValues,
+  SavedAddress,
 } from "@/utils/types/types";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
 import { Proof } from "@cashu/cashu-ts";
@@ -1242,6 +1243,7 @@ const LOCALSTORAGECONSTANTS = {
   signer: "signer",
   nwcString: "nwcString",
   nwcInfo: "nwcInfo",
+  savedAddresses: "savedAddresses",
 };
 
 export const setLocalStorageDataOnSignIn = ({
@@ -1365,6 +1367,7 @@ export interface LocalStorageInterface {
   nwcString?: string | null;
   nwcInfo?: string | null;
   migrationComplete?: boolean;
+  savedAddresses: SavedAddress[];
 }
 
 function isStoredSignerData(
@@ -1427,6 +1430,7 @@ export const getLocalStorageData = (): LocalStorageInterface => {
   let migrationComplete;
   let nwcString;
   let nwcInfo;
+  let savedAddresses: SavedAddress[] = [];
 
   if (typeof window !== "undefined") {
     encryptedPrivateKey = localStorage.getItem(
@@ -1606,6 +1610,14 @@ export const getLocalStorageData = (): LocalStorageInterface => {
       ? localStorage.getItem(LOCALSTORAGECONSTANTS.nwcInfo)
       : null;
     migrationComplete = localStorage.getItem("migrationComplete") === "true";
+    savedAddresses = getLocalStorageJson<SavedAddress[]>(
+      LOCALSTORAGECONSTANTS.savedAddresses,
+      [],
+      {
+        removeOnError: true,
+        validate: (value): value is SavedAddress[] => Array.isArray(value),
+      }
+    );
   }
   return {
     signInMethod: signInMethod as string,
@@ -1626,6 +1638,7 @@ export const getLocalStorageData = (): LocalStorageInterface => {
     nwcString: nwcString as string | null,
     nwcInfo: nwcInfo as string | null,
     migrationComplete: migrationComplete || false,
+    savedAddresses,
   };
 };
 
@@ -1779,4 +1792,65 @@ export const parseLocalProfileFallback = (
   }
 
   return null;
+};
+
+export const getSavedAddresses = (): SavedAddress[] => {
+  const data = getLocalStorageData();
+  return data.savedAddresses || [];
+};
+
+export const saveAddress = (addr: Omit<SavedAddress, "id"> & { id?: string }): SavedAddress => {
+  const addresses = getSavedAddresses();
+  const addressToSave: SavedAddress = {
+    ...addr,
+    id: addr.id || crypto.randomUUID(),
+  };
+
+  // If this is set as default, remove default from others
+  if (addressToSave.isDefault) {
+    addresses.forEach((a) => (a.isDefault = false));
+  }
+
+  const existingIndex = addresses.findIndex((a) => a.id === addressToSave.id);
+  if (existingIndex >= 0) {
+    addresses[existingIndex] = addressToSave;
+  } else {
+    addresses.push(addressToSave);
+  }
+
+  // If this is the only address, make it default
+  if (addresses.length === 1) {
+    addresses[0]!.isDefault = true;
+  }
+
+  localStorage.setItem(LOCALSTORAGECONSTANTS.savedAddresses, JSON.stringify(addresses));
+  window.dispatchEvent(new Event("storage"));
+  
+  return addressToSave;
+};
+
+export const deleteAddress = (id: string): void => {
+  let addresses = getSavedAddresses();
+  const addressToDelete = addresses.find((a) => a.id === id);
+  if (!addressToDelete) return;
+
+  addresses = addresses.filter((a) => a.id !== id);
+
+  // If we deleted the default, set first remaining as default
+  if (addressToDelete.isDefault && addresses.length > 0) {
+    addresses[0]!.isDefault = true;
+  }
+
+  localStorage.setItem(LOCALSTORAGECONSTANTS.savedAddresses, JSON.stringify(addresses));
+  window.dispatchEvent(new Event("storage"));
+};
+
+export const setDefaultAddress = (id: string): void => {
+  const addresses = getSavedAddresses();
+  addresses.forEach((a) => {
+    a.isDefault = a.id === id;
+  });
+
+  localStorage.setItem(LOCALSTORAGECONSTANTS.savedAddresses, JSON.stringify(addresses));
+  window.dispatchEvent(new Event("storage"));
 };
