@@ -18,12 +18,74 @@ import {
 } from "@/utils/mcp/request-proof-server";
 
 let tablesReady = false;
+const MCP_STREAMABLE_HTTP_ACCEPT =
+  "application/json, text/event-stream";
 
 async function ensureTables() {
   if (!tablesReady) {
     await initializeApiKeysTable();
     tablesReady = true;
   }
+}
+
+function getFirstHeaderValue(
+  value: string | string[] | undefined
+): string | undefined {
+  if (Array.isArray(value)) {
+    return value[0]?.trim() || undefined;
+  }
+
+  return value?.split(",")[0]?.trim() || undefined;
+}
+
+function normalizeBaseUrl(baseUrl: string): string {
+  return baseUrl.replace(/\/+$/, "");
+}
+
+function resolveBaseUrl(
+  req: Pick<NextApiRequest, "headers" | "socket">
+): string {
+  const configuredBaseUrl = process.env.NEXT_PUBLIC_BASE_URL?.trim();
+  if (configuredBaseUrl) {
+    return normalizeBaseUrl(configuredBaseUrl);
+  }
+
+  const forwardedProto = getFirstHeaderValue(req.headers["x-forwarded-proto"]);
+  const forwardedHost = getFirstHeaderValue(req.headers["x-forwarded-host"]);
+  const host = forwardedHost || getFirstHeaderValue(req.headers.host);
+  const protocol =
+    forwardedProto ||
+    ((req.socket as typeof req.socket & { encrypted?: boolean }).encrypted
+      ? "https"
+      : "http");
+
+  return `${protocol}://${host || "localhost:5000"}`;
+}
+
+function buildQuickStartExamples(
+  baseUrl: string,
+  apiKey: string,
+  agentName: string
+) {
+  return {
+    curl_initialize: `curl -i -X POST ${baseUrl}/api/mcp \\
+  -H "Authorization: Bearer ${apiKey}" \\
+  -H "Accept: ${MCP_STREAMABLE_HTTP_ACCEPT}" \\
+  -H "Content-Type: application/json" \\
+  -d '{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"${agentName}","version":"1.0.0"}},"id":1}'`,
+    curl_list_tools: `curl -X POST ${baseUrl}/api/mcp \\
+  -H "Authorization: Bearer ${apiKey}" \\
+  -H "Accept: ${MCP_STREAMABLE_HTTP_ACCEPT}" \\
+  -H "Content-Type: application/json" \\
+  -H "Mcp-Session-Id: <session-id-from-initialize>" \\
+  -d '{"jsonrpc":"2.0","method":"tools/list","id":2}'`,
+    curl_search: `curl -X POST ${baseUrl}/api/mcp \\
+  -H "Authorization: Bearer ${apiKey}" \\
+  -H "Accept: ${MCP_STREAMABLE_HTTP_ACCEPT}" \\
+  -H "Content-Type: application/json" \\
+  -H "Mcp-Session-Id: <session-id-from-initialize>" \\
+  -d '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"search_products","arguments":{}},"id":3}'`,
+  };
 }
 
 export default async function handler(
@@ -197,8 +259,7 @@ export default async function handler(
       encryptedNsecValue
     );
 
-    const baseUrl =
-      process.env.NEXT_PUBLIC_BASE_URL || `https://${req.headers.host}`;
+    const baseUrl = resolveBaseUrl(req);
 
     const npub = nip19.npubEncode(pubkey);
 
@@ -212,24 +273,10 @@ export default async function handler(
       quickStart: {
         description:
           "Use the API key as a Bearer token to authenticate MCP requests.",
-        examples: {
-          curl_initialize: `curl -X POST ${baseUrl}/api/mcp \\
-  -H "Authorization: Bearer ${result.key}" \\
-  -H "Content-Type: application/json" \\
-  -d '{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"${trimmedName}","version":"1.0.0"}},"id":1}'`,
-          curl_list_tools: `curl -X POST ${baseUrl}/api/mcp \\
-  -H "Authorization: Bearer ${result.key}" \\
-  -H "Content-Type: application/json" \\
-  -H "Mcp-Session-Id: <session-id-from-initialize>" \\
-  -d '{"jsonrpc":"2.0","method":"tools/list","id":2}'`,
-          curl_search: `curl -X POST ${baseUrl}/api/mcp \\
-  -H "Authorization: Bearer ${result.key}" \\
-  -H "Content-Type: application/json" \\
-  -H "Mcp-Session-Id: <session-id-from-initialize>" \\
-  -d '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"search_products","arguments":{}},"id":3}'`,
-        },
+        examples: buildQuickStartExamples(baseUrl, result.key, trimmedName),
         notes: [
           "Store your API key securely — it will not be shown again.",
+          "Run the initialize command with -i so curl prints the Mcp-Session-Id response header for follow-up requests.",
           `Your permissions are set to "${perm}".${
             perm === "read"
               ? ' Upgrade to "read_write" to place orders, or "full_access" for full marketplace participation.'
