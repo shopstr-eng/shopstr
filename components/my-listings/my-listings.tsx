@@ -32,6 +32,11 @@ const MyListingsPage = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const shopMapContext = useContext(ShopMapContext);
+  const shopProfile: ShopProfile | undefined = usersPubkey
+    ? shopMapContext.shopData.get(usersPubkey)
+    : undefined;
+  const shopBanner = shopProfile?.content.ui.banner ?? "";
+  const shopAboutContent = shopProfile?.content.about ?? "";
 
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -50,20 +55,10 @@ const MyListingsPage = () => {
 
   useEffect(() => {
     setIsFetchingShop(true);
-    if (
-      usersPubkey &&
-      shopMapContext.shopData.has(usersPubkey) &&
-      typeof shopMapContext.shopData.get(usersPubkey) != "undefined"
-    ) {
-      const shopProfile: ShopProfile | undefined =
-        shopMapContext.shopData.get(usersPubkey);
-      if (shopProfile) {
-        setShopBannerURL(shopProfile.content.ui.banner);
-        setShopAbout(shopProfile.content.about);
-      }
-    }
+    setShopBannerURL(shopBanner);
+    setShopAbout(shopAboutContent);
     setIsFetchingShop(false);
-  }, [usersPubkey, shopMapContext, shopBannerURL]);
+  }, [shopAboutContent, shopBanner]);
 
   const handleCreateNewListing = () => {
     if (usersPubkey) {
