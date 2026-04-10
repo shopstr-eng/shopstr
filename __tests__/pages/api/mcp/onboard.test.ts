@@ -47,10 +47,23 @@ const FIXED_NSEC = "nsec1testonboard";
 const FIXED_NPUB = "npub1testonboard";
 const FIXED_AGENT_NAME = "Test Agent";
 
-type MockResponse = NextApiResponse & {
+type MockResponse = {
   statusCode: number;
   jsonBody: unknown;
+  status(code: number): MockResponse;
+  json(payload: unknown): MockResponse;
 };
+
+function setNodeEnv(value: "development" | "production" | "test" | undefined) {
+  const env = process.env as Record<string, string | undefined>;
+
+  if (value === undefined) {
+    delete env["NODE_ENV"];
+    return;
+  }
+
+  env["NODE_ENV"] = value;
+}
 
 function createMockRequest(
   overrides: Partial<NextApiRequest> = {}
@@ -72,7 +85,7 @@ function createMockRequest(
 }
 
 function createMockResponse(): MockResponse {
-  const res = {
+  const res: MockResponse = {
     statusCode: 200,
     jsonBody: undefined,
     status(code: number) {
@@ -83,20 +96,24 @@ function createMockResponse(): MockResponse {
       this.jsonBody = payload;
       return this;
     },
-  } as MockResponse;
+  };
 
   return res;
 }
 
 describe("MCP onboard API quick-start correctness", () => {
   const originalBaseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-  let handler: typeof import("../onboard").default;
+  const originalAllowedHosts = process.env.MCP_ALLOWED_HOSTS;
+  const originalNodeEnv = process.env.NODE_ENV;
+  let handler: typeof import("@/pages/api/mcp/onboard").default;
 
   beforeEach(async () => {
     jest.resetModules();
     jest.clearAllMocks();
 
     delete process.env.NEXT_PUBLIC_BASE_URL;
+    delete process.env.MCP_ALLOWED_HOSTS;
+    setNodeEnv("test");
 
     checkOnboardRateLimitMock.mockReturnValue(true);
     initializeApiKeysTableMock.mockResolvedValue(undefined);
@@ -112,7 +129,7 @@ describe("MCP onboard API quick-start correctness", () => {
     nsecEncodeMock.mockReturnValue(FIXED_NSEC);
     npubEncodeMock.mockReturnValue(FIXED_NPUB);
 
-    handler = (await import("../onboard")).default;
+    handler = (await import("@/pages/api/mcp/onboard")).default;
   });
 
   afterEach(() => {
@@ -121,13 +138,25 @@ describe("MCP onboard API quick-start correctness", () => {
     } else {
       process.env.NEXT_PUBLIC_BASE_URL = originalBaseUrl;
     }
+
+    if (originalAllowedHosts === undefined) {
+      delete process.env.MCP_ALLOWED_HOSTS;
+    } else {
+      process.env.MCP_ALLOWED_HOSTS = originalAllowedHosts;
+    }
+
+    if (originalNodeEnv === undefined) {
+      setNodeEnv(undefined);
+    } else {
+      setNodeEnv(originalNodeEnv);
+    }
   });
 
   it("returns local HTTP onboarding URLs and MCP-compatible curl examples", async () => {
     const req = createMockRequest();
     const res = createMockResponse();
 
-    await handler(req, res);
+    await handler(req, res as unknown as NextApiResponse);
 
     expect(res.statusCode).toBe(201);
     expect(res.jsonBody).toMatchObject({
@@ -161,6 +190,25 @@ describe("MCP onboard API quick-start correctness", () => {
     );
   });
 
+  it("escapes agent names safely inside curl payload examples", async () => {
+    const req = createMockRequest({
+      body: {
+        name: "O'Reilly Bot",
+      },
+    });
+    const res = createMockResponse();
+
+    await handler(req, res as unknown as NextApiResponse);
+
+    const body = res.jsonBody as {
+      quickStart: { examples: Record<string, string> };
+    };
+
+    expect(body.quickStart.examples.curl_initialize).toContain(
+      `O'"'"'Reilly Bot`
+    );
+  });
+
   it("prefers NEXT_PUBLIC_BASE_URL and normalizes trailing slashes", async () => {
     process.env.NEXT_PUBLIC_BASE_URL = "https://shopstr.example/";
 
@@ -171,7 +219,7 @@ describe("MCP onboard API quick-start correctness", () => {
     });
     const res = createMockResponse();
 
-    await handler(req, res);
+    await handler(req, res as unknown as NextApiResponse);
 
     expect(res.statusCode).toBe(201);
     expect(res.jsonBody).toMatchObject({
@@ -180,7 +228,9 @@ describe("MCP onboard API quick-start correctness", () => {
     });
   });
 
-  it("uses forwarded host and protocol when present", async () => {
+  it("uses allowlisted forwarded host and protocol when present", async () => {
+    process.env.MCP_ALLOWED_HOSTS = "shopstr.example";
+
     const req = createMockRequest({
       headers: {
         host: "127.0.0.1:5000",
@@ -190,12 +240,57 @@ describe("MCP onboard API quick-start correctness", () => {
     });
     const res = createMockResponse();
 
-    await handler(req, res);
+    await handler(req, res as unknown as NextApiResponse);
 
     expect(res.statusCode).toBe(201);
     expect(res.jsonBody).toMatchObject({
       mcpEndpoint: "https://shopstr.example/api/mcp",
       manifestUrl: "https://shopstr.example/.well-known/agent.json",
     });
+  });
+
+  it("ignores unallowlisted forwarded hosts in production", async () => {
+    setNodeEnv("production");
+    process.env.MCP_ALLOWED_HOSTS = "shopstr.example";
+
+    const req = createMockRequest({
+      headers: {
+        host: "shopstr.example",
+        "x-forwarded-host": "evil.example",
+        "x-forwarded-proto": "https",
+      },
+    });
+    const res = createMockResponse();
+
+    await handler(req, res as unknown as NextApiResponse);
+
+    expect(res.statusCode).toBe(201);
+    expect(res.jsonBody).toMatchObject({
+      mcpEndpoint: "https://shopstr.example/api/mcp",
+      manifestUrl: "https://shopstr.example/.well-known/agent.json",
+    });
+  });
+
+  it("fails safely in production when no public base URL or allowlisted host is available", async () => {
+    setNodeEnv("production");
+
+    const req = createMockRequest({
+      headers: {
+        host: "shopstr.example",
+      },
+    });
+    const res = createMockResponse();
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+
+    await handler(req, res as unknown as NextApiResponse);
+
+    expect(res.statusCode).toBe(500);
+    expect(res.jsonBody).toEqual({
+      error: "Onboarding failed. Please try again later.",
+    });
+
+    consoleErrorSpy.mockRestore();
   });
 });
