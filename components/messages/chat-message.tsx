@@ -39,7 +39,7 @@ const ChatMessage = ({
   const { pubkey: userPubkey } = useContext(SignerContext);
 
   useEffect(() => {
-    if (messageEvent?.content && messageEvent.content.includes("npub")) {
+    if (messageEvent?.content && messageEvent.content.includes("npub1")) {
       // Find word containing npub using regex
       const npubMatch = messageEvent.content.match(/npub[a-zA-Z0-9]+/);
       if (npubMatch && setBuyerPubkey) {
@@ -115,7 +115,7 @@ const ChatMessage = ({
         return (
           <span
             key={index}
-            className="cursor-pointer text-shopstr-purple hover:underline dark:text-shopstr-yellow"
+            className="text-shopstr-purple dark:text-shopstr-yellow cursor-pointer hover:underline"
             onClick={() => {
               router.replace({
                 pathname: "/orders",
@@ -145,10 +145,10 @@ const ChatMessage = ({
       }`}
     >
       <div
-        className={`flex max-w-[90%] flex-col rounded-t-large p-3 ${
+        className={`rounded-t-large flex max-w-[90%] flex-col p-3 ${
           isUserMessage
-            ? "dark:from-shopstr-yellow-dark rounded-bl-lg bg-gradient-to-br from-shopstr-purple to-shopstr-purple-light text-white dark:to-shopstr-yellow-light dark:text-dark-bg"
-            : "rounded-br-lg bg-gray-300 text-light-text dark:bg-gray-700 dark:text-dark-text"
+            ? "dark:from-shopstr-yellow-dark from-shopstr-purple to-shopstr-purple-light dark:to-shopstr-yellow-light dark:text-dark-bg rounded-bl-lg bg-gradient-to-br text-white"
+            : "text-light-text dark:text-dark-text rounded-br-lg bg-gray-300 dark:bg-gray-700"
         }`}
       >
         <p className="inline-block flex-wrap overflow-x-hidden break-all">
@@ -170,7 +170,7 @@ const ChatMessage = ({
               </div>
             </>
           ) : orderData ? (
-            <div className="flex flex-col gap-2 border-l-4 border-shopstr-purple pl-3 dark:border-shopstr-yellow">
+            <div className="border-shopstr-purple dark:border-shopstr-yellow flex flex-col gap-2 border-l-4 pl-3">
               <span className="text-sm font-bold uppercase opacity-70">
                 ⚡ Zapsnag Order
               </span>

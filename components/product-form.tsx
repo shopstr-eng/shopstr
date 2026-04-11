@@ -17,7 +17,7 @@ import {
   Chip,
   Image,
   Switch,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -371,7 +371,7 @@ export default function ProductForm({
       size="2xl"
     >
       <ModalContent>
-        <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
+        <ModalHeader className="text-light-text dark:text-dark-text flex flex-col gap-1">
           Add New Product Listing
         </ModalHeader>
         <form
@@ -489,7 +489,7 @@ export default function ProductForm({
                       className="relative flex h-full w-full items-center justify-center p-4"
                       onClick={(e) => e.preventDefault()}
                     >
-                      <div className="absolute right-4 top-4 z-20">
+                      <div className="absolute top-4 right-4 z-20">
                         {" "}
                         {/* Increased spacing */}
                         <ConfirmActionDropdown
@@ -625,7 +625,7 @@ export default function ProductForm({
                           return (
                             <div className="flex items-center">
                               <select
-                                className="border-0 bg-transparent text-small text-default-400 outline-none"
+                                className="text-small text-default-400 border-0 bg-transparent outline-none"
                                 key={"currency"}
                                 id="currency"
                                 name="currency"
@@ -653,8 +653,8 @@ export default function ProductForm({
             />
 
             <div className="mx-4 my-2 flex items-center justify-center text-center">
-              <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
-              <p className="ml-2 text-xs text-light-text dark:text-dark-text">
+              <InformationCircleIcon className="text-light-text dark:text-dark-text h-6 w-6" />
+              <p className="text-light-text dark:text-dark-text ml-2 text-xs">
                 Your donation rate on sales is set to{" "}
                 {profileContext.profileData.get(pubkey)?.content
                   ?.shopstr_donation || 2.1}
@@ -773,7 +773,7 @@ export default function ProductForm({
                       endContent={
                         <div className="flex items-center">
                           <select
-                            className="border-0 bg-transparent text-small text-default-400 outline-none"
+                            className="text-small text-default-400 border-0 bg-transparent outline-none"
                             key={"currency"}
                             id="currency"
                             name="currency"
@@ -800,7 +800,7 @@ export default function ProductForm({
             {(watchShippingOption === "Pickup" ||
               watchShippingOption === "Free/Pickup") && (
               <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-light-text dark:text-dark-text">
+                <h3 className="text-light-text dark:text-dark-text text-lg font-semibold">
                   Pickup Locations
                 </h3>
                 <p className="text-sm text-gray-600 dark:text-gray-400">
@@ -817,7 +817,7 @@ export default function ProductForm({
                       {value.map((location: string, index: number) => (
                         <div key={index} className="flex items-center gap-2">
                           <Input
-                            className="flex-1 text-light-text dark:text-dark-text"
+                            className="text-light-text dark:text-dark-text flex-1"
                             variant="bordered"
                             placeholder={`Pickup location ${
                               index + 1
@@ -928,9 +928,7 @@ export default function ProductForm({
                   >
                     <SelectSection className="text-light-text dark:text-dark-text">
                       {CATEGORIES.map((category) => (
-                        <SelectItem key={category} value={category}>
-                          {category}
-                        </SelectItem>
+                        <SelectItem key={category}>{category}</SelectItem>
                       ))}
                     </SelectSection>
                   </Select>
@@ -944,7 +942,7 @@ export default function ProductForm({
               render={({ field: { onChange, value } }) => (
                 <div className="mt-4 flex items-center justify-between rounded-lg border border-gray-200 p-3 dark:border-gray-700">
                   <div className="flex flex-col">
-                    <span className="text-sm font-semibold text-light-text dark:text-dark-text">
+                    <span className="text-light-text dark:text-dark-text text-sm font-semibold">
                       Bulk/Bundle Pricing
                     </span>
                     <span className="text-tiny text-gray-500">
@@ -1083,7 +1081,7 @@ export default function ProductForm({
                       </Button>
                     )}
                     {entries.length > 0 && (
-                      <div className="w-full text-xs text-light-text opacity-75 dark:text-dark-text">
+                      <div className="text-light-text dark:text-dark-text w-full text-xs opacity-75">
                         Note: Bulk prices override the single-unit price when a
                         buyer selects a bundle option.
                       </div>
@@ -1096,7 +1094,7 @@ export default function ProductForm({
             {/* --- Flash Sale Toggle --- */}
             <div className="mt-4 flex items-center justify-between rounded-lg border border-gray-200 p-3 dark:border-gray-700">
               <div className="flex flex-col">
-                <span className="text-sm font-semibold text-light-text dark:text-dark-text">
+                <span className="text-light-text dark:text-dark-text text-sm font-semibold">
                   Post as Flash Sale
                 </span>
                 <span className="text-tiny text-gray-500">
@@ -1115,7 +1113,7 @@ export default function ProductForm({
 
             <div className="w-full max-w-xs">
               <Button
-                className="mb-2 mt-4 w-full justify-start rounded-md pl-2 text-shopstr-purple-light dark:text-shopstr-yellow-light"
+                className="text-shopstr-purple-light dark:text-shopstr-yellow-light mt-4 mb-2 w-full justify-start rounded-md pl-2"
                 variant="light"
                 onClick={() => setShowOptionalTags(!showOptionalTags)}
               >
@@ -1207,24 +1205,12 @@ export default function ProductForm({
                         }}
                       >
                         <SelectSection className="text-light-text dark:text-dark-text">
-                          <SelectItem key="XS" value="XS">
-                            XS
-                          </SelectItem>
-                          <SelectItem key="SM" value="SM">
-                            SM
-                          </SelectItem>
-                          <SelectItem key="MD" value="MD">
-                            MD
-                          </SelectItem>
-                          <SelectItem key="LG" value="LG">
-                            LG
-                          </SelectItem>
-                          <SelectItem key="XL" value="XL">
-                            XL
-                          </SelectItem>
-                          <SelectItem key="XXL" value="XXL">
-                            XXL
-                          </SelectItem>
+                          <SelectItem key="XS">XS</SelectItem>
+                          <SelectItem key="SM">SM</SelectItem>
+                          <SelectItem key="MD">MD</SelectItem>
+                          <SelectItem key="LG">LG</SelectItem>
+                          <SelectItem key="XL">XL</SelectItem>
+                          <SelectItem key="XXL">XXL</SelectItem>
                         </SelectSection>
                       </Select>
                     );
@@ -1277,21 +1263,11 @@ export default function ProductForm({
                         }}
                       >
                         <SelectSection className="text-light-text dark:text-dark-text">
-                          <SelectItem key="Half-pint" value="Half-pint">
-                            Half-pint
-                          </SelectItem>
-                          <SelectItem key="Pint" value="Pint">
-                            Pint
-                          </SelectItem>
-                          <SelectItem key="Quart" value="Quart">
-                            Quart
-                          </SelectItem>
-                          <SelectItem key="Half-gallon" value="Half-gallon">
-                            Half-gallon
-                          </SelectItem>
-                          <SelectItem key="Gallon" value="Gallon">
-                            Gallon
-                          </SelectItem>
+                          <SelectItem key="Half-pint">Half-pint</SelectItem>
+                          <SelectItem key="Pint">Pint</SelectItem>
+                          <SelectItem key="Quart">Quart</SelectItem>
+                          <SelectItem key="Half-gallon">Half-gallon</SelectItem>
+                          <SelectItem key="Gallon">Gallon</SelectItem>
                         </SelectSection>
                       </Select>
                     );
@@ -1327,7 +1303,7 @@ export default function ProductForm({
                       <div className="mt-4 flex flex-wrap gap-4">
                         {volumeArray.map((volume: string) => (
                           <div key={volume} className="flex items-center">
-                            <span className="mr-2 text-light-text dark:text-dark-text">
+                            <span className="text-light-text dark:text-dark-text mr-2">
                               {volume}:
                             </span>
                             <Input
@@ -1353,7 +1329,7 @@ export default function ProductForm({
                           </div>
                         ))}
                         {volumeArray.length > 0 && (
-                          <div className="w-full text-xs text-light-text opacity-75 dark:text-dark-text">
+                          <div className="text-light-text dark:text-dark-text w-full text-xs opacity-75">
                             Note: Volume prices will override the main product
                             price when selected.
                           </div>
@@ -1409,36 +1385,16 @@ export default function ProductForm({
                         }}
                       >
                         <SelectSection className="text-light-text dark:text-dark-text">
-                          <SelectItem key="1 oz" value="1 oz">
-                            1 oz
-                          </SelectItem>
-                          <SelectItem key="2 oz" value="2 oz">
-                            2 oz
-                          </SelectItem>
-                          <SelectItem key="4 oz" value="4 oz">
-                            4 oz
-                          </SelectItem>
-                          <SelectItem key="8 oz" value="8 oz">
-                            8 oz
-                          </SelectItem>
-                          <SelectItem key="12 oz" value="12 oz">
-                            12 oz
-                          </SelectItem>
-                          <SelectItem key="1 lb" value="1 lb">
-                            1 lb
-                          </SelectItem>
-                          <SelectItem key="2 lb" value="2 lb">
-                            2 lb
-                          </SelectItem>
-                          <SelectItem key="5 lb" value="5 lb">
-                            5 lb
-                          </SelectItem>
-                          <SelectItem key="10 lb" value="10 lb">
-                            10 lb
-                          </SelectItem>
-                          <SelectItem key="25 lb" value="25 lb">
-                            25 lb
-                          </SelectItem>
+                          <SelectItem key="1 oz">1 oz</SelectItem>
+                          <SelectItem key="2 oz">2 oz</SelectItem>
+                          <SelectItem key="4 oz">4 oz</SelectItem>
+                          <SelectItem key="8 oz">8 oz</SelectItem>
+                          <SelectItem key="12 oz">12 oz</SelectItem>
+                          <SelectItem key="1 lb">1 lb</SelectItem>
+                          <SelectItem key="2 lb">2 lb</SelectItem>
+                          <SelectItem key="5 lb">5 lb</SelectItem>
+                          <SelectItem key="10 lb">10 lb</SelectItem>
+                          <SelectItem key="25 lb">25 lb</SelectItem>
                         </SelectSection>
                       </Select>
                     );
@@ -1474,7 +1430,7 @@ export default function ProductForm({
                       <div className="mt-4 flex flex-wrap gap-4">
                         {weightArray.map((weight: string) => (
                           <div key={weight} className="flex items-center">
-                            <span className="mr-2 text-light-text dark:text-dark-text">
+                            <span className="text-light-text dark:text-dark-text mr-2">
                               {weight}:
                             </span>
                             <Input
@@ -1500,7 +1456,7 @@ export default function ProductForm({
                           </div>
                         ))}
                         {weightArray.length > 0 && (
-                          <div className="w-full text-xs text-light-text opacity-75 dark:text-dark-text">
+                          <div className="text-light-text dark:text-dark-text w-full text-xs opacity-75">
                             Note: Weight prices will override the main product
                             price when selected.
                           </div>
@@ -1534,7 +1490,7 @@ export default function ProductForm({
                       <div className="mt-4 flex flex-wrap gap-4">
                         {sizeArray.map((size: string) => (
                           <div key={size} className="flex items-center">
-                            <span className="mr-2 text-light-text dark:text-dark-text">
+                            <span className="text-light-text dark:text-dark-text mr-2">
                               {size}:
                             </span>
                             <Input
@@ -1584,31 +1540,16 @@ export default function ProductForm({
                         selectedKeys={[value as string]}
                       >
                         <SelectSection className="text-light-text dark:text-dark-text">
-                          <SelectItem key="New" value="New">
-                            New
-                          </SelectItem>
-                          <SelectItem key="Renewed" value="Renewed">
-                            Renewed
-                          </SelectItem>
-                          <SelectItem
-                            key="Used - Like New"
-                            value="Used - Like New"
-                          >
+                          <SelectItem key="New">New</SelectItem>
+                          <SelectItem key="Renewed">Renewed</SelectItem>
+                          <SelectItem key="Used - Like New">
                             Used - Like New
                           </SelectItem>
-                          <SelectItem
-                            key="Used - Very Good"
-                            value="Used - Very Good"
-                          >
+                          <SelectItem key="Used - Very Good">
                             Used - Very Good
                           </SelectItem>
-                          <SelectItem key="Used - Good" value="Used - Good">
-                            Used - Good
-                          </SelectItem>
-                          <SelectItem
-                            key="Used - Acceptable"
-                            value="Used - Acceptable"
-                          >
+                          <SelectItem key="Used - Good">Used - Good</SelectItem>
+                          <SelectItem key="Used - Acceptable">
                             Used - Acceptable
                           </SelectItem>
                         </SelectSection>
@@ -1645,12 +1586,8 @@ export default function ProductForm({
                         selectedKeys={[value as string]}
                       >
                         <SelectSection className="text-light-text dark:text-dark-text">
-                          <SelectItem key="active" value="active">
-                            Active
-                          </SelectItem>
-                          <SelectItem key="sold" value="sold">
-                            Sold
-                          </SelectItem>
+                          <SelectItem key="active">Active</SelectItem>
+                          <SelectItem key="sold">Sold</SelectItem>
                         </SelectSection>
                       </Select>
                     );
@@ -1747,7 +1684,7 @@ export default function ProductForm({
                         value={value as string}
                         className="text-light-text dark:text-dark-text"
                       />
-                      <p className="mt-1 text-tiny text-gray-500">
+                      <p className="text-tiny mt-1 text-gray-500">
                         Listing will remain visible but marked as
                         &quot;Outdated&quot; after this date. Leave empty if
                         product has no expiration. Buyers won&apos;t be able to
@@ -1760,8 +1697,8 @@ export default function ProductForm({
             )}
 
             <div className="mx-4 my-2 flex items-center justify-center text-center">
-              <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
-              <p className="ml-2 text-xs text-light-text dark:text-dark-text">
+              <InformationCircleIcon className="text-light-text dark:text-dark-text h-6 w-6" />
+              <p className="text-light-text dark:text-dark-text ml-2 text-xs">
                 Your payment preference is set to{" "}
                 {profileContext.profileData.get(pubkey)?.content
                   ?.payment_preference === "lightning"

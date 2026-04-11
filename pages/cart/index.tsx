@@ -10,7 +10,7 @@ import {
   ModalHeader,
   ModalBody,
   Input,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import {
   PlusIcon,
   MinusIcon,
@@ -25,11 +25,13 @@ import {
 } from "@/utils/STATIC-VARIABLES";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
 import CartInvoiceCard from "../../components/cart-invoice-card";
-import { fiat } from "@getalby/lightning-tools";
+import { getSatoshiValue } from "@getalby/lightning-tools";
 import currencySelection from "../../public/currencySelection.json";
 import { ShopMapContext, ProfileMapContext } from "@/utils/context/context";
 import { nip19 } from "nostr-tools";
 import StorefrontThemeWrapper from "@/components/storefront/storefront-theme-wrapper";
+import ProtectedRoute from "@/components/utility-components/protected-route";
+import { getLocalStorageJson } from "@/utils/safe-json";
 
 interface QuantitySelectorProps {
   value: number;
@@ -39,6 +41,26 @@ interface QuantitySelectorProps {
   min: number;
   max: number;
 }
+
+type CartDiscountsMap = Record<string, { code: string; percentage: number }>;
+
+const isCartDiscountsMap = (value: unknown): value is CartDiscountsMap => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+
+  return Object.values(value).every((entry) => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+      return false;
+    }
+
+    const candidate = entry as { code?: unknown; percentage?: unknown };
+    return (
+      typeof candidate.code === "string" &&
+      typeof candidate.percentage === "number"
+    );
+  });
+};
 
 function QuantitySelector({
   value,
@@ -66,8 +88,7 @@ function QuantitySelector({
         }}
         min={min}
         max={max}
-        className="w-12 rounded-md bg-white text-center text-gray-900 outline-none dark:bg-gray-800 dark:text-gray-100
-          [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+        className="w-12 rounded-md bg-white text-center text-gray-900 outline-none dark:bg-gray-800 dark:text-gray-100 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
       />
       <button
         onClick={onIncrease}
@@ -196,13 +217,10 @@ export default function Component() {
         sessionStorage.getItem("sf_seller_pubkey") ||
         localStorage.getItem("sf_seller_pubkey") ||
         "";
-      let fullCart: ProductData[] = [];
-      try {
-        const raw = localStorage.getItem("cart");
-        if (raw) fullCart = JSON.parse(raw);
-      } catch {
-        localStorage.removeItem("cart");
-      }
+      const fullCart = getLocalStorageJson<ProductData[]>("cart", [], {
+        removeOnError: true,
+        validate: Array.isArray,
+      });
 
       let cartList = fullCart;
       if (sfPk) {
@@ -224,21 +242,28 @@ export default function Component() {
       }
 
       // Load saved discount codes
-      const storedDiscounts = localStorage.getItem("cartDiscounts");
-      if (storedDiscounts) {
-        let discounts;
-        try {
-          discounts = JSON.parse(storedDiscounts);
-        } catch {
-          localStorage.removeItem("cartDiscounts");
-          return;
+      const discounts = getLocalStorageJson<CartDiscountsMap>(
+        "cartDiscounts",
+        {},
+        {
+          removeOnError: true,
+          removeOnValidationError: true,
+          validate: isCartDiscountsMap,
         }
+      );
+      if (Object.keys(discounts).length > 0) {
         const codes: { [pubkey: string]: string } = {};
         const applied: { [pubkey: string]: number } = {};
 
-        Object.entries(discounts).forEach(([pubkey, data]: [string, any]) => {
-          codes[pubkey] = data.code;
-          applied[pubkey] = data.percentage;
+        Object.entries(discounts).forEach(([pubkey, data]) => {
+          if (!data || typeof data !== "object") return;
+          const code = (data as { code?: unknown }).code;
+          const percentage = (data as { percentage?: unknown }).percentage;
+          if (typeof code !== "string" || typeof percentage !== "number") {
+            return;
+          }
+          codes[pubkey] = code;
+          applied[pubkey] = percentage;
         });
 
         setDiscountCodes(codes);
@@ -336,13 +361,10 @@ export default function Component() {
   };
 
   const handleRemoveFromCart = (productId: string) => {
-    let cartContent: ProductData[] = [];
-    try {
-      const raw = localStorage.getItem("cart");
-      if (raw) cartContent = JSON.parse(raw);
-    } catch {
-      localStorage.removeItem("cart");
-    }
+    const cartContent = getLocalStorageJson<ProductData[]>("cart", [], {
+      removeOnError: true,
+      validate: Array.isArray,
+    });
     if (cartContent.length > 0) {
       const updatedCart = cartContent.filter(
         (obj: ProductData) => obj.id !== productId
@@ -387,13 +409,15 @@ export default function Component() {
         setDiscountErrors({ ...discountErrors, [pubkey]: "" });
 
         // Save to localStorage
-        const storedDiscounts = localStorage.getItem("cartDiscounts");
-        let discounts: { [pubkey: string]: { code: string; percentage: number } } = {};
-        try {
-          if (storedDiscounts) discounts = JSON.parse(storedDiscounts);
-        } catch {
-          localStorage.removeItem("cartDiscounts");
-        }
+        const discounts = getLocalStorageJson<CartDiscountsMap>(
+          "cartDiscounts",
+          {},
+          {
+            removeOnError: true,
+            removeOnValidationError: true,
+            validate: isCartDiscountsMap,
+          }
+        );
         discounts[pubkey] = {
           code: code,
           percentage: result.discount_percentage,
@@ -422,15 +446,16 @@ export default function Component() {
     setDiscountErrors({ ...discountErrors, [pubkey]: "" });
 
     // Remove from localStorage
-    const storedDiscounts = localStorage.getItem("cartDiscounts");
-    if (storedDiscounts) {
-      let discounts;
-      try {
-        discounts = JSON.parse(storedDiscounts);
-      } catch {
-        localStorage.removeItem("cartDiscounts");
-        return;
+    const discounts = getLocalStorageJson<CartDiscountsMap>(
+      "cartDiscounts",
+      {},
+      {
+        removeOnError: true,
+        removeOnValidationError: true,
+        validate: isCartDiscountsMap,
       }
+    );
+    if (Object.keys(discounts).length > 0) {
       delete discounts[pubkey];
       localStorage.setItem("cartDiscounts", JSON.stringify(discounts));
     }
@@ -465,7 +490,7 @@ export default function Component() {
           amount: basePrice,
           currency: product.currency,
         };
-        const numSats = await fiat.getSatoshiValue(currencyData);
+        const numSats = await getSatoshiValue(currencyData);
         price = Math.round(numSats);
       } catch (err) {
         console.error("ERROR", err);
@@ -499,7 +524,7 @@ export default function Component() {
           amount: shippingCost,
           currency: product.currency,
         };
-        const numSats = await fiat.getSatoshiValue(currencyData);
+        const numSats = await getSatoshiValue(currencyData);
         cost = Math.round(numSats);
       } catch (err) {
         console.error("ERROR", err);
@@ -511,8 +536,8 @@ export default function Component() {
   };
 
   return (
-    <StorefrontThemeWrapper sellerPubkey={sfSellerPubkey}>
-      <>
+    <ProtectedRoute>
+      <StorefrontThemeWrapper sellerPubkey={sfSellerPubkey}>
         {excludedItemCount > 0 && sfSellerPubkey && (
           <div className="mx-auto mt-20 max-w-4xl px-4">
             <div className="rounded-lg border-2 border-yellow-400 bg-yellow-50 p-3 text-sm text-yellow-800 dark:border-yellow-600 dark:bg-yellow-900/20 dark:text-yellow-200">
@@ -526,7 +551,7 @@ export default function Component() {
           </div>
         )}
         {!isBeingPaid ? (
-          <div className="flex min-h-screen flex-col bg-light-bg p-4 text-light-text dark:bg-dark-bg dark:text-dark-text">
+          <div className="bg-light-bg text-light-text dark:bg-dark-bg dark:text-dark-text flex min-h-screen flex-col p-4">
             <div className="mx-auto w-full max-w-4xl pt-20">
               <div className="mb-6 flex items-center">
                 <h1 className="w-full text-left text-2xl font-bold">
@@ -542,7 +567,7 @@ export default function Component() {
                           {sellerProducts.map((product) => (
                             <div
                               key={product.id}
-                              className="flex flex-col rounded-lg border border-gray-300 p-4 shadow-sm dark:border-gray-700 md:flex-row md:items-start md:justify-between"
+                              className="flex flex-col rounded-lg border border-gray-300 p-4 shadow-sm md:flex-row md:items-start md:justify-between dark:border-gray-700"
                             >
                               <div className="flex w-full md:w-auto">
                                 <img
@@ -656,7 +681,7 @@ export default function Component() {
                                       e.target.value.toUpperCase(),
                                   })
                                 }
-                                className="flex-1 text-light-text dark:text-dark-text"
+                                className="text-light-text dark:text-dark-text flex-1"
                                 disabled={appliedDiscounts[sellerPubkey]! > 0}
                                 isInvalid={!!discountErrors[sellerPubkey]}
                                 errorMessage={discountErrors[sellerPubkey]}
@@ -710,15 +735,15 @@ export default function Component() {
                             const isFreeShipping = sellerSubtotal >= threshold;
                             const sellerName = getSellerName(sellerPubkey);
                             return (
-                              <div className="rounded-lg border border-gray-300 bg-light-fg p-4 shadow-sm dark:border-gray-700 dark:bg-dark-fg">
+                              <div className="bg-light-fg dark:bg-dark-fg rounded-lg border border-gray-300 p-4 shadow-sm dark:border-gray-700">
                                 <div className="mb-2 flex items-center gap-2">
-                                  <TruckIcon className="h-5 w-5 text-shopstr-purple dark:text-shopstr-yellow" />
+                                  <TruckIcon className="text-shopstr-purple dark:text-shopstr-yellow h-5 w-5" />
                                   {isFreeShipping ? (
                                     <p className="text-sm font-bold text-green-600 dark:text-green-400">
                                       Free shipping from {sellerName}!
                                     </p>
                                   ) : (
-                                    <p className="text-sm font-bold text-light-text dark:text-dark-text">
+                                    <p className="text-light-text dark:text-dark-text text-sm font-bold">
                                       You&apos;re {remaining.toFixed(2)}{" "}
                                       {thresholdCurrency} away from free
                                       shipping from {sellerName}!
@@ -727,7 +752,7 @@ export default function Component() {
                                 </div>
                                 <div className="h-3 w-full overflow-hidden rounded-full border border-gray-300 bg-gray-200 dark:border-gray-600 dark:bg-gray-700">
                                   <div
-                                    className={`h-full rounded-full duration-500 transition-all ${
+                                    className={`h-full rounded-full transition-all duration-500 ${
                                       isFreeShipping
                                         ? "bg-green-500"
                                         : "bg-shopstr-purple dark:bg-shopstr-yellow"
@@ -787,7 +812,7 @@ export default function Component() {
                   <div className="mb-8 flex items-center justify-center rounded-full border border-gray-300 bg-gray-100 p-6 dark:border-gray-600 dark:bg-gray-700">
                     <ShoppingBagIcon className="h-16 w-16 text-gray-800 dark:text-gray-200" />
                   </div>
-                  <h2 className="mb-2 text-center text-3xl font-bold text-light-text dark:text-dark-text">
+                  <h2 className="text-light-text dark:text-dark-text mb-2 text-center text-3xl font-bold">
                     Your cart is empty . . .
                   </h2>
                   <p className="mb-6 max-w-md text-center text-gray-500 dark:text-gray-400">
@@ -809,7 +834,7 @@ export default function Component() {
             </div>
           </div>
         ) : (
-          <div className="flex min-h-screen w-full bg-light-bg text-light-text dark:bg-dark-bg dark:text-dark-text sm:items-center sm:justify-center">
+          <div className="bg-light-bg text-light-text dark:bg-dark-bg dark:text-dark-text flex min-h-screen w-full sm:items-center sm:justify-center">
             <div className="mx-auto flex w-full flex-col pt-20">
               <div className="flex flex-col items-center">
                 <CartInvoiceCard
@@ -856,11 +881,11 @@ export default function Component() {
               size="2xl"
             >
               <ModalContent>
-                <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+                <ModalHeader className="text-light-text dark:text-dark-text flex items-center justify-center">
                   <CheckCircleIcon className="h-6 w-6 text-green-500" />
                   <div className="ml-2">Order successful!</div>
                 </ModalHeader>
-                <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+                <ModalBody className="text-light-text dark:text-dark-text flex flex-col overflow-hidden">
                   <div className="flex items-center justify-center">
                     The seller will receive a message with your order details.
                   </div>
@@ -890,11 +915,11 @@ export default function Component() {
               size="2xl"
             >
               <ModalContent>
-                <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+                <ModalHeader className="text-light-text dark:text-dark-text flex items-center justify-center">
                   <XCircleIcon className="h-6 w-6 text-red-500" />
                   <div className="ml-2">Invoice generation failed!</div>
                 </ModalHeader>
-                <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+                <ModalBody className="text-light-text dark:text-dark-text flex flex-col overflow-hidden">
                   <div className="flex items-center justify-center">
                     The price and/or currency set for this listing was invalid.
                   </div>
@@ -924,11 +949,11 @@ export default function Component() {
               size="2xl"
             >
               <ModalContent>
-                <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+                <ModalHeader className="text-light-text dark:text-dark-text flex items-center justify-center">
                   <XCircleIcon className="h-6 w-6 text-red-500" />
                   <div className="ml-2">Purchase failed!</div>
                 </ModalHeader>
-                <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+                <ModalBody className="text-light-text dark:text-dark-text flex flex-col overflow-hidden">
                   <div className="flex items-center justify-center">
                     You didn&apos;t have enough balance in your wallet to pay.
                   </div>
@@ -937,7 +962,7 @@ export default function Component() {
             </Modal>
           </>
         ) : null}
-      </>
-    </StorefrontThemeWrapper>
+      </StorefrontThemeWrapper>
+    </ProtectedRoute>
   );
 }

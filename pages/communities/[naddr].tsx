@@ -3,7 +3,7 @@ import { useRouter } from "next/router";
 import { nip19 } from "nostr-tools";
 import { CommunityContext } from "@/utils/context/context";
 import { Community } from "@/utils/types/types";
-import { Spinner } from "@nextui-org/react";
+import { Spinner } from "@heroui/react";
 import CommunityFeed from "@/components/communities/CommunityFeed";
 import { sanitizeUrl } from "@braintree/sanitize-url";
 import { GetServerSideProps } from "next";
@@ -114,18 +114,18 @@ const SingleCommunityPage = () => {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-light-bg pt-20 dark:bg-dark-bg">
+    <div className="bg-light-bg dark:bg-dark-bg flex min-h-screen flex-col pt-20">
       <div className="container mx-auto max-w-3xl px-4">
         <div
-          className="relative mb-8 h-48 w-full rounded-lg bg-cover bg-center dark:bg-dark-fg"
+          className="dark:bg-dark-fg relative mb-8 h-48 w-full rounded-lg bg-cover bg-center"
           style={{ backgroundImage: `url(${sanitizeUrl(community.image)})` }}
         >
           <div className="absolute inset-0 rounded-lg bg-black/30"></div>
         </div>
-        <h1 className="text-4xl font-bold text-light-text dark:text-dark-text">
+        <h1 className="text-light-text dark:text-dark-text text-4xl font-bold">
           {community.name}
         </h1>
-        <p className="mt-2 text-lg text-light-text/80 dark:text-dark-text/80">
+        <p className="text-light-text/80 dark:text-dark-text/80 mt-2 text-lg">
           {community.description}
         </p>
 

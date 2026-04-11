@@ -1,5 +1,6 @@
 import { useContext, useRef, useState } from "react";
-import { Button, Progress } from "@nextui-org/react";
+
+import { Button, Input, Progress } from "@heroui/react";
 import {
   blossomUploadImages,
   getLocalStorageData,
@@ -388,10 +389,9 @@ export const FileUploaderButton = ({
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        onClick={handleDropZoneClick}
-        className={`relative w-full duration-300 transition-all ${
+        className={`relative w-full transition-all duration-300 ${
           isPlaceholder
-            ? "flex h-full min-h-[250px] cursor-pointer items-center justify-center rounded-xl border-2 border-dashed border-shopstr-purple p-6 dark:border-shopstr-yellow"
+            ? "border-shopstr-purple dark:border-shopstr-yellow flex h-full min-h-[250px] items-center justify-center rounded-xl border-2 border-dashed p-6"
             : !isDragging && "border-2 border-dashed border-transparent"
         }`}
       >
@@ -409,12 +409,12 @@ export const FileUploaderButton = ({
               animate={{ scale: [1, 1.1, 1] }}
               transition={{ duration: 0.8, repeat: Infinity }}
             >
-              <PhotoIcon className="mb-4 h-16 w-16 text-shopstr-purple dark:text-shopstr-yellow" />
+              <PhotoIcon className="text-shopstr-purple dark:text-shopstr-yellow mb-4 h-16 w-16" />
             </motion.div>
-            <p className="text-xl font-semibold text-light-text dark:text-dark-text">
+            <p className="text-light-text dark:text-dark-text text-xl font-semibold">
               {isDragging ? "Drop to upload" : "Drag & Drop Images Here"}
             </p>
-            <p className="mt-1 text-center text-sm text-light-text dark:text-dark-text">
+            <p className="text-light-text dark:text-dark-text mt-1 text-center text-sm">
               {isPlaceholder && !isDragging
                 ? "Or click below to select files"
                 : "Supports JPEG, PNG, WebP"}
@@ -472,11 +472,11 @@ export const FileUploaderButton = ({
             className="w-full space-y-4"
           >
             <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-default-700">
+              <span className="text-default-700 text-sm font-medium">
                 Uploading {previews.length} image
                 {previews.length > 1 ? "s" : ""}
               </span>
-              <span className="text-sm font-medium text-shopstr-purple dark:text-shopstr-yellow">
+              <span className="text-shopstr-purple dark:text-shopstr-yellow text-sm font-medium">
                 {progress}%
               </span>
             </div>
@@ -490,7 +490,7 @@ export const FileUploaderButton = ({
                 indicator: "bg-gradient-to-r from-pink-400 to-pink-600",
               }}
             />
-            <div className="flex justify-between text-xs text-default-500">
+            <div className="text-default-500 flex justify-between text-xs">
               <span>Preprocessing{progress >= 30 ? " ✓" : ""}</span>
               <span>Uploading{progress >= 100 ? " ✓" : ""}</span>
               <span>Processing</span>
