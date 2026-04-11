@@ -45,7 +45,7 @@ import {
 } from "@/components/utility-components/nostr-context-provider";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { calculateWeightedScore } from "@/utils/parsers/review-parser-functions";
-import { fiat } from "@getalby/lightning-tools";
+import { getSatoshiValue } from "@getalby/lightning-tools";
 import currencySelection from "@/public/currencySelection.json";
 import {
   Chart as ChartJS,
@@ -249,7 +249,7 @@ const OrdersDashboard = () => {
 
       const ratePromises = currenciesToFetch.map(async (currency) => {
         try {
-          const sats = await fiat.getSatoshiValue({ amount: 1, currency });
+          const sats = await getSatoshiValue({ amount: 1, currency });
           return { currency: currency.toLowerCase(), rate: sats };
         } catch (err) {
           console.error(`Failed to fetch rate for ${currency}:`, err);

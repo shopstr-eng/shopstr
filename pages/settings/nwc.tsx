@@ -18,7 +18,7 @@ import {
   ExclamationCircleIcon,
   WalletIcon,
 } from "@heroicons/react/24/outline";
-import { webln } from "@getalby/sdk";
+import { NostrWebLNProvider } from "@getalby/sdk";
 import { formatWithCommas } from "@/components/utility-components/display-monetary-info";
 import ProtectedRoute from "@/components/utility-components/protected-route";
 
@@ -58,9 +58,9 @@ const NWCSettingsPage = () => {
 
   const fetchBalance = async (connectionString: string | null) => {
     if (!connectionString) return;
-    let nwc: webln.NostrWebLNProvider | null = null;
+    let nwc: NostrWebLNProvider | null = null;
     try {
-      nwc = new webln.NostrWebLNProvider({
+      nwc = new NostrWebLNProvider({
         nostrWalletConnectUrl: connectionString,
       });
       await nwc.enable();
@@ -75,7 +75,7 @@ const NWCSettingsPage = () => {
   };
 
   const handleSave = async () => {
-    let nwc: webln.NostrWebLNProvider | null = null;
+    let nwc: NostrWebLNProvider | null = null;
     setIsLoading(true);
     setError(null);
     setIsSaved(false);
@@ -102,7 +102,7 @@ const NWCSettingsPage = () => {
         throw new Error("Missing 'relay' parameter in the connection string.");
       }
 
-      nwc = new webln.NostrWebLNProvider({ nostrWalletConnectUrl: nwcString });
+      nwc = new NostrWebLNProvider({ nostrWalletConnectUrl: nwcString });
       await nwc.enable();
       const info = await nwc.getInfo();
 
