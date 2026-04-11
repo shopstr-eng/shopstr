@@ -23,7 +23,7 @@
     "@braintree/sanitize-url": "7.1.0",
     "@cashu/cashu-ts": "2.1.0",
     "@ducanh2912/next-pwa": "10.2.9",
-    "@getalby/lightning-tools": "5.0.1",
+    "@getalby/lightning-tools": "8.1.0",
     "@getalby/sdk": "7.0.0",
     "@heroicons/react": "2.1.1",
     "@heroui/react": "2.8.10",
