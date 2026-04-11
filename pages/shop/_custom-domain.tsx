@@ -59,7 +59,7 @@ export default function CustomDomainPage() {
         </p>
         <Link
           href="/"
-          className="mt-6 rounded-lg bg-shopstr-purple px-6 py-3 font-bold text-white"
+          className="bg-shopstr-purple mt-6 rounded-lg px-6 py-3 font-bold text-white"
         >
           Visit Shopstr
         </Link>

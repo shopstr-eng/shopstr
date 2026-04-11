@@ -4,7 +4,7 @@ import ProtectedRoute from "@/components/utility-components/protected-route";
 export default function ShopView() {
   return (
     <ProtectedRoute>
-      <div className="flex h-full min-h-screen flex-col bg-light-bg pt-24 dark:bg-dark-bg">
+      <div className="bg-light-bg dark:bg-dark-bg flex h-full min-h-screen flex-col pt-24">
         <MyListingsFeed />
       </div>
     </ProtectedRoute>

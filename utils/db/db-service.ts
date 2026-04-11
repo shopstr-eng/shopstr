@@ -1,5 +1,6 @@
 import { Pool, PoolClient } from "pg";
 import { NostrEvent } from "../types/types";
+import { findListingBySlug } from "../url-slugs";
 
 let pool: Pool | null = null;
 let tablesInitialized = false;
@@ -1211,16 +1212,6 @@ export async function closeDbPool(): Promise<void> {
   }
 }
 
-function titleToSlug(title: string): string {
-  if (!title) return "";
-  return title
-    .trim()
-    .replace(/[#?&\/\\%=+<>{}|^~\[\]`@!$*()"';:,]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "");
-}
-
 function profileNameToSlug(name: string): string {
   if (!name) return "";
   return name
@@ -1300,7 +1291,7 @@ export async function fetchProductByDTagAndPubkey(
   }
 }
 
-export async function fetchProductByTitleSlug(
+export async function fetchProductByListingSlug(
   slug: string
 ): Promise<NostrEvent | null> {
   const dbPool = getDbPool();
@@ -1315,65 +1306,51 @@ export async function fetchProductByTitleSlug(
        )
        ORDER BY created_at DESC`
     );
-    const pubkeySuffixMatch = slug.match(/^(.+)-([a-f0-9]{8})$/);
-    const baseSlug = pubkeySuffixMatch?.[1];
-    const pubkeyFragment = pubkeySuffixMatch?.[2];
+    const matchingRow = findListingBySlug(
+      slug,
+      result.rows
+        .map((row) => {
+          const tags: string[][] = row.tags;
+          const titleTag = tags.find((t) => t[0] === "title");
+          const title = titleTag?.[1];
 
-    let exactMatch: NostrEvent | null = null;
-    let exactMatchCount = 0;
-    let disambiguatedMatch: NostrEvent | null = null;
+          if (!title) {
+            return null;
+          }
 
-    for (const row of result.rows) {
-      const tags: string[][] = row.tags;
-      const titleTag = tags.find((t) => t[0] === "title");
-      if (!titleTag || !titleTag[1]) continue;
+          return {
+            row,
+            id: row.id,
+            pubkey: row.pubkey,
+            title,
+          };
+        })
+        .filter(
+          (
+            candidate
+          ): candidate is {
+            row: (typeof result.rows)[number];
+            id: string;
+            pubkey: string;
+            title: string;
+          } => candidate !== null
+        )
+    );
 
-      const currentSlug = titleToSlug(titleTag[1]);
+    if (!matchingRow) return null;
 
-      if (currentSlug === slug) {
-        exactMatchCount += 1;
-        if (exactMatchCount > 1) {
-          return null;
-        }
-
-        exactMatch = {
-          id: row.id,
-          pubkey: row.pubkey,
-          created_at: row.created_at,
-          kind: row.kind,
-          tags: row.tags,
-          content: row.content,
-          sig: row.sig,
-        };
-      }
-
-      if (
-        !exactMatch &&
-        !disambiguatedMatch &&
-        baseSlug &&
-        pubkeyFragment &&
-        currentSlug === baseSlug &&
-        row.pubkey.startsWith(pubkeyFragment)
-      ) {
-        disambiguatedMatch = {
-          id: row.id,
-          pubkey: row.pubkey,
-          created_at: row.created_at,
-          kind: row.kind,
-          tags: row.tags,
-          content: row.content,
-          sig: row.sig,
-        };
-      }
-    }
-
-    if (exactMatch) {
-      return exactMatch;
-    }
-
-    return disambiguatedMatch;
+    const row = matchingRow.row;
+    return {
+      id: row.id,
+      pubkey: row.pubkey,
+      created_at: row.created_at,
+      kind: row.kind,
+      tags: row.tags,
+      content: row.content,
+      sig: row.sig,
+    };
   } catch (error) {
-    console.error("Failed to fetch product by title slug:", error);
+    console.error("Failed to fetch product by listing slug:", error);
     return null;
   } finally {
     if (client) client.release();

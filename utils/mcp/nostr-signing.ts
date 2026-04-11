@@ -22,24 +22,24 @@ import {
 
 const ALGORITHM = "aes-256-gcm";
 
-function getEncryptionKey(): Buffer {
+function getEncryptionKey(): Uint8Array {
   const envKey = process.env.MCP_ENCRYPTION_KEY;
   if (!envKey) {
     throw new Error(
       "MCP_ENCRYPTION_KEY environment variable is required for agent key storage"
     );
   }
-  return createHash("sha256").update(envKey).digest();
+  return Uint8Array.from(createHash("sha256").update(envKey).digest());
 }
 
 export function encryptNsec(nsec: string): string {
   const key = getEncryptionKey();
-  const iv = randomBytes(16);
+  const iv = Uint8Array.from(randomBytes(16));
   const cipher = createCipheriv(ALGORITHM, key, iv);
   let encrypted = cipher.update(nsec, "utf8", "hex");
   encrypted += cipher.final("hex");
   const authTag = cipher.getAuthTag().toString("hex");
-  return `${iv.toString("hex")}:${authTag}:${encrypted}`;
+  return `${Buffer.from(iv).toString("hex")}:${authTag}:${encrypted}`;
 }
 
 export function decryptNsec(encryptedData: string): string {
@@ -48,8 +48,12 @@ export function decryptNsec(encryptedData: string): string {
   if (!ivHex || !authTagHex || !encrypted) {
     throw new Error("Invalid encrypted nsec format");
   }
-  const decipher = createDecipheriv(ALGORITHM, key, Buffer.from(ivHex, "hex"));
-  decipher.setAuthTag(Buffer.from(authTagHex, "hex"));
+  const decipher = createDecipheriv(
+    ALGORITHM,
+    key,
+    Uint8Array.from(Buffer.from(ivHex, "hex"))
+  );
+  decipher.setAuthTag(Uint8Array.from(Buffer.from(authTagHex, "hex")));
   let decrypted = decipher.update(encrypted, "hex", "utf8");
   decrypted += decipher.final("utf8");
   return decrypted;

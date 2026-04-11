@@ -16,8 +16,8 @@ import router from "next/router";
 const mockRouterPush = router.push as jest.Mock;
 
 const mockOnOpen = jest.fn();
-jest.mock("@nextui-org/react", () => ({
-  ...jest.requireActual("@nextui-org/react"),
+jest.mock("@heroui/react", () => ({
+  ...jest.requireActual("@heroui/react"),
   useDisclosure: () => ({
     isOpen: false,
     onOpen: mockOnOpen,
@@ -83,7 +83,9 @@ const mockShopDataContextEmpty = {
   updateShopData: jest.fn(),
 };
 
-type SignerContextValue = ComponentProps<typeof SignerContext.Provider>["value"];
+type SignerContextValue = ComponentProps<
+  typeof SignerContext.Provider
+>["value"];
 type ShopContextValue = ComponentProps<typeof ShopMapContext.Provider>["value"];
 
 const renderComponent = (
@@ -274,7 +276,7 @@ describe("MyListingsPage", () => {
       expect(mockRouterPush).toHaveBeenCalledWith("?addNewListing");
 
       fireEvent.click(screen.getAllByText("Edit Shop")[0]!);
-      expect(mockRouterPush).toHaveBeenCalledWith("settings/shop-profile");
+      expect(mockRouterPush).toHaveBeenCalledWith("/settings/shop-profile");
 
       fireEvent.click(screen.getAllByRole("button", { name: "Orders" })[0]!);
       expect(mockRouterPush).toHaveBeenCalledWith("/orders");

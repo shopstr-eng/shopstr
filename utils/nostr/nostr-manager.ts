@@ -4,6 +4,7 @@ import {
   Event as NToolEvent,
   EventTemplate as NToolEvenTemplate,
   verifyEvent,
+  mergeFilters,
 } from "nostr-tools";
 import { SubscribeManyParams, SubCloser } from "nostr-tools/abstract-pool";
 
@@ -147,7 +148,7 @@ export class NostrManager {
     const sub: NostrSub = {
       _sub: this.pool.subscribeMany(
         relays.map((r) => r.url),
-        filters,
+        mergeFilters(...filters),
         params ?? {}
       ),
       close: async () => {
