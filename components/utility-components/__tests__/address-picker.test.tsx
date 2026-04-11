@@ -38,7 +38,7 @@ jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
 }));
 
 // Minimal NextUI mocks
-jest.mock("@nextui-org/react", () => {
+jest.mock("@heroui/react", () => {
   const React = require("react");
   const AccordionContext = React.createContext(null);
 

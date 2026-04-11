@@ -13,12 +13,12 @@ Preferred communication style: Simple, everyday language.
 - **Next.js**: 16.2.3 (Turbopack)
 - **React / React-DOM**: 19.2.5
 - **Tailwind CSS**: 4.2.2 via `@tailwindcss/postcss`
-- **@heroui/react**: 2.8.10 (HeroUI v2 — the maintained successor to `@nextui-org/react` v2)
+- **@heroui/react**: 2.8.10 (HeroUI v2 — the maintained successor to `@heroui/react` v2)
 - **framer-motion**: 12.38.0
 
 ### Tailwind v4 Notes
 
-HeroUI v2.8.10 replaced `@nextui-org/react@2.2.9`. The heroui plugin correctly uses `addBase()` for all non-class selectors (`:root`, `[data-theme]`) — no compatibility shim needed. CSS config uses `@import "tailwindcss"` + `@config "../tailwind.config.ts"` in `styles/globals.css`, and `@tailwindcss/postcss` in `postcss.config.cjs`. The app provider changed from `NextUIProvider` to `HeroUIProvider`. CSS variables renamed from `--nextui-*` to `--heroui-*`.
+HeroUI v2.8.10 replaced `@heroui/react@2.2.9`. The heroui plugin correctly uses `addBase()` for all non-class selectors (`:root`, `[data-theme]`) — no compatibility shim needed. CSS config uses `@import "tailwindcss"` + `@config "../tailwind.config.ts"` in `styles/globals.css`, and `@tailwindcss/postcss` in `postcss.config.cjs`. The app provider changed from `NextUIProvider` to `HeroUIProvider`. CSS variables renamed from `--nextui-*` to `--heroui-*`.
 
 ### Product Listing Page Routing Fix (PR #384)
 

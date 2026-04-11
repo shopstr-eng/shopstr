@@ -7,7 +7,7 @@ import {
   RadioGroup,
   Radio,
   Chip,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import { TrashIcon, StarIcon } from "@heroicons/react/24/outline";
 import { StarIcon as StarIconSolid } from "@heroicons/react/24/solid";
 import { SavedAddress } from "@/utils/types/types";

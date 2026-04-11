@@ -5,7 +5,7 @@ import {
   ModalBody,
   ModalFooter,
   Button,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import { ExclamationTriangleIcon } from "@heroicons/react/24/outline";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 
@@ -50,13 +50,13 @@ export default function ConfirmationModal({
       size="md"
     >
       <ModalContent>
-        <ModalHeader className="flex items-center justify-center gap-2 text-light-text dark:text-dark-text">
+        <ModalHeader className="text-light-text dark:text-dark-text flex items-center justify-center gap-2">
           {isDangerous && (
             <ExclamationTriangleIcon className="h-6 w-6 text-red-500" />
           )}
           <div>{title}</div>
         </ModalHeader>
-        <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+        <ModalBody className="text-light-text dark:text-dark-text flex flex-col overflow-hidden">
           <div className="flex items-center justify-center text-center">
             {message}
           </div>

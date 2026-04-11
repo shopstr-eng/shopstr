@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button } from "@nextui-org/react";
+import { Button } from "@heroui/react";
 import { MinusCircleIcon, PencilIcon } from "@heroicons/react/24/outline";
 import { SavedAddress } from "@/utils/types/types";
 import ConfirmationModal from "./confirmation-modal";
@@ -51,11 +51,11 @@ export default function SavedAddressesList({
           >
             <div className="flex-1">
               <div className="flex items-center gap-2">
-                <h4 className="font-semibold text-light-text dark:text-dark-text">
+                <h4 className="text-light-text dark:text-dark-text font-semibold">
                   {addr.label}
                 </h4>
                 {addr.isDefault && (
-                  <span className="rounded bg-shopstr-purple px-2 py-1 text-xs text-white dark:bg-shopstr-yellow dark:text-black">
+                  <span className="bg-shopstr-purple dark:bg-shopstr-yellow rounded px-2 py-1 text-xs text-white dark:text-black">
                     Default
                   </span>
                 )}

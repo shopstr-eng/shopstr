@@ -1039,65 +1039,14 @@ const PreferencesPage = () => {
               <ModalHeader className="text-light-text dark:text-dark-text flex flex-col gap-1">
                 {editingAddress ? "Edit Address" : "Add New Address"}
               </ModalHeader>
-              {editingAddress && (
-                <EditAddressForm
-                  address={editingAddress}
-                  onSave={handleSaveEditedAddress}
-                  onClose={() => {
-                    setShowEditAddressModal(false);
-                    setEditingAddress(null);
-                  }}
-                />
-              )}
-            </ModalContent>
-          </Modal>
-
-          <span className="text-light-text dark:text-dark-text my-4 flex text-2xl font-bold">
-            Saved Addresses
-          </span>
-
-          {isLoaded && (
-            <div className="bg-light-bg dark:bg-dark-bg mb-6 rounded-md border border-gray-200 p-4 dark:border-zinc-800">
-              <SavedAddressesList
-                addresses={savedAddresses}
-                onEdit={handleEditAddress}
-                onDelete={handleDeleteAddress}
+              <EditAddressForm
+                address={editingAddress}
+                onSave={handleSaveEditedAddress}
+                onClose={() => {
+                  setShowEditAddressModal(false);
+                  setEditingAddress(null);
+                }}
               />
-            </div>
-          )}
-
-          {/* Edit Address Modal */}
-          <Modal
-            backdrop="blur"
-            isOpen={showEditAddressModal}
-            onClose={() => {
-              setShowEditAddressModal(false);
-              setEditingAddress(null);
-            }}
-            classNames={{
-              body: "py-6",
-              backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-              header: "border-b-[1px] border-[#292f46]",
-              footer: "border-t-[1px] border-[#292f46]",
-              closeButton: "hover:bg-black/5 active:bg-white/10",
-            }}
-            scrollBehavior={"outside"}
-            size="2xl"
-          >
-            <ModalContent>
-              <ModalHeader className="text-light-text dark:text-dark-text flex flex-col gap-1">
-                Edit Address
-              </ModalHeader>
-              {editingAddress && (
-                <EditAddressForm
-                  address={editingAddress}
-                  onSave={handleSaveEditedAddress}
-                  onClose={() => {
-                    setShowEditAddressModal(false);
-                    setEditingAddress(null);
-                  }}
-                />
-              )}
             </ModalContent>
           </Modal>
 

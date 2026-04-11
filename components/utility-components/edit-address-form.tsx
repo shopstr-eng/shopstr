@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useForm, Controller } from "react-hook-form";
-import { ModalBody, ModalFooter, Button, Input } from "@nextui-org/react";
+import { ModalBody, ModalFooter, Button, Input } from "@heroui/react";
 import { SavedAddress } from "@/utils/types/types";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { getSavedAddresses } from "@/utils/nostr/nostr-helper-functions";
