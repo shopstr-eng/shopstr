@@ -20,7 +20,7 @@ import {
   ModalFooter,
   Button,
   Input,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
   getLocalStorageData,
@@ -196,7 +196,7 @@ const SendButton = () => {
         size="2xl"
       >
         <ModalContent>
-          <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
+          <ModalHeader className="text-light-text dark:text-dark-text flex flex-col gap-1">
             Send Tokens
           </ModalHeader>
           <form onSubmit={handleSendSubmit(onSendSubmit)}>
@@ -241,8 +241,8 @@ const SendButton = () => {
               />
               {signer instanceof NostrNIP46Signer && (
                 <div className="mx-4 my-2 flex items-center justify-center text-center">
-                  <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
-                  <p className="ml-2 text-xs text-light-text dark:text-dark-text">
+                  <InformationCircleIcon className="text-light-text dark:text-dark-text h-6 w-6" />
+                  <p className="text-light-text dark:text-dark-text ml-2 text-xs">
                     If the token is taking a while to be generated, make sure to
                     check your bunker application to approve the transaction
                     events.
@@ -283,17 +283,17 @@ const SendButton = () => {
                   <CardBody className="flex flex-col items-center">
                     {newToken ? (
                       <div className="flex flex-col items-center justify-center">
-                        <p className="whitespace-break-spaces break-all">
+                        <p className="break-all whitespace-break-spaces">
                           {newToken}
                         </p>
                         <ClipboardIcon
                           onClick={handleCopyTokenString}
-                          className={`ml-2 h-6 w-6 cursor-pointer text-light-text dark:text-dark-text ${
+                          className={`text-light-text dark:text-dark-text ml-2 h-6 w-6 cursor-pointer ${
                             copiedToClipboard ? "hidden" : ""
                           }`}
                         />
                         <CheckIcon
-                          className={`ml-2 h-6 w-6 cursor-pointer text-light-text dark:text-dark-text ${
+                          className={`text-light-text dark:text-dark-text ml-2 h-6 w-6 cursor-pointer ${
                             copiedToClipboard ? "" : "hidden"
                           }`}
                         />

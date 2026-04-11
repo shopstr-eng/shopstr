@@ -16,7 +16,7 @@ import {
   ModalBody,
   ModalFooter,
   Spinner,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import {
   getLocalStorageData,
   publishProofEvent,
@@ -207,7 +207,7 @@ const PayButton = () => {
         size="2xl"
       >
         <ModalContent>
-          <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
+          <ModalHeader className="text-light-text dark:text-dark-text flex flex-col gap-1">
             Pay Lightning Invoice
           </ModalHeader>
           <form onSubmit={handlePaySubmit(onPaySubmit)}>
@@ -256,7 +256,7 @@ const PayButton = () => {
                         value={value}
                       />
                       {feeReserveAmount && (
-                        <div className="mt-2 text-left text-light-text dark:text-dark-text">
+                        <div className="text-light-text dark:text-dark-text mt-2 text-left">
                           Fee Reserve: {feeReserveAmount}
                         </div>
                       )}
@@ -271,8 +271,8 @@ const PayButton = () => {
               />
               {signer instanceof NostrNIP46Signer && (
                 <div className="mx-4 my-2 flex items-center justify-center text-center">
-                  <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
-                  <p className="ml-2 text-xs text-light-text dark:text-dark-text">
+                  <InformationCircleIcon className="text-light-text dark:text-dark-text h-6 w-6" />
+                  <p className="text-light-text dark:text-dark-text ml-2 text-xs">
                     If the invoice payment is taking a while to be confirmed,
                     make sure to check your bunker application to approve the
                     transaction events.
@@ -301,11 +301,11 @@ const PayButton = () => {
                   size="2xl"
                 >
                   <ModalContent>
-                    <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+                    <ModalHeader className="text-light-text dark:text-dark-text flex items-center justify-center">
                       <XCircleIcon className="h-6 w-6 text-red-500" />
                       <div className="ml-2">Payment failed!</div>
                     </ModalHeader>
-                    <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+                    <ModalBody className="text-light-text dark:text-dark-text flex flex-col overflow-hidden">
                       <div className="flex items-center justify-center">
                         No routes could be found, or you don&apos;t have enough
                         funds. Please try again with a new invoice, or change
@@ -337,11 +337,11 @@ const PayButton = () => {
                   size="2xl"
                 >
                   <ModalContent>
-                    <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+                    <ModalHeader className="text-light-text dark:text-dark-text flex items-center justify-center">
                       <CheckCircleIcon className="h-6 w-6 text-green-500" />
                       <div className="ml-2">Invoice successfully paid!</div>
                     </ModalHeader>
-                    <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+                    <ModalBody className="text-light-text dark:text-dark-text flex flex-col overflow-hidden">
                       <div className="flex items-center justify-center">
                         Check your external Lightning wallet for your sats.
                       </div>

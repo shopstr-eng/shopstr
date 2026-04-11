@@ -1,4 +1,3 @@
-import "tailwindcss/tailwind.css";
 import type { AppProps } from "next/app";
 import "../styles/globals.css";
 import { useState, useEffect, useCallback, useContext } from "react";
@@ -31,7 +30,7 @@ import {
   getDefaultRelays,
   LogOut,
 } from "@/utils/nostr/nostr-helper-functions";
-import { NextUIProvider } from "@nextui-org/react";
+import { HeroUIProvider } from "@heroui/react";
 import { ThemeProvider as NextThemesProvider } from "next-themes";
 import {
   fetchAllPosts,
@@ -781,7 +780,7 @@ function Shopstr({ props }: { props: AppProps }) {
 function App(props: AppProps) {
   return (
     <>
-      <NextUIProvider>
+      <HeroUIProvider>
         <NextThemesProvider attribute="class">
           <NostrContextProvider>
             <SignerContextProvider>
@@ -789,7 +788,7 @@ function App(props: AppProps) {
             </SignerContextProvider>
           </NostrContextProvider>
         </NextThemesProvider>
-      </NextUIProvider>
+      </HeroUIProvider>
     </>
   );
 }

@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import SideShopNav from "../side-shop-nav";
 import { ShopMapContext } from "@/utils/context/context";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
-import { useDisclosure } from "@nextui-org/react";
+import { useDisclosure } from "@heroui/react";
 import { useRouter } from "next/router";
 
 jest.mock("next/router", () => ({ __esModule: true, useRouter: jest.fn() }));
@@ -13,8 +13,8 @@ jest.mock("@/components/hooks/use-navigation", () => ({
   default: () => ({ isMessagesActive: false }),
 }));
 
-jest.mock("@nextui-org/react", () => ({
-  ...jest.requireActual("@nextui-org/react"),
+jest.mock("@heroui/react", () => ({
+  ...jest.requireActual("@heroui/react"),
   useDisclosure: jest.fn(),
 }));
 

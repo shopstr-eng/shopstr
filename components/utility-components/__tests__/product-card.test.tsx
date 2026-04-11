@@ -36,8 +36,8 @@ jest.mock("../dropdowns/location-dropdown", () => ({
   locationAvatar: (location: string) => <div>{`Avatar for ${location}`}</div>,
 }));
 
-jest.mock("@nextui-org/react", () => ({
-  ...jest.requireActual("@nextui-org/react"),
+jest.mock("@heroui/react", () => ({
+  ...jest.requireActual("@heroui/react"),
   Chip: ({ children, startContent }: any) => (
     <div>
       {startContent}

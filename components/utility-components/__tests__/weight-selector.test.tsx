@@ -4,7 +4,7 @@ import "@testing-library/jest-dom";
 import WeightSelector from "../weight-selector";
 
 const mockOnSelectionChange = jest.fn();
-jest.mock("@nextui-org/react", () => ({
+jest.mock("@heroui/react", () => ({
   Select: (props: any) => {
     mockOnSelectionChange.mockImplementation((keys) =>
       props.onSelectionChange(keys)

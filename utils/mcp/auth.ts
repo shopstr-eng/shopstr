@@ -61,7 +61,13 @@ export function verifyNostrAuth(
 export function hashApiKey(key: string): string {
   const salt = randomBytes(16);
   const iterations = 100_000;
-  const derivedKey = pbkdf2Sync(key, salt, iterations, 32, "sha256");
+  const derivedKey = pbkdf2Sync(
+    key,
+    Uint8Array.from(salt),
+    iterations,
+    32,
+    "sha256"
+  );
   const saltHex = salt.toString("hex");
   const hashHex = derivedKey.toString("hex");
   // format: algorithm$iterations$salt$hash
@@ -229,12 +235,15 @@ export function verifyApiKey(key: string, storedHash: string): boolean {
   const expectedKey = Buffer.from(parts[3]!, "hex");
   const derivedKey = pbkdf2Sync(
     key,
-    salt,
+    Uint8Array.from(salt),
     iterations,
     expectedKey.length,
     "sha256"
   );
-  return timingSafeEqual(derivedKey, expectedKey);
+  return timingSafeEqual(
+    Uint8Array.from(derivedKey),
+    Uint8Array.from(expectedKey)
+  );
 }
 
 export async function validateApiKey(

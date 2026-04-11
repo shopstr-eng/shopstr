@@ -16,8 +16,8 @@ import router from "next/router";
 const mockRouterPush = router.push as jest.Mock;
 
 const mockOnOpen = jest.fn();
-jest.mock("@nextui-org/react", () => ({
-  ...jest.requireActual("@nextui-org/react"),
+jest.mock("@heroui/react", () => ({
+  ...jest.requireActual("@heroui/react"),
   useDisclosure: () => ({
     isOpen: false,
     onOpen: mockOnOpen,

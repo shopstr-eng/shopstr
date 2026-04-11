@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useRouter } from "next/router";
-import { Card, CardBody, Button, Image, Input } from "@nextui-org/react";
+import { Card, CardBody, Button, Image, Input } from "@heroui/react";
 import {
   ArrowLongRightIcon,
   WalletIcon,
@@ -59,7 +59,7 @@ const OnboardingWallet = () => {
   };
 
   return (
-    <div className="flex h-[100vh] flex-col bg-light-bg pt-24 dark:bg-dark-bg">
+    <div className="bg-light-bg dark:bg-dark-bg flex h-[100vh] flex-col pt-24">
       <div className="mx-auto w-full max-w-2xl px-4 py-6">
         <Card>
           <CardBody>
@@ -71,12 +71,12 @@ const OnboardingWallet = () => {
                 src="/shopstr-2000x2000.png"
                 width={50}
               />
-              <h1 className="cursor-pointer text-center text-3xl font-bold text-shopstr-purple-light hover:text-purple-700 dark:text-shopstr-yellow-light">
+              <h1 className="text-shopstr-purple-light dark:text-shopstr-yellow-light cursor-pointer text-center text-3xl font-bold hover:text-purple-700">
                 Shopstr
               </h1>
             </div>
             <div className="mb-6 text-center">
-              <h2 className="text-2xl font-bold text-light-text dark:text-dark-text">
+              <h2 className="text-light-text dark:text-dark-text text-2xl font-bold">
                 Step 4: Connect Wallet
               </h2>
               <p className="text-light-text dark:text-dark-text">

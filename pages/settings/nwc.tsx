@@ -6,7 +6,7 @@ import {
   CardBody,
   CardHeader,
   Spinner,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs";
 import {
   getLocalStorageData,
@@ -145,14 +145,14 @@ const NWCSettingsPage = () => {
 
   return (
     <ProtectedRoute>
-      <div className="flex h-full flex-col bg-light-bg pt-24 dark:bg-dark-bg">
+      <div className="bg-light-bg dark:bg-dark-bg flex h-full flex-col pt-24">
         <div className="bg mx-auto h-screen w-full lg:w-1/2 lg:pl-4">
           <SettingsBreadCrumbs />
           <div className="p-4">
-            <h2 className="mb-4 text-xl font-bold text-light-text dark:text-dark-text">
+            <h2 className="text-light-text dark:text-dark-text mb-4 text-xl font-bold">
               NWC Connection
             </h2>
-            <p className="mb-4 text-sm text-light-text dark:text-dark-text">
+            <p className="text-light-text dark:text-dark-text mb-4 text-sm">
               Connect your wallet using a Nostr Wallet Connect (NIP-47)
               connection string (e.g., from Alby, Mutiny, or Umbrel). This
               allows Shopstr to request payments directly from your wallet.
@@ -211,10 +211,10 @@ const NWCSettingsPage = () => {
             </div>
 
             {walletInfo && (
-              <Card className="mt-6 bg-light-fg dark:bg-dark-fg">
+              <Card className="bg-light-fg dark:bg-dark-fg mt-6">
                 <CardHeader>
-                  <WalletIcon className="mr-2 h-5 w-5 text-light-text dark:text-dark-text" />
-                  <h3 className="font-bold text-light-text dark:text-dark-text">
+                  <WalletIcon className="text-light-text dark:text-dark-text mr-2 h-5 w-5" />
+                  <h3 className="text-light-text dark:text-dark-text font-bold">
                     Connected Wallet: {walletInfo.alias || "Unknown"}
                   </h3>
                 </CardHeader>

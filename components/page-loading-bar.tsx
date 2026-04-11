@@ -66,7 +66,7 @@ export default function PageLoadingBar() {
 
   return (
     <div
-      className="pointer-events-none fixed left-0 right-0 top-0 z-[9999] h-[3px]"
+      className="pointer-events-none fixed top-0 right-0 left-0 z-[9999] h-[3px]"
       style={{
         opacity: fadeOut ? 0 : 1,
         transition: fadeOut ? "opacity 0.3s ease" : "none",

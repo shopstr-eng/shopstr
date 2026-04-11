@@ -8,7 +8,7 @@ import {
   DropdownTrigger,
   User,
   useDisclosure,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import { nip19 } from "nostr-tools";
 import { useContext, useEffect, useState } from "react";
 import { getProfileSlug } from "@/utils/url-slugs";
@@ -277,7 +277,7 @@ export const ProfileWithDropdown = ({
       color: "default",
       className: "text-light-text dark:text-dark-text",
       startContent: isNPubCopied ? (
-        <CheckIcon className="h-5 w-5 text-shopstr-purple dark:text-shopstr-yellow" />
+        <CheckIcon className="text-shopstr-purple dark:text-shopstr-yellow h-5 w-5" />
       ) : (
         <ClipboardIcon className="h-5 w-5" />
       ),

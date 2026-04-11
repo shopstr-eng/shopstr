@@ -50,9 +50,9 @@ jest.mock("nostr-tools", () => ({
   },
 }));
 
-import { useDisclosure } from "@nextui-org/react";
-jest.mock("@nextui-org/react", () => ({
-  ...jest.requireActual("@nextui-org/react"),
+import { useDisclosure } from "@heroui/react";
+jest.mock("@heroui/react", () => ({
+  ...jest.requireActual("@heroui/react"),
   useDisclosure: jest.fn(),
 }));
 

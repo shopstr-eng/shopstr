@@ -26,8 +26,9 @@
     "@getalby/lightning-tools": "5.0.1",
     "@getalby/sdk": "5.1.2",
     "@heroicons/react": "2.1.1",
+    "@heroui/react": "2.8.10",
     "@modelcontextprotocol/sdk": "1.27.1",
-    "@nextui-org/react": "2.2.9",
+    "@tailwindcss/postcss": "4.2.2",
     "@typescript-eslint/eslint-plugin": "8.56.1",
     "@typescript-eslint/parser": "8.56.1",
     "autoprefixer": "10.4.14",
@@ -37,19 +38,19 @@
     "dexie-react-hooks": "4.4.0",
     "eslint": "10.2.0",
     "eslint-config-next": "13.3.0",
-    "framer-motion": "10.16.4",
+    "framer-motion": "12.38.0",
     "next": "16.2.3",
     "next-themes": "0.2.1",
     "nostr-tools": "2.7.1",
     "pg": "8.11.5",
     "postcss": "8.4.31",
     "qrcode": "1.5.3",
-    "react": "18.2.0",
+    "react": "19.2.5",
     "react-chartjs-2": "5.3.1",
-    "react-dom": "18.2.0",
+    "react-dom": "19.2.5",
     "react-hook-form": "7.47.0",
     "react-responsive-carousel": "3.2.23",
-    "tailwindcss": "3.4.17",
+    "tailwindcss": "4.2.2",
     "uuid": "13.0.0"
   },
   "devDependencies": {
@@ -63,7 +64,7 @@
     "@types/pg": "8.11.4",
     "@types/qrcode": "1.5.5",
     "@types/react": "19.2.14",
-    "@types/react-dom": "18.0.11",
+    "@types/react-dom": "19.2.3",
     "@types/uuid": "9.0.4",
     "babel-jest": "30.0.4",
     "eslint-config-prettier": "9.1.0",
@@ -71,7 +72,7 @@
     "jest": "30.3.0",
     "jest-environment-jsdom": "30.2.0",
     "prettier": "3.1.0",
-    "prettier-plugin-tailwindcss": "0.5.7",
+    "prettier-plugin-tailwindcss": "0.7.2",
     "typescript": "6.0.2"
   },
   "overrides": {
@@ -80,7 +81,7 @@
   },
   "resolutions": {
     "@types/react": "19.2.14",
-    "@types/react-dom": "18.0.11"
+    "@types/react-dom": "19.2.3"
   },
   "browserslist": {
     "production": [

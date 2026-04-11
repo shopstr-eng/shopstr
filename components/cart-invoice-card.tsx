@@ -16,7 +16,7 @@ import {
   Select,
   SelectItem,
   Input,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import {
   BanknotesIcon,
   BoltIcon,
@@ -2447,9 +2447,7 @@ export default function CartInvoiceCard({
                       value={value || ""}
                     >
                       {(product.pickupLocations || []).map((location) => (
-                        <SelectItem key={location} value={location}>
-                          {location}
-                        </SelectItem>
+                        <SelectItem key={location}>{location}</SelectItem>
                       ))}
                     </Select>
                   )}
@@ -2491,10 +2489,10 @@ export default function CartInvoiceCard({
 
   if (showInvoiceCard) {
     return (
-      <div className="flex min-h-screen w-full bg-light-bg text-light-text dark:bg-dark-bg dark:text-dark-text">
+      <div className="bg-light-bg text-light-text dark:bg-dark-bg dark:text-dark-text flex min-h-screen w-full">
         <div className="mx-auto flex w-full flex-col lg:flex-row">
           {/* Order Summary - Full width on mobile, half on desktop */}
-          <div className="w-full bg-gray-50 p-6 dark:bg-gray-800 lg:w-1/2">
+          <div className="w-full bg-gray-50 p-6 lg:w-1/2 dark:bg-gray-800">
             <div className="sticky top-6">
               <h2 className="mb-6 text-2xl font-bold">Order Summary</h2>
 
@@ -2635,7 +2633,7 @@ export default function CartInvoiceCard({
 
               <button
                 onClick={() => onBackToCart?.()}
-                className="mt-4 text-shopstr-purple underline hover:text-shopstr-purple-light dark:text-shopstr-yellow dark:hover:text-shopstr-yellow-light"
+                className="text-shopstr-purple hover:text-shopstr-purple-light dark:text-shopstr-yellow dark:hover:text-shopstr-yellow-light mt-4 underline"
               >
                 ← Back to cart
               </button>
@@ -2643,7 +2641,7 @@ export default function CartInvoiceCard({
           </div>
 
           {/* Divider */}
-          <div className="h-px w-full bg-gray-300 dark:bg-gray-600 lg:h-full lg:w-px"></div>
+          <div className="h-px w-full bg-gray-300 lg:h-full lg:w-px dark:bg-gray-600"></div>
 
           {/* Right Side - Lightning Invoice - maintain consistent width */}
           <div className="w-full p-6 lg:w-1/2">
@@ -2657,7 +2655,7 @@ export default function CartInvoiceCard({
                   <div className="flex flex-col items-center justify-center">
                     {qrCodeUrl ? (
                       <>
-                        <h3 className="mt-3 text-center text-lg font-medium leading-6 text-gray-900 text-light-text dark:text-dark-text">
+                        <h3 className="text-light-text dark:text-dark-text mt-3 text-center text-lg leading-6 font-medium text-gray-900">
                           Don&apos;t refresh or close the page until the payment
                           has been confirmed!
                         </h3>
@@ -2680,12 +2678,12 @@ export default function CartInvoiceCard({
                           </p>
                           <ClipboardIcon
                             onClick={handleCopyInvoice}
-                            className={`ml-2 h-4 w-4 cursor-pointer text-light-text dark:text-dark-text ${
+                            className={`text-light-text dark:text-dark-text ml-2 h-4 w-4 cursor-pointer ${
                               copiedToClipboard ? "hidden" : ""
                             }`}
                           />
                           <CheckIcon
-                            className={`ml-2 h-4 w-4 cursor-pointer text-light-text dark:text-dark-text ${
+                            className={`text-light-text dark:text-dark-text ml-2 h-4 w-4 cursor-pointer ${
                               copiedToClipboard ? "" : "hidden"
                             }`}
                           />
@@ -2699,7 +2697,7 @@ export default function CartInvoiceCard({
                   </div>
                 ) : (
                   <div className="flex flex-col items-center justify-center">
-                    <h3 className="mt-3 text-center text-lg font-medium leading-6 text-gray-900">
+                    <h3 className="mt-3 text-center text-lg leading-6 font-medium text-gray-900">
                       Payment confirmed!
                     </h3>
                     <Image
@@ -2719,10 +2717,10 @@ export default function CartInvoiceCard({
   }
 
   return (
-    <div className="flex min-h-screen w-full bg-light-bg text-light-text dark:bg-dark-bg dark:text-dark-text">
+    <div className="bg-light-bg text-light-text dark:bg-dark-bg dark:text-dark-text flex min-h-screen w-full">
       <div className="mx-auto flex w-full flex-col lg:flex-row">
         {/* Order Summary - Full width on mobile, half on desktop */}
-        <div className="w-full bg-gray-50 p-6 dark:bg-gray-800 lg:w-1/2">
+        <div className="w-full bg-gray-50 p-6 lg:w-1/2 dark:bg-gray-800">
           <div className="sticky top-6">
             <h2 className="mb-6 text-2xl font-bold">Order Summary</h2>
 
@@ -2890,7 +2888,7 @@ export default function CartInvoiceCard({
 
             <button
               onClick={() => onBackToCart?.()}
-              className="mt-4 text-shopstr-purple underline hover:text-shopstr-purple-light dark:text-shopstr-yellow dark:hover:text-shopstr-yellow-light"
+              className="text-shopstr-purple hover:text-shopstr-purple-light dark:text-shopstr-yellow dark:hover:text-shopstr-yellow-light mt-4 underline"
             >
               ← Back to cart
             </button>
@@ -2898,7 +2896,7 @@ export default function CartInvoiceCard({
         </div>
 
         {/* Divider */}
-        <div className="h-px w-full bg-gray-300 dark:bg-gray-600 lg:h-full lg:w-px"></div>
+        <div className="h-px w-full bg-gray-300 lg:h-full lg:w-px dark:bg-gray-600"></div>
 
         {/* Right Side - Order Type Selection, Forms, and Payment */}
         <div className="w-full p-6 lg:w-1/2">
@@ -3028,7 +3026,7 @@ export default function CartInvoiceCard({
                   }}
                   className={`w-full rounded-lg border p-4 text-left hover:bg-gray-50 dark:hover:bg-gray-600 ${
                     shippingPickupPreference === "shipping"
-                      ? "border-shopstr-purple bg-purple-50 dark:border-shopstr-yellow dark:bg-yellow-50"
+                      ? "border-shopstr-purple dark:border-shopstr-yellow bg-purple-50 dark:bg-yellow-50"
                       : "border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-700"
                   }`}
                 >
@@ -3077,7 +3075,7 @@ export default function CartInvoiceCard({
                   }}
                   className={`w-full rounded-lg border p-4 text-left hover:bg-gray-50 dark:hover:bg-gray-600 ${
                     shippingPickupPreference === "contact"
-                      ? "border-shopstr-purple bg-purple-50 dark:border-shopstr-yellow dark:bg-yellow-50"
+                      ? "border-shopstr-purple dark:border-shopstr-yellow bg-purple-50 dark:bg-yellow-50"
                       : "border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-700"
                   }`}
                 >
@@ -3111,9 +3109,7 @@ export default function CartInvoiceCard({
                           }}
                         >
                           {(product.pickupLocations || []).map((location) => (
-                            <SelectItem key={location} value={location}>
-                              {location}
-                            </SelectItem>
+                            <SelectItem key={location}>{location}</SelectItem>
                           ))}
                         </Select>
                       </div>
@@ -3223,7 +3219,7 @@ export default function CartInvoiceCard({
           )}
           {orderConfirmed && (
             <div className="flex flex-col items-center justify-center">
-              <h3 className="mt-3 text-center text-lg font-medium leading-6 text-gray-900">
+              <h3 className="mt-3 text-center text-lg leading-6 font-medium text-gray-900">
                 Order confirmed!
               </h3>
               <Image

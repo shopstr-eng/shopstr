@@ -1,5 +1,5 @@
 import { useState, useEffect, useContext, useCallback } from "react";
-import { Button, Input, Select, SelectItem, Spinner } from "@nextui-org/react";
+import { Button, Input, Select, SelectItem, Spinner } from "@heroui/react";
 import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import ProtectedRoute from "@/components/utility-components/protected-route";
@@ -194,42 +194,42 @@ const ApiKeysPage = () => {
 
   return (
     <ProtectedRoute>
-      <div className="flex h-full flex-col bg-light-bg pt-24 dark:bg-dark-bg">
+      <div className="bg-light-bg dark:bg-dark-bg flex h-full flex-col pt-24">
         <div className="mx-auto w-full px-4 lg:w-1/2 xl:w-2/5">
           <SettingsBreadCrumbs />
 
           <div className="mb-8 p-4">
-            <h2 className="mb-2 text-2xl font-bold text-light-text dark:text-dark-text">
+            <h2 className="text-light-text dark:text-dark-text mb-2 text-2xl font-bold">
               MCP Connection
             </h2>
-            <div className="rounded-lg bg-light-fg p-4 dark:bg-dark-fg">
+            <div className="bg-light-fg dark:bg-dark-fg rounded-lg p-4">
               <div className="mb-3 flex items-start gap-2">
-                <InformationCircleIcon className="mt-0.5 h-5 w-5 flex-shrink-0 text-light-text dark:text-dark-text" />
-                <p className="text-sm text-light-text dark:text-dark-text">
+                <InformationCircleIcon className="text-light-text dark:text-dark-text mt-0.5 h-5 w-5 flex-shrink-0" />
+                <p className="text-light-text dark:text-dark-text text-sm">
                   Use the endpoint URL below to connect AI agents to Shopstr via
                   the Model Context Protocol (MCP). Include your API key in the{" "}
-                  <code className="rounded bg-light-bg px-1 dark:bg-dark-bg">
+                  <code className="bg-light-bg dark:bg-dark-bg rounded px-1">
                     Authorization
                   </code>{" "}
                   header as a Bearer token.
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                <code className="flex-1 break-all rounded-lg bg-light-bg px-3 py-2 text-sm text-light-text dark:bg-dark-bg dark:text-dark-text">
+                <code className="bg-light-bg text-light-text dark:bg-dark-bg dark:text-dark-text flex-1 rounded-lg px-3 py-2 text-sm break-all">
                   {mcpEndpointUrl}
                 </code>
                 <button
                   onClick={() => handleCopy(mcpEndpointUrl)}
-                  className="rounded-lg bg-light-bg p-2 transition-colors hover:opacity-70 dark:bg-dark-bg"
+                  className="bg-light-bg dark:bg-dark-bg rounded-lg p-2 transition-colors hover:opacity-70"
                 >
-                  <ClipboardDocumentIcon className="h-5 w-5 text-light-text dark:text-dark-text" />
+                  <ClipboardDocumentIcon className="text-light-text dark:text-dark-text h-5 w-5" />
                 </button>
               </div>
-              <div className="mt-3 rounded-lg bg-light-bg p-3 dark:bg-dark-bg">
-                <p className="mb-1 text-xs font-bold text-light-text dark:text-dark-text">
+              <div className="bg-light-bg dark:bg-dark-bg mt-3 rounded-lg p-3">
+                <p className="text-light-text dark:text-dark-text mb-1 text-xs font-bold">
                   Example usage:
                 </p>
-                <code className="block whitespace-pre-wrap break-all text-xs text-light-text dark:text-dark-text">
+                <code className="text-light-text dark:text-dark-text block text-xs break-all whitespace-pre-wrap">
                   {`curl ${mcpEndpointUrl} \\
   -H "Authorization: Bearer sk_your_api_key" \\
   -H "Content-Type: application/json" \\
@@ -259,17 +259,17 @@ const ApiKeysPage = () => {
                 API key created! Copy it now — it won&apos;t be shown again.
               </p>
               <div className="flex items-center gap-2">
-                <code className="flex-1 break-all rounded-lg bg-light-bg px-3 py-2 font-mono text-sm text-light-text dark:bg-dark-bg dark:text-dark-text">
+                <code className="bg-light-bg text-light-text dark:bg-dark-bg dark:text-dark-text flex-1 rounded-lg px-3 py-2 font-mono text-sm break-all">
                   {createdKey}
                 </code>
                 <button
                   onClick={() => handleCopy(createdKey)}
-                  className="rounded-lg bg-light-bg p-2 transition-colors hover:opacity-70 dark:bg-dark-bg"
+                  className="bg-light-bg dark:bg-dark-bg rounded-lg p-2 transition-colors hover:opacity-70"
                 >
                   {copied ? (
                     <CheckCircleIcon className="h-5 w-5 text-green-600" />
                   ) : (
-                    <ClipboardDocumentIcon className="h-5 w-5 text-light-text dark:text-dark-text" />
+                    <ClipboardDocumentIcon className="text-light-text dark:text-dark-text h-5 w-5" />
                   )}
                 </button>
               </div>
@@ -277,10 +277,10 @@ const ApiKeysPage = () => {
           )}
 
           <div className="mb-8 px-4">
-            <h2 className="mb-4 text-2xl font-bold text-light-text dark:text-dark-text">
+            <h2 className="text-light-text dark:text-dark-text mb-4 text-2xl font-bold">
               Create API Key
             </h2>
-            <div className="space-y-4 rounded-lg bg-light-fg p-4 dark:bg-dark-fg">
+            <div className="bg-light-fg dark:bg-dark-fg space-y-4 rounded-lg p-4">
               <Input
                 label="Key Name"
                 placeholder="e.g., My AI Agent"
@@ -300,10 +300,10 @@ const ApiKeysPage = () => {
                   value: "text-light-text dark:text-dark-text",
                 }}
               >
-                <SelectItem key="read" value="read">
+                <SelectItem key="read">
                   Read Only — Browse products, profiles, reviews
                 </SelectItem>
-                <SelectItem key="read_write" value="read_write">
+                <SelectItem key="read_write">
                   Read + Write — Browse and place orders
                 </SelectItem>
               </Select>
@@ -319,7 +319,7 @@ const ApiKeysPage = () => {
           </div>
 
           <div className="mb-8 px-4">
-            <h2 className="mb-4 text-2xl font-bold text-light-text dark:text-dark-text">
+            <h2 className="text-light-text dark:text-dark-text mb-4 text-2xl font-bold">
               Your API Keys
             </h2>
             {isLoading ? (
@@ -338,14 +338,14 @@ const ApiKeysPage = () => {
                     className={`rounded-lg p-4 ${
                       key.is_active
                         ? "bg-light-fg dark:bg-dark-fg"
-                        : "bg-light-fg opacity-60 dark:bg-dark-fg"
+                        : "bg-light-fg dark:bg-dark-fg opacity-60"
                     }`}
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
-                          <KeyIcon className="h-5 w-5 text-light-text dark:text-dark-text" />
-                          <span className="font-bold text-light-text dark:text-dark-text">
+                          <KeyIcon className="text-light-text dark:text-dark-text h-5 w-5" />
+                          <span className="text-light-text dark:text-dark-text font-bold">
                             {key.name}
                           </span>
                           {!key.is_active && (
@@ -354,10 +354,10 @@ const ApiKeysPage = () => {
                             </span>
                           )}
                         </div>
-                        <div className="mt-2 space-y-1 text-sm text-light-text dark:text-dark-text">
+                        <div className="text-light-text dark:text-dark-text mt-2 space-y-1 text-sm">
                           <p>
                             Key:{" "}
-                            <code className="rounded bg-light-bg px-1 dark:bg-dark-bg">
+                            <code className="bg-light-bg dark:bg-dark-bg rounded px-1">
                               {key.key_prefix}...
                             </code>
                           </p>

@@ -7,7 +7,7 @@ import {
   ModalBody,
   Input,
   useDisclosure,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import { BoltIcon } from "@heroicons/react/24/outline";
 import { LightningAddress } from "@getalby/lightning-tools";
 import { webln } from "@getalby/sdk";

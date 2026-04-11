@@ -10,7 +10,7 @@ import {
   DropdownMenu,
   DropdownItem,
   Button,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import {
   CheckCircleIcon,
   XCircleIcon,
@@ -375,7 +375,7 @@ const Listing = ({ initialProductEvent }: ListingPageProps) => {
 
   return (
     <StorefrontThemeWrapper sellerPubkey={sfSellerPubkey}>
-      <div className="flex h-full min-h-screen flex-col bg-light-bg pt-20 dark:bg-dark-bg">
+      <div className="bg-light-bg dark:bg-dark-bg flex h-full min-h-screen flex-col pt-20">
         {productData ? (
           isZapsnag ? (
             <div className="mx-auto w-full max-w-2xl p-6">
@@ -386,7 +386,7 @@ const Listing = ({ initialProductEvent }: ListingPageProps) => {
                 />
                 <div className="p-6">
                   <div className="mb-2 flex items-start justify-between">
-                    <h1 className="text-2xl font-bold text-light-text dark:text-dark-text">
+                    <h1 className="text-light-text dark:text-dark-text text-2xl font-bold">
                       {productData.title}
                     </h1>
                     {rawEvent && (
@@ -445,7 +445,7 @@ const Listing = ({ initialProductEvent }: ListingPageProps) => {
           )
         ) : isListingNotFound ? (
           <div className="flex min-h-[60vh] flex-col items-center justify-center px-6 text-center">
-            <h1 className="text-3xl font-bold text-light-text dark:text-dark-text">
+            <h1 className="text-light-text dark:text-dark-text text-3xl font-bold">
               Listing Not Found
             </h1>
             <p className="mt-4 max-w-lg text-gray-500 dark:text-gray-400">
@@ -488,11 +488,11 @@ const Listing = ({ initialProductEvent }: ListingPageProps) => {
               size="2xl"
             >
               <ModalContent>
-                <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+                <ModalHeader className="text-light-text dark:text-dark-text flex items-center justify-center">
                   <CheckCircleIcon className="h-6 w-6 text-green-500" />
                   <div className="ml-2">Order successful!</div>
                 </ModalHeader>
-                <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+                <ModalBody className="text-light-text dark:text-dark-text flex flex-col overflow-hidden">
                   <div className="flex items-center justify-center">
                     The seller will receive a message with your order details.
                   </div>
@@ -520,11 +520,11 @@ const Listing = ({ initialProductEvent }: ListingPageProps) => {
               size="2xl"
             >
               <ModalContent>
-                <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+                <ModalHeader className="text-light-text dark:text-dark-text flex items-center justify-center">
                   <XCircleIcon className="h-6 w-6 text-red-500" />
                   <div className="ml-2">Invoice generation failed!</div>
                 </ModalHeader>
-                <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+                <ModalBody className="text-light-text dark:text-dark-text flex flex-col overflow-hidden">
                   <div className="flex items-center justify-center">
                     The price and/or currency set for this listing was invalid.
                   </div>
@@ -552,11 +552,11 @@ const Listing = ({ initialProductEvent }: ListingPageProps) => {
               size="2xl"
             >
               <ModalContent>
-                <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+                <ModalHeader className="text-light-text dark:text-dark-text flex items-center justify-center">
                   <XCircleIcon className="h-6 w-6 text-red-500" />
                   <div className="ml-2">Purchase failed!</div>
                 </ModalHeader>
-                <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+                <ModalBody className="text-light-text dark:text-dark-text flex flex-col overflow-hidden">
                   <div className="flex items-center justify-center">
                     You didn&apos;t have enough balance in your wallet to pay.
                   </div>

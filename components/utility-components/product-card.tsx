@@ -6,7 +6,7 @@ import {
   DropdownMenu,
   DropdownItem,
   Button,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import Link from "next/link";
 import {
   ArrowTopRightOnSquareIcon,
@@ -103,7 +103,7 @@ export default function ProductCard({
         {router.pathname !== "/" && (
           <div className="mb-2 flex items-center justify-between">
             <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
-              <h2 className="min-w-0 truncate text-xl font-semibold text-light-text dark:text-dark-text">
+              <h2 className="text-light-text dark:text-dark-text min-w-0 truncate text-xl font-semibold">
                 {productData.title}
               </h2>
               {isZapsnag && productData.pubkey === userPubkey && (
@@ -199,7 +199,7 @@ export default function ProductCard({
               <CompactPriceDisplay monetaryInfo={productData} />
             ) : (
               <div className="flex items-center justify-center rounded-md bg-black/10 px-2 py-1 dark:bg-white/10">
-                <span className="text-sm font-bold text-shopstr-purple dark:text-shopstr-yellow">
+                <span className="text-shopstr-purple dark:text-shopstr-yellow text-sm font-bold">
                   ⚡ {productData.price} {productData.currency}
                 </span>
               </div>

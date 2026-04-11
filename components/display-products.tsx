@@ -6,7 +6,7 @@ import { ProductContext, FollowsContext } from "../utils/context/context";
 import ProductCard from "./utility-components/product-card";
 import DisplayProductModal from "./display-product-modal";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
-import { Button, Pagination } from "@nextui-org/react";
+import { Button, Pagination } from "@heroui/react";
 import ShopstrSpinner from "./utility-components/shopstr-spinner";
 import { useRouter } from "next/router";
 import parseTags, {
@@ -41,7 +41,7 @@ const DisplayProducts = ({
   isMyListings?: boolean;
   setCategories?: (categories: string[]) => void;
   onFilteredProductsChange?: (products: ProductData[]) => void;
-  searchBarRef?: React.RefObject<HTMLDivElement>;
+  searchBarRef?: React.RefObject<HTMLDivElement | null>;
 }) => {
   const [productEvents, setProductEvents] = useState<ProductData[]>([]);
   const [isProductsLoading, setIsProductLoading] = useState(true);
@@ -360,7 +360,7 @@ const DisplayProducts = ({
     <>
       <div className="w-full md:pl-4">
         {!isMyListings && isProductsLoading ? (
-          <div className="mb-6 mt-6 flex items-center justify-center">
+          <div className="mt-6 mb-6 flex items-center justify-center">
             <ShopstrSpinner />
           </div>
         ) : null}
@@ -393,7 +393,7 @@ const DisplayProducts = ({
               </div>
             )}
 
-            <div className="mb-6 mt-2 text-center text-xs text-light-text dark:text-dark-text">
+            <div className="text-light-text dark:text-dark-text mt-2 mb-6 text-center text-xs">
               Showing {(currentPage - 1) * itemsPerPage + 1} to{" "}
               {Math.min(filteredProducts.length, currentPage * itemsPerPage)} of{" "}
               {filteredProducts.length} products
@@ -404,11 +404,11 @@ const DisplayProducts = ({
           !isProductsLoading &&
           filteredProducts.length === 0 && (
             <div className="mt-20 flex flex-grow items-center justify-center py-10">
-              <div className="w-full max-w-lg rounded-lg bg-light-fg p-8 text-center shadow-lg dark:bg-dark-fg">
-                <p className="text-3xl font-semibold text-light-text dark:text-dark-text">
+              <div className="bg-light-fg dark:bg-dark-fg w-full max-w-lg rounded-lg p-8 text-center shadow-lg">
+                <p className="text-light-text dark:text-dark-text text-3xl font-semibold">
                   No products found...
                 </p>
-                <p className="mt-4 text-lg text-light-text dark:text-dark-text">
+                <p className="text-light-text dark:text-dark-text mt-4 text-lg">
                   Try changing your search or clearing some filters.
                 </p>
               </div>
@@ -418,11 +418,11 @@ const DisplayProducts = ({
           !isProductsLoading &&
           !productEvents.some((product) => product.pubkey === userPubkey) && (
             <div className="mt-20 flex flex-grow items-center justify-center py-10">
-              <div className="w-full max-w-lg rounded-lg bg-light-fg p-8 text-center shadow-lg dark:bg-dark-fg">
-                <p className="text-3xl font-semibold text-light-text dark:text-dark-text">
+              <div className="bg-light-fg dark:bg-dark-fg w-full max-w-lg rounded-lg p-8 text-center shadow-lg">
+                <p className="text-light-text dark:text-dark-text text-3xl font-semibold">
                   No products found...
                 </p>
-                <p className="mt-4 text-lg text-light-text dark:text-dark-text">
+                <p className="text-light-text dark:text-dark-text mt-4 text-lg">
                   Try adding a new listing!
                 </p>
                 <Button

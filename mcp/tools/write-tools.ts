@@ -2423,7 +2423,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         const fileBuffer = Buffer.from(params.fileBase64, "base64");
         const { createHash: cryptoCreateHash } = await import("crypto");
         const hash = cryptoCreateHash("sha256")
-          .update(fileBuffer)
+          .update(Uint8Array.from(fileBuffer))
           .digest("hex");
 
         const authEvent: EventTemplate = {
