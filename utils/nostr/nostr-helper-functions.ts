@@ -1640,40 +1640,37 @@ export function getDefaultBlossomServer(): string {
 
 export async function verifyNip05Identifier(
   nip05: string,
-  pubkey: string
+  pubkey: string,
+  options?: { baseUrl?: string }
 ): Promise<boolean> {
+  if (!nip05 || !pubkey) return false;
+
   try {
-    if (!nip05 || !pubkey) return false;
+    const params = new URLSearchParams({ nip05, pubkey });
+    const path = `/api/nostr/verify-nip05?${params.toString()}`;
 
-    const parts = nip05.split("@");
-    if (parts.length !== 2) return false;
+    const baseUrl =
+      options?.baseUrl ??
+      (typeof window !== "undefined" ? window.location.origin : null);
 
-    const [username, domain] = parts;
-    if (!username || !domain) return false;
-
-    try {
-      const response = await fetch(
-        `/api/nostr/verify-nip05?nip05=${encodeURIComponent(
-          nip05
-        )}&pubkey=${encodeURIComponent(pubkey)}`
-      );
-
-      if (!response.ok) return false;
-
-      let data: { verified?: boolean };
-      try {
-        data = await response.json();
-      } catch {
-        return false;
-      }
-
-      return data.verified === true;
-    } catch {
-      // This will catch fetch errors, timeout errors, etc.
-      return false;
+    if (!baseUrl && typeof window === "undefined") {
+      throw new Error("verifyNip05Identifier requires baseUrl in SSR");
     }
+
+    const requestUrl = baseUrl ? new URL(path, baseUrl).toString() : path;
+    const response = await fetch(requestUrl);
+
+    if (!response.ok) return false;
+
+    const data: unknown = await response.json();
+
+    return (
+      typeof data === "object" &&
+      data !== null &&
+      "verified" in data &&
+      (data as { verified?: boolean }).verified === true
+    );
   } catch {
-    // Catch any unexpected errors
     return false;
   }
 }
