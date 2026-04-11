@@ -24,7 +24,7 @@
     "@cashu/cashu-ts": "2.1.0",
     "@ducanh2912/next-pwa": "10.2.9",
     "@getalby/lightning-tools": "5.0.1",
-    "@getalby/sdk": "5.1.2",
+    "@getalby/sdk": "7.0.0",
     "@heroicons/react": "2.1.1",
     "@heroui/react": "2.8.10",
     "@modelcontextprotocol/sdk": "1.27.1",
