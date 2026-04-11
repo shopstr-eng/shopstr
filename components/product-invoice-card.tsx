@@ -12,7 +12,7 @@ import {
   Select,
   SelectItem,
   Input,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import {
   BanknotesIcon,
   BoltIcon,
@@ -20,7 +20,7 @@ import {
   ClipboardIcon,
   WalletIcon,
 } from "@heroicons/react/24/outline";
-import { fiat } from "@getalby/lightning-tools";
+import { getSatoshiValue } from "@getalby/lightning-tools";
 import {
   CashuMint,
   CashuWallet,
@@ -41,7 +41,7 @@ import { LightningAddress } from "@getalby/lightning-tools";
 import QRCode from "qrcode";
 import { v4 as uuidv4 } from "uuid";
 import { nip19 } from "nostr-tools";
-import { webln } from "@getalby/sdk";
+import { NostrWebLNProvider } from "@getalby/sdk";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
 import { formatWithCommas } from "./utility-components/display-monetary-info";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
@@ -65,6 +65,7 @@ export default function ProductInvoiceCard({
   setCashuPaymentFailed,
   selectedSize,
   selectedVolume,
+  selectedWeight,
   selectedBulkOption,
   discountCode,
   discountPercentage,
@@ -78,6 +79,7 @@ export default function ProductInvoiceCard({
   setCashuPaymentFailed: (cashuPaymentFailed: boolean) => void;
   selectedSize?: string;
   selectedVolume?: string;
+  selectedWeight?: string;
   selectedBulkOption?: number;
   discountCode?: string;
   discountPercentage?: number;
@@ -116,6 +118,7 @@ export default function ProductInvoiceCard({
     pickupLocation?: string;
     selectedSize?: string;
     selectedVolume?: string;
+    selectedWeight?: string;
     selectedBulkOption?: number;
   } | null>(null);
 
@@ -236,6 +239,7 @@ export default function ProductInvoiceCard({
               : undefined,
             selectedSize,
             selectedVolume,
+            selectedWeight,
             selectedBulkOption: selectedBulkOption
               ? String(selectedBulkOption)
               : undefined,
@@ -390,6 +394,7 @@ export default function ProductInvoiceCard({
           ...productData,
           selectedSize,
           selectedVolume,
+          selectedWeight,
           selectedBulkOption,
         },
         paymentType,
@@ -399,6 +404,7 @@ export default function ProductInvoiceCard({
         pickup,
         selectedSize,
         selectedVolume,
+        selectedWeight,
         selectedBulkOption,
         buyerPubkey,
         donationAmount: donationAmountValue,
@@ -415,6 +421,7 @@ export default function ProductInvoiceCard({
           ...productData,
           selectedSize,
           selectedVolume,
+          selectedWeight,
           selectedBulkOption,
         },
         status: "confirmed",
@@ -425,6 +432,7 @@ export default function ProductInvoiceCard({
         pickup,
         selectedSize,
         selectedVolume,
+        selectedWeight,
         selectedBulkOption,
         buyerPubkey,
         donationAmount: donationAmountValue,
@@ -443,6 +451,7 @@ export default function ProductInvoiceCard({
           ...productData,
           selectedSize,
           selectedVolume,
+          selectedWeight,
           selectedBulkOption,
         },
         quantity: 1,
@@ -451,6 +460,7 @@ export default function ProductInvoiceCard({
         pickup,
         selectedSize,
         selectedVolume,
+        selectedWeight,
         selectedBulkOption,
         buyerPubkey,
         donationAmount: donationAmountValue,
@@ -578,7 +588,7 @@ export default function ProductInvoiceCard({
             amount: price,
             currency: productData.currency,
           };
-          const numSats = await fiat.getSatoshiValue(currencyData);
+          const numSats = await getSatoshiValue(currencyData);
           price = Math.round(numSats);
         } catch (err) {
           console.error("ERROR", err);
@@ -686,7 +696,7 @@ export default function ProductInvoiceCard({
 
   const handleNWCPayment = async (convertedPrice: number, data: any) => {
     setIsNwcLoading(true);
-    let nwc: webln.NostrWebLNProvider | null = null;
+    let nwc: NostrWebLNProvider | null = null;
 
     try {
       if (data.shippingName || data.shippingAddress) {
@@ -718,7 +728,7 @@ export default function ProductInvoiceCard({
       const { nwcString } = getLocalStorageData();
       if (!nwcString) throw new Error("NWC connection not found.");
 
-      nwc = new webln.NostrWebLNProvider({ nostrWalletConnectUrl: nwcString });
+      nwc = new NostrWebLNProvider({ nostrWalletConnectUrl: nwcString });
       await nwc.enable();
 
       await nwc.sendPayment(pr);
@@ -1040,6 +1050,13 @@ export default function ProductInvoiceCard({
               productDetails += " in a " + selectedVolume;
             }
           }
+          if (selectedWeight) {
+            if (productDetails) {
+              productDetails += " and " + selectedWeight;
+            } else {
+              productDetails += " in " + selectedWeight;
+            }
+          }
           if (selectedBulkOption) {
             if (productDetails) {
               productDetails += " (bulk: " + selectedBulkOption + " units)";
@@ -1132,6 +1149,13 @@ export default function ProductInvoiceCard({
               productDetails += " in a " + selectedVolume;
             }
           }
+          if (selectedWeight) {
+            if (productDetails) {
+              productDetails += " and " + selectedWeight;
+            } else {
+              productDetails += " in " + selectedWeight;
+            }
+          }
           if (selectedBulkOption) {
             if (productDetails) {
               productDetails += " (bulk: " + selectedBulkOption + " units)";
@@ -1187,6 +1211,13 @@ export default function ProductInvoiceCard({
           productDetails += " and a " + selectedVolume;
         } else {
           productDetails += " in a " + selectedVolume;
+        }
+      }
+      if (selectedWeight) {
+        if (productDetails) {
+          productDetails += " and " + selectedWeight;
+        } else {
+          productDetails += " in " + selectedWeight;
         }
       }
       if (selectedBulkOption) {
@@ -1305,6 +1336,13 @@ export default function ProductInvoiceCard({
             productDetails += " and a " + selectedVolume;
           } else {
             productDetails += " in a " + selectedVolume;
+          }
+        }
+        if (selectedWeight) {
+          if (productDetails) {
+            productDetails += " and " + selectedWeight;
+          } else {
+            productDetails += " in " + selectedWeight;
           }
         }
         if (selectedBulkOption) {
@@ -1430,6 +1468,13 @@ export default function ProductInvoiceCard({
           productDetails += " in a " + selectedVolume;
         }
       }
+      if (selectedWeight) {
+        if (productDetails) {
+          productDetails += " and " + selectedWeight;
+        } else {
+          productDetails += " in " + selectedWeight;
+        }
+      }
       if (selectedBulkOption) {
         if (productDetails) {
           productDetails += " (bulk: " + selectedBulkOption + " units)";
@@ -1485,6 +1530,13 @@ export default function ProductInvoiceCard({
           productDetails += " and a " + selectedVolume;
         } else {
           productDetails += " in a " + selectedVolume;
+        }
+      }
+      if (selectedWeight) {
+        if (productDetails) {
+          productDetails += " and " + selectedWeight;
+        } else {
+          productDetails += " in " + selectedWeight;
         }
       }
       if (selectedBulkOption) {
@@ -1584,9 +1636,8 @@ export default function ProductInvoiceCard({
       const mint = new CashuMint(mints[0]!);
       const wallet = new CashuWallet(mint);
       const mintKeySetIds = await wallet.getKeySets();
-      const filteredProofs = tokens.filter(
-        (p: Proof) =>
-          mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
+      const filteredProofs = tokens.filter((p: Proof) =>
+        mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
       ) as Proof[];
       const { keep, send } = await wallet.send(price, filteredProofs, {
         includeFees: true,
@@ -1678,7 +1729,7 @@ export default function ProductInvoiceCard({
 
   // Calculate shipping cost based on form type
   const shippingCostToAdd =
-    formType === "shipping" ? productData.shippingCost ?? 0 : 0;
+    formType === "shipping" ? (productData.shippingCost ?? 0) : 0;
 
   const discountedTotal = discountedPrice + shippingCostToAdd;
 
@@ -1703,9 +1754,7 @@ export default function ProductInvoiceCard({
               isRequired
             >
               {(productData.pickupLocations || []).map((location) => (
-                <SelectItem key={location} value={location}>
-                  {location}
-                </SelectItem>
+                <SelectItem key={location}>{location}</SelectItem>
               ))}
             </Select>
           </div>
@@ -1965,10 +2014,10 @@ export default function ProductInvoiceCard({
 
   if (showInvoiceCard) {
     return (
-      <div className="flex min-h-screen w-full bg-light-bg text-light-text dark:bg-dark-bg dark:text-dark-text">
+      <div className="bg-light-bg text-light-text dark:bg-dark-bg dark:text-dark-text flex min-h-screen w-full">
         <div className="mx-auto flex w-full max-w-7xl flex-col lg:flex-row">
           {/* Left Side - Product Summary - maintain same width */}
-          <div className="w-full bg-gray-50 p-6 dark:bg-gray-800 lg:w-1/2">
+          <div className="w-full bg-gray-50 p-6 lg:w-1/2 dark:bg-gray-800">
             <div className="sticky top-6">
               <h2 className="mb-6 text-2xl font-bold">Order Summary</h2>
 
@@ -1992,6 +2041,12 @@ export default function ProductInvoiceCard({
                 {selectedVolume && (
                   <p className="mb-1 text-gray-600 dark:text-gray-400">
                     Volume: {selectedVolume}
+                  </p>
+                )}
+
+                {selectedWeight && (
+                  <p className="mb-1 text-gray-600 dark:text-gray-400">
+                    Weight: {selectedWeight}
                   </p>
                 )}
 
@@ -2091,7 +2146,7 @@ export default function ProductInvoiceCard({
 
               <button
                 onClick={() => setIsBeingPaid(false)}
-                className="mt-4 text-shopstr-purple underline hover:text-shopstr-purple-light dark:text-shopstr-yellow dark:hover:text-shopstr-yellow-light"
+                className="text-shopstr-purple hover:text-shopstr-purple-light dark:text-shopstr-yellow dark:hover:text-shopstr-yellow-light mt-4 underline"
               >
                 ← Back to product
               </button>
@@ -2099,7 +2154,7 @@ export default function ProductInvoiceCard({
           </div>
 
           {/* Divider */}
-          <div className="h-px w-full bg-gray-300 dark:bg-gray-600 lg:h-full lg:w-px"></div>
+          <div className="h-px w-full bg-gray-300 lg:h-full lg:w-px dark:bg-gray-600"></div>
 
           {/* Right Side - Lightning Invoice - maintain consistent width */}
           <div className="w-full p-6 lg:w-1/2">
@@ -2112,7 +2167,7 @@ export default function ProductInvoiceCard({
                   <div className="flex flex-col items-center justify-center">
                     {qrCodeUrl && (
                       <>
-                        <h3 className="mt-3 text-center text-lg font-medium leading-6 text-gray-900 text-light-text dark:text-dark-text">
+                        <h3 className="text-light-text dark:text-dark-text mt-3 text-center text-lg leading-6 font-medium text-gray-900">
                           Don&apos;t refresh or close the page until the payment
                           has been confirmed!
                         </h3>
@@ -2135,12 +2190,12 @@ export default function ProductInvoiceCard({
                           </p>
                           <ClipboardIcon
                             onClick={handleCopyInvoice}
-                            className={`ml-2 h-4 w-4 cursor-pointer text-light-text dark:text-dark-text ${
+                            className={`text-light-text dark:text-dark-text ml-2 h-4 w-4 cursor-pointer ${
                               copiedToClipboard ? "hidden" : ""
                             }`}
                           />
                           <CheckIcon
-                            className={`ml-2 h-4 w-4 cursor-pointer text-light-text dark:text-dark-text ${
+                            className={`text-light-text dark:text-dark-text ml-2 h-4 w-4 cursor-pointer ${
                               copiedToClipboard ? "" : "hidden"
                             }`}
                           />
@@ -2155,7 +2210,7 @@ export default function ProductInvoiceCard({
                   </div>
                 ) : (
                   <div className="flex flex-col items-center justify-center">
-                    <h3 className="mt-3 text-center text-lg font-medium leading-6 text-gray-900">
+                    <h3 className="mt-3 text-center text-lg leading-6 font-medium text-gray-900">
                       Payment confirmed!
                     </h3>
                     <Image
@@ -2175,10 +2230,10 @@ export default function ProductInvoiceCard({
   }
 
   return (
-    <div className="flex min-h-screen w-full bg-light-bg text-light-text dark:bg-dark-bg dark:text-dark-text">
+    <div className="bg-light-bg text-light-text dark:bg-dark-bg dark:text-dark-text flex min-h-screen w-full">
       <div className="mx-auto flex w-full max-w-7xl flex-col lg:flex-row">
         {/* Left Side - Product Summary */}
-        <div className="w-full bg-gray-50 p-6 dark:bg-gray-800 lg:w-1/2">
+        <div className="w-full bg-gray-50 p-6 lg:w-1/2 dark:bg-gray-800">
           <div className="sticky top-6">
             <h2 className="mb-6 text-2xl font-bold">Order Summary</h2>
 
@@ -2202,6 +2257,12 @@ export default function ProductInvoiceCard({
               {selectedVolume && (
                 <p className="mb-1 text-gray-600 dark:text-gray-400">
                   Volume: {selectedVolume}
+                </p>
+              )}
+
+              {selectedWeight && (
+                <p className="mb-1 text-gray-600 dark:text-gray-400">
+                  Weight: {selectedWeight}
                 </p>
               )}
 
@@ -2283,7 +2344,7 @@ export default function ProductInvoiceCard({
 
             <button
               onClick={() => setIsBeingPaid(false)}
-              className="mt-4 text-shopstr-purple underline hover:text-shopstr-purple-light dark:text-shopstr-yellow dark:hover:text-shopstr-yellow-light"
+              className="text-shopstr-purple hover:text-shopstr-purple-light dark:text-shopstr-yellow dark:hover:text-shopstr-yellow-light mt-4 underline"
             >
               ← Back to product
             </button>
@@ -2291,7 +2352,7 @@ export default function ProductInvoiceCard({
         </div>
 
         {/* Divider */}
-        <div className="h-px w-full bg-gray-300 dark:bg-gray-600 lg:h-full lg:w-px"></div>
+        <div className="h-px w-full bg-gray-300 lg:h-full lg:w-px dark:bg-gray-600"></div>
 
         {/* Right Side - Order Type Selection, Forms, and Payment */}
         <div className="w-full p-6 lg:w-1/2">

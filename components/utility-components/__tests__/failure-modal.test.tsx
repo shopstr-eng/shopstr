@@ -7,7 +7,7 @@ jest.mock("@heroicons/react/24/outline", () => ({
   XCircleIcon: () => <div data-testid="x-circle-icon" />,
 }));
 
-jest.mock("@nextui-org/react", () => ({
+jest.mock("@heroui/react", () => ({
   Modal: ({
     isOpen,
     children,

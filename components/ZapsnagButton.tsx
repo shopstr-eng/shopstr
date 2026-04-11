@@ -7,10 +7,10 @@ import {
   ModalBody,
   Input,
   useDisclosure,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import { BoltIcon } from "@heroicons/react/24/outline";
 import { LightningAddress } from "@getalby/lightning-tools";
-import { webln } from "@getalby/sdk";
+import { NostrWebLNProvider } from "@getalby/sdk";
 import {
   NostrContext,
   SignerContext,
@@ -103,7 +103,9 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
       let lud16 = "";
 
       if (events.length > 0) {
-        const kind0 = events.sort((a, b) => b.created_at - a.created_at)[0];
+        const kind0 = [...events].sort(
+          (a, b) => b.created_at - a.created_at
+        )[0];
         if (kind0) {
           try {
             const content = JSON.parse(kind0.content || "{}");
@@ -121,7 +123,7 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
       originalWebLN = (window as any).webln;
       const { nwcString } = getLocalStorageData();
       if (nwcString) {
-        const nwcProvider = new webln.NostrWebLNProvider({
+        const nwcProvider = new NostrWebLNProvider({
           nostrWalletConnectUrl: nwcString,
         });
         await nwcProvider.enable();

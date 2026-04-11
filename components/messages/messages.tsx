@@ -1,7 +1,7 @@
 import { useState, useEffect, useContext } from "react";
 import { nip19 } from "nostr-tools";
 import { useRouter } from "next/router";
-import { Button, useDisclosure } from "@nextui-org/react";
+import { Button, useDisclosure } from "@heroui/react";
 import {
   constructGiftWrappedEvent,
   constructMessageSeal,
@@ -185,8 +185,9 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
               subject === "zapsnag-order")) ||
           (!isPayment && subject && subject === "listing-inquiry")
         ) {
-          plainText &&
+          if (plainText) {
             decryptedChat.push({ ...messageEvent, content: plainText });
+          }
         }
       }
       if (decryptedChat.length > 0) {
@@ -295,7 +296,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
       );
 
       setIsSendingDMLoading(false);
-    } catch (_) {
+    } catch {
       setFailureText("Error sending inquiry.");
       setShowFailureModal(true);
       setIsSendingDMLoading(false);
@@ -308,7 +309,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
   };
 
   return (
-    <div className="min-h-screen bg-light-bg text-gray-800 dark:bg-dark-bg dark:text-gray-200">
+    <div className="bg-light-bg dark:bg-dark-bg min-h-screen text-gray-800 dark:text-gray-200">
       <div className="container mx-auto px-4 py-10">
         {chatsMap.size === 0 ? (
           <div className="flex h-[66vh] items-center justify-center">
@@ -360,7 +361,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
           </div>
         ) : (
           <div className="flex flex-row">
-            <div className="h-[85vh] w-full overflow-y-auto rounded-md pb-12 dark:bg-dark-bg md:w-[450px] md:max-w-[33%] md:flex-shrink-0 md:pb-0 lg:pb-0">
+            <div className="dark:bg-dark-bg h-[85vh] w-full overflow-y-auto rounded-md pb-12 md:w-[450px] md:max-w-[33%] md:flex-shrink-0 md:pb-0 lg:pb-0">
               {sortedChatsByLastMessage.map(
                 ([pubkeyOfChat, chatObject]: [string, ChatObject]) => {
                   return (

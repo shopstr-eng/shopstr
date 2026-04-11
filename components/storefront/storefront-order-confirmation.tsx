@@ -97,7 +97,15 @@ export default function StorefrontOrderConfirmation({
         }
       } catch {}
     }
-    return products.sort(() => Math.random() - 0.5).slice(0, 4);
+    for (let i = products.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const current = products[i];
+      const random = products[j];
+      if (!current || !random) continue;
+      products[i] = random;
+      products[j] = current;
+    }
+    return products.slice(0, 4);
   }, [productContext.productEvents, shopPubkey]);
 
   const formatPaymentMethod = (method: string) => {
@@ -144,7 +152,7 @@ export default function StorefrontOrderConfirmation({
       className="min-h-screen"
       style={{ backgroundColor: colors.background }}
     >
-      <div className="mx-auto max-w-4xl px-4 pb-8 pt-10 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-4xl px-4 pt-10 pb-8 sm:px-6 lg:px-8">
         <div
           className="mb-8 rounded-lg border-2 p-6 sm:p-8"
           style={{
@@ -274,6 +282,30 @@ export default function StorefrontOrderConfirmation({
                       style={{ color: colors.text + "88" }}
                     >
                       Size: {orderData.selectedSize}
+                    </p>
+                  )}
+                  {orderData.selectedVolume && (
+                    <p
+                      className="text-sm"
+                      style={{ color: colors.text + "88" }}
+                    >
+                      Volume: {orderData.selectedVolume}
+                    </p>
+                  )}
+                  {orderData.selectedWeight && (
+                    <p
+                      className="text-sm"
+                      style={{ color: colors.text + "88" }}
+                    >
+                      Weight: {orderData.selectedWeight}
+                    </p>
+                  )}
+                  {orderData.selectedBulkOption && (
+                    <p
+                      className="text-sm"
+                      style={{ color: colors.text + "88" }}
+                    >
+                      Bundle: {orderData.selectedBulkOption} units
                     </p>
                   )}
                 </div>

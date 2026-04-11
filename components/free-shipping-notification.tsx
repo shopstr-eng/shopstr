@@ -34,7 +34,8 @@ export default function FreeShippingNotification({
 
     const sellerTotals = new Map<string, number>();
     for (const item of cart) {
-      const effectivePrice = item.bulkPrice ?? item.volumePrice ?? item.price;
+      const effectivePrice =
+        item.bulkPrice ?? item.volumePrice ?? item.weightPrice ?? item.price;
       const prev = sellerTotals.get(item.pubkey) || 0;
       sellerTotals.set(item.pubkey, prev + effectivePrice);
     }
@@ -86,12 +87,12 @@ export default function FreeShippingNotification({
           animate={{ opacity: 1, x: 0, y: 0 }}
           exit={{ opacity: 0, x: 50, y: -10 }}
           transition={{ type: "spring", stiffness: 300, damping: 25 }}
-          className="fixed right-4 top-20 z-50 w-80 rounded-lg border border-gray-200 bg-light-fg p-4 shadow-lg dark:border-gray-700 dark:bg-dark-fg"
+          className="bg-light-fg dark:bg-dark-fg fixed top-20 right-4 z-50 w-80 rounded-lg border border-gray-200 p-4 shadow-lg dark:border-gray-700"
         >
           <div className="mb-2 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <TruckIcon className="h-5 w-5 text-light-text dark:text-dark-text" />
-              <span className="text-sm font-bold text-light-text dark:text-dark-text">
+              <TruckIcon className="text-light-text dark:text-dark-text h-5 w-5" />
+              <span className="text-light-text dark:text-dark-text text-sm font-bold">
                 Free Shipping Progress
               </span>
             </div>
@@ -99,14 +100,14 @@ export default function FreeShippingNotification({
               onClick={onClose}
               className="rounded-md p-0.5 transition-colors hover:bg-gray-200 dark:hover:bg-gray-600"
             >
-              <XMarkIcon className="h-4 w-4 text-light-text dark:text-dark-text" />
+              <XMarkIcon className="text-light-text dark:text-dark-text h-4 w-4" />
             </button>
           </div>
           <div className="space-y-3">
             {sellerProgresses.map((progress) => (
               <div key={progress.sellerPubkey}>
                 {progress.sellerName && (
-                  <p className="mb-1 text-xs font-semibold text-light-text dark:text-dark-text">
+                  <p className="text-light-text dark:text-dark-text mb-1 text-xs font-semibold">
                     {progress.sellerName}
                   </p>
                 )}

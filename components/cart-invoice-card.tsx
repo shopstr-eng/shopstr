@@ -16,7 +16,7 @@ import {
   Select,
   SelectItem,
   Input,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import {
   BanknotesIcon,
   BoltIcon,
@@ -45,7 +45,7 @@ import QRCode from "qrcode";
 import { v4 as uuidv4 } from "uuid";
 import { nip19 } from "nostr-tools";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
-import { webln } from "@getalby/sdk";
+import { NostrWebLNProvider } from "@getalby/sdk";
 import { formatWithCommas } from "./utility-components/display-monetary-info";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import SignInModal from "./sign-in/SignInModal";
@@ -127,6 +127,7 @@ export default function CartInvoiceCard({
     pickupLocation?: string;
     selectedSize?: string;
     selectedVolume?: string;
+    selectedWeight?: string;
     selectedBulkOption?: string;
   } | null>(null);
 
@@ -143,6 +144,7 @@ export default function CartInvoiceCard({
           pickupLocation: selectedPickupLocations[p.id] || undefined,
           selectedSize: p.selectedSize || undefined,
           selectedVolume: p.selectedVolume || undefined,
+          selectedWeight: p.selectedWeight || undefined,
           selectedBulkOption: p.selectedBulkOption
             ? String(p.selectedBulkOption)
             : undefined,
@@ -230,7 +232,9 @@ export default function CartInvoiceCard({
             ? product.bulkPrice
             : product.volumePrice !== undefined
               ? product.volumePrice
-              : product.price;
+              : product.weightPrice !== undefined
+                ? product.weightPrice
+                : product.price;
         const qty = quantities[product.id] || 1;
         const discountedPrice =
           discount > 0 ? basePrice * (1 - discount / 100) : basePrice;
@@ -503,7 +507,7 @@ export default function CartInvoiceCard({
         receiverNpub: npubForReceiver,
         receiverNsec: nsecForReceiver,
       };
-    } catch (_) {
+    } catch {
       return null;
     }
   };
@@ -640,6 +644,7 @@ export default function CartInvoiceCard({
         donationPercentage: donationPercentageValue,
         selectedSize: product.selectedSize,
         selectedVolume: product.selectedVolume,
+        selectedWeight: product.selectedWeight,
         selectedBulkOption: product.selectedBulkOption,
       };
     } else if (isReceipt) {
@@ -661,6 +666,7 @@ export default function CartInvoiceCard({
         donationPercentage: donationPercentageValue,
         selectedSize: product.selectedSize,
         selectedVolume: product.selectedVolume,
+        selectedWeight: product.selectedWeight,
         selectedBulkOption: product.selectedBulkOption,
       };
     } else if (isDonation) {
@@ -682,6 +688,7 @@ export default function CartInvoiceCard({
         donationPercentage: donationPercentageValue,
         selectedSize: product.selectedSize,
         selectedVolume: product.selectedVolume,
+        selectedWeight: product.selectedWeight,
         selectedBulkOption: product.selectedBulkOption,
       };
     }
@@ -829,6 +836,7 @@ export default function CartInvoiceCard({
           const parts = [p.title || p.productName];
           if (p.selectedSize) parts.push(`Size: ${p.selectedSize}`);
           if (p.selectedVolume) parts.push(`Volume: ${p.selectedVolume}`);
+          if (p.selectedWeight) parts.push(`Weight: ${p.selectedWeight}`);
           if (p.selectedBulkOption)
             parts.push(`Bundle: ${p.selectedBulkOption} units`);
           const qty = quantities[p.id];
@@ -859,7 +867,7 @@ export default function CartInvoiceCard({
       } else {
         await handleLightningPayment(price, paymentData);
       }
-    } catch (error) {
+    } catch {
       setFailureText("Payment failed. Please try again.");
       setShowFailureModal(true);
     }
@@ -962,7 +970,7 @@ export default function CartInvoiceCard({
 
   const handleNWCPayment = async (convertedPrice: number, data: any) => {
     setIsNwcLoading(true);
-    let nwc: webln.NostrWebLNProvider | null = null;
+    let nwc: NostrWebLNProvider | null = null;
 
     try {
       validatePaymentData(convertedPrice, data);
@@ -974,7 +982,7 @@ export default function CartInvoiceCard({
       const { nwcString } = getLocalStorageData();
       if (!nwcString) throw new Error("NWC connection not found.");
 
-      nwc = new webln.NostrWebLNProvider({ nostrWalletConnectUrl: nwcString });
+      nwc = new NostrWebLNProvider({ nostrWalletConnectUrl: nwcString });
       await nwc.enable();
 
       await nwc.sendPayment(pr);
@@ -1027,7 +1035,7 @@ export default function CartInvoiceCard({
         }
       }
       await invoiceHasBeenPaid(wallet, totalCost, hash, data);
-    } catch (error) {
+    } catch {
       if (setInvoiceGenerationFailed) {
         setInvoiceGenerationFailed(true);
       } else {
@@ -1363,6 +1371,13 @@ export default function CartInvoiceCard({
                 productDetails += " in a " + product.selectedVolume;
               }
             }
+            if (product.selectedWeight) {
+              if (productDetails) {
+                productDetails += " and " + product.selectedWeight;
+              } else {
+                productDetails += " in " + product.selectedWeight;
+              }
+            }
             if (product.selectedBulkOption) {
               if (productDetails) {
                 productDetails +=
@@ -1489,6 +1504,13 @@ export default function CartInvoiceCard({
                 productDetails += " in a " + product.selectedVolume;
               }
             }
+            if (product.selectedWeight) {
+              if (productDetails) {
+                productDetails += " and " + product.selectedWeight;
+              } else {
+                productDetails += " in " + product.selectedWeight;
+              }
+            }
             if (product.selectedBulkOption) {
               if (productDetails) {
                 productDetails +=
@@ -1569,6 +1591,13 @@ export default function CartInvoiceCard({
             productDetails += " and a " + product.selectedVolume;
           } else {
             productDetails += " in a " + product.selectedVolume;
+          }
+        }
+        if (product.selectedWeight) {
+          if (productDetails) {
+            productDetails += " and " + product.selectedWeight;
+          } else {
+            productDetails += " in " + product.selectedWeight;
           }
         }
         if (product.selectedBulkOption) {
@@ -1739,6 +1768,13 @@ export default function CartInvoiceCard({
               productDetails += " in a " + product.selectedVolume;
             }
           }
+          if (product.selectedWeight) {
+            if (productDetails) {
+              productDetails += " and " + product.selectedWeight;
+            } else {
+              productDetails += " in " + product.selectedWeight;
+            }
+          }
           if (product.selectedBulkOption) {
             if (productDetails) {
               productDetails +=
@@ -1877,6 +1913,13 @@ export default function CartInvoiceCard({
             productDetails += " in a " + product.selectedVolume;
           }
         }
+        if (product.selectedWeight) {
+          if (productDetails) {
+            productDetails += " and " + product.selectedWeight;
+          } else {
+            productDetails += " in " + product.selectedWeight;
+          }
+        }
         if (product.selectedBulkOption) {
           if (productDetails) {
             productDetails +=
@@ -1942,6 +1985,13 @@ export default function CartInvoiceCard({
             productDetails += " and a " + product.selectedVolume;
           } else {
             productDetails += " in a " + product.selectedVolume;
+          }
+        }
+        if (product.selectedWeight) {
+          if (productDetails) {
+            productDetails += " and " + product.selectedWeight;
+          } else {
+            productDetails += " in " + product.selectedWeight;
           }
         }
         if (product.selectedBulkOption) {
@@ -2026,8 +2076,8 @@ export default function CartInvoiceCard({
         amount: shippingCost,
         currency: product.currency,
       };
-      const { fiat } = await import("@getalby/lightning-tools");
-      const numSats = await fiat.getSatoshiValue(currencyData);
+      const { getSatoshiValue } = await import("@getalby/lightning-tools");
+      const numSats = await getSatoshiValue(currencyData);
       return Math.round(numSats);
     } catch (err) {
       console.error("Error converting shipping cost to sats:", err);
@@ -2052,9 +2102,8 @@ export default function CartInvoiceCard({
       const mint = new CashuMint(mints[0]!);
       const wallet = new CashuWallet(mint);
       const mintKeySetIds = await wallet.getKeySets();
-      const filteredProofs = tokens.filter(
-        (p: Proof) =>
-          mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
+      const filteredProofs = tokens.filter((p: Proof) =>
+        mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
       ) as Proof[];
       const { keep, send } = await wallet.send(price, filteredProofs, {
         includeFees: true,
@@ -2121,7 +2170,7 @@ export default function CartInvoiceCard({
       if (setCashuPaymentSent) {
         setCashuPaymentSent(true);
       }
-    } catch (error) {
+    } catch {
       if (setCashuPaymentFailed) {
         setCashuPaymentFailed(true);
       } else {
@@ -2397,9 +2446,7 @@ export default function CartInvoiceCard({
                       value={value || ""}
                     >
                       {(product.pickupLocations || []).map((location) => (
-                        <SelectItem key={location} value={location}>
-                          {location}
-                        </SelectItem>
+                        <SelectItem key={location}>{location}</SelectItem>
                       ))}
                     </Select>
                   )}
@@ -2441,10 +2488,10 @@ export default function CartInvoiceCard({
 
   if (showInvoiceCard) {
     return (
-      <div className="flex min-h-screen w-full bg-light-bg text-light-text dark:bg-dark-bg dark:text-dark-text">
+      <div className="bg-light-bg text-light-text dark:bg-dark-bg dark:text-dark-text flex min-h-screen w-full">
         <div className="mx-auto flex w-full flex-col lg:flex-row">
           {/* Order Summary - Full width on mobile, half on desktop */}
-          <div className="w-full bg-gray-50 p-6 dark:bg-gray-800 lg:w-1/2">
+          <div className="w-full bg-gray-50 p-6 lg:w-1/2 dark:bg-gray-800">
             <div className="sticky top-6">
               <h2 className="mb-6 text-2xl font-bold">Order Summary</h2>
 
@@ -2466,6 +2513,11 @@ export default function CartInvoiceCard({
                       {product.selectedVolume && (
                         <p className="text-sm text-gray-600 dark:text-gray-400">
                           Volume: {product.selectedVolume}
+                        </p>
+                      )}
+                      {product.selectedWeight && (
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                          Weight: {product.selectedWeight}
                         </p>
                       )}
                       {product.selectedBulkOption && (
@@ -2494,7 +2546,9 @@ export default function CartInvoiceCard({
                           ? product.bulkPrice
                           : product.volumePrice !== undefined
                             ? product.volumePrice
-                            : product.price) * (quantities[product.id] || 1);
+                            : product.weightPrice !== undefined
+                              ? product.weightPrice
+                              : product.price) * (quantities[product.id] || 1);
                       const discountedPrice =
                         discount > 0
                           ? basePrice * (1 - discount / 100)
@@ -2578,7 +2632,7 @@ export default function CartInvoiceCard({
 
               <button
                 onClick={() => onBackToCart?.()}
-                className="mt-4 text-shopstr-purple underline hover:text-shopstr-purple-light dark:text-shopstr-yellow dark:hover:text-shopstr-yellow-light"
+                className="text-shopstr-purple hover:text-shopstr-purple-light dark:text-shopstr-yellow dark:hover:text-shopstr-yellow-light mt-4 underline"
               >
                 ← Back to cart
               </button>
@@ -2586,7 +2640,7 @@ export default function CartInvoiceCard({
           </div>
 
           {/* Divider */}
-          <div className="h-px w-full bg-gray-300 dark:bg-gray-600 lg:h-full lg:w-px"></div>
+          <div className="h-px w-full bg-gray-300 lg:h-full lg:w-px dark:bg-gray-600"></div>
 
           {/* Right Side - Lightning Invoice - maintain consistent width */}
           <div className="w-full p-6 lg:w-1/2">
@@ -2600,7 +2654,7 @@ export default function CartInvoiceCard({
                   <div className="flex flex-col items-center justify-center">
                     {qrCodeUrl ? (
                       <>
-                        <h3 className="mt-3 text-center text-lg font-medium leading-6 text-gray-900 text-light-text dark:text-dark-text">
+                        <h3 className="text-light-text dark:text-dark-text mt-3 text-center text-lg leading-6 font-medium text-gray-900">
                           Don&apos;t refresh or close the page until the payment
                           has been confirmed!
                         </h3>
@@ -2623,12 +2677,12 @@ export default function CartInvoiceCard({
                           </p>
                           <ClipboardIcon
                             onClick={handleCopyInvoice}
-                            className={`ml-2 h-4 w-4 cursor-pointer text-light-text dark:text-dark-text ${
+                            className={`text-light-text dark:text-dark-text ml-2 h-4 w-4 cursor-pointer ${
                               copiedToClipboard ? "hidden" : ""
                             }`}
                           />
                           <CheckIcon
-                            className={`ml-2 h-4 w-4 cursor-pointer text-light-text dark:text-dark-text ${
+                            className={`text-light-text dark:text-dark-text ml-2 h-4 w-4 cursor-pointer ${
                               copiedToClipboard ? "" : "hidden"
                             }`}
                           />
@@ -2642,7 +2696,7 @@ export default function CartInvoiceCard({
                   </div>
                 ) : (
                   <div className="flex flex-col items-center justify-center">
-                    <h3 className="mt-3 text-center text-lg font-medium leading-6 text-gray-900">
+                    <h3 className="mt-3 text-center text-lg leading-6 font-medium text-gray-900">
                       Payment confirmed!
                     </h3>
                     <Image
@@ -2662,10 +2716,10 @@ export default function CartInvoiceCard({
   }
 
   return (
-    <div className="flex min-h-screen w-full bg-light-bg text-light-text dark:bg-dark-bg dark:text-dark-text">
+    <div className="bg-light-bg text-light-text dark:bg-dark-bg dark:text-dark-text flex min-h-screen w-full">
       <div className="mx-auto flex w-full flex-col lg:flex-row">
         {/* Order Summary - Full width on mobile, half on desktop */}
-        <div className="w-full bg-gray-50 p-6 dark:bg-gray-800 lg:w-1/2">
+        <div className="w-full bg-gray-50 p-6 lg:w-1/2 dark:bg-gray-800">
           <div className="sticky top-6">
             <h2 className="mb-6 text-2xl font-bold">Order Summary</h2>
 
@@ -2687,6 +2741,11 @@ export default function CartInvoiceCard({
                     {product.selectedVolume && (
                       <p className="text-sm text-gray-600 dark:text-gray-400">
                         Volume: {product.selectedVolume}
+                      </p>
+                    )}
+                    {product.selectedWeight && (
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        Weight: {product.selectedWeight}
                       </p>
                     )}
                     {product.selectedBulkOption && (
@@ -2715,7 +2774,9 @@ export default function CartInvoiceCard({
                         ? product.bulkPrice
                         : product.volumePrice !== undefined
                           ? product.volumePrice
-                          : product.price;
+                          : product.weightPrice !== undefined
+                            ? product.weightPrice
+                            : product.price;
                     const basePrice =
                       originalPrice * (quantities[product.id] || 1);
                     const discountedPrice =
@@ -2826,7 +2887,7 @@ export default function CartInvoiceCard({
 
             <button
               onClick={() => onBackToCart?.()}
-              className="mt-4 text-shopstr-purple underline hover:text-shopstr-purple-light dark:text-shopstr-yellow dark:hover:text-shopstr-yellow-light"
+              className="text-shopstr-purple hover:text-shopstr-purple-light dark:text-shopstr-yellow dark:hover:text-shopstr-yellow-light mt-4 underline"
             >
               ← Back to cart
             </button>
@@ -2834,7 +2895,7 @@ export default function CartInvoiceCard({
         </div>
 
         {/* Divider */}
-        <div className="h-px w-full bg-gray-300 dark:bg-gray-600 lg:h-full lg:w-px"></div>
+        <div className="h-px w-full bg-gray-300 lg:h-full lg:w-px dark:bg-gray-600"></div>
 
         {/* Right Side - Order Type Selection, Forms, and Payment */}
         <div className="w-full p-6 lg:w-1/2">
@@ -2964,7 +3025,7 @@ export default function CartInvoiceCard({
                   }}
                   className={`w-full rounded-lg border p-4 text-left hover:bg-gray-50 dark:hover:bg-gray-600 ${
                     shippingPickupPreference === "shipping"
-                      ? "border-shopstr-purple bg-purple-50 dark:border-shopstr-yellow dark:bg-yellow-50"
+                      ? "border-shopstr-purple dark:border-shopstr-yellow bg-purple-50 dark:bg-yellow-50"
                       : "border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-700"
                   }`}
                 >
@@ -3013,7 +3074,7 @@ export default function CartInvoiceCard({
                   }}
                   className={`w-full rounded-lg border p-4 text-left hover:bg-gray-50 dark:hover:bg-gray-600 ${
                     shippingPickupPreference === "contact"
-                      ? "border-shopstr-purple bg-purple-50 dark:border-shopstr-yellow dark:bg-yellow-50"
+                      ? "border-shopstr-purple dark:border-shopstr-yellow bg-purple-50 dark:bg-yellow-50"
                       : "border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-700"
                   }`}
                 >
@@ -3047,9 +3108,7 @@ export default function CartInvoiceCard({
                           }}
                         >
                           {(product.pickupLocations || []).map((location) => (
-                            <SelectItem key={location} value={location}>
-                              {location}
-                            </SelectItem>
+                            <SelectItem key={location}>{location}</SelectItem>
                           ))}
                         </Select>
                       </div>
@@ -3159,7 +3218,7 @@ export default function CartInvoiceCard({
           )}
           {orderConfirmed && (
             <div className="flex flex-col items-center justify-center">
-              <h3 className="mt-3 text-center text-lg font-medium leading-6 text-gray-900">
+              <h3 className="mt-3 text-center text-lg leading-6 font-medium text-gray-900">
                 Order confirmed!
               </h3>
               <Image

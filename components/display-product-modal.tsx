@@ -13,7 +13,7 @@ import {
   Button,
   Chip,
   Divider,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import ProductForm from "./product-form";
 import ImageCarousel from "./utility-components/image-carousel";
 import CompactCategories from "./utility-components/compact-categories";
@@ -121,9 +121,9 @@ export default function DisplayProductModal({
         size="2xl"
       >
         <ModalContent>
-          <ModalHeader className="flex flex-col text-light-text dark:text-dark-text">
+          <ModalHeader className="text-light-text dark:text-dark-text flex flex-col">
             <div className="flex items-center justify-between">
-              <h2 className="text-2xl font-bold text-light-text dark:text-dark-text">
+              <h2 className="text-light-text dark:text-dark-text text-2xl font-bold">
                 {productData.title}
                 {isExpired && (
                   <Chip color="warning" variant="flat" className="ml-2">
@@ -188,7 +188,7 @@ export default function DisplayProductModal({
             </div>
             <Divider />
             <span className="text-xl font-semibold">Summary: </span>
-            <span className="whitespace-pre-wrap break-words">
+            <span className="break-words whitespace-pre-wrap">
               {productData.summary}
             </span>
             {productData.sizes && productData.sizes.length > 0 ? (
@@ -199,7 +199,7 @@ export default function DisplayProductModal({
                     ? productData.sizes.map((size: string) => (
                         <span
                           key={size}
-                          className="mb-2 mr-4 text-light-text dark:text-dark-text"
+                          className="text-light-text dark:text-dark-text mr-4 mb-2"
                         >
                           {size}: {productData.sizeQuantities?.get(size) || 0}
                         </span>
@@ -216,9 +216,27 @@ export default function DisplayProductModal({
                     ? productData.volumes.map((volume: string) => (
                         <span
                           key={volume}
-                          className="mb-2 mr-4 text-light-text dark:text-dark-text"
+                          className="text-light-text dark:text-dark-text mr-4 mb-2"
                         >
                           {volume}: {productData.volumePrices?.get(volume) || 0}{" "}
+                          {productData.currency}
+                        </span>
+                      ))
+                    : null}
+                </div>
+              </>
+            ) : null}
+            {productData.weights && productData.weights.length > 0 ? (
+              <>
+                <span className="text-xl font-semibold">Weights: </span>
+                <div className="flex flex-wrap items-center">
+                  {productData.weights && productData.weights.length > 0
+                    ? productData.weights.map((weight: string) => (
+                        <span
+                          key={weight}
+                          className="text-light-text dark:text-dark-text mr-4 mb-2"
+                        >
+                          {weight}: {productData.weightPrices?.get(weight) || 0}{" "}
                           {productData.currency}
                         </span>
                       ))
@@ -235,7 +253,7 @@ export default function DisplayProductModal({
                     .map(([units, price]) => (
                       <span
                         key={units}
-                        className="mb-2 mr-4 text-light-text dark:text-dark-text"
+                        className="text-light-text dark:text-dark-text mr-4 mb-2"
                       >
                         {units} units: {price} {productData.currency}
                       </span>
@@ -245,7 +263,7 @@ export default function DisplayProductModal({
             ) : null}
             {productData.condition && (
               <>
-                <div className="text-left text-xs text-light-text dark:text-dark-text">
+                <div className="text-light-text dark:text-dark-text text-left text-xs">
                   <span className="text-xl font-semibold">Condition: </span>
                   <span className="text-xl">{productData.condition}</span>
                 </div>
@@ -253,7 +271,7 @@ export default function DisplayProductModal({
             )}
             {productData.quantity && (
               <>
-                <div className="text-left text-xs text-light-text dark:text-dark-text">
+                <div className="text-light-text dark:text-dark-text text-left text-xs">
                   <span className="text-xl font-semibold">Quantity: </span>
                   <span className="text-xl">{productData.quantity}</span>
                 </div>
@@ -261,7 +279,7 @@ export default function DisplayProductModal({
             )}
             {productData.restrictions && (
               <>
-                <div className="text-left text-xs text-light-text dark:text-dark-text">
+                <div className="text-light-text dark:text-dark-text text-left text-xs">
                   <span className="text-xl font-semibold">Restrictions: </span>
                   <span className="text-xl text-red-500">
                     {productData.restrictions}
@@ -271,7 +289,7 @@ export default function DisplayProductModal({
             )}
             {productData.required && (
               <>
-                <div className="text-left text-xs text-light-text dark:text-dark-text">
+                <div className="text-light-text dark:text-dark-text text-left text-xs">
                   <span className="text-xl font-semibold">
                     Required Customer Information:{" "}
                   </span>
