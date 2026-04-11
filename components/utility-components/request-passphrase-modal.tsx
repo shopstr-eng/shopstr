@@ -7,7 +7,7 @@ import {
   ModalFooter,
   Input,
   Button,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { useRouter } from "next/router";
 import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
@@ -70,9 +70,11 @@ export default function PassphraseChallengeModal({
   const onCancel = () => {
     if (actionOnCancel) actionOnCancel();
     setIsOpen(false);
-    onCancelRouteTo
-      ? router.push(onCancelRouteTo)
-      : router.push("/marketplace");
+    if (onCancelRouteTo) {
+      router.push(onCancelRouteTo);
+    } else {
+      router.push("/marketplace");
+    }
   };
 
   return (
@@ -93,7 +95,7 @@ export default function PassphraseChallengeModal({
       isDismissable={false}
     >
       <ModalContent>
-        <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
+        <ModalHeader className="text-light-text dark:text-dark-text flex flex-col gap-1">
           Enter Passphrase
         </ModalHeader>
         <ModalBody>

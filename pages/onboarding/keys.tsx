@@ -6,14 +6,7 @@ import {
   EyeSlashIcon,
   ArrowLongRightIcon,
 } from "@heroicons/react/24/outline";
-import {
-  Card,
-  CardBody,
-  Button,
-  Input,
-  Image,
-  Tooltip,
-} from "@nextui-org/react";
+import { Card, CardBody, Button, Input, Image, Tooltip } from "@heroui/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
   generateKeys,
@@ -88,7 +81,7 @@ const Keys = () => {
 
   return (
     <>
-      <div className="flex h-[100vh] flex-col bg-light-bg pt-24 dark:bg-dark-bg">
+      <div className="bg-light-bg dark:bg-dark-bg flex h-[100vh] flex-col pt-24">
         <div className="mx-auto w-full max-w-2xl px-4 py-6">
           <Card>
             <CardBody>
@@ -100,13 +93,13 @@ const Keys = () => {
                   src="/shopstr-2000x2000.png"
                   width={50}
                 />
-                <h1 className="cursor-pointer text-center text-3xl font-bold text-shopstr-purple-light hover:text-purple-700 dark:text-shopstr-yellow-light">
+                <h1 className="text-shopstr-purple-light dark:text-shopstr-yellow-light cursor-pointer text-center text-3xl font-bold hover:text-purple-700">
                   Shopstr
                 </h1>
               </div>
 
               <div className="mb-6 text-center">
-                <h2 className="text-2xl font-bold text-light-text dark:text-dark-text">
+                <h2 className="text-light-text dark:text-dark-text text-2xl font-bold">
                   Step 1: Account Creation
                 </h2>
                 <p className="text-light-text dark:text-dark-text">
@@ -117,7 +110,7 @@ const Keys = () => {
 
               <div className="mb-6 flex flex-col space-y-2">
                 <div className="flex items-center gap-2">
-                  <label className="text-xl font-bold text-light-text dark:text-dark-text">
+                  <label className="text-light-text dark:text-dark-text text-xl font-bold">
                     Passphrase:<span className="text-red-500">*</span>
                   </label>
                   <Tooltip
@@ -131,7 +124,7 @@ const Keys = () => {
                       className="flex items-center justify-center"
                       aria-label="Passphrase information"
                     >
-                      <InformationCircleIcon className="h-6 w-6 cursor-help text-light-text dark:text-dark-text" />
+                      <InformationCircleIcon className="text-light-text dark:text-dark-text h-6 w-6 cursor-help" />
                     </button>
                   </Tooltip>
                 </div>

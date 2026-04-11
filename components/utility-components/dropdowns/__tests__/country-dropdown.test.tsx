@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import CountryDropdown from "../country-dropdown";
-import { Select, SelectItem } from "@nextui-org/react";
+import { Select, SelectItem } from "@heroui/react";
 
 jest.mock("../../../../public/locationSelection.json", () => ({
   countries: [
@@ -10,8 +10,8 @@ jest.mock("../../../../public/locationSelection.json", () => ({
   ],
 }));
 
-jest.mock("@nextui-org/react", () => {
-  const originalModule = jest.requireActual("@nextui-org/react");
+jest.mock("@heroui/react", () => {
+  const originalModule = jest.requireActual("@heroui/react");
   return {
     ...originalModule,
     Select: jest.fn(({ children, _classNames, ...props }) => (

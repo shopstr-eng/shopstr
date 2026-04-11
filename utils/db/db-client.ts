@@ -8,11 +8,10 @@ export async function cacheEventToDatabase(event: NostrEvent): Promise<void> {
       body: JSON.stringify(event),
     });
     if (!response.ok) {
-      throw new Error("Failed to cache event to database");
+      console.error("Failed to cache event to database");
     }
   } catch (error) {
     console.error("Failed to cache event to database:", error);
-    throw error;
   }
 }
 
@@ -34,12 +33,11 @@ export async function cacheEventsToDatabase(
         body: JSON.stringify(chunk),
       });
       if (!response.ok) {
-        throw new Error("Failed to cache events to database");
+        console.error("Failed to cache events to database");
       }
     }
   } catch (error) {
     console.error("Failed to cache events to database:", error);
-    throw error;
   }
 }
 
@@ -86,7 +84,8 @@ export async function getFailedRelayPublishes(): Promise<
   try {
     const response = await fetch("/api/db/get-failed-publishes");
     if (!response.ok) {
-      throw new Error("Failed to fetch failed relay publishes");
+      console.error("Failed to fetch failed relay publishes");
+      return [];
     }
     return await response.json();
   } catch (error) {

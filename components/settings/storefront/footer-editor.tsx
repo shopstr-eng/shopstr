@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Input, Textarea } from "@nextui-org/react";
+import { Input, Textarea } from "@heroui/react";
 import {
   StorefrontFooter,
   StorefrontSocialLink,
@@ -72,7 +72,7 @@ export default function FooterEditor({
   return (
     <div className="space-y-4">
       <div>
-        <label className="mb-1 block text-xs font-medium text-light-text dark:text-dark-text">
+        <label className="text-light-text dark:text-dark-text mb-1 block text-xs font-medium">
           Footer Text
         </label>
         <Textarea
@@ -86,7 +86,7 @@ export default function FooterEditor({
       </div>
 
       <div>
-        <label className="mb-1 flex items-center gap-2 text-xs font-medium text-light-text dark:text-dark-text">
+        <label className="text-light-text dark:text-dark-text mb-1 flex items-center gap-2 text-xs font-medium">
           <input
             type="checkbox"
             checked={footer.showPoweredBy !== false}
@@ -98,7 +98,7 @@ export default function FooterEditor({
       </div>
 
       <div>
-        <label className="mb-2 block text-xs font-medium text-light-text dark:text-dark-text">
+        <label className="text-light-text dark:text-dark-text mb-2 block text-xs font-medium">
           Store Policies
         </label>
         <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">
@@ -123,13 +123,13 @@ export default function FooterEditor({
                     }
                     className="h-3.5 w-3.5"
                   />
-                  <span className="flex-1 text-xs font-medium text-light-text dark:text-dark-text">
+                  <span className="text-light-text dark:text-dark-text flex-1 text-xs font-medium">
                     {POLICY_LABELS[key]}
                   </span>
                   <button
                     type="button"
                     onClick={() => setExpandedPolicy(isExpanded ? null : key)}
-                    className="text-xs text-shopstr-purple hover:underline dark:text-shopstr-yellow"
+                    className="text-shopstr-purple dark:text-shopstr-yellow text-xs hover:underline"
                   >
                     {isExpanded ? "Collapse" : "Edit"}
                   </button>
@@ -168,14 +168,14 @@ export default function FooterEditor({
       </div>
 
       <div>
-        <label className="mb-2 block text-xs font-medium text-light-text dark:text-dark-text">
+        <label className="text-light-text dark:text-dark-text mb-2 block text-xs font-medium">
           Social Links
         </label>
         <div className="space-y-2">
           {(footer.socialLinks || []).map((link, i) => (
             <div key={i} className="flex items-center gap-2">
               <select
-                className="rounded border border-gray-300 bg-light-fg p-1.5 text-xs text-light-text dark:border-gray-600 dark:bg-dark-fg dark:text-dark-text"
+                className="bg-light-fg text-light-text dark:bg-dark-fg dark:text-dark-text rounded border border-gray-300 p-1.5 text-xs dark:border-gray-600"
                 value={link.platform}
                 onChange={(e) => {
                   const links = [...(footer.socialLinks || [])];
@@ -237,7 +237,7 @@ export default function FooterEditor({
       </div>
 
       <div>
-        <label className="mb-2 block text-xs font-medium text-light-text dark:text-dark-text">
+        <label className="text-light-text dark:text-dark-text mb-2 block text-xs font-medium">
           Footer Nav Links
         </label>
         <div className="space-y-2">

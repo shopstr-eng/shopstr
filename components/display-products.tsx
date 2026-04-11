@@ -2,15 +2,11 @@ import { useState, useEffect, useContext } from "react";
 import { nip19 } from "nostr-tools";
 import { deleteEvent } from "@/utils/nostr/nostr-helper-functions";
 import { NostrEvent } from "../utils/types/types";
-import {
-  ProductContext,
-  ProfileMapContext,
-  FollowsContext,
-} from "../utils/context/context";
+import { ProductContext, FollowsContext } from "../utils/context/context";
 import ProductCard from "./utility-components/product-card";
 import DisplayProductModal from "./display-product-modal";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
-import { Button, Pagination } from "@nextui-org/react";
+import { Button, Pagination } from "@heroui/react";
 import ShopstrSpinner from "./utility-components/shopstr-spinner";
 import { useRouter } from "next/router";
 import parseTags, {
@@ -22,6 +18,9 @@ import {
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
 import { getListingSlug } from "@/utils/url-slugs";
+
+const escapeRegExp = (value: string) =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 const DisplayProducts = ({
   focusedPubkey,
@@ -42,12 +41,11 @@ const DisplayProducts = ({
   isMyListings?: boolean;
   setCategories?: (categories: string[]) => void;
   onFilteredProductsChange?: (products: ProductData[]) => void;
-  searchBarRef?: React.RefObject<HTMLDivElement>;
+  searchBarRef?: React.RefObject<HTMLDivElement | null>;
 }) => {
   const [productEvents, setProductEvents] = useState<ProductData[]>([]);
   const [isProductsLoading, setIsProductLoading] = useState(true);
   const productEventContext = useContext(ProductContext);
-  const profileMapContext = useContext(ProfileMapContext);
   const followsContext = useContext(FollowsContext);
   const [focusedProduct, setFocusedProduct] = useState<ProductData>();
   const [showModal, setShowModal] = useState(false);
@@ -84,11 +82,9 @@ const DisplayProducts = ({
     if (!productEventContext) return;
     if (!productEventContext.isLoading && productEventContext.productEvents) {
       setIsProductLoading(true);
-      const sortedProductEvents = [
-        ...productEventContext.productEvents.sort(
-          (a: NostrEvent, b: NostrEvent) => b.created_at - a.created_at
-        ),
-      ];
+      const sortedProductEvents = [...productEventContext.productEvents].sort(
+        (a: NostrEvent, b: NostrEvent) => b.created_at - a.created_at
+      );
       const parsedProductData: ProductData[] = [];
       sortedProductEvents.forEach((event) => {
         if (wotFilter) {
@@ -118,7 +114,11 @@ const DisplayProducts = ({
         }
       });
       setProductEvents(parsedProductData);
-      setIsProductLoading(false);
+      if (parsedProductData.length >= itemsPerPage) {
+        setIsProductLoading(false);
+      } else if (!productEventContext.isLoading) {
+        setIsProductLoading(false);
+      }
     }
   }, [productEventContext, wotFilter]);
 
@@ -219,7 +219,7 @@ const DisplayProducts = ({
     try {
       await deleteEvent(nostr!, signer!, [productId]);
       productEventContext.removeDeletedProductEvent(productId);
-    } catch (_) {
+    } catch {
       return;
     }
   };
@@ -276,12 +276,14 @@ const DisplayProducts = ({
   };
 
   const productSatisfiesSearchFilter = (productData: ProductData) => {
-    if (!selectedSearch) return true;
+    const normalizedSearch = selectedSearch.trim();
+
+    if (!normalizedSearch) return true;
     if (!productData.title) return false;
 
-    if (selectedSearch.includes("naddr")) {
+    if (normalizedSearch.includes("naddr1")) {
       try {
-        const parsedNaddr = nip19.decode(selectedSearch);
+        const parsedNaddr = nip19.decode(normalizedSearch);
         if (parsedNaddr.type === "naddr") {
           return (
             productData.d === parsedNaddr.data.identifier &&
@@ -289,25 +291,25 @@ const DisplayProducts = ({
           );
         }
         return false;
-      } catch (_) {
+      } catch {
         return false;
       }
     }
 
-    if (selectedSearch.includes("npub")) {
+    if (normalizedSearch.includes("npub1")) {
       try {
-        const parsedNpub = nip19.decode(selectedSearch);
+        const parsedNpub = nip19.decode(normalizedSearch);
         if (parsedNpub.type === "npub") {
           return parsedNpub.data === productData.pubkey;
         }
         return false;
-      } catch (_) {
+      } catch {
         return false;
       }
     }
 
     try {
-      const re = new RegExp(selectedSearch, "gi");
+      const re = new RegExp(escapeRegExp(normalizedSearch), "i");
 
       const titleMatch = productData.title.match(re);
       if (titleMatch && titleMatch.length > 0) return true;
@@ -317,13 +319,13 @@ const DisplayProducts = ({
         if (summaryMatch && summaryMatch.length > 0) return true;
       }
 
-      const numericSearch = parseFloat(selectedSearch);
+      const numericSearch = parseFloat(normalizedSearch);
       if (!isNaN(numericSearch) && productData.price === numericSearch) {
         return true;
       }
 
       return false;
-    } catch (_) {
+    } catch {
       return false;
     }
   };
@@ -357,17 +359,14 @@ const DisplayProducts = ({
   return (
     <>
       <div className="w-full md:pl-4">
-        {!isMyListings &&
-        (profileMapContext.isLoading ||
-          productEventContext.isLoading ||
-          isProductsLoading) ? (
-          <div className="mb-6 mt-6 flex items-center justify-center">
+        {!isMyListings && isProductsLoading ? (
+          <div className="mt-6 mb-6 flex items-center justify-center">
             <ShopstrSpinner />
           </div>
         ) : null}
-        {filteredProducts.length > 0 ? (
+        {filteredProducts.length > 0 && (
           <>
-            <div className="grid max-w-full grid-cols-[repeat(auto-fill,minmax(300px,1fr))] justify-items-center gap-4 overflow-x-hidden">
+            <div className="grid max-w-full grid-cols-[repeat(auto-fill,minmax(280px,1fr))] justify-items-stretch gap-4 overflow-x-hidden">
               {getCurrentPageProducts().map(
                 (productData: ProductData, index) => (
                   <ProductCard
@@ -394,36 +393,36 @@ const DisplayProducts = ({
               </div>
             )}
 
-            <div className="mb-6 mt-2 text-center text-xs text-light-text dark:text-dark-text">
+            <div className="text-light-text dark:text-dark-text mt-2 mb-6 text-center text-xs">
               Showing {(currentPage - 1) * itemsPerPage + 1} to{" "}
               {Math.min(filteredProducts.length, currentPage * itemsPerPage)} of{" "}
               {filteredProducts.length} products
             </div>
           </>
-        ) : (
-          wotFilter &&
-          !isProductsLoading && (
+        )}
+        {!isMyListings &&
+          !isProductsLoading &&
+          filteredProducts.length === 0 && (
             <div className="mt-20 flex flex-grow items-center justify-center py-10">
-              <div className="w-full max-w-lg rounded-lg bg-light-fg p-8 text-center shadow-lg dark:bg-dark-fg">
-                <p className="text-3xl font-semibold text-light-text dark:text-dark-text">
+              <div className="bg-light-fg dark:bg-dark-fg w-full max-w-lg rounded-lg p-8 text-center shadow-lg">
+                <p className="text-light-text dark:text-dark-text text-3xl font-semibold">
                   No products found...
                 </p>
-                <p className="mt-4 text-lg text-light-text dark:text-dark-text">
-                  Try turning off the trust filter!
+                <p className="text-light-text dark:text-dark-text mt-4 text-lg">
+                  Try changing your search or clearing some filters.
                 </p>
               </div>
             </div>
-          )
-        )}
+          )}
         {isMyListings &&
           !isProductsLoading &&
           !productEvents.some((product) => product.pubkey === userPubkey) && (
             <div className="mt-20 flex flex-grow items-center justify-center py-10">
-              <div className="w-full max-w-lg rounded-lg bg-light-fg p-8 text-center shadow-lg dark:bg-dark-fg">
-                <p className="text-3xl font-semibold text-light-text dark:text-dark-text">
+              <div className="bg-light-fg dark:bg-dark-fg w-full max-w-lg rounded-lg p-8 text-center shadow-lg">
+                <p className="text-light-text dark:text-dark-text text-3xl font-semibold">
                   No products found...
                 </p>
-                <p className="mt-4 text-lg text-light-text dark:text-dark-text">
+                <p className="text-light-text dark:text-dark-text mt-4 text-lg">
                   Try adding a new listing!
                 </p>
                 <Button

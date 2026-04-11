@@ -115,13 +115,10 @@ export function proxy(request: NextRequest) {
           new URL(`/communities${pathname}`, request.url)
         );
       }
-    } catch (e) {
+    } catch {
       /* ignore */
     }
   }
 
-  const response = NextResponse.next();
-  response.headers.delete("X-Powered-By");
-
-  return response;
+  return NextResponse.next();
 }

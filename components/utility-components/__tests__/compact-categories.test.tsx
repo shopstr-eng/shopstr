@@ -7,7 +7,7 @@ jest.mock("@/utils/STATIC-VARIABLES", () => ({
   CATEGORIES: ["Electronics", "Books", "Home & Kitchen", "Art"],
 }));
 
-jest.mock("@nextui-org/react", () => ({
+jest.mock("@heroui/react", () => ({
   Chip: ({ children }: { children: React.ReactNode }) => (
     <div data-testid="chip">{children}</div>
   ),

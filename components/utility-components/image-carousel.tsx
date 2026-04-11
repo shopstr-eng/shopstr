@@ -1,7 +1,7 @@
 import { Carousel } from "react-responsive-carousel";
 import "react-responsive-carousel/lib/styles/carousel.min.css";
 import { ChevronLeftIcon, ChevronRightIcon } from "@heroicons/react/24/outline";
-import { Image } from "@nextui-org/react";
+import { Image } from "@heroui/react";
 import { buildSrcSet } from "@/utils/images";
 import { useRouter } from "next/router";
 import { PREVNEXTBUTTONSTYLES } from "@/utils/STATIC-VARIABLES";
@@ -78,8 +78,9 @@ export default function ImageCarousel({
           <button
             className={`left-4 ${PREVNEXTBUTTONSTYLES}`}
             onClick={(e) => {
-              onClickHandler();
+              e.preventDefault();
               e.stopPropagation();
+              onClickHandler();
             }}
             title={label}
           >
@@ -92,8 +93,9 @@ export default function ImageCarousel({
           <button
             className={`right-4 ${PREVNEXTBUTTONSTYLES}`}
             onClick={(e) => {
-              onClickHandler();
+              e.preventDefault();
               e.stopPropagation();
+              onClickHandler();
             }}
             title={label}
           >
@@ -112,8 +114,9 @@ export default function ImageCarousel({
                 : `${base} bg-gray-300 hover:bg-gray-500`
             }
             onClick={(e) => {
-              onClickHandler(e);
+              e.preventDefault();
               e.stopPropagation();
+              onClickHandler(e);
             }}
             title={`${label} ${index + 1}`}
             role="button"

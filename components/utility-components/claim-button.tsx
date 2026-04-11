@@ -6,7 +6,7 @@ import {
   ModalHeader,
   Button,
   Spinner,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import {
   ArrowDownTrayIcon,
   BoltIcon,
@@ -227,7 +227,7 @@ export default function ClaimButton({ token }: { token: string }) {
         setIsSpent(true);
         setIsRedeeming(false);
       }
-    } catch (_) {
+    } catch {
       setIsInvalidToken(true);
       setIsRedeeming(false);
     }
@@ -312,7 +312,7 @@ export default function ClaimButton({ token }: { token: string }) {
       } else {
         throw new Error("Wallet not initialized");
       }
-    } catch (_) {
+    } catch {
       setIsPaid(false);
       setOpenRedemptionModal(true);
       setIsRedeeming(false);
@@ -372,7 +372,7 @@ export default function ClaimButton({ token }: { token: string }) {
         size="2xl"
       >
         <ModalContent>
-          <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+          <ModalBody className="text-light-text dark:text-dark-text flex flex-col overflow-hidden">
             <div className="flex items-center justify-center">
               Would you like to claim the token directly to your Shopstr wallet,
               or to your Lightning address?
@@ -420,11 +420,11 @@ export default function ClaimButton({ token }: { token: string }) {
             size="2xl"
           >
             <ModalContent>
-              <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+              <ModalHeader className="text-light-text dark:text-dark-text flex items-center justify-center">
                 <XCircleIcon className="h-6 w-6 text-red-500" />
                 <div className="ml-2">No valid Lightning address found!</div>
               </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+              <ModalBody className="text-light-text dark:text-dark-text flex flex-col overflow-hidden">
                 <div className="flex items-center justify-center">
                   Check your Shopstr wallet for your sats.
                 </div>
@@ -453,11 +453,11 @@ export default function ClaimButton({ token }: { token: string }) {
             size="2xl"
           >
             <ModalContent>
-              <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+              <ModalHeader className="text-light-text dark:text-dark-text flex items-center justify-center">
                 <CheckCircleIcon className="h-6 w-6 text-green-500" />
                 <div className="ml-2">Token successfully claimed!</div>
               </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+              <ModalBody className="text-light-text dark:text-dark-text flex flex-col overflow-hidden">
                 <div className="flex items-center justify-center">
                   Check your Shopstr wallet for your sats.
                 </div>
@@ -486,11 +486,11 @@ export default function ClaimButton({ token }: { token: string }) {
             size="2xl"
           >
             <ModalContent>
-              <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+              <ModalHeader className="text-light-text dark:text-dark-text flex items-center justify-center">
                 <XCircleIcon className="h-6 w-6 text-red-500" />
                 <div className="ml-2">Duplicate token!</div>
               </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+              <ModalBody className="text-light-text dark:text-dark-text flex flex-col overflow-hidden">
                 <div className="flex items-center justify-center">
                   The token you are trying to claim is already in your Shopstr
                   wallet.
@@ -520,11 +520,11 @@ export default function ClaimButton({ token }: { token: string }) {
             size="2xl"
           >
             <ModalContent>
-              <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+              <ModalHeader className="text-light-text dark:text-dark-text flex items-center justify-center">
                 <XCircleIcon className="h-6 w-6 text-red-500" />
                 <div className="ml-2">Spent token!</div>
               </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+              <ModalBody className="text-light-text dark:text-dark-text flex flex-col overflow-hidden">
                 <div className="flex items-center justify-center">
                   The token you are trying to claim has already been redeemed.
                 </div>
@@ -553,11 +553,11 @@ export default function ClaimButton({ token }: { token: string }) {
             size="2xl"
           >
             <ModalContent>
-              <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+              <ModalHeader className="text-light-text dark:text-dark-text flex items-center justify-center">
                 <CheckCircleIcon className="h-6 w-6 text-green-500" />
                 <div className="ml-2">Token successfully redeemed!</div>
               </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+              <ModalBody className="text-light-text dark:text-dark-text flex flex-col overflow-hidden">
                 <div className="flex items-center justify-center">
                   Check your Lightning address ({lnurl}) for your sats.
                 </div>
@@ -585,11 +585,11 @@ export default function ClaimButton({ token }: { token: string }) {
             size="2xl"
           >
             <ModalContent>
-              <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+              <ModalHeader className="text-light-text dark:text-dark-text flex items-center justify-center">
                 <XCircleIcon className="h-6 w-6 text-red-500" />
                 <div className="ml-2">Token redemption failed!</div>
               </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+              <ModalBody className="text-light-text dark:text-dark-text flex flex-col overflow-hidden">
                 <div className="flex items-center justify-center">
                   You are attempting to redeem a token that has already been
                   redeemed, is too small/large, or for which there were no
