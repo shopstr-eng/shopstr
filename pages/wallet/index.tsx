@@ -41,9 +41,8 @@ const Wallet = () => {
 
   const filteredProofs = useMemo(() => {
     if (mints && tokens && mintKeySetIds) {
-      return tokens.filter(
-        (p: Proof) =>
-          mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
+      return tokens.filter((p: Proof) =>
+        mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
       );
     }
     return [];

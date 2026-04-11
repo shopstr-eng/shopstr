@@ -369,9 +369,8 @@ function registerPurchaseTools(
       const startTime = Date.now();
 
       try {
-        const { fetchAllProfilesFromDb } = await import(
-          "@/utils/db/db-service"
-        );
+        const { fetchAllProfilesFromDb } =
+          await import("@/utils/db/db-service");
         const profiles = await fetchAllProfilesFromDb();
         const profile = profiles.find(
           (p: any) =>
@@ -589,9 +588,8 @@ function registerPurchaseTools(
         return permissionError();
 
       try {
-        const { listMcpOrdersAsSeller, formatOrderForResponse } = await import(
-          "@/mcp/tools/purchase-tools"
-        );
+        const { listMcpOrdersAsSeller, formatOrderForResponse } =
+          await import("@/mcp/tools/purchase-tools");
 
         let orders = await listMcpOrdersAsSeller(
           apiKey.pubkey,

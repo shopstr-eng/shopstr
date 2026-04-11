@@ -425,9 +425,9 @@ const OrdersDashboard = () => {
             if (productAddress && productContext?.productEvents) {
               const productEvent = productContext.productEvents.find(
                 (event: any) => {
-                  const eventAddress = `30402:${event.pubkey}:${event.tags.find(
-                    (tag: any) => tag[0] === "d"
-                  )?.[1]}`;
+                  const eventAddress = `30402:${event.pubkey}:${
+                    event.tags.find((tag: any) => tag[0] === "d")?.[1]
+                  }`;
                   return productAddress.includes(eventAddress);
                 }
               );
@@ -778,9 +778,9 @@ const OrdersDashboard = () => {
     if (!productContext?.productEvents) return;
 
     const productEvent = productContext.productEvents.find((event: any) => {
-      const eventAddress = `30402:${event.pubkey}:${event.tags.find(
-        (tag: any) => tag[0] === "d"
-      )?.[1]}`;
+      const eventAddress = `30402:${event.pubkey}:${
+        event.tags.find((tag: any) => tag[0] === "d")?.[1]
+      }`;
       return productAddress.includes(eventAddress);
     });
 

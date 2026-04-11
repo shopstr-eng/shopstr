@@ -215,9 +215,8 @@ export async function getAgentSigner(
 ): Promise<{ signer: any; pubkey: string } | null> {
   if (!apiKey.encrypted_nsec) return null;
   try {
-    const { decryptNsec, McpNostrSigner } = await import(
-      "@/utils/mcp/nostr-signing"
-    );
+    const { decryptNsec, McpNostrSigner } =
+      await import("@/utils/mcp/nostr-signing");
     const nsec = decryptNsec(apiKey.encrypted_nsec);
     const signer = new McpNostrSigner(nsec);
     return { signer, pubkey: signer.getPubKey() };
