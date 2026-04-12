@@ -649,10 +649,16 @@ const OrdersDashboard = () => {
             ? statusPriorityForPersist[cachedStatusValue] || 0
             : 0;
           if (currentPriority > cachedPriority) {
+            const body = JSON.stringify({
+              orderId: order.orderId,
+              status: order.status,
+              messageId: order.messageEvent?.id,
+            });
             createNip98AuthorizationHeader(
               signer!,
               `${window.location.origin}/api/db/update-order-status`,
-              "POST"
+              "POST",
+              body
             )
               .then((authHeader) =>
                 fetch("/api/db/update-order-status", {
@@ -661,11 +667,7 @@ const OrdersDashboard = () => {
                     "Content-Type": "application/json",
                     Authorization: authHeader,
                   },
-                  body: JSON.stringify({
-                    orderId: order.orderId,
-                    status: order.status,
-                    messageId: order.messageEvent?.id,
-                  }),
+                  body,
                 })
               )
               .catch((err) =>
@@ -910,10 +912,15 @@ const OrdersDashboard = () => {
       );
 
       // Persist status to database
+      const body = JSON.stringify({
+        orderId: selectedOrder.orderId,
+        status: "shipped",
+      });
       const authHeader = await createNip98AuthorizationHeader(
         signer,
         `${window.location.origin}/api/db/update-order-status`,
-        "POST"
+        "POST",
+        body
       );
 
       fetch("/api/db/update-order-status", {
@@ -922,10 +929,7 @@ const OrdersDashboard = () => {
           "Content-Type": "application/json",
           Authorization: authHeader,
         },
-        body: JSON.stringify({
-          orderId: selectedOrder.orderId,
-          status: "shipped",
-        }),
+        body,
       }).catch((err) => console.error("Failed to persist shipped status:", err));
 
       handleCloseShippingModal();

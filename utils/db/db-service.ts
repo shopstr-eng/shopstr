@@ -988,8 +988,9 @@ export async function updateOrderStatus(
     if (messageId) {
       await client.query(
         `UPDATE message_events
-         SET order_status = $1, order_id = $2
-         WHERE id = $3
+         SET order_status = $1
+         WHERE id = $2
+         AND order_id = $3
          AND (
            pubkey = $4
            OR EXISTS (
@@ -998,7 +999,7 @@ export async function updateOrderStatus(
              WHERE elem->>0 = 'p' AND elem->>1 = $4
            )
          )`,
-        [status, orderId, messageId, pubkey]
+        [status, messageId, orderId, pubkey]
       );
     }
 

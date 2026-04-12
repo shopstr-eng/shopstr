@@ -40,7 +40,7 @@ export default async function handler(
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const authResult = verifyNip98Request(req, "POST");
+  const authResult = await verifyNip98Request(req, "POST", req.body);
   if (!authResult.ok) {
     return res.status(401).json({ error: authResult.error });
   }

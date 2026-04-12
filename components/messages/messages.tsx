@@ -217,10 +217,12 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
           }
         });
         if (wrappedIdsToMark.length > 0) {
+          const body = JSON.stringify({ messageIds: wrappedIdsToMark });
           createNip98AuthorizationHeader(
             signer!,
             `${window.location.origin}/api/db/mark-messages-read`,
-            "POST"
+            "POST",
+            body
           )
             .then((authHeader) =>
               fetch("/api/db/mark-messages-read", {
@@ -229,7 +231,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
                   "Content-Type": "application/json",
                   Authorization: authHeader,
                 },
-                body: JSON.stringify({ messageIds: wrappedIdsToMark }),
+                body,
               })
             )
             .catch((err) =>

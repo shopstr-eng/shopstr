@@ -249,10 +249,12 @@ function Shopstr({ props }: { props: AppProps }) {
       try {
         const idsForDb =
           wrappedEventIds.length > 0 ? wrappedEventIds : unreadMessageIds;
+        const body = JSON.stringify({ messageIds: idsForDb });
         const authHeader = await createNip98AuthorizationHeader(
           signer!,
           `${window.location.origin}/api/db/mark-messages-read`,
-          "POST"
+          "POST",
+          body
         );
         await fetch("/api/db/mark-messages-read", {
           method: "POST",
@@ -260,7 +262,7 @@ function Shopstr({ props }: { props: AppProps }) {
             "Content-Type": "application/json",
             Authorization: authHeader,
           },
-          body: JSON.stringify({ messageIds: idsForDb }),
+          body,
         });
 
         setNewOrderIds(new Set(unreadMessageIds));

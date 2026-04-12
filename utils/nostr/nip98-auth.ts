@@ -1,3 +1,4 @@
+import CryptoJS from "crypto-js";
 import { verifyEvent } from "nostr-tools";
 import type { NextApiRequest } from "next";
 import type { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
@@ -14,6 +15,10 @@ type NostrHttpAuthEvent = {
 
 const NIP98_KIND = 27235;
 const MAX_AUTH_AGE_SECONDS = 120;
+
+function sha256Hex(value: string): string {
+  return CryptoJS.SHA256(value).toString(CryptoJS.enc.Hex);
+}
 
 function toBase64(value: string): string {
   if (typeof window === "undefined") {
@@ -44,25 +49,33 @@ function getRequestOrigin(req: NextApiRequest): string {
 export async function createNip98AuthorizationHeader(
   signer: NostrSigner,
   url: string,
-  method: string
+  method: string,
+  body?: string
 ): Promise<string> {
+  const tags: string[][] = [
+    ["u", url],
+    ["method", method.toUpperCase()],
+  ];
+
+  if (body !== undefined) {
+    tags.push(["payload", sha256Hex(body)]);
+  }
+
   const authEvent = await signer.sign({
     kind: NIP98_KIND,
     created_at: Math.floor(Date.now() / 1000),
-    tags: [
-      ["u", url],
-      ["method", method.toUpperCase()],
-    ],
+    tags,
     content: "",
   });
 
   return `Nostr ${toBase64(JSON.stringify(authEvent))}`;
 }
 
-export function verifyNip98Request(
+export async function verifyNip98Request(
   req: NextApiRequest,
-  expectedMethod: string
-): { ok: true; pubkey: string } | { ok: false; error: string } {
+  expectedMethod: string,
+  body?: unknown
+): Promise<{ ok: true; pubkey: string } | { ok: false; error: string }> {
   const authorization = req.headers.authorization;
   if (!authorization || !authorization.startsWith("Nostr ")) {
     return { ok: false, error: "Missing NIP-98 authorization header" };
@@ -94,6 +107,24 @@ export function verifyNip98Request(
     const urlTag = getTagValue(parsed.tags, "u");
     if (urlTag !== requestUrl) {
       return { ok: false, error: "Authorization URL mismatch" };
+    }
+
+    const requestBody =
+      body ?? (expectedMethod.toUpperCase() !== "GET" ? req.body : undefined);
+    if (requestBody !== undefined) {
+      const payloadTag = getTagValue(parsed.tags, "payload");
+      if (!payloadTag) {
+        return { ok: false, error: "Missing authorization payload hash" };
+      }
+
+      const serializedBody =
+        typeof requestBody === "string"
+          ? requestBody
+          : JSON.stringify(requestBody);
+      const expectedPayloadHash = sha256Hex(serializedBody);
+      if (payloadTag !== expectedPayloadHash) {
+        return { ok: false, error: "Authorization payload mismatch" };
+      }
     }
 
     return { ok: true, pubkey: parsed.pubkey };
