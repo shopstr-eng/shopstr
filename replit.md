@@ -8,6 +8,25 @@ Shopstr is a global, permissionless marketplace built on the Nostr protocol, ena
 
 Preferred communication style: Simple, everyday language.
 
+## Tech Stack Versions
+
+- **Next.js**: 16.2.3 (Turbopack)
+- **React / React-DOM**: 19.2.5
+- **Tailwind CSS**: 4.2.2 via `@tailwindcss/postcss`
+- **@heroui/react**: 2.8.10 (HeroUI v2 — the maintained successor to `@nextui-org/react` v2)
+- **framer-motion**: 12.38.0
+
+### Tailwind v4 Notes
+
+HeroUI v2.8.10 replaced `@nextui-org/react@2.2.9`. The heroui plugin correctly uses `addBase()` for all non-class selectors (`:root`, `[data-theme]`) — no compatibility shim needed. CSS config uses `@import "tailwindcss"` + `@config "../tailwind.config.ts"` in `styles/globals.css`, and `@tailwindcss/postcss` in `postcss.config.cjs`. The app provider changed from `NextUIProvider` to `HeroUIProvider`. CSS variables renamed from `--nextui-*` to `--heroui-*`.
+
+### Product Listing Page Routing Fix (PR #384)
+
+`findListingBySlug` in `utils/url-slugs.ts` was only matching pubkey-suffixed slugs (e.g. `title-a1b2c3d4`), so uniquely-titled listings with plain slugs returned "not found". Fixed by adding a plain-title fallback match. Also added:
+
+- Defensive "not found" guard: listing page only shows 404 when `productEvents.length > 0`
+- `isLoading: true` during DB pre-load in `fetch-service.ts` to prevent premature 404 before relay fetch completes
+
 ## Recent Changes
 
 ### Onboarding Flow Redesign
@@ -261,7 +280,7 @@ Storefront editor sub-components (in `components/settings/storefront/`):
 - **Payment & Wallet Integration**: `@cashu/cashu-ts`, Lightning Address support (via Alby tools).
 - **MCP**: `@modelcontextprotocol/sdk` for AI agent integration.
 - **Database**: `pg` (PostgreSQL) for server-side caching and MCP data.
-- **UI & Styling**: `@nextui-org/react`, `@heroicons/react`, Tailwind CSS, Framer Motion.
+- **UI & Styling**: `@heroui/react` (HeroUI v2), `@heroicons/react`, Tailwind CSS v4, Framer Motion v12.
 - **Media & Content**: `qrcode`, `react-responsive-carousel`, `@braintree/sanitize-url`.
 - **Cryptography**: `crypto-js`.
 - **Relay Infrastructure**: Default and user-configurable Nostr relays, multi-relay broadcast, subscription management.

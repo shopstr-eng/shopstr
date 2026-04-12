@@ -1,7 +1,7 @@
 import { useContext, useEffect, useState, useMemo } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
-import { useDisclosure } from "@nextui-org/react";
+import { useDisclosure } from "@heroui/react";
 import {
   ShoppingCartIcon,
   Bars3Icon,
@@ -235,7 +235,7 @@ export default function StorefrontThemeWrapper({
         }}
       >
         <nav
-          className="fixed left-0 right-0 top-0 z-50 border-b"
+          className="fixed top-0 right-0 left-0 z-50 border-b"
           style={{
             backgroundColor: colors.secondary,
             borderColor: colors.primary + "33",
@@ -267,7 +267,7 @@ export default function StorefrontThemeWrapper({
                 <ShoppingCartIcon className="h-5 w-5" />
                 {cartQuantity > 0 && (
                   <span
-                    className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full text-xs font-bold"
+                    className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full text-xs font-bold"
                     style={{
                       backgroundColor: colors.primary,
                       color: colors.secondary,

@@ -18,7 +18,7 @@ jest.mock("@/components/settings/settings-bread-crumbs", () => ({
   SettingsBreadCrumbs: () => <div data-testid="breadcrumbs" />,
 }));
 
-jest.mock("@nextui-org/react", () => ({
+jest.mock("@heroui/react", () => ({
   useDisclosure: () => ({
     isOpen: false,
     onOpen: jest.fn(),

@@ -1,3 +1,4 @@
+import { type ReactElement } from "react";
 import { StorefrontColorScheme, StorefrontPolicy } from "@/utils/types/types";
 
 interface StorefrontPolicyPageProps {
@@ -13,7 +14,7 @@ function inlineFormat(text: string): string {
 
 function renderMarkdown(content: string, colors: StorefrontColorScheme) {
   const lines = content.split("\n");
-  const elements: JSX.Element[] = [];
+  const elements: ReactElement[] = [];
   let listItems: string[] = [];
   let listKey = 0;
 
@@ -55,7 +56,7 @@ function renderMarkdown(content: string, colors: StorefrontColorScheme) {
       elements.push(
         <h2
           key={i}
-          className="font-heading mb-3 mt-8 text-xl font-bold"
+          className="font-heading mt-8 mb-3 text-xl font-bold"
           style={{ color: colors.text }}
         >
           {line.slice(3)}
@@ -66,7 +67,7 @@ function renderMarkdown(content: string, colors: StorefrontColorScheme) {
       elements.push(
         <h3
           key={i}
-          className="font-heading mb-2 mt-6 text-lg font-semibold"
+          className="font-heading mt-6 mb-2 text-lg font-semibold"
           style={{ color: colors.text }}
         >
           {line.slice(4)}
@@ -98,7 +99,7 @@ export default function StorefrontPolicyPage({
   colors,
 }: StorefrontPolicyPageProps) {
   return (
-    <div className="min-h-screen px-4 pb-16 pt-20 md:px-6">
+    <div className="min-h-screen px-4 pt-20 pb-16 md:px-6">
       <div className="mx-auto max-w-3xl">
         {renderMarkdown(policy.content, colors)}
       </div>
