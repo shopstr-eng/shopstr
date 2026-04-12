@@ -192,6 +192,46 @@ describe("ChatPanel Component", () => {
       });
     });
 
+    it("should block completion when shipping info is incomplete", async () => {
+      await renderComponent(
+        {
+          isPayment: true,
+          chatsMap: new Map([
+            [
+              "test-pubkey-1",
+              {
+                decryptedChat: [
+                  {
+                    id: "shipping-msg-1",
+                    pubkey: "test-pubkey-1",
+                    kind: 14,
+                    content: "Shipping update",
+                    created_at: 1,
+                    sig: "sig-shipping",
+                    read: true,
+                    tags: [
+                      ["subject", "shipping-info"],
+                      ["carrier", "UPS"],
+                    ],
+                  },
+                ],
+                unreadCount: 0,
+              },
+            ],
+          ]),
+        },
+        {}
+      );
+
+      await userEvent.click(
+        await screen.findByRole("button", { name: /Mark as Completed/i })
+      );
+
+      expect(
+        await screen.findByText(/Missing shipping fields: tracking/i)
+      ).toBeInTheDocument();
+    });
+
     it("should gracefully handle errors on shipping form submission", async () => {
       const consoleErrorSpy = jest
         .spyOn(console, "error")

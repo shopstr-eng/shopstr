@@ -1,6 +1,13 @@
 // initialize new react funcitonal component
 import { Button, Input } from "@heroui/react";
-import { useEffect, useContext, useRef, useState } from "react";
+import {
+  useEffect,
+  useContext,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type KeyboardEvent,
+} from "react";
 import { useForm, Controller } from "react-hook-form";
 import { nip19 } from "nostr-tools";
 import {
@@ -31,6 +38,8 @@ import {
 } from "@/utils/nostr/nostr-helper-functions";
 import { calculateWeightedScore } from "@/utils/parsers/review-parser-functions";
 import { ReviewsContext } from "../../utils/context/context";
+import FailureModal from "../utility-components/failure-modal";
+import { getLatestShippingInfo } from "@/utils/messages/order-message-utils";
 import {
   NostrContext,
   SignerContext,
@@ -80,6 +89,8 @@ const ChatPanel = ({
   );
   const [productAddress, setProductAddress] = useState("");
   const [orderId, setOrderId] = useState("");
+  const [showFailureModal, setShowFailureModal] = useState(false);
+  const [failureText, setFailureText] = useState("");
 
   const reviewsContext = useContext(ReviewsContext);
 
@@ -154,34 +165,24 @@ const ChatPanel = ({
         randomNsecForReceiver
       );
 
-      // Get shipping info from the most recent shipping message
-      const shippingInfo = {
-        tracking: "",
-        carrier: "",
-        eta: 0,
-      };
+      const shippingInfo = getLatestShippingInfo(messages);
 
-      // Find the most recent shipping-info message
-      const shippingMessage = messages
-        .slice()
-        .reverse()
-        .find((msg) => {
-          const subject = msg.tags.find((tag) => tag[0] === "subject")?.[1];
-          return subject === "shipping-info";
-        });
-
-      if (shippingMessage) {
-        const trackingTag = shippingMessage.tags.find(
-          (tag) => tag[0] === "tracking"
+      if (!shippingInfo) {
+        setFailureText(
+          "Cannot complete this order because no shipping update was found."
         );
-        const carrierTag = shippingMessage.tags.find(
-          (tag) => tag[0] === "carrier"
-        );
-        const etaTag = shippingMessage.tags.find((tag) => tag[0] === "eta");
+        setShowFailureModal(true);
+        return;
+      }
 
-        if (trackingTag) shippingInfo.tracking = trackingTag[1] || "";
-        if (carrierTag) shippingInfo.carrier = carrierTag[1] || "";
-        if (etaTag) shippingInfo.eta = parseInt(etaTag[1] || "0");
+      if (shippingInfo.missingFields.length > 0) {
+        setFailureText(
+          `Cannot complete this order yet. Missing shipping fields: ${shippingInfo.missingFields.join(
+            ", "
+          )}.`
+        );
+        setShowFailureModal(true);
+        return;
       }
 
       const message =
@@ -413,10 +414,10 @@ const ChatPanel = ({
             size="md"
             value={messageInput}
             placeholder="Type your message..."
-            onChange={(e) => {
+            onChange={(e: ChangeEvent<HTMLInputElement>) => {
               setMessageInput(e.target.value);
             }}
-            onKeyDown={async (e) => {
+            onKeyDown={async (e: KeyboardEvent<HTMLInputElement>) => {
               if (
                 e.key === "Enter" &&
                 !(messageInput === "" || isSendingDMLoading)
@@ -748,6 +749,14 @@ const ChatPanel = ({
                 </form>
               </ModalContent>
             </Modal>
+            <FailureModal
+              bodyText={failureText}
+              isOpen={showFailureModal}
+              onClose={() => {
+                setShowFailureModal(false);
+                setFailureText("");
+              }}
+            />
           </>
         )
       )}
