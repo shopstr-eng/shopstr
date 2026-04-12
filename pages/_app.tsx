@@ -1,4 +1,3 @@
-import "tailwindcss/tailwind.css";
 import type { AppProps } from "next/app";
 import "../styles/globals.css";
 import { useState, useEffect, useCallback, useContext } from "react";
@@ -32,7 +31,7 @@ import {
   LogOut,
 } from "@/utils/nostr/nostr-helper-functions";
 import { createNip98AuthorizationHeader } from "@/utils/nostr/nip98-auth";
-import { NextUIProvider } from "@nextui-org/react";
+import { HeroUIProvider } from "@heroui/react";
 import { ThemeProvider as NextThemesProvider } from "next-themes";
 import {
   fetchAllPosts,
@@ -55,6 +54,7 @@ import {
 } from "../utils/types/types";
 import { Proof } from "@cashu/cashu-ts";
 import TopNav from "@/components/nav-top";
+import PageLoadingBar from "@/components/page-loading-bar";
 import DynamicHead from "../components/dynamic-meta-head";
 import StructuredData from "../components/structured-data";
 import {
@@ -75,7 +75,7 @@ function Shopstr({ props }: { props: AppProps }) {
     {
       productEvents: [],
       isLoading: true,
-      addNewlyCreatedProductEvent: (productEvent: any) => {
+      addNewlyCreatedProductEvent: (productEvent: NostrEvent) => {
         setProductContext((productContext) => {
           const productEvents = [...productContext.productEvents, productEvent];
           return {
@@ -726,6 +726,7 @@ function Shopstr({ props }: { props: AppProps }) {
         ssrOgMeta={pageProps.ogMeta ?? null}
       />
       <StructuredData />
+      <PageLoadingBar />
       <CommunityContext.Provider value={communityContext}>
         <RelaysContext.Provider value={relaysContext}>
           <BlossomContext.Provider value={blossomContext}>
@@ -788,7 +789,7 @@ function Shopstr({ props }: { props: AppProps }) {
 function App(props: AppProps) {
   return (
     <>
-      <NextUIProvider>
+      <HeroUIProvider>
         <NextThemesProvider attribute="class">
           <NostrContextProvider>
             <SignerContextProvider>
@@ -796,7 +797,7 @@ function App(props: AppProps) {
             </SignerContextProvider>
           </NostrContextProvider>
         </NextThemesProvider>
-      </NextUIProvider>
+      </HeroUIProvider>
     </>
   );
 }
