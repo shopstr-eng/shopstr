@@ -13,7 +13,7 @@ import {
   Button,
   Chip,
   Divider,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import ProductForm from "./product-form";
 import ImageCarousel from "./utility-components/image-carousel";
 import CompactCategories from "./utility-components/compact-categories";
@@ -127,10 +127,8 @@ export default function DisplayProductModal({
         size="2xl"
       >
         <ModalContent>
-          {/* Updated text color */}
           <ModalHeader className="flex flex-col text-black">
             <div className="flex items-center justify-between">
-              {/* Updated text color */}
               <h2 className="text-2xl font-bold text-black">
                 {productData.title}
                 {isExpired && (
@@ -161,7 +159,6 @@ export default function DisplayProductModal({
               </div>
             </div>
           </ModalHeader>
-          {/* Updated text color */}
           <ModalBody className="text-black">
             {productData.images ? (
               <ImageCarousel
@@ -196,7 +193,7 @@ export default function DisplayProductModal({
             {/* Updated Divider style */}
             <Divider className="h-0.5 bg-black" />
             <span className="text-xl font-semibold">Summary: </span>
-            <span className="whitespace-pre-wrap break-words">
+            <span className="break-words whitespace-pre-wrap">
               {productData.summary}
             </span>
             {productData.sizes && productData.sizes.length > 0 ? (
@@ -205,7 +202,6 @@ export default function DisplayProductModal({
                 <div className="flex flex-wrap items-center">
                   {productData.sizes && productData.sizes.length > 0
                     ? productData.sizes.map((size: string) => (
-                        // Updated text color
                         <span key={size} className="mb-2 mr-4 text-black">
                           {size}: {productData.sizeQuantities?.get(size) || 0}
                         </span>
@@ -220,7 +216,6 @@ export default function DisplayProductModal({
                 <div className="flex flex-wrap items-center">
                   {productData.volumes && productData.volumes.length > 0
                     ? productData.volumes.map((volume: string) => (
-                        // Updated text color
                         <span key={volume} className="mb-2 mr-4 text-black">
                           {volume}: {productData.volumePrices?.get(volume) || 0}{" "}
                           {productData.currency}
@@ -236,7 +231,6 @@ export default function DisplayProductModal({
                 <div className="flex flex-wrap items-center">
                   {productData.weights && productData.weights.length > 0
                     ? productData.weights.map((weight: string) => (
-                        // Updated text color
                         <span key={weight} className="mb-2 mr-4 text-black">
                           {weight}: {productData.weightPrices?.get(weight) || 0}{" "}
                           {productData.currency}
@@ -288,7 +282,6 @@ export default function DisplayProductModal({
             ) : null}
             {productData.condition && (
               <>
-                {/* Updated text color */}
                 <div className="text-left text-xs text-black">
                   <span className="text-xl font-semibold">Condition: </span>
                   <span className="text-xl">{productData.condition}</span>
@@ -297,7 +290,6 @@ export default function DisplayProductModal({
             )}
             {productData.quantity && (
               <>
-                {/* Updated text color */}
                 <div className="text-left text-xs text-black">
                   <span className="text-xl font-semibold">Quantity: </span>
                   <span className="text-xl">{productData.quantity}</span>
@@ -306,7 +298,6 @@ export default function DisplayProductModal({
             )}
             {productData.restrictions && (
               <>
-                {/* Updated text color */}
                 <div className="text-left text-xs text-black">
                   <span className="text-xl font-semibold">Restrictions: </span>
                   <span className="text-xl text-red-500">
@@ -317,7 +308,6 @@ export default function DisplayProductModal({
             )}
             {productData.required && (
               <>
-                {/* Updated text color */}
                 <div className="text-left text-xs text-black">
                   <span className="text-xl font-semibold">
                     Required Customer Information:{" "}

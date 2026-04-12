@@ -1,12 +1,5 @@
 import { useContext, useEffect, useState } from "react";
-import {
-  Button,
-  Input,
-  Card,
-  CardBody,
-  CardHeader,
-  Chip,
-} from "@nextui-org/react";
+import { Button, Input, Card, CardBody, CardHeader, Chip } from "@heroui/react";
 import { TrashIcon } from "@heroicons/react/24/outline";
 import { BLUEBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";

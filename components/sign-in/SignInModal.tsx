@@ -7,7 +7,7 @@ import {
   Image,
   Input,
   InputProps,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import {
   WHITEBUTTONCLASSNAMES,
   BLUEBUTTONCLASSNAMES,

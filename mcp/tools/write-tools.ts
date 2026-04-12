@@ -1579,9 +1579,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         } = await import("nostr-tools");
 
         const senderPubkey = signer.getPubKey();
-        const { getDefaultRelays, withBlastr } = await import(
-          "@/utils/nostr/nostr-helper-functions"
-        );
+        const { getDefaultRelays, withBlastr } =
+          await import("@/utils/nostr/nostr-helper-functions");
 
         const defaultRelays = getDefaultRelays();
         const relayHint = defaultRelays[0] || "wss://relay.damus.io";
@@ -1756,9 +1755,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
       if (!signer) return noSignerError();
 
       try {
-        const { updateMcpOrderAddress } = await import(
-          "@/mcp/tools/purchase-tools"
-        );
+        const { updateMcpOrderAddress } =
+          await import("@/mcp/tools/purchase-tools");
 
         const updatedOrder = await updateMcpOrderAddress(
           params.orderId,
@@ -1786,9 +1784,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           await import("nostr-tools");
 
         const senderPubkey = signer.getPubKey();
-        const { getDefaultRelays, withBlastr } = await import(
-          "@/utils/nostr/nostr-helper-functions"
-        );
+        const { getDefaultRelays, withBlastr } =
+          await import("@/utils/nostr/nostr-helper-functions");
         const defaultRelays = getDefaultRelays();
 
         const innerEvent = {
@@ -1917,9 +1914,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
       if (!signer) return noSignerError();
 
       try {
-        const { getMcpOrder, updateMcpOrderStatus } = await import(
-          "@/mcp/tools/purchase-tools"
-        );
+        const { getMcpOrder, updateMcpOrderStatus } =
+          await import("@/mcp/tools/purchase-tools");
         const order = await getMcpOrder(params.orderId);
 
         if (!order) {
@@ -1942,9 +1938,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
         const { generateSecretKey, finalizeEvent, getEventHash, nip44 } =
           await import("nostr-tools");
-        const { getDefaultRelays, withBlastr } = await import(
-          "@/utils/nostr/nostr-helper-functions"
-        );
+        const { getDefaultRelays, withBlastr } =
+          await import("@/utils/nostr/nostr-helper-functions");
 
         const senderPubkey = signer.getPubKey();
         const defaultRelays = getDefaultRelays();
@@ -2123,9 +2118,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
       if (!signer) return noSignerError();
 
       try {
-        const { getMcpOrder, updateMcpOrderStatus } = await import(
-          "@/mcp/tools/purchase-tools"
-        );
+        const { getMcpOrder, updateMcpOrderStatus } =
+          await import("@/mcp/tools/purchase-tools");
         const order = await getMcpOrder(params.orderId);
 
         if (!order) {
@@ -2177,9 +2171,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           try {
             const { generateSecretKey, finalizeEvent, getEventHash, nip44 } =
               await import("nostr-tools");
-            const { getDefaultRelays, withBlastr } = await import(
-              "@/utils/nostr/nostr-helper-functions"
-            );
+            const { getDefaultRelays, withBlastr } =
+              await import("@/utils/nostr/nostr-helper-functions");
 
             const senderPubkey = signer.getPubKey();
             const defaultRelays = getDefaultRelays();
@@ -2323,9 +2316,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
       if (!signer) return noSignerError();
 
       try {
-        const { fetchAllMessagesFromDb } = await import(
-          "@/utils/db/db-service"
-        );
+        const { fetchAllMessagesFromDb } =
+          await import("@/utils/db/db-service");
 
         const allMessages = await fetchAllMessagesFromDb(apiKey.pubkey);
 
@@ -2598,7 +2590,9 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         const fileBuffer = Buffer.from(params.fileBase64, "base64");
         const fileBytes = Uint8Array.from(fileBuffer);
         const { createHash: cryptoCreateHash } = await import("crypto");
-        const hash = cryptoCreateHash("sha256").update(fileBytes).digest("hex");
+        const hash = cryptoCreateHash("sha256")
+        .update(Uint8Array.from(fileBuffer))
+        .digest("hex");;
 
         const authEvent: EventTemplate = {
           kind: 24242,
@@ -2924,9 +2918,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         });
         const encryptedContent = signer.encrypt(pubkey, proofData);
 
-        const { getDefaultRelays, withBlastr } = await import(
-          "@/utils/nostr/nostr-helper-functions"
-        );
+        const { getDefaultRelays, withBlastr } =
+          await import("@/utils/nostr/nostr-helper-functions");
 
         const relays = withBlastr(getDefaultRelays());
         const tags: string[][] = [["mint", mintUrl]];
@@ -2987,9 +2980,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           JSON.stringify(mintTags)
         );
 
-        const { getDefaultRelays, withBlastr } = await import(
-          "@/utils/nostr/nostr-helper-functions"
-        );
+        const { getDefaultRelays, withBlastr } =
+          await import("@/utils/nostr/nostr-helper-functions");
 
         const relays = withBlastr(getDefaultRelays());
         const tags: string[][] = [["d", pubkey]];

@@ -9,7 +9,7 @@ import {
   SelectItem,
   Checkbox,
   Tooltip,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import {
   InformationCircleIcon,
   ShieldCheckIcon,

@@ -1,7 +1,7 @@
 import { useEffect, useState, useContext, useMemo } from "react";
 import { useRouter } from "next/router";
 import { useForm, Controller } from "react-hook-form";
-import { Button, Input, Image } from "@nextui-org/react";
+import { Button, Input, Image } from "@heroui/react";
 import { ProfileMapContext } from "@/utils/context/context";
 import {
   BLUEBUTTONCLASSNAMES,
@@ -127,7 +127,7 @@ const BuyerProfileForm = ({ isOnboarding }: BuyerProfileFormProps) => {
             )}
           </div>
           <FileUploaderButton
-            isIconOnly={true}
+            isIconOnly
             className={`!min-w-10 absolute bottom-0 right-0 z-20 !h-10 !w-10 ${WHITEBUTTONCLASSNAMES}`}
             imgCallbackOnUpload={(imgUrl) => setValue("picture", imgUrl)}
           />

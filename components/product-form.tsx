@@ -17,7 +17,7 @@ import {
   Chip,
   Image,
   Switch,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import {
   ChevronLeftIcon,
   ChevronRightIcon,

@@ -3,7 +3,7 @@ import { ProductData } from "@/utils/parsers/product-parser-functions";
 import ProductCard from "@/components/utility-components/product-card";
 import { getListingSlug } from "@/utils/url-slugs";
 import { useState } from "react";
-import { Pagination } from "@nextui-org/react";
+import { Pagination } from "@heroui/react";
 
 interface StorefrontProductGridProps {
   products: ProductData[];
@@ -59,7 +59,7 @@ export default function StorefrontProductGrid({
             )}
             <div className="flex flex-col justify-center p-8 md:w-1/2">
               <span
-                className="mb-2 text-sm font-semibold uppercase tracking-wider"
+                className="mb-2 text-sm font-semibold tracking-wider uppercase"
                 style={{ color: colors.accent }}
               >
                 Featured
@@ -127,8 +127,8 @@ export default function StorefrontProductGrid({
               cursor: "text-white font-bold",
             }}
             style={{
-              // @ts-expect-error CSS custom property for NextUI theme color
-              "--nextui-primary": colors.accent,
+              // @ts-expect-error CSS custom property for HeroUI theme color
+              "--heroui-primary": colors.accent,
             }}
           />
         </div>

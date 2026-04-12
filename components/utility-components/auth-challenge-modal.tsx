@@ -5,7 +5,7 @@ import {
   ModalBody,
   ModalFooter,
   Button,
-} from "@nextui-org/react";
+} from "@heroui/react";
 // Import your primary button style
 import {
   WHITEBUTTONCLASSNAMES,

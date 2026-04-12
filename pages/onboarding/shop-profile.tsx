@@ -1,5 +1,5 @@
 import { useRouter } from "next/router";
-import { Card, CardBody, Button, Image } from "@nextui-org/react";
+import { Card, CardBody, Button, Image } from "@heroui/react";
 import { ArrowLeftEndOnRectangleIcon } from "@heroicons/react/24/outline";
 import { BLUEBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import ShopProfileForm from "@/components/settings/shop-profile-form";

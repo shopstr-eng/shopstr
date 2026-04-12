@@ -6,7 +6,7 @@ import { nip19 } from "nostr-tools";
 import useNavigation from "@/components/hooks/use-navigation";
 
 import { ShopMapContext } from "@/utils/context/context";
-import { Button, useDisclosure } from "@nextui-org/react";
+import { Button, useDisclosure } from "@heroui/react";
 import { BLACKBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { useRouter } from "next/router";
 import SignInModal from "../sign-in/SignInModal";
@@ -183,7 +183,7 @@ const SideShopNav = ({
             </Button>
             <Button
               className={`${BLACKBUTTONCLASSNAMES} mt-2 w-full`}
-              onClick={() => router.push("settings/shop-profile")}
+              onClick={() => router.push("/settings/shop-profile")}
             >
               Edit Shop
             </Button>

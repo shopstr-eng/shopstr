@@ -13,7 +13,7 @@ import {
   ModalFooter,
   Button,
   Textarea,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import { Relay } from "nostr-tools";
 import {
   BLACKBUTTONCLASSNAMES,

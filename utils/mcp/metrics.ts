@@ -1,5 +1,3 @@
-const SERVER_START_TIME = Date.now();
-
 interface RequestRecord {
   timestamp: number;
   durationMs: number;
@@ -7,83 +5,55 @@ interface RequestRecord {
   tool?: string;
 }
 
-const MAX_RECORDS = 10000;
-const records: RequestRecord[] = [];
+const MAX_REQUEST_DURATION_SAMPLES = 1000;
+const MAX_REQUEST_RECORDS = 10000;
+const RECENT_WINDOW_MS = 5 * 60 * 1000;
+const ONE_HOUR_MS = 60 * 60 * 1000;
 
-const onboardAttempts = new Map<
-  string,
-  { count: number; windowStart: number }
->();
+const requestDurations: number[] = [];
+const requestRecords: RequestRecord[] = [];
+let totalRequests = 0;
+let successfulRequests = 0;
+let failedRequests = 0;
+const toolUsage: Record<string, number> = {};
+const startTime = Date.now();
+
+const onboardRateLimits = new Map<string, { count: number; resetAt: number }>();
 
 export function recordRequest(
   durationMs: number,
   success: boolean,
-  tool?: string
+  toolName?: string
 ) {
-  records.push({ timestamp: Date.now(), durationMs, success, tool });
-  if (records.length > MAX_RECORDS) {
-    records.splice(0, records.length - MAX_RECORDS);
+  requestRecords.push({
+    timestamp: Date.now(),
+    durationMs,
+    success,
+    tool: toolName,
+  });
+  if (requestRecords.length > MAX_REQUEST_RECORDS) {
+    requestRecords.shift();
+  }
+
+  totalRequests++;
+  if (success) {
+    successfulRequests++;
+  } else {
+    failedRequests++;
+  }
+  requestDurations.push(durationMs);
+  if (requestDurations.length > MAX_REQUEST_DURATION_SAMPLES) {
+    requestDurations.shift();
+  }
+  if (toolName) {
+    toolUsage[toolName] = (toolUsage[toolName] || 0) + 1;
   }
 }
 
-export function getMetrics() {
-  const now = Date.now();
-  const uptimeMs = now - SERVER_START_TIME;
-
-  const recentWindow = 5 * 60 * 1000;
-  const recentRecords = records.filter((r) => now - r.timestamp < recentWindow);
-
-  const totalRequests = records.length;
-  const totalErrors = records.filter((r) => !r.success).length;
-  const successRate =
-    totalRequests > 0
-      ? parseFloat(((1 - totalErrors / totalRequests) * 100).toFixed(2))
-      : 100;
-
-  const durations = recentRecords
-    .map((r) => r.durationMs)
-    .sort((a, b) => a - b);
-
-  const p50 = percentile(durations, 50);
-  const p95 = percentile(durations, 95);
-  const p99 = percentile(durations, 99);
-
-  const requestsPerMinute =
-    recentRecords.length > 0
-      ? parseFloat((recentRecords.length / (recentWindow / 60000)).toFixed(1))
-      : 0;
-
-  return {
-    status: "operational" as const,
-    uptime: {
-      startedAt: new Date(SERVER_START_TIME).toISOString(),
-      durationSeconds: Math.floor(uptimeMs / 1000),
-      durationHuman: formatDuration(uptimeMs),
-    },
-    latency: {
-      p50,
-      p95,
-      p99,
-      unit: "ms",
-      sampleSize: durations.length,
-      window: "5m",
-    },
-    throughput: {
-      requestsPerMinute,
-      totalRequests,
-      recentRequests: recentRecords.length,
-    },
-    reliability: {
-      successRate,
-      errorRate: parseFloat((100 - successRate).toFixed(2)),
-      totalErrors,
-    },
-  };
-}
-
-function percentile(sorted: number[], pct: number): number {
-  if (sorted.length === 0) return 0;
-  const idx = Math.ceil((pct / 100) * sorted.length) - 1;
+function percentile(arr: number[], p: number): number {
+  if (arr.length === 0) return 0;
+  const sorted = [...arr].sort((a, b) => a - b);
+  const idx = Math.ceil((p / 100) * sorted.length) - 1;
   return sorted[Math.max(0, idx)]!;
 }
 
@@ -99,18 +69,63 @@ function formatDuration(ms: number): string {
   return `${seconds}s`;
 }
 
+export function getMetrics() {
+  const now = Date.now();
+  const uptimeMs = now - startTime;
+  const recentRecords = requestRecords.filter(
+    (record) => now - record.timestamp < RECENT_WINDOW_MS
+  );
+  return {
+    status: "operational" as const,
+    uptime: {
+      ms: uptimeMs,
+      human: `${Math.floor(uptimeMs / 3600000)}h ${Math.floor(
+        (uptimeMs % 3600000) / 60000
+      )}m`,
+      startedAt: new Date(startTime).toISOString(),
+      durationSeconds: Math.floor(uptimeMs / 1000),
+      durationHuman: formatDuration(uptimeMs),
+    },
+    latency: {
+      p50: percentile(requestDurations, 50),
+      p95: percentile(requestDurations, 95),
+      p99: percentile(requestDurations, 99),
+      unit: "ms",
+      sampleSize: recentRecords.length,
+      window: "5m",
+    },
+    throughput: {
+      total: totalRequests,
+      successful: successfulRequests,
+      failed: failedRequests,
+      reliabilityRate:
+        totalRequests > 0
+          ? ((successfulRequests / totalRequests) * 100).toFixed(2) + "%"
+          : "N/A",
+      requestsPerMinute:
+        recentRecords.length > 0
+          ? parseFloat(
+              (recentRecords.length / (RECENT_WINDOW_MS / 60000)).toFixed(1)
+            )
+          : 0,
+      recentRequests: recentRecords.length,
+    },
+  };
+}
+
 export function checkOnboardRateLimit(ip: string): boolean {
   const now = Date.now();
-  const windowMs = 60 * 60 * 1000;
-  const maxAttempts = 10;
+  const entry = onboardRateLimits.get(ip);
 
-  const entry = onboardAttempts.get(ip);
-  if (!entry || now - entry.windowStart > windowMs) {
-    onboardAttempts.set(ip, { count: 1, windowStart: now });
+  if (!entry || now > entry.resetAt) {
+    onboardRateLimits.set(ip, { count: 1, resetAt: now + ONE_HOUR_MS });
     return true;
   }
 
-  if (entry.count >= maxAttempts) return false;
+  if (entry.count >= 10) {
+    return false;
+  }
+
   entry.count++;
   return true;
 }

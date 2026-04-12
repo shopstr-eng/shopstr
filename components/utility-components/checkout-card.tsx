@@ -19,7 +19,7 @@ import {
   DropdownTrigger,
   DropdownMenu,
   DropdownItem,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import { locationAvatar } from "./dropdowns/location-dropdown";
 import {
   ArrowLongDownIcon,

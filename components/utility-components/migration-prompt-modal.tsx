@@ -1,11 +1,5 @@
 import { useState } from "react";
-import {
-  Modal,
-  ModalContent,
-  ModalBody,
-  Button,
-  Input,
-} from "@nextui-org/react";
+import { Modal, ModalContent, ModalBody, Button, Input } from "@heroui/react";
 import { migrateToNip49 } from "@/utils/nostr/encryption-migration";
 // Import your new button styles
 import {

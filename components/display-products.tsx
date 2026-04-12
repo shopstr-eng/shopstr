@@ -7,7 +7,7 @@ import { ProductContext, FollowsContext } from "../utils/context/context";
 import ProductCard from "./utility-components/product-card";
 import DisplayProductModal from "./display-product-modal";
 import { WHITEBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
-import { Button, Pagination } from "@nextui-org/react";
+import { Button, Pagination } from "@heroui/react";
 import MilkMarketSpinner from "./utility-components/mm-spinner";
 import { useRouter } from "next/router";
 import parseTags, {
@@ -42,7 +42,7 @@ const DisplayProducts = ({
   isMyListings?: boolean;
   setCategories?: (categories: string[]) => void;
   onFilteredProductsChange?: (products: ProductData[]) => void;
-  searchBarRef?: React.RefObject<HTMLDivElement>;
+  searchBarRef?: React.RefObject<HTMLDivElement | null>;
 }) => {
   const [productEvents, setProductEvents] = useState<ProductData[]>([]);
   const [isProductsLoading, setIsProductLoading] = useState(true);

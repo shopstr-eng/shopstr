@@ -1079,9 +1079,8 @@ function registerPurchaseTools(
         return permissionError();
 
       try {
-        const { listMcpOrdersAsSeller, formatOrderForResponse } = await import(
-          "@/mcp/tools/purchase-tools"
-        );
+        const { listMcpOrdersAsSeller, formatOrderForResponse } =
+          await import("@/mcp/tools/purchase-tools");
 
         let orders = await listMcpOrdersAsSeller(
           apiKey.pubkey,

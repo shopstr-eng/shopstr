@@ -15,7 +15,7 @@ import {
   ModalBody,
   ModalFooter,
   Spinner,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import {
   getLocalStorageData,
   publishProofEvent,

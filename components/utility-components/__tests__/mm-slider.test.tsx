@@ -18,7 +18,7 @@ jest.mock("@/utils/STATIC-VARIABLES", () => ({
 }));
 
 const mockOnChangeEnd = jest.fn();
-jest.mock("@nextui-org/react", () => ({
+jest.mock("@heroui/react", () => ({
   Slider: (props: any) => {
     mockOnChangeEnd.mockImplementation((value) => props.onChangeEnd(value));
     return (

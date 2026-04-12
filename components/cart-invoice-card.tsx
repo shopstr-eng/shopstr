@@ -18,7 +18,7 @@ import {
   Select,
   SelectItem,
   Input,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import {
   BanknotesIcon,
   BoltIcon,
@@ -48,7 +48,7 @@ import QRCode from "qrcode";
 import { v4 as uuidv4 } from "uuid";
 import { nip19 } from "nostr-tools";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
-import { webln } from "@getalby/sdk";
+import { NostrWebLNProvider } from "@getalby/sdk";
 import { createSellerActionAuthEventTemplate } from "@milk-market/nostr";
 import { formatWithCommas } from "./utility-components/display-monetary-info";
 import { BLUEBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
@@ -1831,7 +1831,7 @@ export default function CartInvoiceCard({
 
   const handleNWCPayment = async (convertedPrice: number, data: any) => {
     setIsNwcLoading(true);
-    let nwc: webln.NostrWebLNProvider | null = null;
+    let nwc: NostrWebLNProvider | null = null;
 
     try {
       validatePaymentData(convertedPrice, data);
@@ -1843,7 +1843,7 @@ export default function CartInvoiceCard({
       const { nwcString } = getLocalStorageData();
       if (!nwcString) throw new Error("NWC connection not found.");
 
-      nwc = new webln.NostrWebLNProvider({ nostrWalletConnectUrl: nwcString });
+      nwc = new NostrWebLNProvider({ nostrWalletConnectUrl: nwcString });
       await nwc.enable();
 
       await nwc.sendPayment(pr);
@@ -4027,8 +4027,8 @@ export default function CartInvoiceCard({
         amount: shippingCost,
         currency: product.currency,
       };
-      const { fiat } = await import("@getalby/lightning-tools");
-      const numSats = await fiat.getSatoshiValue(currencyData);
+      const { getSatoshiValue } = await import("@getalby/lightning-tools");
+      const numSats = await getSatoshiValue(currencyData);
       return Math.round(numSats);
     } catch (err) {
       console.error("Error converting shipping cost to sats:", err);
@@ -4173,9 +4173,8 @@ export default function CartInvoiceCard({
       const mint = new CashuMint(mints[0]!);
       const wallet = new CashuWallet(mint);
       const mintKeySetIds = await wallet.getKeySets();
-      const filteredProofs = tokens.filter(
-        (p: Proof) =>
-          mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
+      const filteredProofs = tokens.filter((p: Proof) =>
+        mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
       ) as Proof[];
       const { keep, send } = await wallet.send(price, filteredProofs, {
         includeFees: true,
@@ -4547,9 +4546,7 @@ export default function CartInvoiceCard({
                       value={value || ""}
                     >
                       {(product.pickupLocations || []).map((location) => (
-                        <SelectItem key={location} value={location}>
-                          {location}
-                        </SelectItem>
+                        <SelectItem key={location}>{location}</SelectItem>
                       ))}
                     </Select>
                   )}
@@ -5673,9 +5670,7 @@ export default function CartInvoiceCard({
                           }}
                         >
                           {(product.pickupLocations || []).map((location) => (
-                            <SelectItem key={location} value={location}>
-                              {location}
-                            </SelectItem>
+                            <SelectItem key={location}>{location}</SelectItem>
                           ))}
                         </Select>
                       </div>
@@ -5950,7 +5945,7 @@ export default function CartInvoiceCard({
           )}
           {orderConfirmed && (
             <div className="flex flex-col items-center justify-center">
-              <h3 className="mt-3 text-center text-lg font-medium leading-6 text-gray-900">
+              <h3 className="mt-3 text-center text-lg leading-6 font-medium text-gray-900">
                 Order confirmed!
               </h3>
               <Image

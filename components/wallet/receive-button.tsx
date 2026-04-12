@@ -14,7 +14,7 @@ import {
   ModalFooter,
   Button,
   Textarea,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import {
   WHITEBUTTONCLASSNAMES,
   BLUEBUTTONCLASSNAMES,

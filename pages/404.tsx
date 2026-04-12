@@ -1,4 +1,4 @@
-import { Button } from "@nextui-org/react";
+import { Button } from "@heroui/react";
 import { useRouter } from "next/router";
 import Link from "next/link";
 // Import the correct class name for BLUE buttons

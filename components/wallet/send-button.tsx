@@ -20,7 +20,7 @@ import {
   ModalFooter,
   Button,
   Input,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import {
   WHITEBUTTONCLASSNAMES,
   BLUEBUTTONCLASSNAMES,
@@ -88,9 +88,8 @@ const SendButton = () => {
       const mint = new CashuMint(mints[0]!);
       const wallet = new CashuWallet(mint);
       const mintKeySetIds = await wallet.getKeySets();
-      const filteredProofs = tokens.filter(
-        (p: Proof) =>
-          mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
+      const filteredProofs = tokens.filter((p: Proof) =>
+        mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
       ) as Proof[];
       const sendTotal = numSats;
       const { keep, send } = await wallet.send(sendTotal, filteredProofs, {

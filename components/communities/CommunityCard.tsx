@@ -1,5 +1,5 @@
-import { Card, CardHeader, CardBody, Image, Button } from "@nextui-org/react";
-import type React from "react";
+import React from "react";
+import { Card, CardHeader, CardBody, Image, Button } from "@heroui/react";
 import { Community } from "@/utils/types/types";
 import { useRouter } from "next/router";
 import { nip19 } from "nostr-tools";

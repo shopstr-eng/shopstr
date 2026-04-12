@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Input, Select, SelectItem, Textarea } from "@nextui-org/react";
+import { Input, Select, SelectItem, Textarea } from "@heroui/react";
 import {
   StorefrontFooter,
   StorefrontSocialLink,

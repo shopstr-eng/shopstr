@@ -5,8 +5,8 @@ import { ProfileMapContext } from "@/utils/context/context";
 import { nip19 } from "nostr-tools";
 import React from "react";
 
-jest.mock("@nextui-org/react", () => ({
-  ...jest.requireActual("@nextui-org/react"),
+jest.mock("@heroui/react", () => ({
+  ...jest.requireActual("@heroui/react"),
   User: jest.fn(({ avatarProps, name, description, classNames }) => (
     <div data-testid="mock-user">
       <img data-testid="mock-avatar" src={avatarProps.src} alt="avatar" />

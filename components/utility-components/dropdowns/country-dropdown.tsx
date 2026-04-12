@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { Select, SelectItem, SelectSection } from "@nextui-org/react";
+import { Select, SelectItem, SelectSection } from "@heroui/react";
 import locations from "../../../public/locationSelection.json";
 
 const CountryDropdown = ({
@@ -27,7 +27,6 @@ const CountryDropdown = ({
               classNames={{
                 base: "text-black data-[hover=true]:bg-gray-100",
               }}
-              value={country.country}
             >
               {country.country}
             </SelectItem>

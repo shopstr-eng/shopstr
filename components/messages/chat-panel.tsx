@@ -1,15 +1,16 @@
 // initialize new react funcitonal component
-import { Button, Input } from "@nextui-org/react";
 import { useEffect, useContext, useRef, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { nip19 } from "nostr-tools";
 import {
+  Button,
+  Input,
   Modal,
   ModalContent,
   ModalFooter,
   ModalHeader,
   ModalBody,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import {
   BLACKBUTTONCLASSNAMES,
   WHITEBUTTONCLASSNAMES,

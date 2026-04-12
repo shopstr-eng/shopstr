@@ -42,7 +42,7 @@ export default function SectionHero({
         </div>
       )}
 
-      <div className="relative mx-auto flex max-w-6xl flex-col items-center px-6 pb-12 pt-28 text-center md:pb-16 md:pt-32">
+      <div className="relative mx-auto flex max-w-6xl flex-col items-center px-6 pt-28 pb-12 text-center md:pt-32 md:pb-16">
         {shopPicture && (
           <img
             src={sanitizeUrl(shopPicture)}

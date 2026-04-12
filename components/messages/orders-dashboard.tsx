@@ -11,7 +11,7 @@ import {
   ModalFooter,
   Input,
   Button,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import {
   HandThumbUpIcon,
   HandThumbDownIcon,
@@ -51,7 +51,7 @@ import {
 } from "@/components/utility-components/nostr-context-provider";
 import { BLUEBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { calculateWeightedScore } from "@/utils/parsers/review-parser-functions";
-import { fiat } from "@getalby/lightning-tools";
+import { getSatoshiValue } from "@getalby/lightning-tools";
 import currencySelection from "@/public/currencySelection.json";
 import {
   Chart as ChartJS,
@@ -265,7 +265,7 @@ const OrdersDashboard = () => {
 
       const ratePromises = currenciesToFetch.map(async (currency) => {
         try {
-          const sats = await fiat.getSatoshiValue({ amount: 1, currency });
+          const sats = await getSatoshiValue({ amount: 1, currency });
           return { currency: currency.toLowerCase(), rate: sats };
         } catch (err) {
           console.error(`Failed to fetch rate for ${currency}:`, err);
@@ -442,9 +442,9 @@ const OrdersDashboard = () => {
             if (productAddress && productContext?.productEvents) {
               const productEvent = productContext.productEvents.find(
                 (event: any) => {
-                  const eventAddress = `30402:${event.pubkey}:${event.tags.find(
-                    (tag: any) => tag[0] === "d"
-                  )?.[1]}`;
+                  const eventAddress = `30402:${event.pubkey}:${
+                    event.tags.find((tag: any) => tag[0] === "d")?.[1]
+                  }`;
                   return productAddress.includes(eventAddress);
                 }
               );
@@ -892,9 +892,9 @@ const OrdersDashboard = () => {
     if (!productContext?.productEvents) return;
 
     const productEvent = productContext.productEvents.find((event: any) => {
-      const eventAddress = `30402:${event.pubkey}:${event.tags.find(
-        (tag: any) => tag[0] === "d"
-      )?.[1]}`;
+      const eventAddress = `30402:${event.pubkey}:${
+        event.tags.find((tag: any) => tag[0] === "d")?.[1]
+      }`;
       return productAddress.includes(eventAddress);
     });
 
@@ -1857,7 +1857,7 @@ const OrdersDashboard = () => {
                             ) : null}
                           </div>
                         </td>
-                        <td className="whitespace-nowrap px-4 py-4 text-sm">
+                        <td className="px-4 py-4 text-sm whitespace-nowrap">
                           <span
                             className={`inline-flex rounded-md border-2 border-black px-2 py-1 text-xs font-bold ${
                               order.isSale
@@ -1901,7 +1901,7 @@ const OrdersDashboard = () => {
                                 })}`
                             : "N/A"}
                         </td>
-                        <td className="whitespace-nowrap px-4 py-4 text-sm">
+                        <td className="px-4 py-4 text-sm whitespace-nowrap">
                           <div className="flex flex-col gap-1">
                             <span
                               className={`inline-flex rounded-md border-2 border-black px-2 py-1 text-xs font-bold ${

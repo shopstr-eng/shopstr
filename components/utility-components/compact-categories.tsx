@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { CATEGORIES } from "@/utils/STATIC-VARIABLES";
-import { Chip, Tooltip } from "@nextui-org/react";
+import { Chip, Tooltip } from "@heroui/react";
 
 const CompactCategories = ({ categories }: { categories: string[] }) => {
   const [isOpen, setIsOpen] = useState(false);

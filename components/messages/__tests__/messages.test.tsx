@@ -64,8 +64,8 @@ jest.mock("../../sign-in/SignInModal", () => {
 
 jest.mock("next/router", () => ({ __esModule: true, useRouter: jest.fn() }));
 
-jest.mock("@nextui-org/react", () => ({
-  ...jest.requireActual("@nextui-org/react"),
+jest.mock("@heroui/react", () => ({
+  ...jest.requireActual("@heroui/react"),
   useDisclosure: () => ({
     isOpen: false,
     onOpen: jest.fn(),

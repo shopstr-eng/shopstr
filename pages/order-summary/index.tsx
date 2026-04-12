@@ -1,6 +1,6 @@
 import { useEffect, useState, useContext } from "react";
 import { useRouter } from "next/router";
-import { Button } from "@nextui-org/react";
+import { Button } from "@heroui/react";
 import {
   CheckCircleIcon,
   ShoppingBagIcon,

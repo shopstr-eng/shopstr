@@ -1,6 +1,6 @@
 import { useContext, useEffect, useState } from "react";
 import useNavigation from "@/components/hooks/use-navigation";
-import { Button, Image, useDisclosure } from "@nextui-org/react";
+import { Button, Image, useDisclosure } from "@heroui/react";
 import { Bars4Icon } from "@heroicons/react/24/outline";
 import { countNumberOfUnreadMessagesFromChatsContext } from "@/utils/messages/utils";
 import { ChatsContext, ShopMapContext } from "@/utils/context/context";

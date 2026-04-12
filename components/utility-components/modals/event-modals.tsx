@@ -4,7 +4,7 @@ import {
   ModalHeader,
   ModalBody,
   Snippet,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import { Event, nip19 } from "nostr-tools";
 
 interface RawEventModalProps {

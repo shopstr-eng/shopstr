@@ -1,5 +1,5 @@
 import { useState, useEffect, useContext, useCallback } from "react";
-import { Button, Input, Select, SelectItem, Spinner } from "@nextui-org/react";
+import { Button, Input, Select, SelectItem, Spinner } from "@heroui/react";
 import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import {
@@ -308,10 +308,10 @@ const ApiKeysPage = () => {
                   value: "text-black",
                 }}
               >
-                <SelectItem key="read" value="read">
+                <SelectItem key="read">
                   Read Only — Browse products, profiles, reviews
                 </SelectItem>
-                <SelectItem key="read_write" value="read_write">
+                <SelectItem key="read_write">
                   Read + Write — Browse and place orders
                 </SelectItem>
               </Select>

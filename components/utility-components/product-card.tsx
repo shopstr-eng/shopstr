@@ -7,7 +7,7 @@ import {
   DropdownMenu,
   DropdownItem,
   Button,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import Link from "next/link";
 import {
   ArrowTopRightOnSquareIcon,

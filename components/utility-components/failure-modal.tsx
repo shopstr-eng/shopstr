@@ -1,4 +1,4 @@
-import { Modal, ModalContent, ModalHeader, ModalBody } from "@nextui-org/react";
+import { Modal, ModalContent, ModalHeader, ModalBody } from "@heroui/react";
 import { XCircleIcon } from "@heroicons/react/24/outline";
 
 export default function FailureModal({

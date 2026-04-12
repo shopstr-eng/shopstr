@@ -12,7 +12,7 @@ import {
   Input,
   Select,
   SelectItem,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import {
   PlusIcon,
   MinusIcon,
@@ -29,7 +29,7 @@ import {
 } from "@/utils/STATIC-VARIABLES";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
 import CartInvoiceCard from "../../components/cart-invoice-card";
-import { fiat } from "@getalby/lightning-tools";
+import { getSatoshiValue } from "@getalby/lightning-tools";
 import currencySelection from "../../public/currencySelection.json";
 import { ShopMapContext, ProfileMapContext } from "@/utils/context/context";
 import { nip19 } from "nostr-tools";
@@ -705,7 +705,7 @@ export default function Component() {
           amount: basePrice,
           currency: product.currency,
         };
-        const numSats = await fiat.getSatoshiValue(currencyData);
+        const numSats = await getSatoshiValue(currencyData);
         price = Math.round(numSats);
       } catch (err) {
         console.error("ERROR", err);
@@ -739,7 +739,7 @@ export default function Component() {
           amount: shippingCost,
           currency: product.currency,
         };
-        const numSats = await fiat.getSatoshiValue(currencyData);
+        const numSats = await getSatoshiValue(currencyData);
         cost = Math.round(numSats);
       } catch (err) {
         console.error("ERROR", err);

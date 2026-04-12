@@ -7,7 +7,7 @@ import {
   ModalFooter,
   Input,
   Button,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import { PRIMARYBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { useRouter } from "next/router";
 import MilkMarketSpinner from "@/components/utility-components/mm-spinner";

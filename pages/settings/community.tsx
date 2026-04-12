@@ -10,7 +10,7 @@ import {
   ModalBody,
   ModalFooter,
   Input,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import MilkMarketSpinner from "@/components/utility-components/mm-spinner";
 import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs";
 import {

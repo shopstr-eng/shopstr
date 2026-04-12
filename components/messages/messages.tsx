@@ -1,7 +1,7 @@
 import { useState, useEffect, useContext } from "react";
 import { nip19 } from "nostr-tools";
 import { useRouter } from "next/router";
-import { Button, useDisclosure } from "@nextui-org/react";
+import { Button, useDisclosure } from "@heroui/react";
 import {
   constructGiftWrappedEvent,
   constructMessageSeal,

@@ -92,8 +92,5 @@ export function proxy(request: NextRequest) {
     }
   }
 
-  const response = NextResponse.next();
-  response.headers.delete("X-Powered-By");
-
-  return response;
+  return NextResponse.next();
 }

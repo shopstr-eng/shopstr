@@ -23,7 +23,7 @@ import {
   CardBody,
   Divider,
   Chip,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import MilkMarketSpinner from "../utility-components/mm-spinner";
 import {
   WHITEBUTTONCLASSNAMES,

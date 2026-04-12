@@ -25,7 +25,7 @@ import {
   DropdownMenu,
   DropdownItem,
   DropdownSection,
-} from "@nextui-org/react";
+} from "@heroui/react";
 
 import {
   ShopMapContext,
@@ -885,7 +885,6 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                   {CURRENCY_OPTIONS.map((currency) => (
                     <SelectItem
                       key={currency}
-                      value={currency}
                       className="text-black"
                     >
                       {currency}
@@ -1345,7 +1344,6 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                             {GOOGLE_FONT_OPTIONS.map((f) => (
                               <SelectItem
                                 key={f}
-                                value={f}
                                 className="text-black"
                               >
                                 {f}
@@ -1370,7 +1368,6 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                             {GOOGLE_FONT_OPTIONS.map((f) => (
                               <SelectItem
                                 key={f}
-                                value={f}
                                 className="text-black"
                               >
                                 {f}

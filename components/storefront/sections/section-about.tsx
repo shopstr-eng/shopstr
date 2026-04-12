@@ -26,7 +26,7 @@ export default function SectionAbout({ section }: SectionAboutProps) {
       >
         <div className="flex-1">
           {section.body && (
-            <p className="font-body whitespace-pre-line text-lg leading-relaxed opacity-80">
+            <p className="font-body text-lg leading-relaxed whitespace-pre-line opacity-80">
               {section.body}
             </p>
           )}

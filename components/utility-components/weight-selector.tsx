@@ -1,4 +1,4 @@
-import { Select, SelectItem, SelectSection } from "@nextui-org/react";
+import { Select, SelectItem, SelectSection } from "@heroui/react";
 
 interface WeightSelectorProps {
   weights: string[];
@@ -54,7 +54,6 @@ export default function WeightSelector({
             return (
               <SelectItem
                 key={weight}
-                value={weight}
                 textValue={`${weight} - ${price} ${currency}`}
                 className="font-semibold text-black hover:bg-primary-yellow data-[hover=true]:bg-primary-yellow data-[selected=true]:bg-primary-yellow"
               >

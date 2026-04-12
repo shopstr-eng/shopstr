@@ -6,7 +6,7 @@ import {
   ModalHeader,
   Button,
   Spinner,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import {
   ArrowDownTrayIcon,
   BoltIcon,

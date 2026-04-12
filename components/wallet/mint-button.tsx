@@ -19,7 +19,7 @@ import {
   Button,
   Image,
   Input,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import {
   WHITEBUTTONCLASSNAMES,
   BLUEBUTTONCLASSNAMES,
