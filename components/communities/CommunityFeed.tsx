@@ -22,7 +22,7 @@ import {
   Spinner,
   Divider,
   Chip,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
   createCommunityPost,
@@ -57,7 +57,7 @@ const RenderContent = ({
 
   return (
     <div className="space-y-2">
-      <p className="whitespace-pre-wrap text-light-text dark:text-dark-text">
+      <p className="text-light-text dark:text-dark-text whitespace-pre-wrap">
         {parts.map((part, index) => {
           if (isImage(part)) {
             return (
@@ -460,7 +460,7 @@ const CommunityFeed: React.FC<CommunityFeedProps> = ({ community }) => {
         </div>
       )}
       {!isLoading && topLevelPosts.length === 0 && (
-        <div className="mt-10 text-center text-light-text/80 dark:text-dark-text/80">
+        <div className="text-light-text/80 dark:text-dark-text/80 mt-10 text-center">
           <p>No announcements yet. Check back soon!</p>
         </div>
       )}

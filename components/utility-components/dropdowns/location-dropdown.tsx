@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { Select, SelectItem, SelectSection, Avatar } from "@nextui-org/react";
+import { Select, SelectItem, SelectSection, Avatar } from "@heroui/react";
 import locations from "../../../public/locationSelection.json";
 
 export const locationAvatar = (location: string) => {
@@ -108,7 +108,7 @@ const LocationDropdown = ({ value, ...props }: { [x: string]: any }) => {
     <Select
       startContent={locationAvatar(value)}
       {...props}
-      className="mt-2 text-light-text dark:text-dark-text"
+      className="text-light-text dark:text-dark-text mt-2"
     >
       {locationOptions}
     </Select>

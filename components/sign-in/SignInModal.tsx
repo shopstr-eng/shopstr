@@ -7,7 +7,7 @@ import {
   Image,
   Input,
   InputProps,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
   setLocalStorageDataOnSignIn,
@@ -343,7 +343,7 @@ export default function SignInModal({
         size="2xl"
       >
         <ModalContent>
-          <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+          <ModalBody className="text-light-text dark:text-dark-text flex flex-col overflow-hidden">
             {!showSignInOptions && !showSignUpOptions ? (
               // Landing view
               <div className="flex flex-col items-center justify-center space-y-6 py-8">
@@ -355,7 +355,7 @@ export default function SignInModal({
                     src="/shopstr-2000x2000.png"
                     width={80}
                   />
-                  <h1 className="ml-3 text-4xl font-bold text-shopstr-purple-light dark:text-shopstr-yellow-light">
+                  <h1 className="text-shopstr-purple-light dark:text-shopstr-yellow-light ml-3 text-4xl font-bold">
                     Shopstr
                   </h1>
                 </div>
@@ -366,10 +366,10 @@ export default function SignInModal({
 
                 <div className="flex w-full max-w-md flex-col space-y-4">
                   <div className="text-center">
-                    <p className="mb-2 text-lg font-bold text-light-text dark:text-dark-text">
+                    <p className="text-light-text dark:text-dark-text mb-2 text-lg font-bold">
                       New to Shopstr?
                     </p>
-                    <p className="mb-4 text-sm text-light-text dark:text-dark-text">
+                    <p className="text-light-text dark:text-dark-text mb-4 text-sm">
                       Sign up to get started!
                     </p>
                   </div>
@@ -382,7 +382,7 @@ export default function SignInModal({
                     Sign Up
                   </Button>
 
-                  <div className="text-center text-xs font-bold text-light-text dark:text-dark-text">
+                  <div className="text-light-text dark:text-dark-text text-center text-xs font-bold">
                     ------ or ------
                   </div>
 
@@ -407,7 +407,7 @@ export default function SignInModal({
                       src="/shopstr-2000x2000.png"
                       width={50}
                     />
-                    <div className="text-2xl font-bold text-shopstr-purple-light dark:text-shopstr-yellow-light">
+                    <div className="text-shopstr-purple-light dark:text-shopstr-yellow-light text-2xl font-bold">
                       Sign Up
                     </div>
                   </div>
@@ -420,7 +420,7 @@ export default function SignInModal({
                     Nostr Extension Sign-up
                   </Button>
 
-                  <div className="text-center text-xs font-bold text-light-text dark:text-dark-text">
+                  <div className="text-light-text dark:text-dark-text text-center text-xs font-bold">
                     ------ or ------
                   </div>
 
@@ -473,7 +473,7 @@ export default function SignInModal({
                     </div>
                   </div>
 
-                  <div className="text-center text-xs font-bold text-light-text dark:text-dark-text">
+                  <div className="text-light-text dark:text-dark-text text-center text-xs font-bold">
                     ------ or ------
                   </div>
 
@@ -584,7 +584,7 @@ export default function SignInModal({
                     </div>
                   </div>
 
-                  <div className="text-center text-xs font-bold text-light-text dark:text-dark-text">
+                  <div className="text-light-text dark:text-dark-text text-center text-xs font-bold">
                     ------ or ------
                   </div>
 
@@ -598,7 +598,7 @@ export default function SignInModal({
 
                   <div className="mt-4 text-center">
                     <button
-                      className="text-sm font-bold text-shopstr-purple-light underline dark:text-shopstr-yellow-light"
+                      className="text-shopstr-purple-light dark:text-shopstr-yellow-light text-sm font-bold underline"
                       onClick={() => {
                         setShowSignUpOptions(false);
                         setShowSignInOptions(true);
@@ -626,7 +626,7 @@ export default function SignInModal({
                       src="/shopstr-2000x2000.png"
                       width={50}
                     />
-                    <div className="ml-2 text-2xl font-bold text-shopstr-purple-light dark:text-shopstr-yellow-light">
+                    <div className="text-shopstr-purple-light dark:text-shopstr-yellow-light ml-2 text-2xl font-bold">
                       Shopstr
                     </div>
                   </div>
@@ -806,7 +806,7 @@ export default function SignInModal({
 
                 <div className="mt-4 text-center">
                   <button
-                    className="text-sm font-bold text-shopstr-purple-light underline dark:text-shopstr-yellow-light"
+                    className="text-shopstr-purple-light dark:text-shopstr-yellow-light text-sm font-bold underline"
                     onClick={() => {
                       setShowSignInOptions(false);
                       setShowSignUpOptions(true);

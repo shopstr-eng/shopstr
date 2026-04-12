@@ -62,23 +62,23 @@ export default function About() {
         />
       </Head>
 
-      <div className="min-h-screen bg-light-bg dark:bg-dark-bg">
-        <div className="container mx-auto max-w-5xl px-4 pb-24 pt-28">
+      <div className="bg-light-bg dark:bg-dark-bg min-h-screen">
+        <div className="container mx-auto max-w-5xl px-4 pt-28 pb-24">
           <div className="mb-6 flex justify-end">
             <Link href="/" passHref legacyBehavior>
-              <a className="inline-flex items-center gap-1.5 rounded-lg border border-shopstr-purple/30 px-3 py-1.5 text-sm font-medium text-shopstr-purple transition-colors hover:bg-shopstr-purple/10 dark:border-shopstr-yellow/30 dark:text-shopstr-yellow dark:hover:bg-shopstr-yellow/10">
+              <a className="border-shopstr-purple/30 text-shopstr-purple hover:bg-shopstr-purple/10 dark:border-shopstr-yellow/30 dark:text-shopstr-yellow dark:hover:bg-shopstr-yellow/10 inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors">
                 <ArrowLeftIcon className="h-4 w-4" />
                 Back to Home
               </a>
             </Link>
           </div>
-          <h1 className="mb-6 text-center text-4xl font-bold text-light-text dark:text-dark-text md:text-5xl">
+          <h1 className="text-light-text dark:text-dark-text mb-6 text-center text-4xl font-bold md:text-5xl">
             About{" "}
             <span className="text-shopstr-purple dark:text-shopstr-yellow">
               Shopstr
             </span>
           </h1>
-          <p className="mx-auto mb-16 max-w-3xl text-center text-xl leading-relaxed text-light-text/80 dark:text-dark-text/80">
+          <p className="text-light-text/80 dark:text-dark-text/80 mx-auto mb-16 max-w-3xl text-center text-xl leading-relaxed">
             A permissionless, Bitcoin-native marketplace built on the open Nostr
             protocol — enabling censorship-resistant global commerce for
             everyone.
@@ -86,10 +86,10 @@ export default function About() {
 
           {/* Mission */}
           <section className="mb-16">
-            <h2 className="mb-6 text-2xl font-bold text-light-text dark:text-dark-text md:text-3xl">
+            <h2 className="text-light-text dark:text-dark-text mb-6 text-2xl font-bold md:text-3xl">
               Our Mission
             </h2>
-            <div className="space-y-5 rounded-2xl bg-light-fg p-8 text-lg leading-relaxed text-light-text dark:bg-dark-fg dark:text-dark-text">
+            <div className="bg-light-fg text-light-text dark:bg-dark-fg dark:text-dark-text space-y-5 rounded-2xl p-8 text-lg leading-relaxed">
               <p>
                 Shopstr exists to make commerce as free as the internet was
                 originally intended to be. Traditional e-commerce platforms
@@ -103,7 +103,7 @@ export default function About() {
                   <a
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-shopstr-purple underline decoration-dotted hover:decoration-solid dark:text-shopstr-yellow"
+                    className="text-shopstr-purple dark:text-shopstr-yellow underline decoration-dotted hover:decoration-solid"
                   >
                     Nostr protocol
                   </a>
@@ -119,7 +119,7 @@ export default function About() {
                   <a
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-shopstr-purple underline decoration-dotted hover:decoration-solid dark:text-shopstr-yellow"
+                    className="text-shopstr-purple dark:text-shopstr-yellow underline decoration-dotted hover:decoration-solid"
                   >
                     Lightning Network
                   </a>
@@ -129,7 +129,7 @@ export default function About() {
                   <a
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-shopstr-purple underline decoration-dotted hover:decoration-solid dark:text-shopstr-yellow"
+                    className="text-shopstr-purple dark:text-shopstr-yellow underline decoration-dotted hover:decoration-solid"
                   >
                     Cashu
                   </a>
@@ -145,7 +145,7 @@ export default function About() {
 
           {/* Core Values */}
           <section className="mb-16">
-            <h2 className="mb-8 text-2xl font-bold text-light-text dark:text-dark-text md:text-3xl">
+            <h2 className="text-light-text dark:text-dark-text mb-8 text-2xl font-bold md:text-3xl">
               Core Values
             </h2>
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -183,17 +183,17 @@ export default function About() {
               ].map(({ icon: Icon, title, body }) => (
                 <div
                   key={title}
-                  className="rounded-xl bg-light-fg p-6 shadow-md dark:bg-dark-fg"
+                  className="bg-light-fg dark:bg-dark-fg rounded-xl p-6 shadow-md"
                 >
                   <div className="mb-4 flex items-center gap-3">
-                    <div className="rounded-full bg-shopstr-purple/10 p-2 dark:bg-shopstr-yellow/10">
-                      <Icon className="h-6 w-6 text-shopstr-purple dark:text-shopstr-yellow" />
+                    <div className="bg-shopstr-purple/10 dark:bg-shopstr-yellow/10 rounded-full p-2">
+                      <Icon className="text-shopstr-purple dark:text-shopstr-yellow h-6 w-6" />
                     </div>
-                    <h3 className="text-lg font-semibold text-light-text dark:text-dark-text">
+                    <h3 className="text-light-text dark:text-dark-text text-lg font-semibold">
                       {title}
                     </h3>
                   </div>
-                  <p className="leading-relaxed text-light-text/80 dark:text-dark-text/80">
+                  <p className="text-light-text/80 dark:text-dark-text/80 leading-relaxed">
                     {body}
                   </p>
                 </div>
@@ -203,10 +203,10 @@ export default function About() {
 
           {/* Technology */}
           <section className="mb-16">
-            <h2 className="mb-6 text-2xl font-bold text-light-text dark:text-dark-text md:text-3xl">
+            <h2 className="text-light-text dark:text-dark-text mb-6 text-2xl font-bold md:text-3xl">
               Technology & Standards
             </h2>
-            <div className="space-y-5 rounded-2xl bg-light-fg p-8 text-lg leading-relaxed text-light-text dark:bg-dark-fg dark:text-dark-text">
+            <div className="bg-light-fg text-light-text dark:bg-dark-fg dark:text-dark-text space-y-5 rounded-2xl p-8 text-lg leading-relaxed">
               <p>
                 Shopstr is built entirely on open standards. Product listings
                 are published as{" "}
@@ -218,7 +218,7 @@ export default function About() {
                   <a
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-shopstr-purple underline decoration-dotted hover:decoration-solid dark:text-shopstr-yellow"
+                    className="text-shopstr-purple dark:text-shopstr-yellow underline decoration-dotted hover:decoration-solid"
                   >
                     Nostr
                   </a>
@@ -246,7 +246,7 @@ export default function About() {
                   <a
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-shopstr-purple underline decoration-dotted hover:decoration-solid dark:text-shopstr-yellow"
+                    className="text-shopstr-purple dark:text-shopstr-yellow underline decoration-dotted hover:decoration-solid"
                   >
                     github.com/shopstr-eng/shopstr
                   </a>
@@ -259,7 +259,7 @@ export default function About() {
 
           {/* Network Stats with Citations */}
           <section className="mb-16">
-            <h2 className="mb-8 text-2xl font-bold text-light-text dark:text-dark-text md:text-3xl">
+            <h2 className="text-light-text dark:text-dark-text mb-8 text-2xl font-bold md:text-3xl">
               The Network Powering Shopstr
             </h2>
             <div className="grid gap-5 sm:grid-cols-2">
@@ -299,15 +299,15 @@ export default function About() {
               ].map(({ stat, label, detail, source, href }) => (
                 <div
                   key={stat}
-                  className="rounded-xl bg-light-fg p-6 shadow-md dark:bg-dark-fg"
+                  className="bg-light-fg dark:bg-dark-fg rounded-xl p-6 shadow-md"
                 >
-                  <p className="mb-1 text-3xl font-bold text-shopstr-purple dark:text-shopstr-yellow">
+                  <p className="text-shopstr-purple dark:text-shopstr-yellow mb-1 text-3xl font-bold">
                     {stat}
                   </p>
-                  <p className="mb-3 font-semibold text-light-text dark:text-dark-text">
+                  <p className="text-light-text dark:text-dark-text mb-3 font-semibold">
                     {label}
                   </p>
-                  <p className="mb-2 text-sm leading-relaxed text-light-text/80 dark:text-dark-text/80">
+                  <p className="text-light-text/80 dark:text-dark-text/80 mb-2 text-sm leading-relaxed">
                     {detail}
                   </p>
                   {source && href && (
@@ -315,7 +315,7 @@ export default function About() {
                       <a
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-xs text-shopstr-purple underline decoration-dotted hover:decoration-solid dark:text-shopstr-yellow"
+                        className="text-shopstr-purple dark:text-shopstr-yellow text-xs underline decoration-dotted hover:decoration-solid"
                       >
                         Source: {source}
                       </a>
@@ -327,11 +327,11 @@ export default function About() {
           </section>
 
           {/* Open Source Trust Signal */}
-          <section className="mb-16 rounded-2xl bg-gradient-to-r from-shopstr-purple/5 to-shopstr-purple/10 p-8 dark:from-shopstr-yellow/5 dark:to-shopstr-yellow/10">
-            <h2 className="mb-4 text-2xl font-bold text-light-text dark:text-dark-text">
+          <section className="from-shopstr-purple/5 to-shopstr-purple/10 dark:from-shopstr-yellow/5 dark:to-shopstr-yellow/10 mb-16 rounded-2xl bg-gradient-to-r p-8">
+            <h2 className="text-light-text dark:text-dark-text mb-4 text-2xl font-bold">
               Fully Open Source
             </h2>
-            <p className="mb-6 text-lg leading-relaxed text-light-text/90 dark:text-dark-text/90">
+            <p className="text-light-text/90 dark:text-dark-text/90 mb-6 text-lg leading-relaxed">
               Shopstr is not a walled garden — it is an open-source project
               anyone can inspect, fork, and build upon. The codebase is licensed
               under open-source terms and all marketplace data lives on public
@@ -348,14 +348,14 @@ export default function About() {
                 <a
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 rounded-lg bg-shopstr-purple px-5 py-3 font-semibold text-white transition-opacity hover:opacity-90 dark:bg-shopstr-yellow dark:text-black"
+                  className="bg-shopstr-purple dark:bg-shopstr-yellow inline-flex items-center gap-2 rounded-lg px-5 py-3 font-semibold text-white transition-opacity hover:opacity-90 dark:text-black"
                 >
                   View Source on GitHub
                 </a>
               </Link>
               <Link
                 href="/faq"
-                className="inline-flex items-center gap-2 rounded-lg border border-shopstr-purple/30 px-5 py-3 font-semibold text-shopstr-purple transition-colors hover:bg-shopstr-purple/5 dark:border-shopstr-yellow/30 dark:text-shopstr-yellow dark:hover:bg-shopstr-yellow/5"
+                className="border-shopstr-purple/30 text-shopstr-purple hover:bg-shopstr-purple/5 dark:border-shopstr-yellow/30 dark:text-shopstr-yellow dark:hover:bg-shopstr-yellow/5 inline-flex items-center gap-2 rounded-lg border px-5 py-3 font-semibold transition-colors"
               >
                 Read the FAQ
               </Link>
@@ -364,16 +364,16 @@ export default function About() {
 
           {/* CTA */}
           <section className="text-center">
-            <h2 className="mb-4 text-2xl font-bold text-light-text dark:text-dark-text">
+            <h2 className="text-light-text dark:text-dark-text mb-4 text-2xl font-bold">
               Ready to experience permissionless commerce?
             </h2>
-            <p className="mb-8 text-light-text/80 dark:text-dark-text/80">
+            <p className="text-light-text/80 dark:text-dark-text/80 mb-8">
               No account required. Generate a key pair and start buying or
               selling in minutes.
             </p>
             <Link
               href="/marketplace"
-              className="inline-flex items-center gap-2 rounded-xl bg-shopstr-purple px-8 py-4 text-lg font-semibold text-white shadow-lg transition-all hover:opacity-90 hover:shadow-xl dark:bg-shopstr-yellow dark:text-black"
+              className="bg-shopstr-purple dark:bg-shopstr-yellow inline-flex items-center gap-2 rounded-xl px-8 py-4 text-lg font-semibold text-white shadow-lg transition-all hover:opacity-90 hover:shadow-xl dark:text-black"
             >
               Browse the Marketplace
             </Link>
