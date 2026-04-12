@@ -144,11 +144,12 @@ export class NostrManager {
     const relays = relayUrls
       ? this.relays.filter((r) => relayUrls.includes(r.url))
       : this.relays;
-    const requests = relays.flatMap((r) =>
-      filters.map((f) => ({ url: r.url, filter: f }))
-    );
     const sub: NostrSub = {
-      _sub: this.pool.subscribeMap(requests, params ?? {}),
+      _sub: this.pool.subscribeMany(
+        relays.map((r) => r.url),
+        filters,
+        params ?? {}
+      ),
       close: async () => {
         sub._sub.close();
         for (const relay of relays) {
