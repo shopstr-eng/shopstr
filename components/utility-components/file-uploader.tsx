@@ -1,5 +1,5 @@
 import { useContext, useRef, useState } from "react";
-import { Button, Progress } from "@nextui-org/react";
+import { Button, Progress } from "@heroui/react";
 import {
   blossomUploadImages,
   getLocalStorageData,
