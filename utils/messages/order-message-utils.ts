@@ -6,8 +6,8 @@ const normalizeKeyPart = (value?: string | null) =>
 const buildTagMap = (messageEvent: NostrMessageEvent) =>
   new Map(
     messageEvent.tags
-      .filter((tag): tag is [string, string] => tag.length >= 2)
-      .map(([key, value]) => [key, value])
+      .filter((tag) => tag.length >= 2)
+      .map((tag) => [tag[0], tag[1]] as [string, string])
   );
 
 export const buildOrderGroupingKey = (
@@ -22,22 +22,11 @@ export const buildOrderGroupingKey = (
   // and order tags, so we group them by the stable product and fulfillment fields.
   return [
     tagsMap.get("a") || itemTag?.[1] || "",
-    itemTag?.[2] || tagsMap.get("quantity") || "",
     tagsMap.get("amount") || "",
-    tagsMap.get("address") || "",
-    tagsMap.get("pickup") || "",
-    tagsMap.get("size") || "",
-    tagsMap.get("volume") || "",
-    tagsMap.get("weight") || "",
-    tagsMap.get("bulk") || "",
-    tagsMap.get("donation_amount") || "",
-    tagsMap.get("donation_percentage") || "",
-    tagsMap.get("subscription") || "",
-    tagsMap.get("subscription_frequency") || "",
-    tagsMap.get("subscription_id") || "",
+    tagsMap.get("address") || tagsMap.get("pickup") || "",
   ]
     .map(normalizeKeyPart)
-    .join("|");
+    .join("\0");
 };
 
 export const getOrderStatusLookupKeys = (messageEvent: NostrMessageEvent) => {
@@ -86,7 +75,9 @@ export const getLatestShippingInfo = (
   const tagsMap = buildTagMap(shippingMessage);
   const tracking = tagsMap.get("tracking") || "";
   const carrier = tagsMap.get("carrier") || "";
-  const eta = tagsMap.get("eta") ? parseInt(tagsMap.get("eta") || "0") : 0;
+  const etaValue = tagsMap.get("eta");
+  const parsedEta = etaValue ? parseInt(etaValue, 10) : 0;
+  const eta = Number.isNaN(parsedEta) ? 0 : parsedEta;
 
   return {
     tracking,
