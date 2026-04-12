@@ -55,7 +55,8 @@ jest.mock("framer-motion", () => {
   const React = jest.requireActual("react");
   return {
     ...actual,
-    LazyMotion: ({ children }) => React.createElement(React.Fragment, null, children),
+    LazyMotion: ({ children }) =>
+      React.createElement(React.Fragment, null, children),
     AnimatePresence: ({ children }) =>
       React.createElement(React.Fragment, null, children),
   };
@@ -67,7 +68,8 @@ jest.mock("@heroui/modal", () => {
 
   const extractText = (node) => {
     if (node == null || typeof node === "boolean") return "";
-    if (typeof node === "string" || typeof node === "number") return String(node);
+    if (typeof node === "string" || typeof node === "number")
+      return String(node);
     if (Array.isArray(node)) return node.map(extractText).join(" ").trim();
     if (React.isValidElement(node)) return extractText(node.props?.children);
     return "";
@@ -87,8 +89,10 @@ jest.mock("@heroui/modal", () => {
     return findHeaderText(node.props?.children);
   };
 
-  const wrap = (Component) => ({ children, isOpen = true, ...props }) =>
-    isOpen ? React.createElement(Component, props, children) : null;
+  const wrap =
+    (Component) =>
+    ({ children, isOpen = true, ...props }) =>
+      isOpen ? React.createElement(Component, props, children) : null;
 
   const ModalHeader = wrap("div");
   const ModalContent = wrap("div");
@@ -108,7 +112,9 @@ jest.mock("@heroui/modal", () => {
       const siblings = Array.from(document.body.children).filter(
         (child) => child !== portalRoot
       );
-      const previousValues = siblings.map((child) => child.getAttribute("aria-hidden"));
+      const previousValues = siblings.map((child) =>
+        child.getAttribute("aria-hidden")
+      );
 
       siblings.forEach((child) => child.setAttribute("aria-hidden", "true"));
 

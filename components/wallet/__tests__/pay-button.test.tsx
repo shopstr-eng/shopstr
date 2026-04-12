@@ -142,7 +142,9 @@ describe("PayButton Component", () => {
     const cancelButton = screen.getByRole("button", { name: "Cancel" });
     fireEvent.click(cancelButton);
     await waitFor(() => {
-      expect(screen.queryByText("Pay Lightning Invoice")).not.toBeInTheDocument();
+      expect(
+        screen.queryByText("Pay Lightning Invoice")
+      ).not.toBeInTheDocument();
     });
   });
 

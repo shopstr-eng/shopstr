@@ -5,7 +5,9 @@ import CreateCommunityForm from "../CreateCommunityForm";
 import { Community } from "@/utils/types/types";
 
 jest.mock("@heroui/react", () => ({
-  Button: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  Button: ({ children, ...props }: any) => (
+    <button {...props}>{children}</button>
+  ),
   Input: ({ label, value, onChange, errorMessage, ...props }: any) => (
     <div>
       <label>
@@ -34,7 +36,9 @@ jest.mock("@heroui/react", () => ({
       {errorMessage ? <span>{errorMessage}</span> : null}
     </div>
   ),
-  Image: ({ alt, src, ...props }: any) => <img alt={alt} src={src} {...props} />,
+  Image: ({ alt, src, ...props }: any) => (
+    <img alt={alt} src={src} {...props} />
+  ),
 }));
 
 jest.mock("@/components/utility-components/file-uploader", () => ({
