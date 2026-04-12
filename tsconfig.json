@@ -17,6 +17,7 @@
     "paths": {
       "@/*": ["./*"]
     },
+    "ignoreDeprecations": "6.0",
     "baseUrl": ".",
     "noUnusedLocals": true,
     "noUnusedParameters": true,
