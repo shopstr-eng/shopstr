@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useContext, useMemo } from "react";
+import { useEffect, useState, useContext, useMemo } from "react";
 import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs";
 import { ProfileMapContext } from "@/utils/context/context";
 import { useForm, Controller } from "react-hook-form";
@@ -30,7 +30,6 @@ import ProtectedRoute from "@/components/utility-components/protected-route";
 const UserProfilePage = () => {
   const { nostr } = useContext(NostrContext);
   const [isUploadingProfile, setIsUploadingProfile] = useState(false);
-  const [isFetchingProfile, setIsFetchingProfile] = useState(false);
   const {
     signer,
     pubkey: userPubkey,
@@ -59,36 +58,26 @@ const UserProfilePage = () => {
 
   const watchBanner = watch("banner");
   const watchPicture = watch("picture");
+  const hasCurrentUserProfile =
+    !!userPubkey && profileContext.profileData.has(userPubkey);
+  const isFetchingProfile =
+    !userPubkey || (profileContext.isLoading && !hasCurrentUserProfile);
   const defaultImage = useMemo(() => {
     return "https://robohash.org/" + userPubkey;
   }, [userPubkey]);
 
-  const contextLoadedRef = useRef(false);
   useEffect(() => {
-    if (!userPubkey) return;
-    if (contextLoadedRef.current) return;
-    setIsFetchingProfile(true);
-    fetch(`/api/db/fetch-profile?pubkey=${encodeURIComponent(userPubkey)}`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (contextLoadedRef.current) return;
-        if (data?.profile?.content) reset(data.profile.content);
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (!contextLoadedRef.current) setIsFetchingProfile(false);
-      });
-  }, [userPubkey, reset]);
-
-  useEffect(() => {
-    if (!userPubkey) return;
+    if (!userPubkey || profileContext.isLoading) return;
     const profile = profileContext.profileData.get(userPubkey);
-    if (!profile) return;
-    contextLoadedRef.current = true;
-    setIsFetchingProfile(true);
-    reset(profile.content);
-    setIsFetchingProfile(false);
-  }, [profileContext, userPubkey, reset]);
+    if (profile) {
+      reset(profile.content);
+    }
+  }, [
+    userPubkey,
+    profileContext.isLoading,
+    profileContext.profileData,
+    reset,
+  ]);
 
   const onSubmit = async (data: { [x: string]: string }) => {
     if (!userPubkey) throw new Error("pubkey is undefined");

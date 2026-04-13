@@ -535,6 +535,15 @@ function Shopstr({ props }: { props: AppProps }) {
           editBlossomContext([], false);
         }
 
+        const userPubkey = isLoggedIn ? (await signer?.getPubKey()) : undefined;
+        const initialUserProfileFetch = userPubkey
+          ? fetchProfile(nostr!, allRelays, [userPubkey], editProfileContext).catch(
+              (error) => {
+                console.error("Error fetching current user profile:", error);
+              }
+            )
+          : Promise.resolve();
+
         // Fetch products and collect profile pubkeys
         let productEvents: NostrEvent[] = [];
         let profileSetFromProducts = new Set<string>();
@@ -553,7 +562,6 @@ function Shopstr({ props }: { props: AppProps }) {
 
         // Handle profile fetching
         let pubkeysToFetchProfilesFor = [...profileSetFromProducts];
-        const userPubkey = (await signer?.getPubKey()) || undefined;
         const profileSetFromChats = new Set<string>();
 
         if (isLoggedIn) {
@@ -590,6 +598,7 @@ function Shopstr({ props }: { props: AppProps }) {
         }
 
         try {
+          await initialUserProfileFetch;
           await fetchProfile(
             nostr!,
             allRelays,
