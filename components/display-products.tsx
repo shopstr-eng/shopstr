@@ -1,6 +1,6 @@
 import { useState, useEffect, useContext } from "react";
-import { nip19 } from "nostr-tools";
 import { deleteEvent } from "@/utils/nostr/nostr-helper-functions";
+import { productSatisfiesAllFilters } from "@/utils/search/listing-filters";
 import { NostrEvent } from "../utils/types/types";
 import { ProductContext, FollowsContext } from "../utils/context/context";
 import ProductCard from "./utility-components/product-card";
@@ -18,9 +18,6 @@ import {
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
 import { getListingSlug } from "@/utils/url-slugs";
-
-const escapeRegExp = (value: string) =>
-  value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 const DisplayProducts = ({
   focusedPubkey,
@@ -139,7 +136,14 @@ const DisplayProducts = ({
 
     const filtered = productEvents.filter((product) => {
       if (focusedPubkey && product.pubkey !== focusedPubkey) return false;
-      if (!productSatisfiesAllFilters(product)) return false;
+      if (
+        !productSatisfiesAllFilters(product, {
+          selectedCategories,
+          selectedLocation,
+          selectedSearch,
+        })
+      )
+        return false;
       if (!product.currency) return false;
       if (product.images.length === 0) return false;
       if (product.contentWarning) return false;
@@ -258,84 +262,6 @@ const DisplayProducts = ({
     } else {
       setShowModal(false);
     }
-  };
-
-  const productSatisfiesCategoryFilter = (productData: ProductData) => {
-    if (selectedCategories.size === 0) return true;
-    return Array.from(selectedCategories).some((selectedCategory) => {
-      const re = new RegExp(selectedCategory, "gi");
-      return productData?.categories?.some((category) => {
-        const match = category.match(re);
-        return match && match.length > 0;
-      });
-    });
-  };
-
-  const productSatisfieslocationFilter = (productData: ProductData) => {
-    return !selectedLocation || productData.location === selectedLocation;
-  };
-
-  const productSatisfiesSearchFilter = (productData: ProductData) => {
-    const normalizedSearch = selectedSearch.trim();
-
-    if (!normalizedSearch) return true;
-    if (!productData.title) return false;
-
-    if (normalizedSearch.includes("naddr1")) {
-      try {
-        const parsedNaddr = nip19.decode(normalizedSearch);
-        if (parsedNaddr.type === "naddr") {
-          return (
-            productData.d === parsedNaddr.data.identifier &&
-            productData.pubkey === parsedNaddr.data.pubkey
-          );
-        }
-        return false;
-      } catch {
-        return false;
-      }
-    }
-
-    if (normalizedSearch.includes("npub1")) {
-      try {
-        const parsedNpub = nip19.decode(normalizedSearch);
-        if (parsedNpub.type === "npub") {
-          return parsedNpub.data === productData.pubkey;
-        }
-        return false;
-      } catch {
-        return false;
-      }
-    }
-
-    try {
-      const re = new RegExp(escapeRegExp(normalizedSearch), "i");
-
-      const titleMatch = productData.title.match(re);
-      if (titleMatch && titleMatch.length > 0) return true;
-
-      if (productData.summary) {
-        const summaryMatch = productData.summary.match(re);
-        if (summaryMatch && summaryMatch.length > 0) return true;
-      }
-
-      const numericSearch = parseFloat(normalizedSearch);
-      if (!isNaN(numericSearch) && productData.price === numericSearch) {
-        return true;
-      }
-
-      return false;
-    } catch {
-      return false;
-    }
-  };
-
-  const productSatisfiesAllFilters = (productData: ProductData) => {
-    return (
-      productSatisfiesCategoryFilter(productData) &&
-      productSatisfieslocationFilter(productData) &&
-      productSatisfiesSearchFilter(productData)
-    );
   };
 
   const getCurrentPageProducts = () => {
