@@ -17,7 +17,7 @@ describe("buildProfileReportTags", () => {
 
   it("includes the pubkey verbatim", () => {
     const tags = buildProfileReportTags(PUBKEY, "impersonation");
-    expect(tags[0][1]).toBe(PUBKEY);
+    expect(tags[0]![1]).toBe(PUBKEY);
   });
 
   const reasons: Nip56ReportType[] = [
@@ -32,7 +32,7 @@ describe("buildProfileReportTags", () => {
 
   it.each(reasons)("accepts report type %s", (reason) => {
     const tags = buildProfileReportTags(PUBKEY, reason);
-    expect(tags[0][2]).toBe(reason);
+    expect(tags[0]![2]).toBe(reason);
   });
 });
 
@@ -54,6 +54,6 @@ describe("buildListingReportTags", () => {
 
   it("preserves the event id verbatim", () => {
     const tags = buildListingReportTags(EVENT_ID, PUBKEY, "other");
-    expect(tags[0][1]).toBe(EVENT_ID);
+    expect(tags[0]![1]).toBe(EVENT_ID);
   });
 });
