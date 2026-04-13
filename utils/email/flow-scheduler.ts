@@ -55,6 +55,13 @@ export function startFlowScheduler() {
     return;
   }
 
+  if (process.env.NODE_ENV === "development") {
+    console.log(
+      "[flow-scheduler] Skipping scheduler in development mode to reduce memory pressure"
+    );
+    return;
+  }
+
   schedulerStarted = true;
   console.log("[flow-scheduler] Starting email flow scheduler");
 

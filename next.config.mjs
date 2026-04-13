@@ -62,7 +62,7 @@ const nextConfig = {
     "@milk-market/api-client",
   ],
   turbopack: {
-    root: ".",
+    root: process.cwd(),
   },
   async rewrites() {
     return [
