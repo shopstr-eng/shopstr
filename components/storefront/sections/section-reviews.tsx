@@ -1,7 +1,7 @@
 import { StorefrontSection, StorefrontColorScheme } from "@/utils/types/types";
 import { useContext, useMemo } from "react";
 import { ReviewsContext } from "@/utils/context/context";
-import { Chip } from "@nextui-org/react";
+import { Chip } from "@heroui/react";
 import { ProfileWithDropdown } from "@/components/utility-components/profile/profile-dropdown";
 import SellerReviewReply from "@/components/utility-components/seller-review-reply";
 

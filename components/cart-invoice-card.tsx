@@ -676,8 +676,8 @@ export default function CartInvoiceCard({
       }
     }
     return best
-      ? products.find((p) => p.currency.toUpperCase() === best)?.currency ??
-          best
+      ? (products.find((p) => p.currency.toUpperCase() === best)?.currency ??
+          best)
       : null;
   }, [products]);
 
@@ -787,7 +787,8 @@ export default function CartInvoiceCard({
     }
     let cancelled = false;
     const compute = async () => {
-      const { fiat: fiatLib } = await import("@getalby/lightning-tools");
+      const { getSatoshiValue, getFiatValue } =
+        await import("@getalby/lightning-tools");
       let nativeSubtotal = 0;
       for (const product of products) {
         const basePrice =
@@ -811,11 +812,11 @@ export default function CartInvoiceCard({
             const satVal =
               productCurrencyUpper === "SATS" || productCurrencyUpper === "SAT"
                 ? discountedPrice * qty
-                : await fiatLib.getSatoshiValue({
+                : await getSatoshiValue({
                     amount: discountedPrice * qty,
                     currency: product.currency,
                   });
-            const fiatVal = await fiatLib.getFiatValue({
+            const fiatVal = await getFiatValue({
               satoshi: Math.round(satVal),
               currency: cartCurrencyUpper,
             });
@@ -885,7 +886,8 @@ export default function CartInvoiceCard({
     }
     let cancelled = false;
     const compute = async () => {
-      const { fiat: fiatLib } = await import("@getalby/lightning-tools");
+      const { getSatoshiValue, getFiatValue } =
+        await import("@getalby/lightning-tools");
       const map: { [productId: string]: number } = {};
       const cartCurrencyUpper = cartCurrency!.toUpperCase();
       for (const product of products) {
@@ -909,11 +911,11 @@ export default function CartInvoiceCard({
             const satVal =
               productCurrencyUpper === "SATS" || productCurrencyUpper === "SAT"
                 ? discountedPrice * qty
-                : await fiatLib.getSatoshiValue({
+                : await getSatoshiValue({
                     amount: discountedPrice * qty,
                     currency: product.currency,
                   });
-            const fiatVal = await fiatLib.getFiatValue({
+            const fiatVal = await getFiatValue({
               satoshi: Math.round(satVal),
               currency: cartCurrencyUpper,
             });
@@ -938,8 +940,8 @@ export default function CartInvoiceCard({
     }
     const fetchUsdEstimate = async () => {
       try {
-        const { fiat } = await import("@getalby/lightning-tools");
-        const satsPerUsd = await fiat.getSatoshiValue({
+        const { getSatoshiValue } = await import("@getalby/lightning-tools");
+        const satsPerUsd = await getSatoshiValue({
           amount: 1,
           currency: "USD",
         });
@@ -4520,7 +4522,7 @@ export default function CartInvoiceCard({
                     fieldState: { error },
                   }) => (
                     <Select
-                      className="rounded-md border-2 border-black bg-white shadow-neo"
+                      className="shadow-neo rounded-md border-2 border-black bg-white"
                       classNames={{
                         trigger:
                           "border-2 border-black rounded-md shadow-neo !bg-white hover:!bg-white data-[hover=true]:!bg-white data-[focus=true]:!bg-white",
@@ -4971,7 +4973,7 @@ export default function CartInvoiceCard({
                   <div className="flex w-full flex-col items-center justify-center">
                     {qrCodeUrl && (
                       <>
-                        <h3 className="text-dark-text mt-3 text-center text-lg font-medium leading-6">
+                        <h3 className="text-dark-text mt-3 text-center text-lg leading-6 font-medium">
                           Don&apos;t refresh or close the page until the payment
                           has been confirmed!
                         </h3>
@@ -5008,7 +5010,7 @@ export default function CartInvoiceCard({
                     )}
                     {stripeClientSecret && (
                       <div className="w-full">
-                        <h3 className="text-dark-text mb-4 mt-3 text-center text-lg font-medium leading-6">
+                        <h3 className="text-dark-text mt-3 mb-4 text-center text-lg leading-6 font-medium">
                           Enter your card details below to complete your
                           payment.
                         </h3>
@@ -5036,7 +5038,7 @@ export default function CartInvoiceCard({
                   </div>
                 ) : (
                   <div className="flex flex-col items-center justify-center">
-                    <h3 className="text-dark-text mt-3 text-center text-lg font-medium leading-6">
+                    <h3 className="text-dark-text mt-3 text-center text-lg leading-6 font-medium">
                       Payment confirmed!
                     </h3>
                     <Image
@@ -5444,7 +5446,7 @@ export default function CartInvoiceCard({
                     {/* Mixed shipping types - only show combined */}
                     <button
                       onClick={() => handleOrderTypeSelection("combined")}
-                      className="w-full transform rounded-md border-2 border-black bg-white p-4 text-left shadow-neo transition-transform hover:-translate-y-0.5 active:translate-y-0.5"
+                      className="shadow-neo w-full transform rounded-md border-2 border-black bg-white p-4 text-left transition-transform hover:-translate-y-0.5 active:translate-y-0.5"
                     >
                       <div className="font-medium">Mixed delivery</div>
                       <div className="text-sm text-gray-500">
@@ -5461,7 +5463,7 @@ export default function CartInvoiceCard({
                     {/* All products have Free/Pickup - show shipping and contact options */}
                     <button
                       onClick={() => handleOrderTypeSelection("shipping")}
-                      className="w-full transform rounded-md border-2 border-black bg-white p-4 text-left shadow-neo transition-transform hover:-translate-y-0.5 active:translate-y-0.5"
+                      className="shadow-neo w-full transform rounded-md border-2 border-black bg-white p-4 text-left transition-transform hover:-translate-y-0.5 active:translate-y-0.5"
                     >
                       <div className="font-medium">Free or added shipping</div>
                       <div className="text-sm text-gray-500">
@@ -5470,7 +5472,7 @@ export default function CartInvoiceCard({
                     </button>
                     <button
                       onClick={() => handleOrderTypeSelection("contact")}
-                      className="w-full transform rounded-md border-2 border-black bg-white p-4 text-left shadow-neo transition-transform hover:-translate-y-0.5 active:translate-y-0.5"
+                      className="shadow-neo w-full transform rounded-md border-2 border-black bg-white p-4 text-left transition-transform hover:-translate-y-0.5 active:translate-y-0.5"
                     >
                       <div className="font-medium">Pickup</div>
                       <div className="text-sm text-gray-500">
@@ -5482,7 +5484,7 @@ export default function CartInvoiceCard({
                   uniqueShippingTypes.includes("Added Cost") ? (
                   <button
                     onClick={() => handleOrderTypeSelection("shipping")}
-                    className="w-full transform rounded-md border-2 border-black bg-white p-4 text-left shadow-neo transition-transform hover:-translate-y-0.5 active:translate-y-0.5"
+                    className="shadow-neo w-full transform rounded-md border-2 border-black bg-white p-4 text-left transition-transform hover:-translate-y-0.5 active:translate-y-0.5"
                   >
                     <div className="font-medium">
                       Online order with shipping
@@ -5494,7 +5496,7 @@ export default function CartInvoiceCard({
                 ) : (
                   <button
                     onClick={() => handleOrderTypeSelection("contact")}
-                    className="w-full transform rounded-md border-2 border-black bg-white p-4 text-left shadow-neo transition-transform hover:-translate-y-0.5 active:translate-y-0.5"
+                    className="shadow-neo w-full transform rounded-md border-2 border-black bg-white p-4 text-left transition-transform hover:-translate-y-0.5 active:translate-y-0.5"
                   >
                     <div className="font-medium">Online order</div>
                     <div className="text-sm text-gray-500">
@@ -5567,7 +5569,7 @@ export default function CartInvoiceCard({
 
                     setTotalCost(subtotalCost + shippingTotal);
                   }}
-                  className={`w-full transform rounded-md border-2 border-black p-4 text-left shadow-neo transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
+                  className={`shadow-neo w-full transform rounded-md border-2 border-black p-4 text-left transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
                     shippingPickupPreference === "shipping"
                       ? "bg-primary-yellow"
                       : "bg-white"
@@ -5626,7 +5628,7 @@ export default function CartInvoiceCard({
 
                     setTotalCost(subtotalCost + shippingTotal);
                   }}
-                  className={`w-full transform rounded-md border-2 border-black p-4 text-left shadow-neo transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
+                  className={`shadow-neo w-full transform rounded-md border-2 border-black p-4 text-left transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
                     shippingPickupPreference === "contact"
                       ? "bg-primary-yellow"
                       : "bg-white"
@@ -5860,7 +5862,7 @@ export default function CartInvoiceCard({
                   {((isSingleSeller && isStripeMerchant) ||
                     (!isSingleSeller && allSellersHaveStripe)) && (
                     <Button
-                      className={`w-full rounded-md border-2 border-black bg-black px-4 py-2 font-bold text-white shadow-neo transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
+                      className={`shadow-neo w-full rounded-md border-2 border-black bg-black px-4 py-2 font-bold text-white transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
                         !isFormValid || (!isLoggedIn && !buyerEmail)
                           ? "cursor-not-allowed opacity-50"
                           : ""
@@ -5891,7 +5893,7 @@ export default function CartInvoiceCard({
                       ? Object.keys(fiatPaymentOptions).length > 0
                       : isMultiFiatAvailable) && (
                       <Button
-                        className={`w-full rounded-md border-2 border-black bg-black px-4 py-2 font-bold text-white shadow-neo transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
+                        className={`shadow-neo w-full rounded-md border-2 border-black bg-black px-4 py-2 font-bold text-white transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
                           !isFormValid || (!isLoggedIn && !buyerEmail)
                             ? "cursor-not-allowed opacity-50"
                             : ""
@@ -6042,7 +6044,7 @@ export default function CartInvoiceCard({
                       </span>{" "}
                       to:
                     </p>
-                    <div className="mb-4 rounded-md border-2 border-black bg-gray-50 p-4 shadow-neo">
+                    <div className="shadow-neo mb-4 rounded-md border-2 border-black bg-gray-50 p-4">
                       <p className="text-center font-semibold text-black">
                         {selectedFiatOption}:{" "}
                         {singleSellerPubkey &&
@@ -6095,7 +6097,7 @@ export default function CartInvoiceCard({
                     return (
                       <div
                         key={sellerPubkey}
-                        className="rounded-md border-2 border-black bg-gray-50 p-4 shadow-neo"
+                        className="shadow-neo rounded-md border-2 border-black bg-gray-50 p-4"
                       >
                         <p className="mb-2 font-bold text-black">
                           {sellerName}
@@ -6184,7 +6186,7 @@ export default function CartInvoiceCard({
                   setMultiFiatConfirmed({});
                   setPendingPaymentData(null);
                 }}
-                className="rounded-md border-2 border-black bg-white px-6 py-2 font-bold text-black shadow-neo transition-transform hover:-translate-y-0.5 active:translate-y-0.5"
+                className="shadow-neo rounded-md border-2 border-black bg-white px-6 py-2 font-bold text-black transition-transform hover:-translate-y-0.5 active:translate-y-0.5"
               >
                 Cancel
               </Button>
@@ -6210,7 +6212,7 @@ export default function CartInvoiceCard({
                     ? !fiatPaymentConfirmed
                     : !allMultiFiatConfirmed
                 }
-                className={`rounded-md border-2 border-black bg-black px-6 py-2 font-bold text-white shadow-neo transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
+                className={`shadow-neo rounded-md border-2 border-black bg-black px-6 py-2 font-bold text-white transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
                   (
                     isSingleSeller
                       ? !fiatPaymentConfirmed
@@ -6279,11 +6281,7 @@ export default function CartInvoiceCard({
                 >
                   {fiatPaymentOptions &&
                     Object.keys(fiatPaymentOptions).map((option) => (
-                      <SelectItem
-                        key={option}
-                        value={option}
-                        className="text-black"
-                      >
+                      <SelectItem key={option} className="text-black">
                         {option}
                       </SelectItem>
                     ))}
@@ -6322,11 +6320,7 @@ export default function CartInvoiceCard({
                         }}
                       >
                         {Object.keys(opts).map((option) => (
-                          <SelectItem
-                            key={option}
-                            value={option}
-                            className="text-black"
-                          >
+                          <SelectItem key={option} className="text-black">
                             {option}
                           </SelectItem>
                         ))}
@@ -6345,7 +6339,7 @@ export default function CartInvoiceCard({
                   setShowFiatPaymentInstructions(true);
                 }}
                 disabled={!allMultiFiatSelected}
-                className={`rounded-md border-2 border-black bg-black px-6 py-2 font-bold text-white shadow-neo transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
+                className={`shadow-neo rounded-md border-2 border-black bg-black px-6 py-2 font-bold text-white transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
                   !allMultiFiatSelected ? "cursor-not-allowed opacity-50" : ""
                 }`}
               >

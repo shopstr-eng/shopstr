@@ -125,7 +125,7 @@ const TopNav = ({
   };
 
   const MobileMenu = () => (
-    <div className="absolute left-0 top-full w-full border-t border-black bg-primary-blue shadow-lg">
+    <div className="bg-primary-blue absolute top-full left-0 w-full border-t border-black shadow-lg">
       <Button
         className={`w-full bg-transparent ${
           isHomeActive ? "text-primary-yellow" : "text-white"
@@ -153,7 +153,7 @@ const TopNav = ({
       >
         Orders
         {unreadMsgCount > 0 && (
-          <span className="min-w-5 ml-1 inline-flex h-5 items-center justify-center rounded-full bg-yellow-600 px-1.5 text-xs font-bold text-white">
+          <span className="ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-yellow-600 px-1.5 text-xs font-bold text-white">
             {unreadMsgCount}
           </span>
         )}
@@ -185,7 +185,7 @@ const TopNav = ({
       >
         Cart
         {cartQuantity > 0 && (
-          <span className="min-w-5 ml-1 inline-flex h-5 items-center justify-center rounded-full bg-yellow-600 px-1.5 text-xs font-bold text-white">
+          <span className="ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-yellow-600 px-1.5 text-xs font-bold text-white">
             {cartQuantity}
           </span>
         )}
@@ -196,13 +196,13 @@ const TopNav = ({
   return (
     <div
       data-main-nav
-      className="fixed top-0 z-50 w-full border-b-2 border-black bg-primary-blue shadow-lg"
+      className="bg-primary-blue fixed top-0 z-50 w-full border-b-2 border-black shadow-lg"
     >
       <div className="flex items-center justify-between py-2 pr-4">
         <div className="flex flex-shrink-0 items-center">
           <Button
             onClick={handleHomeClick}
-            className="flex items-center bg-transparent text-white duration-200 hover:text-primary-yellow"
+            className="hover:text-primary-yellow flex items-center bg-transparent text-white duration-200"
           >
             <Image
               alt="Milk Market logo"
@@ -239,7 +239,7 @@ const TopNav = ({
           ) : (
             <Button
               onClick={onOpen}
-              className="bg-transparent text-white hover:text-primary-yellow"
+              className="hover:text-primary-yellow bg-transparent text-white"
             >
               Sign In
             </Button>
@@ -248,7 +248,7 @@ const TopNav = ({
         <div className="hidden flex-1 items-center justify-evenly md:flex">
           <Button
             className={`bg-transparent ${
-              isHomeActive ? "font-bold text-primary-yellow" : "text-white"
+              isHomeActive ? "text-primary-yellow font-bold" : "text-white"
             } hover:text-primary-yellow`}
             onClick={handleHomeClick}
           >
@@ -257,7 +257,7 @@ const TopNav = ({
           <Button
             className={`bg-transparent ${
               isCommunitiesActive
-                ? "font-bold text-primary-yellow"
+                ? "text-primary-yellow font-bold"
                 : "text-white"
             } hover:text-primary-yellow`}
             onClick={() => router.push("/communities")}
@@ -266,20 +266,20 @@ const TopNav = ({
           </Button>
           <Button
             className={`bg-transparent ${
-              isMessagesActive ? "font-bold text-primary-yellow" : "text-white"
+              isMessagesActive ? "text-primary-yellow font-bold" : "text-white"
             } hover:text-primary-yellow`}
             onClick={() => handleRoute("/orders")}
           >
             Orders
             {unreadMsgCount > 0 && (
-              <span className="min-w-5 ml-1 inline-flex h-5 items-center justify-center rounded-full bg-yellow-600 px-1.5 text-xs font-bold text-white">
+              <span className="ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-yellow-600 px-1.5 text-xs font-bold text-white">
                 {unreadMsgCount}
               </span>
             )}
           </Button>
           <Button
             className={`bg-transparent ${
-              isWalletActive ? "font-bold text-primary-yellow" : "text-white"
+              isWalletActive ? "text-primary-yellow font-bold" : "text-white"
             } hover:text-primary-yellow`}
             onClick={() => handleRoute("/wallet")}
           >
@@ -288,7 +288,7 @@ const TopNav = ({
           <Button
             className={`bg-transparent ${
               isMyListingsActive
-                ? "font-bold text-primary-yellow"
+                ? "text-primary-yellow font-bold"
                 : "text-white"
             } hover:text-primary-yellow`}
             onClick={() => handleRoute("/my-listings")}
@@ -297,13 +297,13 @@ const TopNav = ({
           </Button>
           <Button
             className={`bg-transparent ${
-              isCartActive ? "font-bold text-primary-yellow" : "text-white"
+              isCartActive ? "text-primary-yellow font-bold" : "text-white"
             } hover:text-primary-yellow`}
             onClick={() => router.push("/cart")}
           >
             Cart
             {cartQuantity > 0 && (
-              <span className="min-w-5 ml-1 inline-flex h-5 items-center justify-center rounded-full bg-yellow-600 px-1.5 text-xs font-bold text-white">
+              <span className="ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-yellow-600 px-1.5 text-xs font-bold text-white">
                 {cartQuantity}
               </span>
             )}
@@ -327,8 +327,8 @@ const TopNav = ({
             <Button
               onClick={onOpen}
               className={`bg-transparent ${
-                isProfileActive ? "font-bold text-primary-yellow" : "text-white"
-              } duration-200 hover:text-primary-yellow`}
+                isProfileActive ? "text-primary-yellow font-bold" : "text-white"
+              } hover:text-primary-yellow duration-200`}
             >
               Sign In
             </Button>

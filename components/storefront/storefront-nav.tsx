@@ -31,7 +31,7 @@ export default function StorefrontNav({
 
   return (
     <nav
-      className="fixed left-0 right-0 top-0 z-50 border-b"
+      className="fixed top-0 right-0 left-0 z-50 border-b"
       style={{
         backgroundColor: colors.secondary,
         borderColor: colors.primary + "33",

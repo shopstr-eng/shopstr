@@ -4,7 +4,13 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { createSellerSessionFromNsec } from "@milk-market/nostr";
 
-import { ActionButton, ScreenScrollView, ScreenTitle, SellerCard, SellerField } from "@/components/seller-ui";
+import {
+  ActionButton,
+  ScreenScrollView,
+  ScreenTitle,
+  SellerCard,
+  SellerField,
+} from "@/components/seller-ui";
 import { mobileApiClient } from "@/lib/api-client";
 import { useSessionUiStore } from "@/stores/session-ui-store";
 import { useSessionStore } from "@/stores/session-store";
@@ -13,7 +19,9 @@ import { sellerThemeTokens } from "@/theme/tokens";
 export default function EmailAuthScreen() {
   const router = useRouter();
   const saveSession = useSessionStore((state) => state.saveSession);
-  const setLastUsedAuthMethod = useSessionUiStore((state) => state.setLastUsedAuthMethod);
+  const setLastUsedAuthMethod = useSessionUiStore(
+    (state) => state.setLastUsedAuthMethod
+  );
 
   const [mode, setMode] = useState<"sign-in" | "sign-up">("sign-in");
   const [email, setEmail] = useState("");
@@ -99,7 +107,11 @@ export default function EmailAuthScreen() {
         />
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
         <ActionButton
-          label={mode === "sign-in" ? "Continue to seller workspace" : "Create seller account"}
+          label={
+            mode === "sign-in"
+              ? "Continue to seller workspace"
+              : "Create seller account"
+          }
           onPress={handleSubmit}
           loading={submitting}
           disabled={!email.trim() || !password.trim()}

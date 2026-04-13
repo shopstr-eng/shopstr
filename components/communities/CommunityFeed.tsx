@@ -16,14 +16,7 @@ import {
   fetchCommunityPosts,
   fetchPendingPosts,
 } from "@/utils/nostr/fetch-service";
-import {
-  Button,
-  Textarea,
-  Card,
-  CardBody,
-  Divider,
-  Chip,
-} from "@heroui/react";
+import { Button, Textarea, Card, CardBody, Divider, Chip } from "@heroui/react";
 import MilkMarketSpinner from "../utility-components/mm-spinner";
 import {
   WHITEBUTTONCLASSNAMES,
@@ -298,7 +291,7 @@ const CommunityFeed: FC<CommunityFeedProps> = ({ community }) => {
   return (
     <div className="space-y-6">
       {isModerator && (
-        <Card className="rounded-lg border-4 border-black bg-white shadow-neo">
+        <Card className="shadow-neo rounded-lg border-4 border-black bg-white">
           <CardBody className="p-6">
             <h3 className="mb-4 text-lg font-bold text-black">
               Create an Announcement
@@ -333,7 +326,7 @@ const CommunityFeed: FC<CommunityFeedProps> = ({ community }) => {
         <div className="space-y-6">
           {topLevelPosts.map((post: CommunityPost) => (
             <Fragment key={post.id}>
-              <Card className="rounded-lg border-4 border-black bg-primary-blue shadow-neo">
+              <Card className="bg-primary-blue shadow-neo rounded-lg border-4 border-black">
                 <CardBody className="p-6">
                   <div className="mb-4 flex items-center justify-between">
                     <ProfileWithDropdown
@@ -345,7 +338,7 @@ const CommunityFeed: FC<CommunityFeedProps> = ({ community }) => {
                     />
                     {isModerator && !post.approved && (
                       <Chip
-                        className="border-2 border-black bg-primary-yellow font-bold text-black"
+                        className="bg-primary-yellow border-2 border-black font-bold text-black"
                         variant="flat"
                       >
                         Pending Approval
@@ -361,7 +354,7 @@ const CommunityFeed: FC<CommunityFeedProps> = ({ community }) => {
                       <Button
                         size="sm"
                         onClick={() => handleApprove(post)}
-                        className="border-2 border-black bg-primary-yellow font-bold text-black shadow-neo hover:-translate-y-0.5"
+                        className="bg-primary-yellow shadow-neo border-2 border-black font-bold text-black hover:-translate-y-0.5"
                       >
                         Approve
                       </Button>
@@ -375,7 +368,7 @@ const CommunityFeed: FC<CommunityFeedProps> = ({ community }) => {
                           onClick={() =>
                             handleRetractApproval(post.approvalEventId)
                           }
-                          className="border-2 border-black bg-red-500 font-bold text-white shadow-neo hover:-translate-y-0.5"
+                          className="shadow-neo border-2 border-black bg-red-500 font-bold text-white hover:-translate-y-0.5"
                         >
                           Retract Approval
                         </Button>
@@ -427,7 +420,7 @@ const CommunityFeed: FC<CommunityFeedProps> = ({ community }) => {
                     .map((reply: CommunityPost) => (
                       <Card
                         key={reply.id}
-                        className="rounded-lg border-4 border-black bg-primary-blue shadow-neo"
+                        className="bg-primary-blue shadow-neo rounded-lg border-4 border-black"
                       >
                         <CardBody className="p-6">
                           <div className="mb-4 flex items-center justify-between">
@@ -440,7 +433,7 @@ const CommunityFeed: FC<CommunityFeedProps> = ({ community }) => {
                             />
                             {isModerator && !reply.approved && (
                               <Chip
-                                className="border-2 border-black bg-primary-yellow font-bold text-black"
+                                className="bg-primary-yellow border-2 border-black font-bold text-black"
                                 variant="flat"
                               >
                                 Pending Approval
@@ -459,7 +452,7 @@ const CommunityFeed: FC<CommunityFeedProps> = ({ community }) => {
                               <Button
                                 size="sm"
                                 onClick={() => handleApprove(reply)}
-                                className="border-2 border-black bg-primary-yellow font-bold text-black shadow-neo hover:-translate-y-0.5"
+                                className="bg-primary-yellow shadow-neo border-2 border-black font-bold text-black hover:-translate-y-0.5"
                               >
                                 Approve
                               </Button>

@@ -1,4 +1,4 @@
-import { Select, SelectItem } from "@nextui-org/react";
+import { Select, SelectItem } from "@heroui/react";
 import { formatWithCommas } from "./display-monetary-info";
 
 export type SubscriptionFrequencyOption =
@@ -50,7 +50,7 @@ export default function SubscriptionPricingCards({
         onClick={() => onSelectionChange(true)}
         className={`relative cursor-pointer rounded-md border-2 p-4 transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
           isSubscription
-            ? "border-black bg-primary-yellow shadow-neo"
+            ? "bg-primary-yellow shadow-neo border-black"
             : "border-gray-300 bg-white"
         }`}
       >
@@ -62,18 +62,18 @@ export default function SubscriptionPricingCards({
               }`}
             >
               {isSubscription && (
-                <div className="h-2 w-2 rounded-full bg-primary-yellow" />
+                <div className="bg-primary-yellow h-2 w-2 rounded-full" />
               )}
             </div>
             <span className="text-lg font-bold text-black">
               Subscribe & Save
             </span>
           </div>
-          <span className="rounded-md border-2 border-black bg-green-400 px-2 py-0.5 text-xs font-bold text-black shadow-neo">
+          <span className="shadow-neo rounded-md border-2 border-black bg-green-400 px-2 py-0.5 text-xs font-bold text-black">
             {discountPercent}% OFF
           </span>
         </div>
-        <div className="ml-7 mt-2">
+        <div className="mt-2 ml-7">
           <p className="text-2xl font-bold text-black">
             {subscriptionFormatted}
           </p>
@@ -115,8 +115,7 @@ export default function SubscriptionPricingCards({
                 {frequencies.map((freq) => (
                   <SelectItem
                     key={freq}
-                    value={freq}
-                    className="font-semibold text-black hover:bg-primary-yellow data-[hover=true]:bg-primary-yellow data-[selected=true]:bg-primary-yellow"
+                    className="hover:bg-primary-yellow data-[hover=true]:bg-primary-yellow data-[selected=true]:bg-primary-yellow font-semibold text-black"
                   >
                     {FREQUENCY_LABELS[freq] || freq}
                   </SelectItem>
@@ -131,7 +130,7 @@ export default function SubscriptionPricingCards({
         onClick={() => onSelectionChange(false)}
         className={`cursor-pointer rounded-md border-2 p-4 transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
           !isSubscription
-            ? "border-black bg-white shadow-neo"
+            ? "shadow-neo border-black bg-white"
             : "border-gray-300 bg-white"
         }`}
       >
@@ -149,7 +148,7 @@ export default function SubscriptionPricingCards({
             One-Time Purchase
           </span>
         </div>
-        <div className="ml-7 mt-2">
+        <div className="mt-2 ml-7">
           <p className="text-2xl font-bold text-black">{regularFormatted}</p>
         </div>
       </div>

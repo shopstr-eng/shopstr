@@ -52,7 +52,7 @@ export default function CustomDomainPage() {
         </p>
         <Link
           href="https://milk.market"
-          className="mt-6 rounded-lg bg-primary-blue px-6 py-3 font-bold text-white"
+          className="bg-primary-blue mt-6 rounded-lg px-6 py-3 font-bold text-white"
         >
           Visit Milk Market
         </Link>

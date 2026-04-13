@@ -32,7 +32,7 @@ const UserTypeSelection = () => {
   return (
     <div className="flex min-h-screen flex-col bg-white pt-24">
       <div className="mx-auto w-full max-w-2xl px-4 py-6">
-        <Card className="rounded-md border-4 border-black bg-white shadow-neo">
+        <Card className="shadow-neo rounded-md border-4 border-black bg-white">
           <CardBody className="p-8">
             <div className="mb-6 flex flex-row items-center justify-center gap-3">
               <Image
@@ -60,7 +60,7 @@ const UserTypeSelection = () => {
                 onClick={() => setSelectedType("buyer")}
                 className={`flex flex-1 flex-col items-center justify-center rounded-md border-4 border-black p-8 transition-all ${
                   selectedType === "buyer"
-                    ? "-translate-y-1 transform bg-primary-yellow shadow-neo"
+                    ? "bg-primary-yellow shadow-neo -translate-y-1 transform"
                     : "bg-white hover:bg-gray-50"
                 }`}
               >
@@ -75,7 +75,7 @@ const UserTypeSelection = () => {
                 onClick={() => setSelectedType("seller")}
                 className={`flex flex-1 flex-col items-center justify-center rounded-md border-4 border-black p-8 transition-all ${
                   selectedType === "seller"
-                    ? "-translate-y-1 transform bg-primary-yellow shadow-neo"
+                    ? "bg-primary-yellow shadow-neo -translate-y-1 transform"
                     : "bg-white hover:bg-gray-50"
                 }`}
               >

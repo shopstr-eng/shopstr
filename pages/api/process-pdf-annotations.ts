@@ -62,7 +62,7 @@ export default async function handler(
 
     // Read the original PDF
     const pdfBytes = fs.readFileSync(pdfFile.filepath);
-    const pdfDoc = await PDFDocument.load(pdfBytes);
+    const pdfDoc = await PDFDocument.load(new Uint8Array(pdfBytes));
 
     // Get standard font for text annotations
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);

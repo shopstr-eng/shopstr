@@ -340,7 +340,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
                 <MilkMarketSpinner />
               </div>
             ) : (
-              <div className="bg-dark-fg mx-auto w-full max-w-lg rounded-xl border-2 border-black p-10 shadow-neo transition-all">
+              <div className="bg-dark-fg shadow-neo mx-auto w-full max-w-lg rounded-xl border-2 border-black p-10 transition-all">
                 <div className="text-center">
                   {isClient && userPubkey ? (
                     <div className="space-y-6">
@@ -384,11 +384,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
         ) : (
           <div className="flex h-full flex-row">
             <div
-              className={`
-                ${currentChatPubkey ? "hidden" : "block"}
-                h-[85vh] w-full overflow-y-auto rounded-md bg-white pb-12 md:block
-                md:w-[450px] md:max-w-[33%] md:flex-shrink-0 md:pb-0 lg:pb-0
-              `}
+              className={` ${currentChatPubkey ? "hidden" : "block"} h-[85vh] w-full overflow-y-auto rounded-md bg-white pb-12 md:block md:w-[450px] md:max-w-[33%] md:flex-shrink-0 md:pb-0 lg:pb-0`}
             >
               {sortedChatsByLastMessage.map(
                 ([pubkeyOfChat, chatObject]: [string, ChatObject]) => {

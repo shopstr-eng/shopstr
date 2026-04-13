@@ -15,9 +15,7 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
 function isAllowedAbsoluteRedirect(url: string): boolean {
   try {
     const parsed = new URL(url);
-    return (
-      parsed.protocol === "https:" || parsed.protocol === "milkmarket:"
-    );
+    return parsed.protocol === "https:" || parsed.protocol === "milkmarket:";
   } catch {
     return false;
   }
@@ -102,7 +100,8 @@ export default async function handler(
       );
       if (!authResult.valid) {
         return res.status(proofResult.status).json({
-          error: proofResult.error || authResult.error || "Authentication failed",
+          error:
+            proofResult.error || authResult.error || "Authentication failed",
         });
       }
     }

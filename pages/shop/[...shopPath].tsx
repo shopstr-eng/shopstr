@@ -173,7 +173,7 @@ export default function ShopSubPage() {
         <p className="mt-4 text-gray-500">This page doesn&apos;t exist.</p>
         <a
           href={`/shop/${slug}`}
-          className="mt-6 rounded-lg bg-primary-blue px-6 py-3 font-bold text-white transition-transform hover:-translate-y-0.5"
+          className="bg-primary-blue mt-6 rounded-lg px-6 py-3 font-bold text-white transition-transform hover:-translate-y-0.5"
         >
           Back to Shop
         </a>

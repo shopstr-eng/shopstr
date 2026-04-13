@@ -61,7 +61,7 @@ const CompactCategories = ({ categories }: { categories: string[] }) => {
           }}
         >
           <div
-            className=" w-fit z-0"
+            className="z-0 w-fit"
             onClick={() => {
               setIsOpen(true);
             }}

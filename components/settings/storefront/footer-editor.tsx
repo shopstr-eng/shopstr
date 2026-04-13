@@ -343,11 +343,7 @@ export default function FooterEditor({
                   className="w-36"
                 >
                   {SOCIAL_PLATFORMS.map((p) => (
-                    <SelectItem
-                      key={p}
-                      value={p}
-                      className="capitalize text-black"
-                    >
+                    <SelectItem key={p} className="text-black capitalize">
                       {p}
                     </SelectItem>
                   ))}
@@ -370,7 +366,7 @@ export default function FooterEditor({
                   className="flex-1"
                   startContent={
                     !isFullUrl && config?.baseUrl ? (
-                      <span className="whitespace-nowrap text-sm text-gray-400">
+                      <span className="text-sm whitespace-nowrap text-gray-400">
                         {config.baseUrl}
                       </span>
                     ) : undefined
@@ -419,7 +415,7 @@ export default function FooterEditor({
                 placeholder="URL or page slug"
                 className="flex-1"
               />
-              <label className="flex items-center gap-1 whitespace-nowrap text-xs text-gray-500">
+              <label className="flex items-center gap-1 text-xs whitespace-nowrap text-gray-500">
                 <input
                   type="checkbox"
                   checked={link.isPage || false}

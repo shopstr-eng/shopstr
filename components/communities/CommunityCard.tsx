@@ -23,9 +23,9 @@ const CommunityCard: React.FC<CommunityCardProps> = ({ community }) => {
   };
 
   return (
-    <Card className="w-full max-w-sm rounded-lg border-4 border-black bg-white shadow-neo transition-transform hover:-translate-y-1">
-      <CardHeader className="flex-col items-start px-6 pb-0 pt-4">
-        <p className="text-xs font-bold uppercase tracking-wide text-gray-600">
+    <Card className="shadow-neo w-full max-w-sm rounded-lg border-4 border-black bg-white transition-transform hover:-translate-y-1">
+      <CardHeader className="flex-col items-start px-6 pt-4 pb-0">
+        <p className="text-xs font-bold tracking-wide text-gray-600 uppercase">
           Community
         </p>
         <h4 className="mt-1 text-xl font-bold text-black">{community.name}</h4>

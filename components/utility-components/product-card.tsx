@@ -79,7 +79,7 @@ export default function ProductCard({
         />
 
         {/* Title Overlay at Bottom of Image */}
-        <div className="absolute bottom-0 left-0 right-0 border-t-2 border-black bg-white/95 p-3 backdrop-blur-sm">
+        <div className="absolute right-0 bottom-0 left-0 border-t-2 border-black bg-white/95 p-3 backdrop-blur-sm">
           <h2 className="truncate text-2xl font-bold text-black">
             {productData.title}
           </h2>
@@ -151,7 +151,7 @@ export default function ProductCard({
                   isIconOnly
                   variant="light"
                   size="sm"
-                  className="min-w-8 h-8 rounded-md border-2 border-black bg-white shadow-neo"
+                  className="shadow-neo h-8 min-w-8 rounded-md border-2 border-black bg-white"
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
@@ -196,10 +196,10 @@ export default function ProductCard({
         {/* Location and Price - with proper spacing */}
         {router.pathname !== "/" && (
           <div className="mt-auto flex min-w-0 items-center justify-between gap-3 pt-2">
-            <div className="min-w-0 max-w-[60%] flex-shrink-0">
+            <div className="max-w-[60%] min-w-0 flex-shrink-0">
               <Chip
                 startContent={locationAvatar(productData.location)}
-                className="max-w-full truncate border-2 border-black bg-primary-blue text-xs font-semibold text-white"
+                className="bg-primary-blue max-w-full truncate border-2 border-black text-xs font-semibold text-white"
               >
                 <span className="truncate">{productData.location}</span>
               </Chip>
@@ -248,7 +248,7 @@ export default function ProductCard({
     <div
       // Updated shadow to use shadow-neo and a larger hover shadow.
       // Note: Your original shadow was 8px. shadow-neo is 4px. I've kept the 8px for hover.
-      className="flex w-full max-w-sm cursor-pointer flex-col overflow-hidden rounded-md border-4 border-black bg-white shadow-neo duration-200 transition-transform hover:-translate-y-1 hover:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] active:translate-y-0 active:shadow-neo"
+      className="shadow-neo active:shadow-neo flex w-full max-w-sm cursor-pointer flex-col overflow-hidden rounded-md border-4 border-black bg-white transition-transform duration-200 hover:-translate-y-1 hover:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] active:translate-y-0"
     >
       {href ? (
         <Link

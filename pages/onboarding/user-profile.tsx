@@ -25,7 +25,7 @@ const OnboardingUserProfile = () => {
   return (
     <div className="flex min-h-screen flex-col bg-white pt-24">
       <div className="mx-auto w-full max-w-2xl px-4 py-6">
-        <Card className="rounded-md border-4 border-black bg-white shadow-neo">
+        <Card className="shadow-neo rounded-md border-4 border-black bg-white">
           <CardBody className="p-8">
             <div className="mb-6 flex flex-row items-center justify-center gap-3">
               <Image

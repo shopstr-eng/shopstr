@@ -31,7 +31,7 @@ export default function StorefrontMyListings({
   }
 
   return (
-    <div className="min-h-screen px-4 pb-8 pt-4" style={{ color: colors.text }}>
+    <div className="min-h-screen px-4 pt-4 pb-8" style={{ color: colors.text }}>
       <MyListingsFeed />
     </div>
   );

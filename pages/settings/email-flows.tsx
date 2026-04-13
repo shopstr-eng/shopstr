@@ -6,7 +6,7 @@ import {
   SelectItem,
   Spinner,
   Tooltip,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import { FlowStepEditor } from "@/components/settings/flow-step-editor";
@@ -325,7 +325,7 @@ const EmailFlowsPage = () => {
     );
     const lastDelay =
       editingSteps.length > 0
-        ? editingSteps[editingSteps.length - 1]?.delay_hours ?? 0
+        ? (editingSteps[editingSteps.length - 1]?.delay_hours ?? 0)
         : 0;
     setEditingSteps([
       ...editingSteps,
@@ -351,10 +351,10 @@ const EmailFlowsPage = () => {
 
   if (!isLoggedIn) {
     return (
-      <div className="flex min-h-screen flex-col bg-white pb-20 pt-24">
+      <div className="flex min-h-screen flex-col bg-white pt-24 pb-20">
         <div className="mx-auto w-full px-4 lg:w-1/2 xl:w-2/5">
           <SettingsBreadCrumbs />
-          <div className="mt-8 rounded-md border-2 border-black bg-yellow-50 p-6 shadow-neo">
+          <div className="shadow-neo mt-8 rounded-md border-2 border-black bg-yellow-50 p-6">
             <p className="text-center text-lg font-bold text-black">
               Please sign in to manage email flows.
             </p>
@@ -366,7 +366,7 @@ const EmailFlowsPage = () => {
 
   if (editingFlow) {
     return (
-      <div className="flex min-h-screen flex-col bg-white pb-20 pt-24">
+      <div className="flex min-h-screen flex-col bg-white pt-24 pb-20">
         <div className="mx-auto w-full px-4 lg:w-2/3 xl:w-1/2">
           <SettingsBreadCrumbs />
 
@@ -382,14 +382,14 @@ const EmailFlowsPage = () => {
           </button>
 
           {error && (
-            <div className="mb-4 flex items-center rounded-md border-2 border-black bg-red-100 p-3 text-red-700 shadow-neo">
+            <div className="shadow-neo mb-4 flex items-center rounded-md border-2 border-black bg-red-100 p-3 text-red-700">
               <ExclamationCircleIcon className="mr-2 h-5 w-5 flex-shrink-0" />
               <span className="text-sm">{error}</span>
             </div>
           )}
 
           {successMessage && (
-            <div className="mb-4 flex items-center rounded-md border-2 border-black bg-green-100 p-3 text-green-700 shadow-neo">
+            <div className="shadow-neo mb-4 flex items-center rounded-md border-2 border-black bg-green-100 p-3 text-green-700">
               <CheckCircleIcon className="mr-2 h-5 w-5 flex-shrink-0" />
               <span className="text-sm">{successMessage}</span>
             </div>
@@ -509,7 +509,7 @@ const EmailFlowsPage = () => {
                 .map((step, index) => (
                   <div
                     key={step.id || `new-${index}`}
-                    className="rounded-md border-2 border-black bg-white shadow-neo"
+                    className="shadow-neo rounded-md border-2 border-black bg-white"
                   >
                     <button
                       onClick={() =>
@@ -518,7 +518,7 @@ const EmailFlowsPage = () => {
                       className="flex w-full items-center justify-between p-4"
                     >
                       <div className="flex items-center gap-3">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-black bg-primary-blue text-sm font-bold text-white">
+                        <div className="bg-primary-blue flex h-8 w-8 items-center justify-center rounded-full border-2 border-black text-sm font-bold text-white">
                           {step.step_order}
                         </div>
                         <div className="text-left">
@@ -624,25 +624,25 @@ const EmailFlowsPage = () => {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-white pb-20 pt-24">
+    <div className="flex min-h-screen flex-col bg-white pt-24 pb-20">
       <div className="mx-auto w-full px-4 lg:w-1/2 xl:w-2/5">
         <SettingsBreadCrumbs />
 
         {error && (
-          <div className="mb-4 flex items-center rounded-md border-2 border-black bg-red-100 p-3 text-red-700 shadow-neo">
+          <div className="shadow-neo mb-4 flex items-center rounded-md border-2 border-black bg-red-100 p-3 text-red-700">
             <ExclamationCircleIcon className="mr-2 h-5 w-5 flex-shrink-0" />
             <span className="text-sm">{error}</span>
           </div>
         )}
 
         {successMessage && (
-          <div className="mb-4 flex items-center rounded-md border-2 border-black bg-green-100 p-3 text-green-700 shadow-neo">
+          <div className="shadow-neo mb-4 flex items-center rounded-md border-2 border-black bg-green-100 p-3 text-green-700">
             <CheckCircleIcon className="mr-2 h-5 w-5 flex-shrink-0" />
             <span className="text-sm">{successMessage}</span>
           </div>
         )}
 
-        <div className="mb-6 flex items-start gap-2 rounded-md border-2 border-black bg-gray-50 p-4 shadow-neo">
+        <div className="shadow-neo mb-6 flex items-start gap-2 rounded-md border-2 border-black bg-gray-50 p-4">
           <InformationCircleIcon className="mt-0.5 h-5 w-5 flex-shrink-0 text-gray-600" />
           <div className="text-sm text-gray-700">
             <p>
@@ -667,7 +667,7 @@ const EmailFlowsPage = () => {
           </div>
 
           {showCreateForm && (
-            <div className="mb-6 space-y-4 rounded-md border-2 border-black bg-white p-4 shadow-neo">
+            <div className="shadow-neo mb-6 space-y-4 rounded-md border-2 border-black bg-white p-4">
               <h3 className="text-lg font-bold text-black">
                 Create Email Flow
               </h3>
@@ -695,9 +695,7 @@ const EmailFlowsPage = () => {
                 }}
               >
                 {Object.entries(FLOW_TYPE_LABELS).map(([key, label]) => (
-                  <SelectItem key={key} value={key}>
-                    {label}
-                  </SelectItem>
+                  <SelectItem key={key}>{label}</SelectItem>
                 ))}
               </Select>
               {newFlowType && (
@@ -749,7 +747,7 @@ const EmailFlowsPage = () => {
               {flows.map((flow) => (
                 <div
                   key={flow.id}
-                  className="rounded-md border-2 border-black bg-white p-4 shadow-neo"
+                  className="shadow-neo rounded-md border-2 border-black bg-white p-4"
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex-1">

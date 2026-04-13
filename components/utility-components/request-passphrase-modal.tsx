@@ -119,7 +119,7 @@ export default function PassphraseChallengeModal({
               type="checkbox"
               checked={remindToggled}
               onChange={() => setRemindToggled(!remindToggled)}
-              className="h-5 w-5 cursor-pointer rounded border-2 border-black accent-primary-yellow"
+              className="accent-primary-yellow h-5 w-5 cursor-pointer rounded border-2 border-black"
             />
             <label className="cursor-pointer text-sm font-semibold text-black">
               Remember passphrase for this session
@@ -136,7 +136,7 @@ export default function PassphraseChallengeModal({
 
         <ModalFooter className="gap-3">
           <Button
-            className="rounded-md border-2 border-black bg-red-500 px-4 py-2 font-bold text-white shadow-neo transition-transform hover:-translate-y-0.5 active:translate-y-0.5"
+            className="shadow-neo rounded-md border-2 border-black bg-red-500 px-4 py-2 font-bold text-white transition-transform hover:-translate-y-0.5 active:translate-y-0.5"
             onClick={onCancel}
             isDisabled={isLoading}
           >

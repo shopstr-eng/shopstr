@@ -154,7 +154,8 @@ export function deserializeSellerSession(raw: string): SellerSession | null {
       nsec: parsed.nsec,
       email: typeof parsed.email === "string" ? parsed.email : undefined,
       relays:
-        Array.isArray(parsed.relays) && parsed.relays.every((item) => typeof item === "string")
+        Array.isArray(parsed.relays) &&
+        parsed.relays.every((item) => typeof item === "string")
           ? parsed.relays
           : [...DEFAULT_SELLER_RELAYS],
       writeRelays:

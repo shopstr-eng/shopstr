@@ -95,7 +95,7 @@ export default function SectionEditor({
   return (
     <div
       ref={cardRef}
-      className={`rounded-lg border-2 bg-white duration-500 transition-all ${
+      className={`rounded-lg border-2 bg-white transition-all duration-500 ${
         isFlashing
           ? "border-blue-500 shadow-[0_0_12px_rgba(59,130,246,0.4)]"
           : "border-gray-200"
@@ -216,10 +216,10 @@ export default function SectionEditor({
                 update({ imagePosition: e.target.value as "left" | "right" })
               }
             >
-              <SelectItem key="left" value="left" className="text-black">
+              <SelectItem key="left" className="text-black">
                 Left
               </SelectItem>
-              <SelectItem key="right" value="right" className="text-black">
+              <SelectItem key="right" className="text-black">
                 Right
               </SelectItem>
             </Select>
@@ -297,17 +297,13 @@ export default function SectionEditor({
                   })
                 }
               >
-                <SelectItem key="grid" value="grid" className="text-black">
+                <SelectItem key="grid" className="text-black">
                   Grid
                 </SelectItem>
-                <SelectItem key="list" value="list" className="text-black">
+                <SelectItem key="list" className="text-black">
                   List
                 </SelectItem>
-                <SelectItem
-                  key="featured"
-                  value="featured"
-                  className="text-black"
-                >
+                <SelectItem key="featured" className="text-black">
                   Featured
                 </SelectItem>
               </Select>
@@ -349,11 +345,7 @@ export default function SectionEditor({
                       placeholder="First product (default)"
                     >
                       {sellerProducts.map((p) => (
-                        <SelectItem
-                          key={p.id}
-                          value={p.id}
-                          className="text-black"
-                        >
+                        <SelectItem key={p.id} className="text-black">
                           {p.title} {p.price ? `($${p.price})` : ""}
                         </SelectItem>
                       ))}
@@ -931,7 +923,7 @@ function ProductOrderList({
   };
 
   if (orderedProducts.length === 0) {
-    return <p className="text-xs italic text-gray-400">No products found.</p>;
+    return <p className="text-xs text-gray-400 italic">No products found.</p>;
   }
 
   return (
@@ -1090,7 +1082,7 @@ function ReviewOrderList({
 
   if (orderedReviews.length === 0) {
     return (
-      <p className="text-xs italic text-gray-400">
+      <p className="text-xs text-gray-400 italic">
         No reviews yet. Reviews will appear here once customers leave feedback.
       </p>
     );

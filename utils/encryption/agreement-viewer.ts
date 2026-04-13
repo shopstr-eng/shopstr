@@ -179,7 +179,7 @@ export async function viewEncryptedAgreement(
     }
 
     // Create a blob from the decrypted data
-    const decryptedBlob = new Blob([decryptedBytes], {
+    const decryptedBlob = new Blob([decryptedBytes.buffer as ArrayBuffer], {
       type: "application/pdf",
     });
 

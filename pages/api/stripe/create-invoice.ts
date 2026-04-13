@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import Stripe from "stripe";
-import { fiat } from "@getalby/lightning-tools";
+import { getFiatValue } from "@getalby/lightning-tools";
 import { getStripeConnectAccount } from "@/utils/db/db-service";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
@@ -9,7 +9,7 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
 
 const satsToUSD = async (sats: number): Promise<number> => {
   try {
-    const usdAmount = await fiat.getFiatValue({
+    const usdAmount = await getFiatValue({
       satoshi: sats,
       currency: "usd",
     });

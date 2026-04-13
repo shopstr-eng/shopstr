@@ -102,15 +102,15 @@ const Wallet = () => {
 
   return (
     <ProtectedRoute>
-      <div className="flex min-h-screen flex-col bg-white px-4 pb-8 pt-[8rem]">
+      <div className="flex min-h-screen flex-col bg-white px-4 pt-[8rem] pb-8">
         <div className="mx-auto w-full max-w-3xl space-y-6">
           {/* Balance Card with Neo-brutalist Design */}
-          <div className="rounded-md border-4 border-black bg-primary-blue p-8 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
+          <div className="bg-primary-blue rounded-md border-4 border-black p-8 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
             <h1 className="mb-2 text-center text-6xl font-bold text-white">
               {totalBalance} sats
             </h1>
             <p
-              className="mb-6 cursor-pointer break-words text-center text-sm text-blue-300 transition-colors hover:text-blue-200"
+              className="mb-6 cursor-pointer text-center text-sm break-words text-blue-300 transition-colors hover:text-blue-200"
               onClick={handleMintClick}
             >
               {mint}: {walletBalance} sats
@@ -132,7 +132,7 @@ const Wallet = () => {
           </div>
 
           {/* Transactions Card with Neo-brutalist Design */}
-          <div className="overflow-hidden rounded-md border-4 border-black bg-primary-blue shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
+          <div className="bg-primary-blue overflow-hidden rounded-md border-4 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
             <Transactions />
           </div>
         </div>

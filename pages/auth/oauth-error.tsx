@@ -1,5 +1,5 @@
 import { useRouter } from "next/router";
-import { Button } from "@nextui-org/react";
+import { Button } from "@heroui/react";
 import { PRIMARYBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 
 export default function OAuthError() {
@@ -8,7 +8,7 @@ export default function OAuthError() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-50">
-      <div className="max-w-md rounded-md border-4 border-black bg-white p-8 shadow-neo">
+      <div className="shadow-neo max-w-md rounded-md border-4 border-black bg-white p-8">
         <h1 className="mb-4 text-2xl font-bold text-red-600">
           Authentication Failed
         </h1>

@@ -13,7 +13,7 @@ import {
   ModalHeader,
   ModalBody,
   ModalFooter,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import ClaimButton from "../utility-components/claim-button";
 import PDFAnnotator from "../utility-components/pdf-annotator";
 import { NostrMessageEvent } from "../../utils/types/types";

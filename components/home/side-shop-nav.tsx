@@ -104,7 +104,7 @@ const SideShopNav = ({
           <>
             <Button
               onClick={() => setSelectedCategories(new Set<string>([]))}
-              className="flex w-full flex-row justify-start bg-transparent py-8 font-bold text-black duration-200 hover:text-primary-yellow"
+              className="hover:text-primary-yellow flex w-full flex-row justify-start bg-transparent py-8 font-bold text-black duration-200"
             >
               <span className="hidden pt-2 text-2xl md:flex">All listings</span>
             </Button>
@@ -116,7 +116,7 @@ const SideShopNav = ({
                     onClick={() =>
                       setSelectedCategories(new Set<string>([category]))
                     }
-                    className="flex w-full flex-row justify-start bg-transparent py-2 text-black duration-200 hover:text-primary-yellow"
+                    className="hover:text-primary-yellow flex w-full flex-row justify-start bg-transparent py-2 text-black duration-200"
                   >
                     <span className="text-xl">{`- ${category} (${count})`}</span>
                   </Button>
@@ -150,7 +150,7 @@ const SideShopNav = ({
               <>
                 <Button
                   onClick={() => setSelectedCategories(new Set<string>([]))}
-                  className="flex w-full flex-row justify-start bg-transparent py-8 font-bold text-black duration-200 hover:text-primary-yellow"
+                  className="hover:text-primary-yellow flex w-full flex-row justify-start bg-transparent py-8 font-bold text-black duration-200"
                 >
                   <span className="hidden pt-2 text-2xl md:flex">
                     All listings
@@ -165,7 +165,7 @@ const SideShopNav = ({
                           onClick={() =>
                             setSelectedCategories(new Set<string>([category]))
                           }
-                          className="flex w-full flex-row justify-start bg-transparent py-2 text-black duration-200 hover:text-primary-yellow"
+                          className="hover:text-primary-yellow flex w-full flex-row justify-start bg-transparent py-2 text-black duration-200"
                         >
                           <span className="text-xl">{`- ${category} (${count})`}</span>
                         </Button>

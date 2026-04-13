@@ -1,13 +1,7 @@
 import { useState } from "react";
 import { useRouter } from "next/router";
 import Head from "next/head";
-import {
-  Button,
-  Image,
-  Modal,
-  ModalContent,
-  ModalBody,
-} from "@nextui-org/react";
+import { Button, Image, Modal, ModalContent, ModalBody } from "@heroui/react";
 import {
   ArrowLeftIcon,
   XMarkIcon,
@@ -280,7 +274,7 @@ const ProducerGuidePage = () => {
       <div className="min-h-screen bg-white">
         {/* Mobile Sidebar Toggle */}
         <button
-          className="fixed right-4 top-4 z-50 rounded border-2 border-black bg-white p-2 shadow-neo lg:hidden"
+          className="shadow-neo fixed top-4 right-4 z-50 rounded border-2 border-black bg-white p-2 lg:hidden"
           onClick={() => setSidebarOpen(!sidebarOpen)}
         >
           <Bars3Icon className="h-6 w-6 text-black" />
@@ -288,7 +282,7 @@ const ProducerGuidePage = () => {
 
         {/* Sidebar */}
         <aside
-          className={`fixed left-0 top-0 z-40 h-screen w-64 transform border-r-4 border-black bg-white shadow-neo transition-transform lg:translate-x-0 ${
+          className={`shadow-neo fixed top-0 left-0 z-40 h-screen w-64 transform border-r-4 border-black bg-white transition-transform lg:translate-x-0 ${
             sidebarOpen ? "translate-x-0" : "-translate-x-full"
           }`}
         >
@@ -301,21 +295,21 @@ const ProducerGuidePage = () => {
                     onClick={() => scrollToSection(item.id)}
                     className={`w-full rounded border-2 border-black px-4 py-2 text-left font-bold transition-all hover:-translate-y-0.5 ${
                       activeSection === item.id
-                        ? "bg-primary-yellow text-black shadow-neo"
+                        ? "bg-primary-yellow shadow-neo text-black"
                         : "bg-white text-black"
                     }`}
                   >
                     {item.label}
                   </button>
                   {item.threads.length > 0 && (
-                    <div className="ml-4 mt-2 space-y-1">
+                    <div className="mt-2 ml-4 space-y-1">
                       {item.threads.map((thread) => (
                         <button
                           key={thread.id}
                           onClick={() => scrollToSection(thread.id)}
                           className={`w-full rounded px-3 py-1 text-left text-sm transition-all hover:bg-gray-100 ${
                             activeSection === thread.id
-                              ? "font-bold text-primary-blue"
+                              ? "text-primary-blue font-bold"
                               : "text-black"
                           }`}
                         >
@@ -355,7 +349,7 @@ const ProducerGuidePage = () => {
                 <h1 className="mb-4 text-5xl font-bold text-black">
                   Producer Guide
                 </h1>
-                <p className="mx-auto max-w-3xl text-lg text-primary-blue">
+                <p className="text-primary-blue mx-auto max-w-3xl text-lg">
                   Learn how to start selling your raw dairy products and other
                   goods on Milk Market.
                 </p>
@@ -363,7 +357,7 @@ const ProducerGuidePage = () => {
             </div>
 
             {/* Video Section */}
-            <div className="mb-16 rounded-lg border-4 border-black bg-primary-blue p-6 shadow-neo">
+            <div className="bg-primary-blue shadow-neo mb-16 rounded-lg border-4 border-black p-6">
               <h2 className="mb-4 text-center text-2xl font-bold text-white">
                 Getting Started Video Guide
               </h2>
@@ -380,10 +374,10 @@ const ProducerGuidePage = () => {
               {/* Step 1 */}
               <div
                 id="step-1"
-                className="rounded-lg border-4 border-black bg-primary-blue p-6 shadow-neo"
+                className="bg-primary-blue shadow-neo rounded-lg border-4 border-black p-6"
               >
                 <div className="mb-6 flex items-start gap-4">
-                  <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full border-4 border-black bg-white text-2xl font-bold text-black shadow-neo">
+                  <div className="shadow-neo flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full border-4 border-black bg-white text-2xl font-bold text-black">
                     1
                   </div>
                   <div className="flex-1">
@@ -405,7 +399,7 @@ const ProducerGuidePage = () => {
                         <span className="inline-flex items-center">
                           with a passphrase{" "}
                           <InformationCircleIcon
-                            className="ml-1 h-4 w-4 cursor-pointer text-primary-yellow hover:opacity-80"
+                            className="text-primary-yellow ml-1 h-4 w-4 cursor-pointer hover:opacity-80"
                             onClick={() => {
                               const faqSection =
                                 document.getElementById("passphrase-faq");
@@ -425,7 +419,7 @@ const ProducerGuidePage = () => {
                         <span className="inline-flex items-center">
                           payment preferences{" "}
                           <InformationCircleIcon
-                            className="ml-1 h-4 w-4 cursor-pointer text-primary-yellow hover:opacity-80"
+                            className="text-primary-yellow ml-1 h-4 w-4 cursor-pointer hover:opacity-80"
                             onClick={() => {
                               const faqSection = document.getElementById(
                                 "payment-methods-faq"
@@ -469,10 +463,10 @@ const ProducerGuidePage = () => {
                   ].map((image, idx) => (
                     <div
                       key={idx}
-                      className="relative cursor-pointer overflow-hidden rounded-lg border-3 border-black bg-gray-700 shadow-neo transition-transform hover:-translate-y-1"
+                      className="shadow-neo relative cursor-pointer overflow-hidden rounded-lg border-3 border-black bg-gray-700 transition-transform hover:-translate-y-1"
                       onClick={() => handleImageClick(image.src)}
                     >
-                      <div className="absolute left-2 top-2 z-10 rounded border-2 border-black bg-white px-2 py-0.5 text-xs font-bold text-black shadow-neo">
+                      <div className="shadow-neo absolute top-2 left-2 z-10 rounded border-2 border-black bg-white px-2 py-0.5 text-xs font-bold text-black">
                         Step {image.step}
                       </div>
                       <Image
@@ -488,10 +482,10 @@ const ProducerGuidePage = () => {
               {/* Step 2 */}
               <div
                 id="step-2"
-                className="rounded-lg border-4 border-black bg-primary-blue p-6 shadow-neo"
+                className="bg-primary-blue shadow-neo rounded-lg border-4 border-black p-6"
               >
                 <div className="mb-6 flex items-start gap-4">
-                  <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full border-4 border-black bg-white text-2xl font-bold text-black shadow-neo">
+                  <div className="shadow-neo flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full border-4 border-black bg-white text-2xl font-bold text-black">
                     2
                   </div>
                   <div className="flex-1">
@@ -512,7 +506,7 @@ const ProducerGuidePage = () => {
                         <span className="inline-flex items-center">
                           if this is your first product{" "}
                           <InformationCircleIcon
-                            className="ml-1 h-4 w-4 cursor-pointer text-primary-yellow hover:opacity-80"
+                            className="text-primary-yellow ml-1 h-4 w-4 cursor-pointer hover:opacity-80"
                             onClick={() => {
                               const faqSection = document.getElementById(
                                 "listing-passphrase-faq"
@@ -563,10 +557,10 @@ const ProducerGuidePage = () => {
                   ].map((image, idx) => (
                     <div
                       key={idx}
-                      className="relative cursor-pointer overflow-hidden rounded-lg border-3 border-black bg-gray-700 shadow-neo transition-transform hover:-translate-y-1"
+                      className="shadow-neo relative cursor-pointer overflow-hidden rounded-lg border-3 border-black bg-gray-700 transition-transform hover:-translate-y-1"
                       onClick={() => handleImageClick(image.src)}
                     >
-                      <div className="absolute left-2 top-2 z-10 rounded border-2 border-black bg-white px-2 py-0.5 text-xs font-bold text-black shadow-neo">
+                      <div className="shadow-neo absolute top-2 left-2 z-10 rounded border-2 border-black bg-white px-2 py-0.5 text-xs font-bold text-black">
                         Step {image.step}
                       </div>
                       <Image
@@ -582,10 +576,10 @@ const ProducerGuidePage = () => {
               {/* Step 3 */}
               <div
                 id="step-3"
-                className="rounded-lg border-4 border-black bg-primary-blue p-6 shadow-neo"
+                className="bg-primary-blue shadow-neo rounded-lg border-4 border-black p-6"
               >
                 <div className="mb-6 flex items-start gap-4">
-                  <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full border-4 border-black bg-white text-2xl font-bold text-black shadow-neo">
+                  <div className="shadow-neo flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full border-4 border-black bg-white text-2xl font-bold text-black">
                     3
                   </div>
                   <div className="flex-1">
@@ -610,7 +604,7 @@ const ProducerGuidePage = () => {
                         <span className="inline-flex items-center">
                           according to your preferences{" "}
                           <InformationCircleIcon
-                            className="ml-1 h-4 w-4 cursor-pointer text-primary-yellow hover:opacity-80"
+                            className="text-primary-yellow ml-1 h-4 w-4 cursor-pointer hover:opacity-80"
                             onClick={() => {
                               const faqSection = document.getElementById(
                                 "process-payments-faq"
@@ -654,10 +648,10 @@ const ProducerGuidePage = () => {
                   ].map((image, idx) => (
                     <div
                       key={idx}
-                      className="relative cursor-pointer overflow-hidden rounded-lg border-3 border-black bg-gray-700 shadow-neo transition-transform hover:-translate-y-1"
+                      className="shadow-neo relative cursor-pointer overflow-hidden rounded-lg border-3 border-black bg-gray-700 transition-transform hover:-translate-y-1"
                       onClick={() => handleImageClick(image.src)}
                     >
-                      <div className="absolute left-2 top-2 z-10 rounded border-2 border-black bg-white px-2 py-0.5 text-xs font-bold text-black shadow-neo">
+                      <div className="shadow-neo absolute top-2 left-2 z-10 rounded border-2 border-black bg-white px-2 py-0.5 text-xs font-bold text-black">
                         Step {image.step}
                       </div>
                       <Image
@@ -673,11 +667,11 @@ const ProducerGuidePage = () => {
               {/* Step 4 */}
               <div
                 id="step-4"
-                className="rounded-lg border-4 border-black bg-primary-blue p-6 shadow-neo"
+                className="bg-primary-blue shadow-neo rounded-lg border-4 border-black p-6"
               >
                 <div className="flex flex-col gap-6 lg:flex-row lg:items-center">
                   <div className="flex items-start gap-4 lg:flex-1">
-                    <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full border-4 border-black bg-white text-2xl font-bold text-black shadow-neo">
+                    <div className="shadow-neo flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full border-4 border-black bg-white text-2xl font-bold text-black">
                       4
                     </div>
                     <div className="flex-1">
@@ -703,7 +697,7 @@ const ProducerGuidePage = () => {
                     </div>
                   </div>
                   <div className="flex items-center justify-center lg:w-1/2">
-                    <div className="w-full max-w-md rounded-lg border-4 border-black bg-white p-6 text-center shadow-neo">
+                    <div className="shadow-neo w-full max-w-md rounded-lg border-4 border-black bg-white p-6 text-center">
                       <h3 className="text-xl font-bold text-black">
                         More community and marketing tools coming soon!
                       </h3>
@@ -714,7 +708,7 @@ const ProducerGuidePage = () => {
             </div>
 
             {/* FAQ Section */}
-            <div className="mt-16 rounded-lg border-4 border-black bg-[#2c3e50] p-8 shadow-neo">
+            <div className="shadow-neo mt-16 rounded-lg border-4 border-black bg-[#2c3e50] p-8">
               <h2 className="mb-6 text-center text-2xl font-bold text-white">
                 New Producer FAQ
               </h2>
@@ -739,7 +733,7 @@ const ProducerGuidePage = () => {
                       />
                     </button>
                     {openFaqIndex === index && (
-                      <div className="bg-white/10 px-4 pb-4 pt-2">
+                      <div className="bg-white/10 px-4 pt-2 pb-4">
                         <p className="text-sm leading-relaxed text-white/90">
                           {item.answer}
                         </p>
@@ -751,7 +745,7 @@ const ProducerGuidePage = () => {
             </div>
 
             {/* Call to Action */}
-            <div className="mt-16 rounded-lg border-4 border-black bg-primary-blue p-6 text-center shadow-neo">
+            <div className="bg-primary-blue shadow-neo mt-16 rounded-lg border-4 border-black p-6 text-center">
               <h2 className="mb-3 text-2xl font-bold text-white">
                 Ready to Start Selling?
               </h2>
@@ -791,7 +785,7 @@ const ProducerGuidePage = () => {
             <ModalBody className="relative p-0">
               <button
                 onClick={closeModal}
-                className="absolute right-4 top-4 z-10 rounded-full border-2 border-black bg-white p-2 text-black shadow-neo transition-colors hover:bg-gray-100"
+                className="shadow-neo absolute top-4 right-4 z-10 rounded-full border-2 border-black bg-white p-2 text-black transition-colors hover:bg-gray-100"
               >
                 <XMarkIcon className="h-6 w-6" />
               </button>

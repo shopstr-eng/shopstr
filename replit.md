@@ -112,7 +112,7 @@ Preferred communication style: Simple, everyday language.
 ## Third-Party Libraries
 
 - **Cryptography**: `crypto-js`, `nostr-tools`, `@cashu/cashu-ts`.
-- **UI Components**: `@nextui-org/react`, `@heroicons/react`, `framer-motion`.
+- **UI Components**: `@heroui/react`, `@heroicons/react`, `framer-motion`.
 - **Payments**: `stripe`, `@stripe/stripe-js`, `@stripe/react-stripe-js`.
 - **File Processing**: `pdf-lib`, `qrcode`.
 - **MCP**: `@modelcontextprotocol/sdk` for AI agent integration.

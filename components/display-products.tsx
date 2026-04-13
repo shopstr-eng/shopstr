@@ -361,7 +361,7 @@ const DisplayProducts = ({
     <>
       <div className="w-full bg-white px-4 md:pl-4">
         {!isMyListings && isProductsLoading ? (
-          <div className="mb-6 mt-6 flex items-center justify-center">
+          <div className="mt-6 mb-6 flex items-center justify-center">
             <MilkMarketSpinner />
           </div>
         ) : null}
@@ -398,7 +398,7 @@ const DisplayProducts = ({
               </div>
             )}
 
-            <div className="mb-6 mt-2 text-center text-sm font-semibold text-black">
+            <div className="mt-2 mb-6 text-center text-sm font-semibold text-black">
               Showing {(currentPage - 1) * itemsPerPage + 1} to{" "}
               {Math.min(filteredProducts.length, currentPage * itemsPerPage)} of{" "}
               {filteredProducts.length} products
@@ -409,7 +409,7 @@ const DisplayProducts = ({
           !isProductsLoading &&
           filteredProducts.length === 0 && (
             <div className="mt-20 flex flex-grow items-center justify-center py-10">
-              <div className="w-full max-w-lg rounded-lg border-4 border-black bg-primary-blue p-8 text-center shadow-neo">
+              <div className="bg-primary-blue shadow-neo w-full max-w-lg rounded-lg border-4 border-black p-8 text-center">
                 <p className="text-3xl font-bold text-white">
                   No products found...
                 </p>
@@ -423,7 +423,7 @@ const DisplayProducts = ({
           !isProductsLoading &&
           !productEvents.some((product) => product.pubkey === userPubkey) && (
             <div className="mt-20 flex flex-grow items-center justify-center py-10">
-              <div className="w-full max-w-lg rounded-lg border-4 border-black bg-primary-blue p-8 text-center shadow-neo">
+              <div className="bg-primary-blue shadow-neo w-full max-w-lg rounded-lg border-4 border-black p-8 text-center">
                 <p className="text-3xl font-bold text-white">
                   No products found...
                 </p>

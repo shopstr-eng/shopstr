@@ -1,7 +1,4 @@
-import {
-  MilkMarketApiError,
-  createMilkMarketApiClient,
-} from "../index";
+import { MilkMarketApiError, createMilkMarketApiClient } from "../index";
 
 describe("api client", () => {
   test("sends email sign-in requests to the expected route", async () => {
@@ -102,7 +99,8 @@ describe("api client", () => {
   test("passes absolute mobile return URLs to the stripe link route", async () => {
     const fetchImpl = jest.fn().mockResolvedValue({
       ok: true,
-      text: async () => JSON.stringify({ url: "https://connect.stripe.com/test" }),
+      text: async () =>
+        JSON.stringify({ url: "https://connect.stripe.com/test" }),
     });
     const client = createMilkMarketApiClient({
       baseUrl: "http://127.0.0.1:5000",

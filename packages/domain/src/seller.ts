@@ -96,14 +96,14 @@ export const DEFAULT_SELLER_RELAYS = [
   "wss://relay.nostr.band",
 ] as const;
 
-const RESERVED_MARKETPLACE_TAGS = new Set(["MilkMarket", "FREEMILK", "SAVEBEEF"]);
+const RESERVED_MARKETPLACE_TAGS = new Set([
+  "MilkMarket",
+  "FREEMILK",
+  "SAVEBEEF",
+]);
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const STOREFRONT_PRODUCT_LAYOUTS = new Set(["grid", "list", "featured"]);
-const STOREFRONT_LANDING_PAGE_STYLES = new Set([
-  "classic",
-  "hero",
-  "minimal",
-]);
+const STOREFRONT_LANDING_PAGE_STYLES = new Set(["classic", "hero", "minimal"]);
 const STOREFRONT_IMAGE_POSITIONS = new Set(["left", "right"]);
 const STOREFRONT_SECTION_TYPES = new Set([
   "hero",
@@ -172,7 +172,9 @@ export function normalizeStorefrontSlug(input: string): string {
     .replace(/^-|-$/g, "");
 }
 
-function normalizeStorefrontConfig(value: unknown): StorefrontConfig | undefined {
+function normalizeStorefrontConfig(
+  value: unknown
+): StorefrontConfig | undefined {
   if (!isRecord(value)) {
     return undefined;
   }
@@ -206,7 +208,9 @@ function normalizeStorefrontConfig(value: unknown): StorefrontConfig | undefined
 
   const footer = isRecord(value.footer)
     ? {
-        ...(typeof value.footer.text === "string" ? { text: value.footer.text } : {}),
+        ...(typeof value.footer.text === "string"
+          ? { text: value.footer.text }
+          : {}),
         ...(typeof value.footer.showPoweredBy === "boolean"
           ? { showPoweredBy: value.footer.showPoweredBy }
           : {}),
@@ -244,7 +248,9 @@ function normalizeStorefrontConfig(value: unknown): StorefrontConfig | undefined
                           | "other")
                       : "other",
                   url: typeof link.url === "string" ? link.url : "",
-                  ...(typeof link.label === "string" ? { label: link.label } : {}),
+                  ...(typeof link.label === "string"
+                    ? { label: link.label }
+                    : {}),
                 }))
                 .filter((link) => link.url),
             }
@@ -253,7 +259,8 @@ function normalizeStorefrontConfig(value: unknown): StorefrontConfig | undefined
           ? {
               policies: {
                 ...(isRecord(value.footer.policies.returnPolicy) &&
-                typeof value.footer.policies.returnPolicy.enabled === "boolean" &&
+                typeof value.footer.policies.returnPolicy.enabled ===
+                  "boolean" &&
                 typeof value.footer.policies.returnPolicy.content === "string"
                   ? {
                       returnPolicy: {
@@ -263,7 +270,8 @@ function normalizeStorefrontConfig(value: unknown): StorefrontConfig | undefined
                     }
                   : {}),
                 ...(isRecord(value.footer.policies.termsOfService) &&
-                typeof value.footer.policies.termsOfService.enabled === "boolean" &&
+                typeof value.footer.policies.termsOfService.enabled ===
+                  "boolean" &&
                 typeof value.footer.policies.termsOfService.content === "string"
                   ? {
                       termsOfService: {
@@ -273,7 +281,8 @@ function normalizeStorefrontConfig(value: unknown): StorefrontConfig | undefined
                     }
                   : {}),
                 ...(isRecord(value.footer.policies.privacyPolicy) &&
-                typeof value.footer.policies.privacyPolicy.enabled === "boolean" &&
+                typeof value.footer.policies.privacyPolicy.enabled ===
+                  "boolean" &&
                 typeof value.footer.policies.privacyPolicy.content === "string"
                   ? {
                       privacyPolicy: {
@@ -283,12 +292,16 @@ function normalizeStorefrontConfig(value: unknown): StorefrontConfig | undefined
                     }
                   : {}),
                 ...(isRecord(value.footer.policies.cancellationPolicy) &&
-                typeof value.footer.policies.cancellationPolicy.enabled === "boolean" &&
-                typeof value.footer.policies.cancellationPolicy.content === "string"
+                typeof value.footer.policies.cancellationPolicy.enabled ===
+                  "boolean" &&
+                typeof value.footer.policies.cancellationPolicy.content ===
+                  "string"
                   ? {
                       cancellationPolicy: {
-                        enabled: value.footer.policies.cancellationPolicy.enabled,
-                        content: value.footer.policies.cancellationPolicy.content,
+                        enabled:
+                          value.footer.policies.cancellationPolicy.enabled,
+                        content:
+                          value.footer.policies.cancellationPolicy.content,
                       },
                     }
                   : {}),
@@ -320,13 +333,19 @@ function normalizeStorefrontConfig(value: unknown): StorefrontConfig | undefined
                   | "contact"
                   | "reviews")
               : "text",
-          ...(typeof section.enabled === "boolean" ? { enabled: section.enabled } : {}),
-          ...(typeof section.heading === "string" ? { heading: section.heading } : {}),
+          ...(typeof section.enabled === "boolean"
+            ? { enabled: section.enabled }
+            : {}),
+          ...(typeof section.heading === "string"
+            ? { heading: section.heading }
+            : {}),
           ...(typeof section.subheading === "string"
             ? { subheading: section.subheading }
             : {}),
           ...(typeof section.body === "string" ? { body: section.body } : {}),
-          ...(typeof section.image === "string" ? { image: section.image } : {}),
+          ...(typeof section.image === "string"
+            ? { image: section.image }
+            : {}),
           ...(typeof section.imagePosition === "string" &&
           STOREFRONT_IMAGE_POSITIONS.has(section.imagePosition)
             ? { imagePosition: section.imagePosition as "left" | "right" }
@@ -334,8 +353,12 @@ function normalizeStorefrontConfig(value: unknown): StorefrontConfig | undefined
           ...(typeof section.fullWidth === "boolean"
             ? { fullWidth: section.fullWidth }
             : {}),
-          ...(typeof section.ctaText === "string" ? { ctaText: section.ctaText } : {}),
-          ...(typeof section.ctaLink === "string" ? { ctaLink: section.ctaLink } : {}),
+          ...(typeof section.ctaText === "string"
+            ? { ctaText: section.ctaText }
+            : {}),
+          ...(typeof section.ctaLink === "string"
+            ? { ctaLink: section.ctaLink }
+            : {}),
           ...(typeof section.overlayOpacity === "number"
             ? { overlayOpacity: section.overlayOpacity }
             : {}),
@@ -367,8 +390,12 @@ function normalizeStorefrontConfig(value: unknown): StorefrontConfig | undefined
           ...(typeof section.productLimit === "number"
             ? { productLimit: section.productLimit }
             : {}),
-          ...(typeof section.email === "string" ? { email: section.email } : {}),
-          ...(typeof section.phone === "string" ? { phone: section.phone } : {}),
+          ...(typeof section.email === "string"
+            ? { email: section.email }
+            : {}),
+          ...(typeof section.phone === "string"
+            ? { phone: section.phone }
+            : {}),
           ...(typeof section.address === "string"
             ? { address: section.address }
             : {}),
@@ -409,7 +436,9 @@ function normalizeStorefrontConfig(value: unknown): StorefrontConfig | undefined
                 ...(typeof section.heading === "string"
                   ? { heading: section.heading }
                   : {}),
-                ...(typeof section.body === "string" ? { body: section.body } : {}),
+                ...(typeof section.body === "string"
+                  ? { body: section.body }
+                  : {}),
               }))
             : [],
         }))
@@ -421,10 +450,7 @@ function normalizeStorefrontConfig(value: unknown): StorefrontConfig | undefined
     ...(typeof value.productLayout === "string" &&
     STOREFRONT_PRODUCT_LAYOUTS.has(value.productLayout)
       ? {
-          productLayout: value.productLayout as
-            | "grid"
-            | "list"
-            | "featured",
+          productLayout: value.productLayout as "grid" | "list" | "featured",
         }
       : {}),
     ...(typeof value.landingPageStyle === "string" &&
@@ -549,7 +575,9 @@ export function parseSellerShopProfileEvent(
   const ui = isRecord(parsed.ui) ? parsed.ui : undefined;
   const storefront = normalizeStorefrontConfig(parsed.storefront);
   const merchants = Array.isArray(parsed.merchants)
-    ? parsed.merchants.filter((value): value is string => typeof value === "string")
+    ? parsed.merchants.filter(
+        (value): value is string => typeof value === "string"
+      )
     : [];
 
   return {
@@ -625,7 +653,9 @@ export function buildSellerListingSummary(
 
   const priceTag = event.tags.find((tag) => tag[0] === "price");
   const price =
-    priceTag && typeof priceTag[1] === "string" && !Number.isNaN(Number(priceTag[1]))
+    priceTag &&
+    typeof priceTag[1] === "string" &&
+    !Number.isNaN(Number(priceTag[1]))
       ? Number(priceTag[1])
       : null;
   const currency =

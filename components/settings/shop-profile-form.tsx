@@ -493,10 +493,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
     setSlugError("");
     try {
       const signedEvent = await signer.sign(
-        createSellerActionAuthEventTemplate(
-          userPubkey,
-          "storefront-slug-write"
-        )
+        createSellerActionAuthEventTemplate(userPubkey, "storefront-slug-write")
       );
       const res = await fetch("/api/storefront/register-slug", {
         method: "POST",
@@ -529,10 +526,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
     if (!confirmed) return;
     try {
       const signedEvent = await signer.sign(
-        createSellerActionAuthEventTemplate(
-          userPubkey,
-          "storefront-slug-write"
-        )
+        createSellerActionAuthEventTemplate(userPubkey, "storefront-slug-write")
       );
       await fetch("/api/storefront/register-slug", {
         method: "DELETE",
@@ -727,7 +721,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
   return (
     <>
       <div className="mb-8 xl:max-w-[600px]">
-        <div className="relative flex h-48 items-center justify-center overflow-hidden rounded-xl border-3 border-black bg-primary-blue">
+        <div className="bg-primary-blue relative flex h-48 items-center justify-center overflow-hidden rounded-xl border-3 border-black">
           {watchBanner && (
             <img
               alt={"Shop Banner Image"}
@@ -736,7 +730,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
             />
           )}
           <FileUploaderButton
-            className={`absolute right-4 top-4 z-20 ${WHITEBUTTONCLASSNAMES}`}
+            className={`absolute top-4 right-4 z-20 ${WHITEBUTTONCLASSNAMES}`}
             imgCallbackOnUpload={(imgUrl) => setValue("banner", imgUrl)}
           >
             Upload Banner
@@ -768,7 +762,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
             </div>
             <FileUploaderButton
               isIconOnly={true}
-              className={`!min-w-10 absolute bottom-0 right-0 z-20 !h-10 !w-10 ${WHITEBUTTONCLASSNAMES}`}
+              className={`absolute right-0 bottom-0 z-20 !h-10 !w-10 !min-w-10 ${WHITEBUTTONCLASSNAMES}`}
               imgCallbackOnUpload={(imgUrl) => setValue("picture", imgUrl)}
             />
           </div>
@@ -883,10 +877,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                   aria-label="Currency"
                 >
                   {CURRENCY_OPTIONS.map((currency) => (
-                    <SelectItem
-                      key={currency}
-                      className="text-black"
-                    >
+                    <SelectItem key={currency} className="text-black">
                       {currency}
                     </SelectItem>
                   ))}
@@ -1126,7 +1117,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                                 }}
                                 className={`flex items-center gap-2 rounded-lg border-2 px-3 py-2 text-sm font-medium transition-all ${
                                   isActive
-                                    ? "border-black shadow-neo"
+                                    ? "shadow-neo border-black"
                                     : "border-gray-300 hover:border-black"
                                 }`}
                               >
@@ -1159,7 +1150,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                             onClick={() => setIsCustomColorScheme(true)}
                             className={`flex items-center gap-2 rounded-lg border-2 px-3 py-2 text-sm font-medium transition-all ${
                               isCustomColorScheme
-                                ? "border-black shadow-neo"
+                                ? "shadow-neo border-black"
                                 : "border-gray-300 hover:border-black"
                             }`}
                           >
@@ -1194,7 +1185,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                               ] as const
                             ).map((key) => (
                               <div key={key}>
-                                <label className="mb-1 block text-xs font-medium capitalize text-gray-500">
+                                <label className="mb-1 block text-xs font-medium text-gray-500 capitalize">
                                   {key}
                                 </label>
                                 <div className="flex items-center gap-2">
@@ -1249,7 +1240,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                               }
                               className={`rounded-lg border-2 p-2 text-center transition-all ${
                                 landingPageStyle === style.value
-                                  ? "border-black shadow-neo"
+                                  ? "shadow-neo border-black"
                                   : "border-gray-300 hover:border-black"
                               }`}
                             >
@@ -1297,7 +1288,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                               }
                               className={`rounded-lg border-2 p-2 text-center transition-all ${
                                 productLayout === layout.value
-                                  ? "border-black shadow-neo"
+                                  ? "shadow-neo border-black"
                                   : "border-gray-300 hover:border-black"
                               }`}
                             >
@@ -1342,10 +1333,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                             onChange={(e) => setFontHeading(e.target.value)}
                           >
                             {GOOGLE_FONT_OPTIONS.map((f) => (
-                              <SelectItem
-                                key={f}
-                                className="text-black"
-                              >
+                              <SelectItem key={f} className="text-black">
                                 {f}
                               </SelectItem>
                             ))}
@@ -1366,10 +1354,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                             onChange={(e) => setFontBody(e.target.value)}
                           >
                             {GOOGLE_FONT_OPTIONS.map((f) => (
-                              <SelectItem
-                                key={f}
-                                className="text-black"
-                              >
+                              <SelectItem key={f} className="text-black">
                                 {f}
                               </SelectItem>
                             ))}
@@ -1667,7 +1652,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                           ))}
                         </div>
                         <div className="mt-3">
-                          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-400">
+                          <p className="mb-2 text-xs font-semibold tracking-wider text-gray-400 uppercase">
                             Add Section
                           </p>
                           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -1824,7 +1809,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                               href={`/shop/${shopSlug}`}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-sm font-bold text-primary-blue underline"
+                              className="text-primary-blue text-sm font-bold underline"
                             >
                               Open live storefront (/shop/{shopSlug})
                             </a>
@@ -1872,7 +1857,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
               <button
                 type="button"
                 onClick={() => setIsMobilePreviewOpen(true)}
-                className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-full border-3 border-black bg-black px-5 py-3 font-bold text-white shadow-lg transition-transform hover:scale-105 xl:hidden"
+                className="fixed right-6 bottom-6 z-50 flex items-center gap-2 rounded-full border-3 border-black bg-black px-5 py-3 font-bold text-white shadow-lg transition-transform hover:scale-105 xl:hidden"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"

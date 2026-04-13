@@ -32,8 +32,8 @@ export default function CompactPriceDisplay({
 
   return (
     <div className="flex min-w-0 flex-col items-end gap-1">
-      <div className="inline-flex items-center rounded-md border-2 border-black bg-black px-2 py-1 shadow-neo">
-        <span className="whitespace-nowrap text-xs font-bold text-white">
+      <div className="shadow-neo inline-flex items-center rounded-md border-2 border-black bg-black px-2 py-1">
+        <span className="text-xs font-bold whitespace-nowrap text-white">
           {formatter.format(Number(price))} {currency}
         </span>
       </div>
@@ -60,7 +60,7 @@ export function DisplayCheckoutCost({
     currency.toLowerCase() === "sats" || currency.toLowerCase() === "sat";
 
   return (
-    <div className="rounded-md border-2 border-black bg-white p-4 shadow-neo">
+    <div className="shadow-neo rounded-md border-2 border-black bg-white p-4">
       <p className="text-2xl font-bold text-black">{formattedPrice}</p>
       {!isSats && satsEstimate != null && (
         <p className="mt-1 text-sm text-gray-500">

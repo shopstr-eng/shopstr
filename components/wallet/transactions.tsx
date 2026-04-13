@@ -48,7 +48,7 @@ const Transactions = () => {
     <div className="w-full">
       <div className="max-h-[50vh] overflow-auto">
         <table className="w-full text-left text-sm">
-          <thead className="sticky top-0 border-b-2 border-white/20 bg-primary-blue text-xs uppercase text-white">
+          <thead className="bg-primary-blue sticky top-0 border-b-2 border-white/20 text-xs text-white uppercase">
             <tr>
               <th scope="col" className="px-6 py-4 font-bold">
                 TYPE
@@ -66,7 +66,7 @@ const Transactions = () => {
               history.map((transaction: Transaction, index) => (
                 <tr
                   key={index}
-                  className="border-b border-white/10 bg-primary-blue text-white transition-colors hover:bg-primary-blue/90"
+                  className="bg-primary-blue hover:bg-primary-blue/90 border-b border-white/10 text-white transition-colors"
                 >
                   <td className="flex items-center px-6 py-4">
                     {transaction.type === 1 ? (

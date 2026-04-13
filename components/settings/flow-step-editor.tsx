@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useContext } from "react";
-import { Button, Progress } from "@nextui-org/react";
+import { Button, Progress } from "@heroui/react";
 import {
   blossomUpload,
   getLocalStorageData,
@@ -315,7 +315,7 @@ export const FlowStepEditor = ({ value, onChange }: FlowStepEditorProps) => {
       </div>
 
       {uploadProgress !== null && (
-        <div className="flex items-center gap-3 border-2 border-b-0 border-t-0 border-black bg-gray-50 px-3 py-2">
+        <div className="flex items-center gap-3 border-2 border-t-0 border-b-0 border-black bg-gray-50 px-3 py-2">
           <span className="flex-shrink-0 text-xs font-bold text-gray-600">
             Uploading image
           </span>
@@ -336,7 +336,7 @@ export const FlowStepEditor = ({ value, onChange }: FlowStepEditorProps) => {
       )}
 
       {uploadError && (
-        <div className="flex items-center gap-2 border-2 border-b-0 border-t-0 border-black bg-red-50 px-3 py-2">
+        <div className="flex items-center gap-2 border-2 border-t-0 border-b-0 border-black bg-red-50 px-3 py-2">
           <span className="flex-1 text-xs text-red-700">{uploadError}</span>
           <button
             type="button"
@@ -349,7 +349,7 @@ export const FlowStepEditor = ({ value, onChange }: FlowStepEditorProps) => {
       )}
 
       {insertModal.type && (
-        <div className="border-2 border-b-0 border-t-0 border-black bg-blue-50 px-3 py-3">
+        <div className="border-2 border-t-0 border-b-0 border-black bg-blue-50 px-3 py-3">
           <p className="mb-2 text-xs font-bold text-gray-700">
             {insertModal.type === "button" ? "Insert Button" : "Insert Link"}
           </p>
@@ -383,7 +383,7 @@ export const FlowStepEditor = ({ value, onChange }: FlowStepEditorProps) => {
               />
             </div>
             <Button
-              className="h-8 min-w-0 rounded-md border-2 border-black bg-primary-blue px-3 text-xs font-bold text-white shadow-none"
+              className="bg-primary-blue h-8 min-w-0 rounded-md border-2 border-black px-3 text-xs font-bold text-white shadow-none"
               size="sm"
               onClick={
                 insertModal.type === "button"
@@ -410,7 +410,7 @@ export const FlowStepEditor = ({ value, onChange }: FlowStepEditorProps) => {
           ref={textareaRef}
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className={`w-full border-2 bg-white p-3 font-mono text-sm text-black outline-none duration-300 transition-colors ${
+          className={`w-full border-2 bg-white p-3 font-mono text-sm text-black transition-colors duration-300 outline-none ${
             isFlashing ? "border-primary-blue bg-blue-50" : "border-black"
           }`}
           rows={12}
@@ -421,7 +421,7 @@ export const FlowStepEditor = ({ value, onChange }: FlowStepEditorProps) => {
           ref={textareaRef}
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className={`w-full border-2 bg-white p-3 text-sm text-black outline-none duration-300 transition-colors ${
+          className={`w-full border-2 bg-white p-3 text-sm text-black transition-colors duration-300 outline-none ${
             isFlashing ? "border-primary-blue bg-blue-50" : "border-black"
           }`}
           rows={12}
@@ -444,7 +444,7 @@ export const FlowStepEditor = ({ value, onChange }: FlowStepEditorProps) => {
             key={tag}
             type="button"
             onClick={() => insertAtCursor(tag)}
-            className="rounded border border-gray-300 bg-white px-2 py-0.5 font-mono text-xs text-gray-700 transition-colors hover:border-black hover:bg-primary-yellow"
+            className="hover:bg-primary-yellow rounded border border-gray-300 bg-white px-2 py-0.5 font-mono text-xs text-gray-700 transition-colors hover:border-black"
           >
             {tag}
           </button>

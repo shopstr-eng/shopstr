@@ -175,14 +175,14 @@ const NWCSettingsPage = () => {
             />
 
             {error && (
-              <div className="mb-4 flex items-center rounded-md border-2 border-black bg-red-100 p-3 text-red-700 shadow-neo">
+              <div className="shadow-neo mb-4 flex items-center rounded-md border-2 border-black bg-red-100 p-3 text-red-700">
                 <ExclamationCircleIcon className="mr-2 h-5 w-5" />
                 <span className="text-sm">{error}</span>
               </div>
             )}
 
             {isSaved && !error && (
-              <div className="mb-4 flex items-center rounded-md border-2 border-black bg-green-100 p-3 text-green-700 shadow-neo">
+              <div className="shadow-neo mb-4 flex items-center rounded-md border-2 border-black bg-green-100 p-3 text-green-700">
                 <CheckCircleIcon className="mr-2 h-5 w-5" />
                 <span className="text-sm">Wallet connected successfully!</span>
               </div>
@@ -214,7 +214,7 @@ const NWCSettingsPage = () => {
             </div>
 
             {walletInfo && (
-              <Card className="mt-6 rounded-md border-2 border-black bg-white shadow-neo">
+              <Card className="shadow-neo mt-6 rounded-md border-2 border-black bg-white">
                 <CardHeader className="border-b-2 border-black">
                   <WalletIcon className="mr-2 h-5 w-5 text-black" />
                   <h3 className="font-bold text-black">

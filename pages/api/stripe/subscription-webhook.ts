@@ -24,8 +24,8 @@ export const config = {
 
 async function getRawBody(req: NextApiRequest): Promise<Buffer> {
   return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
-    req.on("data", (chunk: Buffer) => chunks.push(chunk));
+    const chunks: Uint8Array[] = [];
+    req.on("data", (chunk: Buffer) => chunks.push(new Uint8Array(chunk)));
     req.on("end", () => resolve(Buffer.concat(chunks)));
     req.on("error", reject);
   });

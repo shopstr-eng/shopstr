@@ -197,14 +197,14 @@ const ApiKeysPage = () => {
 
   return (
     <ProtectedRoute>
-      <div className="flex min-h-screen flex-col bg-white pb-20 pt-24">
+      <div className="flex min-h-screen flex-col bg-white pt-24 pb-20">
         <div className="mx-auto w-full px-4 lg:w-1/2 xl:w-2/5">
           <SettingsBreadCrumbs />
           <div className="mb-8">
             <h2 className="mb-2 text-2xl font-bold text-black">
               MCP Connection
             </h2>
-            <div className="rounded-md border-2 border-black bg-gray-50 p-4 shadow-neo">
+            <div className="shadow-neo rounded-md border-2 border-black bg-gray-50 p-4">
               <div className="mb-3 flex items-start gap-2">
                 <InformationCircleIcon className="mt-0.5 h-5 w-5 flex-shrink-0 text-gray-600" />
                 <p className="text-sm text-gray-700">
@@ -218,12 +218,12 @@ const ApiKeysPage = () => {
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                <code className="flex-1 break-all rounded-md border-2 border-black bg-white px-3 py-2 text-sm">
+                <code className="flex-1 rounded-md border-2 border-black bg-white px-3 py-2 text-sm break-all">
                   {mcpEndpointUrl}
                 </code>
                 <button
                   onClick={() => handleCopy(mcpEndpointUrl)}
-                  className="rounded-md border-2 border-black bg-white p-2 transition-colors hover:bg-primary-yellow"
+                  className="hover:bg-primary-yellow rounded-md border-2 border-black bg-white p-2 transition-colors"
                 >
                   <ClipboardDocumentIcon className="h-5 w-5 text-black" />
                 </button>
@@ -232,7 +232,7 @@ const ApiKeysPage = () => {
                 <p className="mb-1 text-xs font-bold text-gray-600">
                   Example usage:
                 </p>
-                <code className="block whitespace-pre-wrap break-all text-xs text-gray-700">
+                <code className="block text-xs break-all whitespace-pre-wrap text-gray-700">
                   {`curl ${mcpEndpointUrl} \\
   -H "Authorization: Bearer mm_your_api_key" \\
   -H "Content-Type: application/json" \\
@@ -243,31 +243,31 @@ const ApiKeysPage = () => {
           </div>
 
           {error && (
-            <div className="mb-4 flex items-center rounded-md border-2 border-black bg-red-100 p-3 text-red-700 shadow-neo">
+            <div className="shadow-neo mb-4 flex items-center rounded-md border-2 border-black bg-red-100 p-3 text-red-700">
               <ExclamationCircleIcon className="mr-2 h-5 w-5" />
               <span className="text-sm">{error}</span>
             </div>
           )}
 
           {successMessage && (
-            <div className="mb-4 flex items-center rounded-md border-2 border-black bg-green-100 p-3 text-green-700 shadow-neo">
+            <div className="shadow-neo mb-4 flex items-center rounded-md border-2 border-black bg-green-100 p-3 text-green-700">
               <CheckCircleIcon className="mr-2 h-5 w-5" />
               <span className="text-sm">{successMessage}</span>
             </div>
           )}
 
           {createdKey && (
-            <div className="mb-6 rounded-md border-2 border-black bg-green-50 p-4 shadow-neo">
+            <div className="shadow-neo mb-6 rounded-md border-2 border-black bg-green-50 p-4">
               <p className="mb-2 text-sm font-bold text-green-800">
                 API key created! Copy it now — it won&apos;t be shown again.
               </p>
               <div className="flex items-center gap-2">
-                <code className="flex-1 break-all rounded-md border-2 border-black bg-white px-3 py-2 font-mono text-sm">
+                <code className="flex-1 rounded-md border-2 border-black bg-white px-3 py-2 font-mono text-sm break-all">
                   {createdKey}
                 </code>
                 <button
                   onClick={() => handleCopy(createdKey)}
-                  className="rounded-md border-2 border-black bg-white p-2 transition-colors hover:bg-primary-yellow"
+                  className="hover:bg-primary-yellow rounded-md border-2 border-black bg-white p-2 transition-colors"
                 >
                   {copied ? (
                     <CheckCircleIcon className="h-5 w-5 text-green-600" />
@@ -283,7 +283,7 @@ const ApiKeysPage = () => {
             <h2 className="mb-4 text-2xl font-bold text-black">
               Create API Key
             </h2>
-            <div className="space-y-4 rounded-md border-2 border-black bg-white p-4 shadow-neo">
+            <div className="shadow-neo space-y-4 rounded-md border-2 border-black bg-white p-4">
               <Input
                 label="Key Name"
                 placeholder="e.g., My AI Agent"
@@ -341,7 +341,7 @@ const ApiKeysPage = () => {
                 {apiKeys.map((key) => (
                   <div
                     key={key.id}
-                    className={`rounded-md border-2 border-black p-4 shadow-neo ${
+                    className={`shadow-neo rounded-md border-2 border-black p-4 ${
                       key.is_active ? "bg-white" : "bg-gray-100 opacity-60"
                     }`}
                   >

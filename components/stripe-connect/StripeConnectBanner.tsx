@@ -1,6 +1,6 @@
 import { useState, useEffect, useContext } from "react";
 import type React from "react";
-import { Button, useDisclosure } from "@nextui-org/react";
+import { Button, useDisclosure } from "@heroui/react";
 import { CreditCardIcon } from "@heroicons/react/24/outline";
 import { BLUEBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
@@ -58,7 +58,7 @@ const StripeConnectBanner: React.FC<StripeConnectBannerProps> = ({
 
   return (
     <>
-      <div className="mx-auto mb-4 w-full max-w-4xl rounded-md border-2 border-black bg-primary-yellow p-4 shadow-neo">
+      <div className="bg-primary-yellow shadow-neo mx-auto mb-4 w-full max-w-4xl rounded-md border-2 border-black p-4">
         <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
           <div className="flex items-center gap-3">
             <CreditCardIcon className="h-6 w-6 flex-shrink-0 text-black" />

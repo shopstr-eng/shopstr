@@ -2,7 +2,7 @@ import { useState } from "react";
 import Head from "next/head";
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { Image } from "@nextui-org/react";
+import { Image } from "@heroui/react";
 import { ArrowLeftIcon } from "@heroicons/react/24/outline";
 import {
   BLACKBUTTONCLASSNAMES,
@@ -99,7 +99,7 @@ export default function ContactPage() {
               <h2 className="mb-6 text-2xl font-black">Get in Touch</h2>
 
               <div className="space-y-6">
-                <div className="rounded-lg border-2 border-black bg-white p-6 shadow-neo">
+                <div className="shadow-neo rounded-lg border-2 border-black bg-white p-6">
                   <h3 className="mb-2 text-lg font-bold">Email</h3>
                   <a
                     href="mailto:freemilk@milk.market"
@@ -112,7 +112,7 @@ export default function ContactPage() {
                   </p>
                 </div>
 
-                <div className="rounded-lg border-2 border-black bg-white p-6 shadow-neo">
+                <div className="shadow-neo rounded-lg border-2 border-black bg-white p-6">
                   <h3 className="mb-2 text-lg font-bold">Nostr</h3>
                   <a
                     href="https://njump.me/milkmarket@milk.market"
@@ -133,7 +133,7 @@ export default function ContactPage() {
                   </p>
                 </div>
 
-                <div className="rounded-lg border-2 border-black bg-white p-6 shadow-neo">
+                <div className="shadow-neo rounded-lg border-2 border-black bg-white p-6">
                   <h3 className="mb-2 text-lg font-bold">Social Media</h3>
                   <div className="flex flex-wrap gap-4">
                     <a
@@ -195,7 +195,7 @@ export default function ContactPage() {
                   </div>
                 </div>
 
-                <div className="rounded-lg border-2 border-black bg-white p-6 shadow-neo">
+                <div className="shadow-neo rounded-lg border-2 border-black bg-white p-6">
                   <h3 className="mb-2 text-lg font-bold">Open Source</h3>
                   <a
                     href="https://github.com/shopstr-eng/milk-market"
@@ -221,7 +221,7 @@ export default function ContactPage() {
 
             <div>
               <h2 className="mb-6 text-2xl font-black">Send a Message</h2>
-              <div className="rounded-lg border-2 border-black bg-white p-6 shadow-neo">
+              <div className="shadow-neo rounded-lg border-2 border-black bg-white p-6">
                 <form
                   onSubmit={async (e) => {
                     e.preventDefault();
@@ -264,7 +264,7 @@ export default function ContactPage() {
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                       placeholder="Your name"
-                      className="w-full rounded-lg border-2 border-black p-3 shadow-neo focus:outline-none"
+                      className="shadow-neo w-full rounded-lg border-2 border-black p-3 focus:outline-none"
                       style={{ backgroundColor: "#f0f0f0" }}
                       required
                     />
@@ -283,7 +283,7 @@ export default function ContactPage() {
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="your@email.com"
-                      className="w-full rounded-lg border-2 border-black p-3 shadow-neo focus:outline-none"
+                      className="shadow-neo w-full rounded-lg border-2 border-black p-3 focus:outline-none"
                       style={{ backgroundColor: "#f0f0f0" }}
                       required
                     />
@@ -300,7 +300,7 @@ export default function ContactPage() {
                       id="subject"
                       value={subject}
                       onChange={(e) => setSubject(e.target.value)}
-                      className="w-full rounded-lg border-2 border-black p-3 shadow-neo focus:outline-none"
+                      className="shadow-neo w-full rounded-lg border-2 border-black p-3 focus:outline-none"
                       style={{ backgroundColor: "#f0f0f0" }}
                     >
                       <option value="">Select a topic</option>
@@ -330,7 +330,7 @@ export default function ContactPage() {
                       onChange={(e) => setMessage(e.target.value)}
                       placeholder="How can we help?"
                       rows={5}
-                      className="w-full rounded-lg border-2 border-black p-3 shadow-neo focus:outline-none"
+                      className="shadow-neo w-full rounded-lg border-2 border-black p-3 focus:outline-none"
                       style={{ backgroundColor: "#f0f0f0" }}
                       required
                     />
@@ -360,7 +360,7 @@ export default function ContactPage() {
             </div>
           </div>
 
-          <section className="mt-12 rounded-lg border-2 border-black bg-zinc-50 p-8 shadow-neo">
+          <section className="shadow-neo mt-12 rounded-lg border-2 border-black bg-zinc-50 p-8">
             <h2 className="mb-4 text-2xl font-black">Frequently Asked</h2>
             <div className="grid gap-4 md:grid-cols-2">
               <div>

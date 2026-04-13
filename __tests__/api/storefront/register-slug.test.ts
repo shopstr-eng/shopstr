@@ -43,7 +43,10 @@ function createSignedAction(
   const pubkey = getPublicKey(secretKey);
   return {
     pubkey,
-    signedEvent: finalizeEvent(createAuthEventTemplate(pubkey, action), secretKey),
+    signedEvent: finalizeEvent(
+      createAuthEventTemplate(pubkey, action),
+      secretKey
+    ),
   };
 }
 

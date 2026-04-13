@@ -698,7 +698,7 @@ export default function StorefrontPreviewPanel({
                 )}
 
                 {landingPageStyle === "minimal" && (
-                  <div className="px-6 pb-4 pt-24">
+                  <div className="px-6 pt-24 pb-4">
                     <div className="mx-auto max-w-6xl">
                       <div className="flex items-center gap-4">
                         <img
@@ -787,7 +787,7 @@ function PreviewNav({
 }) {
   return (
     <nav
-      className="left-0 right-0 top-0 z-40 border-b"
+      className="top-0 right-0 left-0 z-40 border-b"
       style={{
         backgroundColor: colors.secondary,
         borderColor: colors.primary + "33",
@@ -869,7 +869,7 @@ function PreviewProductGrid({
             )}
             <div className="flex flex-col justify-center p-8 md:w-1/2">
               <span
-                className="mb-2 text-sm font-semibold uppercase tracking-wider"
+                className="mb-2 text-sm font-semibold tracking-wider uppercase"
                 style={{ color: colors.accent }}
               >
                 Featured

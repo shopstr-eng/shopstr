@@ -45,7 +45,8 @@ export default async function handler(
       );
       if (!authResult.valid) {
         return res.status(proofResult.status).json({
-          error: proofResult.error || authResult.error || "Authentication failed",
+          error:
+            proofResult.error || authResult.error || "Authentication failed",
         });
       }
     }

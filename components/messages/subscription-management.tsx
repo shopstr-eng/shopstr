@@ -11,7 +11,7 @@ import {
   ModalFooter,
   Input,
   Button,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import AddressChangeModal from "@/components/utility-components/address-change-modal";
 import {
   SignerContext,
@@ -390,12 +390,12 @@ const SubscriptionManagement = () => {
 
   if (!isLoggedIn && !isGuestMode) {
     return (
-      <div className="min-w-0 max-w-[98vw] bg-white px-4 py-4 sm:py-6">
+      <div className="max-w-[98vw] min-w-0 bg-white px-4 py-4 sm:py-6">
         <div className="mx-auto w-full max-w-lg">
           <h1 className="mb-6 text-3xl font-bold text-black">
             Manage Subscriptions
           </h1>
-          <div className="rounded-md border-2 border-black bg-white p-6 shadow-neo">
+          <div className="shadow-neo rounded-md border-2 border-black bg-white p-6">
             <p className="mb-4 text-sm text-black">
               Enter your email and optionally your subscription ID to manage
               your subscriptions.
@@ -453,8 +453,8 @@ const SubscriptionManagement = () => {
   );
 
   return (
-    <div className="min-w-0 max-w-[98vw] bg-white px-4 py-4 sm:py-6">
-      <div className="mx-auto w-full min-w-0 max-w-full">
+    <div className="max-w-[98vw] min-w-0 bg-white px-4 py-4 sm:py-6">
+      <div className="mx-auto w-full max-w-full min-w-0">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
           <h1 className="text-3xl font-bold text-black">My Subscriptions</h1>
           {isGuestMode && (
@@ -475,7 +475,7 @@ const SubscriptionManagement = () => {
         </div>
 
         {subscriptions.length === 0 ? (
-          <div className="rounded-md border-2 border-black bg-white p-8 text-center shadow-neo">
+          <div className="shadow-neo rounded-md border-2 border-black bg-white p-8 text-center">
             <p className="text-lg text-black">No subscriptions found.</p>
           </div>
         ) : (
@@ -489,7 +489,7 @@ const SubscriptionManagement = () => {
                   {activeSubscriptions.map((sub) => (
                     <div
                       key={sub.id}
-                      className="flex flex-col justify-between rounded-md border-2 border-black bg-white p-6 shadow-neo"
+                      className="shadow-neo flex flex-col justify-between rounded-md border-2 border-black bg-white p-6"
                     >
                       <div>
                         <div className="mb-3 flex items-center justify-between">
@@ -589,19 +589,19 @@ const SubscriptionManagement = () => {
                       <div className="flex flex-wrap gap-2 border-t-2 border-black pt-4">
                         <button
                           onClick={() => handleChangeDateClick(sub)}
-                          className="flex-1 rounded-md border-2 border-black bg-primary-yellow px-3 py-2 text-xs font-bold text-black shadow-neo transition-transform hover:-translate-y-0.5 active:translate-y-0.5"
+                          className="bg-primary-yellow shadow-neo flex-1 rounded-md border-2 border-black px-3 py-2 text-xs font-bold text-black transition-transform hover:-translate-y-0.5 active:translate-y-0.5"
                         >
                           Change Date
                         </button>
                         <button
                           onClick={() => handleChangeAddressClick(sub)}
-                          className="flex-1 rounded-md border-2 border-black bg-white px-3 py-2 text-xs font-bold text-black shadow-neo transition-transform hover:-translate-y-0.5 active:translate-y-0.5"
+                          className="shadow-neo flex-1 rounded-md border-2 border-black bg-white px-3 py-2 text-xs font-bold text-black transition-transform hover:-translate-y-0.5 active:translate-y-0.5"
                         >
                           Change Address
                         </button>
                         <button
                           onClick={() => handleCancelClick(sub)}
-                          className="flex-1 rounded-md border-2 border-black bg-red-500 px-3 py-2 text-xs font-bold text-white shadow-neo transition-transform hover:-translate-y-0.5 active:translate-y-0.5"
+                          className="shadow-neo flex-1 rounded-md border-2 border-black bg-red-500 px-3 py-2 text-xs font-bold text-white transition-transform hover:-translate-y-0.5 active:translate-y-0.5"
                         >
                           Cancel
                         </button>
@@ -617,27 +617,27 @@ const SubscriptionManagement = () => {
                 <h2 className="mb-4 text-xl font-bold text-black">
                   Past Subscriptions
                 </h2>
-                <div className="w-full overflow-hidden rounded-md border-2 border-black bg-white shadow-neo">
+                <div className="shadow-neo w-full overflow-hidden rounded-md border-2 border-black bg-white">
                   <div className="max-h-[40vh] overflow-x-auto">
                     <table className="min-w-full text-left text-sm text-black">
                       <thead className="border-b-2 border-black bg-white">
                         <tr>
-                          <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-black">
+                          <th className="px-4 py-3 text-left text-xs font-bold tracking-wider text-black uppercase">
                             Subscription ID
                           </th>
-                          <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-black">
+                          <th className="px-4 py-3 text-left text-xs font-bold tracking-wider text-black uppercase">
                             Seller
                           </th>
-                          <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-black">
+                          <th className="px-4 py-3 text-left text-xs font-bold tracking-wider text-black uppercase">
                             Frequency
                           </th>
-                          <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-black">
+                          <th className="px-4 py-3 text-left text-xs font-bold tracking-wider text-black uppercase">
                             Price
                           </th>
-                          <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-black">
+                          <th className="px-4 py-3 text-left text-xs font-bold tracking-wider text-black uppercase">
                             Status
                           </th>
-                          <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-black">
+                          <th className="px-4 py-3 text-left text-xs font-bold tracking-wider text-black uppercase">
                             Created
                           </th>
                         </tr>
@@ -648,7 +648,7 @@ const SubscriptionManagement = () => {
                             key={sub.id}
                             className="bg-white hover:bg-gray-50"
                           >
-                            <td className="whitespace-nowrap px-4 py-4 text-sm text-black">
+                            <td className="px-4 py-4 text-sm whitespace-nowrap text-black">
                               {sub.stripe_subscription_id.substring(0, 12)}...
                             </td>
                             <td className="px-4 py-4 text-sm text-black">
@@ -662,14 +662,14 @@ const SubscriptionManagement = () => {
                                 "N/A"
                               )}
                             </td>
-                            <td className="whitespace-nowrap px-4 py-4 text-sm text-black">
+                            <td className="px-4 py-4 text-sm whitespace-nowrap text-black">
                               {FREQUENCY_LABELS[sub.frequency] || sub.frequency}
                             </td>
-                            <td className="whitespace-nowrap px-4 py-4 text-sm text-black">
+                            <td className="px-4 py-4 text-sm whitespace-nowrap text-black">
                               {sub.subscription_price}{" "}
                               {sub.currency.toUpperCase()}
                             </td>
-                            <td className="whitespace-nowrap px-4 py-4 text-sm">
+                            <td className="px-4 py-4 text-sm whitespace-nowrap">
                               <span
                                 className={`inline-flex rounded-md border-2 border-black px-2 py-1 text-xs font-bold ${
                                   sub.status === "paused"
@@ -680,7 +680,7 @@ const SubscriptionManagement = () => {
                                 {sub.status}
                               </span>
                             </td>
-                            <td className="whitespace-nowrap px-4 py-4 text-sm text-black">
+                            <td className="px-4 py-4 text-sm whitespace-nowrap text-black">
                               {new Date(sub.created_at).toLocaleDateString()}
                             </td>
                           </tr>

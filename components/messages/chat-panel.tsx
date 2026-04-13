@@ -401,7 +401,7 @@ const ChatPanel = ({
     return (
       <div className="absolute z-20 hidden h-[85vh] w-full flex-col overflow-clip bg-white px-2 md:relative md:flex">
         <div className="mt-10 flex flex-grow items-center justify-center py-10">
-          <div className="w-full max-w-xl rounded-lg border-2 border-black bg-[#2C3E50] p-10 text-center shadow-neo">
+          <div className="shadow-neo w-full max-w-xl rounded-lg border-2 border-black bg-[#2C3E50] p-10 text-center">
             <ChatBubbleLeftIcon className="mx-auto mb-5 h-20 w-20 text-white" />
             <span className="block text-5xl font-bold text-white">
               No chat selected...

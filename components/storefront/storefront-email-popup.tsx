@@ -117,7 +117,7 @@ export default function StorefrontEmailPopupComponent({
           >
             <button
               onClick={handleDismiss}
-              className="absolute right-3 top-3 z-10 rounded-full p-1 transition-colors hover:bg-black/10"
+              className="absolute top-3 right-3 z-10 rounded-full p-1 transition-colors hover:bg-black/10"
               style={{ color: colors.text + "99" }}
             >
               <XMarkIcon className="h-5 w-5" />
@@ -159,7 +159,7 @@ export default function StorefrontEmailPopupComponent({
                     }}
                   >
                     <p
-                      className="mb-1 text-xs uppercase tracking-wider"
+                      className="mb-1 text-xs tracking-wider uppercase"
                       style={{ color: colors.text + "77" }}
                     >
                       Your Code
@@ -212,7 +212,7 @@ export default function StorefrontEmailPopupComponent({
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       required
-                      className="w-full rounded-lg border-2 px-4 py-3 text-sm outline-none transition-colors focus:ring-2"
+                      className="w-full rounded-lg border-2 px-4 py-3 text-sm transition-colors outline-none focus:ring-2"
                       style={{
                         borderColor: colors.text + "22",
                         color: colors.text,
@@ -230,7 +230,7 @@ export default function StorefrontEmailPopupComponent({
                         value={phone}
                         onChange={(e) => setPhone(e.target.value)}
                         required={config.requirePhone}
-                        className="w-full rounded-lg border-2 px-4 py-3 text-sm outline-none transition-colors focus:ring-2"
+                        className="w-full rounded-lg border-2 px-4 py-3 text-sm transition-colors outline-none focus:ring-2"
                         style={{
                           borderColor: colors.text + "22",
                           color: colors.text,

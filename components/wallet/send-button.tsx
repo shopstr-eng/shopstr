@@ -256,7 +256,7 @@ const SendButton = () => {
                 </div>
               )}
               {sendFailed && (
-                <Card className="mt-3 rounded-md border-3 border-black shadow-neo">
+                <Card className="shadow-neo mt-3 rounded-md border-3 border-black">
                   <CardHeader className="flex justify-center gap-3 border-b-2 border-black bg-white">
                     <div className="flex items-center justify-center">
                       <XCircleIcon className="h-6 w-6 text-red-500" />
@@ -278,7 +278,7 @@ const SendButton = () => {
                 </Card>
               )}
               {showTokenCard && (
-                <Card className="mt-3 rounded-md border-3 border-black shadow-neo">
+                <Card className="shadow-neo mt-3 rounded-md border-3 border-black">
                   <CardHeader className="flex justify-center gap-3 border-b-2 border-black bg-white">
                     <div className="flex items-center justify-center">
                       <CheckCircleIcon className="h-6 w-6 text-green-500" />
@@ -291,7 +291,7 @@ const SendButton = () => {
                   <CardBody className="flex flex-col items-center bg-white">
                     {newToken ? (
                       <div className="flex w-full flex-col items-center justify-center">
-                        <p className="mb-3 whitespace-break-spaces break-all font-mono text-sm text-black">
+                        <p className="mb-3 font-mono text-sm break-all whitespace-break-spaces text-black">
                           {newToken}
                         </p>
                         <ClipboardIcon

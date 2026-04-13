@@ -113,7 +113,7 @@ const CreateCommunityForm: React.FC<CreateCommunityFormProps> = ({
               src={watchImage}
               alt="Community image preview"
               width={200}
-              className="rounded-md border-4 border-black shadow-neo"
+              className="shadow-neo rounded-md border-4 border-black"
             />
           </div>
         )}

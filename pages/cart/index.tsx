@@ -29,7 +29,7 @@ import {
 } from "@/utils/STATIC-VARIABLES";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
 import CartInvoiceCard from "../../components/cart-invoice-card";
-import { getSatoshiValue } from "@getalby/lightning-tools";
+import { getSatoshiValue, getFiatValue } from "@getalby/lightning-tools";
 import currencySelection from "../../public/currencySelection.json";
 import { ShopMapContext, ProfileMapContext } from "@/utils/context/context";
 import { nip19 } from "nostr-tools";
@@ -92,8 +92,7 @@ function QuantitySelector({
         }}
         min={min}
         max={max}
-        className="w-16 rounded-md border-2 border-black bg-white px-2 py-1 text-center font-semibold text-black outline-none
-          [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+        className="w-16 rounded-md border-2 border-black bg-white px-2 py-1 text-center font-semibold text-black outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
       />
       <button
         onClick={onIncrease}
@@ -487,7 +486,7 @@ export default function Component() {
               productCurrencyUpper === "SAT"
             ) {
               try {
-                const fiatVal = await fiat.getFiatValue({
+                const fiatVal = await getFiatValue({
                   satoshi: Math.round(nativePrice * qty),
                   currency: cartCurrencyUpper,
                 });
@@ -497,11 +496,11 @@ export default function Component() {
               }
             } else {
               try {
-                const satVal = await fiat.getSatoshiValue({
+                const satVal = await getSatoshiValue({
                   amount: nativePrice * qty,
                   currency: product.currency,
                 });
-                const fiatVal = await fiat.getFiatValue({
+                const fiatVal = await getFiatValue({
                   satoshi: Math.round(satVal),
                   currency: cartCurrencyUpper,
                 });
@@ -899,7 +898,8 @@ export default function Component() {
                                             enabled: !prev[product.id]?.enabled,
                                             frequency:
                                               prev[product.id]?.frequency ||
-                                              product.subscriptionFrequency![0]!,
+                                              product
+                                                .subscriptionFrequency![0]!,
                                           },
                                         }));
                                       }}
@@ -971,7 +971,6 @@ export default function Component() {
                                           (freq) => (
                                             <SelectItem
                                               key={freq}
-                                              value={freq}
                                               className="font-semibold text-black"
                                             >
                                               {FREQUENCY_LABELS[freq] || freq}
@@ -1059,7 +1058,7 @@ export default function Component() {
                           return (
                             <div className="rounded-lg border-2 border-black bg-white p-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
                               <div className="mb-2 flex items-center gap-2">
-                                <TruckIcon className="h-5 w-5 text-primary-blue" />
+                                <TruckIcon className="text-primary-blue h-5 w-5" />
                                 {isFreeShipping ? (
                                   <p className="text-sm font-bold text-green-600">
                                     Free shipping from {sellerName}!
@@ -1074,7 +1073,7 @@ export default function Component() {
                               </div>
                               <div className="h-3 w-full overflow-hidden rounded-full border border-black bg-gray-200">
                                 <div
-                                  className={`h-full rounded-full duration-500 transition-all ${
+                                  className={`h-full rounded-full transition-all duration-500 ${
                                     isFreeShipping
                                       ? "bg-green-500"
                                       : "bg-primary-blue"

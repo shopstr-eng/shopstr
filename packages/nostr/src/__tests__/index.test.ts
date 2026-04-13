@@ -102,7 +102,9 @@ describe("seller nostr helpers", () => {
         tags: [["d", "seller-pubkey"]],
         content: "{}",
       })
-    ).rejects.toThrow(new SellerNostrError("Failed to cache the signed event."));
+    ).rejects.toThrow(
+      new SellerNostrError("Failed to cache the signed event.")
+    );
 
     expect(fetchSpy).toHaveBeenCalledWith(
       "http://127.0.0.1:5000/api/db/cache-event",

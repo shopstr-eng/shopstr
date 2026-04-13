@@ -2,11 +2,7 @@ import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 
 import { sellerThemeTokens } from "@/theme/tokens";
 
-export default function LoadingScreen({
-  message,
-}: {
-  message: string;
-}) {
+export default function LoadingScreen({ message }: { message: string }) {
   return (
     <View style={styles.container}>
       <ActivityIndicator color={sellerThemeTokens.primary} size="large" />

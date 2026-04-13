@@ -66,9 +66,8 @@ export default function BulkSelector({
           {[
             <SelectItem
               key="1"
-              value="1"
               textValue={`1 unit - ${basePrice} ${currency}`}
-              className="font-semibold text-black hover:bg-primary-yellow data-[hover=true]:bg-primary-yellow data-[selected=true]:bg-primary-yellow"
+              className="hover:bg-primary-yellow data-[hover=true]:bg-primary-yellow data-[selected=true]:bg-primary-yellow font-semibold text-black"
             >
               1 unit - {basePrice} {currency}
             </SelectItem>,
@@ -81,7 +80,7 @@ export default function BulkSelector({
                   textValue={`${units} units - ${price} ${currency}${
                     savings > 0 ? ` (Save ${savings}%)` : ""
                   }`}
-                  className="font-semibold text-black hover:bg-primary-yellow data-[hover=true]:bg-primary-yellow data-[selected=true]:bg-primary-yellow"
+                  className="hover:bg-primary-yellow data-[hover=true]:bg-primary-yellow data-[selected=true]:bg-primary-yellow font-semibold text-black"
                 >
                   <div className="flex flex-col">
                     <span>

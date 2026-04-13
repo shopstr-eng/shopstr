@@ -321,7 +321,7 @@ const MintButton = () => {
                 </div>
               )}
               {showInvoiceCard && (
-                <Card className="mt-3 rounded-md border-3 border-black shadow-neo">
+                <Card className="shadow-neo mt-3 rounded-md border-3 border-black">
                   <CardHeader className="flex justify-center gap-3 border-b-2 border-black bg-white">
                     <span className="text-xl font-bold text-black">
                       Lightning Invoice
@@ -339,7 +339,7 @@ const MintButton = () => {
                               src={qrCodeUrl}
                             />
                             <div className="mt-4 flex items-center justify-center">
-                              <p className="break-all text-center font-mono text-sm text-black">
+                              <p className="text-center font-mono text-sm break-all text-black">
                                 {invoice.length > 30
                                   ? `${invoice.substring(
                                       0,

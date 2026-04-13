@@ -2,7 +2,10 @@ import * as SecureStore from "expo-secure-store";
 import { create } from "zustand";
 
 import type { SellerSession } from "@milk-market/domain";
-import { deserializeSellerSession, serializeSellerSession } from "@milk-market/nostr";
+import {
+  deserializeSellerSession,
+  serializeSellerSession,
+} from "@milk-market/nostr";
 
 const SELLER_SESSION_STORAGE_KEY = "milk-market-seller-session";
 
@@ -22,7 +25,9 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
       return;
     }
 
-    const rawSession = await SecureStore.getItemAsync(SELLER_SESSION_STORAGE_KEY);
+    const rawSession = await SecureStore.getItemAsync(
+      SELLER_SESSION_STORAGE_KEY
+    );
     const session = rawSession ? deserializeSellerSession(rawSession) : null;
 
     if (rawSession && !session) {

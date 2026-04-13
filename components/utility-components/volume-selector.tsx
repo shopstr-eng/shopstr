@@ -55,7 +55,7 @@ export default function VolumeSelector({
               <SelectItem
                 key={volume}
                 textValue={`${volume} - ${price} ${currency}`}
-                className="font-semibold text-black hover:bg-primary-yellow data-[hover=true]:bg-primary-yellow data-[selected=true]:bg-primary-yellow"
+                className="hover:bg-primary-yellow data-[hover=true]:bg-primary-yellow data-[selected=true]:bg-primary-yellow font-semibold text-black"
               >
                 {volume} - {price} {currency}
               </SelectItem>

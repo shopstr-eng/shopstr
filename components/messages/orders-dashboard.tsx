@@ -1679,8 +1679,8 @@ const OrdersDashboard = () => {
   }
 
   return (
-    <div className="min-w-0 max-w-[98vw] bg-white px-4 py-4 sm:py-6">
-      <div className="mx-auto w-full min-w-0 max-w-full">
+    <div className="max-w-[98vw] min-w-0 bg-white px-4 py-4 sm:py-6">
+      <div className="mx-auto w-full max-w-full min-w-0">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
           <h1 className="text-3xl font-bold text-black">Orders Dashboard</h1>
           <div className="flex items-center gap-3">
@@ -1692,7 +1692,7 @@ const OrdersDashboard = () => {
                 onClick={() => setDisplayCurrency("sats")}
                 className={`rounded-md px-4 py-2 text-sm font-bold transition-transform ${
                   displayCurrency === "sats"
-                    ? "border-2 border-black bg-primary-yellow text-black shadow-neo"
+                    ? "bg-primary-yellow shadow-neo border-2 border-black text-black"
                     : "border-2 border-transparent bg-white text-black hover:-translate-y-0.5"
                 }`}
               >
@@ -1702,7 +1702,7 @@ const OrdersDashboard = () => {
                 onClick={() => setDisplayCurrency("USD")}
                 className={`rounded-md px-4 py-2 text-sm font-bold transition-transform ${
                   displayCurrency === "USD"
-                    ? "border-2 border-black bg-primary-yellow text-black shadow-neo"
+                    ? "bg-primary-yellow shadow-neo border-2 border-black text-black"
                     : "border-2 border-transparent bg-white text-black hover:-translate-y-0.5"
                 }`}
               >
@@ -1713,14 +1713,14 @@ const OrdersDashboard = () => {
         </div>
 
         <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-3">
-          <div className="rounded-md border-2 border-black bg-white p-6 shadow-neo">
+          <div className="shadow-neo rounded-md border-2 border-black bg-white p-6">
             <h3 className="mb-2 text-sm font-medium text-black">
               Total Orders
             </h3>
             <p className="text-3xl font-bold text-black">{totalOrders}</p>
           </div>
 
-          <div className="rounded-md border-2 border-black bg-white p-6 shadow-neo">
+          <div className="shadow-neo rounded-md border-2 border-black bg-white p-6">
             <h3 className="mb-2 text-sm font-medium text-black">Total GMV</h3>
             <p className="text-3xl font-bold text-black">
               {displayCurrency === "sats"
@@ -1732,7 +1732,7 @@ const OrdersDashboard = () => {
             </p>
           </div>
 
-          <div className="rounded-md border-2 border-black bg-white p-6 shadow-neo">
+          <div className="shadow-neo rounded-md border-2 border-black bg-white p-6">
             <h3 className="mb-2 text-sm font-medium text-black">
               Average Order Size
             </h3>
@@ -1748,58 +1748,58 @@ const OrdersDashboard = () => {
         </div>
 
         {orders.length > 0 && (
-          <div className="mb-8 rounded-md border-2 border-black bg-white p-6 shadow-neo">
+          <div className="shadow-neo mb-8 rounded-md border-2 border-black bg-white p-6">
             <div style={{ height: "300px" }}>
               <Line options={chartOptions} data={getChartData()} />
             </div>
           </div>
         )}
 
-        <div className="w-full overflow-hidden rounded-md border-2 border-black bg-white shadow-neo">
+        <div className="shadow-neo w-full overflow-hidden rounded-md border-2 border-black bg-white">
           <div className="max-h-[70vh] overflow-x-auto">
             <table className="min-w-full text-left text-sm text-black">
               <thead className="border-b-2 border-black bg-white">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-black">
+                  <th className="px-4 py-3 text-left text-xs font-bold tracking-wider text-black uppercase">
                     Order ID
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-black">
+                  <th className="px-4 py-3 text-left text-xs font-bold tracking-wider text-black uppercase">
                     Type
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-black">
+                  <th className="px-4 py-3 text-left text-xs font-bold tracking-wider text-black uppercase">
                     Buyer/Seller
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-black">
+                  <th className="px-4 py-3 text-left text-xs font-bold tracking-wider text-black uppercase">
                     Amount
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-black">
+                  <th className="px-4 py-3 text-left text-xs font-bold tracking-wider text-black uppercase">
                     Status
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-black">
+                  <th className="px-4 py-3 text-left text-xs font-bold tracking-wider text-black uppercase">
                     Date
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-black">
+                  <th className="px-4 py-3 text-left text-xs font-bold tracking-wider text-black uppercase">
                     Address
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-black">
+                  <th className="px-4 py-3 text-left text-xs font-bold tracking-wider text-black uppercase">
                     Pickup Location
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-black">
+                  <th className="px-4 py-3 text-left text-xs font-bold tracking-wider text-black uppercase">
                     Order Specs
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-black">
+                  <th className="px-4 py-3 text-left text-xs font-bold tracking-wider text-black uppercase">
                     Payment
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-black">
+                  <th className="px-4 py-3 text-left text-xs font-bold tracking-wider text-black uppercase">
                     Product
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-black">
+                  <th className="px-4 py-3 text-left text-xs font-bold tracking-wider text-black uppercase">
                     Donation Amount
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-black">
+                  <th className="px-4 py-3 text-left text-xs font-bold tracking-wider text-black uppercase">
                     Subscription
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-black">
+                  <th className="px-4 py-3 text-left text-xs font-bold tracking-wider text-black uppercase">
                     Herdshare Agreement
                   </th>
                 </tr>
@@ -1823,20 +1823,20 @@ const OrdersDashboard = () => {
                       <tr
                         key={order.orderId}
                         className={`bg-white hover:bg-gray-50 ${
-                          isNewOrder ? "border-l-4 border-l-primary-yellow" : ""
+                          isNewOrder ? "border-l-primary-yellow border-l-4" : ""
                         }`}
                       >
-                        <td className="whitespace-nowrap px-4 py-4 text-sm text-black">
+                        <td className="px-4 py-4 text-sm whitespace-nowrap text-black">
                           <div className="flex flex-col gap-1">
                             <span>{order.orderId.substring(0, 8)}...</span>
                             {order.reviewRating !== undefined ? (
-                              <span className="text-xs text-primary-yellow underline">
+                              <span className="text-primary-yellow text-xs underline">
                                 Rating: {order.reviewRating.toFixed(1)}
                               </span>
                             ) : canShowReviewButton(order) ? (
                               <button
                                 onClick={() => handleOpenReviewModal(order)}
-                                className="cursor-pointer text-left text-xs text-primary-yellow underline hover:text-yellow-600"
+                                className="text-primary-yellow cursor-pointer text-left text-xs underline hover:text-yellow-600"
                               >
                                 Leave Review
                               </button>
@@ -1885,7 +1885,7 @@ const OrdersDashboard = () => {
                             );
                           })()}
                         </td>
-                        <td className="whitespace-nowrap px-4 py-4 text-sm text-black">
+                        <td className="px-4 py-4 text-sm whitespace-nowrap text-black">
                           {order.amount > 0
                             ? displayCurrency === "sats"
                               ? `${getConvertedAmount(
@@ -1919,7 +1919,7 @@ const OrdersDashboard = () => {
                             {order.status === "pending" && (
                               <button
                                 onClick={() => handleOpenShippingModal(order)}
-                                className="cursor-pointer text-left text-xs text-primary-yellow underline hover:text-yellow-600"
+                                className="text-primary-yellow cursor-pointer text-left text-xs underline hover:text-yellow-600"
                               >
                                 Send Shipping Update
                               </button>
@@ -1937,7 +1937,7 @@ const OrdersDashboard = () => {
                             )}
                           </div>
                         </td>
-                        <td className="whitespace-nowrap px-4 py-4 text-sm text-black">
+                        <td className="px-4 py-4 text-sm whitespace-nowrap text-black">
                           {new Date(
                             order.timestamp * 1000
                           ).toLocaleDateString()}
@@ -1958,7 +1958,7 @@ const OrdersDashboard = () => {
                             {order.pickupLocation || "N/A"}
                           </div>
                         </td>
-                        <td className="whitespace-nowrap px-4 py-4 text-sm text-black">
+                        <td className="px-4 py-4 text-sm whitespace-nowrap text-black">
                           {(() => {
                             const specs = [];
                             if (order.selectedSize)
@@ -2002,7 +2002,7 @@ const OrdersDashboard = () => {
                             "N/A"
                           )}
                         </td>
-                        <td className="whitespace-nowrap px-4 py-4 text-sm text-black">
+                        <td className="px-4 py-4 text-sm whitespace-nowrap text-black">
                           {order.donationAmount !== undefined &&
                           order.donationAmount > 0
                             ? displayCurrency === "sats"
@@ -2027,7 +2027,7 @@ const OrdersDashboard = () => {
                                 }`
                             : "N/A"}
                         </td>
-                        <td className="whitespace-nowrap px-4 py-4 text-sm">
+                        <td className="px-4 py-4 text-sm whitespace-nowrap">
                           <div className="flex flex-col gap-1">
                             <span
                               className={`inline-flex rounded-md border-2 border-black px-2 py-1 text-xs font-bold ${
@@ -2049,14 +2049,14 @@ const OrdersDashboard = () => {
                                 onClick={() =>
                                   handleOpenAddressChangeModal(order)
                                 }
-                                className="cursor-pointer text-left text-xs text-primary-yellow underline hover:text-yellow-600"
+                                className="text-primary-yellow cursor-pointer text-left text-xs underline hover:text-yellow-600"
                               >
                                 Change Address
                               </button>
                             )}
                           </div>
                         </td>
-                        <td className="whitespace-nowrap px-4 py-4 text-sm">
+                        <td className="px-4 py-4 text-sm whitespace-nowrap">
                           {order.signedHerdshareUrl ? (
                             <button
                               onClick={() => handleViewHerdshare(order)}
@@ -2073,7 +2073,7 @@ const OrdersDashboard = () => {
                             <button
                               onClick={() => handleSignHerdshare(order)}
                               disabled={isLoadingAgreement}
-                              className="inline-flex items-center gap-1 rounded-md border-2 border-black bg-primary-yellow px-2 py-1 text-xs font-bold text-black hover:bg-yellow-400"
+                              className="bg-primary-yellow inline-flex items-center gap-1 rounded-md border-2 border-black px-2 py-1 text-xs font-bold text-black hover:bg-yellow-400"
                             >
                               <DocumentTextIcon className="h-4 w-4" />
                               {isLoadingAgreement &&
@@ -2287,7 +2287,7 @@ const OrdersDashboard = () => {
                 <label className="flex items-center gap-2">
                   <input
                     type="checkbox"
-                    className="h-4 w-4 rounded border-2 border-black accent-primary-yellow"
+                    className="accent-primary-yellow h-4 w-4 rounded border-2 border-black"
                     checked={reviewOptions.get("value") === 1}
                     onChange={(e) =>
                       setReviewOptions((prev) => {
@@ -2302,7 +2302,7 @@ const OrdersDashboard = () => {
                 <label className="flex items-center gap-2">
                   <input
                     type="checkbox"
-                    className="h-4 w-4 rounded border-2 border-black accent-primary-yellow"
+                    className="accent-primary-yellow h-4 w-4 rounded border-2 border-black"
                     checked={reviewOptions.get("quality") === 1}
                     onChange={(e) =>
                       setReviewOptions((prev) => {
@@ -2317,7 +2317,7 @@ const OrdersDashboard = () => {
                 <label className="flex items-center gap-2">
                   <input
                     type="checkbox"
-                    className="h-4 w-4 rounded border-2 border-black accent-primary-yellow"
+                    className="accent-primary-yellow h-4 w-4 rounded border-2 border-black"
                     checked={reviewOptions.get("delivery") === 1}
                     onChange={(e) =>
                       setReviewOptions((prev) => {
@@ -2332,7 +2332,7 @@ const OrdersDashboard = () => {
                 <label className="flex items-center gap-2">
                   <input
                     type="checkbox"
-                    className="h-4 w-4 rounded border-2 border-black accent-primary-yellow"
+                    className="accent-primary-yellow h-4 w-4 rounded border-2 border-black"
                     checked={reviewOptions.get("communication") === 1}
                     onChange={(e) =>
                       setReviewOptions((prev) => {

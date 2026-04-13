@@ -1,6 +1,13 @@
 import { StyleSheet, Text, View } from "react-native";
 
-import { ActionButton, EmptyState, ScreenScrollView, ScreenTitle, SellerCard, StatusPill } from "@/components/seller-ui";
+import {
+  ActionButton,
+  EmptyState,
+  ScreenScrollView,
+  ScreenTitle,
+  SellerCard,
+  StatusPill,
+} from "@/components/seller-ui";
 import LoadingScreen from "@/components/loading-screen";
 import { useSellerListings } from "@/hooks/use-seller-bootstrap";
 import { getErrorMessage } from "@/lib/error-utils";
@@ -67,7 +74,9 @@ export default function ListingsScreen() {
         title="Current listing count"
         description="The data comes from cached product events and is filtered by the current seller pubkey."
       >
-        <Text style={styles.countText}>{listingsQuery.data?.length ?? 0} listings</Text>
+        <Text style={styles.countText}>
+          {listingsQuery.data?.length ?? 0} listings
+        </Text>
         {listingsQuery.isError ? (
           <Text style={styles.errorText}>
             {getErrorMessage(
@@ -112,7 +121,10 @@ export default function ListingsScreen() {
             <View style={styles.categoriesWrap}>
               {listing.categories.length > 0 ? (
                 listing.categories.map((category) => (
-                  <View key={`${listing.id}-${category}`} style={styles.categoryChip}>
+                  <View
+                    key={`${listing.id}-${category}`}
+                    style={styles.categoryChip}
+                  >
                     <Text style={styles.categoryChipText}>{category}</Text>
                   </View>
                 ))

@@ -15,7 +15,7 @@ import {
   ModalFooter,
   Input,
   Button,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import { BLUEBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 
 const MyListingsFeed = () => {

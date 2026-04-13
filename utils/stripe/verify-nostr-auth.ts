@@ -41,7 +41,9 @@ export function verifyNostrAuth(
     const actionTag = Array.isArray(signedEvent.tags)
       ? signedEvent.tags.find(
           (tag: unknown) =>
-            Array.isArray(tag) && tag[0] === "action" && typeof tag[1] === "string"
+            Array.isArray(tag) &&
+            tag[0] === "action" &&
+            typeof tag[1] === "string"
         )
       : undefined;
     const actionValue = Array.isArray(actionTag) ? actionTag[1] : undefined;

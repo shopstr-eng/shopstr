@@ -117,7 +117,7 @@ const SingleCommunityPage = () => {
     <div className="flex min-h-screen flex-col bg-white pt-20">
       <div className="container mx-auto max-w-3xl px-4 py-8">
         {/* Community Header - Neo-brutalist Banner */}
-        <div className="mb-8 overflow-hidden rounded-lg border-4 border-black shadow-neo">
+        <div className="shadow-neo mb-8 overflow-hidden rounded-lg border-4 border-black">
           {community.image ? (
             <div
               className="relative h-48 w-full bg-cover bg-center"
@@ -129,7 +129,7 @@ const SingleCommunityPage = () => {
             </div>
           ) : (
             <div className="flex h-48 w-full items-center justify-center bg-gray-200">
-              <p className="text-2xl font-bold uppercase tracking-wide text-gray-600">
+              <p className="text-2xl font-bold tracking-wide text-gray-600 uppercase">
                 Community Banner
               </p>
             </div>

@@ -259,7 +259,7 @@ const PreferencesPage = () => {
 
   return (
     <ProtectedRoute>
-      <div className="flex min-h-screen flex-col bg-white pb-20 pt-24">
+      <div className="flex min-h-screen flex-col bg-white pt-24 pb-20">
         <div className="mx-auto w-full px-4 lg:w-1/2 xl:w-2/5">
           <SettingsBreadCrumbs />
 
@@ -276,7 +276,7 @@ const PreferencesPage = () => {
                     key={mint}
                     className="flex items-center justify-between rounded-lg border-3 border-black bg-white px-4 py-3"
                   >
-                    <div className="flex-1 break-all text-sm">
+                    <div className="flex-1 text-sm break-all">
                       {mint}
                       {index === 0 && (
                         <span className="ml-2 text-xs text-gray-500">
@@ -338,7 +338,7 @@ const PreferencesPage = () => {
                     key={relay}
                     className="flex items-center justify-between rounded-lg border-3 border-black bg-white px-4 py-3"
                   >
-                    <div className="flex-1 break-all text-sm">{relay}</div>
+                    <div className="flex-1 text-sm break-all">{relay}</div>
                     {relays.length > 1 && (
                       <button
                         onClick={() => deleteRelay(relay, "all")}
@@ -383,7 +383,7 @@ const PreferencesPage = () => {
                     key={relay}
                     className="flex items-center justify-between rounded-lg border-3 border-black bg-white px-4 py-3"
                   >
-                    <div className="flex-1 break-all text-sm">{relay}</div>
+                    <div className="flex-1 text-sm break-all">{relay}</div>
                     {readRelays.length > 1 && (
                       <button
                         onClick={() => deleteRelay(relay, "read")}
@@ -428,7 +428,7 @@ const PreferencesPage = () => {
                     key={relay}
                     className="flex items-center justify-between rounded-lg border-3 border-black bg-white px-4 py-3"
                   >
-                    <div className="flex-1 break-all text-sm">{relay}</div>
+                    <div className="flex-1 text-sm break-all">{relay}</div>
                     {writeRelays.length > 1 && (
                       <button
                         onClick={() => deleteRelay(relay, "write")}
@@ -473,7 +473,7 @@ const PreferencesPage = () => {
                     key={server}
                     className="flex items-center justify-between rounded-lg border-3 border-black bg-white px-4 py-3"
                   >
-                    <div className="flex-1 break-all text-sm">
+                    <div className="flex-1 text-sm break-all">
                       {server}
                       {index === 0 && (
                         <span className="ml-2 text-xs text-gray-500">

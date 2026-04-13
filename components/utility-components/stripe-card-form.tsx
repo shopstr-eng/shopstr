@@ -51,7 +51,7 @@ function CheckoutForm({
 
   return (
     <form onSubmit={handleSubmit} className="w-full">
-      <div className="rounded-md border-2 border-black bg-white p-4 shadow-neo">
+      <div className="shadow-neo rounded-md border-2 border-black bg-white p-4">
         <PaymentElement
           options={{
             layout: "tabs",
@@ -60,7 +60,7 @@ function CheckoutForm({
       </div>
 
       {errorMessage && (
-        <div className="mt-3 rounded-md border-2 border-red-500 bg-red-50 px-4 py-3 text-sm font-bold text-red-600 shadow-neo">
+        <div className="shadow-neo mt-3 rounded-md border-2 border-red-500 bg-red-50 px-4 py-3 text-sm font-bold text-red-600">
           {errorMessage}
         </div>
       )}
@@ -68,7 +68,7 @@ function CheckoutForm({
       <button
         type="submit"
         disabled={!stripe || !elements || isProcessing}
-        className="mt-4 flex w-full transform items-center justify-center gap-2 rounded-md border-2 border-black bg-black px-4 py-3 font-bold text-white shadow-neo transition-transform hover:-translate-y-0.5 active:translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
+        className="shadow-neo mt-4 flex w-full transform items-center justify-center gap-2 rounded-md border-2 border-black bg-black px-4 py-3 font-bold text-white transition-transform hover:-translate-y-0.5 active:translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
       >
         {isProcessing ? (
           <>
@@ -124,7 +124,7 @@ export default function StripeCardForm({
 
   if (loading || !stripeInstance) {
     return (
-      <div className="flex w-full flex-col items-center justify-center rounded-md border-2 border-black bg-white py-8 shadow-neo">
+      <div className="shadow-neo flex w-full flex-col items-center justify-center rounded-md border-2 border-black bg-white py-8">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-black"></div>
         <p className="mt-3 text-sm font-bold text-black">
           Loading payment form...

@@ -1,14 +1,10 @@
 import { useState, useEffect, useContext } from "react";
 import { useRouter } from "next/router";
-import { ArrowLongRightIcon, InformationCircleIcon } from "@heroicons/react/24/outline";
 import {
-  Card,
-  CardBody,
-  Button,
-  Input,
-  Image,
-  Tooltip,
-} from "@heroui/react";
+  ArrowLongRightIcon,
+  InformationCircleIcon,
+} from "@heroicons/react/24/outline";
+import { Card, CardBody, Button, Input, Image, Tooltip } from "@heroui/react";
 import { BLUEBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES"; // Changed to BLUE for neo-brutalist theme
 import {
   generateKeys,
@@ -84,7 +80,7 @@ const Keys = () => {
       <div className="flex h-[100vh] flex-col bg-white pt-24">
         <div className="mx-auto w-full max-w-2xl px-4 py-6">
           {/* Styling from keys.tsx (neo-brutalist card) */}
-          <Card className="rounded-md border-4 border-black bg-white shadow-neo">
+          <Card className="shadow-neo rounded-md border-4 border-black bg-white">
             <CardBody className="p-8">
               {/* Styling from keys.tsx (mb-6, gap-3, text-black) */}
               <div className="mb-6 flex flex-row items-center justify-center gap-3">

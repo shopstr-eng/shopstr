@@ -170,7 +170,7 @@ export default function ShopPage() {
         </p>
         <a
           href="/marketplace"
-          className="mt-6 rounded-lg bg-primary-blue px-6 py-3 font-bold text-white transition-transform hover:-translate-y-0.5"
+          className="bg-primary-blue mt-6 rounded-lg px-6 py-3 font-bold text-white transition-transform hover:-translate-y-0.5"
         >
           Browse Marketplace
         </a>

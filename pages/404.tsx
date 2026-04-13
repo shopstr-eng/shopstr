@@ -10,7 +10,7 @@ export default function Custom404() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-white px-4">
       {/* Rectangular card container with proper padding */}
-      <div className="w-full max-w-2xl rounded-md border-2 border-black bg-white px-8 pb-8 pt-8 text-center shadow-neo">
+      <div className="shadow-neo w-full max-w-2xl rounded-md border-2 border-black bg-white px-8 pt-8 pb-8 text-center">
         <h1 className="mb-2 text-9xl font-bold text-black">404</h1>
         <h2 className="mb-6 text-2xl font-medium text-black md:text-3xl">
           Page Not Found

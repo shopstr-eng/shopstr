@@ -87,7 +87,7 @@ export default function FreeShippingNotification({
           animate={{ opacity: 1, x: 0, y: 0 }}
           exit={{ opacity: 0, x: 50, y: -10 }}
           transition={{ type: "spring", stiffness: 300, damping: 25 }}
-          className="fixed right-4 top-20 z-50 w-80 rounded-md border-2 border-black bg-white p-4 shadow-neo"
+          className="shadow-neo fixed top-20 right-4 z-50 w-80 rounded-md border-2 border-black bg-white p-4"
         >
           <div className="mb-2 flex items-center justify-between">
             <div className="flex items-center gap-2">

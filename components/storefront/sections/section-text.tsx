@@ -17,7 +17,7 @@ export default function SectionText({ section }: SectionTextProps) {
         </h2>
       )}
       {section.body && (
-        <div className="font-body whitespace-pre-line text-lg leading-relaxed opacity-80">
+        <div className="font-body text-lg leading-relaxed whitespace-pre-line opacity-80">
           {section.body}
         </div>
       )}

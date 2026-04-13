@@ -1,6 +1,6 @@
 import { useState, useContext } from "react";
 import type React from "react";
-import { Button } from "@nextui-org/react";
+import { Button } from "@heroui/react";
 import { WHITEBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { SignerContext } from "./nostr-context-provider";
 import {

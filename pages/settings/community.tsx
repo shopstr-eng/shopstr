@@ -240,7 +240,7 @@ const CommunityManagementPage = () => {
                   {myCommunities.map((community) => (
                     <div
                       key={community.id}
-                      className="flex items-center justify-between rounded-md border-3 border-black bg-white p-4 shadow-neo"
+                      className="shadow-neo flex items-center justify-between rounded-md border-3 border-black bg-white p-4"
                     >
                       <span className="text-lg font-bold text-black">
                         {community.name}
@@ -255,7 +255,7 @@ const CommunityManagementPage = () => {
                         </Button>
                         <Button
                           size="sm"
-                          className="transform rounded-md border-2 border-black bg-red-500 px-4 py-2 font-bold text-white shadow-neo transition-transform hover:-translate-y-0.5 active:translate-y-0.5"
+                          className="shadow-neo transform rounded-md border-2 border-black bg-red-500 px-4 py-2 font-bold text-white transition-transform hover:-translate-y-0.5 active:translate-y-0.5"
                           onClick={() => handleDelete(community.id)}
                         >
                           Delete
@@ -322,7 +322,7 @@ const CommunityManagementPage = () => {
               </ModalBody>
               <ModalFooter>
                 <Button
-                  className="transform rounded-md border-2 border-black bg-white px-4 py-2 font-bold text-black shadow-neo transition-transform hover:-translate-y-0.5 active:translate-y-0.5"
+                  className="shadow-neo transform rounded-md border-2 border-black bg-white px-4 py-2 font-bold text-black transition-transform hover:-translate-y-0.5 active:translate-y-0.5"
                   onClick={handlePasswordModalClose}
                 >
                   Cancel

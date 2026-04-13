@@ -30,7 +30,7 @@ const CommunitiesDiscoveryPage = () => {
   }, [otherCommunities, searchQuery]);
 
   return (
-    <div className="flex min-h-screen flex-col bg-white pb-20 pt-24">
+    <div className="flex min-h-screen flex-col bg-white pt-24 pb-20">
       <div className="container mx-auto max-w-7xl px-4">
         {isLoading && communities.size === 0 ? (
           <div className="flex justify-center pt-10">

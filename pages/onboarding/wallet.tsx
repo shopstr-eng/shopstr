@@ -6,7 +6,7 @@ import {
   WalletIcon,
   ExclamationCircleIcon,
 } from "@heroicons/react/24/outline";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import { PRIMARYBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { saveNWCString } from "@/utils/nostr/nostr-helper-functions";
 import { NostrWebLNProvider } from "@getalby/sdk";
 
@@ -109,7 +109,7 @@ const OnboardingWallet = () => {
 
               <div className="flex flex-col gap-3">
                 <Button
-                  className={SHOPSTRBUTTONCLASSNAMES}
+                  className={PRIMARYBUTTONCLASSNAMES}
                   onClick={handleConnect}
                   isLoading={isLoading}
                   isDisabled={!nwcString}

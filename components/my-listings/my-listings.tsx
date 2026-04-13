@@ -94,7 +94,7 @@ const MyListingsPage = () => {
   };
 
   const MobileMenu = () => (
-    <div className="absolute left-0 top-full z-10 mt-2 w-48 rounded-md border-2 border-black bg-white shadow-neo">
+    <div className="shadow-neo absolute top-full left-0 z-10 mt-2 w-48 rounded-md border-2 border-black bg-white">
       <div className="py-1">
         <Button
           className="w-full bg-transparent px-4 py-2 text-left text-sm font-bold text-black hover:bg-gray-100"
@@ -145,7 +145,7 @@ const MyListingsPage = () => {
         />
         {shopBannerURL != "" && !isFetchingShop ? (
           <>
-            <div className="mb-6 flex h-auto w-full items-center justify-center overflow-hidden rounded-lg border-4 border-black shadow-neo">
+            <div className="shadow-neo mb-6 flex h-auto w-full items-center justify-center overflow-hidden rounded-lg border-4 border-black">
               <img
                 src={sanitizeUrl(shopBannerURL)}
                 alt="Shop Banner"

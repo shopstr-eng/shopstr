@@ -7,7 +7,7 @@ import {
   ModalBody,
   ModalFooter,
   Button,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import {
   CreditCardIcon,
   ArrowTopRightOnSquareIcon,
@@ -129,7 +129,7 @@ const StripeConnectModal: React.FC<StripeConnectModalProps> = ({
     >
       <ModalContent>
         <ModalHeader className="flex items-center gap-2 text-black">
-          <CreditCardIcon className="h-6 w-6 text-primary-blue" />
+          <CreditCardIcon className="text-primary-blue h-6 w-6" />
           <span>Set Up Stripe Payments</span>
         </ModalHeader>
         <ModalBody className="text-black">
@@ -139,7 +139,7 @@ const StripeConnectModal: React.FC<StripeConnectModalProps> = ({
           </p>
           <div className="mt-3 space-y-2">
             <div className="flex items-start gap-2">
-              <span className="mt-0.5 text-lg font-bold text-primary-blue">
+              <span className="text-primary-blue mt-0.5 text-lg font-bold">
                 1.
               </span>
               <span className="text-sm">
@@ -147,7 +147,7 @@ const StripeConnectModal: React.FC<StripeConnectModalProps> = ({
               </span>
             </div>
             <div className="flex items-start gap-2">
-              <span className="mt-0.5 text-lg font-bold text-primary-blue">
+              <span className="text-primary-blue mt-0.5 text-lg font-bold">
                 2.
               </span>
               <span className="text-sm">
@@ -156,7 +156,7 @@ const StripeConnectModal: React.FC<StripeConnectModalProps> = ({
               </span>
             </div>
             <div className="flex items-start gap-2">
-              <span className="mt-0.5 text-lg font-bold text-primary-blue">
+              <span className="text-primary-blue mt-0.5 text-lg font-bold">
                 3.
               </span>
               <span className="text-sm">

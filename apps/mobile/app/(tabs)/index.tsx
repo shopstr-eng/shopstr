@@ -5,7 +5,13 @@ import { StyleSheet, Text, View } from "react-native";
 
 import { createSignedStripeConnectAuthEvent } from "@milk-market/nostr";
 
-import { ActionButton, ScreenScrollView, ScreenTitle, SellerCard, StatusPill } from "@/components/seller-ui";
+import {
+  ActionButton,
+  ScreenScrollView,
+  ScreenTitle,
+  SellerCard,
+  StatusPill,
+} from "@/components/seller-ui";
 import { useSellerBootstrap } from "@/hooks/use-seller-bootstrap";
 import { mobileApiClient } from "@/lib/api-client";
 import { getErrorMessage } from "@/lib/error-utils";
@@ -178,9 +184,8 @@ export default function DashboardScreen() {
     setStripeActionMessage("");
 
     try {
-      const createAccountSignedEvent = createSignedStripeConnectAuthEvent(
-        session
-      );
+      const createAccountSignedEvent =
+        createSignedStripeConnectAuthEvent(session);
       const account = await mobileApiClient.createStripeConnectAccount({
         pubkey: session.pubkey,
         signedEvent: createAccountSignedEvent,
@@ -240,7 +245,10 @@ export default function DashboardScreen() {
         description="Phase 2 focuses on secure session restore, storefront basics, Stripe status, and read-only listing visibility."
       />
 
-      <SellerCard title="Seller session" description="Your mobile seller workspace uses the same Milk Market identity model as the web app.">
+      <SellerCard
+        title="Seller session"
+        description="Your mobile seller workspace uses the same Milk Market identity model as the web app."
+      >
         <View style={styles.rowBetween}>
           <View style={styles.metaBlock}>
             <Text style={styles.metaLabel}>Auth method</Text>
@@ -248,7 +256,9 @@ export default function DashboardScreen() {
           </View>
           <View style={styles.metaBlock}>
             <Text style={styles.metaLabel}>Pubkey</Text>
-            <Text style={styles.metaValueShort}>{session.pubkey.slice(0, 12)}...</Text>
+            <Text style={styles.metaValueShort}>
+              {session.pubkey.slice(0, 12)}...
+            </Text>
           </View>
         </View>
         {session.email ? (
@@ -257,7 +267,11 @@ export default function DashboardScreen() {
             <Text style={styles.metaValue}>{session.email}</Text>
           </View>
         ) : null}
-        <ActionButton label="Sign out" onPress={handleSignOut} variant="secondary" />
+        <ActionButton
+          label="Sign out"
+          onPress={handleSignOut}
+          variant="secondary"
+        />
       </SellerCard>
 
       <SellerCard
@@ -268,11 +282,11 @@ export default function DashboardScreen() {
           <View key={item.label} style={styles.rowBetween}>
             <Text style={styles.checkLabel}>{item.label}</Text>
             <StatusPill
-            tone={item.complete ? "success" : "warning"}
-            label={item.complete ? "Done" : "Next"}
-          />
-        </View>
-      ))}
+              tone={item.complete ? "success" : "warning"}
+              label={item.complete ? "Done" : "Next"}
+            />
+          </View>
+        ))}
       </SellerCard>
 
       <SellerCard
@@ -312,7 +326,10 @@ export default function DashboardScreen() {
         {listingsErrorMessage ? (
           <Text style={styles.errorText}>{listingsErrorMessage}</Text>
         ) : null}
-        <ActionButton label="Edit storefront basics" onPress={() => router.push("/storefront" as Href)} />
+        <ActionButton
+          label="Edit storefront basics"
+          onPress={() => router.push("/storefront" as Href)}
+        />
         <ActionButton
           label="Review listings"
           onPress={() => router.push("/listings" as Href)}
@@ -388,10 +405,10 @@ export default function DashboardScreen() {
                   await stripeStatusQuery.refetch();
                 }
               : stripeStatus?.chargesEnabled
-              ? () => {
-                  stripeStatusQuery.refetch().catch(console.error);
-                }
-              : handleStripeConnect
+                ? () => {
+                    stripeStatusQuery.refetch().catch(console.error);
+                  }
+                : handleStripeConnect
           }
           loading={stripeActionLoading || stripeStatusQuery.isFetching}
         />

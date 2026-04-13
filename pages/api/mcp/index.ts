@@ -570,9 +570,8 @@ function registerPurchaseTools(
         return permissionError();
 
       try {
-        const { fetchAllProductsFromDb } = await import(
-          "@/utils/db/db-service"
-        );
+        const { fetchAllProductsFromDb } =
+          await import("@/utils/db/db-service");
         const products = await fetchAllProductsFromDb();
         const product = products.find((p: any) => p.id === productId);
 

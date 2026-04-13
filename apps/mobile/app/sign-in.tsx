@@ -14,7 +14,9 @@ import {
 export default function SignInScreen() {
   const router = useRouter();
   const session = useSessionStore((state) => state.session);
-  const lastUsedAuthMethod = useSessionUiStore((state) => state.lastUsedAuthMethod);
+  const lastUsedAuthMethod = useSessionUiStore(
+    (state) => state.lastUsedAuthMethod
+  );
 
   if (session) {
     return <Redirect href="/" />;
@@ -52,7 +54,8 @@ export default function SignInScreen() {
         <Text style={styles.tipTitle}>Current focus</Text>
         <Text style={styles.tipBody}>
           This mobile phase is seller-only. After sign-in, you can review seller
-          setup status, edit storefront basics, and view listings in read-only form.
+          setup status, edit storefront basics, and view listings in read-only
+          form.
         </Text>
         {lastUsedAuthMethod ? (
           <Text style={styles.tipMeta}>

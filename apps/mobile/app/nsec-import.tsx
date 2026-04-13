@@ -2,9 +2,18 @@ import { useRouter } from "expo-router";
 import { useState } from "react";
 import { StyleSheet, Text } from "react-native";
 
-import { createSellerSessionFromNsec, validateSellerNsec } from "@milk-market/nostr";
+import {
+  createSellerSessionFromNsec,
+  validateSellerNsec,
+} from "@milk-market/nostr";
 
-import { ActionButton, ScreenScrollView, ScreenTitle, SellerCard, SellerField } from "@/components/seller-ui";
+import {
+  ActionButton,
+  ScreenScrollView,
+  ScreenTitle,
+  SellerCard,
+  SellerField,
+} from "@/components/seller-ui";
 import { useSessionUiStore } from "@/stores/session-ui-store";
 import { useSessionStore } from "@/stores/session-store";
 import { sellerThemeTokens } from "@/theme/tokens";
@@ -12,7 +21,9 @@ import { sellerThemeTokens } from "@/theme/tokens";
 export default function NsecImportScreen() {
   const router = useRouter();
   const saveSession = useSessionStore((state) => state.saveSession);
-  const setLastUsedAuthMethod = useSessionUiStore((state) => state.setLastUsedAuthMethod);
+  const setLastUsedAuthMethod = useSessionUiStore(
+    (state) => state.setLastUsedAuthMethod
+  );
 
   const [nsec, setNsec] = useState("");
   const [error, setError] = useState("");

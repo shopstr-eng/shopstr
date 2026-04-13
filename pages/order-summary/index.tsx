@@ -139,8 +139,8 @@ export default function OrderSummary() {
   return (
     <ProtectedRoute>
       <div className="min-h-screen bg-white">
-        <div className="mx-auto max-w-4xl px-4 pb-8 pt-24 sm:px-6 lg:px-8">
-          <div className="mb-8 rounded-lg border-4 border-black bg-white p-6 shadow-neo sm:p-8">
+        <div className="mx-auto max-w-4xl px-4 pt-24 pb-8 sm:px-6 lg:px-8">
+          <div className="shadow-neo mb-8 rounded-lg border-4 border-black bg-white p-6 sm:p-8">
             <div className="mb-6 flex flex-col items-center border-b-2 border-gray-200 pb-6">
               <div className="mb-3 flex h-16 w-16 items-center justify-center rounded-full border-2 border-black bg-green-100">
                 <CheckCircleIcon className="h-10 w-10 text-green-600" />
@@ -469,7 +469,7 @@ export default function OrderSummary() {
                 {latestProducts.map((product) => (
                   <div
                     key={product.id}
-                    className="overflow-hidden rounded-lg border-4 border-black shadow-neo transition-transform hover:-translate-y-1"
+                    className="shadow-neo overflow-hidden rounded-lg border-4 border-black transition-transform hover:-translate-y-1"
                   >
                     <ProductCard
                       productData={product}

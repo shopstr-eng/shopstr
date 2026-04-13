@@ -42,7 +42,7 @@ export const RawEventModal = ({
             className="w-full items-start rounded-md border-2 border-black bg-white"
           >
             <div className="max-h-[60vh] w-full overflow-y-auto">
-              <pre className="whitespace-pre-wrap break-all font-mono text-xs text-black">
+              <pre className="font-mono text-xs break-all whitespace-pre-wrap text-black">
                 {JSON.stringify(rawEvent, null, 2)}
               </pre>
             </div>
@@ -89,7 +89,7 @@ export const EventIdModal = ({
                 codeString={rawEvent?.id}
                 className="w-full rounded-md border-2 border-black bg-white"
               >
-                <span className="whitespace-normal break-all font-mono text-sm text-black">
+                <span className="font-mono text-sm break-all whitespace-normal text-black">
                   {rawEvent?.id}
                 </span>
               </Snippet>
@@ -105,7 +105,7 @@ export const EventIdModal = ({
                   codeString={nip19.noteEncode(rawEvent.id)}
                   className="w-full rounded-md border-2 border-black bg-white"
                 >
-                  <span className="whitespace-normal break-all font-mono text-sm text-black">
+                  <span className="font-mono text-sm break-all whitespace-normal text-black">
                     {nip19.noteEncode(rawEvent.id)}
                   </span>
                 </Snippet>

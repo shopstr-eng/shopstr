@@ -1,4 +1,7 @@
-import type { NostrEventRecord, StripeConnectStatus } from "@milk-market/domain";
+import type {
+  NostrEventRecord,
+  StripeConnectStatus,
+} from "@milk-market/domain";
 
 export const API_CLIENT_PACKAGE_READY = true as const;
 
@@ -202,13 +205,16 @@ export function createMilkMarketApiClient(
       payload: DeleteStorefrontSlugPayload,
       signedEvent: unknown
     ) {
-      return requestJson<{ success: boolean }>("/api/storefront/register-slug", {
-        method: "DELETE",
-        body: {
-          ...payload,
-          signedEvent,
-        },
-      });
+      return requestJson<{ success: boolean }>(
+        "/api/storefront/register-slug",
+        {
+          method: "DELETE",
+          body: {
+            ...payload,
+            signedEvent,
+          },
+        }
+      );
     },
     getStripeConnectStatus(payload: StripeAuthPayload) {
       return requestJson<StripeConnectStatus>(

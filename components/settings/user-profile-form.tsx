@@ -219,7 +219,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
           </div>
           <FileUploaderButton
             isIconOnly={true}
-            className={`!min-w-10 absolute bottom-0 right-0 z-20 !h-10 !w-10 ${WHITEBUTTONCLASSNAMES}`}
+            className={`absolute right-0 bottom-0 z-20 !h-10 !w-10 !min-w-10 ${WHITEBUTTONCLASSNAMES}`}
             imgCallbackOnUpload={(imgUrl) => setValue("picture", imgUrl)}
           />
         </div>
@@ -228,7 +228,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
       {/* NPub Display */}
       {!isOnboarding && (
         <div className="mb-4 flex items-center justify-between gap-2 overflow-hidden rounded-md border-3 border-black bg-white p-3">
-          <p className="break-all font-mono text-sm font-medium text-black">
+          <p className="font-mono text-sm font-medium break-all text-black">
             {userNPub!}
           </p>
           <Tooltip
@@ -257,7 +257,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
       {/* NSec Display */}
       {!isOnboarding && (userNSec || signer instanceof NostrNSecSigner) ? (
         <div className="mb-4 flex items-center justify-between gap-2 overflow-hidden rounded-md border-3 border-black bg-white p-3">
-          <p className="break-all font-mono text-sm font-medium text-black">
+          <p className="font-mono text-sm font-medium break-all text-black">
             {isNSecVisible
               ? userNSec
               : "•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••"}
@@ -320,7 +320,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
         <div className="mb-12 flex items-center justify-between gap-2 overflow-hidden rounded-md border-3 border-black bg-white p-3">
           <div className="min-w-0 flex-1">
             <p className="mb-1 text-xs font-bold text-gray-500">ncryptsec</p>
-            <p className="break-all font-mono text-sm font-medium text-black">
+            <p className="font-mono text-sm font-medium break-all text-black">
               {isNcryptsecVisible
                 ? userNcryptsec
                 : "•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••"}
@@ -766,7 +766,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
               href="https://nostr.com"
               target="_blank"
               rel="noopener noreferrer"
-              className="font-bold text-primary-yellow hover:underline"
+              className="text-primary-yellow font-bold hover:underline"
             >
               Nostr keys
             </a>
@@ -955,25 +955,13 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
                 onChange={(e) => onChange(e.target.value)}
                 onBlur={onBlur}
               >
-                <SelectItem
-                  key="ecash"
-                  value="ecash"
-                  className="font-medium text-black"
-                >
+                <SelectItem key="ecash" className="font-medium text-black">
                   Cashu (Bitcoin)
                 </SelectItem>
-                <SelectItem
-                  key="lightning"
-                  value="lightning"
-                  className="font-medium text-black"
-                >
+                <SelectItem key="lightning" className="font-medium text-black">
                   Lightning (Bitcoin)
                 </SelectItem>
-                <SelectItem
-                  key="fiat"
-                  value="fiat"
-                  className="font-medium text-black"
-                >
+                <SelectItem key="fiat" className="font-medium text-black">
                   Local Currency (Fiat)
                 </SelectItem>
               </Select>

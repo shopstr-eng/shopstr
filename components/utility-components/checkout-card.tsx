@@ -499,7 +499,7 @@ export default function CheckoutCard({
             (productData.sizeQuantities?.get(size) || 0) > 0 ? (
               <button
                 key={size}
-                className={`rounded-md border-2 border-black p-2 text-sm font-bold shadow-neo transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
+                className={`shadow-neo rounded-md border-2 border-black p-2 text-sm font-bold transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
                   selectedSize === size
                     ? "bg-primary-yellow text-black"
                     : "bg-white text-black"
@@ -526,8 +526,8 @@ export default function CheckoutCard({
     }
     const fetchSatsEstimate = async () => {
       try {
-        const { fiat } = await import("@getalby/lightning-tools");
-        const numSats = await fiat.getSatoshiValue({
+        const { getSatoshiValue } = await import("@getalby/lightning-tools");
+        const numSats = await getSatoshiValue({
           amount: currentPrice,
           currency: productData.currency,
         });
@@ -612,7 +612,7 @@ export default function CheckoutCard({
                             alt={`Product image ${index + 1}`}
                             className={`w-full cursor-pointer rounded-md object-cover ${
                               image === selectedImage
-                                ? "border-2 border-primary-yellow"
+                                ? "border-primary-yellow border-2"
                                 : "border-2 border-transparent"
                             }`}
                             style={{ aspectRatio: "1 / 1" }}
@@ -625,7 +625,7 @@ export default function CheckoutCard({
                   {productData.images.length > 3 && (
                     <button
                       onClick={() => setShowAllImages(!showAllImages)}
-                      className="flex flex-col items-center rounded-md border-2 border-black bg-white py-1 shadow-neo transition-transform hover:-translate-y-0.5 active:translate-y-0.5"
+                      className="shadow-neo flex flex-col items-center rounded-md border-2 border-black bg-white py-1 transition-transform hover:-translate-y-0.5 active:translate-y-0.5"
                     >
                       {showAllImages ? (
                         <ArrowLongUpIcon className="h-5 w-5" />
@@ -638,7 +638,7 @@ export default function CheckoutCard({
 
                 {/* Main Image */}
                 <div className="w-3/4">
-                  <div className="rounded-md border-2 border-black bg-white p-4 shadow-neo">
+                  <div className="shadow-neo rounded-md border-2 border-black bg-white p-4">
                     <img
                       src={selectedImage}
                       alt="Selected product image"
@@ -662,7 +662,7 @@ export default function CheckoutCard({
                     }
                   />
                   {merchantQuality !== "" && (
-                    <div className="inline-flex items-center gap-2 rounded-md border-2 border-black bg-white px-3 py-1 shadow-neo">
+                    <div className="shadow-neo inline-flex items-center gap-2 rounded-md border-2 border-black bg-white px-3 py-1">
                       {merchantReview >= 0.5 ? (
                         <>
                           <span className="text-lg">😀</span>
@@ -699,7 +699,7 @@ export default function CheckoutCard({
                           isIconOnly
                           variant="light"
                           size="sm"
-                          className="min-w-8 h-8"
+                          className="h-8 min-w-8"
                         >
                           <EllipsisVerticalIcon className="h-6 w-6 text-gray-500" />
                         </Button>
@@ -731,13 +731,13 @@ export default function CheckoutCard({
 
                 {/* Description */}
                 <div>
-                  <p className="whitespace-pre-wrap break-words text-base text-black">
+                  <p className="text-base break-words whitespace-pre-wrap text-black">
                     {renderSummary()}
                   </p>
                   {productData.summary.length > SUMMARY_CHARACTER_LIMIT && (
                     <button
                       onClick={toggleExpand}
-                      className="mt-2 text-sm font-bold text-black underline hover:text-primary-blue"
+                      className="hover:text-primary-blue mt-2 text-sm font-bold text-black underline"
                     >
                       {isExpanded ? "show less" : "show more"}
                     </button>
@@ -901,7 +901,7 @@ export default function CheckoutCard({
                     <div className="flex items-center gap-2">
                       <Chip
                         startContent={locationAvatar(productData.location)}
-                        className="rounded-full border-2 border-black bg-white px-3 py-1 font-bold shadow-neo"
+                        className="shadow-neo rounded-full border-2 border-black bg-white px-3 py-1 font-bold"
                       >
                         <span className="text-black">
                           📍 {productData.location}
@@ -915,7 +915,7 @@ export default function CheckoutCard({
                         <>
                           {/* Buy Now - Solid Yellow */}
                           <Button
-                            className={`rounded-md border-2 border-black bg-primary-yellow px-6 py-2 font-bold text-black shadow-neo transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
+                            className={`bg-primary-yellow shadow-neo rounded-md border-2 border-black px-6 py-2 font-bold text-black transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
                               (hasSizes && !selectedSize) ||
                               (hasVolumes && !selectedVolume) ||
                               (hasWeights && !selectedWeight)
@@ -936,7 +936,7 @@ export default function CheckoutCard({
 
                           {/* Add To Cart - Light Blue */}
                           <Button
-                            className={`rounded-md border-2 border-black bg-blue-100 px-6 py-2 font-bold text-black shadow-neo transition-transform hover:-translate-y-0.5 hover:bg-blue-200 active:translate-y-0.5 ${
+                            className={`shadow-neo rounded-md border-2 border-black bg-blue-100 px-6 py-2 font-bold text-black transition-transform hover:-translate-y-0.5 hover:bg-blue-200 active:translate-y-0.5 ${
                               isAdded ||
                               (hasSizes && !selectedSize) ||
                               (hasVolumes && !selectedVolume) ||
@@ -959,7 +959,7 @@ export default function CheckoutCard({
                         </>
                       ) : (
                         <Button
-                          className="cursor-not-allowed rounded-md border-2 border-black bg-gray-300 px-6 py-2 font-bold text-gray-600 opacity-50 shadow-neo"
+                          className="shadow-neo cursor-not-allowed rounded-md border-2 border-black bg-gray-300 px-6 py-2 font-bold text-gray-600 opacity-50"
                           disabled
                           size="lg"
                         >
@@ -969,7 +969,7 @@ export default function CheckoutCard({
 
                       {/* Share - Light Blue */}
                       <Button
-                        className="rounded-md border-2 border-black bg-blue-100 px-6 py-2 font-bold text-black shadow-neo transition-transform hover:-translate-y-0.5 hover:bg-blue-200 active:translate-y-0.5"
+                        className="shadow-neo rounded-md border-2 border-black bg-blue-100 px-6 py-2 font-bold text-black transition-transform hover:-translate-y-0.5 hover:bg-blue-200 active:translate-y-0.5"
                         onClick={handleShare}
                         size="lg"
                       >
@@ -985,7 +985,7 @@ export default function CheckoutCard({
                     or{" "}
                     <span
                       onClick={() => handleSendMessage(productData.pubkey)}
-                      className="cursor-pointer font-semibold underline hover:text-primary-blue"
+                      className="hover:text-primary-blue cursor-pointer font-semibold underline"
                     >
                       contact seller
                     </span>
@@ -1006,7 +1006,7 @@ export default function CheckoutCard({
                       ([reviewerPubkey, reviewData]) => (
                         <div
                           key={reviewerPubkey}
-                          className="rounded-md border-2 border-black bg-white p-4 shadow-neo"
+                          className="shadow-neo rounded-md border-2 border-black bg-white p-4"
                         >
                           <div className="mb-3 flex items-center gap-2">
                             <ProfileWithDropdown
@@ -1027,7 +1027,7 @@ export default function CheckoutCard({
                                   return (
                                     <Chip
                                       key={index}
-                                      className={`border-2 border-black font-bold shadow-neo ${
+                                      className={`shadow-neo border-2 border-black font-bold ${
                                         value === "1"
                                           ? "bg-green-400"
                                           : "bg-red-400"
@@ -1042,7 +1042,7 @@ export default function CheckoutCard({
                                   return (
                                     <Chip
                                       key={index}
-                                      className={`border-2 border-black font-bold shadow-neo ${
+                                      className={`shadow-neo border-2 border-black font-bold ${
                                         value === "1"
                                           ? "bg-green-400"
                                           : "bg-red-400"
@@ -1059,7 +1059,7 @@ export default function CheckoutCard({
                             {reviewData.map(([category, value], index) => {
                               if (category === "comment" && value !== "") {
                                 return (
-                                  <p key={index} className="italic text-black">
+                                  <p key={index} className="text-black italic">
                                     &ldquo;{value}&rdquo;
                                   </p>
                                 );
@@ -1079,7 +1079,7 @@ export default function CheckoutCard({
                     )}
                   </div>
                 ) : (
-                  <div className="rounded-md border-2 border-black bg-white p-10 text-center shadow-neo">
+                  <div className="shadow-neo rounded-md border-2 border-black bg-white p-10 text-center">
                     <p className="text-3xl font-bold text-black">
                       No reviews . . . yet!
                     </p>

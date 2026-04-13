@@ -198,7 +198,7 @@ export default function Faq() {
         />
       </Head>
       {/* Main container with new background pattern */}
-      <div className="flex min-h-screen flex-col bg-white bg-grid-pattern py-8 md:pb-20">
+      <div className="bg-grid-pattern flex min-h-screen flex-col bg-white py-8 md:pb-20">
         {/* Centered content with a smaller max-width for the FAQ layout */}
         <div className="container mx-auto max-w-4xl px-4">
           <div className="mb-12">
@@ -231,7 +231,7 @@ export default function Faq() {
                   return (
                     <div
                       key={item.title}
-                      className="rounded-lg border-2 border-black bg-white shadow-neo"
+                      className="shadow-neo rounded-lg border-2 border-black bg-white"
                     >
                       <button
                         onClick={() => handleToggle(currentIndex)}
@@ -242,7 +242,7 @@ export default function Faq() {
                       </button>
                       {/* Content area that slides open/closed */}
                       <div
-                        className={`overflow-hidden duration-300 ease-in-out transition-all ${
+                        className={`overflow-hidden transition-all duration-300 ease-in-out ${
                           isOpen ? "max-h-screen" : "max-h-0"
                         }`}
                       >

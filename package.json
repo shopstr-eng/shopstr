@@ -37,10 +37,14 @@
     "@getalby/sdk": "7.0.0",
     "@heroicons/react": "2.2.0",
     "@heroui/react": "2.8.10",
+    "@milk-market/api-client": "file:./packages/api-client",
+    "@milk-market/domain": "file:./packages/domain",
+    "@milk-market/nostr": "file:./packages/nostr",
     "@modelcontextprotocol/sdk": "1.29.0",
     "@sendgrid/mail": "8.1.6",
     "@stripe/react-stripe-js": "5.6.0",
     "@stripe/stripe-js": "8.8.0",
+    "@tailwindcss/postcss": "4.2.2",
     "@types/formidable": "3.4.5",
     "@types/pg": "8.15.4",
     "@typescript-eslint/eslint-plugin": "8.58.1",
@@ -48,10 +52,10 @@
     "autoprefixer": "10.4.27",
     "chart.js": "4.5.1",
     "crypto-js": "4.2.0",
-    "dexie": "3.2.4",
+    "dexie": "4.4.2",
     "dexie-react-hooks": "4.4.0",
     "eslint": "10.2.0",
-    "eslint-config-next": "13.3.0",
+    "eslint-config-next": "16.2.2",
     "formidable": "3.5.4",
     "framer-motion": "12.38.0",
     "next": "16.2.3",
@@ -69,10 +73,7 @@
     "stripe": "19.0.0",
     "tailwindcss": "4.2.2",
     "uuid": "13.0.0",
-    "ws": "8.19.0",
-    "@milk-market/domain": "file:./packages/domain",
-    "@milk-market/nostr": "file:./packages/nostr",
-    "@milk-market/api-client": "file:./packages/api-client"
+    "ws": "8.19.0"
   },
   "devDependencies": {
     "@testing-library/dom": "10.4.1",
@@ -96,6 +97,16 @@
     "prettier-plugin-tailwindcss": "0.7.2",
     "turbo": "2.5.8",
     "typescript": "6.0.2"
+  },
+  "pnpm": {
+    "peerDependencyRules": {
+      "allowedVersions": {
+        "eslint": ">=10"
+      }
+    },
+    "onlyBuiltDependencies": [
+      "@heroui/shared-utils"
+    ]
   },
   "overrides": {
     "serialize-javascript": "7.0.5",

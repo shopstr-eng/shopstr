@@ -16,6 +16,7 @@ import {
   XCircleIcon,
   EllipsisVerticalIcon,
 } from "@heroicons/react/24/outline";
+import { BLUEBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import parseTags, {
   ProductData,
 } from "@/utils/parsers/product-parser-functions";
@@ -372,8 +373,8 @@ const Listing = ({ initialProductEvent }: ListingPageProps) => {
   const listingContent = (
     <>
       <div className="flex h-full min-h-screen flex-col bg-white pt-20">
-        {productData ?
-          (isZapsnag ? (
+        {productData ? (
+          isZapsnag ? (
             <div className="mx-auto w-full max-w-2xl p-6">
               <div className="overflow-hidden rounded-xl bg-white shadow-lg">
                 <img
@@ -443,28 +444,38 @@ const Listing = ({ initialProductEvent }: ListingPageProps) => {
               rawEvent={rawEvent}
             />
           )
-          ) : isListingNotFound ? (
-            <div className="flex min-h-[60vh] flex-col items-center justify-center px-6 text-center">
-              <h1 className="text-3xl font-bold text-black">
+        ) : isListingNotFound ? (
+          <div className="flex min-h-[60vh] flex-col items-center justify-center px-4">
+            <div className="shadow-neo w-full max-w-2xl rounded-md border-2 border-black bg-white px-8 pt-8 pb-8 text-center">
+              <h1 className="mb-2 text-5xl font-bold text-black">404</h1>
+              <h2 className="mb-6 text-2xl font-medium text-black md:text-3xl">
                 Listing Not Found
-              </h1>
-              <p className="mt-4 max-w-lg text-gray-500">
-                This listing doesn&apos;t exist, hasn&apos;t synced yet, or is no
-                longer available from your current data sources.
+              </h2>
+              <p className="mb-8 text-black">
+                This listing doesn&apos;t exist, hasn&apos;t synced yet, or is
+                no longer available from your current data sources.
               </p>
-              <Button
-                className="mt-6"
-                color="secondary"
-                onPress={() => router.push("/marketplace")}
-              >
-                View marketplace
-              </Button>
+              <div className="flex flex-wrap items-center justify-center gap-4">
+                <Button
+                  className={BLUEBUTTONCLASSNAMES}
+                  onPress={() => router.back()}
+                >
+                  Go back
+                </Button>
+                <Button
+                  className={BLUEBUTTONCLASSNAMES}
+                  onPress={() => router.push("/marketplace")}
+                >
+                  View marketplace
+                </Button>
+              </div>
             </div>
-          ) : (
-            <div className="flex min-h-[60vh] items-center justify-center">
-              <MilkMarketSpinner />
-            </div>
-          )}
+          </div>
+        ) : (
+          <div className="flex min-h-[60vh] items-center justify-center">
+            <MilkMarketSpinner />
+          </div>
+        )}
         {fiatOrderIsPlaced || invoiceIsPaid || cashuPaymentSent ? (
           <>
             <Modal

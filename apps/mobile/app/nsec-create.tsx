@@ -2,9 +2,17 @@ import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
-import { createSellerSessionFromNsec, generateSellerNsecCredentials } from "@milk-market/nostr";
+import {
+  createSellerSessionFromNsec,
+  generateSellerNsecCredentials,
+} from "@milk-market/nostr";
 
-import { ActionButton, ScreenScrollView, ScreenTitle, SellerCard } from "@/components/seller-ui";
+import {
+  ActionButton,
+  ScreenScrollView,
+  ScreenTitle,
+  SellerCard,
+} from "@/components/seller-ui";
 import { useSessionUiStore } from "@/stores/session-ui-store";
 import { useSessionStore } from "@/stores/session-store";
 import { sellerThemeTokens } from "@/theme/tokens";
@@ -12,7 +20,9 @@ import { sellerThemeTokens } from "@/theme/tokens";
 export default function NsecCreateScreen() {
   const router = useRouter();
   const saveSession = useSessionStore((state) => state.saveSession);
-  const setLastUsedAuthMethod = useSessionUiStore((state) => state.setLastUsedAuthMethod);
+  const setLastUsedAuthMethod = useSessionUiStore(
+    (state) => state.setLastUsedAuthMethod
+  );
 
   const [nsec, setNsec] = useState("");
   const [pubkey, setPubkey] = useState("");
@@ -79,7 +89,11 @@ export default function NsecCreateScreen() {
           Keep this nsec somewhere safe before continuing. Phase 2 does not
           include key export or recovery tooling yet.
         </Text>
-        <ActionButton label="Generate another key" onPress={generateFreshCredentials} variant="secondary" />
+        <ActionButton
+          label="Generate another key"
+          onPress={generateFreshCredentials}
+          variant="secondary"
+        />
         <ActionButton
           label="Continue with this seller key"
           onPress={handleContinue}

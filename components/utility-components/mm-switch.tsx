@@ -28,7 +28,7 @@ const MilkMarketSwitch = ({
       />
       <span>
         <p
-          className="cursor-pointer whitespace-nowrap font-bold text-black hover:underline"
+          className="cursor-pointer font-bold whitespace-nowrap text-black hover:underline"
           onClick={handleTrustClick}
         >
           Trust

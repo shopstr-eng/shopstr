@@ -61,7 +61,7 @@ export default function StorefrontPreviewModal({
 
   return (
     <div className="fixed inset-0 z-[9999] flex flex-col bg-black/70">
-      <div className="absolute right-4 top-3 z-50">
+      <div className="absolute top-3 right-4 z-50">
         <button
           type="button"
           onClick={onClose}

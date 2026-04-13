@@ -5,7 +5,7 @@ import {
   ModalBody,
   Button,
   Checkbox,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import {
   ShieldCheckIcon,
   DocumentArrowDownIcon,
@@ -108,7 +108,7 @@ export default function RecoveryKeyModal({
             </p>
 
             <div className="w-full rounded-lg border border-yellow-200 bg-yellow-50 p-4">
-              <p className="select-all break-all text-center font-mono text-lg font-bold tracking-wider text-yellow-800">
+              <p className="text-center font-mono text-lg font-bold tracking-wider break-all text-yellow-800 select-all">
                 {recoveryKey}
               </p>
             </div>

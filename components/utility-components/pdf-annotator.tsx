@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState } from "react";
 import type React from "react";
-import { Button } from "@nextui-org/react";
+import { Button } from "@heroui/react";
 import {
   WHITEBUTTONCLASSNAMES,
   PRIMARYBUTTONCLASSNAMES,
@@ -521,7 +521,7 @@ export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({
           {/* PDF Canvas */}
           <canvas
             ref={canvasRef}
-            className={`block bg-white shadow-neo ${
+            className={`shadow-neo block bg-white ${
               currentTool === "signature" ? "cursor-crosshair" : ""
             }`}
             onMouseDown={handleMouseDown}
@@ -537,7 +537,7 @@ export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({
           {/* Text Annotations Overlay */}
           <div
             ref={overlayRef}
-            className={`absolute left-4 top-4 ${
+            className={`absolute top-4 left-4 ${
               currentTool === "text"
                 ? "cursor-crosshair"
                 : "pointer-events-none"
@@ -551,7 +551,7 @@ export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({
 
         {showTextInput && (
           <div
-            className="absolute z-30 rounded-md border-2 border-black bg-white p-3 shadow-neo"
+            className="shadow-neo absolute z-30 rounded-md border-2 border-black bg-white p-3"
             style={{
               left: Math.min(inputPosition.x, window.innerWidth - 300),
               top: Math.min(inputPosition.y, window.innerHeight - 200),

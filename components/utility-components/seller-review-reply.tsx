@@ -6,7 +6,7 @@ import {
 } from "@/components/utility-components/nostr-context-provider";
 import { publishReviewReply } from "@/utils/nostr/nostr-helper-functions";
 import { ProfileWithDropdown } from "@/components/utility-components/profile/profile-dropdown";
-import { Button, Textarea } from "@nextui-org/react";
+import { Button, Textarea } from "@heroui/react";
 
 interface SellerReviewReplyProps {
   reviewEventId: string | undefined;
@@ -176,7 +176,7 @@ export default function SellerReviewReply({
               className={
                 themed
                   ? "rounded-lg font-bold text-white"
-                  : "rounded-lg border-2 border-black bg-blue-500 font-bold text-white shadow-neo"
+                  : "shadow-neo rounded-lg border-2 border-black bg-blue-500 font-bold text-white"
               }
               style={themed ? { backgroundColor: accentColor } : undefined}
             >

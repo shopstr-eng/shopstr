@@ -2591,8 +2591,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         const fileBytes = Uint8Array.from(fileBuffer);
         const { createHash: cryptoCreateHash } = await import("crypto");
         const hash = cryptoCreateHash("sha256")
-        .update(Uint8Array.from(fileBuffer))
-        .digest("hex");;
+          .update(Uint8Array.from(fileBuffer))
+          .digest("hex");
 
         const authEvent: EventTemplate = {
           kind: 24242,
@@ -3261,10 +3261,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
       try {
         const pubkey = signer.getPubKey();
         const signedEvent = signer.sign(
-          createSellerActionAuthEventTemplate(
-            pubkey,
-            "notification-email-read"
-          )
+          createSellerActionAuthEventTemplate(pubkey, "notification-email-read")
         );
         const response = await fetch(
           `${baseUrl}/api/email/notification-email/read`,
@@ -4056,9 +4053,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
         if (params.useDefaults) {
           const shopName = content.name || "this shop";
-          const { getDefaultPolicies } = await import(
-            "@/utils/storefront-policies"
-          );
+          const { getDefaultPolicies } =
+            await import("@/utils/storefront-policies");
           const defaults = getDefaultPolicies(shopName);
           if (!params.returnPolicy && !existingPolicies.returnPolicy)
             newPolicies.returnPolicy = defaults.returnPolicy;

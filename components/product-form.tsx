@@ -682,7 +682,7 @@ export default function ProductForm({
                         className="relative flex h-full w-full items-center justify-center p-4"
                         onClick={(e) => e.preventDefault()}
                       >
-                        <div className="absolute right-4 top-4 z-20">
+                        <div className="absolute top-4 right-4 z-20">
                           <ConfirmActionDropdown
                             helpText="Are you sure you want to delete this image?"
                             buttonLabel="Delete Image"
@@ -847,7 +847,7 @@ export default function ProductForm({
                               return (
                                 <div className="flex items-center">
                                   <select
-                                    className="rounded-md border-2 border-black bg-white px-3 py-2 text-base font-semibold text-black outline-none invalid:bg-white hover:bg-white focus:bg-white [&>option:hover]:bg-primary-yellow [&>option]:bg-white"
+                                    className="[&>option:hover]:bg-primary-yellow rounded-md border-2 border-black bg-white px-3 py-2 text-base font-semibold text-black outline-none invalid:bg-white hover:bg-white focus:bg-white [&>option]:bg-white"
                                     key={"currency"}
                                     id="currency"
                                     name="currency"
@@ -876,7 +876,7 @@ export default function ProductForm({
               />
 
               <div className="mx-0 my-4 flex items-start text-left">
-                <InformationCircleIcon className="mr-2 mt-0.5 h-5 w-5 flex-shrink-0 text-black" />
+                <InformationCircleIcon className="mt-0.5 mr-2 h-5 w-5 flex-shrink-0 text-black" />
                 <p className="text-xs text-black">
                   Your donation rate on sales is set to{" "}
                   {profileContext.profileData.get(pubkey)?.content
@@ -1057,7 +1057,7 @@ export default function ProductForm({
                           endContent={
                             <div className="flex items-center">
                               <select
-                                className="rounded-md border-2 border-black bg-white px-3 py-2 text-base font-semibold text-black outline-none invalid:bg-white hover:bg-white focus:bg-white [&>option:hover]:bg-primary-yellow [&>option]:bg-white"
+                                className="[&>option:hover]:bg-primary-yellow rounded-md border-2 border-black bg-white px-3 py-2 text-base font-semibold text-black outline-none invalid:bg-white hover:bg-white focus:bg-white [&>option]:bg-white"
                                 key={"currency"}
                                 id="currency"
                                 name="currency"
@@ -1243,21 +1243,11 @@ export default function ProductForm({
                         defaultSelectedKeys={new Set(selectedVolumes)}
                       >
                         <SelectSection>
-                          <SelectItem key="Half-pint" value="Half-pint">
-                            Half-pint
-                          </SelectItem>
-                          <SelectItem key="Pint" value="Pint">
-                            Pint
-                          </SelectItem>
-                          <SelectItem key="Quart" value="Quart">
-                            Quart
-                          </SelectItem>
-                          <SelectItem key="Half-gallon" value="Half-gallon">
-                            Half-gallon
-                          </SelectItem>
-                          <SelectItem key="Gallon" value="Gallon">
-                            Gallon
-                          </SelectItem>
+                          <SelectItem key="Half-pint">Half-pint</SelectItem>
+                          <SelectItem key="Pint">Pint</SelectItem>
+                          <SelectItem key="Quart">Quart</SelectItem>
+                          <SelectItem key="Half-gallon">Half-gallon</SelectItem>
+                          <SelectItem key="Gallon">Gallon</SelectItem>
                         </SelectSection>
                       </Select>
                     </div>
@@ -1379,57 +1369,23 @@ export default function ProductForm({
                         defaultSelectedKeys={new Set(selectedWeights)}
                       >
                         <SelectSection>
-                          <SelectItem key="1oz" value="1oz">
-                            1oz
-                          </SelectItem>
-                          <SelectItem key="2oz" value="2oz">
-                            2oz
-                          </SelectItem>
-                          <SelectItem key="3oz" value="3oz">
-                            3oz
-                          </SelectItem>
-                          <SelectItem key="4oz" value="4oz">
-                            4oz
-                          </SelectItem>
-                          <SelectItem key="5oz" value="5oz">
-                            5oz
-                          </SelectItem>
-                          <SelectItem key="6oz" value="6oz">
-                            6oz
-                          </SelectItem>
-                          <SelectItem key="7oz" value="7oz">
-                            7oz
-                          </SelectItem>
-                          <SelectItem key="8oz" value="8oz">
-                            8oz
-                          </SelectItem>
-                          <SelectItem key="9oz" value="9oz">
-                            9oz
-                          </SelectItem>
-                          <SelectItem key="10oz" value="10oz">
-                            10oz
-                          </SelectItem>
-                          <SelectItem key="11oz" value="11oz">
-                            11oz
-                          </SelectItem>
-                          <SelectItem key="12oz" value="12oz">
-                            12oz
-                          </SelectItem>
-                          <SelectItem key="13oz" value="13oz">
-                            13oz
-                          </SelectItem>
-                          <SelectItem key="14oz" value="14oz">
-                            14oz
-                          </SelectItem>
-                          <SelectItem key="15oz" value="15oz">
-                            15oz
-                          </SelectItem>
-                          <SelectItem key="16oz" value="16oz">
-                            16oz
-                          </SelectItem>
-                          <SelectItem key="1lbs" value="1lbs">
-                            1lbs
-                          </SelectItem>
+                          <SelectItem key="1oz">1oz</SelectItem>
+                          <SelectItem key="2oz">2oz</SelectItem>
+                          <SelectItem key="3oz">3oz</SelectItem>
+                          <SelectItem key="4oz">4oz</SelectItem>
+                          <SelectItem key="5oz">5oz</SelectItem>
+                          <SelectItem key="6oz">6oz</SelectItem>
+                          <SelectItem key="7oz">7oz</SelectItem>
+                          <SelectItem key="8oz">8oz</SelectItem>
+                          <SelectItem key="9oz">9oz</SelectItem>
+                          <SelectItem key="10oz">10oz</SelectItem>
+                          <SelectItem key="11oz">11oz</SelectItem>
+                          <SelectItem key="12oz">12oz</SelectItem>
+                          <SelectItem key="13oz">13oz</SelectItem>
+                          <SelectItem key="14oz">14oz</SelectItem>
+                          <SelectItem key="15oz">15oz</SelectItem>
+                          <SelectItem key="16oz">16oz</SelectItem>
+                          <SelectItem key="1lbs">1lbs</SelectItem>
                         </SelectSection>
                       </Select>
                     </div>
@@ -1556,9 +1512,7 @@ export default function ProductForm({
                       >
                         <SelectSection>
                           {CATEGORIES.map((category) => (
-                            <SelectItem key={category} value={category}>
-                              {category}
-                            </SelectItem>
+                            <SelectItem key={category}>{category}</SelectItem>
                           ))}
                         </SelectSection>
                       </Select>
@@ -1948,7 +1902,7 @@ export default function ProductForm({
                                       </Button>
                                     </div>
                                     {entries.length === 0 && (
-                                      <p className="text-xs italic text-gray-400">
+                                      <p className="text-xs text-gray-400 italic">
                                         No bulk tiers — buyers won&apos;t see a
                                         bundle option for this variant
                                       </p>
@@ -2158,21 +2112,15 @@ export default function ProductForm({
                       )}
                     >
                       <SelectSection>
-                        <SelectItem key="weekly" value="weekly">
-                          Weekly
-                        </SelectItem>
-                        <SelectItem key="every_2_weeks" value="every_2_weeks">
+                        <SelectItem key="weekly">Weekly</SelectItem>
+                        <SelectItem key="every_2_weeks">
                           Every 2 Weeks
                         </SelectItem>
-                        <SelectItem key="monthly" value="monthly">
-                          Monthly
-                        </SelectItem>
-                        <SelectItem key="every_2_months" value="every_2_months">
+                        <SelectItem key="monthly">Monthly</SelectItem>
+                        <SelectItem key="every_2_months">
                           Every 2 Months
                         </SelectItem>
-                        <SelectItem key="quarterly" value="quarterly">
-                          Quarterly
-                        </SelectItem>
+                        <SelectItem key="quarterly">Quarterly</SelectItem>
                       </SelectSection>
                     </Select>
                   </div>
@@ -2241,24 +2189,12 @@ export default function ProductForm({
                             defaultSelectedKeys={new Set(selectedSizes)}
                           >
                             <SelectSection>
-                              <SelectItem key="XS" value="XS">
-                                XS
-                              </SelectItem>
-                              <SelectItem key="SM" value="SM">
-                                SM
-                              </SelectItem>
-                              <SelectItem key="MD" value="MD">
-                                MD
-                              </SelectItem>
-                              <SelectItem key="LG" value="LG">
-                                LG
-                              </SelectItem>
-                              <SelectItem key="XL" value="XL">
-                                XL
-                              </SelectItem>
-                              <SelectItem key="XXL" value="XXL">
-                                XXL
-                              </SelectItem>
+                              <SelectItem key="XS">XS</SelectItem>
+                              <SelectItem key="SM">SM</SelectItem>
+                              <SelectItem key="MD">MD</SelectItem>
+                              <SelectItem key="LG">LG</SelectItem>
+                              <SelectItem key="XL">XL</SelectItem>
+                              <SelectItem key="XXL">XXL</SelectItem>
                             </SelectSection>
                           </Select>
                         </div>
@@ -2349,31 +2285,18 @@ export default function ProductForm({
                             selectedKeys={[value as string]}
                           >
                             <SelectSection>
-                              <SelectItem key="New" value="New">
-                                New
-                              </SelectItem>
-                              <SelectItem key="Renewed" value="Renewed">
-                                Renewed
-                              </SelectItem>
-                              <SelectItem
-                                key="Used - Like New"
-                                value="Used - Like New"
-                              >
+                              <SelectItem key="New">New</SelectItem>
+                              <SelectItem key="Renewed">Renewed</SelectItem>
+                              <SelectItem key="Used - Like New">
                                 Used - Like New
                               </SelectItem>
-                              <SelectItem
-                                key="Used - Very Good"
-                                value="Used - Very Good"
-                              >
+                              <SelectItem key="Used - Very Good">
                                 Used - Very Good
                               </SelectItem>
-                              <SelectItem key="Used - Good" value="Used - Good">
+                              <SelectItem key="Used - Good">
                                 Used - Good
                               </SelectItem>
-                              <SelectItem
-                                key="Used - Acceptable"
-                                value="Used - Acceptable"
-                              >
+                              <SelectItem key="Used - Acceptable">
                                 Used - Acceptable
                               </SelectItem>
                             </SelectSection>
@@ -2417,12 +2340,8 @@ export default function ProductForm({
                             selectedKeys={[value as string]}
                           >
                             <SelectSection>
-                              <SelectItem key="active" value="active">
-                                Active
-                              </SelectItem>
-                              <SelectItem key="sold" value="sold">
-                                Sold
-                              </SelectItem>
+                              <SelectItem key="active">Active</SelectItem>
+                              <SelectItem key="sold">Sold</SelectItem>
                             </SelectSection>
                           </Select>
                         </div>
@@ -2494,7 +2413,7 @@ export default function ProductForm({
                           value={value as string}
                           className="text-black"
                         />
-                        <p className="mt-1 text-tiny text-gray-500">
+                        <p className="text-tiny mt-1 text-gray-500">
                           Listing will remain visible but marked as
                           &quot;Outdated&quot; after this date. Leave empty if
                           product has no expiration. Buyers won&apos;t be able
@@ -2507,7 +2426,7 @@ export default function ProductForm({
               )}
 
               <div className="mx-0 my-4 flex items-start text-left">
-                <InformationCircleIcon className="mr-2 mt-0.5 h-5 w-5 flex-shrink-0 text-black" />
+                <InformationCircleIcon className="mt-0.5 mr-2 h-5 w-5 flex-shrink-0 text-black" />
                 <p className="text-xs text-black">
                   Your payment preference is set to{" "}
                   {profileContext.profileData.get(pubkey)?.content

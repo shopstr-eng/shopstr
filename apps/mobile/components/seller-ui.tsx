@@ -37,7 +37,9 @@ export function ScreenTitle({
     <View style={styles.titleBlock}>
       {eyebrow ? <Text style={styles.eyebrow}>{eyebrow}</Text> : null}
       <Text style={styles.title}>{title}</Text>
-      {description ? <Text style={styles.description}>{description}</Text> : null}
+      {description ? (
+        <Text style={styles.description}>{description}</Text>
+      ) : null}
     </View>
   );
 }
@@ -54,7 +56,9 @@ export function SellerCard({
     <View style={styles.card}>
       <View style={styles.cardHeader}>
         <Text style={styles.cardTitle}>{title}</Text>
-        {description ? <Text style={styles.cardDescription}>{description}</Text> : null}
+        {description ? (
+          <Text style={styles.cardDescription}>{description}</Text>
+        ) : null}
       </View>
       {children}
     </View>
@@ -86,7 +90,11 @@ export function SellerField({
     <View style={styles.fieldWrap}>
       <Text style={styles.fieldLabel}>{label}</Text>
       <TextInput
-        style={[styles.fieldInput, multiline ? styles.fieldTextarea : null, error ? styles.fieldError : null]}
+        style={[
+          styles.fieldInput,
+          multiline ? styles.fieldTextarea : null,
+          error ? styles.fieldError : null,
+        ]}
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
@@ -122,14 +130,18 @@ export function ActionButton({
       style={({ pressed }) => [
         styles.button,
         isPrimary ? styles.buttonPrimary : styles.buttonSecondary,
-        (disabled || loading) ? styles.buttonDisabled : null,
+        disabled || loading ? styles.buttonDisabled : null,
         pressed && !(disabled || loading) ? styles.buttonPressed : null,
       ]}
       disabled={disabled || loading}
       onPress={onPress}
     >
       {loading ? (
-        <ActivityIndicator color={isPrimary ? sellerThemeTokens.surface : sellerThemeTokens.primary} />
+        <ActivityIndicator
+          color={
+            isPrimary ? sellerThemeTokens.surface : sellerThemeTokens.primary
+          }
+        />
       ) : (
         <Text
           style={[

@@ -202,7 +202,7 @@ export default function DisplayProductModal({
                 <div className="flex flex-wrap items-center">
                   {productData.sizes && productData.sizes.length > 0
                     ? productData.sizes.map((size: string) => (
-                        <span key={size} className="mb-2 mr-4 text-black">
+                        <span key={size} className="mr-4 mb-2 text-black">
                           {size}: {productData.sizeQuantities?.get(size) || 0}
                         </span>
                       ))
@@ -216,7 +216,7 @@ export default function DisplayProductModal({
                 <div className="flex flex-wrap items-center">
                   {productData.volumes && productData.volumes.length > 0
                     ? productData.volumes.map((volume: string) => (
-                        <span key={volume} className="mb-2 mr-4 text-black">
+                        <span key={volume} className="mr-4 mb-2 text-black">
                           {volume}: {productData.volumePrices?.get(volume) || 0}{" "}
                           {productData.currency}
                         </span>
@@ -231,7 +231,7 @@ export default function DisplayProductModal({
                 <div className="flex flex-wrap items-center">
                   {productData.weights && productData.weights.length > 0
                     ? productData.weights.map((weight: string) => (
-                        <span key={weight} className="mb-2 mr-4 text-black">
+                        <span key={weight} className="mr-4 mb-2 text-black">
                           {weight}: {productData.weightPrices?.get(weight) || 0}{" "}
                           {productData.currency}
                         </span>
@@ -247,7 +247,7 @@ export default function DisplayProductModal({
                   {Array.from(productData.bulkPrices.entries())
                     .sort((a, b) => a[0] - b[0])
                     .map(([units, price]) => (
-                      <span key={units} className="mb-2 mr-4 text-black">
+                      <span key={units} className="mr-4 mb-2 text-black">
                         {units} units: {price} {productData.currency}
                       </span>
                     ))}
@@ -325,7 +325,7 @@ export default function DisplayProductModal({
                 className={WHITEBUTTONCLASSNAMES}
                 startContent={
                   // Updated icon hover color
-                  <ShareIcon className="h-6 w-6 hover:text-primary-yellow" />
+                  <ShareIcon className="hover:text-primary-yellow h-6 w-6" />
                 }
                 onClick={() => {
                   handleShare().catch((e) => console.error(e));
@@ -340,7 +340,7 @@ export default function DisplayProductModal({
                     className={WHITEBUTTONCLASSNAMES}
                     startContent={
                       // Updated icon hover color
-                      <PencilSquareIcon className="h-6 w-6 hover:text-primary-yellow" />
+                      <PencilSquareIcon className="hover:text-primary-yellow h-6 w-6" />
                     }
                     onClick={handleEditToggle}
                     isDisabled={deleteLoading}
@@ -357,7 +357,7 @@ export default function DisplayProductModal({
                       className={DANGERBUTTONCLASSNAMES}
                       startContent={
                         // Updated icon hover color
-                        <TrashIcon className="h-6 w-6 hover:text-primary-yellow" />
+                        <TrashIcon className="hover:text-primary-yellow h-6 w-6" />
                       }
                       isDisabled={deleteLoading}
                       isLoading={deleteLoading}

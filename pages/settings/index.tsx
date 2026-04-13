@@ -76,7 +76,7 @@ const SettingsPage = () => {
 
   return (
     <ProtectedRoute>
-      <div className="flex min-h-screen flex-col bg-white pb-20 pt-24">
+      <div className="flex min-h-screen flex-col bg-white pt-24 pb-20">
         <div className="mx-auto w-full px-4 lg:w-1/2 xl:w-2/5">
           <h1 className="mb-6 text-4xl font-bold text-black">Settings</h1>
 
@@ -90,10 +90,10 @@ const SettingsPage = () => {
                   <button
                     key={item.id}
                     onClick={() => router.push(item.route)}
-                    className="group w-full transform cursor-pointer rounded-md border-2 border-black bg-white p-4 shadow-neo transition-transform hover:-translate-y-0.5 hover:bg-primary-yellow active:translate-y-0.5"
+                    className="group shadow-neo hover:bg-primary-yellow w-full transform cursor-pointer rounded-md border-2 border-black bg-white p-4 transition-transform hover:-translate-y-0.5 active:translate-y-0.5"
                   >
                     <div className="flex items-center gap-3">
-                      <div className="rounded-md border-2 border-black bg-primary-blue p-2.5">
+                      <div className="bg-primary-blue rounded-md border-2 border-black p-2.5">
                         <IconComponent className="h-5 w-5 text-white" />
                       </div>
                       <div className="flex-1 text-left">
@@ -119,7 +119,7 @@ const SettingsPage = () => {
                 LogOut();
                 router.push("/marketplace");
               }}
-              className="group w-full transform cursor-pointer rounded-md border-2 border-black bg-white p-4 shadow-neo transition-transform hover:-translate-y-0.5 hover:bg-red-100 active:translate-y-0.5"
+              className="group shadow-neo w-full transform cursor-pointer rounded-md border-2 border-black bg-white p-4 transition-transform hover:-translate-y-0.5 hover:bg-red-100 active:translate-y-0.5"
             >
               <div className="flex items-center gap-3">
                 <div className="rounded-md border-2 border-black bg-red-500 p-2.5">

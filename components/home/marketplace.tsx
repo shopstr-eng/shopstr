@@ -318,7 +318,7 @@ function MarketplacePage({
                   ([reviewerPubkey, reviewData]) => (
                     <div
                       key={reviewerPubkey}
-                      className="rounded-lg border-2 border-black bg-white p-3 shadow-neo"
+                      className="shadow-neo rounded-lg border-2 border-black bg-white p-3"
                     >
                       <div className="mb-2 flex items-center gap-2">
                         <ProfileWithDropdown
@@ -370,7 +370,7 @@ function MarketplacePage({
                         {reviewData.map(([category, value], index) => {
                           if (category === "comment" && value !== "") {
                             return (
-                              <p key={index} className="italic text-black">
+                              <p key={index} className="text-black italic">
                                 &ldquo;{value}&rdquo;
                               </p>
                             );
@@ -430,7 +430,7 @@ function MarketplacePage({
 
             <div className="flex flex-wrap gap-2 sm:order-1">
               <Button
-                className="bg-transparent text-lg font-bold text-black hover:text-primary-yellow sm:text-xl"
+                className="hover:text-primary-yellow bg-transparent text-lg font-bold text-black sm:text-xl"
                 onClick={() => {
                   setSelectedCategories(new Set<string>([]));
                   setSelectedLocation("");
@@ -441,7 +441,7 @@ function MarketplacePage({
                 Shop
               </Button>
               <Button
-                className="bg-transparent text-lg font-bold text-black hover:text-primary-yellow sm:text-xl"
+                className="hover:text-primary-yellow bg-transparent text-lg font-bold text-black sm:text-xl"
                 onClick={() => {
                   setSelectedSection("reviews");
                 }}
@@ -449,7 +449,7 @@ function MarketplacePage({
                 Reviews
               </Button>
               <Button
-                className="bg-transparent text-lg font-bold text-black hover:text-primary-yellow sm:text-xl"
+                className="hover:text-primary-yellow bg-transparent text-lg font-bold text-black sm:text-xl"
                 onClick={() => handleSendMessage(focusedPubkey)}
               >
                 Message
@@ -459,7 +459,7 @@ function MarketplacePage({
                 const shopSlug = shopData?.content?.storefront?.shopSlug;
                 return shopSlug ? (
                   <Button
-                    className="bg-transparent text-lg font-bold text-primary-blue hover:text-primary-yellow sm:text-xl"
+                    className="text-primary-blue hover:text-primary-yellow bg-transparent text-lg font-bold sm:text-xl"
                     onClick={() => router.push(`/shop/${shopSlug}`)}
                   >
                     Storefront ↗
@@ -549,7 +549,6 @@ function MarketplacePage({
                     {CATEGORIES.map((category) => (
                       <SelectItem
                         key={category}
-                        value={category}
                         classNames={{
                           base: "text-black data-[hover=true]:!bg-primary-yellow data-[focus=true]:!bg-primary-yellow",
                         }}
@@ -610,18 +609,18 @@ function MarketplacePage({
                 <h3 className="mb-3 text-lg font-semibold text-black">
                   Merchant Quality
                 </h3>
-                <div className="inline-flex items-center gap-1 rounded-lg border-2 border-black bg-white px-2 shadow-neo">
+                <div className="shadow-neo inline-flex items-center gap-1 rounded-lg border-2 border-black bg-white px-2">
                   {merchantReview && merchantReview >= 0.5 ? (
                     <>
                       <span className="text-2xl">😀</span>
-                      <span className="mr-2 whitespace-nowrap text-sm text-black">
+                      <span className="mr-2 text-sm whitespace-nowrap text-black">
                         {merchantQuality}
                       </span>
                     </>
                   ) : (
                     <>
                       <span className="text-2xl">😢</span>
-                      <span className="mr-2 whitespace-nowrap text-sm text-black">
+                      <span className="mr-2 text-sm whitespace-nowrap text-black">
                         {merchantQuality}
                       </span>
                     </>
@@ -630,7 +629,7 @@ function MarketplacePage({
               </div>
             ) : (
               <div className="mt-10 flex flex-grow items-center justify-center py-10">
-                <div className="w-full max-w-xl rounded-lg border-4 border-black bg-white p-10 text-center shadow-neo">
+                <div className="shadow-neo w-full max-w-xl rounded-lg border-4 border-black bg-white p-10 text-center">
                   <p className="text-3xl font-semibold text-black">
                     No reviews . . . yet!
                   </p>
@@ -650,7 +649,7 @@ function MarketplacePage({
         !router.asPath.includes("npub1") && (
           <Button
             radius="full"
-            className={`${BLUEBUTTONCLASSNAMES} fixed bottom-8 right-8 z-50 h-16 w-16`}
+            className={`${BLUEBUTTONCLASSNAMES} fixed right-8 bottom-8 z-50 h-16 w-16`}
             onClick={() => handleAddNewListing()}
           >
             <PlusIcon className="h-8 w-8 !text-white" />

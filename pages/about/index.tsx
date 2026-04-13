@@ -93,7 +93,7 @@ export default function AboutPage() {
             </p>
           </section>
 
-          <section className="mb-12 rounded-lg border-2 border-black bg-zinc-50 p-8 shadow-neo">
+          <section className="shadow-neo mb-12 rounded-lg border-2 border-black bg-zinc-50 p-8">
             <h2 className="mb-4 text-2xl font-black">Why We Built This</h2>
             <p className="mb-4 text-zinc-700">
               The modern dairy supply chain is broken. Large processors and
@@ -112,11 +112,11 @@ export default function AboutPage() {
               processing, and retail &mdash; leaving farmers with just 15.9
               cents. Direct sales cut out those middlemen.
             </p>
-            <blockquote className="my-6 border-l-4 border-black bg-white p-4 italic text-zinc-600">
+            <blockquote className="my-6 border-l-4 border-black bg-white p-4 text-zinc-600 italic">
               &ldquo;The shorter the chain between raw food and fork, the
               fresher it is and the more transparent the system is.&rdquo;
               <br />
-              <span className="mt-2 block text-sm font-bold not-italic text-black">
+              <span className="mt-2 block text-sm font-bold text-black not-italic">
                 &mdash; Joel Salatin,{" "}
                 <span className="font-normal italic">
                   Everything I Want To Do Is Illegal
@@ -137,7 +137,7 @@ export default function AboutPage() {
               What Makes Us Different
             </h2>
             <div className="grid gap-6 md:grid-cols-2">
-              <div className="rounded-lg border-2 border-black bg-white p-6 shadow-neo">
+              <div className="shadow-neo rounded-lg border-2 border-black bg-white p-6">
                 <h3 className="mb-2 text-xl font-bold">No Mandatory Fees</h3>
                 <p className="text-zinc-600">
                   There are no mandatory platform fees. Farmers can elect an
@@ -145,7 +145,7 @@ export default function AboutPage() {
                   but every sale defaults to 100% going to the farmer.
                 </p>
               </div>
-              <div className="rounded-lg border-2 border-black bg-white p-6 shadow-neo">
+              <div className="shadow-neo rounded-lg border-2 border-black bg-white p-6">
                 <h3 className="mb-2 text-xl font-bold">Privacy-First</h3>
                 <p className="text-zinc-600">
                   Built on the Nostr protocol, all communications are encrypted
@@ -153,7 +153,7 @@ export default function AboutPage() {
                   parties.
                 </p>
               </div>
-              <div className="rounded-lg border-2 border-black bg-white p-6 shadow-neo">
+              <div className="shadow-neo rounded-lg border-2 border-black bg-white p-6">
                 <h3 className="mb-2 text-xl font-bold">
                   Multiple Payment Options
                 </h3>
@@ -162,7 +162,7 @@ export default function AboutPage() {
                   or arrange cash and other methods directly with your farmer.
                 </p>
               </div>
-              <div className="rounded-lg border-2 border-black bg-white p-6 shadow-neo">
+              <div className="shadow-neo rounded-lg border-2 border-black bg-white p-6">
                 <h3 className="mb-2 text-xl font-bold">
                   Decentralized & Censorship-Resistant
                 </h3>
@@ -175,7 +175,7 @@ export default function AboutPage() {
             </div>
           </section>
 
-          <section className="mb-12 rounded-lg border-2 border-black bg-zinc-50 p-8 shadow-neo">
+          <section className="shadow-neo mb-12 rounded-lg border-2 border-black bg-zinc-50 p-8">
             <h2 className="mb-4 text-2xl font-black">Our Team</h2>
             <p className="mb-4 text-zinc-700">
               Milk Market was founded by a team of technologists and food
@@ -217,7 +217,7 @@ export default function AboutPage() {
               statistics:
             </p>
             <div className="grid gap-4 md:grid-cols-3">
-              <div className="rounded-lg border-2 border-black bg-white p-4 text-center shadow-neo">
+              <div className="shadow-neo rounded-lg border-2 border-black bg-white p-4 text-center">
                 <span className="block text-3xl font-black">$45.9B</span>
                 <span className="text-sm text-zinc-600">
                   U.S. dairy cash receipts in 2023 (
@@ -232,7 +232,7 @@ export default function AboutPage() {
                   )
                 </span>
               </div>
-              <div className="rounded-lg border-2 border-black bg-white p-4 text-center shadow-neo">
+              <div className="shadow-neo rounded-lg border-2 border-black bg-white p-4 text-center">
                 <span className="block text-3xl font-black">25%</span>
                 <span className="text-sm text-zinc-600">
                   Growth in direct farm sales, 2017-2022 (
@@ -247,7 +247,7 @@ export default function AboutPage() {
                   )
                 </span>
               </div>
-              <div className="rounded-lg border-2 border-black bg-white p-4 text-center shadow-neo">
+              <div className="shadow-neo rounded-lg border-2 border-black bg-white p-4 text-center">
                 <span className="block text-3xl font-black">15.9¢</span>
                 <span className="text-sm text-zinc-600">
                   Farm share of each food dollar in 2023 (

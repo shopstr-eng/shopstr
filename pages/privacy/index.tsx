@@ -102,7 +102,7 @@ export default function PrivacyPolicy() {
         />
       </Head>
       {/* Main container with new background pattern */}
-      <div className="flex min-h-screen flex-col bg-white bg-grid-pattern py-8 md:pb-20">
+      <div className="bg-grid-pattern flex min-h-screen flex-col bg-white py-8 md:pb-20">
         {/* Centered content with a max-width for readability */}
         <div className="container mx-auto max-w-4xl px-4">
           <div className="mb-12">
@@ -131,7 +131,7 @@ export default function PrivacyPolicy() {
               <div
                 key={section.title}
                 // Applying the new neo-brutalist card style
-                className="rounded-lg border-2 border-black bg-white p-6 shadow-neo"
+                className="shadow-neo rounded-lg border-2 border-black bg-white p-6"
               >
                 <h3 className="mb-2 text-lg font-bold text-black">
                   {section.title}

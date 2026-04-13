@@ -2,7 +2,7 @@ import { useState, useContext, useEffect } from "react";
 import type React from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
-import { Image } from "@nextui-org/react";
+import { Image } from "@heroui/react";
 import {
   Bars3Icon,
   XMarkIcon,
@@ -91,15 +91,15 @@ function YouTubeCarousel() {
             href={`https://www.youtube.com/watch?v=${video.id}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="group block w-80 flex-shrink-0 overflow-hidden rounded-lg border-2 border-black bg-white shadow-neo transition-all hover:-translate-y-1 active:translate-y-0 active:shadow-none"
+            className="group shadow-neo block w-80 flex-shrink-0 overflow-hidden rounded-lg border-2 border-black bg-white transition-all hover:-translate-y-1 active:translate-y-0 active:shadow-none"
           >
             <div className="relative aspect-video overflow-hidden">
               <Image
                 src={video.thumbnail}
                 alt={video.title}
-                className="h-full w-full object-cover duration-300 transition-transform group-hover:scale-105"
+                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
               />
-              <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-0 transition-all group-hover:bg-opacity-20">
+              <div className="bg-opacity-0 group-hover:bg-opacity-20 absolute inset-0 flex items-center justify-center bg-black transition-all">
                 <div className="rounded-full bg-red-600 p-3 opacity-0 transition-opacity group-hover:opacity-100">
                   <svg
                     className="h-6 w-6 text-white"
@@ -290,11 +290,11 @@ export default function StandaloneLanding() {
       </nav>
 
       {/* Hero Section - Optimized with single CTA and outcome-first headline */}
-      <section className="relative z-10 overflow-hidden border-b-2 border-black bg-grid-pattern px-4 pb-16 pt-12 sm:px-6 lg:px-8">
+      <section className="bg-grid-pattern relative z-10 overflow-hidden border-b-2 border-black px-4 pt-12 pb-16 sm:px-6 lg:px-8">
         <PlusPattern />
 
         {/* Background Milk Cartons */}
-        <div className="pointer-events-none absolute left-[10%] top-[15%] opacity-[0.06]">
+        <div className="pointer-events-none absolute top-[15%] left-[10%] opacity-[0.06]">
           <Image
             src="/milk-carton.png"
             alt=""
@@ -304,7 +304,7 @@ export default function StandaloneLanding() {
             loading="lazy"
           />
         </div>
-        <div className="pointer-events-none absolute right-[12%] top-[20%] opacity-[0.05]">
+        <div className="pointer-events-none absolute top-[20%] right-[12%] opacity-[0.05]">
           <Image
             src="/milk-carton.png"
             alt=""
@@ -324,7 +324,7 @@ export default function StandaloneLanding() {
             loading="lazy"
           />
         </div>
-        <div className="pointer-events-none absolute bottom-[15%] right-[15%] opacity-[0.05]">
+        <div className="pointer-events-none absolute right-[15%] bottom-[15%] opacity-[0.05]">
           <Image
             src="/milk-carton.png"
             alt=""
@@ -336,13 +336,13 @@ export default function StandaloneLanding() {
         </div>
 
         <div className="relative z-10 mx-auto max-w-4xl text-center">
-          <h1 className="mb-6 text-4xl font-black leading-tight md:text-6xl">
+          <h1 className="mb-6 text-4xl leading-tight font-black md:text-6xl">
             Farm-Fresh Dairy <br />
             <span className="relative inline-block">
               <span className="relative z-10 inline-block rounded-lg border-[3px] border-black bg-black px-4 py-2 text-white">
                 Direct to Your Door
               </span>
-              <span className="absolute bottom-[-5px] right-[-5px] z-0 h-full w-full rounded-lg border-[3px] border-black bg-primary-yellow"></span>
+              <span className="bg-primary-yellow absolute right-[-5px] bottom-[-5px] z-0 h-full w-full rounded-lg border-[3px] border-black"></span>
             </span>
           </h1>
 
@@ -463,12 +463,12 @@ export default function StandaloneLanding() {
       {/* How It Works - Simplified */}
       <section
         id="how-it-works"
-        className="relative z-10 overflow-hidden border-b-2 border-black bg-grid-pattern py-16"
+        className="bg-grid-pattern relative z-10 overflow-hidden border-b-2 border-black py-16"
       >
         <PlusPattern />
 
         {/* Background Milk Cartons */}
-        <div className="pointer-events-none absolute left-[8%] top-[12%] opacity-[0.06]">
+        <div className="pointer-events-none absolute top-[12%] left-[8%] opacity-[0.06]">
           <Image
             src="/milk-carton.png"
             alt=""
@@ -478,7 +478,7 @@ export default function StandaloneLanding() {
             loading="lazy"
           />
         </div>
-        <div className="pointer-events-none absolute bottom-[15%] right-[10%] opacity-[0.05]">
+        <div className="pointer-events-none absolute right-[10%] bottom-[15%] opacity-[0.05]">
           <Image
             src="/milk-carton.png"
             alt=""
@@ -500,7 +500,7 @@ export default function StandaloneLanding() {
           </div>
 
           <div className="grid gap-8 md:grid-cols-3">
-            <div className="rounded-lg border-2 border-black bg-white p-6 text-center shadow-neo">
+            <div className="shadow-neo rounded-lg border-2 border-black bg-white p-6 text-center">
               <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-black text-xl font-bold text-white">
                 1
               </div>
@@ -510,7 +510,7 @@ export default function StandaloneLanding() {
               </p>
             </div>
 
-            <div className="rounded-lg border-2 border-black bg-white p-6 text-center shadow-neo">
+            <div className="shadow-neo rounded-lg border-2 border-black bg-white p-6 text-center">
               <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-black text-xl font-bold text-white">
                 2
               </div>
@@ -520,7 +520,7 @@ export default function StandaloneLanding() {
               </p>
             </div>
 
-            <div className="rounded-lg border-2 border-black bg-white p-6 text-center shadow-neo">
+            <div className="shadow-neo rounded-lg border-2 border-black bg-white p-6 text-center">
               <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-black text-xl font-bold text-white">
                 3
               </div>
@@ -565,7 +565,7 @@ export default function StandaloneLanding() {
           </div>
 
           <div className="grid gap-8 md:grid-cols-3">
-            <div className="rounded-lg border-2 border-black bg-white p-8 text-center shadow-neo">
+            <div className="shadow-neo rounded-lg border-2 border-black bg-white p-8 text-center">
               <span className="mb-4 block text-4xl">0%</span>
               <h3 className="mb-2 text-xl font-bold">No Mandatory Fees</h3>
               <p className="text-zinc-600">
@@ -574,14 +574,14 @@ export default function StandaloneLanding() {
                 always their choice.
               </p>
             </div>
-            <div className="rounded-lg border-2 border-black bg-white p-8 text-center shadow-neo">
+            <div className="shadow-neo rounded-lg border-2 border-black bg-white p-8 text-center">
               <span className="mb-4 block text-4xl">100%</span>
               <h3 className="mb-2 text-xl font-bold">Private & Secure</h3>
               <p className="text-zinc-600">
                 Your data stays encrypted. No tracking, no selling your info.
               </p>
             </div>
-            <div className="rounded-lg border-2 border-black bg-white p-8 text-center shadow-neo">
+            <div className="shadow-neo rounded-lg border-2 border-black bg-white p-8 text-center">
               <span className="mb-4 block text-4xl">24/7</span>
               <h3 className="mb-2 text-xl font-bold">Always Available</h3>
               <p className="text-zinc-600">
@@ -591,12 +591,12 @@ export default function StandaloneLanding() {
             </div>
           </div>
 
-          <blockquote className="mx-auto mt-10 max-w-3xl rounded-lg border-2 border-black bg-white p-6 text-center shadow-neo">
-            <p className="mb-3 text-lg italic text-zinc-700">
+          <blockquote className="shadow-neo mx-auto mt-10 max-w-3xl rounded-lg border-2 border-black bg-white p-6 text-center">
+            <p className="mb-3 text-lg text-zinc-700 italic">
               &ldquo;The shorter the chain between raw food and fork, the
               fresher it is and the more transparent the system is.&rdquo;
             </p>
-            <cite className="text-sm font-bold not-italic text-black">
+            <cite className="text-sm font-bold text-black not-italic">
               &mdash; Joel Salatin,{" "}
               <span className="font-normal italic">
                 Everything I Want To Do Is Illegal
@@ -615,7 +615,7 @@ export default function StandaloneLanding() {
             </h2>
           </div>
 
-          <div className="rounded-lg border-2 border-black bg-white p-6 shadow-neo">
+          <div className="shadow-neo rounded-lg border-2 border-black bg-white p-6">
             <FAQItem
               question="Is raw milk legal in my state?"
               answer="Raw milk laws vary by state. Some states allow retail sales, others permit farm sales only, and some restrict it entirely. Check your local regulations. Milk Market simply connects buyers with local farmers - you arrange the transaction directly."
@@ -641,11 +641,11 @@ export default function StandaloneLanding() {
       </section>
 
       {/* YouTube Videos Section */}
-      <section className="relative z-10 overflow-hidden border-b-2 border-black bg-grid-pattern py-16">
+      <section className="bg-grid-pattern relative z-10 overflow-hidden border-b-2 border-black py-16">
         <PlusPattern />
 
         {/* Background Milk Cartons */}
-        <div className="pointer-events-none absolute left-[12%] top-[18%] opacity-[0.06]">
+        <div className="pointer-events-none absolute top-[18%] left-[12%] opacity-[0.06]">
           <Image
             src="/milk-carton.png"
             alt=""
@@ -655,7 +655,7 @@ export default function StandaloneLanding() {
             loading="lazy"
           />
         </div>
-        <div className="pointer-events-none absolute bottom-[20%] right-[8%] opacity-[0.05]">
+        <div className="pointer-events-none absolute right-[8%] bottom-[20%] opacity-[0.05]">
           <Image
             src="/milk-carton.png"
             alt=""
@@ -706,7 +706,7 @@ export default function StandaloneLanding() {
             Get updates on new farms, products, and the raw dairy movement
           </p>
 
-          <div className="rounded-lg border-2 border-black bg-white p-8 text-left shadow-neo">
+          <div className="shadow-neo rounded-lg border-2 border-black bg-white p-8 text-left">
             <form onSubmit={handleSubmit} className="space-y-6">
               <div>
                 <label className="mb-2 block text-base font-bold">
@@ -755,7 +755,7 @@ export default function StandaloneLanding() {
                   placeholder={
                     contactType === "email" ? "your@email.com" : "npub1..."
                   }
-                  className="w-full rounded-lg border-2 border-black p-3 shadow-neo focus:outline-none"
+                  className="shadow-neo w-full rounded-lg border-2 border-black p-3 focus:outline-none"
                   style={{ backgroundColor: "#f0f0f0" }}
                 />
               </div>

@@ -1,7 +1,5 @@
 import { NextApiRequest, NextApiResponse } from "next";
-import {
-  saveNotificationEmail,
-} from "@/utils/db/db-service";
+import { saveNotificationEmail } from "@/utils/db/db-service";
 import { verifyNostrAuth } from "@/utils/stripe/verify-nostr-auth";
 
 export default async function handler(

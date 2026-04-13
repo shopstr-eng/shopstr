@@ -12,14 +12,8 @@ export default function StripeConnectReturnScreen() {
 
   useEffect(() => {
     const nextStatus =
-      refresh === "true"
-        ? "refresh"
-        : success === "true"
-          ? "success"
-          : "";
-    const target = nextStatus
-      ? `/?stripeConnectStatus=${nextStatus}`
-      : "/";
+      refresh === "true" ? "refresh" : success === "true" ? "success" : "";
+    const target = nextStatus ? `/?stripeConnectStatus=${nextStatus}` : "/";
 
     router.replace(target as Href);
   }, [refresh, router, success]);

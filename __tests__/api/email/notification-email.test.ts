@@ -40,7 +40,10 @@ function createSignedAction(
   const pubkey = getPublicKey(secretKey);
   return {
     pubkey,
-    signedEvent: finalizeEvent(createAuthEventTemplate(pubkey, action), secretKey),
+    signedEvent: finalizeEvent(
+      createAuthEventTemplate(pubkey, action),
+      secretKey
+    ),
   };
 }
 
@@ -54,7 +57,9 @@ describe("notification email api", () => {
       "seller@example.com"
     );
     const response = createMockResponse();
-    const { pubkey, signedEvent } = createSignedAction("notification-email-read");
+    const { pubkey, signedEvent } = createSignedAction(
+      "notification-email-read"
+    );
 
     await readHandler(
       {
@@ -74,7 +79,9 @@ describe("notification email api", () => {
 
   test("rejects read requests with the wrong action", async () => {
     const response = createMockResponse();
-    const { pubkey, signedEvent } = createSignedAction("notification-email-write");
+    const { pubkey, signedEvent } = createSignedAction(
+      "notification-email-write"
+    );
 
     await readHandler(
       {
@@ -96,7 +103,9 @@ describe("notification email api", () => {
 
   test("saves notification email with a valid signed event", async () => {
     const response = createMockResponse();
-    const { pubkey, signedEvent } = createSignedAction("notification-email-write");
+    const { pubkey, signedEvent } = createSignedAction(
+      "notification-email-write"
+    );
 
     await writeHandler(
       {

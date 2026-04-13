@@ -16,7 +16,14 @@ import {
   publishSellerShopProfile,
 } from "@milk-market/nostr";
 
-import { ActionButton, ScreenScrollView, ScreenTitle, SellerCard, SellerField, StatusPill } from "@/components/seller-ui";
+import {
+  ActionButton,
+  ScreenScrollView,
+  ScreenTitle,
+  SellerCard,
+  SellerField,
+  StatusPill,
+} from "@/components/seller-ui";
 import LoadingScreen from "@/components/loading-screen";
 import { useSellerBootstrap } from "@/hooks/use-seller-bootstrap";
 import { getApiBaseUrl } from "@/lib/api-base-url";
@@ -28,7 +35,8 @@ import { sellerThemeTokens } from "@/theme/tokens";
 export default function StorefrontScreen() {
   const queryClient = useQueryClient();
   const session = useSessionStore((state) => state.session);
-  const { notificationEmailQuery, profileQuery, shopProfile } = useSellerBootstrap(session);
+  const { notificationEmailQuery, profileQuery, shopProfile } =
+    useSellerBootstrap(session);
   const sellerProfile = profileQuery.data ?? null;
   const sellerNotificationEmail = notificationEmailQuery.data?.email;
 
@@ -37,9 +45,9 @@ export default function StorefrontScreen() {
   );
   const [errors, setErrors] = useState<StorefrontBasicsValidationErrors>({});
   const [isDirty, setIsDirty] = useState(false);
-  const [lastHydratedSignature, setLastHydratedSignature] = useState<string | null>(
-    null
-  );
+  const [lastHydratedSignature, setLastHydratedSignature] = useState<
+    string | null
+  >(null);
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
   const [saveError, setSaveError] = useState("");
@@ -49,7 +57,11 @@ export default function StorefrontScreen() {
   });
 
   useEffect(() => {
-    if (profileQuery.isLoading || notificationEmailQuery.isLoading || !session) {
+    if (
+      profileQuery.isLoading ||
+      notificationEmailQuery.isLoading ||
+      !session
+    ) {
       return;
     }
 
@@ -122,14 +134,19 @@ export default function StorefrontScreen() {
               ]);
             }}
             variant="secondary"
-            loading={profileQuery.isFetching || notificationEmailQuery.isFetching}
+            loading={
+              profileQuery.isFetching || notificationEmailQuery.isFetching
+            }
           />
         </SellerCard>
       </ScreenScrollView>
     );
   }
 
-  const handleFieldChange = (field: keyof StorefrontBasicsDraft, value: string) => {
+  const handleFieldChange = (
+    field: keyof StorefrontBasicsDraft,
+    value: string
+  ) => {
     setDraft((currentDraft) => ({
       ...currentDraft,
       [field]: value,
@@ -185,19 +202,25 @@ export default function StorefrontScreen() {
             value: savedSlug,
             status: "saving",
           });
-          const slugResponse = await mobileApiClient.registerStorefrontSlug({
-            pubkey: session.pubkey,
-            slug: savedSlug,
-          }, createSignedSellerActionAuthEvent(session, "storefront-slug-write"));
+          const slugResponse = await mobileApiClient.registerStorefrontSlug(
+            {
+              pubkey: session.pubkey,
+              slug: savedSlug,
+            },
+            createSignedSellerActionAuthEvent(session, "storefront-slug-write")
+          );
           savedSlug = slugResponse.slug;
           setSlugState({
             value: savedSlug,
             status: "saved",
           });
         } else if (existingSlug) {
-          await mobileApiClient.deleteStorefrontSlug({
-            pubkey: session.pubkey,
-          }, createSignedSellerActionAuthEvent(session, "storefront-slug-write"));
+          await mobileApiClient.deleteStorefrontSlug(
+            {
+              pubkey: session.pubkey,
+            },
+            createSignedSellerActionAuthEvent(session, "storefront-slug-write")
+          );
           setSlugState({
             value: "",
             status: "saved",
@@ -245,11 +268,17 @@ export default function StorefrontScreen() {
 
       if (normalizedDraft.notificationEmail) {
         try {
-          await mobileApiClient.saveSellerNotificationEmail({
-            email: normalizedDraft.notificationEmail,
-            role: "seller",
-            pubkey: session.pubkey,
-          }, createSignedSellerActionAuthEvent(session, "notification-email-write"));
+          await mobileApiClient.saveSellerNotificationEmail(
+            {
+              email: normalizedDraft.notificationEmail,
+              role: "seller",
+              pubkey: session.pubkey,
+            },
+            createSignedSellerActionAuthEvent(
+              session,
+              "notification-email-write"
+            )
+          );
         } catch (caughtError) {
           const message = getErrorMessage(
             caughtError,
@@ -290,7 +319,9 @@ export default function StorefrontScreen() {
       setSaveMessage("Storefront basics saved.");
 
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["seller-profile", session.pubkey] }),
+        queryClient.invalidateQueries({
+          queryKey: ["seller-profile", session.pubkey],
+        }),
         queryClient.invalidateQueries({
           queryKey: ["seller-notification-email", session.pubkey],
         }),
@@ -332,7 +363,11 @@ export default function StorefrontScreen() {
         ) : null}
         <StatusPill
           tone={shopProfile?.content.name ? "success" : "warning"}
-          label={shopProfile?.content.name ? "Storefront basics saved" : "Needs seller details"}
+          label={
+            shopProfile?.content.name
+              ? "Storefront basics saved"
+              : "Needs seller details"
+          }
         />
         <Text style={styles.summaryText}>
           Public slug: {shopProfile?.content.storefront?.shopSlug ?? "not set"}
@@ -358,7 +393,9 @@ export default function StorefrontScreen() {
         <SellerField
           label="Notification email"
           value={draft.notificationEmail}
-          onChangeText={(value) => handleFieldChange("notificationEmail", value)}
+          onChangeText={(value) =>
+            handleFieldChange("notificationEmail", value)
+          }
           placeholder="seller@example.com"
           keyboardType="email-address"
           autoCapitalize="none"
@@ -373,15 +410,20 @@ export default function StorefrontScreen() {
           error={errors.shopSlug || slugState.error}
         />
         <Text style={styles.helperText}>
-          Slugs are normalized to lowercase and used for the seller storefront URL.
+          Slugs are normalized to lowercase and used for the seller storefront
+          URL.
         </Text>
         {saveError ? <Text style={styles.errorText}>{saveError}</Text> : null}
-        {saveMessage ? <Text style={styles.successText}>{saveMessage}</Text> : null}
+        {saveMessage ? (
+          <Text style={styles.successText}>{saveMessage}</Text>
+        ) : null}
         <ActionButton
           label="Save storefront basics"
           onPress={handleSave}
           loading={saving}
-          disabled={profileQuery.isFetching || notificationEmailQuery.isFetching}
+          disabled={
+            profileQuery.isFetching || notificationEmailQuery.isFetching
+          }
         />
       </SellerCard>
     </ScreenScrollView>

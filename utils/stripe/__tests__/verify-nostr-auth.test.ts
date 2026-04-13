@@ -2,10 +2,7 @@
 
 import { finalizeEvent, generateSecretKey, getPublicKey } from "nostr-tools";
 
-import {
-  createAuthEventTemplate,
-  verifyNostrAuth,
-} from "../verify-nostr-auth";
+import { createAuthEventTemplate, verifyNostrAuth } from "../verify-nostr-auth";
 
 describe("verifyNostrAuth", () => {
   test("accepts a valid signed event with the expected action", () => {
@@ -75,7 +72,9 @@ describe("verifyNostrAuth", () => {
   });
 
   test("rejects missing signed events", () => {
-    expect(verifyNostrAuth(undefined, "seller-pubkey", "stripe-connect")).toEqual(
+    expect(
+      verifyNostrAuth(undefined, "seller-pubkey", "stripe-connect")
+    ).toEqual(
       expect.objectContaining({
         valid: false,
         error: "Missing signed auth event",

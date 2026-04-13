@@ -128,7 +128,7 @@ const BuyerProfileForm = ({ isOnboarding }: BuyerProfileFormProps) => {
           </div>
           <FileUploaderButton
             isIconOnly
-            className={`!min-w-10 absolute bottom-0 right-0 z-20 !h-10 !w-10 ${WHITEBUTTONCLASSNAMES}`}
+            className={`absolute right-0 bottom-0 z-20 !h-10 !w-10 !min-w-10 ${WHITEBUTTONCLASSNAMES}`}
             imgCallbackOnUpload={(imgUrl) => setValue("picture", imgUrl)}
           />
         </div>

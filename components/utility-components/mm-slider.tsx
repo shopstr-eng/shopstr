@@ -1,6 +1,6 @@
 import { useState, useEffect, useContext } from "react";
-  import { Button } from "@heroui/react";
-  import { Slider } from "@heroui/react";
+import { Button } from "@heroui/react";
+import { Slider } from "@heroui/react";
 import { FollowsContext } from "../../utils/context/context";
 import { getLocalStorageData } from "@/utils/nostr/nostr-helper-functions";
 import { BLUEBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";

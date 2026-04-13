@@ -1,6 +1,6 @@
 import { useState, useEffect, useContext } from "react";
 import { useRouter } from "next/router";
-import { Card, CardBody, Button, Image, Spinner } from "@nextui-org/react";
+import { Card, CardBody, Button, Image, Spinner } from "@heroui/react";
 import {
   ArrowLeftEndOnRectangleIcon,
   CreditCardIcon,
@@ -135,7 +135,7 @@ const OnboardingStripeConnect = () => {
   return (
     <div className="flex min-h-screen flex-col bg-white pt-24">
       <div className="mx-auto w-full max-w-2xl px-4 py-6">
-        <Card className="rounded-md border-4 border-black bg-white shadow-neo">
+        <Card className="shadow-neo rounded-md border-4 border-black bg-white">
           <CardBody className="p-8">
             <div className="mb-6 flex flex-row items-center justify-center gap-3">
               <Image
@@ -186,14 +186,14 @@ const OnboardingStripeConnect = () => {
               <>
                 <div className="mb-6 rounded-md border-2 border-black bg-gray-50 p-6">
                   <div className="mb-4 flex items-center gap-3">
-                    <CreditCardIcon className="h-8 w-8 text-primary-blue" />
+                    <CreditCardIcon className="text-primary-blue h-8 w-8" />
                     <h3 className="text-lg font-bold text-black">
                       Why connect Stripe?
                     </h3>
                   </div>
                   <div className="space-y-3">
                     <div className="flex items-start gap-2">
-                      <span className="mt-0.5 font-bold text-primary-blue">
+                      <span className="text-primary-blue mt-0.5 font-bold">
                         &bull;
                       </span>
                       <span className="text-sm text-black">
@@ -201,7 +201,7 @@ const OnboardingStripeConnect = () => {
                       </span>
                     </div>
                     <div className="flex items-start gap-2">
-                      <span className="mt-0.5 font-bold text-primary-blue">
+                      <span className="text-primary-blue mt-0.5 font-bold">
                         &bull;
                       </span>
                       <span className="text-sm text-black">
@@ -209,7 +209,7 @@ const OnboardingStripeConnect = () => {
                       </span>
                     </div>
                     <div className="flex items-start gap-2">
-                      <span className="mt-0.5 font-bold text-primary-blue">
+                      <span className="text-primary-blue mt-0.5 font-bold">
                         &bull;
                       </span>
                       <span className="text-sm text-black">
@@ -217,7 +217,7 @@ const OnboardingStripeConnect = () => {
                       </span>
                     </div>
                     <div className="flex items-start gap-2">
-                      <span className="mt-0.5 font-bold text-primary-blue">
+                      <span className="text-primary-blue mt-0.5 font-bold">
                         &bull;
                       </span>
                       <span className="text-sm text-black">

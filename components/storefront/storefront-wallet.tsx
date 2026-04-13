@@ -124,7 +124,7 @@ export default function StorefrontWallet({ colors }: StorefrontWalletProps) {
   }
 
   return (
-    <div className="flex min-h-screen flex-col px-4 pb-8 pt-8">
+    <div className="flex min-h-screen flex-col px-4 pt-8 pb-8">
       <div className="mx-auto w-full max-w-3xl space-y-6">
         <div
           className="rounded-md border-4 p-8"
@@ -142,7 +142,7 @@ export default function StorefrontWallet({ colors }: StorefrontWalletProps) {
           </h1>
           {mint ? (
             <p
-              className="mb-6 cursor-pointer break-words text-center text-sm transition-colors hover:opacity-80"
+              className="mb-6 cursor-pointer text-center text-sm break-words transition-colors hover:opacity-80"
               style={{ color: colors.accent }}
               onClick={handleMintClick}
             >
@@ -150,7 +150,7 @@ export default function StorefrontWallet({ colors }: StorefrontWalletProps) {
             </p>
           ) : (
             <p
-              className="mb-6 cursor-pointer break-words text-center text-sm transition-colors hover:opacity-80"
+              className="mb-6 cursor-pointer text-center text-sm break-words transition-colors hover:opacity-80"
               style={{ color: colors.accent }}
               onClick={handleMintClick}
             >
