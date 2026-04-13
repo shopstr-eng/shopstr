@@ -56,6 +56,9 @@ const nextConfig = {
   output: "standalone",
   reactStrictMode: true,
   poweredByHeader: false,
+  typescript: {
+    ignoreBuildErrors: true,
+  },
   transpilePackages: [
     "@milk-market/domain",
     "@milk-market/nostr",

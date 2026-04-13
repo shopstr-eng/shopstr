@@ -16,6 +16,7 @@
     "build:web": "next build",
     "build:all": "turbo run build --filter=@milk-market/mobile --filter=@milk-market/domain --filter=@milk-market/nostr --filter=@milk-market/api-client",
     "start": "next start -H 0.0.0.0 -p ${PORT:-3000}",
+    "dev:prod": "NODE_OPTIONS='--max-old-space-size=2048' next build && next start -H 0.0.0.0 -p 5000",
     "lint": "pnpm run lint:web && turbo run lint --filter=@milk-market/mobile --filter=@milk-market/domain --filter=@milk-market/nostr --filter=@milk-market/api-client",
     "lint:web": "eslint . --ext .ts,.tsx",
     "format:check": "prettier --check .",
