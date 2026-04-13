@@ -7,7 +7,6 @@ import {
   DropdownItem,
   Button,
 } from "@heroui/react";
-import Link from "next/link";
 import {
   ArrowTopRightOnSquareIcon,
   EllipsisVerticalIcon,
@@ -49,25 +48,96 @@ export default function ProductCard({
     ? Date.now() / 1000 > productData.expiration
     : false;
 
-  const handleCardClick = (e: React.MouseEvent) => {
-    const target = e.target as HTMLElement;
+  const shouldBlockCardNavigation = (target: Element | null) => {
     const isCarouselControl =
-      target.closest('button[title*="slide"]') ||
-      target.closest('li[role="button"]') ||
-      target.closest(".carousel-control");
+      target?.closest('button[title*="slide"]') ||
+      target?.closest('li[role="button"]') ||
+      target?.closest(".carousel-control");
     const isDropdown =
-      target.closest('[role="menu"]') ||
-      target.closest('[data-slot="trigger"]') ||
-      target.closest('button[data-slot="trigger"]');
-    if (isCarouselControl || isDropdown) {
+      target?.closest('[role="menu"]') ||
+      target?.closest('[data-slot="trigger"]') ||
+      target?.closest('button[data-slot="trigger"]');
+    const isProfileDropdown = target?.closest("[data-profile-dropdown]");
+
+    return Boolean(isCarouselControl || isDropdown || isProfileDropdown);
+  };
+
+  const openHrefInNewTab = () => {
+    if (!href) return;
+    window.open(href, "_blank", "noopener,noreferrer");
+  };
+
+  const handleCardClick = (e: React.MouseEvent) => {
+    const target = e.target as Element;
+    if (shouldBlockCardNavigation(target)) {
       e.preventDefault();
       e.stopPropagation();
       return;
     }
+
+    if (href && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      openHrefInNewTab();
+      return;
+    }
+
     if (onProductClick) {
       onProductClick(productData, e);
+      if (e.defaultPrevented) {
+        return;
+      }
+    }
+
+    if (href) {
+      void router.push(href);
     }
   };
+
+  const handleCardAuxClick = (e: React.MouseEvent) => {
+    if (e.button !== 1) {
+      return;
+    }
+
+    const target = e.target as Element;
+    if (shouldBlockCardNavigation(target)) {
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+
+    if (href) {
+      e.preventDefault();
+      openHrefInNewTab();
+    }
+  };
+
+  const handleCardKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key !== "Enter" && e.key !== " ") {
+      return;
+    }
+
+    const target = e.target as Element;
+    if (shouldBlockCardNavigation(target)) {
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+
+    e.preventDefault();
+
+    if (onProductClick) {
+      onProductClick(productData);
+      if (e.defaultPrevented) {
+        return;
+      }
+    }
+
+    if (href) {
+      void router.push(href);
+    }
+  };
+
+  const isCardInteractive = Boolean(href || onProductClick);
 
   const handleNjumpClick = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -90,7 +160,14 @@ export default function ProductCard({
   };
 
   const content = (
-    <div className="cursor-pointer" onClick={handleCardClick}>
+    <div
+      className={isCardInteractive ? "cursor-pointer" : ""}
+      onClick={isCardInteractive ? handleCardClick : undefined}
+      onAuxClick={href ? handleCardAuxClick : undefined}
+      onKeyDown={isCardInteractive ? handleCardKeyDown : undefined}
+      role={isCardInteractive ? "link" : undefined}
+      tabIndex={isCardInteractive ? 0 : undefined}
+    >
       <div>
         <ImageCarousel
           images={productData.images}
@@ -172,6 +249,7 @@ export default function ProductCard({
         )}
         <div
           className="mb-3"
+          data-profile-dropdown
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -214,15 +292,7 @@ export default function ProductCard({
     <div
       className={`${cardHoverStyle} my-4 w-full rounded-2xl bg-white shadow-md transition-all duration-300 dark:bg-neutral-900`}
     >
-      <div className="w-full overflow-hidden rounded-2xl">
-        {href ? (
-          <Link href={href} className="block">
-            {content}
-          </Link>
-        ) : (
-          content
-        )}
-      </div>
+      <div className="w-full overflow-hidden rounded-2xl">{content}</div>
       <RawEventModal
         isOpen={showRawEventModal}
         onClose={() => setShowRawEventModal(false)}
