@@ -33,7 +33,9 @@ import parseTags, {
 } from "@/utils/parsers/product-parser-functions";
 import {
   buildOrderGroupingKey,
+  getOrderConsolidationKey,
   getOrderStatusLookupKeys,
+  registerTaggedOrderGroupingKey,
   resolveExplicitPaymentMethod,
 } from "@/utils/messages/order-message-utils";
 import {
@@ -495,6 +497,7 @@ const OrdersDashboard = () => {
       }
 
       const consolidatedOrdersMap = new Map<string, OrderData>();
+      const taggedOrderGroupKeys = new Map<string, string | null>();
 
       const getCachedStatusForOrder = (order: OrderData) => {
         for (const lookupKey of order.statusLookupKeys) {
@@ -508,7 +511,11 @@ const OrdersDashboard = () => {
       };
 
       for (const order of ordersList) {
-        const existing = consolidatedOrdersMap.get(order.orderGroupKey);
+        const consolidationKey = getOrderConsolidationKey(
+          order,
+          taggedOrderGroupKeys
+        );
+        const existing = consolidatedOrdersMap.get(consolidationKey);
 
         if (!existing) {
           const cachedStatus = getCachedStatusForOrder(order);
@@ -523,7 +530,7 @@ const OrdersDashboard = () => {
             ? statusPriorityInit[cachedStatus] || 0
             : 0;
           const orderPriority = statusPriorityInit[order.status] || 0;
-          consolidatedOrdersMap.set(order.orderGroupKey, {
+          consolidatedOrdersMap.set(consolidationKey, {
             ...order,
             orderId: order.orderTag || order.orderId,
             status:
@@ -531,6 +538,11 @@ const OrdersDashboard = () => {
                 ? cachedStatus
                 : order.status,
           });
+          registerTaggedOrderGroupingKey(
+            order,
+            taggedOrderGroupKeys,
+            consolidationKey
+          );
         } else {
           const statusPriority: Record<string, number> = {
             canceled: 5,
@@ -559,7 +571,7 @@ const OrdersDashboard = () => {
             new Set([...existing.statusLookupKeys, ...order.statusLookupKeys])
           );
 
-          consolidatedOrdersMap.set(order.orderGroupKey, {
+          consolidatedOrdersMap.set(consolidationKey, {
             ...existing,
             orderTag: existing.orderTag || order.orderTag,
             orderId: existing.orderTag || order.orderTag || existing.orderId,
@@ -605,6 +617,11 @@ const OrdersDashboard = () => {
               order.subscriptionFrequency || existing.subscriptionFrequency,
             subscriptionId: order.subscriptionId || existing.subscriptionId,
           });
+          registerTaggedOrderGroupingKey(
+            order,
+            taggedOrderGroupKeys,
+            consolidationKey
+          );
         }
       }
 

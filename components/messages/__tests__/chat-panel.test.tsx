@@ -232,7 +232,7 @@ describe("ChatPanel Component", () => {
       ).toBeInTheDocument();
     });
 
-    it("should block completion when no shipping info message exists", async () => {
+    it("should allow completion when no shipping info message exists", async () => {
       await renderComponent(
         {
           isPayment: true,
@@ -264,9 +264,17 @@ describe("ChatPanel Component", () => {
         await screen.findByRole("button", { name: /Mark as Completed/i })
       );
 
-      expect(
-        await screen.findByText(/no shipping update was found/i)
-      ).toBeInTheDocument();
+      await waitFor(() => {
+        expect(nostrHelpers.constructGiftWrappedEvent).toHaveBeenCalledWith(
+          expect.anything(),
+          "mock-buyer-pubkey",
+          expect.stringContaining("has been completed"),
+          "order-completed",
+          expect.objectContaining({
+            status: "completed",
+          })
+        );
+      });
     });
 
     it("should gracefully handle errors on shipping form submission", async () => {

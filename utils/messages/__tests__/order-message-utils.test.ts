@@ -1,7 +1,9 @@
 import {
   buildOrderGroupingKey,
+  getOrderConsolidationKey,
   getLatestShippingInfo,
   getOrderStatusLookupKeys,
+  registerTaggedOrderGroupingKey,
   resolveExplicitPaymentMethod,
 } from "../order-message-utils";
 
@@ -35,6 +37,15 @@ describe("order-message-utils", () => {
     );
   });
 
+  test("buildOrderGroupingKey returns empty string when fallback metadata is incomplete", () => {
+    const incompleteEvent = {
+      id: "msg-incomplete",
+      tags: [["subject", "payment-change"]],
+    } as any;
+
+    expect(buildOrderGroupingKey(incompleteEvent)).toBe("");
+  });
+
   test("resolveExplicitPaymentMethod only uses explicit tags", () => {
     expect(resolveExplicitPaymentMethod("ecash")).toBe("Cashu");
     expect(resolveExplicitPaymentMethod("lightning")).toBe("Lightning");
@@ -57,6 +68,49 @@ describe("order-message-utils", () => {
       expect.arrayContaining(["order-123", "msg-3"])
     );
     expect(lookupKeys.length).toBeGreaterThanOrEqual(2);
+  });
+
+  test("repeated tagged orders keep distinct consolidation keys", () => {
+    const taggedOrderGroupKeys = new Map<string, string | null>();
+    const firstOrder = {
+      orderId: "msg-1",
+      orderTag: "order-1",
+      orderGroupKey: "same-group",
+    };
+    const secondOrder = {
+      orderId: "msg-2",
+      orderTag: "order-2",
+      orderGroupKey: "same-group",
+    };
+
+    const firstKey = getOrderConsolidationKey(firstOrder, taggedOrderGroupKeys);
+    registerTaggedOrderGroupingKey(
+      firstOrder,
+      taggedOrderGroupKeys,
+      firstKey
+    );
+
+    const secondKey = getOrderConsolidationKey(
+      secondOrder,
+      taggedOrderGroupKeys
+    );
+    registerTaggedOrderGroupingKey(
+      secondOrder,
+      taggedOrderGroupKeys,
+      secondKey
+    );
+
+    expect(firstKey).toBe("order-1");
+    expect(secondKey).toBe("order-2");
+    expect(
+      getOrderConsolidationKey(
+        {
+          orderId: "msg-3",
+          orderGroupKey: "same-group",
+        },
+        taggedOrderGroupKeys
+      )
+    ).toBe("msg-3");
   });
 
   test("getLatestShippingInfo surfaces missing fields", () => {

@@ -172,15 +172,7 @@ const ChatPanel = ({
 
       const shippingInfo = getLatestShippingInfo(messages);
 
-      if (!shippingInfo) {
-        setFailureText(
-          "Cannot complete this order because no shipping update was found."
-        );
-        setShowFailureModal(true);
-        return;
-      }
-
-      if (shippingInfo.missingFields.length > 0) {
+      if (shippingInfo && shippingInfo.missingFields.length > 0) {
         setFailureText(
           `Cannot complete this order yet. Missing shipping fields: ${shippingInfo.missingFields
             .map((field) => FIELD_LABELS[field] ?? field)
@@ -194,8 +186,8 @@ const ChatPanel = ({
         "Your order from " +
         userNPub +
         " has been completed." +
-        (shippingInfo.tracking ? " Tracking: " + shippingInfo.tracking : "") +
-        (shippingInfo.carrier ? " Carrier: " + shippingInfo.carrier : "");
+        (shippingInfo?.tracking ? " Tracking: " + shippingInfo.tracking : "") +
+        (shippingInfo?.carrier ? " Carrier: " + shippingInfo.carrier : "");
 
       const giftWrappedMessageEvent = await constructGiftWrappedEvent(
         decodedRandomPubkeyForSender.data as string,
@@ -208,9 +200,9 @@ const ChatPanel = ({
           status: "completed",
           isOrder: true,
           orderId,
-          ...(shippingInfo.tracking && { tracking: shippingInfo.tracking }),
-          ...(shippingInfo.carrier && { carrier: shippingInfo.carrier }),
-          ...(shippingInfo.eta && { eta: shippingInfo.eta }),
+          ...(shippingInfo?.tracking && { tracking: shippingInfo.tracking }),
+          ...(shippingInfo?.carrier && { carrier: shippingInfo.carrier }),
+          ...(shippingInfo?.eta && { eta: shippingInfo.eta }),
         }
       );
 

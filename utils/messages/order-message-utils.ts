@@ -10,17 +10,27 @@ const buildTagMap = (messageEvent: NostrMessageEvent) =>
       .map((tag) => [tag[0], tag[1]] as [string, string])
   );
 
+const hasOrderGroupingData = (value?: string | null) => Boolean(value?.trim());
+
 const _buildOrderGroupingKeyFromMap = (
   tagsMap: Map<string, string>,
   messageEvent: NostrMessageEvent
 ) => {
   const itemTag = messageEvent.tags.find((tag) => tag[0] === "item");
+  const productReference = tagsMap.get("a") || itemTag?.[1] || "";
+  const amount = tagsMap.get("amount") || "";
+  const fulfillmentTarget =
+    tagsMap.get("address") || tagsMap.get("pickup") || "";
 
-  return [
-    tagsMap.get("a") || itemTag?.[1] || "",
-    tagsMap.get("amount") || "",
-    tagsMap.get("address") || tagsMap.get("pickup") || "",
-  ]
+  if (
+    !hasOrderGroupingData(productReference) ||
+    !hasOrderGroupingData(amount) ||
+    !hasOrderGroupingData(fulfillmentTarget)
+  ) {
+    return "";
+  }
+
+  return [productReference, amount, fulfillmentTarget]
     .map(normalizeKeyPart)
     .join("\0");
 };
@@ -31,16 +41,64 @@ export const buildOrderGroupingKey = (
 
 export const getOrderStatusLookupKeys = (messageEvent: NostrMessageEvent) => {
   const tagsMap = buildTagMap(messageEvent);
+  const orderTag = tagsMap.get("order");
+  const orderGroupKey = _buildOrderGroupingKeyFromMap(tagsMap, messageEvent);
+
   return Array.from(
     new Set(
       [
-        tagsMap.get("order"),
-        _buildOrderGroupingKeyFromMap(tagsMap, messageEvent),
+        orderTag,
+        orderTag ? undefined : orderGroupKey,
         messageEvent.id,
       ]
         .filter((value): value is string => Boolean(value))
     )
   );
+};
+
+type OrderConsolidationCandidate = {
+  orderId: string;
+  orderTag?: string;
+  orderGroupKey: string;
+};
+
+export const getOrderConsolidationKey = (
+  order: OrderConsolidationCandidate,
+  taggedOrderGroupKeys: Map<string, string | null>
+) => {
+  if (order.orderTag) {
+    return order.orderTag;
+  }
+
+  if (order.orderGroupKey) {
+    const matchedTaggedOrderKey = taggedOrderGroupKeys.get(order.orderGroupKey);
+    if (matchedTaggedOrderKey) {
+      return matchedTaggedOrderKey;
+    }
+  }
+
+  return order.orderId;
+};
+
+export const registerTaggedOrderGroupingKey = (
+  order: OrderConsolidationCandidate,
+  taggedOrderGroupKeys: Map<string, string | null>,
+  consolidationKey: string
+) => {
+  if (!order.orderTag || !order.orderGroupKey) {
+    return;
+  }
+
+  const existingTaggedOrderKey = taggedOrderGroupKeys.get(order.orderGroupKey);
+
+  if (typeof existingTaggedOrderKey === "undefined") {
+    taggedOrderGroupKeys.set(order.orderGroupKey, consolidationKey);
+    return;
+  }
+
+  if (existingTaggedOrderKey !== consolidationKey) {
+    taggedOrderGroupKeys.set(order.orderGroupKey, null);
+  }
 };
 
 export const resolveExplicitPaymentMethod = (paymentTag?: string) => {
@@ -82,14 +140,20 @@ export const getLatestShippingInfo = (
   const etaValue = tagsMap.get("eta");
   const parsedEta = etaValue ? Number(etaValue.trim()) : 0;
   const eta = Number.isFinite(parsedEta) ? parsedEta : 0;
+  const missingFields: ShippingInfo["missingFields"] = [];
+
+  if (!tracking) {
+    missingFields.push("tracking");
+  }
+
+  if (!carrier) {
+    missingFields.push("carrier");
+  }
 
   return {
     tracking,
     carrier,
     eta,
-    missingFields: [
-      ...(tracking ? [] : ["tracking"]),
-      ...(carrier ? [] : ["carrier"]),
-    ],
+    missingFields,
   };
 };
