@@ -28,7 +28,10 @@ export default function ProductCard({
   href,
 }: {
   productData: ProductData;
-  onProductClick?: (productId: ProductData, e?: React.MouseEvent) => void;
+  onProductClick?: (
+    productId: ProductData,
+    e?: React.MouseEvent<HTMLElement> | React.KeyboardEvent<HTMLElement>
+  ) => void;
   href?: string | null;
 }) {
   const [showRawEventModal, setShowRawEventModal] = useState(false);
@@ -62,22 +65,20 @@ export default function ProductCard({
     return Boolean(isCarouselControl || isDropdown || isProfileDropdown);
   };
 
-  const openHrefInNewTab = () => {
-    if (!href) return;
-    window.open(href, "_blank", "noopener,noreferrer");
+  const getElementTarget = (target: EventTarget | null): Element | null => {
+    return target instanceof Element ? target : null;
   };
 
-  const handleCardClick = (e: React.MouseEvent) => {
-    const target = e.target as Element;
+  const navigateToHref = () => {
+    if (!href) return;
+    void router.push(href);
+  };
+
+  const handleCardClick = (e: React.MouseEvent<HTMLElement>) => {
+    const target = getElementTarget(e.target);
     if (shouldBlockCardNavigation(target)) {
       e.preventDefault();
       e.stopPropagation();
-      return;
-    }
-
-    if (href && (e.metaKey || e.ctrlKey)) {
-      e.preventDefault();
-      openHrefInNewTab();
       return;
     }
 
@@ -89,16 +90,25 @@ export default function ProductCard({
     }
 
     if (href) {
-      void router.push(href);
+      // Keep native link behavior for modified clicks/new tabs.
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) {
+        return;
+      }
+      e.preventDefault();
+      navigateToHref();
     }
   };
 
-  const handleCardAuxClick = (e: React.MouseEvent) => {
-    if (e.button !== 1) {
-      return;
+  const handleCardClickCapture = (e: React.MouseEvent<HTMLElement>) => {
+    const target = getElementTarget(e.target);
+    if (shouldBlockCardNavigation(target)) {
+      // Cancel link default early; allow nested controls to handle the click.
+      e.preventDefault();
     }
+  };
 
-    const target = e.target as Element;
+  const handleCardKeyDown = (e: React.KeyboardEvent<HTMLElement>) => {
+    const target = getElementTarget(e.target);
     if (shouldBlockCardNavigation(target)) {
       e.preventDefault();
       e.stopPropagation();
@@ -106,34 +116,30 @@ export default function ProductCard({
     }
 
     if (href) {
-      e.preventDefault();
-      openHrefInNewTab();
-    }
-  };
+      // Link semantics: activate with Enter only.
+      if (e.key !== "Enter") {
+        return;
+      }
 
-  const handleCardKeyDown = (e: React.KeyboardEvent) => {
+      e.preventDefault();
+      if (onProductClick) {
+        onProductClick(productData, e);
+        if (e.defaultPrevented) {
+          return;
+        }
+      }
+      navigateToHref();
+      return;
+    }
+
+    // Button semantics for non-link interactive cards.
     if (e.key !== "Enter" && e.key !== " ") {
       return;
     }
 
-    const target = e.target as Element;
-    if (shouldBlockCardNavigation(target)) {
-      e.preventDefault();
-      e.stopPropagation();
-      return;
-    }
-
     e.preventDefault();
-
     if (onProductClick) {
-      onProductClick(productData);
-      if (e.defaultPrevented) {
-        return;
-      }
-    }
-
-    if (href) {
-      void router.push(href);
+      onProductClick(productData, e);
     }
   };
 
@@ -159,15 +165,8 @@ export default function ProductCard({
     }
   };
 
-  const content = (
-    <div
-      className={isCardInteractive ? "cursor-pointer" : ""}
-      onClick={isCardInteractive ? handleCardClick : undefined}
-      onAuxClick={href ? handleCardAuxClick : undefined}
-      onKeyDown={isCardInteractive ? handleCardKeyDown : undefined}
-      role={isCardInteractive ? "link" : undefined}
-      tabIndex={isCardInteractive ? 0 : undefined}
-    >
+  const contentBody = (
+    <>
       <div>
         <ImageCarousel
           images={productData.images}
@@ -251,7 +250,6 @@ export default function ProductCard({
           className="mb-3"
           data-profile-dropdown
           onClick={(e) => {
-            e.preventDefault();
             e.stopPropagation();
           }}
         >
@@ -285,6 +283,29 @@ export default function ProductCard({
           </div>
         )}
       </div>
+    </>
+  );
+
+  const content = href ? (
+    <a
+      href={href}
+      className={isCardInteractive ? "cursor-pointer" : ""}
+      onClickCapture={isCardInteractive ? handleCardClickCapture : undefined}
+      onClick={isCardInteractive ? handleCardClick : undefined}
+      onKeyDown={isCardInteractive ? handleCardKeyDown : undefined}
+    >
+      {contentBody}
+    </a>
+  ) : (
+    <div
+      className={isCardInteractive ? "cursor-pointer" : ""}
+      onClickCapture={isCardInteractive ? handleCardClickCapture : undefined}
+      onClick={isCardInteractive ? handleCardClick : undefined}
+      onKeyDown={isCardInteractive ? handleCardKeyDown : undefined}
+      role={isCardInteractive ? "button" : undefined}
+      tabIndex={isCardInteractive ? 0 : undefined}
+    >
+      {contentBody}
     </div>
   );
 
