@@ -108,10 +108,13 @@ export default function ProductCard({
   };
 
   const handleCardKeyDown = (e: React.KeyboardEvent<HTMLElement>) => {
+    // Let nested interactive controls handle their own keyboard activation.
+    if (e.target !== e.currentTarget) {
+      return;
+    }
+
     const target = getElementTarget(e.target);
     if (shouldBlockCardNavigation(target)) {
-      e.preventDefault();
-      e.stopPropagation();
       return;
     }
 

@@ -66,6 +66,12 @@ const mockProductData: ProductData = {
   totalCost: 1000,
 };
 
+const mockSellerZapsnagProduct: ProductData = {
+  ...mockProductData,
+  d: "zapsnag",
+  categories: ["zapsnag"],
+};
+
 const renderWithContext = (
   ui: React.ReactElement,
   userPubkey: string | null = null
@@ -123,6 +129,15 @@ describe("ProductCard", () => {
       expect(mockRouter.push).toHaveBeenCalledWith("/listing/test-slug");
     });
 
+    it("navigates when pressing Enter on the linked card itself", () => {
+      renderWithContext(
+        <ProductCard productData={mockProductData} href="/listing/test-slug" />
+      );
+
+      fireEvent.keyDown(screen.getByRole("link"), { key: "Enter" });
+      expect(mockRouter.push).toHaveBeenCalledWith("/listing/test-slug");
+    });
+
     it("does not navigate when clicking seller dropdown area", () => {
       renderWithContext(
         <ProductCard productData={mockProductData} href="/listing/test-slug" />
@@ -145,6 +160,25 @@ describe("ProductCard", () => {
 
       fireEvent.click(screen.getByTestId("image-carousel").parentElement!);
       expect(onProductClick).toHaveBeenCalled();
+      expect(mockRouter.push).not.toHaveBeenCalled();
+    });
+
+    it("does not navigate when pressing Enter on nested controls inside a linked seller card", () => {
+      renderWithContext(
+        <ProductCard
+          productData={mockSellerZapsnagProduct}
+          href="/listing/test-slug"
+        />,
+        "owner_pubkey"
+      );
+
+      fireEvent.keyDown(
+        screen.getByRole("button", {
+          name: /open flash sale in nostr client/i,
+        }),
+        { key: "Enter" }
+      );
+
       expect(mockRouter.push).not.toHaveBeenCalled();
     });
 
