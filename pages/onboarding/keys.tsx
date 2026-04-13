@@ -102,7 +102,7 @@ const Keys = () => {
                 <h2 className="text-light-text dark:text-dark-text text-2xl font-bold">
                   Step 1: Account Creation
                 </h2>
-                <p className="text-light-text dark:text-dark-text">
+                <p className="text-light-text dark:text-dark-text text-sm">
                   Enter a passphrase to make sure your data is secured. You can
                   view your account information under your profile settings.
                 </p>
@@ -111,12 +111,11 @@ const Keys = () => {
               <div className="mb-6 flex flex-col space-y-2">
                 <div className="flex items-center gap-2">
                   <label className="text-light-text dark:text-dark-text text-xl font-bold">
-                    Passphrase:<span className="text-red-500">*</span>
+                    Passphrase<span className="text-red-500">*</span>
                   </label>
                   <Tooltip
                     content="This passphrase acts as a password and is used to keep your account secure. Remember it and keep it safe as it can't be recovered!"
                     placement="right"
-                    trigger="focus"
                     closeDelay={100}
                   >
                     <button
