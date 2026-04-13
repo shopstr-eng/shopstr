@@ -7,6 +7,7 @@ import { ProductData } from "@/utils/parsers/product-parser-functions";
 
 const mockRouter = {
   pathname: "/product-page",
+  push: jest.fn(),
 };
 jest.mock("next/router", () => ({
   useRouter: () => mockRouter,
@@ -18,7 +19,9 @@ jest.mock("../profile/profile-dropdown", () => ({
       data-testid="profile-dropdown"
       data-pubkey={props.pubkey}
       data-keys={JSON.stringify(props.dropDownKeys)}
-    ></div>
+    >
+      <button data-testid="profile-dropdown-trigger">Seller</button>
+    </div>
   ),
 }));
 jest.mock(
@@ -77,6 +80,10 @@ const renderWithContext = (
 };
 
 describe("ProductCard", () => {
+  beforeEach(() => {
+    mockRouter.push.mockClear();
+  });
+
   it("returns null if no productData is provided", () => {
     // @ts-expect-error: Intentionally passing null to test component's null-handling
     const { container } = render(<ProductCard productData={null} />);
@@ -105,6 +112,40 @@ describe("ProductCard", () => {
         mockProductData,
         expect.any(Object)
       );
+    });
+
+    it("navigates via router.push when href is provided", () => {
+      renderWithContext(
+        <ProductCard productData={mockProductData} href="/listing/test-slug" />
+      );
+
+      fireEvent.click(screen.getByTestId("image-carousel").parentElement!);
+      expect(mockRouter.push).toHaveBeenCalledWith("/listing/test-slug");
+    });
+
+    it("does not navigate when clicking seller dropdown area", () => {
+      renderWithContext(
+        <ProductCard productData={mockProductData} href="/listing/test-slug" />
+      );
+
+      fireEvent.click(screen.getByTestId("profile-dropdown-trigger"));
+      expect(mockRouter.push).not.toHaveBeenCalled();
+    });
+
+    it("does not navigate if onProductClick prevents default", () => {
+      const onProductClick = jest.fn((_product, event) => event?.preventDefault());
+
+      renderWithContext(
+        <ProductCard
+          productData={mockProductData}
+          href="/listing/test-slug"
+          onProductClick={onProductClick}
+        />
+      );
+
+      fireEvent.click(screen.getByTestId("image-carousel").parentElement!);
+      expect(onProductClick).toHaveBeenCalled();
+      expect(mockRouter.push).not.toHaveBeenCalled();
     });
 
     it('shows "shop_profile" dropdown key for the owner', () => {

@@ -17,7 +17,7 @@ const customJestConfig = {
 module.exports = async () => {
   const jestConfig = await createJestConfig(customJestConfig)();
   jestConfig.transformIgnorePatterns = [
-    "/node_modules/(?!(dexie|nostr-tools|@getalby/lightning-tools|@cashu/cashu-ts|uuid)/)",
+        "/node_modules/(?!(dexie|nostr-tools|@noble|@scure|@getalby/lightning-tools|@cashu/cashu-ts|uuid)/)",
     "^.+\\.module\\.(css|sass|scss)$",
   ];
 
