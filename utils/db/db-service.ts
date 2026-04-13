@@ -688,9 +688,9 @@ export async function fetchCachedEvents(
 
   try {
     client = await dbPool.connect();
-    let query = `SELECT id, pubkey, created_at, kind, tags, content, sig FROM ${table} WHERE 1=1`;
-    const params: any[] = [];
-    let paramIndex = 1;
+    let query = `SELECT id, pubkey, created_at, kind, tags, content, sig FROM ${table} WHERE kind = $1`;
+    const params: any[] = [kind];
+    let paramIndex = 2;
 
     if (filters?.pubkey) {
       query += ` AND pubkey = $${paramIndex++}`;
