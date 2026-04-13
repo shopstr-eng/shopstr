@@ -1,8 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import {
-  getOrderParticipants,
-  updateOrderStatus,
-} from "@/utils/db/db-service";
+import { getOrderParticipants, updateOrderStatus } from "@/utils/db/db-service";
 import { verifyNip98Request } from "@/utils/nostr/nip98-auth";
 
 const SELLER_MANAGED_STATUSES = new Set(["confirmed", "shipped", "completed"]);

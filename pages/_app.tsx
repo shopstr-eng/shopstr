@@ -495,7 +495,9 @@ function Shopstr({ props }: { props: AppProps }) {
           fn(...args);
         }) as TFn;
       };
-      const createGuardedEditors = <T extends Record<string, EditorFn>,>(editors: T): T => {
+      const createGuardedEditors = <T extends Record<string, EditorFn>>(
+        editors: T
+      ): T => {
         const guardedEditors = {} as T;
 
         (Object.keys(editors) as Array<keyof T>).forEach((key) => {
@@ -576,7 +578,13 @@ function Shopstr({ props }: { props: AppProps }) {
         const [relayResult, userPubkey] = await Promise.all([
           runTask(
             "fetching relays",
-            () => fetchAllRelays(nostr!, signer!, allRelays, guardedEditRelaysContext),
+            () =>
+              fetchAllRelays(
+                nostr!,
+                signer!,
+                allRelays,
+                guardedEditRelaysContext
+              ),
             () => guardedEditRelaysContext([], [], [], false)
           ),
           runTask(
@@ -641,10 +649,10 @@ function Shopstr({ props }: { props: AppProps }) {
 
         const communitiesPromise = runTask(
           "fetching communities",
-          () => fetchAllCommunities(nostr!, allRelays, guardedEditCommunityContext),
+          () =>
+            fetchAllCommunities(nostr!, allRelays, guardedEditCommunityContext),
           () => guardedEditCommunityContext(new Map(), false)
         );
-        
 
         const productsPromise = runTask(
           "fetching products",
@@ -679,7 +687,8 @@ function Shopstr({ props }: { props: AppProps }) {
         const productEvents = productsResult?.productEvents ?? [];
         const profileSetFromProducts =
           productsResult?.profileSetFromProducts ?? new Set<string>();
-        const profileSetFromChats = chatsResult?.profileSetFromChats ?? new Set<string>();
+        const profileSetFromChats =
+          chatsResult?.profileSetFromChats ?? new Set<string>();
 
         const pubkeySet = new Set<string>([
           ...profileSetFromProducts,
@@ -704,7 +713,11 @@ function Shopstr({ props }: { props: AppProps }) {
                 guardedEditProfileContext,
                 profileContext.profileData
               ),
-            () => guardedEditProfileContext(new Map(profileContext.profileData), false)
+            () =>
+              guardedEditProfileContext(
+                new Map(profileContext.profileData),
+                false
+              )
           ),
           runTask(
             "fetching shop profiles",
@@ -750,8 +763,14 @@ function Shopstr({ props }: { props: AppProps }) {
         }
 
         if (walletResult?.cashuMints?.length && walletResult.cashuProofs) {
-          localStorage.setItem("mints", JSON.stringify(walletResult.cashuMints));
-          localStorage.setItem("tokens", JSON.stringify(walletResult.cashuProofs));
+          localStorage.setItem(
+            "mints",
+            JSON.stringify(walletResult.cashuMints)
+          );
+          localStorage.setItem(
+            "tokens",
+            JSON.stringify(walletResult.cashuProofs)
+          );
         }
 
         await runTask("retrying relay publishes", async () => {

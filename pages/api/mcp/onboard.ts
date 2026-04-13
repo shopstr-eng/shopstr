@@ -18,8 +18,7 @@ import {
 } from "@/utils/mcp/request-proof-server";
 
 let tablesReady = false;
-const MCP_STREAMABLE_HTTP_ACCEPT =
-  "application/json, text/event-stream";
+const MCP_STREAMABLE_HTTP_ACCEPT = "application/json, text/event-stream";
 const SAFE_HTTP_PROTOCOLS = new Set(["http", "https"]);
 
 async function ensureTables() {
@@ -92,7 +91,9 @@ function isAllowlistedHost(host: string, allowedHosts: Set<string>): boolean {
       return allowedUrl.host === candidateUrl.host;
     }
 
-    return allowedUrl.hostname.toLowerCase() === candidateUrl.hostname.toLowerCase();
+    return (
+      allowedUrl.hostname.toLowerCase() === candidateUrl.hostname.toLowerCase()
+    );
   });
 }
 
@@ -133,10 +134,7 @@ function resolveRequestProtocol(
   const forwardedProto = getFirstHeaderValue(
     req.headers["x-forwarded-proto"]
   )?.toLowerCase();
-  if (
-    forwardedProto &&
-    SAFE_HTTP_PROTOCOLS.has(forwardedProto)
-  ) {
+  if (forwardedProto && SAFE_HTTP_PROTOCOLS.has(forwardedProto)) {
     return forwardedProto as "http" | "https";
   }
 
@@ -165,7 +163,9 @@ function resolveBaseUrl(
   const requestHost = requestHostHeader
     ? normalizeHostValue(requestHostHeader)
     : undefined;
-  const forwardedHostHeader = getFirstHeaderValue(req.headers["x-forwarded-host"]);
+  const forwardedHostHeader = getFirstHeaderValue(
+    req.headers["x-forwarded-host"]
+  );
   const forwardedHost = forwardedHostHeader
     ? normalizeHostValue(forwardedHostHeader)
     : undefined;

@@ -32,7 +32,9 @@ describe("verifyNip98Request", () => {
       url: "/api/db/update-order-status",
     } as any;
 
-    await expect(verifyNip98Request(req, "POST", { orderId: "o1" })).resolves.toEqual({
+    await expect(
+      verifyNip98Request(req, "POST", { orderId: "o1" })
+    ).resolves.toEqual({
       ok: false,
       error: "Missing NIP-98 authorization header",
     });
@@ -59,7 +61,9 @@ describe("verifyNip98Request", () => {
       url: "/api/db/update-order-status",
     } as any;
 
-    await expect(verifyNip98Request(req, "POST", { orderId: "o1" })).resolves.toEqual({
+    await expect(
+      verifyNip98Request(req, "POST", { orderId: "o1" })
+    ).resolves.toEqual({
       ok: false,
       error: "Invalid authorization signature",
     });
@@ -84,7 +88,9 @@ describe("verifyNip98Request", () => {
       url: "/api/db/update-order-status",
     } as any;
 
-    await expect(verifyNip98Request(req, "POST", { orderId: "o1" })).resolves.toEqual({
+    await expect(
+      verifyNip98Request(req, "POST", { orderId: "o1" })
+    ).resolves.toEqual({
       ok: false,
       error: "Authorization URL mismatch",
     });
@@ -177,7 +183,9 @@ describe("verifyNip98Request", () => {
       url: "/api/db/update-order-status",
     } as any;
 
-    await expect(verifyNip98Request(req, "POST", JSON.parse(body))).resolves.toEqual({
+    await expect(
+      verifyNip98Request(req, "POST", JSON.parse(body))
+    ).resolves.toEqual({
       ok: true,
       pubkey: "f".repeat(64),
     });

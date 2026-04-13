@@ -7,7 +7,8 @@ jest.mock("@/utils/nostr/nip98-auth", () => ({
 }));
 
 jest.mock("@/utils/db/db-service", () => ({
-  getOrderParticipants: (...args: unknown[]) => getOrderParticipantsMock(...args),
+  getOrderParticipants: (...args: unknown[]) =>
+    getOrderParticipantsMock(...args),
   updateOrderStatus: (...args: unknown[]) => updateOrderStatusMock(...args),
 }));
 

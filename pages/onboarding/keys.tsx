@@ -111,7 +111,7 @@ const Keys = () => {
               <div className="mb-6 flex flex-col space-y-2">
                 <div className="flex items-center gap-2">
                   <label className="text-light-text dark:text-dark-text text-xl font-bold">
-                    Passphrase<span className="text-red-500">*</span>
+                    Passphrase <span className="text-red-500">*</span>
                   </label>
                   <Tooltip
                     content="This passphrase acts as a password and is used to keep your account secure. Remember it and keep it safe as it can't be recovered!"

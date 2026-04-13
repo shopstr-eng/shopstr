@@ -29,25 +29,49 @@ describe("product-filter-helpers", () => {
     });
 
     it("should return true if product matches a selected category (case-insensitive)", () => {
-      expect(productSatisfiesCategoryFilter(mockProduct, new Set(["outdoors"]))).toBe(true);
+      expect(
+        productSatisfiesCategoryFilter(mockProduct, new Set(["outdoors"]))
+      ).toBe(true);
     });
 
     it("should return true if product matches any of the selected categories", () => {
-      expect(productSatisfiesCategoryFilter(mockProduct, new Set(["Gadgets", "Sustainable"]))).toBe(true);
+      expect(
+        productSatisfiesCategoryFilter(
+          mockProduct,
+          new Set(["Gadgets", "Sustainable"])
+        )
+      ).toBe(true);
     });
 
     it("should return false if product matches none of the selected categories", () => {
-      expect(productSatisfiesCategoryFilter(mockProduct, new Set(["Electronics"]))).toBe(false);
+      expect(
+        productSatisfiesCategoryFilter(mockProduct, new Set(["Electronics"]))
+      ).toBe(false);
     });
 
     it("should handle special regex characters in category names correctly", () => {
-      const productWithSpecialCategory = { 
-        ...mockProduct, 
-        categories: ["A.B", "C*D", "E(F)"] 
+      const productWithSpecialCategory = {
+        ...mockProduct,
+        categories: ["A.B", "C*D", "E(F)"],
       };
-      expect(productSatisfiesCategoryFilter(productWithSpecialCategory, new Set(["A.B"]))).toBe(true);
-      expect(productSatisfiesCategoryFilter(productWithSpecialCategory, new Set(["C*D"]))).toBe(true);
-      expect(productSatisfiesCategoryFilter(productWithSpecialCategory, new Set(["E(F)"]))).toBe(true);
+      expect(
+        productSatisfiesCategoryFilter(
+          productWithSpecialCategory,
+          new Set(["A.B"])
+        )
+      ).toBe(true);
+      expect(
+        productSatisfiesCategoryFilter(
+          productWithSpecialCategory,
+          new Set(["C*D"])
+        )
+      ).toBe(true);
+      expect(
+        productSatisfiesCategoryFilter(
+          productWithSpecialCategory,
+          new Set(["E(F)"])
+        )
+      ).toBe(true);
     });
   });
 
@@ -57,11 +81,15 @@ describe("product-filter-helpers", () => {
     });
 
     it("should return true if location matches", () => {
-      expect(productSatisfiesLocationFilter(mockProduct, "San Francisco")).toBe(true);
+      expect(productSatisfiesLocationFilter(mockProduct, "San Francisco")).toBe(
+        true
+      );
     });
 
     it("should return false if location does not match", () => {
-      expect(productSatisfiesLocationFilter(mockProduct, "New York")).toBe(false);
+      expect(productSatisfiesLocationFilter(mockProduct, "New York")).toBe(
+        false
+      );
     });
   });
 
@@ -90,13 +118,22 @@ describe("product-filter-helpers", () => {
     });
 
     it("should return false if no match found", () => {
-      expect(productSatisfiesSearchFilter(mockProduct, "smartphone")).toBe(false);
+      expect(productSatisfiesSearchFilter(mockProduct, "smartphone")).toBe(
+        false
+      );
     });
 
     it("should handle regex special characters in search", () => {
-      const productWithSpecialChars = { ...mockProduct, title: "Phone (v2) [Refurbished]" };
-      expect(productSatisfiesSearchFilter(productWithSpecialChars, "(v2)")).toBe(true);
-      expect(productSatisfiesSearchFilter(productWithSpecialChars, "[Refurbished]")).toBe(true);
+      const productWithSpecialChars = {
+        ...mockProduct,
+        title: "Phone (v2) [Refurbished]",
+      };
+      expect(
+        productSatisfiesSearchFilter(productWithSpecialChars, "(v2)")
+      ).toBe(true);
+      expect(
+        productSatisfiesSearchFilter(productWithSpecialChars, "[Refurbished]")
+      ).toBe(true);
     });
 
     it("should still use plain-text matching for non-bech32 searches containing npub/naddr text", () => {
@@ -105,16 +142,24 @@ describe("product-filter-helpers", () => {
         title: "npub guide",
         summary: "how to read an naddr reference",
       };
-      expect(productSatisfiesSearchFilter(productWithNostrTerms, "npub guide")).toBe(true);
-      expect(productSatisfiesSearchFilter(productWithNostrTerms, "naddr reference")).toBe(true);
+      expect(
+        productSatisfiesSearchFilter(productWithNostrTerms, "npub guide")
+      ).toBe(true);
+      expect(
+        productSatisfiesSearchFilter(productWithNostrTerms, "naddr reference")
+      ).toBe(true);
     });
 
-    // Note: Nip-19 decoding (naddr/npub) is handled by nostr-tools. 
+    // Note: Nip-19 decoding (naddr/npub) is handled by nostr-tools.
     // In a full integration test we would use real naddr strings.
     // Here we're mainly testing that the logic reaches the decode block.
     it("should return false for invalid naddr/npub strings instead of crashing", () => {
-      expect(productSatisfiesSearchFilter(mockProduct, "naddr1invalid")).toBe(false);
-      expect(productSatisfiesSearchFilter(mockProduct, "npub1invalid")).toBe(false);
+      expect(productSatisfiesSearchFilter(mockProduct, "naddr1invalid")).toBe(
+        false
+      );
+      expect(productSatisfiesSearchFilter(mockProduct, "npub1invalid")).toBe(
+        false
+      );
     });
   });
 

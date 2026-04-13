@@ -19,7 +19,6 @@ import {
 import { getListingSlug } from "@/utils/url-slugs";
 import { productSatisfiesAllFilters } from "@/utils/parsers/product-filter-helpers";
 
-
 const DisplayProducts = ({
   focusedPubkey,
   selectedCategories,
@@ -264,7 +263,6 @@ const DisplayProducts = ({
       setShowModal(false);
     }
   };
-
 
   const getCurrentPageProducts = () => {
     const startIndex = (currentPage - 1) * itemsPerPage;

@@ -177,16 +177,16 @@ describe("MCP onboard API quick-start correctness", () => {
     };
 
     expect(body.quickStart.examples.curl_initialize).toContain(
-      'curl -i -X POST http://localhost:5000/api/mcp'
+      "curl -i -X POST http://localhost:5000/api/mcp"
     );
     expect(body.quickStart.examples.curl_initialize).toContain(
-      'Accept: application/json, text/event-stream'
+      "Accept: application/json, text/event-stream"
     );
     expect(body.quickStart.examples.curl_list_tools).toContain(
-      'Mcp-Session-Id: <session-id-from-initialize>'
+      "Mcp-Session-Id: <session-id-from-initialize>"
     );
     expect(body.quickStart.examples.curl_search).toContain(
-      'Accept: application/json, text/event-stream'
+      "Accept: application/json, text/event-stream"
     );
   });
 

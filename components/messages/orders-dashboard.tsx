@@ -930,7 +930,9 @@ const OrdersDashboard = () => {
           Authorization: authHeader,
         },
         body,
-      }).catch((err) => console.error("Failed to persist shipped status:", err));
+      }).catch((err) =>
+        console.error("Failed to persist shipped status:", err)
+      );
 
       handleCloseShippingModal();
     } catch (error) {
