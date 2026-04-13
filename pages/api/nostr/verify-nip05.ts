@@ -169,7 +169,7 @@ async function readLimitedJson(
   }
 
   return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
+    let body = "";
     let bytesRead = 0;
     let settled = false;
 
@@ -192,14 +192,14 @@ async function readLimitedJson(
         return;
       }
 
-      chunks.push(buffer);
+      body += buffer.toString("utf8");
     });
 
     response.on("end", () => {
       if (settled) return;
 
       try {
-        const parsed = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+        const parsed = JSON.parse(body);
         finish(parsed && typeof parsed === "object" ? parsed : null);
       } catch {
         finish(null);
