@@ -10,16 +10,12 @@ const buildTagMap = (messageEvent: NostrMessageEvent) =>
       .map((tag) => [tag[0], tag[1]] as [string, string])
   );
 
-export const buildOrderGroupingKey = (
+const _buildOrderGroupingKeyFromMap = (
+  tagsMap: Map<string, string>,
   messageEvent: NostrMessageEvent
-): string => {
-  const tagsMap = buildTagMap(messageEvent);
-  const itemTag = messageEvent.tags.find(
-    (tag): tag is [string, string, string?] => tag[0] === "item"
-  );
+) => {
+  const itemTag = messageEvent.tags.find((tag) => tag[0] === "item");
 
-  // Different lifecycle messages for the same order can carry different subjects
-  // and order tags, so we group them by the stable product and fulfillment fields.
   return [
     tagsMap.get("a") || itemTag?.[1] || "",
     tagsMap.get("amount") || "",
@@ -29,11 +25,19 @@ export const buildOrderGroupingKey = (
     .join("\0");
 };
 
+export const buildOrderGroupingKey = (
+  messageEvent: NostrMessageEvent
+): string => _buildOrderGroupingKeyFromMap(buildTagMap(messageEvent), messageEvent);
+
 export const getOrderStatusLookupKeys = (messageEvent: NostrMessageEvent) => {
   const tagsMap = buildTagMap(messageEvent);
   return Array.from(
     new Set(
-      [tagsMap.get("order"), buildOrderGroupingKey(messageEvent), messageEvent.id]
+      [
+        tagsMap.get("order"),
+        _buildOrderGroupingKeyFromMap(tagsMap, messageEvent),
+        messageEvent.id,
+      ]
         .filter((value): value is string => Boolean(value))
     )
   );
@@ -76,8 +80,8 @@ export const getLatestShippingInfo = (
   const tracking = tagsMap.get("tracking") || "";
   const carrier = tagsMap.get("carrier") || "";
   const etaValue = tagsMap.get("eta");
-  const parsedEta = etaValue ? parseInt(etaValue, 10) : 0;
-  const eta = Number.isNaN(parsedEta) ? 0 : parsedEta;
+  const parsedEta = etaValue ? Number(etaValue.trim()) : 0;
+  const eta = Number.isFinite(parsedEta) ? parsedEta : 0;
 
   return {
     tracking,

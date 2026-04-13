@@ -232,6 +232,43 @@ describe("ChatPanel Component", () => {
       ).toBeInTheDocument();
     });
 
+    it("should block completion when no shipping info message exists", async () => {
+      await renderComponent(
+        {
+          isPayment: true,
+          chatsMap: new Map([
+            [
+              "test-pubkey-1",
+              {
+                decryptedChat: [
+                  {
+                    id: "order-msg-1",
+                    pubkey: "test-pubkey-1",
+                    kind: 14,
+                    content: "Order placed",
+                    created_at: 1,
+                    sig: "sig-1",
+                    read: true,
+                    tags: [["subject", "order-info"]],
+                  },
+                ],
+                unreadCount: 0,
+              },
+            ],
+          ]),
+        },
+        {}
+      );
+
+      await userEvent.click(
+        await screen.findByRole("button", { name: /Mark as Completed/i })
+      );
+
+      expect(
+        await screen.findByText(/no shipping update was found/i)
+      ).toBeInTheDocument();
+    });
+
     it("should gracefully handle errors on shipping form submission", async () => {
       const consoleErrorSpy = jest
         .spyOn(console, "error")

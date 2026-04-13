@@ -60,6 +60,11 @@ const ChatPanel = ({
   isSendingDMLoading: boolean;
   isPayment: boolean;
 }) => {
+  const FIELD_LABELS: Record<string, string> = {
+    tracking: "Tracking number",
+    carrier: "Carrier",
+  };
+
   const [messageInput, setMessageInput] = useState("");
   const [messages, setMessages] = useState<NostrMessageEvent[]>([]); // [chatPubkey, chat]
   const [showShippingModal, setShowShippingModal] = useState(false);
@@ -177,9 +182,9 @@ const ChatPanel = ({
 
       if (shippingInfo.missingFields.length > 0) {
         setFailureText(
-          `Cannot complete this order yet. Missing shipping fields: ${shippingInfo.missingFields.join(
-            ", "
-          )}.`
+          `Cannot complete this order yet. Missing shipping fields: ${shippingInfo.missingFields
+            .map((field) => FIELD_LABELS[field] ?? field)
+            .join(", ")}.`
         );
         setShowFailureModal(true);
         return;
