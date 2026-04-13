@@ -111,8 +111,8 @@ const UserProfilePage = () => {
             <ShopstrSpinner />
           ) : (
             <>
-              <div className="bg-light-fg dark:bg-dark-fg mb-20 h-40 rounded-lg">
-                <div className="bg-shopstr-purple-light dark:bg-dark-fg relative flex h-40 items-center justify-center rounded-lg">
+              <div className="relative mb-14">
+                <div className="relative flex h-40 items-center justify-center overflow-hidden rounded-lg bg-shopstr-purple-light dark:bg-dark-fg">
                   {watchBanner && (
                     <Image
                       alt={"User banner image"}
@@ -121,36 +121,36 @@ const UserProfilePage = () => {
                     />
                   )}
                   <FileUploaderButton
-                    className={`bg-shopstr-purple absolute right-5 bottom-5 z-20 border-2 border-white shadow-md ${SHOPSTRBUTTONCLASSNAMES}`}
+                    className={`absolute bottom-3 right-3 z-20 border-2 border-white bg-shopstr-purple shadow-md ${SHOPSTRBUTTONCLASSNAMES}`}
                     imgCallbackOnUpload={(imgUrl) => setValue("banner", imgUrl)}
                   >
                     Upload Banner
                   </FileUploaderButton>
                 </div>
-                <div className="flex items-center justify-center">
-                  <div className="relative z-20 mt-[-3rem] h-24 w-24">
-                    <div className="">
-                      <FileUploaderButton
-                        isIconOnly
-                        className={`absolute right-[-0.5rem] bottom-[-0.5rem] z-20 ${SHOPSTRBUTTONCLASSNAMES}`}
-                        imgCallbackOnUpload={(imgUrl) =>
-                          setValue("picture", imgUrl)
-                        }
-                      />
+                <div className="absolute -bottom-12 left-1/2 z-20 -translate-x-1/2">
+                  <div className="relative h-24 w-24">
+                    <div className="h-24 w-24 overflow-hidden rounded-full">
                       {watchPicture ? (
                         <Image
                           src={watchPicture}
                           alt="user profile picture"
-                          className="rounded-full"
+                          className="h-full w-full rounded-full object-cover"
                         />
                       ) : (
                         <Image
                           src={defaultImage}
                           alt="user profile picture"
-                          className="rounded-full"
+                          className="h-full w-full rounded-full object-cover"
                         />
                       )}
                     </div>
+                    <FileUploaderButton
+                      isIconOnly
+                      className={`absolute -bottom-1 -right-1 z-30 transition-transform hover:scale-110 ${SHOPSTRBUTTONCLASSNAMES}`}
+                      imgCallbackOnUpload={(imgUrl) =>
+                        setValue("picture", imgUrl)
+                      }
+                    />
                   </div>
                 </div>
               </div>

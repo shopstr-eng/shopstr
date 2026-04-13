@@ -215,7 +215,7 @@ const TopNav = ({
           {signedIn ? (
             <ProfileWithDropdown
               pubkey={userPubkey!}
-              baseClassname="flex-shrink-0 dark:hover:shopstr-yellow-light rounded-3xl hover:scale-105 hover:bg-light-bg hover:shadow-lg dark:hover:bg-dark-bg"
+              baseClassname="flex-shrink-0 rounded-full transition-opacity hover:opacity-80"
               dropDownKeys={[
                 "shop_profile",
                 "user_profile",
@@ -309,7 +309,7 @@ const TopNav = ({
           {signedIn ? (
             <ProfileWithDropdown
               pubkey={userPubkey!}
-              baseClassname="justify-start dark:hover:shopstr-yellow-light pl-2 rounded-3xl py-2 hover:scale-105 hover:bg-light-bg hover:shadow-lg dark:hover:bg-dark-bg"
+              baseClassname="justify-start pl-2 rounded-full py-2 transition-opacity hover:opacity-80"
               dropDownKeys={[
                 "shop_profile",
                 "user_profile",

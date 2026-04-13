@@ -181,7 +181,7 @@ function MarketplacePage({
       focusedPubkey &&
       reviewsContext.merchantReviewsData.has(focusedPubkey) &&
       typeof reviewsContext.merchantReviewsData.get(focusedPubkey) !=
-        "undefined" &&
+      "undefined" &&
       reviewsContext.productReviewsData.has(focusedPubkey) &&
       typeof reviewsContext.productReviewsData.get(focusedPubkey) != "undefined"
     ) {
@@ -345,11 +345,10 @@ function MarketplacePage({
                               return (
                                 <Chip
                                   key={index}
-                                  className={`text-light-text dark:text-dark-text ${
-                                    value === "1"
+                                  className={`text-light-text dark:text-dark-text ${value === "1"
                                       ? "bg-green-500"
                                       : "bg-red-500"
-                                  }`}
+                                    }`}
                                 >
                                   {`overall: ${value === "1" ? "👍" : "👎"}`}
                                 </Chip>
@@ -358,15 +357,13 @@ function MarketplacePage({
                               return (
                                 <Chip
                                   key={index}
-                                  className={`text-light-text dark:text-dark-text ${
-                                    value === "1"
+                                  className={`text-light-text dark:text-dark-text ${value === "1"
                                       ? "bg-green-500"
                                       : "bg-red-500"
-                                  }`}
+                                    }`}
                                 >
-                                  {`${category}: ${
-                                    value === "1" ? "👍" : "👎"
-                                  }`}
+                                  {`${category}: ${value === "1" ? "👍" : "👎"
+                                    }`}
                                 </Chip>
                               );
                             }
@@ -577,11 +574,10 @@ function MarketplacePage({
                   {merchantReview && merchantReview >= 0.5 ? (
                     <>
                       <FaceSmileIcon
-                        className={`h-10 w-10 p-1 ${
-                          merchantReview >= 0.75
+                        className={`h-10 w-10 p-1 ${merchantReview >= 0.75
                             ? "text-green-500"
                             : "text-green-300"
-                        }`}
+                          }`}
                       />
                       <span className="text-light-text dark:text-dark-text mr-2 text-sm whitespace-nowrap">
                         {merchantQuality}
@@ -590,11 +586,10 @@ function MarketplacePage({
                   ) : (
                     <>
                       <FaceFrownIcon
-                        className={`h-10 w-10 p-1 ${
-                          merchantReview >= 0.25
+                        className={`h-10 w-10 p-1 ${merchantReview >= 0.25
                             ? "text-red-300"
                             : "text-red-500"
-                        }`}
+                          }`}
                       />
                       <span className="text-light-text dark:text-dark-text mr-2 text-sm whitespace-nowrap">
                         {merchantQuality}

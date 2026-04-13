@@ -292,7 +292,7 @@ const DisplayProducts = ({
         ) : null}
         {filteredProducts.length > 0 && (
           <>
-            <div className="grid max-w-full grid-cols-[repeat(auto-fill,minmax(280px,1fr))] justify-items-stretch gap-4 overflow-x-hidden">
+            <div className="grid max-w-full grid-cols-1 justify-items-stretch gap-4 overflow-x-hidden px-2 sm:grid-cols-[repeat(auto-fill,minmax(280px,1fr))] sm:px-0">
               {getCurrentPageProducts().map(
                 (productData: ProductData, index) => (
                   <ProductCard
