@@ -39,7 +39,7 @@ export const productSatisfiesLocationFilter = (
 
 /**
  * Checks if a product satisfies the search filter.
- * Supports Nip-19 addresses (naddr, npub) and text-based search in title/summary.
+ * Supports Nip-19 addresses (naddr1, npub1) and text-based search in title/summary.
  * Also supports numeric price matching.
  * @param productData - The product to check.
  * @param selectedSearch - The search query string.
@@ -55,7 +55,7 @@ export const productSatisfiesSearchFilter = (
   if (!productData.title) return false;
 
   // Handle Nip-19 naddr search
-  if (normalizedSearch.includes("naddr")) {
+  if (normalizedSearch.includes("naddr1")) {
     try {
       const parsedNaddr = nip19.decode(normalizedSearch);
       if (parsedNaddr.type === "naddr") {
@@ -71,7 +71,7 @@ export const productSatisfiesSearchFilter = (
   }
 
   // Handle Nip-19 npub search
-  if (normalizedSearch.includes("npub")) {
+  if (normalizedSearch.includes("npub1")) {
     try {
       const parsedNpub = nip19.decode(normalizedSearch);
       if (parsedNpub.type === "npub") {
@@ -98,7 +98,7 @@ export const productSatisfiesSearchFilter = (
 
     // Match numeric price
     const numericSearch = parseFloat(normalizedSearch);
-    if (!isNaN(numericSearch) && Math.abs(productData.price - numericSearch) < 0.001) {
+    if (!isNaN(numericSearch) && productData.price === numericSearch) {
       return true;
     }
 

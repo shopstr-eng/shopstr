@@ -38,7 +38,7 @@ import {
   finalizeAndSendNostrEvent,
 } from "@/utils/nostr/nostr-helper-functions";
 import LocationDropdown from "./utility-components/dropdowns/location-dropdown";
-import ConfirmActionModal from "./utility-components/modals/confirm-action-modal";
+import ConfirmActionDropdown from "./utility-components/dropdowns/confirm-action-dropdown";
 import { ProductContext, ProfileMapContext } from "../utils/context/context";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
 import { buildSrcSet } from "@/utils/images";
@@ -492,9 +492,9 @@ export default function ProductForm({
                       <div className="absolute top-4 right-4 z-20">
                         {" "}
                         {/* Increased spacing */}
-                        <ConfirmActionModal
-                          description="Are you sure you want to delete this image?"
-                          confirmLabel="Delete Image"
+                        <ConfirmActionDropdown
+                          helpText="Are you sure you want to delete this image?"
+                          buttonLabel="Delete Image"
                           onConfirm={deleteImage(index)}
                         >
                           <Button
@@ -509,7 +509,7 @@ export default function ProductForm({
                           >
                             <TrashIcon style={{ padding: 4 }} />
                           </Button>
-                        </ConfirmActionModal>
+                        </ConfirmActionDropdown>
                       </div>
                       <Image
                         alt="Product Image"
@@ -1718,17 +1718,17 @@ export default function ProductForm({
           </ModalBody>
 
           <ModalFooter>
-            <ConfirmActionModal
-              description={
+            <ConfirmActionDropdown
+              helpText={
                 "Are you sure you want to clear this form? You will lose all current progress."
               }
-              confirmLabel={"Clear Form"}
+              buttonLabel={"Clear Form"}
               onConfirm={clear}
             >
               <Button color="danger" variant="light">
                 Clear
               </Button>
-            </ConfirmActionModal>
+            </ConfirmActionDropdown>
 
             <Button
               className={SHOPSTRBUTTONCLASSNAMES}

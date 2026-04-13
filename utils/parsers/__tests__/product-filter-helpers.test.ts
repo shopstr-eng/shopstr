@@ -79,13 +79,13 @@ describe("product-filter-helpers", () => {
       expect(productSatisfiesSearchFilter(mockProduct, "hydrated")).toBe(true);
     });
 
-    it("should match by numeric price with precision tolerance", () => {
+    it("should match by exact numeric price", () => {
       expect(productSatisfiesSearchFilter(mockProduct, "25")).toBe(true);
-      expect(productSatisfiesSearchFilter(mockProduct, "25.0001")).toBe(true);
-      expect(productSatisfiesSearchFilter(mockProduct, "24.9999")).toBe(true);
     });
 
-    it("should return false if price is outside tolerance", () => {
+    it("should return false if price is not an exact match", () => {
+      expect(productSatisfiesSearchFilter(mockProduct, "25.0001")).toBe(false);
+      expect(productSatisfiesSearchFilter(mockProduct, "24.9999")).toBe(false);
       expect(productSatisfiesSearchFilter(mockProduct, "25.01")).toBe(false);
     });
 
@@ -97,6 +97,16 @@ describe("product-filter-helpers", () => {
       const productWithSpecialChars = { ...mockProduct, title: "Phone (v2) [Refurbished]" };
       expect(productSatisfiesSearchFilter(productWithSpecialChars, "(v2)")).toBe(true);
       expect(productSatisfiesSearchFilter(productWithSpecialChars, "[Refurbished]")).toBe(true);
+    });
+
+    it("should still use plain-text matching for non-bech32 searches containing npub/naddr text", () => {
+      const productWithNostrTerms = {
+        ...mockProduct,
+        title: "npub guide",
+        summary: "how to read an naddr reference",
+      };
+      expect(productSatisfiesSearchFilter(productWithNostrTerms, "npub guide")).toBe(true);
+      expect(productSatisfiesSearchFilter(productWithNostrTerms, "naddr reference")).toBe(true);
     });
 
     // Note: Nip-19 decoding (naddr/npub) is handled by nostr-tools. 

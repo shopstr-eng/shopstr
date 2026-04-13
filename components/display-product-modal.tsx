@@ -19,7 +19,7 @@ import ImageCarousel from "./utility-components/image-carousel";
 import CompactCategories from "./utility-components/compact-categories";
 import { locationAvatar } from "./utility-components/dropdowns/location-dropdown";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
-import ConfirmActionModal from "./utility-components/modals/confirm-action-modal";
+import ConfirmActionDropdown from "./utility-components/dropdowns/confirm-action-dropdown";
 import { ProfileWithDropdown } from "./utility-components/profile/profile-dropdown";
 import SuccessModal from "./utility-components/success-modal";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
@@ -326,9 +326,9 @@ export default function DisplayProductModal({
                   >
                     Edit Listing
                   </Button>
-                  <ConfirmActionModal
-                    description="Are you sure you want to delete this listing?"
-                    confirmLabel="Delete Listing"
+                  <ConfirmActionDropdown
+                    helpText="Are you sure you want to delete this listing?"
+                    buttonLabel="Delete Listing"
                     onConfirm={beginDeleteListingProcess}
                   >
                     <Button
@@ -341,7 +341,7 @@ export default function DisplayProductModal({
                     >
                       Delete Listing
                     </Button>
-                  </ConfirmActionModal>
+                  </ConfirmActionDropdown>
                 </>
               )}
             </div>
