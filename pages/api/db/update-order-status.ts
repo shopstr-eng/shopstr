@@ -67,10 +67,7 @@ export default async function handler(
   }
 
   try {
-    const { buyerPubkey, sellerPubkey } = await getOrderParticipants(
-      orderId,
-      messageId
-    );
+    const { buyerPubkey, sellerPubkey } = await getOrderParticipants(orderId);
 
     if (!buyerPubkey || !sellerPubkey) {
       return res.status(404).json({

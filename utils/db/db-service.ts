@@ -913,10 +913,7 @@ export async function getUnreadMessageCount(pubkey: string): Promise<number> {
   }
 }
 
-export async function getOrderParticipants(
-  orderId: string,
-  messageId?: string
-): Promise<{
+export async function getOrderParticipants(orderId: string): Promise<{
   buyerPubkey: string | null;
   sellerPubkey: string | null;
 }> {
@@ -928,9 +925,9 @@ export async function getOrderParticipants(
     const result = await client.query<{ tags: string[][] }>(
       `SELECT tags
        FROM message_events
-       WHERE order_id = $1 OR ($2 IS NOT NULL AND id = $2)
+       WHERE order_id = $1
        ORDER BY created_at DESC`,
-      [orderId, messageId || null] as any[]
+      [orderId] as any[]
     );
 
     let buyerPubkey: string | null = null;
