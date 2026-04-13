@@ -42,7 +42,7 @@ outputType = "webview"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "pnpm run dev:prod"
+args = "pnpm run dev"
 waitForPort = 5000
 
 [agent]
