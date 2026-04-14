@@ -1,5 +1,4 @@
 import { useContext, useRef, useState } from "react";
-
 import { Button, Input, Progress } from "@heroui/react";
 import {
   blossomUploadImages,
@@ -307,7 +306,7 @@ export const FileUploaderButton = ({
           }
           return null;
         })
-        .filter((url) => url !== null);
+        .filter((url): url is string => typeof url === "string" && url.length > 0);
 
       setTimeout(() => {
         setProgress(null);
@@ -345,14 +344,20 @@ export const FileUploaderButton = ({
 
   const handleChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    setLoading(true);
-    if (files) {
-      const uploadedImages = await uploadImages(files);
-      uploadedImages
-        .filter((imgUrl): imgUrl is string => imgUrl !== null)
-        .forEach((imgUrl) => imgCallbackOnUpload(imgUrl));
+    if (files && files.length > 0) {
+      setLoading(true);
+      try {
+        const uploadedImages = await uploadImages(files);
+        uploadedImages
+          .filter(
+            (imgUrl): imgUrl is string =>
+              typeof imgUrl === "string" && imgUrl.length > 0
+          )
+          .forEach((imgUrl) => imgCallbackOnUpload(imgUrl));
+      } finally {
+        setLoading(false);
+      }
     }
-    setLoading(false);
     if (hiddenFileInput.current) {
       hiddenFileInput.current.value = "";
     }
@@ -383,11 +388,17 @@ export const FileUploaderButton = ({
     const files = e.dataTransfer.files;
     if (files && files.length > 0) {
       setLoading(true);
-      const uploadedImages = await uploadImages(files);
-      uploadedImages
-        .filter((imgUrl): imgUrl is string => imgUrl !== null)
-        .forEach((imgUrl) => imgCallbackOnUpload(imgUrl));
-      setLoading(false);
+      try {
+        const uploadedImages = await uploadImages(files);
+        uploadedImages
+          .filter(
+            (imgUrl): imgUrl is string =>
+              typeof imgUrl === "string" && imgUrl.length > 0
+          )
+          .forEach((imgUrl) => imgCallbackOnUpload(imgUrl));
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
@@ -452,6 +463,7 @@ export const FileUploaderButton = ({
 
         {!isPlaceholder && (
           <Button
+            type="button"
             isLoading={loading}
             onClick={handleClick}
             isIconOnly={isIconOnly || loading}

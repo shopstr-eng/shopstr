@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useContext, useMemo } from "react";
+import { useEffect, useState, useContext, useMemo } from "react";
 import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs";
 import { ProfileMapContext } from "@/utils/context/context";
 import { useForm, Controller } from "react-hook-form";
@@ -22,7 +22,12 @@ import {
   NostrContext,
 } from "@/components/utility-components/nostr-context-provider";
 import { NostrNSecSigner } from "@/utils/nostr/signers/nostr-nsec-signer";
-import { createNostrProfileEvent } from "@/utils/nostr/nostr-helper-functions";
+import {
+  createNostrProfileEvent,
+  getLocalUserProfileKey,
+  parseLocalProfileFallback,
+  isProfileContentPopulated,
+} from "@/utils/nostr/nostr-helper-functions";
 import { FileUploaderButton } from "@/components/utility-components/file-uploader";
 import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
 import ProtectedRoute from "@/components/utility-components/protected-route";
@@ -62,44 +67,106 @@ const UserProfilePage = () => {
   const defaultImage = useMemo(() => {
     return "https://robohash.org/" + userPubkey;
   }, [userPubkey]);
-
-  const contextLoadedRef = useRef(false);
-  useEffect(() => {
-    if (!userPubkey) return;
-    if (contextLoadedRef.current) return;
-    setIsFetchingProfile(true);
-    fetch(`/api/db/fetch-profile?pubkey=${encodeURIComponent(userPubkey)}`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (contextLoadedRef.current) return;
-        if (data?.profile?.content) reset(data.profile.content);
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (!contextLoadedRef.current) setIsFetchingProfile(false);
-      });
-  }, [userPubkey, reset]);
+  const profileImageSrc = watchPicture || defaultImage;
 
   useEffect(() => {
     if (!userPubkey) return;
-    const profile = profileContext.profileData.get(userPubkey);
-    if (!profile) return;
-    contextLoadedRef.current = true;
     setIsFetchingProfile(true);
-    reset(profile.content);
+
+    const localFallback = parseLocalProfileFallback(
+      localStorage.getItem(getLocalUserProfileKey(userPubkey))
+    );
+
+    const profileMap = profileContext.profileData;
+    const profile = profileMap.has(userPubkey)
+      ? profileMap.get(userPubkey)
+      : undefined;
+
+    if (profile) {
+      const profileCreatedAt = profile.created_at || 0;
+      const shouldUseLocalFallback =
+        !!localFallback &&
+        localFallback.updatedAt > profileCreatedAt &&
+        isProfileContentPopulated(localFallback.content);
+
+      if (shouldUseLocalFallback) {
+        reset(localFallback.content);
+      } else {
+        reset(profile.content);
+      }
+
+      try {
+        localStorage.setItem(
+          getLocalUserProfileKey(userPubkey),
+          JSON.stringify({
+            content: shouldUseLocalFallback
+              ? localFallback!.content
+              : profile.content,
+            updatedAt: shouldUseLocalFallback
+              ? localFallback!.updatedAt
+              : profileCreatedAt,
+          })
+        );
+      } catch (error) {
+        console.error("Failed to persist profile fallback locally:", error);
+      }
+    } else {
+      try {
+        if (localFallback?.content) {
+          reset(localFallback.content);
+        }
+      } catch (error) {
+        console.error("Failed to read local profile fallback:", error);
+      }
+    }
     setIsFetchingProfile(false);
   }, [profileContext, userPubkey, reset]);
 
   const onSubmit = async (data: { [x: string]: string }) => {
-    if (!userPubkey) throw new Error("pubkey is undefined");
+    if (!userPubkey) {
+      console.error("Cannot save profile: pubkey is undefined");
+      return;
+    }
+
     setIsUploadingProfile(true);
-    await createNostrProfileEvent(nostr!, signer!, JSON.stringify(data));
-    profileContext.updateProfileData({
-      pubkey: userPubkey!,
-      content: data,
-      created_at: 0,
-    });
-    setIsUploadingProfile(false);
+    try {
+      const profileMap = profileContext.profileData;
+      const existingProfile = profileMap.has(userPubkey)
+        ? profileMap.get(userPubkey)?.content
+        : {};
+
+      const updatedData = {
+        ...existingProfile,
+        ...data,
+      };
+
+      try {
+        localStorage.setItem(
+          getLocalUserProfileKey(userPubkey),
+          JSON.stringify({
+            content: updatedData,
+            updatedAt: Math.floor(Date.now() / 1000),
+          })
+        );
+      } catch (error) {
+        console.error("Failed to save local profile fallback:", error);
+      }
+
+      await createNostrProfileEvent(
+        nostr!,
+        signer!,
+        JSON.stringify(updatedData)
+      );
+      profileContext.updateProfileData({
+        pubkey: userPubkey,
+        content: updatedData,
+        created_at: Math.floor(Date.now() / 1000),
+      });
+    } catch (error) {
+      console.error("Failed to save user profile:", error);
+    } finally {
+      setIsUploadingProfile(false);
+    }
   };
 
   return (
@@ -137,19 +204,13 @@ const UserProfilePage = () => {
                           setValue("picture", imgUrl)
                         }
                       />
-                      {watchPicture ? (
-                        <Image
-                          src={watchPicture}
-                          alt="user profile picture"
-                          className="rounded-full"
-                        />
-                      ) : (
-                        <Image
-                          src={defaultImage}
-                          alt="user profile picture"
-                          className="rounded-full"
-                        />
-                      )}
+                      <Image
+                        key={profileImageSrc}
+                        src={profileImageSrc}
+                        alt="user profile picture"
+                        radius="full"
+                        className="h-24 w-24 object-cover"
+                      />
                     </div>
                   </div>
                 </div>
@@ -496,7 +557,7 @@ const UserProfilePage = () => {
                       labelPlacement="outside"
                       onChange={onChange}
                       onBlur={onBlur}
-                      value={value.toString()}
+                      value={value?.toString() || ""}
                     />
                   )}
                 />
