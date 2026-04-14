@@ -32,6 +32,13 @@ import parseTags, {
   ProductData,
 } from "@/utils/parsers/product-parser-functions";
 import {
+  buildOrderGroupingKey,
+  getOrderConsolidationKey,
+  getOrderStatusLookupKeys,
+  registerTaggedOrderGroupingKey,
+  resolveExplicitPaymentMethod,
+} from "@/utils/messages/order-message-utils";
+import {
   constructGiftWrappedEvent,
   constructMessageSeal,
   constructMessageGiftWrap,
@@ -72,6 +79,9 @@ ChartJS.register(
 
 interface OrderData {
   orderId: string;
+  orderTag?: string;
+  orderGroupKey: string;
+  statusLookupKeys: string[];
   buyerPubkey: string;
   productAddress: string;
   amount: number;
@@ -285,7 +295,9 @@ const OrdersDashboard = () => {
         const chat = entry[1] as NostrMessageEvent[];
         for (const messageEvent of chat) {
           const tagsMap = new Map(
-            messageEvent.tags.map((tag: string[]) => [tag[0], tag[1]])
+            messageEvent.tags
+              .filter((tag): tag is [string, string] => tag.length >= 2)
+              .map(([key, value]) => [key, value])
           );
           const subject = tagsMap.get("subject") || "";
           if (
@@ -294,9 +306,11 @@ const OrdersDashboard = () => {
             subject === "shipping-info" ||
             subject === "order-completed"
           ) {
-            const orderId = tagsMap.get("order") || messageEvent.id;
-            if (orderId && !orderIds.includes(orderId)) {
-              orderIds.push(orderId);
+            const orderStatusKeys = getOrderStatusLookupKeys(messageEvent);
+            for (const statusKey of orderStatusKeys) {
+              if (!orderIds.includes(statusKey)) {
+                orderIds.push(statusKey);
+              }
             }
           }
         }
@@ -351,7 +365,10 @@ const OrdersDashboard = () => {
             subject === "order-completed" ||
             subject === "zapsnag-order"
           ) {
-            const orderId = tagsMap.get("order") || messageEvent.id;
+            const orderTag = tagsMap.get("order") || "";
+            const orderGroupKey = buildOrderGroupingKey(messageEvent);
+            const statusLookupKeys = getOrderStatusLookupKeys(messageEvent);
+            const orderId = orderTag || messageEvent.id;
             const itemTag = messageEvent.tags.find((tag) => tag[0] === "item");
             const productAddress =
               tagsMap.get("a") || (itemTag ? itemTag[1] : "") || "";
@@ -441,33 +458,13 @@ const OrdersDashboard = () => {
             }
             const finalAmount = amount > 0 ? amount : productPrice * quantity;
 
-            let paymentMethod = "Not specified";
-            if (paymentType) {
-              switch (paymentType.toLowerCase()) {
-                case "ecash":
-                  paymentMethod = "Cashu";
-                  break;
-                case "lightning":
-                  paymentMethod = "Lightning";
-                  break;
-                default:
-                  paymentMethod =
-                    paymentType.charAt(0).toUpperCase() + paymentType.slice(1);
-              }
-            } else if (messageEvent.content) {
-              const content = messageEvent.content.toLowerCase();
-              if (content.includes("lightning") || content.includes("lnurl")) {
-                paymentMethod = "Lightning";
-              } else if (
-                content.includes("cashu") ||
-                content.includes("ecash")
-              ) {
-                paymentMethod = "Cashu";
-              }
-            }
+            const paymentMethod = resolveExplicitPaymentMethod(paymentType);
 
             ordersList.push({
               orderId,
+              orderTag: orderTag || undefined,
+              orderGroupKey,
+              statusLookupKeys,
               buyerPubkey,
               productAddress,
               amount: finalAmount,
@@ -501,12 +498,28 @@ const OrdersDashboard = () => {
       }
 
       const consolidatedOrdersMap = new Map<string, OrderData>();
+      const taggedOrderGroupKeys = new Map<string, string | null>();
+
+      const getCachedStatusForOrder = (order: OrderData) => {
+        for (const lookupKey of order.statusLookupKeys) {
+          const cachedStatus = cachedStatuses[lookupKey];
+          if (cachedStatus) {
+            return cachedStatus;
+          }
+        }
+
+        return undefined;
+      };
 
       for (const order of ordersList) {
-        const existing = consolidatedOrdersMap.get(order.orderId);
+        const consolidationKey = getOrderConsolidationKey(
+          order,
+          taggedOrderGroupKeys
+        );
+        const existing = consolidatedOrdersMap.get(consolidationKey);
 
         if (!existing) {
-          const cachedStatus = cachedStatuses[order.orderId];
+          const cachedStatus = getCachedStatusForOrder(order);
           const statusPriorityInit: Record<string, number> = {
             canceled: 5,
             completed: 4,
@@ -518,13 +531,19 @@ const OrdersDashboard = () => {
             ? statusPriorityInit[cachedStatus] || 0
             : 0;
           const orderPriority = statusPriorityInit[order.status] || 0;
-          consolidatedOrdersMap.set(order.orderId, {
+          consolidatedOrdersMap.set(consolidationKey, {
             ...order,
+            orderId: order.orderTag || order.orderId,
             status:
               cachedPriority > orderPriority && cachedStatus
                 ? cachedStatus
                 : order.status,
           });
+          registerTaggedOrderGroupingKey(
+            order,
+            taggedOrderGroupKeys,
+            consolidationKey
+          );
         } else {
           const statusPriority: Record<string, number> = {
             canceled: 5,
@@ -535,7 +554,7 @@ const OrdersDashboard = () => {
           };
           const existingPriority = statusPriority[existing.status] || 0;
           const newPriority = statusPriority[order.status] || 0;
-          const cachedStatus = cachedStatuses[order.orderId];
+          const cachedStatus = getCachedStatusForOrder(order);
           const cachedPriority = cachedStatus
             ? statusPriority[cachedStatus] || 0
             : 0;
@@ -549,8 +568,15 @@ const OrdersDashboard = () => {
             finalStatus = cachedStatus;
           }
 
-          consolidatedOrdersMap.set(order.orderId, {
+          const mergedStatusLookupKeys = Array.from(
+            new Set([...existing.statusLookupKeys, ...order.statusLookupKeys])
+          );
+
+          consolidatedOrdersMap.set(consolidationKey, {
             ...existing,
+            orderTag: existing.orderTag || order.orderTag,
+            orderId: existing.orderTag || order.orderTag || existing.orderId,
+            statusLookupKeys: mergedStatusLookupKeys,
             status: finalStatus,
             address: order.address || existing.address,
             pickupLocation: order.pickupLocation || existing.pickupLocation,
@@ -592,6 +618,11 @@ const OrdersDashboard = () => {
               order.subscriptionFrequency || existing.subscriptionFrequency,
             subscriptionId: order.subscriptionId || existing.subscriptionId,
           });
+          registerTaggedOrderGroupingKey(
+            order,
+            taggedOrderGroupKeys,
+            consolidationKey
+          );
         }
       }
 
@@ -644,7 +675,9 @@ const OrdersDashboard = () => {
       for (const order of consolidatedOrders) {
         if (order.status && order.orderId) {
           const currentPriority = statusPriorityForPersist[order.status] || 0;
-          const cachedStatusValue = cachedStatuses[order.orderId];
+          const cachedStatusValue = order.statusLookupKeys
+            .map((lookupKey) => cachedStatuses[lookupKey])
+            .find((status): status is string => Boolean(status));
           const cachedPriority = cachedStatusValue
             ? statusPriorityForPersist[cachedStatusValue] || 0
             : 0;
