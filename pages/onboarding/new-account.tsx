@@ -76,7 +76,7 @@ const Keys = () => {
 
   return (
     <>
-     <>div className="flex h-[100vh] flex-col bg-white pt-24">
+      <div className="flex h-[100vh] flex-col bg-white pt-24">
         <div className="mx-auto w-full max-w-2xl px-4 py-6">
           <Card className="shadow-neo rounded-md border-4 border-black bg-white">
             <CardBody className="p-8">
@@ -96,7 +96,6 @@ const Keys = () => {
               <div className="mb-6 text-center">
                 <h2 className="mb-3 text-2xl font-bold text-black">
                   Step 1: Account Creation
-       
                 </h2>
                 <p className="text-black">
                   Enter a passphrase to make sure your data is secured. You can
@@ -119,7 +118,8 @@ const Keys = () => {
                     classNames={{
                       content:
                         "bg-black text-white p-3 max-w-xs border-2 border-black",
-                    }}           >
+                    }}
+                  >
                     {/* Button wrapper for focus trigger from new-account.tsx */}
                     <button
                       type="button"
@@ -164,7 +164,7 @@ const Keys = () => {
           </Card>
         </div>
       </div>
-      {FailureModal
+      <FailureModal
         bodyText="No passphrase provided!"
         isOpen={showFailureModal}
         onClose={() => setShowFailureModal(false)}

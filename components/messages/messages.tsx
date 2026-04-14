@@ -23,7 +23,7 @@ import {
 } from "@/components/utility-components/nostr-context-provider";
 import SignInModal from "../sign-in/SignInModal";
 import { WHITEBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
-createNip98AuthorizationHeader } from "@/utils/nostr/nip98-auth";
+import { createNip98AuthorizationHeader } from "@/utils/nostr/nip98-auth";
 
 const Messages = ({ isPayment }: { isPayment: boolean }) => {
   const router = useRouter();
