@@ -795,8 +795,6 @@ function Shopstr({ props }: { props: AppProps }) {
     }
 
     fetchData();
-    window.addEventListener("storage", fetchData);
-    return () => window.removeEventListener("storage", fetchData);
   }, [nostr, signer, isLoggedIn]);
 
   useEffect(() => {
