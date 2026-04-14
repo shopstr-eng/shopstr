@@ -7,6 +7,13 @@ jest.mock("@/components/utility-components/display-monetary-info", () => ({
 }));
 
 const mockedCalculateTotalCost = calculateTotalCost as jest.Mock;
+const totalCostWithoutShipping = ({
+  price,
+  shippingCost,
+}: {
+  price: number;
+  shippingCost?: number;
+}) => price + (shippingCost ?? 0);
 
 describe("parseTags", () => {
   const baseEvent: NostrEvent = {
@@ -77,6 +84,76 @@ describe("parseTags", () => {
     expect(result.shippingType).toBe("Added Cost");
     expect(result.shippingCost).toBe(10);
   });
+
+  it("should ignore legacy 2-value shipping tags", () => {
+    mockedCalculateTotalCost.mockImplementation(totalCostWithoutShipping);
+
+    const event = {
+      ...baseEvent,
+      tags: [
+        ["price", "50", "USD"],
+        ["shipping", "5", "USD"],
+      ],
+    };
+    const result = parseTags(event)!;
+
+    expect(result.shippingType).toBeUndefined();
+    expect(result.shippingCost).toBeUndefined();
+    expect(result.totalCost).toBe(50);
+  });
+
+  it("should ignore legacy 1-value shipping tags", () => {
+    mockedCalculateTotalCost.mockImplementation(totalCostWithoutShipping);
+
+    const event = {
+      ...baseEvent,
+      tags: [
+        ["price", "50", "USD"],
+        ["shipping", "Free"],
+      ],
+    };
+    const result = parseTags(event)!;
+
+    expect(result.shippingType).toBeUndefined();
+    expect(result.shippingCost).toBeUndefined();
+    expect(result.totalCost).toBe(50);
+  });
+
+  it("should ignore malformed modern shipping tags with non-numeric cost", () => {
+    mockedCalculateTotalCost.mockImplementation(totalCostWithoutShipping);
+
+    const event = {
+      ...baseEvent,
+      tags: [
+        ["price", "50", "USD"],
+        ["shipping", "Added Cost", "not-a-number", "USD"],
+      ],
+    };
+    const result = parseTags(event)!;
+
+    expect(result.shippingType).toBeUndefined();
+    expect(result.shippingCost).toBeUndefined();
+    expect(result.totalCost).toBe(50);
+  });
+
+  it("should ignore malformed modern shipping tags with negative cost", () => {
+    mockedCalculateTotalCost.mockImplementation(totalCostWithoutShipping);
+
+    const event = {
+      ...baseEvent,
+      tags: [
+        ["price", "50", "USD"],
+        ["shipping", "Added Cost", "-10", "USD"],
+      ],
+    };
+    const result = parseTags(event)!;
+
+    expect(result.shippingType).toBeUndefined();
+    expect(result.shippingCost).toBeUndefined();
+    expect(result.totalCost).toBe(50);
+  });
+
+
 
   it("should parse various content-warning tags as true", () => {
     const event1 = { ...baseEvent, tags: [["content-warning"]] };
