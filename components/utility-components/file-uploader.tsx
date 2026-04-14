@@ -17,6 +17,27 @@ import {
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const MAX_STRIP_SIZE = 25 * 1024 * 1024;
 const COMPRESSION_THRESHOLD = 20 * 1024 * 1024;
+const UPLOAD_CONCURRENCY = 4;
+
+async function withConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<R>
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let nextIndex = 0;
+  const workers = Array.from(
+    { length: Math.min(limit, items.length) },
+    async () => {
+      while (nextIndex < items.length) {
+        const i = nextIndex++;
+        results[i] = await fn(items[i]!);
+      }
+    }
+  );
+  await Promise.all(workers);
+  return results;
+}
 
 export const FileUploaderButton = ({
   disabled,
@@ -207,6 +228,10 @@ export const FileUploaderButton = ({
     try {
       const imageFiles = Array.from(files);
 
+      if (imageFiles.length === 0) {
+        return [];
+      }
+
       if (
         imageFiles.some(
           (imgFile) =>
@@ -226,10 +251,12 @@ export const FileUploaderButton = ({
       }));
       setPreviews(previewsList);
 
-      // Preprocess files in parallel so multi-image uploads don't block on one-by-one canvas work.
+      // Preprocess files with bounded concurrency to avoid spiking memory/CPU on large selections.
       let processedCount = 0;
-      const processedImageFiles = await Promise.all(
-        imageFiles.map(async (imageFile) => {
+      const processedImageFiles = await withConcurrency(
+        imageFiles,
+        UPLOAD_CONCURRENCY,
+        async (imageFile) => {
           let processed: File;
           if (imageFile.size > MAX_STRIP_SIZE) {
             processed = imageFile;
@@ -242,15 +269,17 @@ export const FileUploaderButton = ({
           processedCount += 1;
           setProgress(Math.round((processedCount / imageFiles.length) * 30));
           return processed;
-        })
+        }
       );
 
       let responses: any[] = [];
       if (isLoggedIn) {
-        // Upload in parallel and map progress by completed uploads instead of array index order.
+        // Upload with bounded concurrency and track progress by completed count.
         let uploadedCount = 0;
-        responses = await Promise.all(
-          processedImageFiles.map(async (imageFile) => {
+        responses = await withConcurrency(
+          processedImageFiles,
+          UPLOAD_CONCURRENCY,
+          async (imageFile) => {
             const tags = await blossomUploadImages(
               imageFile,
               signer!,
@@ -260,11 +289,10 @@ export const FileUploaderButton = ({
             );
             uploadedCount += 1;
             setProgress(
-              30 +
-                Math.round((uploadedCount / processedImageFiles.length) * 70)
+              30 + Math.round((uploadedCount / processedImageFiles.length) * 70)
             );
             return tags;
-          })
+          }
         );
       }
 
