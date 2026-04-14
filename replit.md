@@ -256,3 +256,9 @@ API keys are created via the `/settings/api-keys` UI page, the `/api/mcp/api-key
 - **Authoritative Citations**: Inline links to USDA ERS, USDA AMS with specific statistics (e.g., "$44B+ farm revenue", "12% YoY growth in direct sales").
 - **Expert Quotes**: Attributed dairy expert quote on landing page and about page.
 - **E-E-A-T Signals**: Author/founder schema, team credentials, social proof with real data, and comprehensive business information.
+
+## Dev Mode Optimizations
+
+- **Turbopack**: Dev server uses Turbopack (Next.js default) instead of webpack for significantly faster compilation (~36s vs ~87s initial, sub-second subsequent).
+- **PWA disabled in dev**: Service worker and PWA caching are disabled via `next.config.mjs` in development.
+- **Flow scheduler disabled in dev**: Email flow scheduler skipped in development to reduce memory pressure.
