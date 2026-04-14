@@ -152,11 +152,12 @@ const UserProfilePage = () => {
         console.error("Failed to save local profile fallback:", error);
       }
 
-      await createNostrProfileEvent(
-        nostr!,
-        signer!,
-        JSON.stringify(updatedData)
-      );
+      if (!nostr || !signer) {
+        console.error("Cannot save profile: nostr or signer is unavailable");
+        return;
+      }
+
+      await createNostrProfileEvent(nostr, signer, JSON.stringify(updatedData));
       profileContext.updateProfileData({
         pubkey: userPubkey,
         content: updatedData,
@@ -219,7 +220,7 @@ const UserProfilePage = () => {
               <div
                 className="border-light-fg dark:border-dark-fg mx-auto mb-2 flex w-full max-w-2xl cursor-pointer flex-row items-center justify-center rounded-lg border-2 p-2 hover:opacity-60"
                 onClick={() => {
-                  navigator.clipboard.writeText(userNPub!);
+                  if (userNPub) navigator.clipboard.writeText(userNPub);
                   setIsNPubCopied(true);
                   setTimeout(() => {
                     setIsNPubCopied(false);
@@ -230,7 +231,7 @@ const UserProfilePage = () => {
                   className="lg:text-md text-light-text dark:text-dark-text pr-2 text-[0.50rem] font-bold break-all sm:text-xs md:text-sm"
                   suppressHydrationWarning
                 >
-                  {userNPub!}
+                  {userNPub}
                 </span>
                 {isNPubCopied ? (
                   <CheckIcon

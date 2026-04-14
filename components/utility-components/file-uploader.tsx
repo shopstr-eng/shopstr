@@ -306,7 +306,9 @@ export const FileUploaderButton = ({
           }
           return null;
         })
-        .filter((url): url is string => typeof url === "string" && url.length > 0);
+        .filter(
+          (url): url is string => typeof url === "string" && url.length > 0
+        );
 
       setTimeout(() => {
         setProgress(null);

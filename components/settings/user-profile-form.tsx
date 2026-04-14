@@ -169,11 +169,12 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
         console.error("Failed to save local profile fallback:", error);
       }
 
-      await createNostrProfileEvent(
-        nostr!,
-        signer!,
-        JSON.stringify(updatedData)
-      );
+      if (!nostr || !signer) {
+        console.error("Cannot save profile: nostr or signer is unavailable");
+        return;
+      }
+
+      await createNostrProfileEvent(nostr, signer, JSON.stringify(updatedData));
       profileContext.updateProfileData({
         pubkey: userPubkey,
         content: updatedData,

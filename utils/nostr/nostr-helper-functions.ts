@@ -1174,7 +1174,11 @@ export async function blossomUploadImages(
         tags.push(["x", responseSha256], ["ox", responseSha256]);
       }
 
-      if (responseSize !== undefined && responseSize !== null && responseSize !== "") {
+      if (
+        responseSize !== undefined &&
+        responseSize !== null &&
+        responseSize !== ""
+      ) {
         tags.push(["size", responseSize.toString()]);
       }
 
