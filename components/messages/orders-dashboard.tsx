@@ -51,6 +51,7 @@ import {
 } from "@/components/utility-components/nostr-context-provider";
 import { BLUEBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { calculateWeightedScore } from "@/utils/parsers/review-parser-functions";
+import { createNip98AuthorizationHeader } from "@/utils/nostr/nip98-auth";
 import { getSatoshiValue } from "@getalby/lightning-tools";
 import currencySelection from "@/public/currencySelection.json";
 import {
@@ -762,24 +763,37 @@ const OrdersDashboard = () => {
             ? statusPriorityForPersist[cachedStatusValue] || 0
             : 0;
           if (currentPriority > cachedPriority) {
-            fetch("/api/db/update-order-status", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                orderId: order.orderId,
-                status: order.status,
-                messageId: order.messageEvent?.id,
-              }),
-            }).catch((err) =>
-              console.error("Failed to save order status:", err)
-            );
+            const body = JSON.stringify({
+              orderId: order.orderId,
+              status: order.status,
+              messageId: order.messageEvent?.id,
+            });
+            createNip98AuthorizationHeader(
+              signer!,
+              `${window.location.origin}/api/db/update-order-status`,
+              "POST",
+              body
+            )
+              .then((authHeader) =>
+                fetch("/api/db/update-order-status", {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: authHeader,
+                  },
+                  body,
+                })
+              )
+              .catch((err) =>
+                console.error("Failed to save order status:", err)
+              );
           }
         }
       }
     }
 
     loadOrders();
-  }, [chatsContext, productContext, cachedStatuses]);
+  }, [chatsContext, productContext, cachedStatuses, signer]);
 
   const convertToSats = (amount: number, currency: string): number => {
     const curr = currency?.toLowerCase() || "sats";
@@ -1012,13 +1026,24 @@ const OrdersDashboard = () => {
       );
 
       // Persist status to database
+      const body = JSON.stringify({
+        orderId: selectedOrder.orderId,
+        status: "shipped",
+      });
+      const authHeader = await createNip98AuthorizationHeader(
+        signer,
+        `${window.location.origin}/api/db/update-order-status`,
+        "POST",
+        body
+      );
+
       fetch("/api/db/update-order-status", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          orderId: selectedOrder.orderId,
-          status: "shipped",
-        }),
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: authHeader,
+        },
+        body,
       }).catch((err) =>
         console.error("Failed to persist shipped status:", err)
       );

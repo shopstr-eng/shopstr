@@ -1707,65 +1707,37 @@ export function getDefaultBlossomServer(): string {
 
 export async function verifyNip05Identifier(
   nip05: string,
-  pubkey: string
+  pubkey: string,
+  options?: { baseUrl?: string }
 ): Promise<boolean> {
+  if (!nip05 || !pubkey) return false;
+
   try {
-    if (!nip05 || !pubkey) return false;
+    const params = new URLSearchParams({ nip05, pubkey });
+    const path = `/api/nostr/verify-nip05?${params.toString()}`;
 
-    const parts = nip05.split("@");
-    if (parts.length !== 2) return false;
+    const baseUrl =
+      options?.baseUrl ??
+      (typeof window !== "undefined" ? window.location.origin : null);
 
-    const [username, domain] = parts;
-    if (!username || !domain) return false;
-
-    let url;
-    try {
-      url = `https://${domain}/.well-known/nostr.json?name=${username}`;
-    } catch {
-      return false;
+    if (!baseUrl && typeof window === "undefined") {
+      throw new Error("verifyNip05Identifier requires baseUrl in SSR");
     }
 
-    try {
-      // Use a timeout to prevent hanging requests
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // Reduced to 5 second timeout
+    const requestUrl = baseUrl ? new URL(path, baseUrl).toString() : path;
+    const response = await fetch(requestUrl);
 
-      const response = await fetch(url, {
-        signal: controller.signal,
-        mode: "cors",
-        cache: "no-cache",
-        headers: {
-          Accept: "application/json",
-        },
-      });
-      clearTimeout(timeoutId);
+    if (!response.ok) return false;
 
-      if (!response.ok) return false;
+    const data: unknown = await response.json();
 
-      let data;
-      try {
-        data = await response.json();
-      } catch {
-        return false;
-      }
-
-      if (!data || typeof data !== "object") return false;
-
-      const names = data.names || {};
-      return (
-        names[username] === pubkey || names[username.toLowerCase()] === pubkey
-      );
-    } catch (error) {
-      // Log the error for debugging but don't throw
-      console.warn(`Failed to verify NIP-05 identifier ${nip05}:`, error);
-      return false;
-    }
-  } catch (error) {
-    // Catch any unexpected errors
-    console.warn(
-      `Unexpected error verifying NIP-05 identifier ${nip05}:`,
-      error
+    return (
+      typeof data === "object" &&
+      data !== null &&
+      "verified" in data &&
+      (data as { verified?: boolean }).verified === true
     );
+  } catch {
     return false;
   }
 }

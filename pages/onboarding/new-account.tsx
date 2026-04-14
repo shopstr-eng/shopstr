@@ -76,13 +76,10 @@ const Keys = () => {
 
   return (
     <>
-      {/* Styling from keys.tsx (bg-white) */}
-      <div className="flex h-[100vh] flex-col bg-white pt-24">
+     <>div className="flex h-[100vh] flex-col bg-white pt-24">
         <div className="mx-auto w-full max-w-2xl px-4 py-6">
-          {/* Styling from keys.tsx (neo-brutalist card) */}
           <Card className="shadow-neo rounded-md border-4 border-black bg-white">
             <CardBody className="p-8">
-              {/* Styling from keys.tsx (mb-6, gap-3, text-black) */}
               <div className="mb-6 flex flex-row items-center justify-center gap-3">
                 <Image
                   alt="Milk Market logo"
@@ -96,10 +93,10 @@ const Keys = () => {
                 </h1>
               </div>
 
-              {/* Text from new-account.tsx, Styling from keys.tsx */}
               <div className="mb-6 text-center">
                 <h2 className="mb-3 text-2xl font-bold text-black">
                   Step 1: Account Creation
+       
                 </h2>
                 <p className="text-black">
                   Enter a passphrase to make sure your data is secured. You can
@@ -107,25 +104,22 @@ const Keys = () => {
                 </p>
               </div>
 
-              {/* Public and Private key sections from keys.tsx are intentionally removed to match new-account.tsx logic */}
-
-              {/* Passphrase section with styling from keys.tsx */}
               <div className="mb-6 flex flex-col space-y-2">
                 <div className="flex items-center gap-2">
                   <label className="text-xl font-bold text-black">
-                    Passphrase:<span className="text-red-500">*</span>
+                    Passphrase <span className="text-red-500">*</span>
                   </label>
                   <Tooltip
                     // Content from new-account.tsx
                     content="This passphrase acts as a password and is used to keep your account secure. Remember it and keep it safe as it can't be recovered!"
                     placement="right"
+                    closeDelay={100}
                     trigger="focus" // Accessibility from new-account.tsx
                     // Styling from keys.tsx
                     classNames={{
                       content:
                         "bg-black text-white p-3 max-w-xs border-2 border-black",
-                    }}
-                  >
+                    }}           >
                     {/* Button wrapper for focus trigger from new-account.tsx */}
                     <button
                       type="button"
@@ -170,8 +164,7 @@ const Keys = () => {
           </Card>
         </div>
       </div>
-      {/* FailureModal from new-account.tsx (SuccessModal is removed) */}
-      <FailureModal
+      {FailureModal
         bodyText="No passphrase provided!"
         isOpen={showFailureModal}
         onClose={() => setShowFailureModal(false)}

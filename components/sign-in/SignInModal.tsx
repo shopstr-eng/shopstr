@@ -719,8 +719,8 @@ export default function SignInModal({
                       <div>
                         <label className="mb-2 block text-sm font-bold text-black">
                           {isNcryptsec
-                            ? "Decryption Passphrase:"
-                            : "Encryption Passphrase:"}
+                            ? "Decryption Passphrase "
+                            : "Encryption Passphrase "}
                           <span className="text-red-500">*</span>
                         </label>
                         <Input
@@ -997,8 +997,8 @@ export default function SignInModal({
                     <div>
                       <label className="mb-2 block text-sm font-bold text-black">
                         {isNcryptsec
-                          ? "Decryption Passphrase:"
-                          : "Encryption Passphrase:"}
+                          ? "Decryption Passphrase "
+                          : "Encryption Passphrase "}
                         <span className="text-red-500">*</span>
                       </label>
                       <Input

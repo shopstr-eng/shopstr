@@ -51,7 +51,9 @@ const withPWA = withPWAInit({
 });
 
 const nextConfig = {
-  allowedDevOrigins: ["e9ba601a-36d6-4d29-ba29-e886d75befcb-00-o2i19us8bom3.picard.replit.dev"],
+  allowedDevOrigins: [
+    "e9ba601a-36d6-4d29-ba29-e886d75befcb-00-o2i19us8bom3.picard.replit.dev",
+  ],
   bundlePagesRouterDependencies: true,
   output: "standalone",
   reactStrictMode: true,

@@ -2,6 +2,7 @@ import { useContext, useEffect, useState } from "react";
 import { Button, Input, Card, CardBody, CardHeader, Chip } from "@heroui/react";
 import { TrashIcon } from "@heroicons/react/24/outline";
 import { BLUEBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import { formatCurrentDateTimeLocalValue } from "@/utils/datetime-local";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import {
   buildDiscountCodeCreateProof,
@@ -196,7 +197,7 @@ export default function DiscountCodes() {
             placeholder="Select expiration date"
             value={newExpiration}
             onChange={(e) => setNewExpiration(e.target.value)}
-            min={new Date().toISOString().slice(0, 16)}
+            min={formatCurrentDateTimeLocalValue()}
             className="text-white"
           />
           <Input
