@@ -79,6 +79,7 @@ export default function SavedAddressesList({
                 isIconOnly
                 size="sm"
                 variant="light"
+                aria-label={`Edit ${addr.label}`}
                 onClick={() => onEdit(addr)}
                 className="text-shopstr-purple dark:text-shopstr-yellow"
               >
@@ -89,6 +90,7 @@ export default function SavedAddressesList({
                 size="sm"
                 variant="light"
                 color="danger"
+                aria-label={`Delete ${addr.label}`}
                 onClick={() => handleDeleteClick(addr)}
               >
                 <MinusCircleIcon className="h-4 w-4" />

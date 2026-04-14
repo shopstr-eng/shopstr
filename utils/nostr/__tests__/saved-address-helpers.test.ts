@@ -1,127 +1,308 @@
-// Pure unit tests for the saved address localStorage helper functions.
-// We mock the full nostr-helper-functions module and re-implement the helpers
-// in-memory so we can test the logic without the side-effects of getLocalStorageData.
+const localStorageMock = (() => {
+  let store: Record<string, string> = {};
+  return {
+    getItem: jest.fn((key: string) => store[key] ?? null),
+    setItem: jest.fn((key: string, value: string) => {
+      store[key] = value;
+    }),
+    removeItem: jest.fn((key: string) => {
+      delete store[key];
+    }),
+    clear: jest.fn(() => {
+      store = {};
+    }),
+    get length() {
+      return Object.keys(store).length;
+    },
+    key: jest.fn((index: number) => Object.keys(store)[index] ?? null),
+  };
+})();
 
-const LOCAL_STORAGE_KEY = "savedAddresses";
+Object.defineProperty(window, "localStorage", { value: localStorageMock });
 
-interface AddressEntry {
-  id: string;
-  label: string;
-  name: string;
-  address: string;
-  unit?: string;
-  city: string;
-  state: string;
-  zip: string;
-  country: string;
-  isDefault: boolean;
-}
+const dispatchEventSpy = jest
+  .spyOn(window, "dispatchEvent")
+  .mockImplementation(() => true);
 
-// Lightweight in-memory implementations matching the helpers:
-let store: AddressEntry[] = [];
+import {
+  saveAddress,
+  deleteAddress,
+  setDefaultAddress,
+  getSavedAddresses,
+} from "../saved-address-helpers";
 
-function getAddresses(): AddressEntry[] {
-  return [...store];
-}
+// ------------------------------------------------------------------------------
 
-function saveAddrImpl(addr: Omit<AddressEntry, "id"> & { id?: string }): AddressEntry {
-  const toSave: AddressEntry = { ...addr, id: addr.id || `id-${Math.random()}` };
-  if (toSave.isDefault) {
-    store.forEach((a) => (a.isDefault = false));
-  }
-  const idx = store.findIndex((a) => a.id === toSave.id);
-  if (idx >= 0) {
-    store[idx] = toSave;
-  } else {
-    store.push(toSave);
-  }
-  if (store.length === 1) store[0]!.isDefault = true;
-  return toSave;
-}
+beforeEach(() => {
+  localStorageMock.clear();
+  jest.clearAllMocks();
+  dispatchEventSpy.mockImplementation(() => true);
+});
 
-function deleteAddrImpl(id: string): void {
-  const addr = store.find((a) => a.id === id);
-  if (!addr) return;
-  store = store.filter((a) => a.id !== id);
-  if (addr.isDefault && store.length > 0) store[0]!.isDefault = true;
-}
+// ---- saveAddress -------------------------------------------------------------
 
-function setDefaultImpl(id: string): void {
-  store.forEach((a) => { a.isDefault = a.id === id; });
-}
-
-describe("Saved Address helpers – logic", () => {
-  beforeEach(() => {
-    store = [];
+describe("saveAddress", () => {
+  it("generates an id when none is provided", () => {
+    const saved = saveAddress({
+      label: "Home",
+      name: "Alice",
+      address: "1 Main St",
+      city: "Springfield",
+      state: "IL",
+      zip: "62701",
+      country: "US",
+      isDefault: false,
+    });
+    expect(saved.id).toBeTruthy();
   });
 
-  describe("saveAddress", () => {
-    it("saves with a generated id", () => {
-      const saved = saveAddrImpl({ label: "Home", name: "Alice", address: "1 St",
-        city: "C", state: "S", zip: "Z", country: "US", isDefault: false });
-      expect(saved.id).toBeDefined();
-      expect(saved.name).toBe("Alice");
+  it("auto-promotes the first address to default even if isDefault is false", () => {
+    saveAddress({
+      label: "Home",
+      name: "Alice",
+      address: "1 Main St",
+      city: "C",
+      state: "S",
+      zip: "Z",
+      country: "US",
+      isDefault: false,
     });
-
-    it("auto-promotes to default when it's the only address", () => {
-      saveAddrImpl({ label: "Home", name: "A", address: "1 St",
-        city: "C", state: "S", zip: "Z", country: "US", isDefault: false });
-      expect(store[0]!.isDefault).toBe(true);
-    });
-
-    it("clears previous defaults when saving a new default", () => {
-      const first = saveAddrImpl({ label: "H", name: "A", address: "1",
-        city: "C", state: "S", zip: "Z", country: "US", isDefault: true });
-      saveAddrImpl({ label: "W", name: "B", address: "2",
-        city: "C", state: "S", zip: "Z", country: "US", isDefault: true });
-      const updated = store.find((a) => a.id === first.id)!;
-      expect(updated.isDefault).toBe(false);
-      expect(store.filter((a) => a.isDefault).length).toBe(1);
-    });
-
-    it("upserts address with the same id", () => {
-      const saved = saveAddrImpl({ label: "H", name: "Alice", address: "1",
-        city: "C", state: "S", zip: "Z", country: "US", isDefault: false });
-      saveAddrImpl({ ...saved, name: "Alice Updated" });
-      expect(store.length).toBe(1);
-      expect(store[0]!.name).toBe("Alice Updated");
-    });
+    const [addr] = getSavedAddresses();
+    expect(addr!.isDefault).toBe(true);
   });
 
-  describe("deleteAddress", () => {
-    it("removes address by id", () => {
-      const addr = saveAddrImpl({ label: "H", name: "A", address: "1",
-        city: "C", state: "S", zip: "Z", country: "US", isDefault: false });
-      deleteAddrImpl(addr.id);
-      expect(store.find((a) => a.id === addr.id)).toBeUndefined();
+  it("strips previous defaults when saving a new default", () => {
+    const first = saveAddress({
+      label: "Home",
+      name: "Alice",
+      address: "1 St",
+      city: "C",
+      state: "S",
+      zip: "Z",
+      country: "US",
+      isDefault: true,
     });
-
-    it("promotes next if deleted was default", () => {
-      const first = saveAddrImpl({ label: "H", name: "A", address: "1",
-        city: "C", state: "S", zip: "Z", country: "US", isDefault: true });
-      const second = saveAddrImpl({ label: "W", name: "B", address: "2",
-        city: "C", state: "S", zip: "Z", country: "US", isDefault: false });
-      deleteAddrImpl(first.id);
-      expect(store.find((a) => a.id === second.id)!.isDefault).toBe(true);
+    saveAddress({
+      label: "Work",
+      name: "Bob",
+      address: "2 St",
+      city: "C",
+      state: "S",
+      zip: "Z",
+      country: "US",
+      isDefault: true,
     });
-
-    it("is a no-op for unknown ids", () => {
-      saveAddrImpl({ label: "H", name: "A", address: "1",
-        city: "C", state: "S", zip: "Z", country: "US", isDefault: false });
-      deleteAddrImpl("nonexistent");
-      expect(store.length).toBe(1);
-    });
+    const addresses = getSavedAddresses();
+    const firstInStore = addresses.find((a) => a.id === first.id)!;
+    expect(firstInStore.isDefault).toBe(false);
+    expect(addresses.filter((a) => a.isDefault).length).toBe(1);
   });
 
-  describe("setDefaultAddress", () => {
-    it("marks one id as default and clears others", () => {
-      const a = saveAddrImpl({ label: "A", name: "Alice", address: "1",
-        city: "C", state: "S", zip: "Z", country: "US", isDefault: true });
-      const b = saveAddrImpl({ label: "B", name: "Bob", address: "2",
-        city: "C", state: "S", zip: "Z", country: "US", isDefault: false });
-      setDefaultImpl(b.id);
-      expect(store.find((x) => x.id === a.id)!.isDefault).toBe(false);
-      expect(store.find((x) => x.id === b.id)!.isDefault).toBe(true);
+  it("upserts an address when saving with an existing id", () => {
+    const saved = saveAddress({
+      label: "Home",
+      name: "Alice",
+      address: "1 St",
+      city: "C",
+      state: "S",
+      zip: "Z",
+      country: "US",
+      isDefault: true,
     });
+    saveAddress({ ...saved, name: "Alice Updated" });
+    const addresses = getSavedAddresses();
+    expect(addresses.length).toBe(1);
+    expect(addresses[0]!.name).toBe("Alice Updated");
+  });
+
+  it("guarantees exactly one default after editing with isDefault:false when no other default exists", () => {
+    const saved = saveAddress({
+      label: "Home",
+      name: "Alice",
+      address: "1 St",
+      city: "C",
+      state: "S",
+      zip: "Z",
+      country: "US",
+      isDefault: true,
+    });
+    // Edit it, explicitly passing isDefault: false (only-default guard is UI-level)
+    saveAddress({ ...saved, name: "Alice Updated", isDefault: false });
+    const addresses = getSavedAddresses();
+    expect(addresses.filter((a) => a.isDefault).length).toBe(1);
+  });
+
+  it("preserves existing default when adding a new non-default address", () => {
+    // addr1 is NOT default, addr2 IS default — default lives at index 1
+    saveAddress({
+      label: "Home",
+      name: "Alice",
+      address: "1 St",
+      city: "C",
+      state: "S",
+      zip: "Z",
+      country: "US",
+      isDefault: false,
+    });
+    const second = saveAddress({
+      label: "Work",
+      name: "Bob",
+      address: "2 St",
+      city: "C",
+      state: "S",
+      zip: "Z",
+      country: "US",
+      isDefault: true,
+    });
+    // Add a third address without checking "set as default"
+    saveAddress({
+      label: "Gym",
+      name: "Carol",
+      address: "3 St",
+      city: "C",
+      state: "S",
+      zip: "Z",
+      country: "US",
+      isDefault: false,
+    });
+    const addresses = getSavedAddresses();
+    // "Work" (second) must still be the only default
+    expect(addresses.find((a) => a.id === second.id)!.isDefault).toBe(true);
+    expect(addresses.filter((a) => a.isDefault).length).toBe(1);
+  });
+
+  it("dispatches a storage event after saving", () => {
+    saveAddress({
+      label: "Home",
+      name: "A",
+      address: "1",
+      city: "C",
+      state: "S",
+      zip: "Z",
+      country: "US",
+      isDefault: false,
+    });
+    expect(dispatchEventSpy).toHaveBeenCalled();
+  });
+});
+
+// ---- deleteAddress -----------------------------------------------------------
+
+describe("deleteAddress", () => {
+  it("removes the address with the given id", () => {
+    const addr = saveAddress({
+      label: "Home",
+      name: "A",
+      address: "1",
+      city: "C",
+      state: "S",
+      zip: "Z",
+      country: "US",
+      isDefault: false,
+    });
+    deleteAddress(addr.id);
+    expect(getSavedAddresses().find((a) => a.id === addr.id)).toBeUndefined();
+  });
+
+  it("promotes the next address to default when the default is deleted", () => {
+    const first = saveAddress({
+      label: "Home",
+      name: "A",
+      address: "1",
+      city: "C",
+      state: "S",
+      zip: "Z",
+      country: "US",
+      isDefault: true,
+    });
+    const second = saveAddress({
+      label: "Work",
+      name: "B",
+      address: "2",
+      city: "C",
+      state: "S",
+      zip: "Z",
+      country: "US",
+      isDefault: false,
+    });
+    deleteAddress(first.id);
+    const remaining = getSavedAddresses();
+    expect(remaining.find((a) => a.id === second.id)!.isDefault).toBe(true);
+    expect(remaining.filter((a) => a.isDefault).length).toBe(1);
+  });
+
+  it("is a no-op for an unknown id", () => {
+    saveAddress({
+      label: "Home",
+      name: "A",
+      address: "1",
+      city: "C",
+      state: "S",
+      zip: "Z",
+      country: "US",
+      isDefault: false,
+    });
+    deleteAddress("nonexistent-id");
+    expect(getSavedAddresses().length).toBe(1);
+  });
+
+  it("leaves an empty list when the last address is deleted", () => {
+    const addr = saveAddress({
+      label: "Home",
+      name: "A",
+      address: "1",
+      city: "C",
+      state: "S",
+      zip: "Z",
+      country: "US",
+      isDefault: true,
+    });
+    deleteAddress(addr.id);
+    expect(getSavedAddresses().length).toBe(0);
+  });
+});
+
+// ---- setDefaultAddress -------------------------------------------------------
+
+describe("setDefaultAddress", () => {
+  it("marks the given id as default and clears all others", () => {
+    const a = saveAddress({
+      label: "A",
+      name: "Alice",
+      address: "1",
+      city: "C",
+      state: "S",
+      zip: "Z",
+      country: "US",
+      isDefault: true,
+    });
+    const b = saveAddress({
+      label: "B",
+      name: "Bob",
+      address: "2",
+      city: "C",
+      state: "S",
+      zip: "Z",
+      country: "US",
+      isDefault: false,
+    });
+    setDefaultAddress(b.id);
+    const addresses = getSavedAddresses();
+    expect(addresses.find((x) => x.id === a.id)!.isDefault).toBe(false);
+    expect(addresses.find((x) => x.id === b.id)!.isDefault).toBe(true);
+    expect(addresses.filter((x) => x.isDefault).length).toBe(1);
+  });
+});
+
+// ---- getSavedAddresses -------------------------------------------------------
+
+describe("getSavedAddresses", () => {
+  it("returns an empty array when nothing is stored", () => {
+    expect(getSavedAddresses()).toEqual([]);
+  });
+
+  it("returns an empty array when localStorage contains invalid JSON", () => {
+    localStorageMock.setItem("savedAddresses", "not-json{{");
+    expect(getSavedAddresses()).toEqual([]);
   });
 });

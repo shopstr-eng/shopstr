@@ -57,6 +57,7 @@ export default function AddressPicker({
   const [newAddr, setNewAddr] = useState<Omit<SavedAddress, "id" | "isDefault">>(
     EMPTY_ADDRESS_FORM
   );
+  const [formError, setFormError] = useState<string>("");
 
   const loadAddresses = () => {
     const loaded = getSavedAddresses();
@@ -67,6 +68,7 @@ export default function AddressPicker({
   const resetEditor = () => {
     setIsAddingNew(false);
     setNewAddr(EMPTY_ADDRESS_FORM);
+    setFormError("");
   };
 
   useEffect(() => {
@@ -127,13 +129,15 @@ export default function AddressPicker({
       !newAddr.name.trim() ||
       !newAddr.address.trim() ||
       !newAddr.city.trim() ||
+      !newAddr.state.trim() ||
       !newAddr.zip.trim() ||
       !newAddr.country.trim()
     ) {
-      alert("Please fill out all required fields.");
+      setFormError("Please fill out all required fields.");
       return;
     }
 
+    setFormError("");
     const saved = saveAddress({
       ...newAddr,
       isDefault: false,
@@ -232,6 +236,11 @@ export default function AddressPicker({
               isRequired
             />
           </div>
+          {formError && (
+            <p role="alert" className="text-sm text-danger">
+              {formError}
+            </p>
+          )}
           <div className="mt-2 flex justify-end gap-2">
             <Button size="sm" variant="flat" onClick={resetEditor}>
               Cancel

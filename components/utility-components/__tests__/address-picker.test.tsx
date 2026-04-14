@@ -301,15 +301,14 @@ describe("AddressPicker", () => {
     ).toBeInTheDocument();
   });
 
-  it("shows alert when saving new address with missing required fields", () => {
-    window.alert = jest.fn();
+  it("shows inline error when saving new address with missing required fields", () => {
     (helpers.getSavedAddresses as jest.Mock).mockReturnValue([]);
     render(<AddressPicker onSelect={mockOnSelect} forceExpanded />);
     fireEvent.click(screen.getByText("+ Add another address"));
     fireEvent.click(screen.getByText("Save & Use"));
-    expect(window.alert).toHaveBeenCalledWith(
-      "Please fill out all required fields."
-    );
+    expect(
+      screen.getByRole("alert")
+    ).toHaveTextContent("Please fill out all required fields.");
   });
 
   it("calls saveAddress and onSelect when valid new address is saved", async () => {
@@ -334,6 +333,10 @@ describe("AddressPicker", () => {
     fireEvent.change(
       screen.getByRole("textbox", { hidden: true, name: "City" }),
       { target: { value: "City" } }
+    );
+    fireEvent.change(
+      screen.getByRole("textbox", { hidden: true, name: "State" }),
+      { target: { value: "TX" } }
     );
     fireEvent.change(
       screen.getByRole("textbox", { hidden: true, name: "Zip/Postal" }),
