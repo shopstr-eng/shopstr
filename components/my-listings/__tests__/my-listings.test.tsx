@@ -1,5 +1,6 @@
 import { render, screen, fireEvent } from "@testing-library/react";
 import "@testing-library/jest-dom";
+import type { ComponentProps } from "react";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import { ShopMapContext } from "@/utils/context/context";
 import { ShopProfile } from "@/utils/types/types";
@@ -15,8 +16,8 @@ import router from "next/router";
 const mockRouterPush = router.push as jest.Mock;
 
 const mockOnOpen = jest.fn();
-jest.mock("@nextui-org/react", () => ({
-  ...jest.requireActual("@nextui-org/react"),
+jest.mock("@heroui/react", () => ({
+  ...jest.requireActual("@heroui/react"),
   useDisclosure: () => ({
     isOpen: false,
     onOpen: mockOnOpen,
@@ -82,7 +83,15 @@ const mockShopDataContextEmpty = {
   updateShopData: jest.fn(),
 };
 
-const renderComponent = (signerContextValue: any, shopContextValue: any) => {
+type SignerContextValue = ComponentProps<
+  typeof SignerContext.Provider
+>["value"];
+type ShopContextValue = ComponentProps<typeof ShopMapContext.Provider>["value"];
+
+const renderComponent = (
+  signerContextValue: SignerContextValue,
+  shopContextValue: ShopContextValue
+) => {
   return render(
     <SignerContext.Provider value={signerContextValue}>
       <ShopMapContext.Provider value={shopContextValue}>
@@ -185,7 +194,7 @@ describe("MyListingsPage", () => {
       expect(mockRouterPush).toHaveBeenCalledWith("?addNewListing");
 
       fireEvent.click(screen.getAllByText("Edit Shop")[0]!);
-      expect(mockRouterPush).toHaveBeenCalledWith("settings/shop-profile");
+      expect(mockRouterPush).toHaveBeenCalledWith("/settings/shop-profile");
 
       fireEvent.click(screen.getAllByRole("button", { name: "Orders" })[0]!);
       expect(mockRouterPush).toHaveBeenCalledWith("/orders");

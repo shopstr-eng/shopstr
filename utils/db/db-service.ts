@@ -1,5 +1,6 @@
 import { Pool, PoolClient } from "pg";
 import { NostrEvent } from "../types/types";
+import { findListingBySlug } from "../url-slugs";
 
 let pool: Pool | null = null;
 let tablesInitialized = false;
@@ -687,9 +688,9 @@ export async function fetchCachedEvents(
 
   try {
     client = await dbPool.connect();
-    let query = `SELECT id, pubkey, created_at, kind, tags, content, sig FROM ${table} WHERE 1=1`;
-    const params: any[] = [];
-    let paramIndex = 1;
+    let query = `SELECT id, pubkey, created_at, kind, tags, content, sig FROM ${table} WHERE kind = $1`;
+    const params: any[] = [kind];
+    let paramIndex = 2;
 
     if (filters?.pubkey) {
       query += ` AND pubkey = $${paramIndex++}`;
@@ -856,7 +857,10 @@ export async function fetchAllMessagesFromDb(
 }
 
 // Mark messages as read in database
-export async function markMessagesAsRead(messageIds: string[]): Promise<void> {
+export async function markMessagesAsRead(
+  messageIds: string[],
+  pubkey: string
+): Promise<void> {
   if (messageIds.length === 0) return;
 
   const dbPool = getDbPool();
@@ -865,8 +869,18 @@ export async function markMessagesAsRead(messageIds: string[]): Promise<void> {
   try {
     client = await dbPool.connect();
     await client.query(
-      `UPDATE message_events SET is_read = TRUE WHERE id = ANY($1)`,
-      [messageIds]
+      `UPDATE message_events
+       SET is_read = TRUE
+       WHERE id = ANY($1)
+       AND (
+         pubkey = $2
+         OR EXISTS (
+           SELECT 1
+           FROM jsonb_array_elements(tags) elem
+           WHERE elem->>0 = 'p' AND elem->>1 = $2
+         )
+       )`,
+      [messageIds, pubkey] as any[]
     );
   } catch (error) {
     console.error("Failed to mark messages as read:", error);
@@ -899,10 +913,67 @@ export async function getUnreadMessageCount(pubkey: string): Promise<number> {
   }
 }
 
+export async function getOrderParticipants(orderId: string): Promise<{
+  buyerPubkey: string | null;
+  sellerPubkey: string | null;
+}> {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    const result = await client.query<{ tags: string[][] }>(
+      `SELECT tags
+       FROM message_events
+       WHERE order_id = $1
+       ORDER BY created_at DESC`,
+      [orderId] as any[]
+    );
+
+    let buyerPubkey: string | null = null;
+    let sellerPubkey: string | null = null;
+
+    for (const row of result.rows) {
+      const tags = Array.isArray(row.tags) ? (row.tags as string[][]) : [];
+
+      if (!buyerPubkey) {
+        const buyerTag = tags.find((tag) => tag[0] === "b");
+        if (buyerTag?.[1]) {
+          buyerPubkey = buyerTag[1];
+        }
+      }
+
+      if (!sellerPubkey) {
+        const itemTag = tags.find((tag) => tag[0] === "item");
+        const productAddress =
+          tags.find((tag) => tag[0] === "a")?.[1] || itemTag?.[1];
+        const addressParts = productAddress?.split(":");
+        if (addressParts && addressParts.length >= 2 && addressParts[1]) {
+          sellerPubkey = addressParts[1];
+        }
+      }
+
+      if (buyerPubkey && sellerPubkey) {
+        break;
+      }
+    }
+
+    return { buyerPubkey, sellerPubkey };
+  } catch (error) {
+    console.error("Failed to get order participants:", error);
+    throw error;
+  } finally {
+    if (client) {
+      client.release();
+    }
+  }
+}
+
 // Update order status in database
 export async function updateOrderStatus(
   orderId: string,
   status: string,
+  pubkey: string,
   messageId?: string
 ): Promise<void> {
   const dbPool = getDbPool();
@@ -913,14 +984,35 @@ export async function updateOrderStatus(
 
     if (messageId) {
       await client.query(
-        `UPDATE message_events SET order_status = $1, order_id = $2 WHERE id = $3`,
-        [status, orderId, messageId]
+        `UPDATE message_events
+         SET order_status = $1
+         WHERE id = $2
+         AND order_id = $3
+         AND (
+           pubkey = $4
+           OR EXISTS (
+             SELECT 1
+             FROM jsonb_array_elements(tags) elem
+             WHERE elem->>0 = 'p' AND elem->>1 = $4
+           )
+         )`,
+        [status, messageId, orderId, pubkey]
       );
     }
 
     await client.query(
-      `UPDATE message_events SET order_status = $1 WHERE order_id = $2`,
-      [status, orderId]
+      `UPDATE message_events
+       SET order_status = $1
+       WHERE order_id = $2
+       AND (
+         pubkey = $3
+         OR EXISTS (
+           SELECT 1
+           FROM jsonb_array_elements(tags) elem
+           WHERE elem->>0 = 'p' AND elem->>1 = $3
+         )
+       )`,
+      [status, orderId, pubkey]
     );
   } catch (error) {
     console.error("Failed to update order status:", error);
@@ -1211,16 +1303,6 @@ export async function closeDbPool(): Promise<void> {
   }
 }
 
-function titleToSlug(title: string): string {
-  if (!title) return "";
-  return title
-    .trim()
-    .replace(/[#?&\/\\%=+<>{}|^~\[\]`@!$*()"';:,]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "");
-}
-
 function profileNameToSlug(name: string): string {
   if (!name) return "";
   return name
@@ -1300,7 +1382,7 @@ export async function fetchProductByDTagAndPubkey(
   }
 }
 
-export async function fetchProductByTitleSlug(
+export async function fetchProductByListingSlug(
   slug: string
 ): Promise<NostrEvent | null> {
   const dbPool = getDbPool();
@@ -1315,65 +1397,51 @@ export async function fetchProductByTitleSlug(
        )
        ORDER BY created_at DESC`
     );
-    const pubkeySuffixMatch = slug.match(/^(.+)-([a-f0-9]{8})$/);
-    const baseSlug = pubkeySuffixMatch?.[1];
-    const pubkeyFragment = pubkeySuffixMatch?.[2];
+    const matchingRow = findListingBySlug(
+      slug,
+      result.rows
+        .map((row) => {
+          const tags: string[][] = row.tags;
+          const titleTag = tags.find((t) => t[0] === "title");
+          const title = titleTag?.[1];
 
-    let exactMatch: NostrEvent | null = null;
-    let exactMatchCount = 0;
-    let disambiguatedMatch: NostrEvent | null = null;
+          if (!title) {
+            return null;
+          }
 
-    for (const row of result.rows) {
-      const tags: string[][] = row.tags;
-      const titleTag = tags.find((t) => t[0] === "title");
-      if (!titleTag || !titleTag[1]) continue;
+          return {
+            row,
+            id: row.id,
+            pubkey: row.pubkey,
+            title,
+          };
+        })
+        .filter(
+          (
+            candidate
+          ): candidate is {
+            row: (typeof result.rows)[number];
+            id: string;
+            pubkey: string;
+            title: string;
+          } => candidate !== null
+        )
+    );
 
-      const currentSlug = titleToSlug(titleTag[1]);
+    if (!matchingRow) return null;
 
-      if (currentSlug === slug) {
-        exactMatchCount += 1;
-        if (exactMatchCount > 1) {
-          return null;
-        }
-
-        exactMatch = {
-          id: row.id,
-          pubkey: row.pubkey,
-          created_at: row.created_at,
-          kind: row.kind,
-          tags: row.tags,
-          content: row.content,
-          sig: row.sig,
-        };
-      }
-
-      if (
-        !exactMatch &&
-        !disambiguatedMatch &&
-        baseSlug &&
-        pubkeyFragment &&
-        currentSlug === baseSlug &&
-        row.pubkey.startsWith(pubkeyFragment)
-      ) {
-        disambiguatedMatch = {
-          id: row.id,
-          pubkey: row.pubkey,
-          created_at: row.created_at,
-          kind: row.kind,
-          tags: row.tags,
-          content: row.content,
-          sig: row.sig,
-        };
-      }
-    }
-
-    if (exactMatch) {
-      return exactMatch;
-    }
-
-    return disambiguatedMatch;
+    const row = matchingRow.row;
+    return {
+      id: row.id,
+      pubkey: row.pubkey,
+      created_at: row.created_at,
+      kind: row.kind,
+      tags: row.tags,
+      content: row.content,
+      sig: row.sig,
+    };
   } catch (error) {
-    console.error("Failed to fetch product by title slug:", error);
+    console.error("Failed to fetch product by listing slug:", error);
     return null;
   } finally {
     if (client) client.release();

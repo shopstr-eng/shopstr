@@ -3,8 +3,8 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import ConfirmActionDropdown from "../confirm-action-dropdown";
 
-jest.mock("@nextui-org/react", () => {
-  const originalModule = jest.requireActual("@nextui-org/react");
+jest.mock("@heroui/react", () => {
+  const originalModule = jest.requireActual("@heroui/react");
 
   return {
     ...originalModule,

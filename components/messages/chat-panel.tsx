@@ -1,5 +1,5 @@
 // initialize new react funcitonal component
-import { Button, Input } from "@nextui-org/react";
+import { Button, Input } from "@heroui/react";
 import { useEffect, useContext, useRef, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { nip19 } from "nostr-tools";
@@ -9,7 +9,7 @@ import {
   ModalFooter,
   ModalHeader,
   ModalBody,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
   ArrowUturnLeftIcon,
@@ -346,18 +346,18 @@ const ChatPanel = ({
 
   if (!currentChatPubkey)
     return (
-      <div className="absolute z-20 hidden h-[85vh] w-full flex-col overflow-clip px-2 dark:bg-dark-bg md:relative md:flex">
+      <div className="dark:bg-dark-bg absolute z-20 hidden h-[85vh] w-full flex-col overflow-clip px-2 md:relative md:flex">
         <div className="mt-10 flex flex-grow items-center justify-center py-10">
-          <div className="w-full max-w-xl rounded-lg bg-light-fg p-10 text-center shadow-lg dark:bg-dark-fg">
-            <ChatBubbleLeftIcon className="mx-auto mb-5 h-20 w-20 text-light-text dark:text-dark-text" />
-            <span className="block text-5xl text-light-text dark:text-dark-text">
+          <div className="bg-light-fg dark:bg-dark-fg w-full max-w-xl rounded-lg p-10 text-center shadow-lg">
+            <ChatBubbleLeftIcon className="text-light-text dark:text-dark-text mx-auto mb-5 h-20 w-20" />
+            <span className="text-light-text dark:text-dark-text block text-5xl">
               No chat selected . . .
             </span>
-            <div className="opacity-4 flex flex-col items-center justify-center gap-3 pt-5">
-              <span className="text-2xl text-light-text dark:text-dark-text">
+            <div className="flex flex-col items-center justify-center gap-3 pt-5 opacity-4">
+              <span className="text-light-text dark:text-dark-text text-2xl">
                 Use your up and down arrow keys to select chats!
               </span>
-              <ArrowsUpDownIcon className="h-10 w-10 text-light-text dark:text-dark-text" />
+              <ArrowsUpDownIcon className="text-light-text dark:text-dark-text h-10 w-10" />
             </div>
           </div>
         </div>
@@ -370,11 +370,11 @@ const ChatPanel = ({
   };
 
   return (
-    <div className="absolute flex h-full w-full flex-col overflow-clip bg-light-bg px-2 pb-20 dark:bg-dark-bg md:relative md:h-[85vh] md:pb-0 lg:pb-0">
-      <h2 className="flex h-[60px] w-full flex-row items-center overflow-clip align-middle text-shopstr-purple-light dark:text-shopstr-yellow-light">
+    <div className="bg-light-bg dark:bg-dark-bg absolute flex h-full w-full flex-col overflow-clip px-2 pb-20 md:relative md:h-[85vh] md:pb-0 lg:pb-0">
+      <h2 className="text-shopstr-purple-light dark:text-shopstr-yellow-light flex h-[60px] w-full flex-row items-center overflow-clip align-middle">
         <ArrowUturnLeftIcon
           onClick={handleGoBack}
-          className="mx-3 h-9 w-9 cursor-pointer rounded-md p-1 text-shopstr-purple-light hover:bg-shopstr-yellow hover:text-purple-700 dark:text-shopstr-yellow-light  hover:dark:bg-shopstr-purple"
+          className="text-shopstr-purple-light hover:bg-shopstr-yellow dark:text-shopstr-yellow-light hover:dark:bg-shopstr-purple mx-3 h-9 w-9 cursor-pointer rounded-md p-1 hover:text-purple-700"
         />
         <ProfileWithDropdown
           pubkey={currentChatPubkey}
@@ -382,7 +382,7 @@ const ChatPanel = ({
           nameClassname="block"
         />
       </h2>
-      <div className="my-2 h-full overflow-y-scroll rounded-md border-2 border-light-fg bg-light-fg p-3 dark:border-dark-fg dark:bg-dark-fg">
+      <div className="border-light-fg bg-light-fg dark:border-dark-fg dark:bg-dark-fg my-2 h-full overflow-y-scroll rounded-md border-2 p-3">
         {messages
           .filter(
             (message, index, self) =>
@@ -407,7 +407,7 @@ const ChatPanel = ({
       {!isPayment ? (
         <div className="space-x flex items-center p-2">
           <Input
-            className="pr-3 text-light-text dark:text-dark-text"
+            className="text-light-text dark:text-dark-text pr-3"
             type="text"
             width="100%"
             size="md"
@@ -464,7 +464,7 @@ const ChatPanel = ({
             size="2xl"
           >
             <ModalContent>
-              <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
+              <ModalHeader className="text-light-text dark:text-dark-text flex flex-col gap-1">
                 Enter Shipping Details
               </ModalHeader>
               <form onSubmit={handleShippingSubmit(onShippingSubmit)}>
@@ -606,7 +606,7 @@ const ChatPanel = ({
               size="2xl"
             >
               <ModalContent>
-                <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
+                <ModalHeader className="text-light-text dark:text-dark-text flex flex-col gap-1">
                   Leave a Review
                 </ModalHeader>
                 <form onSubmit={handleReviewSubmit(onReviewSubmit)}>
@@ -620,7 +620,7 @@ const ChatPanel = ({
                           className={`h-12 w-12 cursor-pointer rounded-lg border-2 p-2 transition-colors ${
                             selectedThumb === "up"
                               ? "border-green-500 text-green-500"
-                              : "border-light-text text-light-text hover:border-green-500 hover:text-green-500 dark:border-dark-text dark:text-dark-text"
+                              : "border-light-text text-light-text dark:border-dark-text dark:text-dark-text hover:border-green-500 hover:text-green-500"
                           }`}
                           onClick={() => setSelectedThumb("up")}
                         />
@@ -630,7 +630,7 @@ const ChatPanel = ({
                           className={`h-12 w-12 cursor-pointer rounded-lg border-2 p-2 transition-colors ${
                             selectedThumb === "down"
                               ? "border-red-500 text-red-500"
-                              : "border-light-text text-light-text hover:border-red-500 hover:text-red-500 dark:border-dark-text dark:text-dark-text"
+                              : "border-light-text text-light-text dark:border-dark-text dark:text-dark-text hover:border-red-500 hover:text-red-500"
                           }`}
                           onClick={() => setSelectedThumb("down")}
                         />
@@ -718,7 +718,7 @@ const ChatPanel = ({
                         <div>
                           <textarea
                             {...field}
-                            className="w-full rounded-md border-2 border-light-fg bg-light-bg p-2 text-light-text dark:border-dark-fg dark:bg-dark-bg dark:text-dark-text"
+                            className="border-light-fg bg-light-bg text-light-text dark:border-dark-fg dark:bg-dark-bg dark:text-dark-text w-full rounded-md border-2 p-2"
                             rows={4}
                             placeholder="Write your review comment here..."
                           />

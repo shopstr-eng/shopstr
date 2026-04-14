@@ -36,7 +36,7 @@ export default function SectionAbout({ section, colors }: SectionAboutProps) {
         )}
         <div className={`w-full ${section.image ? "md:w-1/2" : ""}`}>
           {section.body && (
-            <p className="font-body whitespace-pre-line text-lg leading-relaxed opacity-80">
+            <p className="font-body text-lg leading-relaxed whitespace-pre-line opacity-80">
               {section.body}
             </p>
           )}

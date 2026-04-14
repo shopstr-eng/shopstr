@@ -79,7 +79,7 @@ export const fetchAllPosts = async (
         if (response.ok) {
           productArrayFromDb = await response.json();
           if (productArrayFromDb.length > 0) {
-            editProductContext(productArrayFromDb, false);
+            editProductContext(productArrayFromDb, true);
           }
         }
       } catch (error) {

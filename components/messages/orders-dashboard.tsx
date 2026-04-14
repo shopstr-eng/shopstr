@@ -11,7 +11,7 @@ import {
   ModalFooter,
   Input,
   Button,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import {
   HandThumbUpIcon,
   HandThumbDownIcon,
@@ -45,7 +45,8 @@ import {
 } from "@/components/utility-components/nostr-context-provider";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { calculateWeightedScore } from "@/utils/parsers/review-parser-functions";
-import { fiat } from "@getalby/lightning-tools";
+import { createNip98AuthorizationHeader } from "@/utils/nostr/nip98-auth";
+import { getSatoshiValue } from "@getalby/lightning-tools";
 import currencySelection from "@/public/currencySelection.json";
 import {
   Chart as ChartJS,
@@ -249,7 +250,7 @@ const OrdersDashboard = () => {
 
       const ratePromises = currenciesToFetch.map(async (currency) => {
         try {
-          const sats = await fiat.getSatoshiValue({ amount: 1, currency });
+          const sats = await getSatoshiValue({ amount: 1, currency });
           return { currency: currency.toLowerCase(), rate: sats };
         } catch (err) {
           console.error(`Failed to fetch rate for ${currency}:`, err);
@@ -425,9 +426,9 @@ const OrdersDashboard = () => {
             if (productAddress && productContext?.productEvents) {
               const productEvent = productContext.productEvents.find(
                 (event: any) => {
-                  const eventAddress = `30402:${event.pubkey}:${event.tags.find(
-                    (tag: any) => tag[0] === "d"
-                  )?.[1]}`;
+                  const eventAddress = `30402:${event.pubkey}:${
+                    event.tags.find((tag: any) => tag[0] === "d")?.[1]
+                  }`;
                   return productAddress.includes(eventAddress);
                 }
               );
@@ -648,24 +649,37 @@ const OrdersDashboard = () => {
             ? statusPriorityForPersist[cachedStatusValue] || 0
             : 0;
           if (currentPriority > cachedPriority) {
-            fetch("/api/db/update-order-status", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                orderId: order.orderId,
-                status: order.status,
-                messageId: order.messageEvent?.id,
-              }),
-            }).catch((err) =>
-              console.error("Failed to save order status:", err)
-            );
+            const body = JSON.stringify({
+              orderId: order.orderId,
+              status: order.status,
+              messageId: order.messageEvent?.id,
+            });
+            createNip98AuthorizationHeader(
+              signer!,
+              `${window.location.origin}/api/db/update-order-status`,
+              "POST",
+              body
+            )
+              .then((authHeader) =>
+                fetch("/api/db/update-order-status", {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: authHeader,
+                  },
+                  body,
+                })
+              )
+              .catch((err) =>
+                console.error("Failed to save order status:", err)
+              );
           }
         }
       }
     }
 
     loadOrders();
-  }, [chatsContext, productContext, cachedStatuses]);
+  }, [chatsContext, productContext, cachedStatuses, signer]);
 
   const convertToSats = (amount: number, currency: string): number => {
     const curr = currency?.toLowerCase() || "sats";
@@ -778,9 +792,9 @@ const OrdersDashboard = () => {
     if (!productContext?.productEvents) return;
 
     const productEvent = productContext.productEvents.find((event: any) => {
-      const eventAddress = `30402:${event.pubkey}:${event.tags.find(
-        (tag: any) => tag[0] === "d"
-      )?.[1]}`;
+      const eventAddress = `30402:${event.pubkey}:${
+        event.tags.find((tag: any) => tag[0] === "d")?.[1]
+      }`;
       return productAddress.includes(eventAddress);
     });
 
@@ -898,13 +912,24 @@ const OrdersDashboard = () => {
       );
 
       // Persist status to database
+      const body = JSON.stringify({
+        orderId: selectedOrder.orderId,
+        status: "shipped",
+      });
+      const authHeader = await createNip98AuthorizationHeader(
+        signer,
+        `${window.location.origin}/api/db/update-order-status`,
+        "POST",
+        body
+      );
+
       fetch("/api/db/update-order-status", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          orderId: selectedOrder.orderId,
-          status: "shipped",
-        }),
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: authHeader,
+        },
+        body,
       }).catch((err) =>
         console.error("Failed to persist shipped status:", err)
       );
@@ -1279,10 +1304,10 @@ const OrdersDashboard = () => {
   }
 
   return (
-    <div className="min-w-0 max-w-[98vw] bg-light-bg px-4 py-4 dark:bg-dark-bg sm:py-6">
-      <div className="mx-auto w-full min-w-0 max-w-full">
+    <div className="bg-light-bg dark:bg-dark-bg max-w-[98vw] min-w-0 px-4 py-4 sm:py-6">
+      <div className="mx-auto w-full max-w-full min-w-0">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-          <h1 className="text-3xl font-bold text-light-text dark:text-dark-text">
+          <h1 className="text-light-text dark:text-dark-text text-3xl font-bold">
             Orders Dashboard
           </h1>
           <div className="flex items-center gap-3">
@@ -1319,7 +1344,7 @@ const OrdersDashboard = () => {
             <h3 className="mb-2 text-sm font-medium text-gray-600 dark:text-gray-400">
               Total Orders
             </h3>
-            <p className="text-3xl font-bold text-light-text dark:text-dark-text">
+            <p className="text-light-text dark:text-dark-text text-3xl font-bold">
               {totalOrders}
             </p>
           </div>
@@ -1328,7 +1353,7 @@ const OrdersDashboard = () => {
             <h3 className="mb-2 text-sm font-medium text-gray-600 dark:text-gray-400">
               Total GMV
             </h3>
-            <p className="text-3xl font-bold text-light-text dark:text-dark-text">
+            <p className="text-light-text dark:text-dark-text text-3xl font-bold">
               {displayCurrency === "sats"
                 ? `${getDisplayedGMV().toLocaleString()} sats`
                 : `$${getDisplayedGMV().toLocaleString(undefined, {
@@ -1342,7 +1367,7 @@ const OrdersDashboard = () => {
             <h3 className="mb-2 text-sm font-medium text-gray-600 dark:text-gray-400">
               Average Order Size
             </h3>
-            <p className="text-3xl font-bold text-light-text dark:text-dark-text">
+            <p className="text-light-text dark:text-dark-text text-3xl font-bold">
               {displayCurrency === "sats"
                 ? `${getDisplayedAverage().toFixed(0)} sats`
                 : `$${getDisplayedAverage().toLocaleString(undefined, {
@@ -1366,40 +1391,40 @@ const OrdersDashboard = () => {
             <table className="min-w-full text-left text-sm text-gray-500 dark:text-gray-400">
               <thead className="border-b border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-900">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600 dark:text-gray-400">
+                  <th className="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-600 uppercase dark:text-gray-400">
                     Order ID
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600 dark:text-gray-400">
+                  <th className="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-600 uppercase dark:text-gray-400">
                     Type
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600 dark:text-gray-400">
+                  <th className="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-600 uppercase dark:text-gray-400">
                     Buyer/Seller
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600 dark:text-gray-400">
+                  <th className="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-600 uppercase dark:text-gray-400">
                     Amount
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600 dark:text-gray-400">
+                  <th className="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-600 uppercase dark:text-gray-400">
                     Status
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600 dark:text-gray-400">
+                  <th className="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-600 uppercase dark:text-gray-400">
                     Date
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600 dark:text-gray-400">
+                  <th className="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-600 uppercase dark:text-gray-400">
                     Address
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600 dark:text-gray-400">
+                  <th className="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-600 uppercase dark:text-gray-400">
                     Pickup Location
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600 dark:text-gray-400">
+                  <th className="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-600 uppercase dark:text-gray-400">
                     Order Specs
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600 dark:text-gray-400">
+                  <th className="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-600 uppercase dark:text-gray-400">
                     Payment
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600 dark:text-gray-400">
+                  <th className="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-600 uppercase dark:text-gray-400">
                     Product
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600 dark:text-gray-400">
+                  <th className="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-600 uppercase dark:text-gray-400">
                     Donation Amount
                   </th>
                 </tr>
@@ -1424,21 +1449,21 @@ const OrdersDashboard = () => {
                         key={order.orderId}
                         className={`hover:bg-gray-50 dark:hover:bg-gray-700 ${
                           isNewOrder
-                            ? "border-l-4 border-l-shopstr-purple dark:border-l-shopstr-yellow"
+                            ? "border-l-shopstr-purple dark:border-l-shopstr-yellow border-l-4"
                             : ""
                         }`}
                       >
-                        <td className="whitespace-nowrap px-4 py-4 text-sm text-light-text dark:text-dark-text">
+                        <td className="text-light-text dark:text-dark-text px-4 py-4 text-sm whitespace-nowrap">
                           <div className="flex flex-col gap-1">
                             <span>{order.orderId.substring(0, 8)}...</span>
                             {order.reviewRating !== undefined ? (
-                              <span className="text-xs text-shopstr-purple-light underline dark:text-shopstr-yellow-light">
+                              <span className="text-shopstr-purple-light dark:text-shopstr-yellow-light text-xs underline">
                                 Rating: {order.reviewRating.toFixed(1)}
                               </span>
                             ) : canShowReviewButton(order) ? (
                               <button
                                 onClick={() => handleOpenReviewModal(order)}
-                                className="cursor-pointer text-left text-xs text-shopstr-purple-light underline hover:text-shopstr-purple dark:text-shopstr-yellow-light dark:hover:text-shopstr-yellow"
+                                className="text-shopstr-purple-light hover:text-shopstr-purple dark:text-shopstr-yellow-light dark:hover:text-shopstr-yellow cursor-pointer text-left text-xs underline"
                               >
                                 Leave Review
                               </button>
@@ -1459,7 +1484,7 @@ const OrdersDashboard = () => {
                             ) : null}
                           </div>
                         </td>
-                        <td className="whitespace-nowrap px-4 py-4 text-sm">
+                        <td className="px-4 py-4 text-sm whitespace-nowrap">
                           <span
                             className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
                               order.isSale
@@ -1489,7 +1514,7 @@ const OrdersDashboard = () => {
                             );
                           })()}
                         </td>
-                        <td className="whitespace-nowrap px-4 py-4 text-sm text-light-text dark:text-dark-text">
+                        <td className="text-light-text dark:text-dark-text px-4 py-4 text-sm whitespace-nowrap">
                           {order.amount > 0
                             ? displayCurrency === "sats"
                               ? `${getConvertedAmount(
@@ -1505,7 +1530,7 @@ const OrdersDashboard = () => {
                                 })}`
                             : "N/A"}
                         </td>
-                        <td className="whitespace-nowrap px-4 py-4 text-sm">
+                        <td className="px-4 py-4 text-sm whitespace-nowrap">
                           <div className="flex flex-col gap-1">
                             <span
                               className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
@@ -1523,7 +1548,7 @@ const OrdersDashboard = () => {
                             {order.status === "pending" && (
                               <button
                                 onClick={() => handleOpenShippingModal(order)}
-                                className="cursor-pointer text-left text-xs text-shopstr-purple-light underline hover:text-shopstr-purple dark:text-shopstr-yellow-light dark:hover:text-shopstr-yellow"
+                                className="text-shopstr-purple-light hover:text-shopstr-purple dark:text-shopstr-yellow-light dark:hover:text-shopstr-yellow cursor-pointer text-left text-xs underline"
                               >
                                 Send Shipping Update
                               </button>
@@ -1541,12 +1566,12 @@ const OrdersDashboard = () => {
                             )}
                           </div>
                         </td>
-                        <td className="whitespace-nowrap px-4 py-4 text-sm text-light-text dark:text-dark-text">
+                        <td className="text-light-text dark:text-dark-text px-4 py-4 text-sm whitespace-nowrap">
                           {new Date(
                             order.timestamp * 1000
                           ).toLocaleDateString()}
                         </td>
-                        <td className="max-w-xs px-4 py-4 text-sm text-light-text dark:text-dark-text">
+                        <td className="text-light-text dark:text-dark-text max-w-xs px-4 py-4 text-sm">
                           <div className="flex flex-col gap-1">
                             <div
                               className="truncate"
@@ -1559,14 +1584,14 @@ const OrdersDashboard = () => {
                                 onClick={() =>
                                   handleOpenAddressChangeModal(order)
                                 }
-                                className="cursor-pointer text-left text-xs text-shopstr-purple-light underline hover:text-shopstr-purple dark:text-shopstr-yellow-light dark:hover:text-shopstr-yellow"
+                                className="text-shopstr-purple-light hover:text-shopstr-purple dark:text-shopstr-yellow-light dark:hover:text-shopstr-yellow cursor-pointer text-left text-xs underline"
                               >
                                 Change Address
                               </button>
                             )}
                           </div>
                         </td>
-                        <td className="max-w-xs px-4 py-4 text-sm text-light-text dark:text-dark-text">
+                        <td className="text-light-text dark:text-dark-text max-w-xs px-4 py-4 text-sm">
                           <div
                             className="truncate"
                             title={order.pickupLocation || "N/A"}
@@ -1574,7 +1599,7 @@ const OrdersDashboard = () => {
                             {order.pickupLocation || "N/A"}
                           </div>
                         </td>
-                        <td className="whitespace-nowrap px-4 py-4 text-sm text-light-text dark:text-dark-text">
+                        <td className="text-light-text dark:text-dark-text px-4 py-4 text-sm whitespace-nowrap">
                           {(() => {
                             const specs = [];
                             if (order.selectedSize)
@@ -1603,7 +1628,7 @@ const OrdersDashboard = () => {
                             </span>
                           )}
                         </td>
-                        <td className="px-4 py-4 text-sm text-light-text dark:text-dark-text">
+                        <td className="text-light-text dark:text-dark-text px-4 py-4 text-sm">
                           {order.productAddress ? (
                             <button
                               onClick={() =>
@@ -1618,7 +1643,7 @@ const OrdersDashboard = () => {
                             "N/A"
                           )}
                         </td>
-                        <td className="whitespace-nowrap px-4 py-4 text-sm text-light-text dark:text-dark-text">
+                        <td className="text-light-text dark:text-dark-text px-4 py-4 text-sm whitespace-nowrap">
                           {order.donationAmount !== undefined &&
                           order.donationAmount > 0
                             ? displayCurrency === "sats"
@@ -1675,7 +1700,7 @@ const OrdersDashboard = () => {
         size="2xl"
       >
         <ModalContent>
-          <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
+          <ModalHeader className="text-light-text dark:text-dark-text flex flex-col gap-1">
             Enter Shipping Details
           </ModalHeader>
           <form onSubmit={handleShippingSubmit(onShippingSubmit)}>
@@ -1807,7 +1832,7 @@ const OrdersDashboard = () => {
         size="2xl"
       >
         <ModalContent>
-          <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
+          <ModalHeader className="text-light-text dark:text-dark-text flex flex-col gap-1">
             Leave a Review
           </ModalHeader>
           <form onSubmit={handleReviewSubmit(onReviewSubmit)}>
@@ -1821,7 +1846,7 @@ const OrdersDashboard = () => {
                     className={`h-12 w-12 cursor-pointer rounded-lg border-2 p-2 transition-colors ${
                       selectedThumb === "up"
                         ? "border-green-500 text-green-500"
-                        : "border-light-text text-light-text hover:border-green-500 hover:text-green-500 dark:border-dark-text dark:text-dark-text"
+                        : "border-light-text text-light-text dark:border-dark-text dark:text-dark-text hover:border-green-500 hover:text-green-500"
                     }`}
                     onClick={() => setSelectedThumb("up")}
                   />
@@ -1831,7 +1856,7 @@ const OrdersDashboard = () => {
                     className={`h-12 w-12 cursor-pointer rounded-lg border-2 p-2 transition-colors ${
                       selectedThumb === "down"
                         ? "border-red-500 text-red-500"
-                        : "border-light-text text-light-text hover:border-red-500 hover:text-red-500 dark:border-dark-text dark:text-dark-text"
+                        : "border-light-text text-light-text dark:border-dark-text dark:text-dark-text hover:border-red-500 hover:text-red-500"
                     }`}
                     onClick={() => setSelectedThumb("down")}
                   />
@@ -1916,7 +1941,7 @@ const OrdersDashboard = () => {
                   <div>
                     <textarea
                       {...field}
-                      className="w-full rounded-md border-2 border-light-fg bg-light-bg p-2 text-light-text dark:border-dark-fg dark:bg-dark-bg dark:text-dark-text"
+                      className="border-light-fg bg-light-bg text-light-text dark:border-dark-fg dark:bg-dark-bg dark:text-dark-text w-full rounded-md border-2 p-2"
                       rows={4}
                       placeholder="Write your review comment here..."
                     />
@@ -1965,7 +1990,7 @@ const OrdersDashboard = () => {
           <ModalBody>
             <div className="flex flex-col gap-4">
               <div>
-                <p className="mb-1 text-sm font-semibold text-light-text dark:text-dark-text">
+                <p className="text-light-text dark:text-dark-text mb-1 text-sm font-semibold">
                   Order: {returnRequestOrder?.orderId?.substring(0, 8)}...
                 </p>
                 <p className="text-sm text-gray-500 dark:text-gray-400">
@@ -1973,7 +1998,7 @@ const OrdersDashboard = () => {
                 </p>
               </div>
               <div>
-                <label className="mb-2 block text-sm font-semibold text-light-text dark:text-dark-text">
+                <label className="text-light-text dark:text-dark-text mb-2 block text-sm font-semibold">
                   Request Type
                 </label>
                 <div className="flex gap-3">
@@ -1984,7 +2009,7 @@ const OrdersDashboard = () => {
                       className={`rounded-lg border px-3 py-1.5 text-sm font-semibold transition-colors ${
                         returnRequestType === type
                           ? "border-shopstr-purple bg-shopstr-purple/10 text-shopstr-purple dark:border-shopstr-yellow dark:bg-shopstr-yellow/10 dark:text-shopstr-yellow"
-                          : "border-gray-300 bg-transparent text-gray-600 hover:border-shopstr-purple dark:border-gray-600 dark:text-gray-400"
+                          : "hover:border-shopstr-purple border-gray-300 bg-transparent text-gray-600 dark:border-gray-600 dark:text-gray-400"
                       }`}
                     >
                       {type.charAt(0).toUpperCase() + type.slice(1)}
@@ -1993,14 +2018,14 @@ const OrdersDashboard = () => {
                 </div>
               </div>
               <div>
-                <label className="mb-2 block text-sm font-semibold text-light-text dark:text-dark-text">
+                <label className="text-light-text dark:text-dark-text mb-2 block text-sm font-semibold">
                   Message to Seller
                 </label>
                 <textarea
                   value={returnRequestMessage}
                   onChange={(e) => setReturnRequestMessage(e.target.value)}
                   rows={5}
-                  className="w-full rounded-md border border-gray-300 bg-light-bg p-3 text-sm text-light-text focus:border-shopstr-purple focus:outline-none dark:border-gray-600 dark:bg-dark-bg dark:text-dark-text dark:focus:border-shopstr-yellow"
+                  className="bg-light-bg text-light-text focus:border-shopstr-purple dark:bg-dark-bg dark:text-dark-text dark:focus:border-shopstr-yellow w-full rounded-md border border-gray-300 p-3 text-sm focus:outline-none dark:border-gray-600"
                   placeholder="Describe the reason for your request..."
                 />
               </div>

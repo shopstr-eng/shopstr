@@ -1,4 +1,4 @@
-import { Listbox, ListboxItem, ListboxSection } from "@nextui-org/react";
+import { Listbox, ListboxItem, ListboxSection } from "@heroui/react";
 import {
   ArrowRightStartOnRectangleIcon,
   BuildingStorefrontIcon,
@@ -26,7 +26,7 @@ const SettingsPage = () => {
 
   return (
     <ProtectedRoute>
-      <div className="flex h-full flex-col bg-light-bg pt-24 dark:bg-dark-bg">
+      <div className="bg-light-bg dark:bg-dark-bg flex h-full flex-col pt-24">
         <div className="bg mx-auto h-screen w-full lg:w-1/2 lg:pl-4">
           <SettingsBreadCrumbs />
           <Listbox variant="flat" aria-label="Listbox menu with sections">

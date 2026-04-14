@@ -8,7 +8,7 @@ import {
   DropdownTrigger,
   User,
   useDisclosure,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import { nip19 } from "nostr-tools";
 import { useContext, useEffect, useState } from "react";
 import { getProfileSlug } from "@/utils/url-slugs";
@@ -25,6 +25,7 @@ import {
 import { useRouter } from "next/router";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import SignInModal from "../../sign-in/SignInModal";
+import { ProfileData } from "@/utils/types/types";
 
 type DropDownKeys =
   | "shop"
@@ -35,6 +36,48 @@ type DropDownKeys =
   | "user_profile"
   | "logout"
   | "copy_npub";
+
+const fetchedProfileContentCache = new Map<string, ProfileData["content"]>();
+const inFlightProfileRequests = new Map<
+  string,
+  Promise<ProfileData["content"] | null>
+>();
+const MAX_PROFILE_CACHE_ENTRIES = 100;
+
+const trimProfileContentCache = () => {
+  while (fetchedProfileContentCache.size > MAX_PROFILE_CACHE_ENTRIES) {
+    const oldestKey = fetchedProfileContentCache.keys().next().value;
+    if (!oldestKey) break;
+    fetchedProfileContentCache.delete(oldestKey);
+  }
+};
+
+const clearProfileRequestCaches = () => {
+  fetchedProfileContentCache.clear();
+  inFlightProfileRequests.clear();
+};
+
+const fetchProfileContent = async (pubkey: string) => {
+  try {
+    const response = await fetch(
+      `/api/db/fetch-profile?pubkey=${encodeURIComponent(pubkey)}`
+    );
+    if (!response.ok) return null;
+
+    const responseText = await response.text();
+    if (!responseText) return null;
+
+    const data = JSON.parse(responseText) as {
+      profile?: {
+        content?: ProfileData["content"];
+      };
+    };
+
+    return data?.profile?.content || null;
+  } catch {
+    return null;
+  }
+};
 
 export const ProfileWithDropdown = ({
   pubkey,
@@ -47,10 +90,10 @@ export const ProfileWithDropdown = ({
   pubkey: string;
   dropDownKeys: DropDownKeys[];
 }) => {
-  const [pfp, setPfp] = useState("");
-  const [displayName, setDisplayName] = useState("");
+  const [fetchedProfileContent, setFetchedProfileContent] = useState<
+    ProfileData["content"] | null
+  >(null);
   const [isNPubCopied, setIsNPubCopied] = useState(false);
-  const [isNip05Verified, setIsNip05Verified] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const profileContext = useContext(ProfileMapContext);
   const shopMapContext = useContext(ShopMapContext);
@@ -65,42 +108,65 @@ export const ProfileWithDropdown = ({
   };
 
   useEffect(() => {
+    let isCancelled = false;
+
     if (!pubkey) return;
-    fetch(`/api/db/fetch-profile?pubkey=${encodeURIComponent(pubkey)}`)
-      .then((r) => r.json())
-      .then((data) => {
-        const content = data?.profile?.content;
-        if (!content) return;
-        setDisplayName(() => {
-          let name = content.name || npub;
-          name = name.length > 15 ? name.slice(0, 15) + "..." : name;
-          return name;
+    if (typeof fetch !== "function") return;
+
+    const contextProfileContent =
+      profileContext.profileData.get(pubkey)?.content;
+    if (contextProfileContent) {
+      setFetchedProfileContent(contextProfileContent);
+      return;
+    }
+
+    const cachedProfileContent = fetchedProfileContentCache.get(pubkey);
+    if (cachedProfileContent) {
+      setFetchedProfileContent(cachedProfileContent);
+      return;
+    }
+
+    setFetchedProfileContent(null);
+    let request = inFlightProfileRequests.get(pubkey);
+    if (!request) {
+      request = fetchProfileContent(pubkey)
+        .then((content) => {
+          if (content) {
+            fetchedProfileContentCache.set(pubkey, content);
+            trimProfileContentCache();
+          }
+          return content;
+        })
+        .finally(() => {
+          inFlightProfileRequests.delete(pubkey);
         });
-        if (content.picture) setPfp(content.picture);
+      inFlightProfileRequests.set(pubkey, request);
+    }
+
+    request
+      .then((content) => {
+        if (!content || isCancelled) return;
+        setFetchedProfileContent(content);
       })
       .catch(() => {});
-  }, [pubkey, npub]);
 
-  useEffect(() => {
-    const profileMap = profileContext.profileData;
-    const profile = profileMap.has(pubkey) ? profileMap.get(pubkey) : undefined;
-    const npubFallback = pubkey ? nip19.npubEncode(pubkey) : "";
-    setDisplayName(() => {
-      let name =
-        profile && profile.content.name ? profile.content.name : npubFallback;
-      if (profile?.content?.nip05 && profile.nip05Verified) {
-        name = profile.content.nip05;
-      }
-      name = name.length > 15 ? name.slice(0, 15) + "..." : name;
-      return name;
-    });
-    setPfp(
-      profile && profile.content && profile.content.picture
-        ? profile.content.picture
-        : `https://robohash.org/${pubkey}`
-    );
-    setIsNip05Verified(profile?.nip05Verified || false);
-  }, [profileContext, pubkey]);
+    return () => {
+      isCancelled = true;
+    };
+  }, [pubkey, profileContext.profileData]);
+
+  const profile = profileContext.profileData.get(pubkey);
+  const profileContent = profile?.content ?? fetchedProfileContent;
+  const displayName = (() => {
+    let name =
+      profile?.content?.nip05 && profile.nip05Verified
+        ? profile.content.nip05
+        : profileContent?.name || npub;
+    name = name.length > 15 ? name.slice(0, 15) + "..." : name;
+    return name;
+  })();
+  const pfp = profileContent?.picture || `https://robohash.org/${pubkey}`;
+  const isNip05Verified = profile?.nip05Verified || false;
 
   const DropDownItems: {
     [key in DropDownKeys]: DropdownItemProps & { label: string };
@@ -199,6 +265,7 @@ export const ProfileWithDropdown = ({
       startContent: <ArrowRightStartOnRectangleIcon className={"h-5 w-5"} />,
       onPress: () => {
         handleDropdownAction(() => {
+          clearProfileRequestCaches();
           LogOut();
           router.push("/marketplace");
         });
@@ -210,7 +277,7 @@ export const ProfileWithDropdown = ({
       color: "default",
       className: "text-light-text dark:text-dark-text",
       startContent: isNPubCopied ? (
-        <CheckIcon className="h-5 w-5 text-shopstr-purple dark:text-shopstr-yellow" />
+        <CheckIcon className="text-shopstr-purple dark:text-shopstr-yellow h-5 w-5" />
       ) : (
         <ClipboardIcon className="h-5 w-5" />
       ),
