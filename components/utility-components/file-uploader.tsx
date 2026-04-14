@@ -1,5 +1,5 @@
 import { useContext, useRef, useState } from "react";
-import { Button, Input, Progress } from "@heroui/react";
+import { Button, Progress } from "@heroui/react";
 import {
   blossomUploadImages,
   getLocalStorageData,
@@ -426,6 +426,7 @@ export const FileUploaderButton = ({
       {/* Drag and Drop Zone */}
       <div
         ref={dropZoneRef}
+        onClick={handleDropZoneClick}
         onDragEnter={handleDragEnter}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
