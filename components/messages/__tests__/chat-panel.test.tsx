@@ -232,6 +232,55 @@ describe("ChatPanel Component", () => {
       ).toBeInTheDocument();
     });
 
+    it("should dismiss the failure modal when closed", async () => {
+      await renderComponent(
+        {
+          isPayment: true,
+          chatsMap: new Map([
+            [
+              "test-pubkey-1",
+              {
+                decryptedChat: [
+                  {
+                    id: "shipping-msg-2",
+                    pubkey: "test-pubkey-1",
+                    kind: 14,
+                    content: "Shipping update",
+                    created_at: 1,
+                    sig: "sig-shipping-2",
+                    read: true,
+                    tags: [
+                      ["subject", "shipping-info"],
+                      ["carrier", "FedEx"],
+                    ],
+                  },
+                ],
+                unreadCount: 0,
+              },
+            ],
+          ]),
+        },
+        {}
+      );
+
+      await userEvent.click(
+        await screen.findByRole("button", { name: /Mark as Completed/i })
+      );
+
+      const errorText = await screen.findByText(
+        /Missing shipping fields: tracking/i
+      );
+      expect(errorText).toBeInTheDocument();
+
+      await userEvent.click(screen.getByRole("button", { name: /close/i }));
+
+      await waitFor(() => {
+        expect(
+          screen.queryByText(/Missing shipping fields: tracking/i)
+        ).not.toBeInTheDocument();
+      });
+    });
+
     it("should allow completion when no shipping info message exists", async () => {
       await renderComponent(
         {

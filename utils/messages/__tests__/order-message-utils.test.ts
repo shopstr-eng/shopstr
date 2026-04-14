@@ -52,6 +52,11 @@ describe("order-message-utils", () => {
     expect(resolveExplicitPaymentMethod()).toBe("Not specified");
   });
 
+  test("resolveExplicitPaymentMethod title-cases unknown payment types", () => {
+    expect(resolveExplicitPaymentMethod("bitcoin")).toBe("Bitcoin");
+    expect(resolveExplicitPaymentMethod("monero")).toBe("Monero");
+  });
+
   test("getOrderStatusLookupKeys includes tag, grouping key, and message id", () => {
     const event = {
       id: "msg-3",
@@ -64,9 +69,7 @@ describe("order-message-utils", () => {
     } as any;
 
     const lookupKeys = getOrderStatusLookupKeys(event);
-    expect(lookupKeys).toEqual(
-      expect.arrayContaining(["order-123", "msg-3"])
-    );
+    expect(lookupKeys).toEqual(expect.arrayContaining(["order-123", "msg-3"]));
     expect(lookupKeys.length).toBeGreaterThanOrEqual(2);
   });
 
@@ -84,11 +87,7 @@ describe("order-message-utils", () => {
     };
 
     const firstKey = getOrderConsolidationKey(firstOrder, taggedOrderGroupKeys);
-    registerTaggedOrderGroupingKey(
-      firstOrder,
-      taggedOrderGroupKeys,
-      firstKey
-    );
+    registerTaggedOrderGroupingKey(firstOrder, taggedOrderGroupKeys, firstKey);
 
     const secondKey = getOrderConsolidationKey(
       secondOrder,
@@ -126,5 +125,68 @@ describe("order-message-utils", () => {
     const result = getLatestShippingInfo([shippingEvent]);
     expect(result?.carrier).toBe("UPS");
     expect(result?.missingFields).toEqual(["tracking"]);
+  });
+
+  test("getLatestShippingInfo returns null when no shipping-info message exists", () => {
+    const messages = [
+      {
+        id: "msg-5",
+        tags: [["subject", "order-info"]],
+      },
+      {
+        id: "msg-6",
+        tags: [["subject", "payment-confirmation"]],
+      },
+    ] as any[];
+
+    expect(getLatestShippingInfo(messages)).toBeNull();
+    expect(getLatestShippingInfo([])).toBeNull();
+  });
+
+  test("buildOrderGroupingKey uses item tag when a tag is absent", () => {
+    const eventWithItemTag = {
+      id: "msg-7",
+      tags: [
+        ["subject", "order-info"],
+        ["item", "30402:merchant:dtag", "1"],
+        ["amount", "500"],
+        ["address", "456 Oak Ave"],
+      ],
+    } as any;
+
+    const eventWithATag = {
+      id: "msg-8",
+      tags: [
+        ["subject", "shipping-info"],
+        ["a", "30402:merchant:dtag"],
+        ["amount", "500"],
+        ["address", "456 Oak Ave"],
+      ],
+    } as any;
+
+    expect(buildOrderGroupingKey(eventWithItemTag)).toBe(
+      buildOrderGroupingKey(eventWithATag)
+    );
+    expect(buildOrderGroupingKey(eventWithItemTag)).not.toBe("");
+  });
+
+  test("getOrderStatusLookupKeys includes grouping key even when orderTag is present", () => {
+    const event = {
+      id: "msg-9",
+      tags: [
+        ["subject", "order-receipt"],
+        ["order", "order-456"],
+        ["a", "30402:merchant:dtag"],
+        ["amount", "1000"],
+        ["address", "789 Pine St"],
+      ],
+    } as any;
+
+    const lookupKeys = getOrderStatusLookupKeys(event);
+    const groupingKey = buildOrderGroupingKey(event);
+
+    expect(lookupKeys).toContain("order-456");
+    expect(lookupKeys).toContain(groupingKey);
+    expect(lookupKeys).toContain("msg-9");
   });
 });

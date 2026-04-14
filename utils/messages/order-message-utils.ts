@@ -37,21 +37,22 @@ const _buildOrderGroupingKeyFromMap = (
 
 export const buildOrderGroupingKey = (
   messageEvent: NostrMessageEvent
-): string => _buildOrderGroupingKeyFromMap(buildTagMap(messageEvent), messageEvent);
+): string =>
+  _buildOrderGroupingKeyFromMap(buildTagMap(messageEvent), messageEvent);
 
 export const getOrderStatusLookupKeys = (messageEvent: NostrMessageEvent) => {
   const tagsMap = buildTagMap(messageEvent);
   const orderTag = tagsMap.get("order");
   const orderGroupKey = _buildOrderGroupingKeyFromMap(tagsMap, messageEvent);
 
+  // Always include both the explicit orderTag and the computed grouping key so
+  // that a status cached under the grouping key (before the orderTag was seen)
+  // is still found when the orderTag is present on a later message.
   return Array.from(
     new Set(
-      [
-        orderTag,
-        orderTag ? undefined : orderGroupKey,
-        messageEvent.id,
-      ]
-        .filter((value): value is string => Boolean(value))
+      [orderTag, orderGroupKey, messageEvent.id].filter(
+        (value): value is string => Boolean(value)
+      )
     )
   );
 };
@@ -97,6 +98,9 @@ export const registerTaggedOrderGroupingKey = (
   }
 
   if (existingTaggedOrderKey !== consolidationKey) {
+    // null is a meaningful sentinel: it signals that two different consolidation
+    // keys share this group key, making the group key ambiguous and ineligible
+    // for resolution in getOrderConsolidationKey. It is not an uninitialized value.
     taggedOrderGroupKeys.set(order.orderGroupKey, null);
   }
 };
@@ -138,6 +142,8 @@ export const getLatestShippingInfo = (
   const tracking = tagsMap.get("tracking") || "";
   const carrier = tagsMap.get("carrier") || "";
   const etaValue = tagsMap.get("eta");
+  // Number() + Number.isFinite rejects partially-numeric strings like "12days"
+  // that parseInt would silently accept, ensuring malformed ETA tags produce 0.
   const parsedEta = etaValue ? Number(etaValue.trim()) : 0;
   const eta = Number.isFinite(parsedEta) ? parsedEta : 0;
   const missingFields: ShippingInfo["missingFields"] = [];

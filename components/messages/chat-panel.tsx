@@ -172,6 +172,9 @@ const ChatPanel = ({
 
       const shippingInfo = getLatestShippingInfo(messages);
 
+      // Intentional: only block completion if a shipping-info message exists but is incomplete.
+      // If no shipping-info message has been sent yet, the seller may be completing a
+      // non-physical or pre-shipping order, so we allow it to proceed without shipping data.
       if (shippingInfo && shippingInfo.missingFields.length > 0) {
         setFailureText(
           `Cannot complete this order yet. Missing shipping fields: ${shippingInfo.missingFields
@@ -576,6 +579,14 @@ const ChatPanel = ({
               </form>
             </ModalContent>
           </Modal>
+          <FailureModal
+            bodyText={failureText}
+            isOpen={showFailureModal}
+            onClose={() => {
+              setShowFailureModal(false);
+              setFailureText("");
+            }}
+          />
         </>
       ) : (
         productAddress &&
@@ -746,14 +757,6 @@ const ChatPanel = ({
                 </form>
               </ModalContent>
             </Modal>
-            <FailureModal
-              bodyText={failureText}
-              isOpen={showFailureModal}
-              onClose={() => {
-                setShowFailureModal(false);
-                setFailureText("");
-              }}
-            />
           </>
         )
       )}

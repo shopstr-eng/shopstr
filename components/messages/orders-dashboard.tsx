@@ -290,7 +290,7 @@ const OrdersDashboard = () => {
     async function loadCachedStatuses() {
       if (!chatsContext || chatsContext.isLoading) return;
 
-      const orderIds: string[] = [];
+      const orderIdSet = new Set<string>();
       for (const entry of chatsContext.chatsMap) {
         const chat = entry[1] as NostrMessageEvent[];
         for (const messageEvent of chat) {
@@ -308,20 +308,18 @@ const OrdersDashboard = () => {
           ) {
             const orderStatusKeys = getOrderStatusLookupKeys(messageEvent);
             for (const statusKey of orderStatusKeys) {
-              if (!orderIds.includes(statusKey)) {
-                orderIds.push(statusKey);
-              }
+              orderIdSet.add(statusKey);
             }
           }
         }
       }
 
-      if (orderIds.length > 0) {
+      if (orderIdSet.size > 0) {
         try {
           const response = await fetch("/api/db/get-order-statuses", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ orderIds }),
+            body: JSON.stringify({ orderIds: Array.from(orderIdSet) }),
           });
           if (response.ok) {
             const data = await response.json();
