@@ -41,6 +41,10 @@ import LocationDropdown from "./utility-components/dropdowns/location-dropdown";
 import ConfirmActionDropdown from "./utility-components/dropdowns/confirm-action-dropdown";
 import { ProductContext, ProfileMapContext } from "../utils/context/context";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
+import {
+  formatCurrentDateTimeLocalValue,
+  formatUnixTimestampAsDateTimeLocalValue,
+} from "@/utils/datetime-local";
 import { buildSrcSet } from "@/utils/images";
 import { FileUploaderButton } from "./utility-components/file-uploader";
 import currencySelection from "../public/currencySelection.json";
@@ -123,7 +127,7 @@ export default function ProductForm({
           Required: oldValues.required ? oldValues.required : "",
           Restrictions: oldValues.restrictions ? oldValues.restrictions : "",
           Expiration: oldValues.expiration
-            ? new Date(oldValues.expiration * 1000).toISOString().slice(0, 16)
+            ? formatUnixTimestampAsDateTimeLocalValue(oldValues.expiration)
             : "",
         }
       : {
@@ -1673,7 +1677,7 @@ export default function ProductForm({
                     <div className="mt-4">
                       <Input
                         type="datetime-local"
-                        min={new Date().toISOString().slice(0, 16)}
+                        min={formatCurrentDateTimeLocalValue()}
                         variant="bordered"
                         label="Valid Until (Optional)"
                         labelPlacement="inside"

@@ -51,6 +51,9 @@ const nextConfig = {
   bundlePagesRouterDependencies: true,
   output: "standalone",
   reactStrictMode: true,
+  allowedDevOrigins: process.env.REPLIT_DEV_DOMAIN
+    ? [process.env.REPLIT_DEV_DOMAIN]
+    : [],
   poweredByHeader: false,
   turbopack: {},
   async rewrites() {
