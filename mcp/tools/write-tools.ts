@@ -23,7 +23,6 @@ import {
   buildSignedHttpRequestProofTemplate,
   SIGNED_EVENT_HEADER,
 } from "@/utils/nostr/request-auth";
-import type { BinaryLike } from "node:crypto";
 
 const resolveCname = promisify(dns.resolveCname);
 const resolve4 = promisify(dns.resolve4);
@@ -2414,7 +2413,11 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
       try {
         const fileBuffer = Buffer.from(params.fileBase64, "base64");
-        const binaryData: BinaryLike = new Uint8Array(fileBuffer.buffer, fileBuffer.byteOffset, fileBuffer.byteLength);
+        const binaryData = new Uint8Array(
+          fileBuffer.buffer as ArrayBuffer,
+          fileBuffer.byteOffset,
+          fileBuffer.byteLength
+        );
         const { createHash: cryptoCreateHash } = await import("node:crypto");
         const hash = cryptoCreateHash("sha256")
           .update(binaryData)
@@ -2446,7 +2449,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
         const response = await fetch(uploadUrl.toString(), {
           method: "PUT",
-          body: new Blob([Uint8Array.from(fileBuffer)], {
+          body: new Blob([binaryData], {
             type: params.mimeType,
           }),
           headers: {
