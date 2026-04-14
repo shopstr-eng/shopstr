@@ -31,7 +31,7 @@ export function parseShippingTag(
     return;
   }
 
-  if (!rawShippingCost?.trim()) {
+  if (rawShippingCost == null || !String(rawShippingCost).trim()) {
     return;
   }
 
