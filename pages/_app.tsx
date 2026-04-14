@@ -983,8 +983,6 @@ function MilkMarket({ props }: { props: AppProps }) {
     }
 
     fetchData();
-    window.addEventListener("storage", fetchData);
-    return () => window.removeEventListener("storage", fetchData);
   }, [nostr, signer, isLoggedIn]);
 
   // When navigating between storefront pages, refetch for the new shop

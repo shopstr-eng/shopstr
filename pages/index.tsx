@@ -138,7 +138,7 @@ export default function StandaloneLanding() {
     if (router.pathname === "/" && signerContext.isLoggedIn) {
       router.push("/marketplace");
     }
-  }, [router.pathname, signerContext]);
+  }, [router.pathname, signerContext.isLoggedIn]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitMessage, setSubmitMessage] = useState<{
