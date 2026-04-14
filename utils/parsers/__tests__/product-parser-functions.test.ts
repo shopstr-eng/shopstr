@@ -153,8 +153,6 @@ describe("parseTags", () => {
     expect(result.totalCost).toBe(50);
   });
 
-
-
   it("should parse various content-warning tags as true", () => {
     const event1 = { ...baseEvent, tags: [["content-warning"]] };
     expect(parseTags(event1)!.contentWarning).toBe(true);

@@ -6,9 +6,7 @@ import {
 
 describe("parseShippingTag", () => {
   it("parses the modern 3-value shipping tag format", () => {
-    expect(
-      parseShippingTag(["shipping", "Added Cost", "10", "USD"])
-    ).toEqual({
+    expect(parseShippingTag(["shipping", "Added Cost", "10", "USD"])).toEqual({
       shippingType: "Added Cost",
       shippingCost: 10,
     });

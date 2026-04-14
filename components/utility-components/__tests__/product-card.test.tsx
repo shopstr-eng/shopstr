@@ -148,7 +148,9 @@ describe("ProductCard", () => {
     });
 
     it("does not navigate if onProductClick prevents default", () => {
-      const onProductClick = jest.fn((_product, event) => event?.preventDefault());
+      const onProductClick = jest.fn((_product, event) =>
+        event?.preventDefault()
+      );
 
       renderWithContext(
         <ProductCard

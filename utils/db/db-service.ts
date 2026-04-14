@@ -407,7 +407,11 @@ export async function cacheEvent(event: NostrEvent): Promise<void> {
         // Delete older reviews from the same pubkey for the same product
         const deleteQuery = {
           text: `DELETE FROM ${table} WHERE pubkey = $1 AND kind = $2 AND tags @> $3::jsonb`,
-          values: [event.pubkey, event.kind, buildReviewDTagFilter(dTag)] as any[],
+          values: [
+            event.pubkey,
+            event.kind,
+            buildReviewDTagFilter(dTag),
+          ] as any[],
         };
         await client.query(deleteQuery);
       }
@@ -601,7 +605,12 @@ async function cacheEventsTransaction(events: NostrEvent[]): Promise<void> {
           // First, lock and delete old rows
           await client.query(
             `DELETE FROM ${table} WHERE pubkey = $1 AND kind = $2 AND tags @> $3::jsonb AND id != $4`,
-            [event.pubkey, event.kind, buildReviewDTagFilter(dTag), event.id] as any[]
+            [
+              event.pubkey,
+              event.kind,
+              buildReviewDTagFilter(dTag),
+              event.id,
+            ] as any[]
           );
 
           // Then insert/update with ON CONFLICT
