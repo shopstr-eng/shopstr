@@ -1,10 +1,14 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import Stripe from "stripe";
-import { getFiatValue } from "@getalby/lightning-tools";
 import {
   getStripeConnectAccount,
   createSubscription,
 } from "@/utils/db/db-service";
+import {
+  ZERO_DECIMAL_CURRENCIES,
+  isCrypto as isCryptoCurrency,
+  convertToSmallestUnit,
+} from "@/utils/stripe/currency";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
   apiVersion: "2025-09-30.clover",
@@ -22,68 +26,6 @@ const FREQUENCY_TO_INTERVAL: Record<
   monthly: { interval: "month", interval_count: 1 },
   every_2_months: { interval: "month", interval_count: 2 },
   quarterly: { interval: "month", interval_count: 3 },
-};
-
-const ZERO_DECIMAL_CURRENCIES = new Set([
-  "bif",
-  "clp",
-  "djf",
-  "gnf",
-  "jpy",
-  "kmf",
-  "krw",
-  "mga",
-  "pyg",
-  "rwf",
-  "ugx",
-  "vnd",
-  "vuv",
-  "xaf",
-  "xof",
-  "xpf",
-]);
-
-const isCryptoCurrency = (cur: string) => {
-  const c = cur.toLowerCase();
-  return c === "sats" || c === "sat" || c === "btc";
-};
-
-const toSmallestUnit = (amount: number, cur: string) => {
-  return ZERO_DECIMAL_CURRENCIES.has(cur.toLowerCase())
-    ? Math.round(amount)
-    : Math.round(amount * 100);
-};
-
-const satsToUSD = async (sats: number): Promise<number> => {
-  try {
-    const usdAmount = await getFiatValue({
-      satoshi: sats,
-      currency: "usd",
-    });
-    return usdAmount;
-  } catch (error) {
-    console.error("Error converting sats to USD:", error);
-    const btcPrice = 100000;
-    return (sats / 100000000) * btcPrice;
-  }
-};
-
-const convertToSmallestUnit = async (
-  amount: number,
-  currency: string
-): Promise<{ amountSmallest: number; stripeCurrency: string }> => {
-  if (isCryptoCurrency(currency)) {
-    let sats = currency.toLowerCase() === "btc" ? amount * 100000000 : amount;
-    const usdAmount = await satsToUSD(sats);
-    return {
-      amountSmallest: Math.round(usdAmount * 100),
-      stripeCurrency: "usd",
-    };
-  }
-  return {
-    amountSmallest: toSmallestUnit(amount, currency),
-    stripeCurrency: currency.toLowerCase(),
-  };
 };
 
 export default async function handler(

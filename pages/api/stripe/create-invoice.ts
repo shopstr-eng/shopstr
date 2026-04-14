@@ -1,25 +1,11 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import Stripe from "stripe";
-import { getFiatValue } from "@getalby/lightning-tools";
 import { getStripeConnectAccount } from "@/utils/db/db-service";
+import { isCrypto, satsToUSD } from "@/utils/stripe/currency";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
   apiVersion: "2025-09-30.clover",
 });
-
-const satsToUSD = async (sats: number): Promise<number> => {
-  try {
-    const usdAmount = await getFiatValue({
-      satoshi: sats,
-      currency: "usd",
-    });
-    return usdAmount;
-  } catch (error) {
-    console.error("Error converting sats to USD:", error);
-    const btcPrice = 100000;
-    return (sats / 100000000) * btcPrice;
-  }
-};
 
 export default async function handler(
   req: NextApiRequest,
@@ -43,15 +29,10 @@ export default async function handler(
     let amountInCents: number;
     const currencyLower = currency.toLowerCase();
 
-    if (currencyLower === "sats" || currencyLower === "sat") {
-      const usdAmount = await satsToUSD(amount);
-      amountInCents = Math.round(usdAmount * 100);
-    } else if (currencyLower === "btc") {
-      const sats = amount * 100000000;
+    if (isCrypto(currency)) {
+      const sats = currencyLower === "btc" ? amount * 100000000 : amount;
       const usdAmount = await satsToUSD(sats);
       amountInCents = Math.round(usdAmount * 100);
-    } else if (currencyLower === "usd") {
-      amountInCents = Math.round(amount * 100);
     } else {
       amountInCents = Math.round(amount * 100);
     }

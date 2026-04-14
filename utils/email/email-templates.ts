@@ -646,6 +646,163 @@ export function popupDiscountEmail(params: {
   };
 }
 
+export function paymentFailedBuyerEmail(params: {
+  invoiceId: string;
+  subscriptionId?: string;
+  amountDisplay?: string;
+}): {
+  subject: string;
+  html: string;
+} {
+  const body = `
+    <h2 style="margin:0 0 16px;color:#111827;font-size:20px;font-weight:700;">Payment Failed</h2>
+    <p style="margin:0 0 16px;color:#374151;font-size:15px;line-height:1.6;">
+      We were unable to process your recent payment${
+        params.amountDisplay
+          ? ` of <strong>${esc(params.amountDisplay)}</strong>`
+          : ""
+      }. Please update your payment method to avoid any interruption to your order or subscription.
+    </p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#fef2f2;border-radius:8px;padding:16px;margin-bottom:24px;">
+      <tr>
+        <td>
+          <p style="margin:0 0 8px;color:#991b1b;font-size:14px;font-weight:600;">Details</p>
+          <p style="margin:0 0 4px;color:#374151;font-size:14px;"><strong>Invoice:</strong> ${esc(
+            params.invoiceId
+          )}</p>
+          ${
+            params.subscriptionId
+              ? `<p style="margin:0;color:#374151;font-size:14px;"><strong>Subscription:</strong> ${esc(
+                  params.subscriptionId
+                )}</p>`
+              : ""
+          }
+        </td>
+      </tr>
+    </table>
+    <p style="margin:0;color:#6b7280;font-size:13px;line-height:1.5;">
+      If you believe this is an error, please check with your card issuer or try a different payment method.
+    </p>`;
+
+  return {
+    subject: `${BRAND_NAME} — Payment Failed`,
+    html: baseTemplate("Payment Failed", body),
+  };
+}
+
+export function paymentFailedSellerEmail(params: {
+  invoiceId: string;
+  subscriptionId?: string;
+  customerEmail?: string;
+  amountDisplay?: string;
+}): {
+  subject: string;
+  html: string;
+} {
+  const body = `
+    <h2 style="margin:0 0 16px;color:#111827;font-size:20px;font-weight:700;">Customer Payment Failed</h2>
+    <p style="margin:0 0 16px;color:#374151;font-size:15px;line-height:1.6;">
+      A payment from ${
+        params.customerEmail
+          ? `<strong>${esc(params.customerEmail)}</strong>`
+          : "a customer"
+      }${
+        params.amountDisplay
+          ? ` for <strong>${esc(params.amountDisplay)}</strong>`
+          : ""
+      } has failed. The customer has been notified to update their payment method.
+    </p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#fef2f2;border-radius:8px;padding:16px;margin-bottom:24px;">
+      <tr>
+        <td>
+          <p style="margin:0 0 8px;color:#991b1b;font-size:14px;font-weight:600;">Details</p>
+          <p style="margin:0 0 4px;color:#374151;font-size:14px;"><strong>Invoice:</strong> ${esc(
+            params.invoiceId
+          )}</p>
+          ${
+            params.subscriptionId
+              ? `<p style="margin:0;color:#374151;font-size:14px;"><strong>Subscription:</strong> ${esc(
+                  params.subscriptionId
+                )}</p>`
+              : ""
+          }
+        </td>
+      </tr>
+    </table>
+    <p style="margin:0;color:#6b7280;font-size:13px;line-height:1.5;">
+      No action is required from you at this time. The customer will need to resolve the payment issue on their end.
+    </p>`;
+
+  return {
+    subject: `${BRAND_NAME} — Customer Payment Failed`,
+    html: baseTemplate("Customer Payment Failed", body),
+  };
+}
+
+export function transferFailureAlertEmail(params: {
+  subscriptionId: string;
+  invoiceId: string;
+  failures: Array<{
+    sellerPubkey: string;
+    amountCents: number;
+    error: string;
+  }>;
+}): {
+  subject: string;
+  html: string;
+} {
+  const failureRows = params.failures
+    .map(
+      (f) => `
+      <tr>
+        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;color:#374151;font-size:13px;font-family:monospace;">${esc(
+          f.sellerPubkey.substring(0, 12)
+        )}...</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;color:#374151;font-size:13px;">$${(
+          f.amountCents / 100
+        ).toFixed(2)}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;color:#991b1b;font-size:13px;">${esc(
+          f.error
+        )}</td>
+      </tr>`
+    )
+    .join("");
+
+  const body = `
+    <h2 style="margin:0 0 16px;color:#111827;font-size:20px;font-weight:700;">Seller Transfer Failure Alert</h2>
+    <p style="margin:0 0 16px;color:#374151;font-size:15px;line-height:1.6;">
+      One or more seller transfers failed during subscription renewal processing. Manual intervention may be required.
+    </p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#fef2f2;border-radius:8px;padding:16px;margin-bottom:24px;">
+      <tr>
+        <td>
+          <p style="margin:0 0 4px;color:#374151;font-size:14px;"><strong>Subscription:</strong> ${esc(
+            params.subscriptionId
+          )}</p>
+          <p style="margin:0;color:#374151;font-size:14px;"><strong>Invoice:</strong> ${esc(
+            params.invoiceId
+          )}</p>
+        </td>
+      </tr>
+    </table>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
+      <tr style="background-color:#f9fafb;">
+        <th style="padding:8px 12px;text-align:left;color:#6b7280;font-size:12px;text-transform:uppercase;">Seller</th>
+        <th style="padding:8px 12px;text-align:left;color:#6b7280;font-size:12px;text-transform:uppercase;">Amount</th>
+        <th style="padding:8px 12px;text-align:left;color:#6b7280;font-size:12px;text-transform:uppercase;">Error</th>
+      </tr>
+      ${failureRows}
+    </table>
+    <p style="margin:0;color:#6b7280;font-size:13px;line-height:1.5;">
+      Please review these failures in the Stripe dashboard and process the transfers manually if needed.
+    </p>`;
+
+  return {
+    subject: `${BRAND_NAME} — Seller Transfer Failure Alert`,
+    html: baseTemplate("Transfer Failure Alert", body),
+  };
+}
+
 export function accountRecoveryEmail(params: { recoveryLink: string }): {
   subject: string;
   html: string;

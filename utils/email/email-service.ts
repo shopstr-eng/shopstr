@@ -10,6 +10,9 @@ import {
   returnRequestEmail,
   inquiryNotificationEmail,
   accountRecoveryEmail,
+  paymentFailedBuyerEmail,
+  paymentFailedSellerEmail,
+  transferFailureAlertEmail,
   OrderEmailParams,
   SubscriptionEmailParams,
 } from "./email-templates";
@@ -150,4 +153,45 @@ export async function sendReturnRequestToSeller(
 ): Promise<boolean> {
   const { subject, html } = returnRequestEmail(params);
   return sendEmail(sellerEmail, subject, html);
+}
+
+export async function sendPaymentFailedToBuyer(
+  buyerEmail: string,
+  params: {
+    invoiceId: string;
+    subscriptionId?: string;
+    amountDisplay?: string;
+  }
+): Promise<boolean> {
+  const { subject, html } = paymentFailedBuyerEmail(params);
+  return sendEmail(buyerEmail, subject, html);
+}
+
+export async function sendPaymentFailedToSeller(
+  sellerEmail: string,
+  params: {
+    invoiceId: string;
+    subscriptionId?: string;
+    customerEmail?: string;
+    amountDisplay?: string;
+  }
+): Promise<boolean> {
+  const { subject, html } = paymentFailedSellerEmail(params);
+  return sendEmail(sellerEmail, subject, html);
+}
+
+export async function sendTransferFailureAlert(
+  adminEmail: string,
+  params: {
+    subscriptionId: string;
+    invoiceId: string;
+    failures: Array<{
+      sellerPubkey: string;
+      amountCents: number;
+      error: string;
+    }>;
+  }
+): Promise<boolean> {
+  const { subject, html } = transferFailureAlertEmail(params);
+  return sendEmail(adminEmail, subject, html);
 }

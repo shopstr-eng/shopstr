@@ -1,55 +1,11 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import Stripe from "stripe";
-import { getFiatValue } from "@getalby/lightning-tools";
 import { getStripeConnectAccount } from "@/utils/db/db-service";
+import { isCrypto, toSmallestUnit, satsToUSD } from "@/utils/stripe/currency";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
   apiVersion: "2025-09-30.clover",
 });
-
-const ZERO_DECIMAL_CURRENCIES = new Set([
-  "bif",
-  "clp",
-  "djf",
-  "gnf",
-  "jpy",
-  "kmf",
-  "krw",
-  "mga",
-  "pyg",
-  "rwf",
-  "ugx",
-  "vnd",
-  "vuv",
-  "xaf",
-  "xof",
-  "xpf",
-]);
-
-const isCrypto = (cur: string) => {
-  const c = cur.toLowerCase();
-  return c === "sats" || c === "sat" || c === "btc";
-};
-
-const toSmallestUnit = (amount: number, cur: string) => {
-  return ZERO_DECIMAL_CURRENCIES.has(cur.toLowerCase())
-    ? Math.round(amount)
-    : Math.round(amount * 100);
-};
-
-const satsToUSD = async (sats: number): Promise<number> => {
-  try {
-    const usdAmount = await getFiatValue({
-      satoshi: sats,
-      currency: "usd",
-    });
-    return usdAmount;
-  } catch (error) {
-    console.error("Error converting sats to USD:", error);
-    const btcPrice = 100000;
-    return (sats / 100000000) * btcPrice;
-  }
-};
 
 interface SellerSplit {
   sellerPubkey: string;

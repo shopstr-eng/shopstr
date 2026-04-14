@@ -1,6 +1,15 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import Stripe from "stripe";
-import { getStripeConnectAccount } from "@/utils/db/db-service";
+import {
+  getStripeConnectAccount,
+  getSellerNotificationEmail,
+  getSubscriptionByStripeId,
+} from "@/utils/db/db-service";
+import {
+  sendPaymentFailedToBuyer,
+  sendPaymentFailedToSeller,
+  sendTransferFailureAlert,
+} from "@/utils/email/email-service";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
   apiVersion: "2025-09-30.clover",
@@ -30,21 +39,17 @@ export default async function handler(
   }
 
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+  if (!webhookSecret) {
+    console.error("STRIPE_WEBHOOK_SECRET not configured");
+    return res.status(500).json({ error: "Webhook secret not configured" });
+  }
 
   let event: Stripe.Event;
 
   try {
     const rawBody = await getRawBody(req);
-
-    if (webhookSecret) {
-      const sig = req.headers["stripe-signature"] as string;
-      event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret);
-    } else {
-      event = JSON.parse(rawBody.toString()) as Stripe.Event;
-      console.warn(
-        "STRIPE_WEBHOOK_SECRET not set — accepting unverified webhook"
-      );
-    }
+    const sig = req.headers["stripe-signature"] as string;
+    event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret);
   } catch (err) {
     console.error("Webhook signature verification failed:", err);
     return res
@@ -61,11 +66,7 @@ export default async function handler(
       }
       case "invoice.payment_failed": {
         const invoice = event.data.object as Stripe.Invoice;
-        console.error(
-          `Invoice payment failed: ${invoice.id}, subscription: ${
-            (invoice as any).subscription
-          }`
-        );
+        await handleInvoicePaymentFailed(invoice);
         break;
       }
       default:
@@ -76,6 +77,57 @@ export default async function handler(
   } catch (error) {
     console.error("Webhook handler error:", error);
     return res.status(500).json({ error: "Webhook handler error" });
+  }
+}
+
+async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
+  const invoiceAny = invoice as any;
+  const subscriptionId = invoiceAny.subscription
+    ? typeof invoiceAny.subscription === "string"
+      ? invoiceAny.subscription
+      : invoiceAny.subscription.id
+    : undefined;
+
+  const customerEmail = invoice.customer_email || undefined;
+  const amountDue = invoice.amount_due;
+  const currency = (invoice.currency || "usd").toUpperCase();
+  const amountDisplay = amountDue
+    ? `${(amountDue / 100).toFixed(2)} ${currency}`
+    : undefined;
+
+  console.error(
+    `Invoice payment failed: ${invoice.id}, subscription: ${subscriptionId || "none"}, customer: ${customerEmail || "unknown"}`
+  );
+
+  if (customerEmail) {
+    await sendPaymentFailedToBuyer(customerEmail, {
+      invoiceId: invoice.id,
+      subscriptionId,
+      amountDisplay,
+    }).catch((err) =>
+      console.error("Failed to send payment failure email to buyer:", err)
+    );
+  }
+
+  if (subscriptionId) {
+    try {
+      const dbSubscription = await getSubscriptionByStripeId(subscriptionId);
+      if (dbSubscription?.seller_pubkey) {
+        const sellerEmail = await getSellerNotificationEmail(
+          dbSubscription.seller_pubkey
+        );
+        if (sellerEmail) {
+          await sendPaymentFailedToSeller(sellerEmail, {
+            invoiceId: invoice.id,
+            subscriptionId,
+            customerEmail,
+            amountDisplay,
+          });
+        }
+      }
+    } catch (err) {
+      console.error("Failed to send payment failure email to seller:", err);
+    }
   }
 }
 
@@ -129,6 +181,9 @@ async function handleInvoicePaid(invoice: Stripe.Invoice) {
     amountCents: number;
     error: string;
   }[] = [];
+  const nonPlatformSplits = sellerSplits.filter(
+    (s) => s.pubkey !== process.env.NEXT_PUBLIC_MILK_MARKET_PK
+  );
 
   for (const split of sellerSplits) {
     const isPlatformAccount =
@@ -186,9 +241,39 @@ async function handleInvoicePaid(invoice: Stripe.Invoice) {
         failedTransfers
       )}`
     );
-    const nonPlatformSplits = sellerSplits.filter(
-      (s) => s.pubkey !== process.env.NEXT_PUBLIC_MILK_MARKET_PK
-    );
+
+    try {
+      const dbSubscription = await getSubscriptionByStripeId(subscriptionId);
+      const sellerPubkey = dbSubscription?.seller_pubkey;
+      let alertEmail: string | null = null;
+
+      if (sellerPubkey) {
+        alertEmail = await getSellerNotificationEmail(sellerPubkey);
+      }
+
+      if (!alertEmail) {
+        const { fromEmail } =
+          await import("@/utils/email/sendgrid-client").then((m) =>
+            m.getUncachableSendGridClient()
+          );
+        alertEmail = fromEmail;
+      }
+
+      if (alertEmail) {
+        await sendTransferFailureAlert(alertEmail, {
+          subscriptionId,
+          invoiceId: invoice.id,
+          failures: failedTransfers.map((f) => ({
+            sellerPubkey: f.pubkey,
+            amountCents: f.amountCents,
+            error: f.error,
+          })),
+        });
+      }
+    } catch (emailErr) {
+      console.error("Failed to send transfer failure alert email:", emailErr);
+    }
+
     if (failedTransfers.length >= nonPlatformSplits.length) {
       throw new Error(
         `All seller transfers failed for subscription ${subscriptionId}`
