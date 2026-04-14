@@ -75,12 +75,19 @@ export default function ShopPage() {
 
   useEffect(() => {
     if (!slug || typeof slug !== "string") return;
-    if (shopPubkey) return;
+    let isActive = true;
+
+    setIsLoading(true);
+    setNotFound(false);
+    setShopPubkey("");
+    setInitialShopConfig(null);
+    setInitialCreatedAt(0);
 
     const lookupBySlug = async () => {
       if (!shopMapContext.isLoading) {
         for (const [pubkey, shop] of shopMapContext.shopData.entries()) {
           if (shop?.content?.storefront?.shopSlug === slug) {
+            if (!isActive) return;
             setShopPubkey(pubkey);
             setIsLoading(false);
             return;
@@ -92,8 +99,10 @@ export default function ShopPage() {
         const res = await fetch(
           `/api/storefront/lookup?slug=${encodeURIComponent(slug)}`
         );
+        if (!isActive) return;
         if (res.ok) {
           const data = await res.json();
+          if (!isActive) return;
           if (data.pubkey) {
             setShopPubkey(data.pubkey);
             if (data.shopConfig) setInitialShopConfig(data.shopConfig);
@@ -104,7 +113,7 @@ export default function ShopPage() {
         }
       } catch {}
 
-      if (shopMapContext.isLoading) return;
+      if (!isActive || shopMapContext.isLoading) return;
 
       for (const [pubkey, shop] of shopMapContext.shopData.entries()) {
         const shopName = shop?.content?.name;
@@ -115,6 +124,7 @@ export default function ShopPage() {
             .replace(/-+/g, "-")
             .replace(/^-|-$/g, "");
           if (generatedSlug === slug) {
+            if (!isActive) return;
             setShopPubkey(pubkey);
             setIsLoading(false);
             return;
@@ -127,7 +137,10 @@ export default function ShopPage() {
     };
 
     lookupBySlug();
-  }, [slug, shopMapContext.shopData, shopMapContext.isLoading, shopPubkey]);
+    return () => {
+      isActive = false;
+    };
+  }, [slug, shopMapContext.shopData, shopMapContext.isLoading]);
 
   if (isLoading) {
     return (
