@@ -690,6 +690,7 @@ export async function fetchCachedEvents(
   filters?: {
     pubkey?: string;
     limit?: number;
+    offset?: number;
     since?: number;
     until?: number;
   }
@@ -726,6 +727,11 @@ export async function fetchCachedEvents(
     if (filters?.limit) {
       query += ` LIMIT $${paramIndex++}`;
       params.push(filters.limit);
+    }
+
+    if (filters?.offset) {
+      query += ` OFFSET $${paramIndex++}`;
+      params.push(filters.offset);
     }
 
     const result = await client.query(query, params);
@@ -782,8 +788,7 @@ export async function deleteCachedEventsByIds(
   let client;
 
   // All tables that can store events
-  const tables = [
-    "product_events",
+  const otherTables = [
     "review_events",
     "message_events",
     "profile_events",
@@ -796,7 +801,41 @@ export async function deleteCachedEventsByIds(
     client = await dbPool.connect();
     await client.query("BEGIN");
 
-    for (const table of tables) {
+    // For product_events: delete by ID, and also remove any versions that are
+    // strictly OLDER than the deleted event (same pubkey + d-tag, smaller
+    // created_at). This cleans up stale versions without touching a newer
+    // version that may already exist (e.g. an edit published before the old
+    // one was explicitly removed).
+    await client.query(
+      `DELETE FROM product_events
+       WHERE id = ANY($1)
+          OR (
+            kind = 30402
+            AND EXISTS (
+              SELECT 1
+              FROM product_events ref,
+              LATERAL (
+                SELECT elem->>'1' AS d_tag
+                FROM jsonb_array_elements(ref.tags) elem
+                WHERE elem->>'0' = 'd'
+                LIMIT 1
+              ) ref_d
+              WHERE ref.id = ANY($1)
+                AND ref.pubkey = product_events.pubkey
+                AND product_events.created_at < ref.created_at
+                AND EXISTS (
+                  SELECT 1
+                  FROM jsonb_array_elements(product_events.tags) elem
+                  WHERE elem->>'0' = 'd'
+                    AND elem->>'1' = ref_d.d_tag
+                )
+            )
+          )`,
+      [eventIds]
+    );
+
+    // For all other tables, delete by ID only
+    for (const table of otherTables) {
       await client.query(`DELETE FROM ${table} WHERE id = ANY($1)`, [eventIds]);
     }
 
@@ -817,9 +856,64 @@ export async function deleteCachedEventsByIds(
   }
 }
 
-// Fetch all products from database
-export async function fetchAllProductsFromDb(): Promise<NostrEvent[]> {
-  return fetchCachedEvents(30402);
+// Fetch all products from database, returning only the latest version per
+// (pubkey, d-tag) so that updated or deleted-then-re-listed products never
+// show stale duplicates.
+export async function fetchAllProductsFromDb(
+  limit = 500,
+  offset = 0
+): Promise<NostrEvent[]> {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+
+    // Inner query: DISTINCT ON (pubkey, d_tag) with ORDER BY created_at DESC
+    // selects the single newest event per listing address.
+    // Outer query re-sorts by created_at DESC so callers get recent products
+    // first, then applies LIMIT/OFFSET for batched pagination.
+    const result = await client.query(
+      `SELECT pe.id, pe.pubkey, pe.created_at, pe.kind,
+              pe.tags, pe.content, pe.sig
+       FROM (
+         SELECT DISTINCT ON (p.pubkey, d.d_tag)
+           p.id, p.pubkey, p.created_at, p.kind, p.tags, p.content, p.sig
+         FROM product_events p,
+         LATERAL (
+           SELECT COALESCE(
+             (SELECT elem->>'1'
+              FROM jsonb_array_elements(p.tags) elem
+              WHERE elem->>'0' = 'd'
+              LIMIT 1),
+             p.id
+           ) AS d_tag
+         ) d
+         WHERE p.kind = 30402
+         ORDER BY p.pubkey, d.d_tag, p.created_at DESC
+       ) pe
+       ORDER BY pe.created_at DESC
+       LIMIT $1 OFFSET $2`,
+      [limit, offset]
+    );
+
+    return result.rows.map((row) => ({
+      id: row.id,
+      pubkey: row.pubkey,
+      created_at: row.created_at,
+      kind: row.kind,
+      tags: row.tags,
+      content: row.content,
+      sig: row.sig,
+    }));
+  } catch (error) {
+    console.error("Failed to fetch products from database:", error);
+    return [];
+  } finally {
+    if (client) {
+      client.release();
+    }
+  }
 }
 
 // Fetch all reviews from database

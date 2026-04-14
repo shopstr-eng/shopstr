@@ -55,18 +55,49 @@ export const fetchAllPosts = async (
 }> => {
   return new Promise(async function (resolve, reject) {
     try {
-      // First, load from database to immediately populate the UI
-      let productArrayFromDb: NostrEvent[] = [];
-      try {
-        const response = await fetch("/api/db/fetch-products");
-        if (response.ok) {
-          productArrayFromDb = await response.json();
-          if (productArrayFromDb.length > 0) {
-            editProductContext(productArrayFromDb, true);
-          }
+      const BATCH_SIZE = 500;
+      const profileSetFromProducts: Set<string> = new Set();
+      const dbProductsMap = new Map<string, NostrEvent>();
+
+      const getEventKey = (event: NostrEvent): string => {
+        if (event.kind === 30402) {
+          const dTag = event.tags?.find((tag: string[]) => tag[0] === "d")?.[1];
+          if (dTag) return `${event.pubkey}:${dTag}`;
         }
-      } catch (error) {
-        console.error("Failed to fetch products from database: ", error);
+        return event.id;
+      };
+
+      // Cascading DB fetch: load batches one at a time, displaying each as it arrives
+      let offset = 0;
+      let keepFetching = true;
+      while (keepFetching) {
+        try {
+          const response = await fetch(
+            `/api/db/fetch-products?limit=${BATCH_SIZE}&offset=${offset}`
+          );
+          if (!response.ok) break;
+          const batch: NostrEvent[] = await response.json();
+          if (!batch.length) break;
+
+          for (const event of batch) {
+            if (event && event.id) {
+              const key = getEventKey(event);
+              const existing = dbProductsMap.get(key);
+              if (!existing || event.created_at > existing.created_at) {
+                dbProductsMap.set(key, event);
+              }
+              if (event.pubkey) profileSetFromProducts.add(event.pubkey);
+            }
+          }
+
+          editProductContext(Array.from(dbProductsMap.values()), true);
+
+          if (batch.length < BATCH_SIZE) break;
+          offset += BATCH_SIZE;
+        } catch (error) {
+          console.error("Failed to fetch products batch from database:", error);
+          break;
+        }
       }
 
       const filter: Filter = {
@@ -77,12 +108,6 @@ export const fetchAllPosts = async (
         kinds: [1],
         "#t": ["shopstr-zapsnag", "zapsnag"],
       };
-
-      const profileSetFromProducts: Set<string> = new Set();
-
-      productArrayFromDb.forEach((event) => {
-        if (event.pubkey) profileSetFromProducts.add(event.pubkey);
-      });
 
       const fetchedEvents = await nostr.fetch(
         [filter, zapsnagFilter],
@@ -103,34 +128,18 @@ export const fetchAllPosts = async (
         );
       }
 
-      const getEventKey = (event: NostrEvent): string => {
-        if (event.kind === 30402) {
-          const dTag = event.tags?.find((tag: string[]) => tag[0] === "d")?.[1];
-          if (dTag) return `${event.pubkey}:${dTag}`;
-        }
-        return event.id;
-      };
-
-      const mergedProductsMap = new Map<string, NostrEvent>();
-
-      for (const event of productArrayFromDb) {
-        if (event && event.id) {
-          mergedProductsMap.set(getEventKey(event), event);
-        }
-      }
-
+      // Merge relay events on top of the accumulated DB products
       for (const event of fetchedEvents) {
         if (!event || !event.id) continue;
-
         const key = getEventKey(event);
-        const existing = mergedProductsMap.get(key);
+        const existing = dbProductsMap.get(key);
         if (!existing || event.created_at >= existing.created_at) {
-          mergedProductsMap.set(key, event);
+          dbProductsMap.set(key, event);
         }
         profileSetFromProducts.add(event.pubkey);
       }
 
-      const mergedProductArray = Array.from(mergedProductsMap.values());
+      const mergedProductArray = Array.from(dbProductsMap.values());
 
       editProductContext(mergedProductArray, false);
 

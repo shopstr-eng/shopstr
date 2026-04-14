@@ -334,12 +334,12 @@ function Shopstr({ props }: { props: AppProps }) {
     });
 
   const editProductContext = (
-    productEvents: NostrEvent[],
+    productEvents: NostrEvent[] | null,
     isLoading: boolean
   ) => {
     setProductContext((productContext) => {
       return {
-        productEvents: productEvents,
+        productEvents: productEvents ?? productContext.productEvents,
         isLoading: isLoading,
         addNewlyCreatedProductEvent: productContext.addNewlyCreatedProductEvent,
         removeDeletedProductEvent: productContext.removeDeletedProductEvent,
@@ -657,7 +657,7 @@ function Shopstr({ props }: { props: AppProps }) {
         const productsPromise = runTask(
           "fetching products",
           () => fetchAllPosts(nostr!, allRelays, guardedEditProductContext),
-          () => guardedEditProductContext([], false)
+          () => guardedEditProductContext(null, false)
         );
 
         const chatsPromise = isLoggedIn
