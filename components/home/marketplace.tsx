@@ -232,7 +232,7 @@ function MarketplacePage({
       }
     }
     setIsFetchingShop(false);
-  }, [focusedPubkey, shopMapContext, shopBannerURL]);
+  }, [focusedPubkey, shopMapContext]);
 
   useEffect(() => {
     setIsFetchingFollows(true);

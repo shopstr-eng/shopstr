@@ -29,6 +29,16 @@ HeroUI v2.8.10 replaced `@nextui-org/react@2.2.9`. The heroui plugin correctly u
 
 ## Recent Changes
 
+### Dev Server Infinite-Loop Fix
+
+Root cause: Next.js 16 Turbopack's HMR WebSocket was blocked by the Replit cross-origin proxy because `allowedDevOrigins` was not set in `next.config.mjs`. With no WebSocket connection, the HMR client fell back to polling and triggered full page reloads every ~30–60 s. Each reload remounted `Shopstr`, fired `loadSigner` (which always created a fresh signer object reference), and restarted `fetchData`, producing the observed `GET /marketplace → fetch-relays → fetch-profile → GET /marketplace` cycle.
+
+Three fixes applied:
+
+1. **`next.config.mjs`** — added `allowedDevOrigins: [process.env.REPLIT_DEV_DOMAIN]` so HMR WebSocket can connect from the Replit preview domain. HMR now shows `[HMR] connected` and `[Fast Refresh] done` instead of triggering page reloads.
+2. **`nostr-context-provider.tsx` (`loadSigner`)** — added `lastSuccessfulSignerKeyRef` to skip `setSigner` (and therefore skip `fetchData`) when the serialized signer credentials haven't changed. Prevents spurious `fetchData` restarts from unrelated storage events (e.g. NWC string saves) that previously created a new signer object reference.
+3. **`pages/index.tsx`** — narrowed the redirect effect dependency from the whole `signerContext` object to `signerContext.isLoggedIn`, preventing the effect from firing on every `SignerContextProvider` re-render when the login state itself hasn't changed.
+
 ### Onboarding Flow Redesign
 
 - **Step 1 (keys.tsx)**: Simplified to only show a passphrase input. Removed public/private key display and copy handlers. Now redirects to user-type selection after completion.

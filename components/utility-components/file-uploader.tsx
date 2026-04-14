@@ -1,5 +1,5 @@
 import { useContext, useRef, useState } from "react";
-import { Button, Progress } from "@heroui/react";
+import { Button, Input, Progress } from "@heroui/react";
 import {
   blossomUploadImages,
   getLocalStorageData,
@@ -225,26 +225,31 @@ export const FileUploaderButton = ({
       }));
       setPreviews(previewsList);
 
-      const processedImageFiles: File[] = [];
-      for (let idx = 0; idx < imageFiles.length; idx++) {
-        const imageFile = imageFiles[idx]!;
-        let processed: File;
-        if (imageFile.size > MAX_STRIP_SIZE) {
-          processed = imageFile;
-        } else {
-          processed = await stripImageMetadata(imageFile);
-        }
-        if (processed.size > COMPRESSION_THRESHOLD) {
-          processed = await compressImage(processed);
-        }
-        processedImageFiles.push(processed);
-        setProgress(Math.round(((idx + 1) / imageFiles.length) * 30));
-      }
+      // Preprocess files in parallel so multi-image uploads don't block on one-by-one canvas work.
+      let processedCount = 0;
+      const processedImageFiles = await Promise.all(
+        imageFiles.map(async (imageFile) => {
+          let processed: File;
+          if (imageFile.size > MAX_STRIP_SIZE) {
+            processed = imageFile;
+          } else {
+            processed = await stripImageMetadata(imageFile);
+          }
+          if (processed.size > COMPRESSION_THRESHOLD) {
+            processed = await compressImage(processed);
+          }
+          processedCount += 1;
+          setProgress(Math.round((processedCount / imageFiles.length) * 30));
+          return processed;
+        })
+      );
 
       let responses: any[] = [];
       if (isLoggedIn) {
+        // Upload in parallel and map progress by completed uploads instead of array index order.
+        let uploadedCount = 0;
         responses = await Promise.all(
-          processedImageFiles.map(async (imageFile, idx) => {
+          processedImageFiles.map(async (imageFile) => {
             const tags = await blossomUploadImages(
               imageFile,
               signer!,
@@ -252,8 +257,10 @@ export const FileUploaderButton = ({
                 ? blossomServers
                 : ["https://cdn.nostrcheck.me"]
             );
+            uploadedCount += 1;
             setProgress(
-              30 + Math.round(((idx + 1) / processedImageFiles.length) * 70)
+              30 +
+                Math.round((uploadedCount / processedImageFiles.length) * 70)
             );
             return tags;
           })
@@ -367,6 +374,23 @@ export const FileUploaderButton = ({
     }
   };
 
+  const isHandlingDropZoneClickRef = useRef(false);
+
+  const handleDropZoneClick = () => {
+    // Placeholder mode should behave like the button: click anywhere in the box opens picker.
+    // Guard against duplicate invocations from nested click handlers bubbling to the drop zone.
+    if (!isPlaceholder || isHandlingDropZoneClickRef.current) {
+      return;
+    }
+
+    isHandlingDropZoneClickRef.current = true;
+    handleClick();
+
+    setTimeout(() => {
+      isHandlingDropZoneClickRef.current = false;
+    }, 0);
+  };
+
   return (
     <div className="flex w-full flex-col gap-4">
       {/* Drag and Drop Zone */}
@@ -446,15 +470,8 @@ export const FileUploaderButton = ({
           ref={hiddenFileInput}
           onChange={handleChange}
           className="hidden"
+          disabled={disabled || loading}
         />
-
-        {isPlaceholder && (
-          <div
-            className="absolute inset-0 cursor-pointer"
-            onClick={handleClick}
-            aria-label="Click to upload images"
-          />
-        )}
       </div>
 
       {/* Progress Bar */}

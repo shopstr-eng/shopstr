@@ -7,7 +7,6 @@ import {
   DropdownItem,
   Button,
 } from "@heroui/react";
-import Link from "next/link";
 import {
   ArrowTopRightOnSquareIcon,
   EllipsisVerticalIcon,
@@ -29,7 +28,10 @@ export default function ProductCard({
   href,
 }: {
   productData: ProductData;
-  onProductClick?: (productId: ProductData, e?: React.MouseEvent) => void;
+  onProductClick?: (
+    productId: ProductData,
+    e?: React.MouseEvent<HTMLElement> | React.KeyboardEvent<HTMLElement>
+  ) => void;
   href?: string | null;
 }) {
   const [showRawEventModal, setShowRawEventModal] = useState(false);
@@ -49,25 +51,102 @@ export default function ProductCard({
     ? Date.now() / 1000 > productData.expiration
     : false;
 
-  const handleCardClick = (e: React.MouseEvent) => {
-    const target = e.target as HTMLElement;
+  const shouldBlockCardNavigation = (target: Element | null) => {
     const isCarouselControl =
-      target.closest('button[title*="slide"]') ||
-      target.closest('li[role="button"]') ||
-      target.closest(".carousel-control");
+      target?.closest('button[title*="slide"]') ||
+      target?.closest('li[role="button"]') ||
+      target?.closest(".carousel-control");
     const isDropdown =
-      target.closest('[role="menu"]') ||
-      target.closest('[data-slot="trigger"]') ||
-      target.closest('button[data-slot="trigger"]');
-    if (isCarouselControl || isDropdown) {
+      target?.closest('[role="menu"]') ||
+      target?.closest('[data-slot="trigger"]') ||
+      target?.closest('button[data-slot="trigger"]');
+    const isProfileDropdown = target?.closest("[data-profile-dropdown]");
+
+    return Boolean(isCarouselControl || isDropdown || isProfileDropdown);
+  };
+
+  const getElementTarget = (target: EventTarget | null): Element | null => {
+    return target instanceof Element ? target : null;
+  };
+
+  const navigateToHref = () => {
+    if (!href) return;
+    void router.push(href);
+  };
+
+  const handleCardClick = (e: React.MouseEvent<HTMLElement>) => {
+    const target = getElementTarget(e.target);
+    if (shouldBlockCardNavigation(target)) {
       e.preventDefault();
       e.stopPropagation();
       return;
     }
+
+    if (onProductClick) {
+      onProductClick(productData, e);
+      if (e.defaultPrevented) {
+        return;
+      }
+    }
+
+    if (href) {
+      // Keep native link behavior for modified clicks/new tabs.
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) {
+        return;
+      }
+      e.preventDefault();
+      navigateToHref();
+    }
+  };
+
+  const handleCardClickCapture = (e: React.MouseEvent<HTMLElement>) => {
+    const target = getElementTarget(e.target);
+    if (shouldBlockCardNavigation(target)) {
+      // Cancel link default early; allow nested controls to handle the click.
+      e.preventDefault();
+    }
+  };
+
+  const handleCardKeyDown = (e: React.KeyboardEvent<HTMLElement>) => {
+    // Let nested interactive controls handle their own keyboard activation.
+    if (e.target !== e.currentTarget) {
+      return;
+    }
+
+    const target = getElementTarget(e.target);
+    if (shouldBlockCardNavigation(target)) {
+      return;
+    }
+
+    if (href) {
+      // Link semantics: activate with Enter only.
+      if (e.key !== "Enter") {
+        return;
+      }
+
+      e.preventDefault();
+      if (onProductClick) {
+        onProductClick(productData, e);
+        if (e.defaultPrevented) {
+          return;
+        }
+      }
+      navigateToHref();
+      return;
+    }
+
+    // Button semantics for non-link interactive cards.
+    if (e.key !== "Enter" && e.key !== " ") {
+      return;
+    }
+
+    e.preventDefault();
     if (onProductClick) {
       onProductClick(productData, e);
     }
   };
+
+  const isCardInteractive = Boolean(href || onProductClick);
 
   const handleNjumpClick = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -89,8 +168,8 @@ export default function ProductCard({
     }
   };
 
-  const content = (
-    <div className="cursor-pointer" onClick={handleCardClick}>
+  const contentBody = (
+    <>
       <div>
         <ImageCarousel
           images={productData.images}
@@ -172,8 +251,8 @@ export default function ProductCard({
         )}
         <div
           className="mb-3"
+          data-profile-dropdown
           onClick={(e) => {
-            e.preventDefault();
             e.stopPropagation();
           }}
         >
@@ -207,6 +286,29 @@ export default function ProductCard({
           </div>
         )}
       </div>
+    </>
+  );
+
+  const content = href ? (
+    <a
+      href={href}
+      className={isCardInteractive ? "cursor-pointer" : ""}
+      onClickCapture={isCardInteractive ? handleCardClickCapture : undefined}
+      onClick={isCardInteractive ? handleCardClick : undefined}
+      onKeyDown={isCardInteractive ? handleCardKeyDown : undefined}
+    >
+      {contentBody}
+    </a>
+  ) : (
+    <div
+      className={isCardInteractive ? "cursor-pointer" : ""}
+      onClickCapture={isCardInteractive ? handleCardClickCapture : undefined}
+      onClick={isCardInteractive ? handleCardClick : undefined}
+      onKeyDown={isCardInteractive ? handleCardKeyDown : undefined}
+      role={isCardInteractive ? "button" : undefined}
+      tabIndex={isCardInteractive ? 0 : undefined}
+    >
+      {contentBody}
     </div>
   );
 
@@ -214,15 +316,7 @@ export default function ProductCard({
     <div
       className={`${cardHoverStyle} my-4 w-full rounded-2xl bg-white shadow-md transition-all duration-300 dark:bg-neutral-900`}
     >
-      <div className="w-full overflow-hidden rounded-2xl">
-        {href ? (
-          <Link href={href} className="block">
-            {content}
-          </Link>
-        ) : (
-          content
-        )}
-      </div>
+      <div className="w-full overflow-hidden rounded-2xl">{content}</div>
       <RawEventModal
         isOpen={showRawEventModal}
         onClose={() => setShowRawEventModal(false)}

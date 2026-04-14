@@ -104,6 +104,7 @@ async function initializeTables(): Promise<void> {
       );
 
       CREATE INDEX IF NOT EXISTS idx_review_events_pubkey ON review_events(pubkey);
+      CREATE INDEX IF NOT EXISTS idx_review_events_tags ON review_events USING gin (tags jsonb_path_ops);
 
       -- Messages table (kind 1059 - gift wrapped DM)
       CREATE TABLE IF NOT EXISTS message_events (
@@ -350,6 +351,10 @@ function isReviewEvent(kind: number): boolean {
   return kind === 31555;
 }
 
+export function buildReviewDTagFilter(dTag: string): string {
+  return JSON.stringify([["d", dTag]]);
+}
+
 // Cache a single event to the database
 export async function cacheEvent(event: NostrEvent): Promise<void> {
   const table = getTableForKind(event.kind);
@@ -401,8 +406,12 @@ export async function cacheEvent(event: NostrEvent): Promise<void> {
       if (dTag) {
         // Delete older reviews from the same pubkey for the same product
         const deleteQuery = {
-          text: `DELETE FROM ${table} WHERE pubkey = $1 AND kind = $2 AND tags::text LIKE $3`,
-          values: [event.pubkey, event.kind, `%"d","${dTag}"%`] as any[],
+          text: `DELETE FROM ${table} WHERE pubkey = $1 AND kind = $2 AND tags @> $3::jsonb`,
+          values: [
+            event.pubkey,
+            event.kind,
+            buildReviewDTagFilter(dTag),
+          ] as any[],
         };
         await client.query(deleteQuery);
       }
@@ -595,8 +604,13 @@ async function cacheEventsTransaction(events: NostrEvent[]): Promise<void> {
         if (dTag) {
           // First, lock and delete old rows
           await client.query(
-            `DELETE FROM ${table} WHERE pubkey = $1 AND kind = $2 AND tags::text LIKE $3 AND id != $4`,
-            [event.pubkey, event.kind, `%"d","${dTag}"%`, event.id] as any[]
+            `DELETE FROM ${table} WHERE pubkey = $1 AND kind = $2 AND tags @> $3::jsonb AND id != $4`,
+            [
+              event.pubkey,
+              event.kind,
+              buildReviewDTagFilter(dTag),
+              event.id,
+            ] as any[]
           );
 
           // Then insert/update with ON CONFLICT
