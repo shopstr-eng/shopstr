@@ -254,7 +254,10 @@ const DisplayProducts = ({
     return `/listing/${product.id}`;
   };
 
-  const onProductClick = (product: ProductData, e?: React.MouseEvent) => {
+  const onProductClick = (
+    product: ProductData,
+    e?: React.MouseEvent<HTMLElement> | React.KeyboardEvent<HTMLElement>
+  ) => {
     setFocusedProduct(product);
     if (product.pubkey === userPubkey) {
       e?.preventDefault();
