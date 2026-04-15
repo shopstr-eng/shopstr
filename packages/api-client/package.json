@@ -10,7 +10,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@milk-market/domain": "workspace:*"
+    "@milk-market/domain": "file:../domain"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json --emitDeclarationOnly",

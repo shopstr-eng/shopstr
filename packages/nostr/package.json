@@ -10,7 +10,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@milk-market/domain": "workspace:*",
+    "@milk-market/domain": "file:../domain",
     "nostr-tools": "2.7.1"
   },
   "scripts": {

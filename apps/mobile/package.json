@@ -15,9 +15,9 @@
     "test": "node -e \"process.exit(0)\""
   },
   "dependencies": {
-    "@milk-market/api-client": "workspace:*",
-    "@milk-market/domain": "workspace:*",
-    "@milk-market/nostr": "workspace:*",
+    "@milk-market/api-client": "file:../../packages/api-client",
+    "@milk-market/domain": "file:../../packages/domain",
+    "@milk-market/nostr": "file:../../packages/nostr",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-navigation/native": "^7.1.33",
     "@tanstack/react-query": "5.95.0",
