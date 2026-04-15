@@ -77,8 +77,10 @@ const DisplayProducts = ({
 
   useEffect(() => {
     if (!productEventContext) return;
-    if (!productEventContext.isLoading && productEventContext.productEvents) {
-      setIsProductLoading(true);
+    const hasProducts =
+      productEventContext.productEvents &&
+      productEventContext.productEvents.length > 0;
+    if (hasProducts) {
       const sortedProductEvents = [...productEventContext.productEvents].sort(
         (a: NostrEvent, b: NostrEvent) => b.created_at - a.created_at
       );
@@ -111,11 +113,15 @@ const DisplayProducts = ({
         }
       });
       setProductEvents(parsedProductData);
-      if (parsedProductData.length >= itemsPerPage) {
-        setIsProductLoading(false);
-      } else if (!productEventContext.isLoading) {
+      if (
+        parsedProductData.length >= itemsPerPage ||
+        !productEventContext.isLoading
+      ) {
         setIsProductLoading(false);
       }
+    } else if (!productEventContext.isLoading) {
+      setProductEvents([]);
+      setIsProductLoading(false);
     }
   }, [productEventContext, wotFilter]);
 
