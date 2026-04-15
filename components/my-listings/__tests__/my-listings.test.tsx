@@ -196,7 +196,9 @@ describe("MyListingsPage", () => {
         );
         const currentView = within(container);
 
-        fireEvent.click(currentView.getAllByRole("button", { name: "About" })[0]!);
+        fireEvent.click(
+          currentView.getAllByRole("button", { name: "About" })[0]!
+        );
         expect(currentView.getByText("Initial about text")).toBeInTheDocument();
 
         const updatedShopContext = {
@@ -228,7 +230,9 @@ describe("MyListingsPage", () => {
         );
 
         expect(currentView.getByText("Updated about text")).toBeInTheDocument();
-        expect(currentView.queryByText("Initial about text")).not.toBeInTheDocument();
+        expect(
+          currentView.queryByText("Initial about text")
+        ).not.toBeInTheDocument();
       });
     });
 

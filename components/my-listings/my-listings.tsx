@@ -18,10 +18,6 @@ const MyListingsPage = () => {
   const { pubkey: usersPubkey } = useContext(SignerContext);
   const { isOpen, onOpen, onClose } = useDisclosure();
 
-  const [shopBannerURL, setShopBannerURL] = useState("");
-  const [shopAbout, setShopAbout] = useState("");
-  const [isFetchingShop, setIsFetchingShop] = useState(false);
-
   const [selectedSection, setSelectedSection] = useState("Listings");
 
   const [selectedCategories, setSelectedCategories] = useState(
@@ -52,13 +48,6 @@ const MyListingsPage = () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);
-
-  useEffect(() => {
-    setIsFetchingShop(true);
-    setShopBannerURL(shopBanner);
-    setShopAbout(shopAboutContent);
-    setIsFetchingShop(false);
-  }, [shopAboutContent, shopBanner]);
 
   const handleCreateNewListing = () => {
     if (usersPubkey) {
@@ -147,11 +136,11 @@ const MyListingsPage = () => {
   return (
     <div className="mx-auto h-full w-full">
       <div className="bg-light-bg dark:bg-dark-bg flex max-w-[100%] flex-col px-3 pb-2">
-        {shopBannerURL != "" && !isFetchingShop ? (
+        {shopBanner !== "" ? (
           <>
             <div className="bg-light-bg dark:bg-dark-bg flex h-auto w-full items-center justify-center bg-cover bg-center">
               <img
-                src={sanitizeUrl(shopBannerURL)}
+                src={sanitizeUrl(shopBanner)}
                 alt="Shop Banner"
                 className="max-h-[210px] w-full items-center justify-center object-cover"
               />
@@ -298,13 +287,13 @@ const MyListingsPage = () => {
               setCategories={setCategories}
             />
           )}
-          {selectedSection === "About" && shopAbout && (
+          {selectedSection === "About" && shopAboutContent && (
             <div className="text-light-text dark:text-dark-text flex w-full flex-col justify-start bg-transparent px-4 py-8">
               <h2 className="pb-2 text-2xl font-bold">About</h2>
-              <p className="text-base">{shopAbout}</p>
+              <p className="text-base">{shopAboutContent}</p>
             </div>
           )}
-          {selectedSection === "About" && !shopAbout && (
+          {selectedSection === "About" && !shopAboutContent && (
             <div className="mt-20 flex flex-grow items-center justify-center py-10">
               <div className="bg-light-fg dark:bg-dark-fg w-full max-w-lg rounded-lg p-8 text-center shadow-lg">
                 <p className="text-light-text dark:text-dark-text text-3xl font-semibold">
