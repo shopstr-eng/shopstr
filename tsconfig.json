@@ -11,7 +11,13 @@
     "paths": {
       "@/*": ["./*"]
     },
-    "baseUrl": "."
+    "ignoreDeprecations": "6.0",
+    "baseUrl": ".",
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx"],
   "exclude": [

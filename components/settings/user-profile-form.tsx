@@ -26,16 +26,18 @@ import {
   NostrContext,
 } from "@/components/utility-components/nostr-context-provider";
 import { NostrNSecSigner } from "@/utils/nostr/signers/nostr-nsec-signer";
-import { createNostrProfileEvent } from "@/utils/nostr/nostr-helper-functions";
+import {
+  createNostrProfileEvent,
+  getLocalUserProfileKey,
+  parseLocalProfileFallback,
+  isProfileContentPopulated,
+} from "@/utils/nostr/nostr-helper-functions";
 import { FileUploaderButton } from "@/components/utility-components/file-uploader";
 import MilkMarketSpinner from "@/components/utility-components/mm-spinner";
 
 interface UserProfileFormProps {
   isOnboarding?: boolean;
 }
-
-const getLocalUserProfileKey = (pubkey: string) =>
-  `shopstr:user-profile:${pubkey}`;
 
 const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
   const router = useRouter();
@@ -90,6 +92,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
   const defaultImage = useMemo(() => {
     return "https://robohash.org/" + userPubkey;
   }, [userPubkey]);
+  const profileImageSrc = watchPicture || defaultImage;
 
   const contextLoadedRef = useRef(false);
   useEffect(() => {
@@ -114,7 +117,34 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
     if (!profile) return;
     contextLoadedRef.current = true;
     setIsFetchingProfile(true);
-    reset(profile.content);
+
+    const localFallback = parseLocalProfileFallback(
+      localStorage.getItem(getLocalUserProfileKey(userPubkey))
+    );
+    const profileCreatedAt = profile.created_at || 0;
+    const shouldUseLocalFallback =
+      !!localFallback &&
+      localFallback.updatedAt > profileCreatedAt &&
+      isProfileContentPopulated(localFallback.content);
+
+    reset(shouldUseLocalFallback ? localFallback.content : profile.content);
+
+    try {
+      localStorage.setItem(
+        getLocalUserProfileKey(userPubkey),
+        JSON.stringify({
+          content: shouldUseLocalFallback
+            ? localFallback!.content
+            : profile.content,
+          updatedAt: shouldUseLocalFallback
+            ? localFallback!.updatedAt
+            : profileCreatedAt,
+        })
+      );
+    } catch (error) {
+      console.error("Failed to persist profile fallback locally:", error);
+    }
+
     setIsFetchingProfile(false);
   }, [profileContext, userPubkey, reset]);
 
@@ -165,11 +195,12 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
         console.error("Failed to save local profile fallback:", error);
       }
 
-      await createNostrProfileEvent(
-        nostr!,
-        signer!,
-        JSON.stringify(updatedData)
-      );
+      if (!nostr || !signer) {
+        console.error("Cannot save profile: nostr or signer is unavailable");
+        return;
+      }
+
+      await createNostrProfileEvent(nostr, signer, JSON.stringify(updatedData));
       profileContext.updateProfileData({
         pubkey: userPubkey,
         content: updatedData,
@@ -1001,12 +1032,12 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
                       if (option.requiresUsername) {
                         setValue("fiat_options", {
                           ...currentOptions,
-                          [option.key]: "", // Set to empty string to show input
+                          [option.key]: "",
                         });
                       } else {
                         setValue("fiat_options", {
                           ...currentOptions,
-                          [option.key]: "available", // "available" for no-username options
+                          [option.key]: "available",
                         });
                       }
                     } else {

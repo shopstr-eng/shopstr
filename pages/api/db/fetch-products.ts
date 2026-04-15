@@ -4,6 +4,12 @@ import {
   fetchProductsByPubkeyFromDb,
 } from "@/utils/db/db-service";
 
+export const config = {
+  api: {
+    responseLimit: false,
+  },
+};
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
@@ -14,11 +20,19 @@ export default async function handler(
 
   try {
     const { pubkey } = req.query;
+    const limit = Math.min(
+      parseInt((req.query.limit as string) || "500", 10) || 500,
+      1000
+    );
+    const offset = Math.max(
+      parseInt((req.query.offset as string) || "0", 10) || 0,
+      0
+    );
     let products;
     if (pubkey && typeof pubkey === "string") {
-      products = await fetchProductsByPubkeyFromDb(pubkey);
+      products = await fetchProductsByPubkeyFromDb(pubkey, limit, offset);
     } else {
-      products = await fetchAllProductsFromDb();
+      products = await fetchAllProductsFromDb(limit, offset);
     }
     res.status(200).json(products);
   } catch (error) {

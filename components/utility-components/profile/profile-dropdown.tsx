@@ -326,7 +326,10 @@ export const ProfileWithDropdown = ({
   return (
     <>
       <div
-        onClick={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+        }}
         onPointerDown={(e) => e.stopPropagation()}
         onMouseDown={(e) => e.stopPropagation()}
       >
@@ -348,13 +351,15 @@ export const ProfileWithDropdown = ({
                 src: pfp,
                 className: "border-2 border-black",
               }}
-              className={"transition-transform"}
+              className={
+                "group cursor-pointer rounded-md px-1 py-0.5 transition-all duration-200 hover:bg-black/5 hover:shadow-sm dark:hover:bg-white/10"
+              }
               classNames={{
                 name: `overflow-hidden text-ellipsis whitespace-nowrap ${
                   bg && bg === "dark" ? "text-white" : "text-black"
                 } hidden ${nameClassname} ${
                   isNip05Verified ? "text-primary-yellow" : ""
-                }`,
+                } group-hover:underline group-hover:underline-offset-2`,
                 base: `${baseClassname}`,
               }}
               name={displayName}

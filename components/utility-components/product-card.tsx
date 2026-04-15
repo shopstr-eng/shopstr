@@ -8,7 +8,6 @@ import {
   DropdownItem,
   Button,
 } from "@heroui/react";
-import Link from "next/link";
 import {
   ArrowTopRightOnSquareIcon,
   EllipsisVerticalIcon,
@@ -31,7 +30,10 @@ export default function ProductCard({
   href,
 }: {
   productData: ProductData;
-  onProductClick?: (productId: ProductData, e?: React.MouseEvent) => void;
+  onProductClick?: (
+    productId: ProductData,
+    e?: React.MouseEvent<HTMLElement> | React.KeyboardEvent<HTMLElement>
+  ) => void;
   href?: string | null;
 }) {
   const [showRawEventModal, setShowRawEventModal] = useState(false);
@@ -47,6 +49,103 @@ export default function ProductCard({
   const isExpired = productData.expiration
     ? Date.now() / 1000 > productData.expiration
     : false;
+
+  const shouldBlockCardNavigation = (target: Element | null) => {
+    const isCarouselControl =
+      target?.closest('button[title*="slide"]') ||
+      target?.closest('li[role="button"]') ||
+      target?.closest(".carousel-control");
+    const isDropdown =
+      target?.closest('[role="menu"]') ||
+      target?.closest('[data-slot="trigger"]') ||
+      target?.closest('button[data-slot="trigger"]');
+    const isProfileDropdown = target?.closest("[data-profile-dropdown]");
+
+    return Boolean(isCarouselControl || isDropdown || isProfileDropdown);
+  };
+
+  const getElementTarget = (target: EventTarget | null): Element | null => {
+    return target instanceof Element ? target : null;
+  };
+
+  const navigateToHref = () => {
+    if (!href) return;
+    void router.push(href);
+  };
+
+  const handleCardClick = (e: React.MouseEvent<HTMLElement>) => {
+    const target = getElementTarget(e.target);
+    if (shouldBlockCardNavigation(target)) {
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+
+    if (onProductClick) {
+      onProductClick(productData, e);
+      if (e.defaultPrevented) {
+        return;
+      }
+    }
+
+    if (href) {
+      // Keep native link behavior for modified clicks/new tabs.
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) {
+        return;
+      }
+      e.preventDefault();
+      navigateToHref();
+    }
+  };
+
+  const handleCardClickCapture = (e: React.MouseEvent<HTMLElement>) => {
+    const target = getElementTarget(e.target);
+    if (shouldBlockCardNavigation(target)) {
+      // Cancel link default early; allow nested controls to handle the click.
+      e.preventDefault();
+    }
+  };
+
+  const handleCardKeyDown = (e: React.KeyboardEvent<HTMLElement>) => {
+    // Let nested interactive controls handle their own keyboard activation.
+    if (e.target !== e.currentTarget) {
+      return;
+    }
+
+    const target = getElementTarget(e.target);
+    if (shouldBlockCardNavigation(target)) {
+      return;
+    }
+
+    if (href) {
+      // Link semantics: activate with Enter only.
+      if (e.key !== "Enter") {
+        return;
+      }
+
+      e.preventDefault();
+      if (onProductClick) {
+        onProductClick(productData, e);
+        if (e.defaultPrevented) {
+          return;
+        }
+      }
+      navigateToHref();
+      return;
+    }
+
+    // Button semantics for non-link interactive cards.
+    if (e.key !== "Enter" && e.key !== " ") {
+      return;
+    }
+
+    e.preventDefault();
+    if (onProductClick) {
+      onProductClick(productData, e);
+    }
+  };
+
+  const isCardInteractive = Boolean(href || onProductClick);
 
   const handleNjumpClick = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -68,7 +167,7 @@ export default function ProductCard({
     }
   };
 
-  const content = (
+  const contentBody = (
     <div className="flex h-full flex-col">
       {/* Image Section with Title Overlay */}
       <div className="relative h-64 w-full overflow-hidden border-b-4 border-black bg-gray-200">
@@ -103,6 +202,7 @@ export default function ProductCard({
         <div className="flex min-w-0 items-center justify-between gap-2">
           <div
             className="min-w-0 flex-1 overflow-hidden"
+            data-profile-dropdown
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -221,46 +321,32 @@ export default function ProductCard({
     </div>
   );
 
-  const handleCardClick = (e: React.MouseEvent) => {
-    // Check if the click target is within elements we want to ignore
-    const target = e.target as HTMLElement;
-    const isCarouselControl =
-      target.closest('button[title*="slide"]') ||
-      target.closest('li[role="button"]') ||
-      target.closest(".carousel-control");
-    const isDropdown =
-      target.closest('[role="menu"]') ||
-      target.closest('[data-slot="trigger"]') ||
-      target.closest('button[data-slot="trigger"]');
-
-    if (isCarouselControl || isDropdown) {
-      e.preventDefault();
-      e.stopPropagation();
-      return;
-    }
-
-    if (onProductClick) {
-      onProductClick(productData, e);
-    }
-  };
+  const content = href ? (
+    <a
+      href={href}
+      className={isCardInteractive ? "cursor-pointer" : ""}
+      onClickCapture={isCardInteractive ? handleCardClickCapture : undefined}
+      onClick={isCardInteractive ? handleCardClick : undefined}
+      onKeyDown={isCardInteractive ? handleCardKeyDown : undefined}
+    >
+      {contentBody}
+    </a>
+  ) : (
+    <div
+      className={isCardInteractive ? "cursor-pointer" : ""}
+      onClickCapture={isCardInteractive ? handleCardClickCapture : undefined}
+      onClick={isCardInteractive ? handleCardClick : undefined}
+      onKeyDown={isCardInteractive ? handleCardKeyDown : undefined}
+      role={isCardInteractive ? "button" : undefined}
+      tabIndex={isCardInteractive ? 0 : undefined}
+    >
+      {contentBody}
+    </div>
+  );
 
   return (
-    <div
-      // Updated shadow to use shadow-neo and a larger hover shadow.
-      // Note: Your original shadow was 8px. shadow-neo is 4px. I've kept the 8px for hover.
-      className="shadow-neo active:shadow-neo flex w-full max-w-sm cursor-pointer flex-col overflow-hidden rounded-md border-4 border-black bg-white transition-transform duration-200 hover:-translate-y-1 hover:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] active:translate-y-0"
-    >
-      {href ? (
-        <Link
-          href={href}
-          className="block flex h-full flex-col"
-          onClick={handleCardClick}
-        >
-          {content}
-        </Link>
-      ) : (
-        <div onClick={handleCardClick}>{content}</div>
-      )}
+    <div className="shadow-neo active:shadow-neo flex w-full max-w-sm cursor-pointer flex-col overflow-hidden rounded-md border-4 border-black bg-white transition-transform duration-200 hover:-translate-y-1 hover:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] active:translate-y-0">
+      <div className="w-full overflow-hidden rounded-2xl">{content}</div>
       <RawEventModal
         isOpen={showRawEventModal}
         onClose={() => setShowRawEventModal(false)}
