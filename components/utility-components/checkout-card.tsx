@@ -48,7 +48,7 @@ import { RawEventModal, EventIdModal } from "./modals/event-modals";
 import { getLocalStorageJson } from "@/utils/safe-json";
 
 const SUMMARY_CHARACTER_LIMIT = 100;
-type CartDiscountsMap = Record<string, { code: string; percentage: number }>;
+type CartDiscountsMap = Record<string, { code: string }>;
 
 const isCartDiscountsMap = (value: unknown): value is CartDiscountsMap => {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -60,11 +60,8 @@ const isCartDiscountsMap = (value: unknown): value is CartDiscountsMap => {
       return false;
     }
 
-    const candidate = entry as { code?: unknown; percentage?: unknown };
-    return (
-      typeof candidate.code === "string" &&
-      typeof candidate.percentage === "number"
-    );
+    const candidate = entry as { code?: unknown };
+    return typeof candidate.code === "string";
   });
 };
 
@@ -377,7 +374,6 @@ export default function CheckoutCard({
         );
         discounts[productData.pubkey] = {
           code: discountCode,
-          percentage: appliedDiscount,
         };
         localStorage.setItem("cartDiscounts", JSON.stringify(discounts));
       }
