@@ -1,0 +1,108 @@
+import { parseJsonWithFallback } from "./safe-json";
+
+/**
+ * Storage Schema definition for consistent key management and type safety.
+ * This acts as a single source of truth for all localStorage keys used in Shopstr.
+ */
+export const STORAGE_KEYS = {
+  // Auth & Signer keys inherited from existing constants
+  SIGNER: "signer",
+  SIGN_IN_METHOD: "signInMethod",
+  ENCRYPTED_PRIVATE_KEY: "encryptedPrivateKey",
+  CLIENT_PUBKEY: "clientPubkey",
+  CLIENT_PRIVKEY: "clientPrivkey",
+  
+  // Nostr & Relays
+  RELAYS: "relays",
+  READ_RELAYS: "readRelays",
+  WRITE_RELAYS: "writeRelays",
+  
+  // Wallet & Cashu
+  MINTS: "mints",
+  TOKENS: "tokens",
+  HISTORY: "history",
+  WOT: "wot",
+  
+  // NWC
+  NWC_STRING: "nwcString",
+  NWC_INFO: "nwcInfo",
+  
+  // Storefront & Cart (These were mostly unmanaged string literals)
+  CART: "cart",
+  CART_DISCOUNTS: "cartDiscounts",
+  SF_SELLER_PUBKEY: "sf_seller_pubkey",
+  SF_SHOP_SLUG: "sf_shop_slug",
+  
+  // System
+  MIGRATION_COMPLETE: "migrationComplete",
+  THEME: "theme",
+} as const;
+
+export type StorageKey = typeof STORAGE_KEYS[keyof typeof STORAGE_KEYS] | string;
+
+class StorageManager {
+  /**
+   * Safe check for browser environment to prevent Next.js SSR hydration crashes
+   */
+  private get isBrowser(): boolean {
+    return typeof window !== "undefined";
+  }
+
+  /**
+   * Get a string item from localStorage
+   */
+  getItem(key: StorageKey): string | null {
+    if (!this.isBrowser) return null;
+    return localStorage.getItem(key);
+  }
+
+  /**
+   * Set a string item in localStorage
+   */
+  setItem(key: StorageKey, value: string): void {
+    if (!this.isBrowser) return;
+    localStorage.setItem(key, value);
+  }
+
+  /**
+   * Remove an item from localStorage
+   */
+  removeItem(key: StorageKey): void {
+    if (!this.isBrowser) return;
+    localStorage.removeItem(key);
+  }
+
+  /**
+   * Get and parse JSON data with a fallback and type-safety
+   */
+  getJson<T>(key: StorageKey, fallback: T): T {
+    if (!this.isBrowser) return fallback;
+    const raw = localStorage.getItem(key);
+    return parseJsonWithFallback(raw, fallback, {
+      onError: (err) => console.warn(`Storage parse error for key "${key}":`, err),
+    });
+  }
+
+  /**
+   * Stringify and set JSON data in localStorage safely
+   */
+  setJson<T>(key: StorageKey, value: T): void {
+    if (!this.isBrowser) return;
+    try {
+      const serialized = JSON.stringify(value);
+      localStorage.setItem(key, serialized);
+    } catch (err) {
+      console.error(`Failed to serialize data for storage key "${key}":`, err);
+    }
+  }
+
+  /**
+   * Clear multiple specific keys. Useful for logout routines.
+   */
+  clearKeys(keys: StorageKey[]): void {
+    if (!this.isBrowser) return;
+    keys.forEach((key) => localStorage.removeItem(key));
+  }
+}
+
+export const storage = new StorageManager();
