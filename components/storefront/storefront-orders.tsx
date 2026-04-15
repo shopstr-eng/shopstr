@@ -4,9 +4,13 @@ import { SignerContext } from "@/components/utility-components/nostr-context-pro
 import OrdersDashboard from "@/components/messages/orders-dashboard";
 interface StorefrontOrdersProps {
   colors: StorefrontColorScheme;
+  shopPubkey: string;
 }
 
-export default function StorefrontOrders({ colors }: StorefrontOrdersProps) {
+export default function StorefrontOrders({
+  colors,
+  shopPubkey,
+}: StorefrontOrdersProps) {
   const { isLoggedIn } = useContext(SignerContext);
 
   if (!isLoggedIn) {
@@ -45,7 +49,7 @@ export default function StorefrontOrders({ colors }: StorefrontOrdersProps) {
           } as React.CSSProperties
         }
       >
-        <OrdersDashboard />
+        <OrdersDashboard filterBySellerPubkey={shopPubkey} />
       </div>
     </div>
   );

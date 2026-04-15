@@ -301,6 +301,22 @@ export default function StorefrontLayout({
   };
 
   const themedCss = `
+    .sf-layout .bg-primary-yellow { background-color: var(--sf-primary) !important; }
+    .sf-layout .bg-primary-blue { background-color: var(--sf-secondary) !important; }
+    .sf-layout .text-primary-blue { color: var(--sf-secondary) !important; }
+    .sf-layout .hover\\:text-primary-blue:hover { color: var(--sf-accent) !important; }
+    .sf-layout .border-primary-yellow { border-color: var(--sf-primary) !important; }
+    .sf-layout .border-black { border-color: var(--sf-secondary) !important; }
+    .sf-layout .shadow-neo {
+      box-shadow: 4px 4px 0 var(--sf-secondary) !important;
+    }
+    .sf-layout .bg-white { background-color: var(--sf-bg) !important; }
+    .sf-layout .text-black { color: var(--sf-text) !important; }
+    .sf-layout .text-gray-500 { color: color-mix(in srgb, var(--sf-text) 50%, transparent) !important; }
+    .sf-layout .text-gray-600 { color: color-mix(in srgb, var(--sf-text) 60%, transparent) !important; }
+    .sf-layout .bg-blue-100 { background-color: color-mix(in srgb, var(--sf-accent) 15%, var(--sf-bg)) !important; }
+    .sf-layout .hover\\:bg-blue-200:hover { background-color: color-mix(in srgb, var(--sf-accent) 25%, var(--sf-bg)) !important; }
+
     body.sf-active [data-overlay-container] .border-black { border-color: var(--sf-secondary) !important; }
     body.sf-active [data-overlay-container] .shadow-neo {
       box-shadow: 4px 4px 0 var(--sf-secondary) !important;
@@ -340,7 +356,7 @@ export default function StorefrontLayout({
         <style>{themedCss}</style>
       </Head>
       <div
-        className="min-h-screen"
+        className="sf-layout min-h-screen"
         style={{
           ...cssVars,
           ...fontStyles,
@@ -528,7 +544,7 @@ export default function StorefrontLayout({
           </div>
         ) : currentPage === "orders" ? (
           <div className="pt-14">
-            <StorefrontOrders colors={colors} />
+            <StorefrontOrders colors={colors} shopPubkey={shopPubkey} />
           </div>
         ) : currentPage === "wallet" ? (
           <div className="pt-14">

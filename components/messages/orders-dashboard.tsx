@@ -123,7 +123,13 @@ interface OrderData {
   returnRequestType?: string;
 }
 
-const OrdersDashboard = () => {
+interface OrdersDashboardProps {
+  filterBySellerPubkey?: string;
+}
+
+const OrdersDashboard = ({
+  filterBySellerPubkey,
+}: OrdersDashboardProps = {}) => {
   const chatsContext = useContext(ChatsContext);
   const productContext = useContext(ProductContext);
   const [orders, setOrders] = useState<OrderData[]>([]);
@@ -745,8 +751,14 @@ const OrdersDashboard = () => {
         }
       }
 
-      setOrders(consolidatedOrders);
-      setTotalOrders(consolidatedOrders.length);
+      const finalOrders = filterBySellerPubkey
+        ? consolidatedOrders.filter(
+            (o) => o.sellerPubkey === filterBySellerPubkey
+          )
+        : consolidatedOrders;
+
+      setOrders(finalOrders);
+      setTotalOrders(finalOrders.length);
       setIsLoading(false);
 
       const statusPriorityForPersist: Record<string, number> = {
@@ -796,7 +808,13 @@ const OrdersDashboard = () => {
     }
 
     loadOrders();
-  }, [chatsContext, productContext, cachedStatuses, signer]);
+  }, [
+    chatsContext,
+    productContext,
+    cachedStatuses,
+    signer,
+    filterBySellerPubkey,
+  ]);
 
   const convertToSats = (amount: number, currency: string): number => {
     const curr = currency?.toLowerCase() || "sats";
