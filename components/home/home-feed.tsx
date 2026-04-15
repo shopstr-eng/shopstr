@@ -52,6 +52,7 @@ const HomeFeed = ({
             src={sanitizeUrl(shopBannerURL)}
             alt="Shop Banner"
             className="max-h-[210px] w-full items-center justify-center object-cover"
+            fetchPriority="high"
           />
         </div>
       )}

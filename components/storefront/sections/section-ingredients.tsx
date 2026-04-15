@@ -43,6 +43,7 @@ export default function SectionIngredients({
                   src={sanitizeUrl(item.image)}
                   alt={item.name}
                   className="mb-4 h-20 w-20 rounded-full object-cover"
+                  loading="lazy"
                 />
               ) : (
                 <div

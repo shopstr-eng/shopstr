@@ -99,6 +99,7 @@ export default function SellerView({
             src="/free-milk.png"
             alt="Milk Market Banner"
             className="max-h-[300px] w-full items-center justify-center object-contain py-8"
+            fetchPriority="high"
           />
         </div>
       )}

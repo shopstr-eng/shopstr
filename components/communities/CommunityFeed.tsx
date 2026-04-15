@@ -66,6 +66,7 @@ const RenderContent = ({
                 src={sanitizeUrl(part)}
                 alt="User content"
                 className="mt-2 max-h-96 rounded-md border-2 border-black"
+                loading="lazy"
               />
             );
           }
@@ -105,6 +106,7 @@ const RenderContent = ({
               src={sanitizeUrl(url)}
               alt="Tagged media"
               className="mt-2 max-h-96 rounded-md border-2 border-black"
+              loading="lazy"
             />
           ))}
         </div>

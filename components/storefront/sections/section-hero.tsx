@@ -29,6 +29,7 @@ export default function SectionHero({
             alt=""
             className="h-full w-full object-cover"
             style={{ opacity: 1 - overlayOpacity }}
+            fetchPriority="high"
           />
           <div
             className="absolute inset-0"
@@ -50,6 +51,7 @@ export default function SectionHero({
             alt={shopName}
             className="mb-6 h-24 w-24 rounded-full border-4 object-cover shadow-lg md:h-32 md:w-32"
             style={{ borderColor: colors.primary }}
+            fetchPriority="high"
           />
         )}
 
