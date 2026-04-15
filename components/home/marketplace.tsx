@@ -1,6 +1,6 @@
 import {
   MagnifyingGlassIcon,
-  QuestionMarkCircleIcon,
+  InformationCircleIcon,
 } from "@heroicons/react/24/outline";
 import {
   Button,
@@ -418,7 +418,7 @@ function MarketplacePage({
                     content="You can also search by Nostr identifier (naddr1… or npub1…)"
                     placement="bottom"
                   >
-                    <QuestionMarkCircleIcon className="h-4 w-4 cursor-default text-gray-400" />
+                    <InformationCircleIcon className="h-4 w-4 cursor-default text-gray-400" />
                   </Tooltip>
                 }
                 onChange={(event) => {
@@ -506,7 +506,7 @@ function MarketplacePage({
                     content="You can also search by Nostr identifier (naddr1… or npub1…)"
                     placement="bottom"
                   >
-                    <QuestionMarkCircleIcon className="h-4 w-4 cursor-default text-gray-400" />
+                    <InformationCircleIcon className="h-4 w-4 cursor-default text-gray-400" />
                   </Tooltip>
                 }
                 onChange={(event) => {
