@@ -969,7 +969,7 @@ function MilkMarket({ props }: { props: AppProps }) {
       } catch (error) {
         console.error("Critical error during app initialization:", error);
         if (!isCurrentRun()) return;
-        guardedEditProductContext([], false);
+        guardedEditProductContext(null, false);
         guardedEditReviewsContext(new Map(), new Map(), false);
         guardedEditShopContext(new Map(), false);
         guardedEditProfileContext(new Map(), false);
@@ -1048,7 +1048,7 @@ function MilkMarket({ props }: { props: AppProps }) {
             profileSetFromProducts = result.profileSetFromProducts;
           } catch (error) {
             console.error("Error fetching products:", error);
-            editProductContext([], false);
+            editProductContext(null, false);
           }
 
           let pubkeysToFetchProfilesFor = [...profileSetFromProducts];
