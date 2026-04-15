@@ -2188,13 +2188,55 @@ export const fetchStorefrontData = async (
   const profileSetFromProducts = new Set<string>([shopPubkey]);
 
   try {
+    const response = await fetch("/api/db/fetch-profiles");
+    if (response.ok) {
+      const profilesFromDb = await response.json();
+      const shopProfilesFromDb = profilesFromDb.filter(
+        (e: NostrEvent) => e.kind === 30019 && pubkeysToFetch.includes(e.pubkey)
+      );
+      if (shopProfilesFromDb.length > 0) {
+        shopProfilesFromDb.sort(
+          (a: NostrEvent, b: NostrEvent) => b.created_at - a.created_at
+        );
+        const latestEventsMap: Map<string, NostrEvent> = new Map();
+        shopProfilesFromDb.forEach((event: NostrEvent) => {
+          if (!latestEventsMap.has(event.pubkey)) {
+            latestEventsMap.set(event.pubkey, event);
+          }
+        });
+        const shopProfile: Map<string, ShopProfile | any> = new Map();
+        latestEventsMap.forEach((event, pubkey) => {
+          try {
+            shopProfile.set(pubkey, {
+              pubkey: event.pubkey,
+              content: JSON.parse(event.content),
+              created_at: event.created_at,
+              event: event,
+            });
+          } catch (error) {
+            console.error(
+              `Failed to parse shop profile from DB for pubkey: ${pubkey}`,
+              error
+            );
+          }
+        });
+        if (shopProfile.size > 0) {
+          editShopContext(shopProfile, true);
+        }
+      }
+    }
+  } catch (error) {
+    console.error("Failed to pre-fetch shop profile from DB:", error);
+  }
+
+  try {
     const response = await fetch(
       `/api/db/fetch-products?pubkey=${encodeURIComponent(shopPubkey)}`
     );
     if (response.ok) {
       const productsFromDb: NostrEvent[] = await response.json();
       if (productsFromDb.length > 0) {
-        editProductContext(productsFromDb, false);
+        editProductContext(productsFromDb, true);
         productEvents = productsFromDb;
       }
     }
@@ -2202,131 +2244,155 @@ export const fetchStorefrontData = async (
     console.error("Failed to fetch storefront products from DB:", error);
   }
 
-  try {
-    await fetchProfile(nostr, relays, pubkeysToFetch, editProfileContext);
-  } catch (error) {
+  const dbProducts = [...productEvents];
+
+  const profilePromise = fetchProfile(
+    nostr,
+    relays,
+    pubkeysToFetch,
+    editProfileContext
+  ).catch((error) => {
     console.error("Error fetching storefront profile:", error);
     editProfileContext(new Map(), false);
-  }
+  });
 
-  try {
-    await fetchShopProfile(nostr, relays, pubkeysToFetch, editShopContext);
-  } catch (error) {
+  const shopPromise = fetchShopProfile(
+    nostr,
+    relays,
+    pubkeysToFetch,
+    editShopContext
+  ).catch((error) => {
     console.error("Error fetching storefront shop profile:", error);
     editShopContext(new Map(), false);
-  }
+  });
 
-  try {
-    const productFilter: Filter = {
-      kinds: [30402],
-      authors: [shopPubkey],
-    };
-    const fetchedProducts = await nostr.fetch([productFilter], {}, relays);
-
-    if (fetchedProducts.length > 0) {
-      const getEventKey = (event: NostrEvent): string => {
-        if (event.kind === 30402) {
-          const dTag = event.tags?.find((tag: string[]) => tag[0] === "d")?.[1];
-          if (dTag) return `${event.pubkey}:${dTag}`;
-        }
-        return event.id;
+  const productRelayPromise = (async () => {
+    try {
+      const productFilter: Filter = {
+        kinds: [30402],
+        authors: [shopPubkey],
       };
+      const fetchedProducts = await nostr.fetch([productFilter], {}, relays);
 
-      const mergedMap = new Map<string, NostrEvent>();
-      for (const event of productEvents) {
-        if (event?.id) mergedMap.set(getEventKey(event), event);
+      if (fetchedProducts.length > 0) {
+        const getEventKey = (event: NostrEvent): string => {
+          if (event.kind === 30402) {
+            const dTag = event.tags?.find(
+              (tag: string[]) => tag[0] === "d"
+            )?.[1];
+            if (dTag) return `${event.pubkey}:${dTag}`;
+          }
+          return event.id;
+        };
+
+        const mergedMap = new Map<string, NostrEvent>();
+        for (const event of dbProducts) {
+          if (event?.id) mergedMap.set(getEventKey(event), event);
+        }
+        for (const event of fetchedProducts) {
+          if (!event?.id) continue;
+          const key = getEventKey(event);
+          const existing = mergedMap.get(key);
+          if (!existing || event.created_at >= existing.created_at) {
+            mergedMap.set(key, event);
+          }
+        }
+
+        productEvents = Array.from(mergedMap.values());
+        editProductContext(productEvents, false);
+
+        const validProducts = fetchedProducts.filter(
+          (e) => e.id && e.sig && e.pubkey
+        );
+        if (validProducts.length > 0) {
+          cacheEventsToDatabase(validProducts).catch((error) =>
+            console.error(
+              "Failed to cache storefront products to database:",
+              error
+            )
+          );
+        }
+      } else {
+        editProductContext(
+          productEvents.length > 0 ? productEvents : [],
+          false
+        );
       }
-      for (const event of fetchedProducts) {
-        if (!event?.id) continue;
-        const key = getEventKey(event);
-        const existing = mergedMap.get(key);
-        if (!existing || event.created_at >= existing.created_at) {
-          mergedMap.set(key, event);
+    } catch (error) {
+      console.error("Error fetching storefront products from relays:", error);
+      editProductContext(productEvents.length > 0 ? productEvents : [], false);
+    }
+  })();
+
+  const reviewPromise = fetchReviews(
+    nostr,
+    relays,
+    dbProducts,
+    editReviewsContext
+  ).catch((error) => {
+    console.error("Error fetching storefront reviews:", error);
+    editReviewsContext(new Map(), new Map(), false);
+  });
+
+  const communityPromise = (async () => {
+    try {
+      const communityFilter: Filter = {
+        kinds: [34550],
+        authors: [shopPubkey],
+        "#t": ["milkmarket"],
+      };
+      const fetchedCommunities = await nostr.fetch(
+        [communityFilter],
+        {},
+        relays
+      );
+      const communityMap = new Map<string, Community>();
+
+      try {
+        const response = await fetch("/api/db/fetch-communities");
+        if (response.ok) {
+          const communitiesFromDb = await response.json();
+          for (const event of communitiesFromDb) {
+            if (event.pubkey === shopPubkey) {
+              const community = parseCommunityEvent(event);
+              if (community) communityMap.set(community.id, community);
+            }
+          }
+        }
+      } catch {}
+
+      for (const event of fetchedCommunities) {
+        const community = parseCommunityEvent(event);
+        if (community) {
+          const existing = communityMap.get(community.id);
+          if (!existing || community.createdAt >= existing.createdAt) {
+            communityMap.set(community.id, community);
+          }
         }
       }
 
-      productEvents = Array.from(mergedMap.values());
-      editProductContext(productEvents, false);
+      editCommunityContext(communityMap, false);
 
-      const validProducts = fetchedProducts.filter(
-        (e) => e.id && e.sig && e.pubkey
+      const validCommunities = fetchedCommunities.filter(
+        (e) => e.id && e.sig && e.pubkey && e.kind === 34550
       );
-      if (validProducts.length > 0) {
-        cacheEventsToDatabase(validProducts).catch((error) =>
+      if (validCommunities.length > 0) {
+        cacheEventsToDatabase(validCommunities).catch((error) =>
           console.error(
-            "Failed to cache storefront products to database:",
+            "Failed to cache storefront communities to database:",
             error
           )
         );
       }
-    } else if (productEvents.length === 0) {
-      editProductContext([], false);
+    } catch (error) {
+      console.error("Error fetching storefront communities:", error);
+      editCommunityContext(new Map(), false);
     }
-  } catch (error) {
-    console.error("Error fetching storefront products from relays:", error);
-    if (productEvents.length === 0) {
-      editProductContext([], false);
-    }
-  }
+  })();
 
-  try {
-    await fetchReviews(nostr, relays, productEvents, editReviewsContext);
-  } catch (error) {
-    console.error("Error fetching storefront reviews:", error);
-    editReviewsContext(new Map(), new Map(), false);
-  }
-
-  try {
-    const communityFilter: Filter = {
-      kinds: [34550],
-      authors: [shopPubkey],
-      "#t": ["milkmarket"],
-    };
-    const fetchedCommunities = await nostr.fetch([communityFilter], {}, relays);
-    const communityMap = new Map<string, Community>();
-
-    try {
-      const response = await fetch("/api/db/fetch-communities");
-      if (response.ok) {
-        const communitiesFromDb = await response.json();
-        for (const event of communitiesFromDb) {
-          if (event.pubkey === shopPubkey) {
-            const community = parseCommunityEvent(event);
-            if (community) communityMap.set(community.id, community);
-          }
-        }
-      }
-    } catch {}
-
-    for (const event of fetchedCommunities) {
-      const community = parseCommunityEvent(event);
-      if (community) {
-        const existing = communityMap.get(community.id);
-        if (!existing || community.createdAt >= existing.createdAt) {
-          communityMap.set(community.id, community);
-        }
-      }
-    }
-
-    editCommunityContext(communityMap, false);
-
-    const validCommunities = fetchedCommunities.filter(
-      (e) => e.id && e.sig && e.pubkey && e.kind === 34550
-    );
-    if (validCommunities.length > 0) {
-      cacheEventsToDatabase(validCommunities).catch((error) =>
-        console.error(
-          "Failed to cache storefront communities to database:",
-          error
-        )
-      );
-    }
-  } catch (error) {
-    console.error("Error fetching storefront communities:", error);
-    editCommunityContext(new Map(), false);
-  }
-
-  if (options?.userPubkey && options?.signer && options?.editChatContext) {
+  const chatPromise = (async () => {
+    if (!options?.userPubkey || !options?.signer || !options?.editChatContext)
+      return;
     try {
       const isShopOwner = options.userPubkey === shopPubkey;
 
@@ -2383,24 +2449,28 @@ export const fetchStorefrontData = async (
 
         options.editChatContext(filteredChatsMap, false);
       }
-
-      if (profileSetFromProducts.size > pubkeysToFetch.length) {
-        const allProfilePubkeys = [
-          ...new Set([...pubkeysToFetch, ...profileSetFromProducts]),
-        ];
-        try {
-          await fetchProfile(
-            nostr,
-            relays,
-            allProfilePubkeys,
-            editProfileContext
-          );
-        } catch {}
-      }
     } catch (error) {
       console.error("Error fetching storefront chats:", error);
       options.editChatContext(new Map(), false);
     }
+  })();
+
+  await Promise.all([
+    profilePromise,
+    shopPromise,
+    productRelayPromise,
+    reviewPromise,
+    communityPromise,
+    chatPromise,
+  ]);
+
+  if (profileSetFromProducts.size > pubkeysToFetch.length) {
+    const allProfilePubkeys = [
+      ...new Set([...pubkeysToFetch, ...profileSetFromProducts]),
+    ];
+    try {
+      await fetchProfile(nostr, relays, allProfilePubkeys, editProfileContext);
+    } catch {}
   }
 
   return { productEvents, profileSetFromProducts };
