@@ -11,6 +11,7 @@ import {
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { useRouter } from "next/router";
 import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
+import { EyeIcon, EyeSlashIcon } from "@heroicons/react/24/outline";
 
 export default function PassphraseChallengeModal({
   actionOnSubmit,
@@ -29,6 +30,7 @@ export default function PassphraseChallengeModal({
 }) {
   const [remindToggled, setRemindToggled] = useState(false);
   const [passphraseInput, setPassphraseInput] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const isButtonDisabled = useMemo(() => {
     return passphraseInput.trim().length === 0;
@@ -99,20 +101,33 @@ export default function PassphraseChallengeModal({
           Enter Passphrase
         </ModalHeader>
         <ModalBody>
-          <Input
-            className="text-light-text dark:text-dark-text"
-            autoFocus
-            ref={passphraseInputRef}
-            variant="flat"
-            label="Passphrase"
-            labelPlacement="inside"
-            type="password"
-            onChange={(e) => setPassphraseInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") onSubmit();
-            }}
-            value={passphraseInput}
-          />
+          <div className="flex items-center gap-1">
+            <Input
+              className="text-light-text dark:text-dark-text"
+              autoFocus
+              ref={passphraseInputRef}
+              variant="flat"
+              label="Passphrase"
+              labelPlacement="inside"
+              type={showPassword ? "text" : "password"}
+              onChange={(e) => setPassphraseInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") onSubmit();
+              }}
+              value={passphraseInput}
+            />
+            <button
+              className="cursor-pointer"
+              onClick={() => setShowPassword((prev) => !prev)}
+            >
+              {" "}
+              {showPassword ? (
+                <EyeSlashIcon className="h-6 w-6" />
+              ) : (
+                <EyeIcon className="h-6 w-6" />
+              )}
+            </button>
+          </div>
           <div className="mt-4 flex items-center gap-2">
             <input
               type="checkbox"
