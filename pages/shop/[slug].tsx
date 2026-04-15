@@ -30,14 +30,36 @@ export const getServerSideProps: GetServerSideProps<ShopPageProps> = async (
       const shopEvent = await fetchShopProfileByPubkeyFromDb(pubkey);
       if (shopEvent) {
         const content = JSON.parse(shopEvent.content);
+        const seo = content.storefront?.seoMeta;
+        const shopName = content.name || "Shop";
+        const shopAbout = content.about || "";
+
+        const autoTitle = `${shopName} — Farm-Fresh Products | Milk Market`;
+        const autoDescription = shopAbout
+          ? shopAbout.length > 160
+            ? shopAbout.slice(0, 157) + "..."
+            : shopAbout
+          : `Shop farm-fresh products from ${shopName} on Milk Market. Direct from the producer to your door.`;
+
         return {
           props: {
             ogMeta: {
-              title: content.name ? `${content.name} Shop` : "Milk Market Shop",
-              description:
-                content.about || "Check out this shop on Milk Market!",
-              image: content.ui?.picture || "/milk-market.png",
+              title: seo?.metaTitle || autoTitle,
+              description: seo?.metaDescription || autoDescription,
+              image:
+                seo?.ogImage ||
+                content.ui?.banner ||
+                content.ui?.picture ||
+                "/milk-market.png",
               url: `/shop/${shopSlug}`,
+              keywords:
+                seo?.keywords ||
+                `${shopName}, farm fresh, raw milk, dairy, local farm, ${shopSlug}`,
+              locale: seo?.locale || "en_US",
+              locationRegion: seo?.locationRegion || undefined,
+              locationCity: seo?.locationCity || undefined,
+              siteName: shopName,
+              type: "business.business",
             },
           },
         };

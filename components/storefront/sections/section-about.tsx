@@ -1,5 +1,6 @@
 import { StorefrontSection, StorefrontColorScheme } from "@/utils/types/types";
 import { sanitizeUrl } from "@braintree/sanitize-url";
+import FormattedText from "../formatted-text";
 
 interface SectionAboutProps {
   section: StorefrontSection;
@@ -12,12 +13,12 @@ export default function SectionAbout({ section }: SectionAboutProps) {
   return (
     <div className="mx-auto max-w-6xl px-4 py-16 md:px-6">
       {section.heading && (
-        <h2
+        <FormattedText
+          text={section.heading}
+          as="h2"
           className="font-heading mb-8 text-3xl font-bold"
           style={{ color: "var(--sf-text)" }}
-        >
-          {section.heading}
-        </h2>
+        />
       )}
       <div
         className={`flex flex-col gap-8 md:flex-row md:items-center ${
@@ -26,9 +27,11 @@ export default function SectionAbout({ section }: SectionAboutProps) {
       >
         <div className="flex-1">
           {section.body && (
-            <p className="font-body text-lg leading-relaxed whitespace-pre-line opacity-80">
-              {section.body}
-            </p>
+            <FormattedText
+              text={section.body}
+              as="p"
+              className="font-body text-lg leading-relaxed whitespace-pre-line opacity-80"
+            />
           )}
         </div>
         {section.image && (

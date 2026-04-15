@@ -6,6 +6,18 @@ export interface StorefrontColorScheme {
   text: string;
 }
 
+export interface StorefrontNavColors {
+  background: string;
+  text: string;
+  accent: string;
+}
+
+export interface StorefrontFooterColors {
+  background: string;
+  text: string;
+  accent: string;
+}
+
 export interface StorefrontSocialLink {
   platform:
     | "instagram"
@@ -63,6 +75,7 @@ export interface StorefrontIngredientItem {
   name: string;
   description?: string;
   image?: string;
+  emoji?: string;
 }
 
 export interface StorefrontComparisonColumn {
@@ -128,6 +141,29 @@ export interface StorefrontPage {
   sections: StorefrontSection[];
 }
 
+export interface PopupFlowStep {
+  id: string;
+  question: string;
+  answers: PopupFlowAnswer[];
+}
+
+export interface PopupFlowAnswer {
+  id: string;
+  label: string;
+  nextStepId?: string;
+}
+
+export interface PopupStyle {
+  backgroundColor?: string;
+  textColor?: string;
+  accentColor?: string;
+  buttonColor?: string;
+  buttonTextColor?: string;
+  backgroundImage?: string;
+  overlayOpacity?: number;
+  useCustomFonts?: boolean;
+}
+
 export interface StorefrontEmailPopup {
   enabled: boolean;
   discountPercentage: number;
@@ -137,6 +173,19 @@ export interface StorefrontEmailPopup {
   requirePhone?: boolean;
   buttonText?: string;
   successMessage?: string;
+  style?: PopupStyle;
+  flowSteps?: PopupFlowStep[];
+}
+
+export interface StorefrontSeoMeta {
+  metaTitle?: string;
+  metaDescription?: string;
+  ogImage?: string;
+  keywords?: string;
+  locale?: string;
+  locationRegion?: string;
+  locationCity?: string;
+  autoGenerate?: boolean;
 }
 
 export interface StorefrontConfig {
@@ -147,6 +196,10 @@ export interface StorefrontConfig {
   customDomain?: string;
   fontHeading?: string;
   fontBody?: string;
+  customFontHeadingUrl?: string;
+  customFontHeadingName?: string;
+  customFontBodyUrl?: string;
+  customFontBodyName?: string;
   sections?: StorefrontSection[];
   pages?: StorefrontPage[];
   footer?: StorefrontFooter;
@@ -154,4 +207,7 @@ export interface StorefrontConfig {
   showCommunityPage?: boolean;
   showWalletPage?: boolean;
   emailPopup?: StorefrontEmailPopup;
+  navColors?: StorefrontNavColors;
+  footerColors?: StorefrontFooterColors;
+  seoMeta?: StorefrontSeoMeta;
 }

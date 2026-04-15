@@ -5,6 +5,8 @@ import {
   StorefrontPage,
   StorefrontFooter,
   StorefrontNavLink,
+  StorefrontNavColors,
+  StorefrontFooterColors,
 } from "@/utils/types/types";
 import StorefrontPreviewPanel from "./storefront-preview-panel";
 
@@ -24,6 +26,8 @@ interface StorefrontPreviewModalProps {
   pages: StorefrontPage[];
   footer: StorefrontFooter;
   navLinks: StorefrontNavLink[];
+  navColors?: StorefrontNavColors;
+  footerColors?: StorefrontFooterColors;
   shopSlug: string;
   currentPreviewPage?: string;
 }
@@ -44,6 +48,8 @@ export default function StorefrontPreviewModal({
   pages,
   footer,
   navLinks,
+  navColors,
+  footerColors,
   shopSlug,
 }: StorefrontPreviewModalProps) {
   useEffect(() => {
@@ -84,6 +90,8 @@ export default function StorefrontPreviewModal({
         pages={pages}
         footer={footer}
         navLinks={navLinks}
+        navColors={navColors}
+        footerColors={footerColors}
         shopSlug={shopSlug}
       />
     </div>

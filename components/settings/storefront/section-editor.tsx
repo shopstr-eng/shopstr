@@ -156,6 +156,18 @@ export default function SectionEditor({
 
       {isExpanded && (
         <div className="space-y-4 border-t border-gray-100 px-4 py-4">
+          <p className="flex items-center gap-1.5 text-[11px] text-gray-400">
+            <span>Formatting:</span>
+            <code className="rounded bg-gray-100 px-1 py-0.5 text-[10px] text-gray-500">
+              **bold**
+            </code>
+            <code className="rounded bg-gray-100 px-1 py-0.5 text-[10px] text-gray-500">
+              *italic*
+            </code>
+            <code className="rounded bg-gray-100 px-1 py-0.5 text-[10px] text-gray-500">
+              ***bold italic***
+            </code>
+          </p>
           <Input
             label="Heading"
             classNames={{ inputWrapper: inputWrapperClass }}
@@ -626,43 +638,143 @@ function IngredientEditor({
     onChange(updated);
   };
 
+  const getVisualMode = (
+    item: StorefrontIngredientItem
+  ): "none" | "emoji" | "image" => {
+    if (item.emoji) return "emoji";
+    if (item.image) return "image";
+    return "none";
+  };
+
+  const setVisualMode = (idx: number, mode: "none" | "emoji" | "image") => {
+    if (mode === "emoji") {
+      edit(idx, { emoji: items[idx]!.emoji || "🥛", image: undefined });
+    } else if (mode === "image") {
+      edit(idx, { image: items[idx]!.image || "", emoji: undefined });
+    } else {
+      edit(idx, { image: undefined, emoji: undefined });
+    }
+  };
+
   return (
     <div className="space-y-3">
       <label className="block text-sm font-bold text-gray-700">
         Ingredient Items
       </label>
-      {items.map((item, idx) => (
-        <div
-          key={idx}
-          className="flex items-center gap-2 rounded border border-gray-200 p-2"
-        >
-          <Input
-            label="Name"
-            size="sm"
-            classNames={{ inputWrapper: inputWrapperClass }}
-            variant="bordered"
-            value={item.name}
-            onChange={(e) => edit(idx, { name: e.target.value })}
-            className="flex-1"
-          />
-          <Input
-            label="Description"
-            size="sm"
-            classNames={{ inputWrapper: inputWrapperClass }}
-            variant="bordered"
-            value={item.description || ""}
-            onChange={(e) => edit(idx, { description: e.target.value })}
-            className="flex-1"
-          />
-          <button
-            type="button"
-            onClick={() => remove(idx)}
-            className="text-xs text-red-500"
-          >
-            ✕
-          </button>
-        </div>
-      ))}
+      {items.map((item, idx) => {
+        const mode = getVisualMode(item);
+        return (
+          <div key={idx} className="rounded-lg border border-gray-200 p-3">
+            <div className="flex items-center gap-2">
+              {mode === "emoji" && (
+                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 text-2xl">
+                  {item.emoji}
+                </span>
+              )}
+              {mode === "image" && item.image && (
+                <img
+                  src={item.image}
+                  alt={item.name}
+                  className="h-10 w-10 rounded-full object-cover"
+                />
+              )}
+              <Input
+                label="Name"
+                size="sm"
+                classNames={{ inputWrapper: inputWrapperClass }}
+                variant="bordered"
+                value={item.name}
+                onChange={(e) => edit(idx, { name: e.target.value })}
+                className="flex-1"
+              />
+              <Input
+                label="Description"
+                size="sm"
+                classNames={{ inputWrapper: inputWrapperClass }}
+                variant="bordered"
+                value={item.description || ""}
+                onChange={(e) => edit(idx, { description: e.target.value })}
+                className="flex-1"
+              />
+              <button
+                type="button"
+                onClick={() => remove(idx)}
+                className="text-xs text-red-500"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="mt-2 flex items-center gap-2">
+              <span className="text-xs text-gray-500">Visual:</span>
+              <div className="flex rounded-md border border-gray-300">
+                <button
+                  type="button"
+                  onClick={() => setVisualMode(idx, "none")}
+                  className={`px-2 py-1 text-xs font-medium ${
+                    mode === "none"
+                      ? "bg-gray-800 text-white"
+                      : "text-gray-500 hover:bg-gray-100"
+                  } rounded-l-md`}
+                >
+                  None
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setVisualMode(idx, "emoji")}
+                  className={`border-x border-gray-300 px-2 py-1 text-xs font-medium ${
+                    mode === "emoji"
+                      ? "bg-gray-800 text-white"
+                      : "text-gray-500 hover:bg-gray-100"
+                  }`}
+                >
+                  Emoji
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setVisualMode(idx, "image")}
+                  className={`px-2 py-1 text-xs font-medium ${
+                    mode === "image"
+                      ? "bg-gray-800 text-white"
+                      : "text-gray-500 hover:bg-gray-100"
+                  } rounded-r-md`}
+                >
+                  Image
+                </button>
+              </div>
+              {mode === "emoji" && (
+                <Input
+                  label="Emoji"
+                  size="sm"
+                  classNames={{ inputWrapper: inputWrapperClass }}
+                  variant="bordered"
+                  value={item.emoji || ""}
+                  onChange={(e) => edit(idx, { emoji: e.target.value })}
+                  className="w-20"
+                />
+              )}
+              {mode === "image" && (
+                <div className="flex flex-1 items-center gap-2">
+                  <Input
+                    label="Image URL"
+                    size="sm"
+                    classNames={{ inputWrapper: inputWrapperClass }}
+                    variant="bordered"
+                    value={item.image || ""}
+                    onChange={(e) => edit(idx, { image: e.target.value })}
+                    className="flex-1"
+                  />
+                  <FileUploaderButton
+                    className="rounded-lg border-2 border-black bg-white px-3 py-2 text-xs font-bold text-black"
+                    imgCallbackOnUpload={(url) => edit(idx, { image: url })}
+                  >
+                    Upload
+                  </FileUploaderButton>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })}
       <button
         type="button"
         onClick={add}

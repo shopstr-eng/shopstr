@@ -1,5 +1,6 @@
 import { StorefrontColorScheme } from "@/utils/types/types";
 import { sanitizeUrl } from "@braintree/sanitize-url";
+import FormattedText from "./formatted-text";
 
 interface StorefrontHeroProps {
   shopName: string;
@@ -59,12 +60,12 @@ export default function StorefrontHero({
         </h1>
 
         {shopAbout && (
-          <p
+          <FormattedText
+            text={shopAbout}
+            as="p"
             className="mt-4 max-w-xl text-lg"
             style={{ color: colors.background + "CC" }}
-          >
-            {shopAbout}
-          </p>
+          />
         )}
 
         <div

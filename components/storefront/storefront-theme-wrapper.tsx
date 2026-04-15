@@ -15,6 +15,8 @@ import {
   StorefrontConfig,
   StorefrontColorScheme,
   StorefrontFooter,
+  StorefrontNavColors,
+  StorefrontFooterColors,
 } from "@/utils/types/types";
 import StorefrontFooterComponent from "./storefront-footer";
 
@@ -128,6 +130,10 @@ export default function StorefrontThemeWrapper({
   const hasCustomStorefront = !!storefront;
   const hasFooter = !!storefront?.footer;
 
+  const navBg = storefront?.navColors?.background || colors.secondary;
+  const navText = storefront?.navColors?.text || colors.background;
+  const navAccent = storefront?.navColors?.accent || colors.primary;
+
   const profile = profileContext?.profileData?.get(sellerPubkey);
   const shop = shopMapContext.shopData.get(sellerPubkey);
   const shopName = shop?.content?.name || profile?.content?.name || "Shop";
@@ -137,18 +143,61 @@ export default function StorefrontThemeWrapper({
 
   const fontHeading = storefront?.fontHeading || "";
   const fontBody = storefront?.fontBody || "";
+  const customFontHeadingUrl = storefront?.customFontHeadingUrl || "";
+  const customFontHeadingName = storefront?.customFontHeadingName || "";
+  const customFontBodyUrl = storefront?.customFontBodyUrl || "";
+  const customFontBodyName = storefront?.customFontBodyName || "";
 
   const googleFontsUrl = useMemo(() => {
     const fonts = new Set<string>();
-    if (fontHeading && GOOGLE_FONT_OPTIONS.includes(fontHeading))
+    if (
+      fontHeading &&
+      !customFontHeadingUrl &&
+      GOOGLE_FONT_OPTIONS.includes(fontHeading)
+    )
       fonts.add(fontHeading);
-    if (fontBody && GOOGLE_FONT_OPTIONS.includes(fontBody)) fonts.add(fontBody);
+    if (
+      fontBody &&
+      !customFontBodyUrl &&
+      GOOGLE_FONT_OPTIONS.includes(fontBody)
+    )
+      fonts.add(fontBody);
+    if (customFontHeadingUrl || customFontBodyUrl) fonts.add("Poppins");
     if (fonts.size === 0) return null;
     const families = Array.from(fonts)
       .map((f) => `family=${f.replace(/ /g, "+")}:wght@400;600;700`)
       .join("&");
     return `https://fonts.googleapis.com/css2?${families}&display=swap`;
-  }, [fontHeading, fontBody]);
+  }, [fontHeading, fontBody, customFontHeadingUrl, customFontBodyUrl]);
+
+  const getFontFormat = (url: string): string => {
+    if (url.includes(".woff2")) return "woff2";
+    if (url.includes(".woff")) return "woff";
+    if (url.includes(".otf")) return "opentype";
+    if (url.includes(".ttf")) return "truetype";
+    return "woff2";
+  };
+
+  const customFontFaceCss = useMemo(() => {
+    let css = "";
+    if (customFontHeadingUrl) {
+      const name =
+        customFontHeadingName?.replace(/\.[^.]+$/, "") || "CustomHeading";
+      const format = getFontFormat(customFontHeadingUrl);
+      css += `@font-face { font-family: '${name}'; src: url('${customFontHeadingUrl}') format('${format}'); font-weight: 100 900; font-display: swap; }\n`;
+    }
+    if (customFontBodyUrl && customFontBodyUrl !== customFontHeadingUrl) {
+      const name = customFontBodyName?.replace(/\.[^.]+$/, "") || "CustomBody";
+      const format = getFontFormat(customFontBodyUrl);
+      css += `@font-face { font-family: '${name}'; src: url('${customFontBodyUrl}') format('${format}'); font-weight: 100 900; font-display: swap; }\n`;
+    }
+    return css;
+  }, [
+    customFontHeadingUrl,
+    customFontHeadingName,
+    customFontBodyUrl,
+    customFontBodyName,
+  ]);
 
   const defaultFooter: StorefrontFooter = hasFooter
     ? storefront!.footer!
@@ -168,11 +217,20 @@ export default function StorefrontThemeWrapper({
     "--sf-text": colors.text,
   } as React.CSSProperties;
 
+  const resolvedHeadingFont = customFontHeadingUrl
+    ? `'${customFontHeadingName?.replace(/\.[^.]+$/, "") || "CustomHeading"}', 'Poppins', sans-serif`
+    : fontHeading
+      ? `'${fontHeading}', sans-serif`
+      : "";
+  const resolvedBodyFont = customFontBodyUrl
+    ? `'${customFontBodyName?.replace(/\.[^.]+$/, "") || "CustomBody"}', 'Poppins', sans-serif`
+    : fontBody
+      ? `'${fontBody}', sans-serif`
+      : "";
+
   const fontStyles = {
-    ...(fontHeading
-      ? { "--font-heading": `'${fontHeading}', sans-serif` }
-      : {}),
-    ...(fontBody ? { "--font-body": `'${fontBody}', sans-serif` } : {}),
+    ...(resolvedHeadingFont ? { "--font-heading": resolvedHeadingFont } : {}),
+    ...(resolvedBodyFont ? { "--font-body": resolvedBodyFont } : {}),
   } as React.CSSProperties;
 
   const themedCss = `
@@ -221,6 +279,7 @@ export default function StorefrontThemeWrapper({
             <link href={googleFontsUrl} rel="stylesheet" />
           </>
         )}
+        {customFontFaceCss && <style>{customFontFaceCss}</style>}
         <style>{themedCss}</style>
       </Head>
       <div
@@ -235,8 +294,8 @@ export default function StorefrontThemeWrapper({
         <nav
           className="fixed top-0 right-0 left-0 z-50 border-b"
           style={{
-            backgroundColor: colors.secondary,
-            borderColor: colors.primary + "33",
+            backgroundColor: navBg,
+            borderColor: navAccent + "33",
           }}
         >
           <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-2 md:px-6">
@@ -250,7 +309,7 @@ export default function StorefrontThemeWrapper({
               )}
               <span
                 className="font-heading text-lg font-bold"
-                style={{ color: colors.background }}
+                style={{ color: navText }}
               >
                 {shopName}
               </span>
@@ -260,15 +319,15 @@ export default function StorefrontThemeWrapper({
               <button
                 onClick={() => router.push("/cart")}
                 className="relative rounded-md p-2 transition-colors"
-                style={{ color: colors.background }}
+                style={{ color: navText }}
               >
                 <ShoppingCartIcon className="h-5 w-5" />
                 {cartQuantity > 0 && (
                   <span
                     className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full text-xs font-bold"
                     style={{
-                      backgroundColor: colors.primary,
-                      color: colors.secondary,
+                      backgroundColor: navAccent,
+                      color: navBg,
                     }}
                   >
                     {cartQuantity}
@@ -295,8 +354,8 @@ export default function StorefrontThemeWrapper({
                     onClick={onOpen}
                     className="rounded-md px-4 py-1.5 text-sm font-medium transition-colors"
                     style={{
-                      backgroundColor: colors.primary,
-                      color: colors.secondary,
+                      backgroundColor: navAccent,
+                      color: navBg,
                     }}
                   >
                     Sign In
@@ -307,7 +366,7 @@ export default function StorefrontThemeWrapper({
               <button
                 className="flex h-8 w-8 items-center justify-center rounded md:hidden"
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                style={{ color: colors.background }}
+                style={{ color: navText }}
               >
                 {mobileMenuOpen ? (
                   <XMarkIcon className="h-6 w-6" />
@@ -322,8 +381,8 @@ export default function StorefrontThemeWrapper({
             <div
               className="border-t md:hidden"
               style={{
-                backgroundColor: colors.secondary,
-                borderColor: colors.primary + "22",
+                backgroundColor: navBg,
+                borderColor: navAccent + "22",
               }}
             >
               {isLoggedIn && userPubkey ? (
@@ -348,7 +407,7 @@ export default function StorefrontThemeWrapper({
                     setMobileMenuOpen(false);
                   }}
                   className="block w-full px-6 py-3 text-left text-sm font-medium"
-                  style={{ color: colors.background + "CC" }}
+                  style={{ color: navText + "CC" }}
                 >
                   Sign In
                 </button>
@@ -358,7 +417,7 @@ export default function StorefrontThemeWrapper({
                   <a
                     href={homeHref}
                     className="block px-6 py-3 text-sm font-medium"
-                    style={{ color: colors.background + "CC" }}
+                    style={{ color: navText + "CC" }}
                     onClick={() => setMobileMenuOpen(false)}
                   >
                     Back to Shop
@@ -366,7 +425,7 @@ export default function StorefrontThemeWrapper({
                   <a
                     href={`/shop/${shopSlug}/orders`}
                     className="block px-6 py-3 text-sm font-medium"
-                    style={{ color: colors.background + "CC" }}
+                    style={{ color: navText + "CC" }}
                     onClick={() => setMobileMenuOpen(false)}
                   >
                     Orders
@@ -382,6 +441,7 @@ export default function StorefrontThemeWrapper({
         <StorefrontFooterComponent
           footer={defaultFooter}
           colors={colors}
+          footerColors={storefront?.footerColors}
           shopName={shopName}
           shopSlug={shopSlug}
         />

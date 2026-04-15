@@ -1,4 +1,5 @@
 import { StorefrontSection, StorefrontColorScheme } from "@/utils/types/types";
+import FormattedText from "../formatted-text";
 
 interface SectionComparisonProps {
   section: StorefrontSection;
@@ -17,12 +18,12 @@ export default function SectionComparison({
   return (
     <div className="mx-auto max-w-5xl px-4 py-16 md:px-6">
       {section.heading && (
-        <h2
+        <FormattedText
+          text={section.heading}
+          as="h2"
           className="font-heading mb-8 text-center text-3xl font-bold"
           style={{ color: "var(--sf-text)" }}
-        >
-          {section.heading}
-        </h2>
+        />
       )}
       <div className="overflow-x-auto">
         <table className="w-full border-collapse">
@@ -50,7 +51,7 @@ export default function SectionComparison({
                   className="font-body border-b px-4 py-3 font-medium"
                   style={{ borderColor: colors.primary + "11" }}
                 >
-                  {feature}
+                  <FormattedText text={feature} />
                 </td>
                 {columns.map((col, colIdx) => (
                   <td
@@ -58,7 +59,7 @@ export default function SectionComparison({
                     className="font-body border-b px-4 py-3 text-center"
                     style={{ borderColor: colors.primary + "11" }}
                   >
-                    {col.values[rowIdx] || "—"}
+                    <FormattedText text={col.values[rowIdx] || "—"} />
                   </td>
                 ))}
               </tr>

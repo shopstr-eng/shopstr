@@ -1,5 +1,6 @@
 import { StorefrontSection, StorefrontColorScheme } from "@/utils/types/types";
 import { useState } from "react";
+import FormattedText from "../formatted-text";
 
 interface SectionFaqProps {
   section: StorefrontSection;
@@ -15,12 +16,12 @@ export default function SectionFaq({ section, colors }: SectionFaqProps) {
   return (
     <div className="mx-auto max-w-3xl px-4 py-16 md:px-6">
       {section.heading && (
-        <h2
+        <FormattedText
+          text={section.heading}
+          as="h2"
           className="font-heading mb-8 text-center text-3xl font-bold"
           style={{ color: "var(--sf-text)" }}
-        >
-          {section.heading}
-        </h2>
+        />
       )}
       <div className="space-y-3">
         {items.map((item, idx) => (
@@ -37,7 +38,11 @@ export default function SectionFaq({ section, colors }: SectionFaqProps) {
               }}
               onClick={() => setOpenIndex(openIndex === idx ? null : idx)}
             >
-              <span className="font-heading">{item.question}</span>
+              <FormattedText
+                text={item.question || ""}
+                as="span"
+                className="font-heading"
+              />
               <span
                 className="ml-4 text-xl transition-transform"
                 style={{
@@ -50,12 +55,12 @@ export default function SectionFaq({ section, colors }: SectionFaqProps) {
               </span>
             </button>
             {openIndex === idx && (
-              <div
-                className="font-body border-t px-6 py-4 opacity-80"
+              <FormattedText
+                text={item.answer || ""}
+                as="div"
+                className="font-body border-t px-6 py-4 whitespace-pre-line opacity-80"
                 style={{ borderColor: colors.primary + "11" }}
-              >
-                {item.answer}
-              </div>
+              />
             )}
           </div>
         ))}

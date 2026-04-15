@@ -1,4 +1,5 @@
 import { StorefrontSection, StorefrontColorScheme } from "@/utils/types/types";
+import FormattedText from "../formatted-text";
 
 interface SectionTextProps {
   section: StorefrontSection;
@@ -9,17 +10,19 @@ export default function SectionText({ section }: SectionTextProps) {
   return (
     <div className="mx-auto max-w-4xl px-4 py-16 md:px-6">
       {section.heading && (
-        <h2
+        <FormattedText
+          text={section.heading}
+          as="h2"
           className="font-heading mb-6 text-3xl font-bold"
           style={{ color: "var(--sf-text)" }}
-        >
-          {section.heading}
-        </h2>
+        />
       )}
       {section.body && (
-        <div className="font-body text-lg leading-relaxed whitespace-pre-line opacity-80">
-          {section.body}
-        </div>
+        <FormattedText
+          text={section.body}
+          as="div"
+          className="font-body text-lg leading-relaxed whitespace-pre-line opacity-80"
+        />
       )}
     </div>
   );

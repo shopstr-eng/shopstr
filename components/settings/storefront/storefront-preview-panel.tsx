@@ -1,14 +1,17 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import {
   StorefrontColorScheme,
   StorefrontSection,
   StorefrontPage,
   StorefrontFooter,
   StorefrontNavLink,
+  StorefrontNavColors,
+  StorefrontFooterColors,
 } from "@/utils/types/types";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
 import SectionRenderer from "@/components/storefront/section-renderer";
 import StorefrontFooterComponent from "@/components/storefront/storefront-footer";
+import FormattedText from "@/components/storefront/formatted-text";
 
 const PLACEHOLDER_IMAGES = [
   "https://images.unsplash.com/photo-1550583724-b2692b85b150?w=400&h=400&fit=crop",
@@ -445,10 +448,16 @@ interface StorefrontPreviewPanelProps {
   landingPageStyle: "classic" | "hero" | "minimal";
   fontHeading: string;
   fontBody: string;
+  customFontHeadingUrl?: string;
+  customFontHeadingName?: string;
+  customFontBodyUrl?: string;
+  customFontBodyName?: string;
   sections: StorefrontSection[];
   pages: StorefrontPage[];
   footer: StorefrontFooter;
   navLinks: StorefrontNavLink[];
+  navColors?: StorefrontNavColors;
+  footerColors?: StorefrontFooterColors;
   shopSlug: string;
   compact?: boolean;
 }
@@ -463,10 +472,16 @@ export default function StorefrontPreviewPanel({
   landingPageStyle,
   fontHeading,
   fontBody,
+  customFontHeadingUrl,
+  customFontHeadingName,
+  customFontBodyUrl,
+  customFontBodyName,
   sections,
   pages,
   footer,
   navLinks,
+  navColors,
+  footerColors,
   shopSlug,
   compact,
 }: StorefrontPreviewPanelProps) {
@@ -483,10 +498,73 @@ export default function StorefrontPreviewPanel({
   const displayPicture = pictureUrl || PLACEHOLDER_PROFILE;
   const displayBanner = bannerUrl || PLACEHOLDER_BANNER;
 
-  const googleFontsUrl = buildGoogleFontsUrl(fontHeading, fontBody);
+  const googleFontsUrl = (() => {
+    const needsGoogle = !customFontHeadingUrl || !customFontBodyUrl;
+    const needsPoppinsFallback = customFontHeadingUrl || customFontBodyUrl;
+    if (!needsGoogle && !needsPoppinsFallback) return null;
+    const fonts = new Set<string>();
+    if (
+      !customFontHeadingUrl &&
+      fontHeading &&
+      GOOGLE_FONT_OPTIONS.includes(fontHeading)
+    )
+      fonts.add(fontHeading);
+    if (
+      !customFontBodyUrl &&
+      fontBody &&
+      GOOGLE_FONT_OPTIONS.includes(fontBody)
+    )
+      fonts.add(fontBody);
+    if (needsPoppinsFallback) fonts.add("Poppins");
+    if (fonts.size === 0) return null;
+    const families = Array.from(fonts)
+      .map((f) => `family=${f.replace(/ /g, "+")}:wght@400;600;700`)
+      .join("&");
+    return `https://fonts.googleapis.com/css2?${families}&display=swap`;
+  })();
+
+  const getFontFormat = (url: string): string => {
+    if (url.includes(".woff2")) return "woff2";
+    if (url.includes(".woff")) return "woff";
+    if (url.includes(".otf")) return "opentype";
+    if (url.includes(".ttf")) return "truetype";
+    return "woff2";
+  };
+
+  const customFontFaceCss = (() => {
+    let css = "";
+    if (customFontHeadingUrl) {
+      const name =
+        customFontHeadingName?.replace(/\.[^.]+$/, "") || "CustomHeading";
+      const format = getFontFormat(customFontHeadingUrl);
+      css += `@font-face { font-family: '${name}'; src: url('${customFontHeadingUrl}') format('${format}'); font-weight: 100 900; font-display: swap; }\n`;
+    }
+    if (customFontBodyUrl && customFontBodyUrl !== customFontHeadingUrl) {
+      const name = customFontBodyName?.replace(/\.[^.]+$/, "") || "CustomBody";
+      const format = getFontFormat(customFontBodyUrl);
+      css += `@font-face { font-family: '${name}'; src: url('${customFontBodyUrl}') format('${format}'); font-weight: 100 900; font-display: swap; }\n`;
+    }
+    return css;
+  })();
 
   const hasSections = sections.length > 0;
-  const hasNav = navLinks.length > 0;
+
+  const previewNavLinks: StorefrontNavLink[] = useMemo(() => {
+    const links: StorefrontNavLink[] =
+      navLinks.length > 0 ? [...navLinks] : [{ label: "Home", href: "" }];
+    const alreadyHasShop = links.some(
+      (l) => l.href === "shop" || l.href === "/shop"
+    );
+    if (!alreadyHasShop) {
+      const homeIdx = links.findIndex((l) => l.href === "" || l.href === "/");
+      links.splice(homeIdx + 1, 0, {
+        label: "Shop",
+        href: "shop",
+        isPage: true,
+      });
+    }
+    return links;
+  }, [navLinks]);
 
   const activeSections = (() => {
     let raw: StorefrontSection[];
@@ -519,11 +597,20 @@ export default function StorefrontPreviewPanel({
     "--sf-text": colors.text,
   } as React.CSSProperties;
 
+  const resolvedHeadingFont = customFontHeadingUrl
+    ? `'${customFontHeadingName?.replace(/\.[^.]+$/, "") || "CustomHeading"}', 'Poppins', sans-serif`
+    : fontHeading
+      ? `'${fontHeading}', sans-serif`
+      : "";
+  const resolvedBodyFont = customFontBodyUrl
+    ? `'${customFontBodyName?.replace(/\.[^.]+$/, "") || "CustomBody"}', 'Poppins', sans-serif`
+    : fontBody
+      ? `'${fontBody}', sans-serif`
+      : "";
+
   const fontStyles = {
-    ...(fontHeading
-      ? { "--font-heading": `'${fontHeading}', sans-serif` }
-      : {}),
-    ...(fontBody ? { "--font-body": `'${fontBody}', sans-serif` } : {}),
+    ...(resolvedHeadingFont ? { "--font-heading": resolvedHeadingFont } : {}),
+    ...(resolvedBodyFont ? { "--font-body": resolvedBodyFont } : {}),
   } as React.CSSProperties;
 
   const viewportWidthClass = {
@@ -545,6 +632,7 @@ export default function StorefrontPreviewPanel({
           <link href={googleFontsUrl} rel="stylesheet" />
         </>
       )}
+      {customFontFaceCss && <style>{customFontFaceCss}</style>}
       <style>{`
         .preview-container .font-heading { font-family: var(--font-heading, inherit); }
         .preview-container .font-body { font-family: var(--font-body, inherit); }
@@ -563,8 +651,10 @@ export default function StorefrontPreviewPanel({
           >
             {previewPage
               ? `Page: ${
-                  pages.find((p) => p.slug === previewPage)?.title ||
-                  previewPage
+                  previewPage === "shop"
+                    ? "Shop"
+                    : pages.find((p) => p.slug === previewPage)?.title ||
+                      previewPage
                 }`
               : "Live Preview"}
           </h3>
@@ -595,35 +685,44 @@ export default function StorefrontPreviewPanel({
             ))}
           </div>
 
-          {pages.length > 0 && (
-            <div className="flex items-center gap-0.5">
+          <div className="flex items-center gap-0.5">
+            <button
+              type="button"
+              onClick={() => setPreviewPage("")}
+              className={`rounded px-2 py-1 text-xs font-medium ${
+                !previewPage
+                  ? "bg-blue-600 text-white"
+                  : "text-gray-400 hover:text-white"
+              }`}
+            >
+              Home
+            </button>
+            <button
+              type="button"
+              onClick={() => setPreviewPage("shop")}
+              className={`rounded px-2 py-1 text-xs font-medium ${
+                previewPage === "shop"
+                  ? "bg-blue-600 text-white"
+                  : "text-gray-400 hover:text-white"
+              }`}
+            >
+              Shop
+            </button>
+            {pages.map((page) => (
               <button
+                key={page.id}
                 type="button"
-                onClick={() => setPreviewPage("")}
+                onClick={() => setPreviewPage(page.slug)}
                 className={`rounded px-2 py-1 text-xs font-medium ${
-                  !previewPage
+                  previewPage === page.slug
                     ? "bg-blue-600 text-white"
                     : "text-gray-400 hover:text-white"
                 }`}
               >
-                Home
+                {page.title}
               </button>
-              {pages.map((page) => (
-                <button
-                  key={page.id}
-                  type="button"
-                  onClick={() => setPreviewPage(page.slug)}
-                  className={`rounded px-2 py-1 text-xs font-medium ${
-                    previewPage === page.slug
-                      ? "bg-blue-600 text-white"
-                      : "text-gray-400 hover:text-white"
-                  }`}
-                >
-                  {page.title}
-                </button>
-              ))}
-            </div>
-          )}
+            ))}
+          </div>
         </div>
       </div>
 
@@ -644,19 +743,61 @@ export default function StorefrontPreviewPanel({
               color: "var(--sf-text)",
             }}
           >
-            {hasNav && (
-              <PreviewNav
-                shopName={displayName}
-                pictureUrl={displayPicture}
-                colors={colors}
-                navLinks={navLinks}
-                currentPage={previewPage}
-                onNavClick={handleNavClick}
-              />
+            <PreviewNav
+              shopName={displayName}
+              pictureUrl={displayPicture}
+              colors={colors}
+              navColors={navColors}
+              navLinks={previewNavLinks}
+              currentPage={previewPage}
+              onNavClick={handleNavClick}
+            />
+
+            {previewPage === "shop" && (
+              <div className="mx-auto max-w-6xl px-4 pt-20 pb-8 md:px-6">
+                <h2
+                  className="font-heading mb-4 text-xl font-bold"
+                  style={{ color: colors.text }}
+                >
+                  Shop
+                </h2>
+                <div
+                  className="mb-4 rounded-lg border-2 px-4 py-2"
+                  style={{
+                    borderColor: colors.primary + "44",
+                    backgroundColor: colors.background,
+                    color: colors.text + "66",
+                  }}
+                >
+                  Search products...
+                </div>
+                <div className="mb-4 flex flex-wrap gap-2">
+                  {["All", "Milk", "Cheese", "Eggs"].map((cat, i) => (
+                    <span
+                      key={cat}
+                      className="rounded-full border-2 px-3 py-1 text-xs font-medium"
+                      style={{
+                        borderColor:
+                          i === 0 ? colors.primary : colors.primary + "33",
+                        backgroundColor:
+                          i === 0 ? colors.primary : "transparent",
+                        color: i === 0 ? colors.background : colors.text + "CC",
+                      }}
+                    >
+                      {cat}
+                    </span>
+                  ))}
+                </div>
+                <PreviewProductGrid
+                  products={MOCK_PRODUCTS}
+                  layout={productLayout}
+                  colors={colors}
+                />
+              </div>
             )}
 
             {!previewPage && landingPageStyle !== "hero" && (
-              <>
+              <div className="pt-14">
                 {landingPageStyle === "classic" && (
                   <>
                     <div className="w-full">
@@ -684,9 +825,11 @@ export default function StorefrontPreviewPanel({
                           >
                             {displayName}
                           </h1>
-                          <p className="font-body mt-2 max-w-2xl opacity-70">
-                            {displayAbout}
-                          </p>
+                          <FormattedText
+                            text={displayAbout}
+                            as="p"
+                            className="font-body mt-2 max-w-2xl opacity-70"
+                          />
                           <div className="mt-2 flex items-center gap-3 text-sm opacity-60">
                             <span>{MOCK_PRODUCTS.length} products</span>
                             <span>12 reviews</span>
@@ -718,13 +861,18 @@ export default function StorefrontPreviewPanel({
                     </div>
                   </div>
                 )}
-              </>
+              </div>
             )}
 
-            {hasSections && activeSections.length > 0 ? (
+            {previewPage === "shop" ? null : hasSections &&
+              activeSections.length > 0 ? (
               <div
                 className={
-                  hasNav && activeSections[0]?.type === "hero" ? "pt-14" : ""
+                  activeSections[0]?.type === "hero"
+                    ? "pt-14"
+                    : !previewPage
+                      ? ""
+                      : "pt-14"
                 }
               >
                 {activeSections.map((section) => (
@@ -743,7 +891,7 @@ export default function StorefrontPreviewPanel({
                   />
                 ))}
               </div>
-            ) : (
+            ) : previewPage !== "shop" ? (
               <div
                 className={`mx-auto max-w-6xl px-4 py-8 md:px-6 ${
                   landingPageStyle === "hero" ? "pt-14" : ""
@@ -755,11 +903,12 @@ export default function StorefrontPreviewPanel({
                   colors={colors}
                 />
               </div>
-            )}
+            ) : null}
 
             <StorefrontFooterComponent
               footer={previewFooter}
               colors={colors}
+              footerColors={footerColors}
               shopName={displayName}
               shopSlug={shopSlug || "preview"}
             />
@@ -774,6 +923,7 @@ function PreviewNav({
   shopName,
   pictureUrl,
   colors,
+  navColors,
   navLinks,
   currentPage,
   onNavClick,
@@ -781,16 +931,21 @@ function PreviewNav({
   shopName: string;
   pictureUrl: string;
   colors: StorefrontColorScheme;
+  navColors?: StorefrontNavColors;
   navLinks: StorefrontNavLink[];
   currentPage: string;
   onNavClick: (link: StorefrontNavLink) => void;
 }) {
+  const bg = navColors?.background || colors.secondary;
+  const text = navColors?.text || colors.background;
+  const accent = navColors?.accent || colors.primary;
+
   return (
     <nav
       className="top-0 right-0 left-0 z-40 border-b"
       style={{
-        backgroundColor: colors.secondary,
-        borderColor: colors.primary + "33",
+        backgroundColor: bg,
+        borderColor: accent + "33",
         position: "sticky",
       }}
     >
@@ -805,7 +960,7 @@ function PreviewNav({
           )}
           <span
             className="font-heading text-lg font-bold"
-            style={{ color: colors.background }}
+            style={{ color: text }}
           >
             {shopName}
           </span>
@@ -823,7 +978,7 @@ function PreviewNav({
                 onClick={() => onNavClick(link)}
                 className="rounded-md px-3 py-2 text-sm font-medium transition-colors"
                 style={{
-                  color: isActive ? colors.primary : colors.background + "CC",
+                  color: isActive ? accent : text + "CC",
                 }}
               >
                 {link.label}

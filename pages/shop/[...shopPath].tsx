@@ -25,20 +25,49 @@ export const getServerSideProps: GetServerSideProps<ShopSubPageProps> = async (
     return { props: { ogMeta: DEFAULT_OG } };
   }
 
+  const subPage = pathParts[1] || "";
+
   try {
     const pubkey = await fetchShopPubkeyBySlug(slug);
     if (pubkey) {
       const shopEvent = await fetchShopProfileByPubkeyFromDb(pubkey);
       if (shopEvent) {
         const content = JSON.parse(shopEvent.content);
+        const seo = content.storefront?.seoMeta;
+        const shopName = content.name || "Shop";
+        const shopAbout = content.about || "";
+
+        const pageSuffix = subPage
+          ? ` — ${subPage.charAt(0).toUpperCase() + subPage.slice(1)}`
+          : "";
+        const autoTitle = `${shopName}${pageSuffix} | Milk Market`;
+        const autoDescription = shopAbout
+          ? shopAbout.length > 160
+            ? shopAbout.slice(0, 157) + "..."
+            : shopAbout
+          : `Shop farm-fresh products from ${shopName} on Milk Market. Direct from the producer to your door.`;
+
         return {
           props: {
             ogMeta: {
-              title: content.name ? `${content.name} Shop` : "Milk Market Shop",
-              description:
-                content.about || "Check out this shop on Milk Market!",
-              image: content.ui?.picture || "/milk-market.png",
+              title: seo?.metaTitle
+                ? `${seo.metaTitle}${pageSuffix}`
+                : autoTitle,
+              description: seo?.metaDescription || autoDescription,
+              image:
+                seo?.ogImage ||
+                content.ui?.banner ||
+                content.ui?.picture ||
+                "/milk-market.png",
               url: `/shop/${pathParts.join("/")}`,
+              keywords:
+                seo?.keywords ||
+                `${shopName}, farm fresh, raw milk, dairy, local farm, ${slug}`,
+              locale: seo?.locale || "en_US",
+              locationRegion: seo?.locationRegion || undefined,
+              locationCity: seo?.locationCity || undefined,
+              siteName: shopName,
+              type: "business.business",
             },
           },
         };

@@ -1,4 +1,5 @@
 import { StorefrontSection, StorefrontColorScheme } from "@/utils/types/types";
+import FormattedText from "../formatted-text";
 
 interface SectionContactProps {
   section: StorefrontSection;
@@ -12,17 +13,19 @@ export default function SectionContact({
   return (
     <div className="mx-auto max-w-4xl px-4 py-16 md:px-6">
       {section.heading && (
-        <h2
+        <FormattedText
+          text={section.heading}
+          as="h2"
           className="font-heading mb-4 text-center text-3xl font-bold"
           style={{ color: "var(--sf-text)" }}
-        >
-          {section.heading}
-        </h2>
+        />
       )}
       {section.body && (
-        <p className="font-body mx-auto mb-8 max-w-xl text-center text-lg opacity-70">
-          {section.body}
-        </p>
+        <FormattedText
+          text={section.body}
+          as="p"
+          className="font-body mx-auto mb-8 max-w-xl text-center text-lg opacity-70"
+        />
       )}
       <div
         className="mx-auto max-w-md rounded-xl border p-8"
@@ -62,9 +65,11 @@ export default function SectionContact({
               <span style={{ color: colors.accent }} className="mt-1 text-xl">
                 ⌂
               </span>
-              <p className="font-body whitespace-pre-line opacity-80">
-                {section.address}
-              </p>
+              <FormattedText
+                text={section.address}
+                as="p"
+                className="font-body whitespace-pre-line opacity-80"
+              />
             </div>
           )}
         </div>

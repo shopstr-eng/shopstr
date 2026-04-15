@@ -22,6 +22,8 @@ import {
   StorefrontConfig,
   StorefrontColorScheme,
   StorefrontNavLink,
+  StorefrontNavColors,
+  StorefrontFooterColors,
   StorefrontFooter,
 } from "@/utils/types/types";
 import { sanitizeUrl } from "@braintree/sanitize-url";
@@ -30,11 +32,13 @@ import parseTags from "@/utils/parsers/product-parser-functions";
 import Link from "next/link";
 import StorefrontProductGrid from "./storefront-product-grid";
 import SectionRenderer from "./section-renderer";
+import FormattedText from "./formatted-text";
 import StorefrontFooterComponent from "./storefront-footer";
 import StorefrontCommunity from "./storefront-community";
 import StorefrontOrders from "./storefront-orders";
 import StorefrontWallet from "./storefront-wallet";
 import StorefrontMyListings from "./storefront-my-listings";
+import StorefrontShopPage from "./storefront-shop-page";
 import StorefrontOrderConfirmation from "./storefront-order-confirmation";
 import StorefrontPolicyPage from "./storefront-policy-page";
 import StorefrontEmailPopupComponent from "./storefront-email-popup";
@@ -185,6 +189,14 @@ export default function StorefrontLayout({
   const hasNav = storefront.navLinks && storefront.navLinks.length > 0;
   const hasFooter = !!storefront.footer;
 
+  const navBg = storefront.navColors?.background || colors.secondary;
+  const navText = storefront.navColors?.text || colors.background;
+  const navAccent = storefront.navColors?.accent || colors.primary;
+
+  const ftBg = storefront.footerColors?.background || colors.secondary;
+  const ftText = storefront.footerColors?.text || colors.background;
+  const ftAccent = storefront.footerColors?.accent || colors.primary;
+
   const activeSections = useMemo(() => {
     if (currentPage && storefront.pages) {
       const page = storefront.pages.find((p) => p.slug === currentPage);
@@ -233,11 +245,25 @@ export default function StorefrontLayout({
   const defaultNavLinks: StorefrontNavLink[] = useMemo(() => {
     let links: StorefrontNavLink[] = hasNav
       ? [...storefront.navLinks!]
-      : [{ label: "Shop", href: "" }];
+      : [
+          { label: "Home", href: "" },
+          { label: "Shop", href: "shop", isPage: true },
+        ];
     if (!isShopOwner) {
       links = links.filter(
         (l) => l.href !== "my-listings" && l.href !== "/my-listings"
       );
+    }
+    const alreadyHasShop = links.some(
+      (l) => l.href === "shop" || l.href === "/shop"
+    );
+    if (!alreadyHasShop) {
+      const homeIdx = links.findIndex((l) => l.href === "" || l.href === "/");
+      links.splice(homeIdx + 1, 0, {
+        label: "Shop",
+        href: "shop",
+        isPage: true,
+      });
     }
     const alreadyHasOrders = links.some(
       (l) => l.href === "orders" || l.href === "/orders"
@@ -337,7 +363,46 @@ export default function StorefrontLayout({
   return (
     <>
       <Head>
-        <title>{shopName}</title>
+        <title>{storefront.seoMeta?.metaTitle || shopName}</title>
+        {storefront.seoMeta?.metaDescription && (
+          <meta
+            name="description"
+            content={storefront.seoMeta.metaDescription}
+          />
+        )}
+        {storefront.seoMeta?.keywords && (
+          <meta name="keywords" content={storefront.seoMeta.keywords} />
+        )}
+        {storefront.seoMeta?.locale && (
+          <meta property="og:locale" content={storefront.seoMeta.locale} />
+        )}
+        {storefront.seoMeta?.locationRegion && (
+          <meta name="geo.region" content={storefront.seoMeta.locationRegion} />
+        )}
+        {storefront.seoMeta?.locationCity && (
+          <meta
+            name="geo.placename"
+            content={storefront.seoMeta.locationCity}
+          />
+        )}
+        <meta property="og:type" content="business.business" />
+        <meta property="og:site_name" content={shopName} />
+        <meta
+          property="og:title"
+          content={storefront.seoMeta?.metaTitle || shopName}
+        />
+        {storefront.seoMeta?.metaDescription && (
+          <meta
+            property="og:description"
+            content={storefront.seoMeta.metaDescription}
+          />
+        )}
+        {(storefront.seoMeta?.ogImage || bannerUrl || pictureUrl) && (
+          <meta
+            property="og:image"
+            content={storefront.seoMeta?.ogImage || bannerUrl || pictureUrl}
+          />
+        )}
         {googleFontsUrl && (
           <>
             <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -367,8 +432,8 @@ export default function StorefrontLayout({
         <nav
           className="fixed top-0 right-0 left-0 z-50 border-b"
           style={{
-            backgroundColor: colors.secondary,
-            borderColor: colors.primary + "33",
+            backgroundColor: navBg,
+            borderColor: navAccent + "33",
           }}
         >
           <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-2 md:px-6">
@@ -382,7 +447,7 @@ export default function StorefrontLayout({
               )}
               <span
                 className="font-heading text-lg font-bold"
-                style={{ color: colors.background }}
+                style={{ color: navText }}
               >
                 {shopName}
               </span>
@@ -401,9 +466,7 @@ export default function StorefrontLayout({
                       href={href}
                       className="rounded-md px-3 py-2 text-sm font-medium transition-colors"
                       style={{
-                        color: isActive
-                          ? colors.primary
-                          : colors.background + "CC",
+                        color: isActive ? navAccent : navText + "CC",
                       }}
                     >
                       {link.label}
@@ -417,15 +480,15 @@ export default function StorefrontLayout({
               <button
                 onClick={() => router.push("/cart")}
                 className="relative rounded-md p-2 transition-colors"
-                style={{ color: colors.background }}
+                style={{ color: navText }}
               >
                 <ShoppingCartIcon className="h-5 w-5" />
                 {cartQuantity > 0 && (
                   <span
                     className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full text-xs font-bold"
                     style={{
-                      backgroundColor: colors.primary,
-                      color: colors.secondary,
+                      backgroundColor: navAccent,
+                      color: navBg,
                     }}
                   >
                     {cartQuantity}
@@ -452,8 +515,8 @@ export default function StorefrontLayout({
                     onClick={onOpen}
                     className="rounded-md px-4 py-1.5 text-sm font-medium transition-colors"
                     style={{
-                      backgroundColor: colors.primary,
-                      color: colors.secondary,
+                      backgroundColor: navAccent,
+                      color: navBg,
                     }}
                   >
                     Sign In
@@ -464,7 +527,7 @@ export default function StorefrontLayout({
               <button
                 className="flex h-8 w-8 items-center justify-center rounded md:hidden"
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                style={{ color: colors.background }}
+                style={{ color: navText }}
               >
                 {mobileMenuOpen ? (
                   <XMarkIcon className="h-6 w-6" />
@@ -479,8 +542,8 @@ export default function StorefrontLayout({
             <div
               className="border-t md:hidden"
               style={{
-                backgroundColor: colors.secondary,
-                borderColor: colors.primary + "22",
+                backgroundColor: navBg,
+                borderColor: navAccent + "22",
               }}
             >
               {defaultNavLinks.length > 0 &&
@@ -491,7 +554,7 @@ export default function StorefrontLayout({
                       key={idx}
                       href={href}
                       className="block px-6 py-3 text-sm font-medium"
-                      style={{ color: colors.background + "CC" }}
+                      style={{ color: navText + "CC" }}
                       onClick={() => setMobileMenuOpen(false)}
                     >
                       {link.label}
@@ -520,7 +583,7 @@ export default function StorefrontLayout({
                     setMobileMenuOpen(false);
                   }}
                   className="block w-full px-6 py-3 text-left text-sm font-medium"
-                  style={{ color: colors.background + "CC" }}
+                  style={{ color: navText + "CC" }}
                 >
                   Sign In
                 </button>
@@ -529,7 +592,15 @@ export default function StorefrontLayout({
           )}
         </nav>
 
-        {currentPage === "order-confirmation" ? (
+        {currentPage === "shop" ? (
+          <div className="pt-0">
+            <StorefrontShopPage
+              products={sellerProducts}
+              colors={colors}
+              shopName={shopName}
+            />
+          </div>
+        ) : currentPage === "order-confirmation" ? (
           <div className="pt-14">
             <StorefrontOrderConfirmation
               colors={colors}
@@ -633,9 +704,11 @@ export default function StorefrontLayout({
                             {shopName}
                           </h1>
                           {shopAbout && (
-                            <p className="font-body mt-2 max-w-2xl opacity-70">
-                              {shopAbout}
-                            </p>
+                            <FormattedText
+                              text={shopAbout}
+                              as="p"
+                              className="font-body mt-2 max-w-2xl opacity-70"
+                            />
                           )}
                           <div className="mt-2 flex items-center gap-3 text-sm opacity-60">
                             <span>{sellerProducts.length} products</span>
@@ -717,6 +790,7 @@ export default function StorefrontLayout({
         <StorefrontFooterComponent
           footer={defaultFooter}
           colors={colors}
+          footerColors={storefront.footerColors}
           shopName={shopName}
           shopSlug={shopSlug}
         />
@@ -729,6 +803,8 @@ export default function StorefrontLayout({
             colors={colors}
             shopPubkey={shopPubkey}
             shopName={shopName}
+            fontHeading={fontHeading}
+            fontBody={fontBody}
           />
         )}
     </>

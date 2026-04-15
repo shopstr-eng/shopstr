@@ -1,5 +1,6 @@
 import { StorefrontSection, StorefrontColorScheme } from "@/utils/types/types";
 import { sanitizeUrl } from "@braintree/sanitize-url";
+import FormattedText from "../formatted-text";
 
 interface SectionStoryProps {
   section: StorefrontSection;
@@ -10,17 +11,19 @@ export default function SectionStory({ section, colors }: SectionStoryProps) {
   return (
     <div className="mx-auto max-w-6xl px-4 py-16 md:px-6">
       {section.heading && (
-        <h2
+        <FormattedText
+          text={section.heading}
+          as="h2"
           className="font-heading mb-4 text-center text-3xl font-bold"
           style={{ color: "var(--sf-text)" }}
-        >
-          {section.heading}
-        </h2>
+        />
       )}
       {section.body && (
-        <p className="font-body mx-auto mb-12 max-w-2xl text-center text-lg whitespace-pre-line opacity-70">
-          {section.body}
-        </p>
+        <FormattedText
+          text={section.body}
+          as="p"
+          className="font-body mx-auto mb-12 max-w-2xl text-center text-lg whitespace-pre-line opacity-70"
+        />
       )}
 
       {section.timelineItems && section.timelineItems.length > 0 && (
@@ -59,10 +62,16 @@ export default function SectionStory({ section, colors }: SectionStoryProps) {
                       {item.year}
                     </span>
                   )}
-                  <h3 className="font-heading text-xl font-bold">
-                    {item.heading}
-                  </h3>
-                  <p className="font-body mt-2 opacity-70">{item.body}</p>
+                  <FormattedText
+                    text={item.heading || ""}
+                    as="h3"
+                    className="font-heading text-xl font-bold"
+                  />
+                  <FormattedText
+                    text={item.body || ""}
+                    as="p"
+                    className="font-body mt-2 whitespace-pre-line opacity-70"
+                  />
                   {item.image && (
                     <img
                       src={sanitizeUrl(item.image)}

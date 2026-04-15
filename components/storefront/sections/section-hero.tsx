@@ -1,5 +1,6 @@
 import { StorefrontSection, StorefrontColorScheme } from "@/utils/types/types";
 import { sanitizeUrl } from "@braintree/sanitize-url";
+import FormattedText from "../formatted-text";
 
 interface SectionHeroProps {
   section: StorefrontSection;
@@ -52,20 +53,20 @@ export default function SectionHero({
           />
         )}
 
-        <h1
+        <FormattedText
+          text={section.heading || shopName}
+          as="h1"
           className="font-heading text-4xl font-bold md:text-5xl"
           style={{ color: colors.background }}
-        >
-          {section.heading || shopName}
-        </h1>
+        />
 
         {section.subheading && (
-          <p
+          <FormattedText
+            text={section.subheading}
+            as="p"
             className="font-body mt-4 max-w-xl text-lg"
             style={{ color: colors.background + "CC" }}
-          >
-            {section.subheading}
-          </p>
+          />
         )}
 
         {section.ctaText && (

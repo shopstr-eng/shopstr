@@ -1108,12 +1108,27 @@ export async function blossomUpload(
   signer: NostrSigner,
   servers: Request["url"][]
 ) {
+  const FONT_TYPES = [
+    "font/woff2",
+    "font/woff",
+    "font/ttf",
+    "font/otf",
+    "application/font-woff",
+    "application/font-woff2",
+    "application/x-font-ttf",
+    "application/x-font-opentype",
+    "application/vnd.ms-fontobject",
+  ];
+  const isFont =
+    FONT_TYPES.includes(fileUpload.type) ||
+    /\.(woff2?|ttf|otf|eot)$/i.test(fileUpload.name);
+
   if (isImage) {
     if (!fileUpload.type.includes("image"))
       throw new Error("Only images are supported");
-  } else {
+  } else if (!isFont) {
     if (fileUpload.type !== "application/pdf")
-      throw new Error("Only PDFs are supported");
+      throw new Error("Only PDFs and font files are supported");
   }
 
   const arrayBuffer = await fileUpload.arrayBuffer();

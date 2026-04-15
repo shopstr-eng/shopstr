@@ -1,6 +1,7 @@
 import {
   StorefrontColorScheme,
   StorefrontFooter,
+  StorefrontFooterColors,
   StorefrontPolicies,
 } from "@/utils/types/types";
 import Link from "next/link";
@@ -13,6 +14,7 @@ import {
 interface StorefrontFooterProps {
   footer: StorefrontFooter;
   colors: StorefrontColorScheme;
+  footerColors?: StorefrontFooterColors;
   shopName: string;
   shopSlug: string;
 }
@@ -42,12 +44,17 @@ const POLICY_KEYS: (keyof StorefrontPolicies)[] = [
 export default function StorefrontFooterComponent({
   footer,
   colors,
+  footerColors,
   shopName,
   shopSlug,
 }: StorefrontFooterProps) {
   const socialLinks = footer.socialLinks || [];
   const navLinks = footer.navLinks || [];
   const showPoweredBy = footer.showPoweredBy !== false;
+
+  const bg = footerColors?.background || colors.secondary;
+  const text = footerColors?.text || colors.background;
+  const accent = footerColors?.accent || colors.primary;
 
   const policies = footer.policies || {};
   const defaults = getDefaultPolicies(shopName);
@@ -61,9 +68,9 @@ export default function StorefrontFooterComponent({
     <footer
       className="border-t px-4 py-12 md:px-6"
       style={{
-        backgroundColor: colors.secondary,
-        borderColor: colors.primary + "22",
-        color: colors.background,
+        backgroundColor: bg,
+        borderColor: accent + "22",
+        color: text,
       }}
     >
       <div className="mx-auto max-w-6xl">
@@ -88,7 +95,7 @@ export default function StorefrontFooterComponent({
                     key={idx}
                     href={href}
                     className="font-body text-sm opacity-60 transition-opacity hover:opacity-100"
-                    style={{ color: colors.background }}
+                    style={{ color: text }}
                   >
                     {link.label}
                   </Link>
@@ -107,8 +114,8 @@ export default function StorefrontFooterComponent({
                   rel="noopener noreferrer"
                   className="flex h-10 w-10 items-center justify-center rounded-full text-lg transition-transform hover:scale-110"
                   style={{
-                    backgroundColor: colors.primary + "22",
-                    color: colors.primary,
+                    backgroundColor: accent + "22",
+                    color: accent,
                   }}
                   title={social.label || social.platform}
                 >
@@ -131,14 +138,14 @@ export default function StorefrontFooterComponent({
         {enabledPolicies.length > 0 && (
           <div
             className="mt-8 flex flex-wrap justify-center gap-x-6 gap-y-2 border-t pt-6"
-            style={{ borderColor: colors.background + "11" }}
+            style={{ borderColor: text + "11" }}
           >
             {enabledPolicies.map((key) => (
               <Link
                 key={key}
                 href={`/shop/${shopSlug}/${POLICY_SLUGS[key]}`}
                 className="font-body text-xs opacity-40 transition-opacity hover:opacity-80"
-                style={{ color: colors.background }}
+                style={{ color: text }}
               >
                 {POLICY_LABELS[key]}
               </Link>
@@ -152,17 +159,11 @@ export default function StorefrontFooterComponent({
               enabledPolicies.length > 0 ? "mt-4" : "mt-8 border-t pt-6"
             } text-center text-sm opacity-40`}
             style={
-              enabledPolicies.length > 0
-                ? {}
-                : { borderColor: colors.background + "11" }
+              enabledPolicies.length > 0 ? {} : { borderColor: text + "11" }
             }
           >
             Powered by{" "}
-            <Link
-              href="/"
-              className="underline"
-              style={{ color: colors.primary }}
-            >
+            <Link href="/" className="underline" style={{ color: accent }}>
               Milk Market
             </Link>
           </div>

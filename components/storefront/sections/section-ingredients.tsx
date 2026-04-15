@@ -1,5 +1,6 @@
 import { StorefrontSection, StorefrontColorScheme } from "@/utils/types/types";
 import { sanitizeUrl } from "@braintree/sanitize-url";
+import FormattedText from "../formatted-text";
 
 interface SectionIngredientsProps {
   section: StorefrontSection;
@@ -15,17 +16,19 @@ export default function SectionIngredients({
   return (
     <div className="mx-auto max-w-6xl px-4 py-16 md:px-6">
       {section.heading && (
-        <h2
+        <FormattedText
+          text={section.heading}
+          as="h2"
           className="font-heading mb-4 text-center text-3xl font-bold"
           style={{ color: "var(--sf-text)" }}
-        >
-          {section.heading}
-        </h2>
+        />
       )}
       {section.body && (
-        <p className="font-body mx-auto mb-12 max-w-2xl text-center text-lg opacity-70">
-          {section.body}
-        </p>
+        <FormattedText
+          text={section.body}
+          as="p"
+          className="font-body mx-auto mb-12 max-w-2xl text-center text-lg opacity-70"
+        />
       )}
       {items.length > 0 && (
         <div className="grid grid-cols-2 gap-6 md:grid-cols-3 lg:grid-cols-4">
@@ -49,14 +52,16 @@ export default function SectionIngredients({
                     color: colors.primary,
                   }}
                 >
-                  ✦
+                  {item.emoji || "✦"}
                 </div>
               )}
               <h3 className="font-heading text-base font-bold">{item.name}</h3>
               {item.description && (
-                <p className="font-body mt-2 text-sm opacity-60">
-                  {item.description}
-                </p>
+                <FormattedText
+                  text={item.description}
+                  as="p"
+                  className="font-body mt-2 text-sm opacity-60"
+                />
               )}
             </div>
           ))}

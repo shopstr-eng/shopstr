@@ -1,5 +1,6 @@
 import { StorefrontSection, StorefrontColorScheme } from "@/utils/types/types";
 import { sanitizeUrl } from "@braintree/sanitize-url";
+import FormattedText from "../formatted-text";
 
 interface SectionTestimonialsProps {
   section: StorefrontSection;
@@ -21,12 +22,12 @@ export default function SectionTestimonials({
     >
       <div className="mx-auto max-w-6xl">
         {section.heading && (
-          <h2
+          <FormattedText
+            text={section.heading}
+            as="h2"
             className="font-heading mb-12 text-center text-3xl font-bold"
             style={{ color: "var(--sf-text)" }}
-          >
-            {section.heading}
-          </h2>
+          />
         )}
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
           {testimonials.map((t, idx) => (
@@ -54,7 +55,9 @@ export default function SectionTestimonials({
                 </div>
               )}
               <p className="font-body mb-4 italic opacity-80">
-                &ldquo;{t.quote}&rdquo;
+                &ldquo;
+                <FormattedText text={t.quote || ""} />
+                &rdquo;
               </p>
               <div className="flex items-center gap-3">
                 {t.image && (
