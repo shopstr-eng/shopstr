@@ -45,28 +45,10 @@ import WeightSelector from "./weight-selector";
 import BulkSelector from "./bulk-selector";
 import ZapsnagButton from "@/components/ZapsnagButton";
 import { RawEventModal, EventIdModal } from "./modals/event-modals";
-import { storage } from "@/utils/storage";
+import { storage, STORAGE_KEYS } from "@/utils/storage";
+import { CartDiscountsMap, isCartDiscountsMap } from "@/utils/cart-discounts";
 
 const SUMMARY_CHARACTER_LIMIT = 100;
-type CartDiscountsMap = Record<string, { code: string; percentage: number }>;
-
-const isCartDiscountsMap = (value: unknown): value is CartDiscountsMap => {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return false;
-  }
-
-  return Object.values(value).every((entry) => {
-    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
-      return false;
-    }
-
-    const candidate = entry as { code?: unknown; percentage?: unknown };
-    return (
-      typeof candidate.code === "string" &&
-      typeof candidate.percentage === "number"
-    );
-  });
-};
 
 export default function CheckoutCard({
   productData,
@@ -364,7 +346,6 @@ export default function CheckoutCard({
         const discounts = storage.getJson<CartDiscountsMap>("cartDiscounts", {});
         discounts[productData.pubkey] = {
           code: discountCode,
-          percentage: appliedDiscount,
         };
         storage.setJson("cartDiscounts", discounts);
       }
