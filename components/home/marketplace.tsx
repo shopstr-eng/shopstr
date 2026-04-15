@@ -1,4 +1,7 @@
-import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
+import {
+  MagnifyingGlassIcon,
+  QuestionMarkCircleIcon,
+} from "@heroicons/react/24/outline";
 import {
   Button,
   Chip,
@@ -6,6 +9,7 @@ import {
   SelectItem,
   SelectSection,
   Input,
+  Tooltip,
   useDisclosure,
   Dropdown,
   DropdownTrigger,
@@ -406,9 +410,17 @@ function MarketplacePage({
               <Input
                 className="text-light-text dark:text-dark-text"
                 isClearable
-                placeholder="Title, summary, price, naddr1..., npub1..."
+                placeholder="Search by name, price, or seller"
                 value={selectedSearch}
                 startContent={<MagnifyingGlassIcon height={"1em"} />}
+                endContent={
+                  <Tooltip
+                    content="You can also search by Nostr identifier (naddr1… or npub1…)"
+                    placement="bottom"
+                  >
+                    <QuestionMarkCircleIcon className="h-4 w-4 cursor-default text-gray-400" />
+                  </Tooltip>
+                }
                 onChange={(event) => {
                   const value = event.target.value;
                   setSelectedSearch(value);
@@ -486,15 +498,23 @@ function MarketplacePage({
               <Input
                 className="text-light-text dark:text-dark-text mt-2"
                 isClearable
-                placeholder="Title, summary, price, naddr1..., npub1..."
+                placeholder="Search by name, price, or seller"
                 value={selectedSearch}
                 startContent={<MagnifyingGlassIcon height={"1em"} />}
+                endContent={
+                  <Tooltip
+                    content="You can also search by Nostr identifier (naddr1… or npub1…)"
+                    placement="bottom"
+                  >
+                    <QuestionMarkCircleIcon className="h-4 w-4 cursor-default text-gray-400" />
+                  </Tooltip>
+                }
                 onChange={(event) => {
                   const value = event.target.value;
                   setSelectedSearch(value);
                 }}
                 onClear={() => setSelectedSearch("")}
-              ></Input>
+              />
             </div>
             <div className="flex w-full flex-row gap-2 pb-3">
               <Select

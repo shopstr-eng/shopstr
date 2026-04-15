@@ -109,6 +109,16 @@ export const productSatisfiesSearchFilter = (
 };
 
 /**
+ * Checks if a product has a valid price (>= 1 in its currency).
+ * Products with a price below 1 are considered invalid and hidden.
+ * @param productData - The product to check.
+ * @returns boolean
+ */
+export const productSatisfiesPriceFilter = (productData: ProductData) => {
+  return Number(productData.price) >= 1;
+};
+
+/**
  * Orchestrates all individual filters for a product.
  */
 export const productSatisfiesAllFilters = (
@@ -120,6 +130,7 @@ export const productSatisfiesAllFilters = (
   }
 ) => {
   return (
+    productSatisfiesPriceFilter(productData) &&
     productSatisfiesCategoryFilter(productData, filters.selectedCategories) &&
     productSatisfiesLocationFilter(productData, filters.selectedLocation) &&
     productSatisfiesSearchFilter(productData, filters.selectedSearch)
