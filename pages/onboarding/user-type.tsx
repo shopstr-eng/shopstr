@@ -60,7 +60,7 @@ const UserTypeSelection = () => {
                 onClick={() => setSelectedType("buyer")}
                 className={`flex flex-1 flex-col items-center justify-center rounded-lg border-2 p-8 transition-all ${
                   selectedType === "buyer"
-                    ? "border-shopstr-purple bg-shopstr-yellow dark:border-shopstr-yellow dark:bg-shopstr-yellow"
+                    ? "bg-shopstr-yellow dark:border-shopstr-yellow dark:bg-shopstr-yellow-dark"
                     : "bg-light-fg hover:bg-light-bg dark:border-dark-fg dark:bg-dark-fg dark:hover:bg-dark-bg border-gray-300"
                 }`}
               >
@@ -77,7 +77,7 @@ const UserTypeSelection = () => {
                 onClick={() => setSelectedType("seller")}
                 className={`flex flex-1 flex-col items-center justify-center rounded-lg border-2 p-8 transition-all ${
                   selectedType === "seller"
-                    ? "border-shopstr-purple bg-shopstr-yellow dark:border-shopstr-yellow dark:bg-shopstr-yellow"
+                    ? "bg-shopstr-yellow dark:border-shopstr-yellow dark:bg-shopstr-yellow-dark"
                     : "bg-light-fg hover:bg-light-bg dark:border-dark-fg dark:bg-dark-fg dark:hover:bg-dark-bg border-gray-300"
                 }`}
               >
