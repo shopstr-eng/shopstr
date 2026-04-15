@@ -10,7 +10,6 @@ interface ImageCarouselProps {
   classname?: string;
   showThumbs?: boolean;
   fixedHeight?: boolean;
-  eager?: boolean;
 }
 
 export default function ImageCarousel({
@@ -18,7 +17,6 @@ export default function ImageCarousel({
   classname = "",
   showThumbs = false,
   fixedHeight = true,
-  eager = false,
 }: ImageCarouselProps) {
   const containerClass = `flex items-center justify-center ${classname}`;
 
@@ -34,14 +32,12 @@ export default function ImageCarousel({
             src="/no-image-placeholder.png"
             className={imageClass}
             alt="No product image available - dairy listing placeholder"
-            loading="lazy"
           />
         </div>,
       ];
     }
 
     return images.map((image, index) => {
-      const isFirst = index === 0;
       return (
         <div className={containerClass} key={`image-${index}`}>
           <Image
@@ -50,7 +46,6 @@ export default function ImageCarousel({
             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 384px"
             className={imageClass}
             alt={`Product image ${index + 1} - farm-fresh dairy listing`}
-            loading={isFirst && eager ? "eager" : "lazy"}
             radius="none"
             style={{
               width: "100%",

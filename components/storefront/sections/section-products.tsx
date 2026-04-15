@@ -117,6 +117,7 @@ function PreviewProductGridInline({
                   src={featuredProduct.images[0]}
                   alt={featuredProduct.title}
                   className="h-64 w-full object-cover md:h-full"
+                  fetchPriority="high"
                 />
               </div>
             )}
@@ -164,6 +165,7 @@ function PreviewProductGridInline({
                   src={product.images[0]}
                   alt={product.title}
                   className="h-24 w-24 flex-shrink-0 rounded-lg object-cover"
+                  loading="lazy"
                 />
               )}
               <div className="flex flex-1 flex-col justify-center">
@@ -193,6 +195,7 @@ function PreviewProductGridInline({
                     src={product.images[0]}
                     alt={product.title}
                     className="h-full w-full object-cover transition-transform hover:scale-105"
+                    loading="lazy"
                   />
                 </div>
               )}

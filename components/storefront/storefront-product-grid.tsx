@@ -54,6 +54,7 @@ export default function StorefrontProductGrid({
                   src={featuredProduct.images[0]}
                   alt={featuredProduct.title}
                   className="h-64 w-full object-cover md:h-full"
+                  fetchPriority="high"
                 />
               </div>
             )}
@@ -110,11 +111,7 @@ export default function StorefrontProductGrid({
           const href = `/listing/${slug}`;
           return (
             <div key={product.id || product.d}>
-              <ProductCard
-                productData={product}
-                href={href}
-                eagerImages={index < 6}
-              />
+              <ProductCard productData={product} href={href} />
             </div>
           );
         })}

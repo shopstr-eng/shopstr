@@ -443,6 +443,7 @@ export default function StorefrontLayout({
                   src={sanitizeUrl(pictureUrl)}
                   alt={shopName}
                   className="h-8 w-8 rounded-full object-cover"
+                  fetchPriority="high"
                 />
               )}
               <span
@@ -680,6 +681,7 @@ export default function StorefrontLayout({
                           src={sanitizeUrl(bannerUrl)}
                           alt={`${shopName} Banner`}
                           className="w-full object-contain"
+                          fetchPriority="high"
                         />
                       </div>
                     )}
@@ -694,6 +696,7 @@ export default function StorefrontLayout({
                             alt={shopName}
                             className="h-20 w-20 rounded-full border-4 object-cover"
                             style={{ borderColor: colors.primary }}
+                            fetchPriority="high"
                           />
                         )}
                         <div>
@@ -731,6 +734,7 @@ export default function StorefrontLayout({
                             src={sanitizeUrl(pictureUrl)}
                             alt={shopName}
                             className="h-14 w-14 rounded-full object-cover"
+                            fetchPriority="high"
                           />
                         )}
                         <div>

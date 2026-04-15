@@ -28,7 +28,6 @@ export default function ProductCard({
   productData,
   onProductClick,
   href,
-  eagerImages = false,
 }: {
   productData: ProductData;
   onProductClick?: (
@@ -36,7 +35,6 @@ export default function ProductCard({
     e?: React.MouseEvent<HTMLElement> | React.KeyboardEvent<HTMLElement>
   ) => void;
   href?: string | null;
-  eagerImages?: boolean;
 }) {
   const [showRawEventModal, setShowRawEventModal] = useState(false);
   const [showEventIdModal, setShowEventIdModal] = useState(false);
@@ -177,7 +175,6 @@ export default function ProductCard({
           images={productData.images}
           classname="w-full h-full object-cover"
           showThumbs={false}
-          eager={eagerImages}
         />
 
         {/* Title Overlay at Bottom of Image */}

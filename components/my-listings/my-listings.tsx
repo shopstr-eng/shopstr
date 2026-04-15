@@ -150,6 +150,7 @@ const MyListingsPage = () => {
                 src={sanitizeUrl(shopBannerURL)}
                 alt="Shop Banner"
                 className="max-h-[210px] w-full object-cover"
+                fetchPriority="high"
               />
             </div>
           </>

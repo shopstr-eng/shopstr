@@ -1,5 +1,3 @@
-/* eslint-disable @next/next/no-img-element */
-
 import HomeFeed from "@/components/home/home-feed";
 import { GetServerSideProps } from "next";
 import { OgMetaProps, DEFAULT_OG } from "@/components/og-head";

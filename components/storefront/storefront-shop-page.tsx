@@ -287,11 +287,7 @@ export default function StorefrontShopPage({
             const href = `/listing/${slug}`;
             return (
               <div key={product.id || product.d}>
-                <ProductCard
-                  productData={product}
-                  href={href}
-                  eagerImages={index < 6}
-                />
+                <ProductCard productData={product} href={href} />
               </div>
             );
           })}

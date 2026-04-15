@@ -309,7 +309,6 @@ const DisplayProducts = ({
                     productData={productData}
                     onProductClick={onProductClick}
                     href={getProductHref(productData)}
-                    eagerImages={index < 8}
                   />
                 )
               )}

@@ -124,6 +124,7 @@ export default function StorefrontFooterComponent({
                       src={SOCIAL_IMAGE_ICONS[social.platform]}
                       alt={social.label || social.platform}
                       className="h-5 w-5 object-contain"
+                      loading="lazy"
                     />
                   ) : (
                     SOCIAL_EMOJI_ICONS[social.platform] ||
