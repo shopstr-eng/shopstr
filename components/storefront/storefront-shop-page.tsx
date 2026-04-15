@@ -282,12 +282,16 @@ export default function StorefrontShopPage({
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {visibleProducts.map((product) => {
+          {visibleProducts.map((product, index) => {
             const slug = getListingSlug(product, products);
             const href = `/listing/${slug}`;
             return (
               <div key={product.id || product.d}>
-                <ProductCard productData={product} href={href} />
+                <ProductCard
+                  productData={product}
+                  href={href}
+                  eagerImages={index < 6}
+                />
               </div>
             );
           })}

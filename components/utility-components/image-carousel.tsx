@@ -10,6 +10,7 @@ interface ImageCarouselProps {
   classname?: string;
   showThumbs?: boolean;
   fixedHeight?: boolean;
+  eager?: boolean;
 }
 
 export default function ImageCarousel({
@@ -17,10 +18,10 @@ export default function ImageCarousel({
   classname = "",
   showThumbs = false,
   fixedHeight = true,
+  eager = false,
 }: ImageCarouselProps) {
   const containerClass = `flex items-center justify-center ${classname}`;
 
-  // Updated image class to use rounded-md for consistency
   const imageClass = fixedHeight
     ? "h-full w-full object-cover rounded-md transition-transform duration-300 ease-in-out hover:scale-105"
     : "w-full object-cover rounded-md";
@@ -39,23 +40,26 @@ export default function ImageCarousel({
       ];
     }
 
-    return images.map((image, index) => (
-      <div className={containerClass} key={`image-${index}`}>
-        <Image
-          src={image}
-          srcSet={buildSrcSet(image)}
-          className={imageClass}
-          alt={`Product image ${index + 1} - farm-fresh dairy listing`}
-          loading="lazy"
-          radius="none" // radius="none" is fine, imageClass controls it
-          style={{
-            width: "100%",
-            height: "100%",
-          }}
-          disableSkeleton={true}
-        />
-      </div>
-    ));
+    return images.map((image, index) => {
+      const isFirst = index === 0;
+      return (
+        <div className={containerClass} key={`image-${index}`}>
+          <Image
+            src={image}
+            srcSet={buildSrcSet(image)}
+            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 384px"
+            className={imageClass}
+            alt={`Product image ${index + 1} - farm-fresh dairy listing`}
+            loading={isFirst && eager ? "eager" : "lazy"}
+            radius="none"
+            style={{
+              width: "100%",
+              height: "100%",
+            }}
+          />
+        </div>
+      );
+    });
   };
 
   return (
