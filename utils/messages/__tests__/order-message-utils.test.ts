@@ -52,6 +52,25 @@ describe("order-message-utils", () => {
     expect(resolveExplicitPaymentMethod()).toBe("Not specified");
   });
 
+  test("resolveExplicitPaymentMethod handles stripe and card payments", () => {
+    expect(resolveExplicitPaymentMethod("stripe")).toBe("Card");
+    expect(resolveExplicitPaymentMethod("card")).toBe("Card");
+    expect(resolveExplicitPaymentMethod("nwc")).toBe("NWC");
+  });
+
+  test("resolveExplicitPaymentMethod handles fiat payment methods", () => {
+    expect(resolveExplicitPaymentMethod("venmo")).toBe("Venmo");
+    expect(resolveExplicitPaymentMethod("zelle")).toBe("Zelle");
+    expect(resolveExplicitPaymentMethod("cash")).toBe("Cash");
+    expect(resolveExplicitPaymentMethod("cashapp")).toBe("Cash App");
+    expect(resolveExplicitPaymentMethod("cash app")).toBe("Cash App");
+    expect(resolveExplicitPaymentMethod("paypal")).toBe("PayPal");
+    expect(resolveExplicitPaymentMethod("apple pay")).toBe("Apple Pay");
+    expect(resolveExplicitPaymentMethod("applepay")).toBe("Apple Pay");
+    expect(resolveExplicitPaymentMethod("google pay")).toBe("Google Pay");
+    expect(resolveExplicitPaymentMethod("googlepay")).toBe("Google Pay");
+  });
+
   test("resolveExplicitPaymentMethod title-cases unknown payment types", () => {
     expect(resolveExplicitPaymentMethod("bitcoin")).toBe("Bitcoin");
     expect(resolveExplicitPaymentMethod("monero")).toBe("Monero");

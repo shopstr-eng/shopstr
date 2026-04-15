@@ -352,7 +352,7 @@ export const ProfileWithDropdown = ({
                 className: "border-2 border-black",
               }}
               className={
-                "group cursor-pointer rounded-md px-1 py-0.5 transition-all duration-200 hover:bg-black/5 hover:shadow-sm dark:hover:bg-white/10"
+                "group cursor-pointer rounded-md px-1 py-0.5 transition-all duration-200 hover:bg-white/10 hover:shadow-sm"
               }
               classNames={{
                 name: `overflow-hidden text-ellipsis whitespace-nowrap ${

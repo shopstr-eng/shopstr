@@ -239,7 +239,9 @@ export default function ProductInvoiceCard({
           quantity: params.quantity,
         }),
       });
-    } catch (e) {}
+    } catch (e) {
+      console.error("Failed to send order email:", e);
+    }
   };
 
   const sendInquiryDM = async (sellerPubkey: string, productTitle: string) => {

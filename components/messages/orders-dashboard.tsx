@@ -445,6 +445,8 @@ const OrdersDashboard = () => {
             const paymentTag = paymentType || "";
             const paymentProof = paymentProofValue;
 
+            const orderCurrency = tagsMap.get("currency") || "";
+
             let productTitle = "Unknown Product";
             let isSale = false;
             let productCurrency = "sats";
@@ -471,6 +473,7 @@ const OrdersDashboard = () => {
                 productPrice = productData?.price || 0;
               }
             }
+            const resolvedCurrency = orderCurrency || productCurrency;
             const finalAmount = amount > 0 ? amount : productPrice * quantity;
 
             const paymentMethod = resolveExplicitPaymentMethod(paymentType);
@@ -500,7 +503,7 @@ const OrdersDashboard = () => {
               paymentProof,
               subject,
               isSale,
-              currency: productCurrency,
+              currency: resolvedCurrency,
               donationAmount,
               donationPercentage,
               sellerPubkey: merchantPubkey || undefined,

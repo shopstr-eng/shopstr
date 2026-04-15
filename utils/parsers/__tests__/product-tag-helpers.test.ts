@@ -53,6 +53,14 @@ describe("getEffectiveShippingCost", () => {
   it("returns the parsed cost for paid shipping", () => {
     expect(getEffectiveShippingCost("Added Cost", 15)).toBe(15);
   });
+
+  it("returns the cost for Added Cost/Pickup when cost is positive", () => {
+    expect(getEffectiveShippingCost("Added Cost/Pickup", 10)).toBe(10);
+  });
+
+  it("returns zero for Added Cost/Pickup when cost is zero (pickup selected)", () => {
+    expect(getEffectiveShippingCost("Added Cost/Pickup", 0)).toBe(0);
+  });
 });
 
 describe("parseShippingFromTags", () => {

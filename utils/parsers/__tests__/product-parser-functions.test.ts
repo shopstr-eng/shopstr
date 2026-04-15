@@ -253,27 +253,30 @@ describe("parseTags", () => {
 
     expect(result.contentWarning).toBeFalsy();
   });
-});
-it("should parse weight tags into weights array and prices map", () => {
-  const event = {
-    ...baseEvent,
-    tags: [
-      ["weight", "100g", "10"],
-      ["weight", "500g", "40"],
-    ],
-  };
-  const result = parseTags(event);
 
-  expect(result.weights).toEqual(["100g", "500g"]);
-  expect(result.weightPrices).toBeInstanceOf(Map);
-  expect(result.weightPrices.get("100g")).toBe(10);
-  expect(result.weightPrices.get("500g")).toBe(40);
-});
+  it("should parse weight tags into weights array and prices map", () => {
+    mockedCalculateTotalCost.mockImplementation(totalCostWithoutShipping);
+    const event = {
+      ...baseEvent,
+      tags: [
+        ["weight", "100g", "10"],
+        ["weight", "500g", "40"],
+      ],
+    };
+    const result = parseTags(event)!;
 
-it("should handle a weight tag without a price", () => {
-  const event = { ...baseEvent, tags: [["weight", "100g"]] };
-  const result = parseTags(event);
+    expect(result.weights).toEqual(["100g", "500g"]);
+    expect(result.weightPrices).toBeInstanceOf(Map);
+    expect(result.weightPrices!.get("100g")).toBe(10);
+    expect(result.weightPrices!.get("500g")).toBe(40);
+  });
 
-  expect(result.weights).toEqual(["100g"]);
-  expect(result.weightPrices.get("100g")).toBeUndefined();
+  it("should handle a weight tag without a price", () => {
+    mockedCalculateTotalCost.mockImplementation(totalCostWithoutShipping);
+    const event = { ...baseEvent, tags: [["weight", "100g"]] };
+    const result = parseTags(event)!;
+
+    expect(result.weights).toEqual(["100g"]);
+    expect(result.weightPrices!.get("100g")).toBeUndefined();
+  });
 });

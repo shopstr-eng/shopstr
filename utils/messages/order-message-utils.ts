@@ -108,14 +108,33 @@ export const registerTaggedOrderGroupingKey = (
 export const resolveExplicitPaymentMethod = (paymentTag?: string) => {
   if (!paymentTag) return "Not specified";
 
-  switch (paymentTag.toLowerCase()) {
-    case "ecash":
-      return "Cashu";
-    case "lightning":
-      return "Lightning";
-    default:
-      return paymentTag.charAt(0).toUpperCase() + paymentTag.slice(1);
+  const PAYMENT_DISPLAY_NAMES: Record<string, string> = {
+    ecash: "Cashu",
+    lightning: "Lightning",
+    stripe: "Card",
+    card: "Card",
+    nwc: "NWC",
+    cashapp: "Cash App",
+    "cash app": "Cash App",
+    paypal: "PayPal",
+    "apple pay": "Apple Pay",
+    applepay: "Apple Pay",
+    "google pay": "Google Pay",
+    googlepay: "Google Pay",
+    venmo: "Venmo",
+    zelle: "Zelle",
+    cash: "Cash",
+  };
+
+  const normalized = paymentTag.toLowerCase().trim();
+  if (PAYMENT_DISPLAY_NAMES[normalized]) {
+    return PAYMENT_DISPLAY_NAMES[normalized];
   }
+
+  return paymentTag
+    .split(/[\s_-]+/)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
 };
 
 export type ShippingInfo = {

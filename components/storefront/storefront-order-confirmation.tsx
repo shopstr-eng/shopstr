@@ -8,6 +8,7 @@ import {
   ArrowPathIcon,
 } from "@heroicons/react/24/outline";
 import { StorefrontColorScheme } from "@/utils/types/types";
+import { resolveExplicitPaymentMethod } from "@/utils/messages/order-message-utils";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import { ProductContext } from "@/utils/context/context";
 import parseTags, {
@@ -111,15 +112,14 @@ export default function StorefrontOrderConfirmation({
   }, [productContext.productEvents, shopPubkey]);
 
   const formatPaymentMethod = (method: string) => {
-    const methods: Record<string, string> = {
-      lightning: "Lightning Network",
-      cashu: "Cashu eCash",
-      nwc: "Nostr Wallet Connect",
-      stripe: "Credit Card (Stripe)",
-      cash: "Cash",
-      fiat: "Fiat Payment",
+    const resolved = resolveExplicitPaymentMethod(method);
+    const summaryLabels: Record<string, string> = {
+      Lightning: "Lightning Network",
+      Cashu: "Cashu eCash",
+      NWC: "Nostr Wallet Connect",
+      Card: "Credit Card (Stripe)",
     };
-    return methods[method] || method;
+    return summaryLabels[resolved] || resolved;
   };
 
   const getProductHref = (product: ProductData) => {
@@ -380,7 +380,7 @@ export default function StorefrontOrderConfirmation({
                             </span>
                           )}
                           <span style={{ color: colors.text }}>
-                            $0.00 (Free Shipping)
+                            0 {orderData.currency} (Free Shipping)
                           </span>
                           <span
                             className="rounded-full px-2 py-0.5 text-xs font-semibold"
@@ -437,7 +437,7 @@ export default function StorefrontOrderConfirmation({
                           </span>
                         )}
                         <span style={{ color: colors.text }}>
-                          $0.00 (Free Shipping)
+                          0 {orderData.currency} (Free Shipping)
                         </span>
                         <span
                           className="rounded-full px-2 py-0.5 text-xs font-semibold"

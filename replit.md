@@ -37,6 +37,18 @@ Preferred communication style: Simple, everyday language.
 - **Relay Management**: Multi-relay support with configurable lists (NIP-65).
 - **Event Caching**: Local caching of Nostr events.
 
+## Order Message Handling & Payment Tags
+
+- **Payment Method Resolution**: `resolveExplicitPaymentMethod()` in `utils/messages/order-message-utils.ts` maps raw payment tags from order messages to human-readable display names (e.g., "stripe" → "Card", "nwc" → "NWC", "cash app" → "Cash App", "paypal" → "PayPal", "apple pay" → "Apple Pay", "google pay" → "Google Pay"). Used in both the orders dashboard and email notifications. Unknown payment types get title-cased with word-boundary splitting.
+- **Order Currency Resolution**: Orders dashboard (`components/messages/orders-dashboard.tsx`) reads the `["currency", ...]` tag from order messages when available, falling back to the product listing's currency. This ensures correct currency display even when the product is deleted or the order was paid in a different currency.
+- **Shipping Tag Parsing**: `parseShippingTag()` and `parseShippingFromTags()` in `utils/parsers/product-tag-helpers.ts` enforce strict 4-element format `["shipping", type, cost, currency]` validated against `SHIPPING_OPTIONS` allowlist. `getEffectiveShippingCost()` returns 0 for zero-cost types (Free, Free/Pickup, Pickup, N/A) and handles "Added Cost/Pickup" with zero cost (pickup selected).
+- **Order Grouping**: `buildOrderGroupingKey()` groups related order messages using product reference + amount + fulfillment target (address or pickup location). `getOrderConsolidationKey()` and `registerTaggedOrderGroupingKey()` handle deduplication across explicit order tags and computed grouping keys.
+- **Email Payment Method Formatting**: The `/api/email/send-order-email` endpoint uses `resolveExplicitPaymentMethod()` to normalize raw payment type strings before sending to email templates, ensuring consistent branded names (e.g., "PayPal" not "paypal") in both buyer and seller notification emails.
+- **Order Subject Routing**: `messages.tsx` filters order-related messages for the Orders chat tab using subjects: `order-payment`, `order-info`, `payment-change`, `order-receipt`, `shipping-info`, `order-completed`, `zapsnag-order`, `address-change`. The `chat-panel.tsx` sends `order-completed` when a seller marks an order delivered.
+- **ZapsnagButton Order Tags**: `ZapsnagButton.tsx` sends full order metadata (productData, orderAmount, orderCurrency, paymentType, paymentReference, status) to `constructGiftWrappedEvent`, ensuring zapsnag orders display properly in the orders dashboard with product name, amount, and payment info.
+- **MCP Order Emails**: `pages/api/mcp/create-order.ts` `sendOrderEmail()` passes full order metadata (shippingAddress, selectedSize, selectedVolume, selectedWeight, selectedBulkOption, productId, quantity) to the email API, ensuring MCP-created orders produce complete seller/buyer notification emails with variant and shipping details.
+- **Order Summary Payment Display**: Both `pages/order-summary/index.tsx` and `components/storefront/storefront-order-confirmation.tsx` use `resolveExplicitPaymentMethod()` as the canonical source for payment method names, with additional descriptive labels for the summary context (e.g., "Lightning" → "Lightning Network", "Card" → "Credit Card (Stripe)"). Free shipping displays use the order's actual currency instead of hardcoded "$".
+
 ## Payment Systems
 
 - **Lightning Network**: Direct invoice generation and payment verification.

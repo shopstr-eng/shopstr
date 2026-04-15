@@ -184,7 +184,9 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
               subject === "payment-change" ||
               subject === "order-receipt" ||
               subject === "shipping-info" ||
-              subject === "zapsnag-order")) ||
+              subject === "order-completed" ||
+              subject === "zapsnag-order" ||
+              subject === "address-change")) ||
           (!isPayment && subject && subject === "listing-inquiry")
         ) {
           if (plainText) {

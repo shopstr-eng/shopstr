@@ -1796,7 +1796,7 @@ export const saveNWCString = (nwcString: string) => {
 };
 
 export const getLocalUserProfileKey = (pubkey: string) =>
-  `shopstr:user-profile:${pubkey}`;
+  `milk-market:user-profile:${pubkey}`;
 
 export interface LocalProfileFallback {
   content: Record<string, unknown>;

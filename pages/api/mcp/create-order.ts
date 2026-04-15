@@ -368,6 +368,17 @@ async function handleCreateOrder(
       ? `size:${selectedSize}`
       : "_default";
 
+    const emailOptions = {
+      shippingAddress: shippingAddress
+        ? Object.values(shippingAddress).filter(Boolean).join(", ")
+        : null,
+      selectedSize,
+      selectedVolume,
+      selectedWeight,
+      selectedBulkUnits,
+      quantity: effectiveQuantity,
+    };
+
     if (paymentMethod === "lightning") {
       return handleLightningPayment(
         res,
@@ -383,7 +394,8 @@ async function handleCreateOrder(
         shippingAddress || null,
         pricingBlock,
         mintUrl,
-        inventoryVariantKey
+        inventoryVariantKey,
+        emailOptions
       );
     }
 
@@ -402,7 +414,8 @@ async function handleCreateOrder(
         shippingAddress || null,
         pricingBlock,
         cashuToken,
-        inventoryVariantKey
+        inventoryVariantKey,
+        emailOptions
       );
     }
 
@@ -422,7 +435,8 @@ async function handleCreateOrder(
         pricingBlock,
         sellerProfile,
         fiatMethod,
-        inventoryVariantKey
+        inventoryVariantKey,
+        emailOptions
       );
     }
 
@@ -439,7 +453,8 @@ async function handleCreateOrder(
       buyerEmail || null,
       shippingAddress || null,
       pricingBlock,
-      inventoryVariantKey
+      inventoryVariantKey,
+      emailOptions
     );
   } catch (error) {
     console.error("Failed to create MCP order:", error);
@@ -464,7 +479,8 @@ async function handleLightningPayment(
   shippingAddress: Record<string, string> | null,
   pricingBlock: any,
   mintUrl?: string,
-  inventoryVariantKey?: string
+  inventoryVariantKey?: string,
+  emailOptions?: Record<string, any>
 ) {
   const mint = mintUrl || DEFAULT_MINT_URL;
 
@@ -514,7 +530,8 @@ async function handleLightningPayment(
       orderId,
       totalAmount,
       currency,
-      "lightning"
+      "lightning",
+      emailOptions
     );
 
     return res.status(402).json({
@@ -562,7 +579,8 @@ async function handleCashuPayment(
   shippingAddress: Record<string, string> | null,
   pricingBlock: any,
   cashuToken?: string,
-  inventoryVariantKey?: string
+  inventoryVariantKey?: string,
+  emailOptions?: Record<string, any>
 ) {
   if (!cashuToken) {
     return res.status(400).json({
@@ -660,7 +678,8 @@ async function handleCashuPayment(
       orderId,
       totalAmount,
       currency,
-      "cashu"
+      "cashu",
+      emailOptions
     );
 
     return res.status(201).json({
@@ -701,7 +720,8 @@ async function handleFiatPayment(
   pricingBlock: any,
   sellerProfile: any,
   fiatMethod?: string,
-  inventoryVariantKey?: string
+  inventoryVariantKey?: string,
+  emailOptions?: Record<string, any>
 ) {
   const fiatOptions = sellerProfile?.fiat_options || [];
   if (fiatOptions.length === 0) {
@@ -757,7 +777,8 @@ async function handleFiatPayment(
     orderId,
     totalAmount,
     currency,
-    fiatMethod || "fiat"
+    fiatMethod || "fiat",
+    emailOptions
   );
 
   return res.status(402).json({
@@ -802,7 +823,8 @@ async function handleStripePayment(
   buyerEmail: string | null,
   shippingAddress: Record<string, string> | null,
   pricingBlock: any,
-  inventoryVariantKey?: string
+  inventoryVariantKey?: string,
+  emailOptions?: Record<string, any>
 ) {
   let paymentIntentId: string | null = null;
   let clientSecret: string | null = null;
@@ -901,7 +923,8 @@ async function handleStripePayment(
     orderId,
     totalAmount,
     currency,
-    "stripe"
+    "stripe",
+    emailOptions
   );
 
   if (paymentIntentId && clientSecret) {
@@ -952,7 +975,15 @@ async function sendOrderEmail(
   orderId: string,
   totalAmount: number,
   currency: string,
-  paymentMethod: string
+  paymentMethod: string,
+  options?: {
+    shippingAddress?: string | null;
+    selectedSize?: string;
+    selectedVolume?: string;
+    selectedWeight?: string;
+    selectedBulkUnits?: number;
+    quantity?: number;
+  }
 ) {
   if (!buyerEmail) return;
   try {
@@ -970,6 +1001,15 @@ async function sendOrderEmail(
           amount: totalAmount,
           currency,
           paymentMethod,
+          shippingAddress: options?.shippingAddress || undefined,
+          selectedSize: options?.selectedSize || undefined,
+          selectedVolume: options?.selectedVolume || undefined,
+          selectedWeight: options?.selectedWeight || undefined,
+          selectedBulkOption: options?.selectedBulkUnits
+            ? String(options.selectedBulkUnits)
+            : undefined,
+          productId: product.id,
+          quantity: options?.quantity || 1,
         }),
       });
     }

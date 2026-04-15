@@ -14,6 +14,7 @@ import {
   getDbPool,
 } from "@/utils/db/db-service";
 import { deductStock } from "@/utils/db/inventory-service";
+import { resolveExplicitPaymentMethod } from "@/utils/messages/order-message-utils";
 
 export default async function handler(
   req: NextApiRequest,
@@ -56,7 +57,7 @@ export default async function handler(
     productTitle,
     amount: amount || "N/A",
     currency: currency || "sats",
-    paymentMethod: paymentMethod || "N/A",
+    paymentMethod: resolveExplicitPaymentMethod(paymentMethod) || "N/A",
     buyerName,
     shippingAddress,
     buyerContact,

@@ -83,6 +83,10 @@ export function getEffectiveShippingCost(
     return 0;
   }
 
+  if (shippingType === "Added Cost/Pickup" && shippingCost === 0) {
+    return 0;
+  }
+
   if (
     typeof shippingCost !== "number" ||
     !Number.isFinite(shippingCost) ||

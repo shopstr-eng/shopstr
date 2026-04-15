@@ -175,6 +175,12 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
           isOrder: true,
           orderId: orderId,
           buyerPubkey: userPubkey,
+          productData: product,
+          orderAmount: product.price,
+          orderCurrency: product.currency || "sats",
+          paymentType: "lightning",
+          paymentReference: lud16,
+          status: "pending",
         }
       );
 

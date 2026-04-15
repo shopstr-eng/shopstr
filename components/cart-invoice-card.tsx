@@ -350,7 +350,9 @@ export default function CartInvoiceCard({
           quantity: params.quantity,
         }),
       });
-    } catch (e) {}
+    } catch (e) {
+      console.error("Failed to send order email:", e);
+    }
   };
 
   useEffect(() => {
@@ -1664,6 +1666,8 @@ export default function CartInvoiceCard({
             sellerPubkey,
             buyerName: paymentData.shippingName || undefined,
             shippingAddress: emailAddressTag,
+            buyerContact:
+              paymentData.contactEmail || paymentData.contactPhone || undefined,
             pickupLocation: sellerPickupSummary || undefined,
             subscriptionFrequency: sellerSubFrequency,
           };
@@ -2722,6 +2726,10 @@ export default function CartInvoiceCard({
             .map((p: any) => p.title || p.productName)
             .join(", ");
           const breakdown = getSellerCostBreakdown(sellerPubkey);
+          const sellerPickupSummary = sellerProducts
+            .map((p: any) => selectedPickupLocations[p.id])
+            .filter(Boolean)
+            .join(", ");
           return {
             orderId,
             productTitle: sellerProductTitles,
@@ -2734,6 +2742,8 @@ export default function CartInvoiceCard({
             sellerPubkey,
             buyerName: data.shippingName || undefined,
             shippingAddress: emailAddressTag,
+            buyerContact: data.contactEmail || data.contactPhone || undefined,
+            pickupLocation: sellerPickupSummary || undefined,
           };
         });
       } else {
@@ -2751,6 +2761,11 @@ export default function CartInvoiceCard({
             sellerPubkey,
             buyerName: data.shippingName || undefined,
             shippingAddress: emailAddressTag,
+            buyerContact: data.contactEmail || data.contactPhone || undefined,
+            pickupLocation:
+              Object.values(selectedPickupLocations)
+                .filter(Boolean)
+                .join(", ") || undefined,
           },
         ];
       }

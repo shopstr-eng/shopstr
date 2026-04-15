@@ -269,12 +269,12 @@ const ChatPanel = ({
           updateType: "status",
           message:
             "Your order has been marked as completed." +
-            (shippingInfo.tracking
+            (shippingInfo?.tracking
               ? ` Tracking: ${shippingInfo.tracking}`
               : "") +
-            (shippingInfo.carrier ? ` Carrier: ${shippingInfo.carrier}` : ""),
-          trackingNumber: shippingInfo.tracking || undefined,
-          carrier: shippingInfo.carrier || undefined,
+            (shippingInfo?.carrier ? ` Carrier: ${shippingInfo.carrier}` : ""),
+          trackingNumber: shippingInfo?.tracking || undefined,
+          carrier: shippingInfo?.carrier || undefined,
         }),
       }).catch(() => {});
     } catch (error) {
