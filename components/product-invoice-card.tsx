@@ -1825,7 +1825,8 @@ export default function ProductInvoiceCard({
                 />
               ) : (
                 <p className="text-sm text-gray-500 dark:text-gray-400">
-                  No saved addresses yet. Fill in the form below to create one.
+                  No saved addresses yet. You can continue with the form below
+                  for this order, or add one from Preferences to reuse later.
                 </p>
               )}
             </div>
