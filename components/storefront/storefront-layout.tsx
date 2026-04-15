@@ -42,6 +42,7 @@ import StorefrontWallet from "./storefront-wallet";
 import StorefrontMyListings from "./storefront-my-listings";
 import StorefrontOrderConfirmation from "./storefront-order-confirmation";
 import StorefrontPolicyPage from "./storefront-policy-page";
+import { storage, STORAGE_KEYS } from "@/utils/storage";
 
 const DEFAULT_COLORS: StorefrontColorScheme = {
   primary: "#a438ba",
@@ -156,23 +157,22 @@ export default function StorefrontLayout({
 
   useEffect(() => {
     if (shopPubkey) {
-      sessionStorage.setItem("sf_seller_pubkey", shopPubkey);
-      localStorage.setItem("sf_seller_pubkey", shopPubkey);
+      storage.setSessionItem(STORAGE_KEYS.SF_SELLER_PUBKEY, shopPubkey);
+      storage.setItem(STORAGE_KEYS.SF_SELLER_PUBKEY, shopPubkey);
     }
     if (shopSlug) {
-      sessionStorage.setItem("sf_shop_slug", shopSlug);
-      localStorage.setItem("sf_shop_slug", shopSlug);
+      storage.setSessionItem(STORAGE_KEYS.SF_SHOP_SLUG, shopSlug);
+      storage.setItem(STORAGE_KEYS.SF_SHOP_SLUG, shopSlug);
     }
   }, [shopPubkey, shopSlug]);
 
   useEffect(() => {
     const sync = () => {
-      const cart = localStorage.getItem("cart");
-      if (!cart) {
+      const items = storage.getJson<any[]>(STORAGE_KEYS.CART, []);
+      if (items.length === 0) {
         setCartQuantity(0);
         return;
       }
-      const items = JSON.parse(cart) as { pubkey?: string }[];
       setCartQuantity(
         shopPubkey
           ? items.filter((p) => p.pubkey === shopPubkey).length

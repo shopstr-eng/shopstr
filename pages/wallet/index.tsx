@@ -8,6 +8,7 @@ import PayButton from "../../components/wallet/pay-button";
 import Transactions from "../../components/wallet/transactions";
 import { CashuMint, CashuWallet, MintKeyset, Proof } from "@cashu/cashu-ts";
 import ProtectedRoute from "@/components/utility-components/protected-route";
+import { storage, STORAGE_KEYS } from "@/utils/storage";
 
 const Wallet = () => {
   const [totalBalance, setTotalBalance] = useState(0);
@@ -17,8 +18,8 @@ const Wallet = () => {
   const [mintKeySetIds, setMintKeySetIds] = useState<MintKeyset[]>([]);
   const router = useRouter();
 
-  const localStorageData = useMemo(() => getLocalStorageData(), []);
-  const { mints, tokens } = localStorageData;
+  const mints = useMemo(() => storage.getJson<string[]>(STORAGE_KEYS.MINTS, []), []);
+  const tokens = useMemo(() => storage.getJson<any[]>(STORAGE_KEYS.TOKENS, []), []);
 
   useEffect(() => {
     const currentMint = new CashuMint(mints[0]!);
@@ -66,7 +67,7 @@ const Wallet = () => {
 
   useEffect(() => {
     const interval = setInterval(() => {
-      const { tokens: newTokens } = getLocalStorageData();
+      const newTokens = storage.getJson<any[]>(STORAGE_KEYS.TOKENS, []);
       if (newTokens) {
         const tokensTotal =
           newTokens.length >= 1

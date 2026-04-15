@@ -37,9 +37,9 @@ import {
   constructMessageGiftWrap,
   sendGiftWrappedMessageEvent,
   generateKeys,
-  getLocalStorageData,
   publishProofEvent,
 } from "@/utils/nostr/nostr-helper-functions";
+import { storage, STORAGE_KEYS } from "@/utils/storage";
 import { LightningAddress } from "@getalby/lightning-tools";
 import QRCode from "qrcode";
 import { v4 as uuidv4 } from "uuid";
@@ -92,7 +92,8 @@ export default function CartInvoiceCard({
   setCashuPaymentSent?: (cashuPaymentSent: boolean) => void;
   setCashuPaymentFailed?: (cashuPaymentFailed: boolean) => void;
 }) {
-  const { mints, tokens, history } = getLocalStorageData();
+  const mints = storage.getJson<string[]>(STORAGE_KEYS.MINTS, []);
+  const tokens = storage.getJson<any[]>(STORAGE_KEYS.TOKENS, []);
   const {
     isLoggedIn,
     pubkey: userPubkey,
@@ -166,9 +167,9 @@ export default function CartInvoiceCard({
             }
           });
         }
-        sessionStorage.setItem(
-          "orderSummary",
-          JSON.stringify({
+        storage.setSessionJson(
+          STORAGE_KEYS.ORDER_SUMMARY,
+          {
             productTitle: pendingOrderRef.current.productTitle,
             productImage: products[0]?.images?.[0] || "",
             amount: String(totalCost),
@@ -184,7 +185,7 @@ export default function CartInvoiceCard({
             originalShippingCost: anyFreeShipping
               ? String(originalShipping)
               : undefined,
-          })
+          }
         );
       } catch {}
 
@@ -420,7 +421,7 @@ export default function CartInvoiceCard({
   // Load NWC info and check cart for NWC compatibility
   useEffect(() => {
     const loadNwcInfo = () => {
-      const { nwcInfo: infoString } = getLocalStorageData();
+      const infoString = storage.getItem(STORAGE_KEYS.NWC_INFO);
       if (infoString) {
         try {
           const info = JSON.parse(infoString);

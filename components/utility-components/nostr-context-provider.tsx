@@ -20,6 +20,7 @@ import { NostrNIP46Signer } from "@/utils/nostr/signers/nostr-nip46-signer";
 import { NostrNSecSigner } from "@/utils/nostr/signers/nostr-nsec-signer";
 import { needsMigration } from "@/utils/nostr/encryption-migration";
 import MigrationPromptModal from "./migration-prompt-modal";
+import { storage, STORAGE_KEYS } from "@/utils/storage";
 
 interface SignerContextInterface {
   signer?: NostrSigner;
@@ -206,12 +207,12 @@ export function SignerContextProvider({ children }: { children: ReactNode }) {
     setSigner(signerObject);
     loadKeys(signerObject);
 
-    const isAlreadyLoaded = localStorage.getItem("signer");
+    const isAlreadyLoaded = storage.getItem(STORAGE_KEYS.SIGNER);
     if (
       !isAlreadyLoaded ||
       JSON.stringify(existingSigner) !== isAlreadyLoaded
     ) {
-      localStorage.setItem("signer", JSON.stringify(existingSigner));
+      storage.setJson(STORAGE_KEYS.SIGNER, existingSigner);
 
       const shouldReloadSigner = false;
       window.dispatchEvent(

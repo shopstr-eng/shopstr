@@ -31,7 +31,7 @@ import { ShopMapContext, ProfileMapContext } from "@/utils/context/context";
 import { nip19 } from "nostr-tools";
 import StorefrontThemeWrapper from "@/components/storefront/storefront-theme-wrapper";
 import ProtectedRoute from "@/components/utility-components/protected-route";
-import { getLocalStorageJson } from "@/utils/safe-json";
+import { storage, STORAGE_KEYS } from "@/utils/storage";
 
 interface QuantitySelectorProps {
   value: number;
@@ -201,26 +201,16 @@ export default function Component() {
   const router = useRouter();
 
   useEffect(() => {
-    const stored =
-      sessionStorage.getItem("sf_seller_pubkey") ||
-      localStorage.getItem("sf_seller_pubkey");
+    const stored = storage.getSessionItem(STORAGE_KEYS.SF_SELLER_PUBKEY) || storage.getItem(STORAGE_KEYS.SF_SELLER_PUBKEY);
     if (stored) setSfSellerPubkey(stored);
-    const storedSlug =
-      sessionStorage.getItem("sf_shop_slug") ||
-      localStorage.getItem("sf_shop_slug");
+    const storedSlug = storage.getSessionItem(STORAGE_KEYS.SF_SHOP_SLUG) || storage.getItem(STORAGE_KEYS.SF_SHOP_SLUG);
     if (storedSlug) setSfShopSlug(storedSlug);
   }, []);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const sfPk =
-        sessionStorage.getItem("sf_seller_pubkey") ||
-        localStorage.getItem("sf_seller_pubkey") ||
-        "";
-      const fullCart = getLocalStorageJson<ProductData[]>("cart", [], {
-        removeOnError: true,
-        validate: Array.isArray,
-      });
+    const sfPk = storage.getSessionItem(STORAGE_KEYS.SF_SELLER_PUBKEY) || storage.getItem(STORAGE_KEYS.SF_SELLER_PUBKEY) || "";
+    const fullCart = storage.getJson<ProductData[]>(STORAGE_KEYS.CART, []);
 
       let cartList = fullCart;
       if (sfPk) {
@@ -242,15 +232,7 @@ export default function Component() {
       }
 
       // Load saved discount codes
-      const discounts = getLocalStorageJson<CartDiscountsMap>(
-        "cartDiscounts",
-        {},
-        {
-          removeOnError: true,
-          removeOnValidationError: true,
-          validate: isCartDiscountsMap,
-        }
-      );
+      const discounts = storage.getJson<CartDiscountsMap>(STORAGE_KEYS.CART_DISCOUNTS, {});
       if (Object.keys(discounts).length > 0) {
         const codes: { [pubkey: string]: string } = {};
         const applied: { [pubkey: string]: number } = {};
@@ -361,16 +343,13 @@ export default function Component() {
   };
 
   const handleRemoveFromCart = (productId: string) => {
-    const cartContent = getLocalStorageJson<ProductData[]>("cart", [], {
-      removeOnError: true,
-      validate: Array.isArray,
-    });
+    const cartContent = storage.getJson<ProductData[]>(STORAGE_KEYS.CART, []);
     if (cartContent.length > 0) {
       const updatedCart = cartContent.filter(
         (obj: ProductData) => obj.id !== productId
       );
       setProducts(updatedCart);
-      localStorage.setItem("cart", JSON.stringify(updatedCart));
+      storage.setJson(STORAGE_KEYS.CART, updatedCart);
     }
   };
 
@@ -408,21 +387,13 @@ export default function Component() {
         });
         setDiscountErrors({ ...discountErrors, [pubkey]: "" });
 
-        // Save to localStorage
-        const discounts = getLocalStorageJson<CartDiscountsMap>(
-          "cartDiscounts",
-          {},
-          {
-            removeOnError: true,
-            removeOnValidationError: true,
-            validate: isCartDiscountsMap,
-          }
-        );
+        // Save to storage
+        const discounts = storage.getJson<CartDiscountsMap>(STORAGE_KEYS.CART_DISCOUNTS, {});
         discounts[pubkey] = {
           code: code,
           percentage: result.discount_percentage,
         };
-        localStorage.setItem("cartDiscounts", JSON.stringify(discounts));
+        storage.setJson(STORAGE_KEYS.CART_DISCOUNTS, discounts);
       } else {
         setDiscountErrors({
           ...discountErrors,
@@ -445,19 +416,11 @@ export default function Component() {
     setAppliedDiscounts({ ...appliedDiscounts, [pubkey]: 0 });
     setDiscountErrors({ ...discountErrors, [pubkey]: "" });
 
-    // Remove from localStorage
-    const discounts = getLocalStorageJson<CartDiscountsMap>(
-      "cartDiscounts",
-      {},
-      {
-        removeOnError: true,
-        removeOnValidationError: true,
-        validate: isCartDiscountsMap,
-      }
-    );
+    // Remove from storage
+    const discounts = storage.getJson<CartDiscountsMap>(STORAGE_KEYS.CART_DISCOUNTS, {});
     if (Object.keys(discounts).length > 0) {
       delete discounts[pubkey];
-      localStorage.setItem("cartDiscounts", JSON.stringify(discounts));
+      storage.setJson(STORAGE_KEYS.CART_DISCOUNTS, discounts);
     }
   };
 
