@@ -46,24 +46,9 @@ import BulkSelector from "./bulk-selector";
 import ZapsnagButton from "@/components/ZapsnagButton";
 import { RawEventModal, EventIdModal } from "./modals/event-modals";
 import { getLocalStorageJson } from "@/utils/safe-json";
+import { CartDiscountsMap, isCartDiscountsMap } from "@/utils/cart-discounts";
 
 const SUMMARY_CHARACTER_LIMIT = 100;
-type CartDiscountsMap = Record<string, { code: string }>;
-
-const isCartDiscountsMap = (value: unknown): value is CartDiscountsMap => {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return false;
-  }
-
-  return Object.values(value).every((entry) => {
-    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
-      return false;
-    }
-
-    const candidate = entry as { code?: unknown };
-    return typeof candidate.code === "string";
-  });
-};
 
 export default function CheckoutCard({
   productData,
