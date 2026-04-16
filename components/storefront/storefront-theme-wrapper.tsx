@@ -18,6 +18,7 @@ import {
 } from "@/utils/types/types";
 import StorefrontFooterComponent from "./storefront-footer";
 import { getNavTextColor } from "@/utils/storefront-colors";
+import { storage, STORAGE_KEYS } from "@/utils/storage";
 
 const DEFAULT_COLORS: StorefrontColorScheme = {
   primary: "#a438ba",
@@ -79,18 +80,18 @@ export default function StorefrontThemeWrapper({
 
   useEffect(() => {
     if (sellerPubkey) {
-      sessionStorage.setItem("sf_seller_pubkey", sellerPubkey);
-      localStorage.setItem("sf_seller_pubkey", sellerPubkey);
+      storage.setSessionItem(STORAGE_KEYS.SF_SELLER_PUBKEY, sellerPubkey);
+      storage.setItem(STORAGE_KEYS.SF_SELLER_PUBKEY, sellerPubkey);
     }
     if (storefront?.shopSlug) {
-      sessionStorage.setItem("sf_shop_slug", storefront.shopSlug);
-      localStorage.setItem("sf_shop_slug", storefront.shopSlug);
+      storage.setSessionItem(STORAGE_KEYS.SF_SHOP_SLUG, storefront.shopSlug);
+      storage.setItem(STORAGE_KEYS.SF_SHOP_SLUG, storefront.shopSlug);
     }
   }, [sellerPubkey, storefront?.shopSlug]);
 
   useEffect(() => {
     const sync = () => {
-      const cart = localStorage.getItem("cart");
+      const cart = storage.getItem(STORAGE_KEYS.CART);
       if (!cart) {
         setCartQuantity(0);
         return;

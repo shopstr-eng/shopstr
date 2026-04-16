@@ -26,6 +26,7 @@ import {
   sendGiftWrappedMessageEvent,
 } from "@/utils/nostr/nostr-helper-functions";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import { storage, STORAGE_KEYS } from "@/utils/storage";
 import { LightningAddress } from "@getalby/lightning-tools";
 import { nip19 } from "nostr-tools";
 import {
@@ -200,10 +201,10 @@ export default function ClaimButton({ token }: { token: string }) {
           tokenAmount.toString()
         );
         const tokenArray = [...tokens, ...uniqueProofs];
-        localStorage.setItem("tokens", JSON.stringify(tokenArray));
+        storage.setJson(STORAGE_KEYS.TOKENS, tokenArray);
         if (!mints.includes(tokenMint)) {
           const updatedMints = [...mints, tokenMint];
-          localStorage.setItem("mints", JSON.stringify(updatedMints));
+          storage.setJson(STORAGE_KEYS.MINTS, updatedMints);
           await publishWalletEvent(nostr!, signer!);
         }
         if (isInvalid) {
@@ -212,17 +213,14 @@ export default function ClaimButton({ token }: { token: string }) {
           setIsReceived(true);
         }
         setIsRedeeming(false);
-        localStorage.setItem(
-          "history",
-          JSON.stringify([
-            {
-              type: 1,
-              amount: tokenAmount,
-              date: Math.floor(Date.now() / 1000),
-            },
-            ...history,
-          ])
-        );
+        storage.setJson(STORAGE_KEYS.HISTORY, [
+          {
+            type: 1,
+            amount: tokenAmount,
+            date: Math.floor(Date.now() / 1000),
+          },
+          ...history,
+        ]);
       } else {
         setIsSpent(true);
         setIsRedeeming(false);

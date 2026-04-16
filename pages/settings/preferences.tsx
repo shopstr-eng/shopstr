@@ -968,10 +968,10 @@ const PreferencesPage = () => {
               label="Select your prefered theme:"
               orientation={"horizontal"}
               defaultValue={
-                (localStorage.getItem("theme") as string) || theme || "system"
+                (storage.getItem(STORAGE_KEYS.THEME) as string) || theme || "system"
               }
               onChange={(e) => {
-                localStorage.setItem("theme", e.target.value);
+                storage.setItem(STORAGE_KEYS.THEME, e.target.value);
                 setTheme(e.target.value);
               }}
             >

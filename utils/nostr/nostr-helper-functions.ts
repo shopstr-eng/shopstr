@@ -1307,7 +1307,7 @@ export const setLocalStorageDataOnSignIn = ({
   }
 
   if (migrationComplete) {
-    localStorage.setItem("migrationComplete", migrationComplete.toString());
+    storage.setItem(STORAGE_KEYS.MIGRATION_COMPLETE, migrationComplete.toString());
   }
 
   window.dispatchEvent(new Event("storage"));
@@ -1480,7 +1480,6 @@ export const getLocalStorageData = (): LocalStorageInterface => {
   nwcString = storage.getItem(STORAGE_KEYS.NWC_STRING);
   nwcInfo = storage.getItem(STORAGE_KEYS.NWC_INFO);
   migrationComplete = storage.getItem(STORAGE_KEYS.MIGRATION_COMPLETE) === "true";
-  }
   return {
     signInMethod: signInMethod as string,
     encryptedPrivateKey: encryptedPrivateKey as string,

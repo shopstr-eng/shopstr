@@ -5,6 +5,7 @@ import { useTheme } from "next-themes";
 import { FollowsContext } from "../../utils/context/context";
 import { getLocalStorageData } from "@/utils/nostr/nostr-helper-functions";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import { storage, STORAGE_KEYS } from "@/utils/storage";
 
 const ShopstrSlider = () => {
   const { theme } = useTheme();
@@ -20,7 +21,7 @@ const ShopstrSlider = () => {
   }, []);
 
   useEffect(() => {
-    localStorage.setItem("wot", String(wot));
+    storage.setItem(STORAGE_KEYS.WOT, String(wot));
   }, [wot]);
 
   const refreshPage = () => {
