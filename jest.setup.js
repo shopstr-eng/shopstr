@@ -48,7 +48,7 @@ jest.mock("@heroui/ripple", () => {
       onPress: jest.fn(),
     }),
   };
-});
+}, { virtual: true });
 
 jest.mock("framer-motion", () => {
   const actual = jest.requireActual("framer-motion");
@@ -167,4 +167,4 @@ jest.mock("@heroui/modal", () => {
     ModalFooter,
     ModalHeader,
   };
-});
+}, { virtual: true });

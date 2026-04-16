@@ -1,4 +1,4 @@
-import { type ReactElement } from "react";
+import { Fragment, type ReactElement, type ReactNode } from "react";
 import { StorefrontColorScheme, StorefrontPolicy } from "@/utils/types/types";
 
 interface StorefrontPolicyPageProps {
@@ -6,10 +6,41 @@ interface StorefrontPolicyPageProps {
   colors: StorefrontColorScheme;
 }
 
-function inlineFormat(text: string): string {
-  return text
-    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-    .replace(/\*(.+?)\*/g, "<em>$1</em>");
+function renderInline(text: string): ReactNode[] {
+  const segments: ReactNode[] = [];
+  const inlinePattern = /\*\*(.+?)\*\*|\*(.+?)\*/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = inlinePattern.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      segments.push(text.slice(lastIndex, match.index));
+    }
+
+    if (match[1] !== undefined) {
+      segments.push(<strong key={`strong-${match.index}`}>{match[1]}</strong>);
+    } else if (match[2] !== undefined) {
+      segments.push(<em key={`em-${match.index}`}>{match[2]}</em>);
+    }
+
+    lastIndex = match.index + match[0].length;
+  }
+
+  if (lastIndex < text.length) {
+    segments.push(text.slice(lastIndex));
+  }
+
+  if (segments.length === 0) {
+    return [text];
+  }
+
+  return segments.map((segment, index) =>
+    typeof segment === "string" ? (
+      <Fragment key={`text-${index}`}>{segment}</Fragment>
+    ) : (
+      segment
+    )
+  );
 }
 
 function renderMarkdown(content: string, colors: StorefrontColorScheme) {
@@ -28,7 +59,7 @@ function renderMarkdown(content: string, colors: StorefrontColorScheme) {
         >
           {listItems.map((item, i) => (
             <li key={i} className="text-sm leading-relaxed">
-              <span dangerouslySetInnerHTML={{ __html: inlineFormat(item) }} />
+              <span>{renderInline(item)}</span>
             </li>
           ))}
         </ul>
@@ -84,8 +115,9 @@ function renderMarkdown(content: string, colors: StorefrontColorScheme) {
           key={i}
           className="font-body mb-4 text-sm leading-relaxed"
           style={{ color: colors.text + "CC" }}
-          dangerouslySetInnerHTML={{ __html: inlineFormat(line) }}
-        />
+        >
+          {renderInline(line)}
+        </p>
       );
     }
   }
