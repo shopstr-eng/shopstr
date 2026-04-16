@@ -1129,61 +1129,18 @@ export async function blossomUploadImages(
       }
 
       const response = await res.json();
-      // Normalize Blossom responses across top-level and NIP-94 tag formats so uploads always yield a usable URL and metadata.
-      let currentResponseUrl = response.url;
-      let responseType = response.type;
-      let responseSha256 = response.sha256;
-      let responseSize = response.size;
 
-      if (response.nip94_event && response.nip94_event.tags) {
-        const findTag = (tagName: string) => {
-          const tag = response.nip94_event.tags.find(
-            (t: string[]) => t[0] === tagName
-          );
-          return tag ? tag[1] : undefined;
-        };
-        currentResponseUrl = currentResponseUrl || findTag("url");
-        responseSha256 = responseSha256 || findTag("ox") || findTag("x");
-        responseSize = responseSize || findTag("size");
-        responseType = responseType || findTag("m");
-      }
+      responseUrl = response.url;
 
-      if (!currentResponseUrl && responseSha256) {
-        currentResponseUrl = new URL(`/${responseSha256}`, server).toString();
-      }
+      tags = [
+        ["url", responseUrl],
+        ["x", response.sha256],
+        ["ox", response.sha256],
+        ["size", response.size.toString()],
+      ];
 
-      responseUrl = currentResponseUrl || "";
-
-      if (!responseUrl) {
-        console.error("Blossom upload response missing media URL", {
-          server,
-          responseType,
-          responseSha256,
-          responseSize,
-          hasNip94Tags: Boolean(response.nip94_event?.tags),
-          response,
-        });
-        throw new Error(
-          "Server successfully responded but didn't provide a media URL. Check your configured server URL."
-        );
-      }
-
-      tags = [["url", responseUrl]];
-
-      if (responseSha256) {
-        tags.push(["x", responseSha256], ["ox", responseSha256]);
-      }
-
-      if (
-        responseSize !== undefined &&
-        responseSize !== null &&
-        responseSize !== ""
-      ) {
-        tags.push(["size", responseSize.toString()]);
-      }
-
-      if (responseType) {
-        tags.push(["m", responseType]);
+      if (response.type) {
+        tags.push(["m", response.type]);
       }
     } else {
       const url = new URL("/mirror", server);
@@ -1726,57 +1683,4 @@ export const saveNWCString = (nwcString: string) => {
     localStorage.removeItem(LOCALSTORAGECONSTANTS.nwcInfo);
   }
   window.dispatchEvent(new Event("storage"));
-};
-
-export const getLocalUserProfileKey = (pubkey: string) =>
-  `shopstr:user-profile:${pubkey}`;
-
-export interface LocalProfileFallback {
-  content: Record<string, unknown>;
-  updatedAt: number;
-}
-
-export const isProfileContentPopulated = (content: Record<string, unknown>) =>
-  Object.values(content).some(
-    (value) => value !== "" && value !== null && value !== undefined
-  );
-
-export const parseLocalProfileFallback = (
-  raw: string | null
-): LocalProfileFallback | null => {
-  if (!raw) return null;
-
-  try {
-    const parsed = JSON.parse(raw);
-
-    // Backward compatibility: previously we stored content directly.
-    if (
-      parsed &&
-      typeof parsed === "object" &&
-      !Array.isArray(parsed) &&
-      !("content" in parsed)
-    ) {
-      return {
-        content: parsed as Record<string, unknown>,
-        updatedAt: 0,
-      };
-    }
-
-    if (
-      parsed &&
-      typeof parsed === "object" &&
-      !Array.isArray(parsed) &&
-      "content" in parsed
-    ) {
-      const fallback = parsed as LocalProfileFallback;
-      return {
-        content: fallback.content || {},
-        updatedAt: fallback.updatedAt || 0,
-      };
-    }
-  } catch (error) {
-    console.error("Failed to parse local profile fallback:", error);
-  }
-
-  return null;
 };

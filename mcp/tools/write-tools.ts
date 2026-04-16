@@ -2413,14 +2413,9 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
       try {
         const fileBuffer = Buffer.from(params.fileBase64, "base64");
-        const binaryData = new Uint8Array(
-          fileBuffer.buffer as ArrayBuffer,
-          fileBuffer.byteOffset,
-          fileBuffer.byteLength
-        );
-        const { createHash: cryptoCreateHash } = await import("node:crypto");
+        const { createHash: cryptoCreateHash } = await import("crypto");
         const hash = cryptoCreateHash("sha256")
-          .update(binaryData)
+          .update(Uint8Array.from(fileBuffer))
           .digest("hex");
 
         const authEvent: EventTemplate = {
@@ -2430,7 +2425,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           tags: [
             ["t", "upload"],
             ["x", hash],
-            ["size", binaryData.length.toString()],
+            ["size", fileBuffer.length.toString()],
             [
               "expiration",
               Math.floor((Date.now() + 24 * 60 * 60 * 1000) / 1000).toString(),
@@ -2449,7 +2444,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
         const response = await fetch(uploadUrl.toString(), {
           method: "PUT",
-          body: new Blob([binaryData], {
+          body: new Blob([Uint8Array.from(fileBuffer)], {
             type: params.mimeType,
           }),
           headers: {
@@ -2473,7 +2468,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           {
             url: result.url,
             sha256: result.sha256 || hash,
-            size: result.size || binaryData.length,
+            size: result.size || fileBuffer.length,
             serverUrl,
           },
           startTime

@@ -529,6 +529,7 @@ export default function ProductForm({
                     <div
                       key="placeholder"
                       className="flex h-full w-full items-center justify-center p-4"
+                      onClick={(e) => e.preventDefault()}
                     >
                       <FileUploaderButton
                         isPlaceholder={true}

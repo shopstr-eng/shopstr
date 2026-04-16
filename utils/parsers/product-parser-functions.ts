@@ -1,6 +1,5 @@
 import { ShippingOptionsType } from "@/utils/STATIC-VARIABLES";
 import { calculateTotalCost } from "@/components/utility-components/display-monetary-info";
-import { parseShippingTag } from "@/utils/parsers/product-tag-helpers";
 import { NostrEvent } from "@/utils/types/types";
 
 export type ProductData = {
@@ -95,11 +94,13 @@ export const parseTags = (productEvent: NostrEvent) => {
         parsedData.currency = currency!;
         break;
       case "shipping":
-        const parsedShipping = parseShippingTag(tag);
-        if (parsedShipping) {
-          parsedData.shippingType = parsedShipping.shippingType;
-          parsedData.shippingCost = parsedShipping.shippingCost;
+        if (values.length === 3) {
+          const [shippingType, cost, _currency] = values;
+          parsedData.shippingType = shippingType as ShippingOptionsType;
+          parsedData.shippingCost = Number(cost);
+          break;
         }
+
         break;
       case "d":
         parsedData.d = values[0];

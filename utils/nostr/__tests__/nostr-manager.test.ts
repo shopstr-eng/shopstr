@@ -4,7 +4,7 @@ const fakePoolInstance = {
     connect: jest.fn().mockResolvedValue(undefined),
     close: jest.fn().mockResolvedValue(undefined),
   }),
-  subscribeMap: jest.fn().mockReturnValue({ close: jest.fn() }),
+  subscribeMany: jest.fn().mockReturnValue({ close: jest.fn() }),
   publish: jest.fn().mockReturnValue([Promise.resolve("ok")]),
 };
 const FakePool = jest.fn().mockImplementation(() => fakePoolInstance);
@@ -116,7 +116,7 @@ describe("NostrManager", () => {
       const cb = jest.fn();
       await mgr.subscribe([], { onevent: cb }, ["u1"]);
 
-      const params = fakePoolInstance.subscribeMap.mock.calls[0][1];
+      const params = fakePoolInstance.subscribeMany.mock.calls[0][2];
       params.onevent!({ id: 1 });
       params.onevent!({ id: 2 });
 

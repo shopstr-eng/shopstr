@@ -3,7 +3,6 @@ import { useRouter } from "next/router";
 import { nip19 } from "nostr-tools";
 import { CheckIcon, ClipboardIcon } from "@heroicons/react/24/outline";
 import ClaimButton from "../utility-components/claim-button";
-import LinkPreview from "./link-preview";
 import { NostrMessageEvent } from "../../utils/types/types";
 import { timeSinceMessageDisplayText } from "../../utils/messages/utils";
 import { getDecodedToken } from "@cashu/cashu-ts";
@@ -109,36 +108,26 @@ const ChatMessage = ({
   };
 
   const renderMessageContent = (content: string) => {
-    const parts = content.split(/(https?:\/\/[^\s<>"']+)/g);
-    return parts.map((part, index) => {
-      if (/^https?:\/\//.test(part)) {
+    const words = content.split(/(\s+)/);
+    return words.map((word, index) => {
+      const npubMatch = word.match(/npub[a-zA-Z0-9]+/);
+      if (npubMatch) {
         return (
-          <span key={index} className="block">
-            <LinkPreview url={part} isUserMessage={isUserMessage} />
+          <span
+            key={index}
+            className="text-shopstr-purple dark:text-shopstr-yellow cursor-pointer hover:underline"
+            onClick={() => {
+              router.replace({
+                pathname: "/orders",
+                query: { pk: npubMatch[0], isInquiry: true },
+              });
+            }}
+          >
+            {word}
           </span>
         );
       }
-      const subParts = part.split(/(\s+)/);
-      return subParts.map((sub, subIndex) => {
-        const npubMatch = sub.match(/npub[a-zA-Z0-9]+/);
-        if (npubMatch) {
-          return (
-            <span
-              key={`${index}-${subIndex}`}
-              className="text-shopstr-purple dark:text-shopstr-yellow cursor-pointer hover:underline"
-              onClick={() => {
-                router.replace({
-                  pathname: "/orders",
-                  query: { pk: npubMatch[0], isInquiry: true },
-                });
-              }}
-            >
-              {sub}
-            </span>
-          );
-        }
-        return sub;
-      });
+      return word;
     });
   };
 
@@ -162,7 +151,7 @@ const ChatMessage = ({
             : "text-light-text dark:text-dark-text rounded-br-lg bg-gray-300 dark:bg-gray-700"
         }`}
       >
-        <div className="flex flex-col overflow-x-hidden break-all">
+        <p className="inline-block flex-wrap overflow-x-hidden break-all">
           {cashuPrefix && canDecodeToken && tokenAfterCashuVersion ? (
             <>
               {renderMessageContent(contentBeforeCashu!)}
@@ -199,7 +188,7 @@ const ChatMessage = ({
           ) : (
             renderMessageContent(messageEvent.content)
           )}
-        </div>
+        </p>
         <div className="m-1"></div>
         <span
           className={`text-xs opacity-50 ${

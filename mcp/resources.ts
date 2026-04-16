@@ -1,9 +1,5 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { fetchAllProductsFromDb } from "@/utils/db/db-service";
-import {
-  getEffectiveShippingCost,
-  parseShippingFromTags,
-} from "@/utils/parsers/product-tag-helpers";
 import { NostrEvent } from "@/utils/types/types";
 
 function getTagValue(tags: string[][], key: string): string | undefined {
@@ -21,17 +17,21 @@ function getAllTagValues(tags: string[][], key: string): string[] {
 function buildCatalogEntry(event: NostrEvent) {
   const tags = event.tags || [];
   const priceTag = tags.find((t) => t[0] === "price");
-  const parsedShipping = parseShippingFromTags(tags);
+  const shippingTag = tags.find((t) => t[0] === "shipping");
 
   const price = priceTag ? Number(priceTag[1]) : 0;
   const currency = priceTag ? priceTag[2] || "" : "";
-  const shippingType = parsedShipping?.shippingType;
-  const shippingCost = parsedShipping?.shippingCost;
-  const effectiveShippingCost = getEffectiveShippingCost(
-    shippingType,
-    shippingCost
-  );
-  const shippingCostForTotal = effectiveShippingCost ?? 0;
+  const shippingType = shippingTag ? shippingTag[1] || "" : "";
+  const shippingCost =
+    shippingTag && shippingTag[2] ? Number(shippingTag[2]) : 0;
+
+  const effectiveShippingCost =
+    shippingType === "Free" ||
+    shippingType === "Free/Pickup" ||
+    shippingType === "Pickup" ||
+    shippingType === "N/A"
+      ? 0
+      : shippingCost;
 
   return {
     id: event.id,
@@ -48,7 +48,7 @@ function buildCatalogEntry(event: NostrEvent) {
       unit: "per item",
       shippingCost: effectiveShippingCost,
       shippingType: shippingType || "N/A",
-      totalEstimate: price + shippingCostForTotal,
+      totalEstimate: price + effectiveShippingCost,
       paymentMethods: ["lightning", "cashu"],
     },
   };

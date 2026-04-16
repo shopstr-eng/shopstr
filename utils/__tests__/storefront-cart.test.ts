@@ -40,12 +40,4 @@ describe("getStorefrontCartQuantity", () => {
     expect(getStorefrontCartQuantity("seller-a")).toBe(0);
     expect(removeItemSpy).toHaveBeenCalledWith("cart");
   });
-
-  it("returns zero and removes non-array cart storage", () => {
-    const removeItemSpy = jest.spyOn(Storage.prototype, "removeItem");
-    localStorage.setItem("cart", JSON.stringify({ pubkey: "seller-a" }));
-
-    expect(getStorefrontCartQuantity("seller-a")).toBe(0);
-    expect(removeItemSpy).toHaveBeenCalledWith("cart");
-  });
 });

@@ -1,5 +1,5 @@
 import { useContext, useRef, useState } from "react";
-import { Button, Progress } from "@heroui/react";
+import { Button, Input, Progress } from "@heroui/react";
 import {
   blossomUploadImages,
   getLocalStorageData,
@@ -16,27 +16,6 @@ import {
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const MAX_STRIP_SIZE = 25 * 1024 * 1024;
 const COMPRESSION_THRESHOLD = 20 * 1024 * 1024;
-const UPLOAD_CONCURRENCY = 4;
-
-async function withConcurrency<T, R>(
-  items: T[],
-  limit: number,
-  fn: (item: T) => Promise<R>
-): Promise<R[]> {
-  const results: R[] = new Array(items.length);
-  let nextIndex = 0;
-  const workers = Array.from(
-    { length: Math.min(limit, items.length) },
-    async () => {
-      while (nextIndex < items.length) {
-        const i = nextIndex++;
-        results[i] = await fn(items[i]!);
-      }
-    }
-  );
-  await Promise.all(workers);
-  return results;
-}
 
 export const FileUploaderButton = ({
   disabled,
@@ -227,10 +206,6 @@ export const FileUploaderButton = ({
     try {
       const imageFiles = Array.from(files);
 
-      if (imageFiles.length === 0) {
-        return [];
-      }
-
       if (
         imageFiles.some(
           (imgFile) =>
@@ -250,35 +225,26 @@ export const FileUploaderButton = ({
       }));
       setPreviews(previewsList);
 
-      // Preprocess files with bounded concurrency to avoid spiking memory/CPU on large selections.
-      let processedCount = 0;
-      const processedImageFiles = await withConcurrency(
-        imageFiles,
-        UPLOAD_CONCURRENCY,
-        async (imageFile) => {
-          let processed: File;
-          if (imageFile.size > MAX_STRIP_SIZE) {
-            processed = imageFile;
-          } else {
-            processed = await stripImageMetadata(imageFile);
-          }
-          if (processed.size > COMPRESSION_THRESHOLD) {
-            processed = await compressImage(processed);
-          }
-          processedCount += 1;
-          setProgress(Math.round((processedCount / imageFiles.length) * 30));
-          return processed;
+      const processedImageFiles: File[] = [];
+      for (let idx = 0; idx < imageFiles.length; idx++) {
+        const imageFile = imageFiles[idx]!;
+        let processed: File;
+        if (imageFile.size > MAX_STRIP_SIZE) {
+          processed = imageFile;
+        } else {
+          processed = await stripImageMetadata(imageFile);
         }
-      );
+        if (processed.size > COMPRESSION_THRESHOLD) {
+          processed = await compressImage(processed);
+        }
+        processedImageFiles.push(processed);
+        setProgress(Math.round(((idx + 1) / imageFiles.length) * 30));
+      }
 
       let responses: any[] = [];
       if (isLoggedIn) {
-        // Upload with bounded concurrency and track progress by completed count.
-        let uploadedCount = 0;
-        responses = await withConcurrency(
-          processedImageFiles,
-          UPLOAD_CONCURRENCY,
-          async (imageFile) => {
+        responses = await Promise.all(
+          processedImageFiles.map(async (imageFile, idx) => {
             const tags = await blossomUploadImages(
               imageFile,
               signer!,
@@ -286,12 +252,11 @@ export const FileUploaderButton = ({
                 ? blossomServers
                 : ["https://cdn.nostrcheck.me"]
             );
-            uploadedCount += 1;
             setProgress(
-              30 + Math.round((uploadedCount / processedImageFiles.length) * 70)
+              30 + Math.round(((idx + 1) / processedImageFiles.length) * 70)
             );
             return tags;
-          }
+          })
         );
       }
 
@@ -306,9 +271,7 @@ export const FileUploaderButton = ({
           }
           return null;
         })
-        .filter(
-          (url): url is string => typeof url === "string" && url.length > 0
-        );
+        .filter((url) => url !== null);
 
       setTimeout(() => {
         setProgress(null);
@@ -346,20 +309,14 @@ export const FileUploaderButton = ({
 
   const handleChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    if (files && files.length > 0) {
-      setLoading(true);
-      try {
-        const uploadedImages = await uploadImages(files);
-        uploadedImages
-          .filter(
-            (imgUrl): imgUrl is string =>
-              typeof imgUrl === "string" && imgUrl.length > 0
-          )
-          .forEach((imgUrl) => imgCallbackOnUpload(imgUrl));
-      } finally {
-        setLoading(false);
-      }
+    setLoading(true);
+    if (files) {
+      const uploadedImages = await uploadImages(files);
+      uploadedImages
+        .filter((imgUrl): imgUrl is string => imgUrl !== null)
+        .forEach((imgUrl) => imgCallbackOnUpload(imgUrl));
     }
+    setLoading(false);
     if (hiddenFileInput.current) {
       hiddenFileInput.current.value = "";
     }
@@ -390,35 +347,12 @@ export const FileUploaderButton = ({
     const files = e.dataTransfer.files;
     if (files && files.length > 0) {
       setLoading(true);
-      try {
-        const uploadedImages = await uploadImages(files);
-        uploadedImages
-          .filter(
-            (imgUrl): imgUrl is string =>
-              typeof imgUrl === "string" && imgUrl.length > 0
-          )
-          .forEach((imgUrl) => imgCallbackOnUpload(imgUrl));
-      } finally {
-        setLoading(false);
-      }
+      const uploadedImages = await uploadImages(files);
+      uploadedImages
+        .filter((imgUrl): imgUrl is string => imgUrl !== null)
+        .forEach((imgUrl) => imgCallbackOnUpload(imgUrl));
+      setLoading(false);
     }
-  };
-
-  const isHandlingDropZoneClickRef = useRef(false);
-
-  const handleDropZoneClick = () => {
-    // Placeholder mode should behave like the button: click anywhere in the box opens picker.
-    // Guard against duplicate invocations from nested click handlers bubbling to the drop zone.
-    if (!isPlaceholder || isHandlingDropZoneClickRef.current) {
-      return;
-    }
-
-    isHandlingDropZoneClickRef.current = true;
-    handleClick();
-
-    setTimeout(() => {
-      isHandlingDropZoneClickRef.current = false;
-    }, 0);
   };
 
   return (
@@ -426,7 +360,6 @@ export const FileUploaderButton = ({
       {/* Drag and Drop Zone */}
       <div
         ref={dropZoneRef}
-        onClick={handleDropZoneClick}
         onDragEnter={handleDragEnter}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
@@ -466,7 +399,6 @@ export const FileUploaderButton = ({
 
         {!isPlaceholder && (
           <Button
-            type="button"
             isLoading={loading}
             onClick={handleClick}
             isIconOnly={isIconOnly || loading}
@@ -494,15 +426,22 @@ export const FileUploaderButton = ({
           </Button>
         )}
 
-        <input
+        <Input
           type="file"
           accept={ALLOWED_TYPES.join(",")}
           multiple
           ref={hiddenFileInput}
           onChange={handleChange}
           className="hidden"
-          disabled={disabled || loading}
         />
+
+        {isPlaceholder && (
+          <div
+            className="absolute inset-0 cursor-pointer"
+            onClick={handleClick}
+            aria-label="Click to upload images"
+          />
+        )}
       </div>
 
       {/* Progress Bar */}

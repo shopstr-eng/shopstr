@@ -7,10 +7,6 @@ import {
   validateDiscountCode,
   getDbPool,
 } from "@/utils/db/db-service";
-import {
-  getEffectiveShippingCost,
-  parseShippingFromTags,
-} from "@/utils/parsers/product-tag-helpers";
 import { NostrEvent } from "@/utils/types/types";
 import { registerTool } from "./register-tool";
 
@@ -40,23 +36,25 @@ function determinePaymentMethods(
 function buildPricingBlock(
   price: number,
   currency: string,
-  shippingType?: string,
-  shippingCost?: number,
+  shippingType: string,
+  shippingCost: number,
   quantity: number = 1,
   paymentMethods?: string[]
 ) {
-  const effectiveShippingCost = getEffectiveShippingCost(
-    shippingType,
-    shippingCost
-  );
-  const shippingCostForTotal = effectiveShippingCost ?? 0;
+  const effectiveShippingCost =
+    shippingType === "Free" ||
+    shippingType === "Free/Pickup" ||
+    shippingType === "Pickup" ||
+    shippingType === "N/A"
+      ? 0
+      : shippingCost;
   return {
     amount: price,
     currency: currency || "sats",
     unit: "per item",
     shippingCost: effectiveShippingCost,
     shippingType: shippingType || "N/A",
-    totalEstimate: price * quantity + shippingCostForTotal,
+    totalEstimate: price * quantity + effectiveShippingCost,
     paymentMethods: paymentMethods || ["lightning", "cashu"],
   };
 }
@@ -64,12 +62,13 @@ function buildPricingBlock(
 function parseProductEvent(event: NostrEvent) {
   const tags = event.tags || [];
   const priceTag = tags.find((t) => t[0] === "price");
-  const parsedShipping = parseShippingFromTags(tags);
+  const shippingTag = tags.find((t) => t[0] === "shipping");
 
   const price = priceTag ? Number(priceTag[1]) : 0;
   const currency = priceTag ? priceTag[2] || "" : "";
-  const shippingType = parsedShipping?.shippingType;
-  const shippingCost = parsedShipping?.shippingCost;
+  const shippingType = shippingTag ? shippingTag[1] || "" : "";
+  const shippingCost =
+    shippingTag && shippingTag[2] ? Number(shippingTag[2]) : 0;
 
   const sizes = tags
     .filter((t) => t[0] === "size" && t[1])

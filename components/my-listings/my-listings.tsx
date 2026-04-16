@@ -18,6 +18,10 @@ const MyListingsPage = () => {
   const { pubkey: usersPubkey } = useContext(SignerContext);
   const { isOpen, onOpen, onClose } = useDisclosure();
 
+  const [shopBannerURL, setShopBannerURL] = useState("");
+  const [shopAbout, setShopAbout] = useState("");
+  const [isFetchingShop, setIsFetchingShop] = useState(false);
+
   const [selectedSection, setSelectedSection] = useState("Listings");
 
   const [selectedCategories, setSelectedCategories] = useState(
@@ -28,11 +32,6 @@ const MyListingsPage = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const shopMapContext = useContext(ShopMapContext);
-  const shopProfile: ShopProfile | undefined = usersPubkey
-    ? shopMapContext.shopData.get(usersPubkey)
-    : undefined;
-  const shopBanner = shopProfile?.content.ui.banner ?? "";
-  const shopAboutContent = shopProfile?.content.about ?? "";
 
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -48,6 +47,23 @@ const MyListingsPage = () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);
+
+  useEffect(() => {
+    setIsFetchingShop(true);
+    if (
+      usersPubkey &&
+      shopMapContext.shopData.has(usersPubkey) &&
+      typeof shopMapContext.shopData.get(usersPubkey) != "undefined"
+    ) {
+      const shopProfile: ShopProfile | undefined =
+        shopMapContext.shopData.get(usersPubkey);
+      if (shopProfile) {
+        setShopBannerURL(shopProfile.content.ui.banner);
+        setShopAbout(shopProfile.content.about);
+      }
+    }
+    setIsFetchingShop(false);
+  }, [usersPubkey, shopMapContext, shopBannerURL]);
 
   const handleCreateNewListing = () => {
     if (usersPubkey) {
@@ -136,11 +152,11 @@ const MyListingsPage = () => {
   return (
     <div className="mx-auto h-full w-full">
       <div className="bg-light-bg dark:bg-dark-bg flex max-w-[100%] flex-col px-3 pb-2">
-        {shopBanner !== "" ? (
+        {shopBannerURL != "" && !isFetchingShop ? (
           <>
             <div className="bg-light-bg dark:bg-dark-bg flex h-auto w-full items-center justify-center bg-cover bg-center">
               <img
-                src={sanitizeUrl(shopBanner)}
+                src={sanitizeUrl(shopBannerURL)}
                 alt="Shop Banner"
                 className="max-h-[210px] w-full items-center justify-center object-cover"
               />
@@ -287,13 +303,13 @@ const MyListingsPage = () => {
               setCategories={setCategories}
             />
           )}
-          {selectedSection === "About" && shopAboutContent && (
+          {selectedSection === "About" && shopAbout && (
             <div className="text-light-text dark:text-dark-text flex w-full flex-col justify-start bg-transparent px-4 py-8">
               <h2 className="pb-2 text-2xl font-bold">About</h2>
-              <p className="text-base">{shopAboutContent}</p>
+              <p className="text-base">{shopAbout}</p>
             </div>
           )}
-          {selectedSection === "About" && !shopAboutContent && (
+          {selectedSection === "About" && !shopAbout && (
             <div className="mt-20 flex flex-grow items-center justify-center py-10">
               <div className="bg-light-fg dark:bg-dark-fg w-full max-w-lg rounded-lg p-8 text-center shadow-lg">
                 <p className="text-light-text dark:text-dark-text text-3xl font-semibold">

@@ -7,7 +7,6 @@ type StorefrontCartItem = {
 export const getStorefrontCartQuantity = (sellerPubkey = "") => {
   const cartItems = getLocalStorageJson<StorefrontCartItem[]>("cart", [], {
     removeOnError: true,
-    removeOnValidationError: true,
     validate: Array.isArray,
   });
 
