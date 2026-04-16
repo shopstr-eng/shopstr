@@ -1,7 +1,6 @@
 import { Carousel } from "react-responsive-carousel";
 import "react-responsive-carousel/lib/styles/carousel.min.css";
 import { ChevronLeftIcon, ChevronRightIcon } from "@heroicons/react/24/outline";
-import { Image } from "@heroui/react";
 import { buildSrcSet } from "@/utils/images";
 import { PREVNEXTBUTTONSTYLES } from "@/utils/STATIC-VARIABLES";
 
@@ -18,26 +17,22 @@ export default function ImageCarousel({
   showThumbs = false,
   fixedHeight = true,
 }: ImageCarouselProps) {
-  const containerClass = `flex items-center justify-center ${classname}`;
+  const containerClass = fixedHeight
+    ? `h-full w-full overflow-hidden ${classname}`
+    : `w-full overflow-hidden ${classname}`;
 
   const imageClass = fixedHeight
     ? "h-full w-full object-cover transition-transform duration-300 ease-in-out hover:scale-105"
     : "w-full object-cover";
 
-  const wrapperClass = fixedHeight
-    ? "h-full w-full !rounded-none overflow-hidden"
-    : "w-full !rounded-none overflow-hidden";
-
   const displayImages = () => {
     if (!images || images.length === 0) {
       return [
         <div className={containerClass} key="no-image">
-          <Image
+          <img
             src="/no-image-placeholder.png"
-            className={wrapperClass}
-            classNames={{ img: imageClass }}
+            className={imageClass}
             alt="No product image available - dairy listing placeholder"
-            radius="none"
           />
         </div>,
       ];
@@ -46,18 +41,12 @@ export default function ImageCarousel({
     return images.map((image, index) => {
       return (
         <div className={containerClass} key={`image-${index}`}>
-          <Image
+          <img
             src={image}
             srcSet={buildSrcSet(image)}
             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 384px"
-            className={wrapperClass}
-            classNames={{ img: imageClass }}
+            className={imageClass}
             alt={`Product image ${index + 1} - farm-fresh dairy listing`}
-            radius="none"
-            style={{
-              width: "100%",
-              height: "100%",
-            }}
           />
         </div>
       );
