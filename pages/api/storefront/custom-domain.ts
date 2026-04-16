@@ -1,5 +1,11 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getDbPool } from "@/utils/db/db-service";
+import {
+  buildCustomDomainCreateProof,
+  buildCustomDomainDeleteProof,
+  extractSignedEventFromRequest,
+  verifySignedHttpRequestProof,
+} from "@/utils/nostr/request-auth";
 
 const pool = getDbPool();
 
@@ -15,6 +21,17 @@ export default async function handler(
     }
 
     const cleanDomain = domain.toLowerCase().trim();
+    const verification = verifySignedHttpRequestProof(
+      extractSignedEventFromRequest(req),
+      buildCustomDomainCreateProof({
+        pubkey,
+        domain: cleanDomain,
+      })
+    );
+
+    if (!verification.ok) {
+      return res.status(verification.status).json({ error: verification.error });
+    }
 
     const slugResult = await pool.query(
       "SELECT slug FROM shop_slugs WHERE pubkey = $1",
@@ -80,6 +97,15 @@ export default async function handler(
     const { pubkey } = req.body;
     if (!pubkey) {
       return res.status(400).json({ error: "pubkey is required" });
+    }
+
+    const verification = verifySignedHttpRequestProof(
+      extractSignedEventFromRequest(req),
+      buildCustomDomainDeleteProof(pubkey)
+    );
+
+    if (!verification.ok) {
+      return res.status(verification.status).json({ error: verification.error });
     }
 
     try {
