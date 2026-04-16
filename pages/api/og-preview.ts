@@ -12,7 +12,6 @@ const CACHE_TTL = 1000 * 60 * 30;
 
 function decodeHTMLEntities(str: string): string {
   return str
-    .replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
@@ -20,6 +19,7 @@ function decodeHTMLEntities(str: string): string {
     .replace(/&apos;/g, "'")
     .replace(/&#x27;/g, "'")
     .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
     .trim();
 }
 
