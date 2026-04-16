@@ -364,7 +364,6 @@ export default function CheckoutCard({
       const discounts = storedDiscounts ? JSON.parse(storedDiscounts) : {};
       discounts[productData.pubkey] = {
         code: discountCode,
-        percentage: appliedDiscount,
       };
       localStorage.setItem("cartDiscounts", JSON.stringify(discounts));
     }

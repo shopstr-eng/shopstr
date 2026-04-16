@@ -30,7 +30,6 @@ const MyListingsPage = () => {
     ? shopMapContext.shopData.get(usersPubkey)
     : undefined;
   const shopBanner = shopProfile?.content.ui.banner ?? "";
-  const shopAboutContent = shopProfile?.content.about ?? "";
 
   const menuRef = useRef<HTMLDivElement>(null);
 

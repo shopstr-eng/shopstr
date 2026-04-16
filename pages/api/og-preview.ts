@@ -77,7 +77,7 @@ export default async function handler(
       signal: controller.signal,
       headers: {
         "User-Agent":
-          "Mozilla/5.0 (compatible; Shopstr/1.0; +https://shopstr.store)",
+          "Mozilla/5.0 (compatible; MilkMarket/1.0; +https://milk.market)",
         Accept: "text/html,application/xhtml+xml",
       },
     });

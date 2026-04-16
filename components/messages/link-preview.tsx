@@ -51,7 +51,7 @@ const LinkPreview = ({
   const linkClass = `underline ${
     isUserMessage
       ? "text-white/90 hover:text-white"
-      : "text-shopstr-purple dark:text-shopstr-yellow"
+      : "text-primary-yellow hover:text-yellow-400"
   }`;
 
   if (status === "loading" || status === "link") {
@@ -73,10 +73,8 @@ const LinkPreview = ({
       href={ogData?.url || url}
       target="_blank"
       rel="noopener noreferrer"
-      className={`mt-1 block overflow-hidden rounded-lg border no-underline transition-opacity hover:opacity-80 ${
-        isUserMessage
-          ? "border-white/30 bg-white/10"
-          : "border-gray-200 bg-white dark:border-gray-600 dark:bg-gray-800"
+      className={`shadow-neo mt-1 block overflow-hidden rounded-md border-2 border-black no-underline transition-opacity hover:opacity-80 ${
+        isUserMessage ? "border-white/30 bg-white/10" : "border-black bg-white"
       }`}
       onClick={(e) => e.stopPropagation()}
     >
@@ -94,9 +92,7 @@ const LinkPreview = ({
         {ogData?.title && (
           <p
             className={`truncate text-sm font-semibold ${
-              isUserMessage
-                ? "text-white"
-                : "text-light-text dark:text-dark-text"
+              isUserMessage ? "text-white" : "text-black"
             }`}
           >
             {ogData.title}
@@ -105,9 +101,7 @@ const LinkPreview = ({
         {ogData?.description && (
           <p
             className={`mt-0.5 line-clamp-2 text-xs ${
-              isUserMessage
-                ? "text-white/70"
-                : "text-light-text/70 dark:text-dark-text/70"
+              isUserMessage ? "text-white/70" : "text-gray-600"
             }`}
           >
             {ogData.description}
@@ -115,9 +109,7 @@ const LinkPreview = ({
         )}
         <p
           className={`mt-1 truncate text-xs ${
-            isUserMessage
-              ? "text-white/50"
-              : "text-light-text/50 dark:text-dark-text/50"
+            isUserMessage ? "text-white/50" : "text-gray-400"
           }`}
         >
           {hostname}
