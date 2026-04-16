@@ -66,9 +66,9 @@ const PreferencesModal = ({
     if (!nostr || !signer) {
       setFailureText("Please sign in to update preferences.");
       setShowFailureModal(true);
-      return false;
+      return null;
     }
-    return true;
+    return { nostr, signer };
   };
 
   useEffect(() => {
@@ -113,7 +113,8 @@ const PreferencesModal = ({
   };
 
   const replaceMint = async (newMint: string) => {
-    if (!requireAuthenticatedSigner()) return;
+    const auth = requireAuthenticatedSigner();
+    if (!auth) return;
 
     try {
       const response = await fetch(newMint + "/keys");
@@ -123,7 +124,7 @@ const PreferencesModal = ({
         } else {
           setMints([newMint, ...mints.filter((mint) => mint !== newMint)]);
         }
-        await publishWalletEvent(nostr!, signer!);
+        await publishWalletEvent(auth.nostr, auth.signer);
         handleToggleMintModal();
       } else {
         setFailureText(
@@ -140,10 +141,11 @@ const PreferencesModal = ({
   };
 
   const deleteMint = async (mintToDelete: string) => {
-    if (!requireAuthenticatedSigner()) return;
+    const auth = requireAuthenticatedSigner();
+    if (!auth) return;
 
     setMints(mints.filter((mint) => mint !== mintToDelete));
-    await publishWalletEvent(nostr, signer);
+    await publishWalletEvent(auth.nostr, auth.signer);
   };
 
   useEffect(() => {
@@ -226,9 +228,10 @@ const PreferencesModal = ({
   };
 
   const publishRelays = () => {
-    if (!requireAuthenticatedSigner()) return;
+    const auth = requireAuthenticatedSigner();
+    if (!auth) return;
 
-    createNostrRelayEvent(nostr, signer);
+    createNostrRelayEvent(auth.nostr, auth.signer);
     setRelaysAreChanged(false);
   };
 
@@ -280,9 +283,10 @@ const PreferencesModal = ({
   };
 
   const publishBlossomServers = () => {
-    if (!requireAuthenticatedSigner()) return;
+    const auth = requireAuthenticatedSigner();
+    if (!auth) return;
 
-    createBlossomServerEvent(nostr, signer);
+    createBlossomServerEvent(auth.nostr, auth.signer);
     setBlossomServersAreChanged(false);
   };
 
