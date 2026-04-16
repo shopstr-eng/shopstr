@@ -43,7 +43,6 @@ const PreferencesModal = ({
   const [relays, setRelays] = useState(Array<string>(0));
   const [readRelays, setReadRelays] = useState(Array<string>(0));
   const [writeRelays, setWriteRelays] = useState(Array<string>(0));
-  const [showRelayModal, setShowRelayModal] = useState(false);
   const [relaysAreChanged, setRelaysAreChanged] = useState(false);
   const [currentRelayType, setCurrentRelayType] = useState<
     "all" | "read" | "write" | ""
@@ -62,6 +61,15 @@ const PreferencesModal = ({
 
   const [showFailureModal, setShowFailureModal] = useState(false);
   const [failureText, setFailureText] = useState("");
+
+  const requireAuthenticatedSigner = () => {
+    if (!nostr || !signer) {
+      setFailureText("Please sign in to update preferences.");
+      setShowFailureModal(true);
+      return false;
+    }
+    return true;
+  };
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -105,6 +113,8 @@ const PreferencesModal = ({
   };
 
   const replaceMint = async (newMint: string) => {
+    if (!requireAuthenticatedSigner()) return;
+
     try {
       const response = await fetch(newMint + "/keys");
       if (response.ok) {
@@ -130,8 +140,10 @@ const PreferencesModal = ({
   };
 
   const deleteMint = async (mintToDelete: string) => {
+    if (!requireAuthenticatedSigner()) return;
+
     setMints(mints.filter((mint) => mint !== mintToDelete));
-    await publishWalletEvent(nostr!, signer!);
+    await publishWalletEvent(nostr, signer);
   };
 
   useEffect(() => {
@@ -159,14 +171,20 @@ const PreferencesModal = ({
   } = useForm();
 
   const onRelaySubmit = async (data: { [x: string]: string }) => {
+    if (!currentRelayType) return;
+
     const relay = data["relay"];
     await addRelay(relay!, currentRelayType);
   };
 
-  const handleToggleRelayModal = (type: "all" | "read" | "write" | "") => {
+  const openRelayModal = (type: "all" | "read" | "write") => {
     setCurrentRelayType(type);
     relayReset();
-    setShowRelayModal(!showRelayModal);
+  };
+
+  const closeRelayModal = () => {
+    setCurrentRelayType("");
+    relayReset();
   };
 
   const addRelay = async (
@@ -185,7 +203,7 @@ const PreferencesModal = ({
         }
       }
       relayTest.close();
-      handleToggleRelayModal(type);
+      closeRelayModal();
       setRelaysAreChanged(true);
     } catch {
       setFailureText(`${newRelay} was unable to connect!`);
@@ -208,7 +226,9 @@ const PreferencesModal = ({
   };
 
   const publishRelays = () => {
-    createNostrRelayEvent(nostr!, signer!);
+    if (!requireAuthenticatedSigner()) return;
+
+    createNostrRelayEvent(nostr, signer);
     setRelaysAreChanged(false);
   };
 
@@ -223,6 +243,8 @@ const PreferencesModal = ({
   };
 
   const addBlossomServer = async (newServer: string) => {
+    if (!requireAuthenticatedSigner()) return;
+
     try {
       const url = new URL("/upload", newServer);
       const checkResponse = await fetch(url);
@@ -258,7 +280,9 @@ const PreferencesModal = ({
   };
 
   const publishBlossomServers = () => {
-    createBlossomServerEvent(nostr!, signer!);
+    if (!requireAuthenticatedSigner()) return;
+
+    createBlossomServerEvent(nostr, signer);
     setBlossomServersAreChanged(false);
   };
 
@@ -472,7 +496,7 @@ const PreferencesModal = ({
                 <div className="bg-light-bg dark:bg-dark-bg flex h-fit flex-row justify-between px-3 py-[15px]">
                   <Button
                     className={SHOPSTRBUTTONCLASSNAMES}
-                    onClick={() => handleToggleRelayModal("all")}
+                    onClick={() => openRelayModal("all")}
                   >
                     Add Relay
                   </Button>
@@ -487,8 +511,8 @@ const PreferencesModal = ({
                 </div>
                 <Modal
                   backdrop="blur"
-                  isOpen={showRelayModal}
-                  onClose={() => handleToggleRelayModal("all")}
+                  isOpen={currentRelayType === "all"}
+                  onClose={closeRelayModal}
                   classNames={{
                     body: "py-6",
                     backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
@@ -553,7 +577,7 @@ const PreferencesModal = ({
                         <Button
                           color="danger"
                           variant="light"
-                          onClick={() => handleToggleRelayModal("")}
+                          onClick={closeRelayModal}
                         >
                           Cancel
                         </Button>
@@ -601,7 +625,7 @@ const PreferencesModal = ({
                 <div className="bg-light-bg dark:bg-dark-bg flex h-fit flex-row justify-between px-3 py-[15px]">
                   <Button
                     className={SHOPSTRBUTTONCLASSNAMES}
-                    onClick={() => handleToggleRelayModal("read")}
+                    onClick={() => openRelayModal("read")}
                   >
                     Add Relay
                   </Button>
@@ -618,8 +642,8 @@ const PreferencesModal = ({
                 </div>
                 <Modal
                   backdrop="blur"
-                  isOpen={showRelayModal}
-                  onClose={() => handleToggleRelayModal("read")}
+                  isOpen={currentRelayType === "read"}
+                  onClose={closeRelayModal}
                   classNames={{
                     body: "py-6",
                     backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
@@ -684,7 +708,7 @@ const PreferencesModal = ({
                         <Button
                           color="danger"
                           variant="light"
-                          onClick={() => handleToggleRelayModal("")}
+                          onClick={closeRelayModal}
                         >
                           Cancel
                         </Button>
@@ -732,7 +756,7 @@ const PreferencesModal = ({
                 <div className="bg-light-bg dark:bg-dark-bg flex h-fit flex-row justify-between px-3 py-[15px]">
                   <Button
                     className={SHOPSTRBUTTONCLASSNAMES}
-                    onClick={() => handleToggleRelayModal("write")}
+                    onClick={() => openRelayModal("write")}
                   >
                     Add Relay
                   </Button>
@@ -749,8 +773,8 @@ const PreferencesModal = ({
                 </div>
                 <Modal
                   backdrop="blur"
-                  isOpen={showRelayModal}
-                  onClose={() => handleToggleRelayModal("write")}
+                  isOpen={currentRelayType === "write"}
+                  onClose={closeRelayModal}
                   classNames={{
                     body: "py-6",
                     backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
@@ -815,7 +839,7 @@ const PreferencesModal = ({
                         <Button
                           color="danger"
                           variant="light"
-                          onClick={() => handleToggleRelayModal("")}
+                          onClick={closeRelayModal}
                         >
                           Cancel
                         </Button>

@@ -2,6 +2,7 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import ShopstrSwitch from "../shopstr-switch";
 import { UIContext } from "@/utils/context/context";
+import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 
 const mockUseTheme = { theme: "light" };
 jest.mock("next-themes", () => ({
@@ -50,14 +51,18 @@ describe("ShopstrSwitch", () => {
     const mockSetPreferencesModalOpen = jest.fn();
 
     render(
-      <UIContext.Provider
-        value={{
-          isPreferencesModalOpen: false,
-          setPreferencesModalOpen: mockSetPreferencesModalOpen,
-        }}
+      <SignerContext.Provider
+        value={{ isLoggedIn: true } as any}
       >
-        <ShopstrSwitch wotFilter={false} setWotFilter={jest.fn()} />
-      </UIContext.Provider>
+        <UIContext.Provider
+          value={{
+            isPreferencesModalOpen: false,
+            setPreferencesModalOpen: mockSetPreferencesModalOpen,
+          }}
+        >
+          <ShopstrSwitch wotFilter={false} setWotFilter={jest.fn()} />
+        </UIContext.Provider>
+      </SignerContext.Provider>
     );
 
     const trustLabel = screen.getByText("Trust");
@@ -65,6 +70,27 @@ describe("ShopstrSwitch", () => {
     fireEvent.click(trustLabel);
 
     expect(mockSetPreferencesModalOpen).toHaveBeenCalledWith(true);
+  });
+
+  it("should route to preferences when the user is logged out and clicks 'Trust'", () => {
+    render(
+      <SignerContext.Provider
+        value={{ isLoggedIn: false } as any}
+      >
+        <UIContext.Provider
+          value={{
+            isPreferencesModalOpen: false,
+            setPreferencesModalOpen: jest.fn(),
+          }}
+        >
+          <ShopstrSwitch wotFilter={false} setWotFilter={jest.fn()} />
+        </UIContext.Provider>
+      </SignerContext.Provider>
+    );
+
+    fireEvent.click(screen.getByText("Trust"));
+
+    expect(mockRouterPush).toHaveBeenCalledWith("/settings/preferences");
   });
 
   it('should have the "secondary" color in light mode', () => {
