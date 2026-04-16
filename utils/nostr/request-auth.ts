@@ -204,3 +204,25 @@ export function buildDiscountCodeDeleteProof({
     },
   };
 }
+
+function serializeEventIds(eventIds: string[]): string {
+  return [...eventIds].sort().join(",");
+}
+
+export function buildDeleteCachedEventsProof({
+  pubkey,
+  eventIds,
+}: {
+  pubkey: string;
+  eventIds: string[];
+}): SignedHttpRequestProof {
+  return {
+    action: "delete_cached_events",
+    method: "POST",
+    path: "/api/db/delete-events",
+    pubkey,
+    fields: {
+      eventIds: serializeEventIds(eventIds),
+    },
+  };
+}

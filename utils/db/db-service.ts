@@ -856,6 +856,47 @@ export async function deleteCachedEventsByIds(
   }
 }
 
+export async function cachedEventsBelongToPubkey(
+  eventIds: string[],
+  pubkey: string
+): Promise<boolean> {
+  if (eventIds.length === 0) return true;
+
+  const dbPool = getDbPool();
+  let client;
+
+  const eventTables = [
+    "product_events",
+    "review_events",
+    "message_events",
+    "profile_events",
+    "wallet_events",
+    "community_events",
+    "config_events",
+  ];
+
+  try {
+    client = await dbPool.connect();
+    const unionQuery = eventTables
+      .map((table) => `SELECT id, pubkey FROM ${table} WHERE id = ANY($1)`)
+      .join(" UNION ALL ");
+
+    const result = await client.query<{ id: string; pubkey: string }>(
+      unionQuery,
+      [eventIds]
+    );
+
+    return result.rows.every((row) => row.pubkey === pubkey);
+  } catch (error) {
+    console.error("Failed to verify cached event ownership:", error);
+    return false;
+  } finally {
+    if (client) {
+      client.release();
+    }
+  }
+}
+
 // Fetch all products from database, returning only the latest version per
 // (pubkey, d-tag) so that updated or deleted-then-re-listed products never
 // show stale duplicates.
