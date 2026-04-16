@@ -1,9 +1,86 @@
-import { type ReactElement } from "react";
+import { type ReactElement, type ReactNode } from "react";
 import { StorefrontColorScheme, StorefrontPolicy } from "@/utils/types/types";
 
 interface StorefrontPolicyPageProps {
   policy: StorefrontPolicy;
   colors: StorefrontColorScheme;
+}
+
+function findClosingMarker(
+  text: string,
+  start: number,
+  marker: "*" | "**"
+): number {
+  let j = start;
+  while (j < text.length) {
+    if (text[j] === "\\" && j + 1 < text.length) {
+      j += 2;
+      continue;
+    }
+    if (marker === "**") {
+      if (text[j] === "*" && text[j + 1] === "*") return j;
+    } else {
+      if (text[j] === "*" && text[j + 1] !== "*") return j;
+    }
+    j++;
+  }
+  return -1;
+}
+
+function renderInline(text: string, keyPrefix = "i"): ReactNode[] {
+  const nodes: ReactNode[] = [];
+  let buffer = "";
+  let i = 0;
+  let counter = 0;
+
+  const flushBuffer = () => {
+    if (buffer.length > 0) {
+      nodes.push(buffer);
+      buffer = "";
+    }
+  };
+
+  while (i < text.length) {
+    const ch = text[i]!;
+
+    if (ch === "\\" && i + 1 < text.length) {
+      const next = text[i + 1]!;
+      if (next === "*" || next === "\\") {
+        buffer += next;
+        i += 2;
+        continue;
+      }
+    }
+
+    if (ch === "*") {
+      const isBold = text[i + 1] === "*";
+      const marker: "*" | "**" = isBold ? "**" : "*";
+      const contentStart = i + marker.length;
+      const closeIdx = findClosingMarker(text, contentStart, marker);
+
+      if (closeIdx > contentStart) {
+        flushBuffer();
+        const inner = text.slice(contentStart, closeIdx);
+        const key = `${keyPrefix}-${isBold ? "b" : "e"}-${counter++}`;
+        const innerNodes = renderInline(inner, `${key}-n`);
+        nodes.push(
+          isBold ? (
+            <strong key={key}>{innerNodes}</strong>
+          ) : (
+            <em key={key}>{innerNodes}</em>
+          )
+        );
+        i = closeIdx + marker.length;
+        continue;
+      }
+    }
+
+    buffer += ch;
+    i++;
+  }
+
+  flushBuffer();
+  return nodes.length > 0 ? nodes : [text];
 }
 
 function renderMarkdown(content: string, colors: StorefrontColorScheme) {
@@ -22,7 +99,7 @@ function renderMarkdown(content: string, colors: StorefrontColorScheme) {
         >
           {listItems.map((item, i) => (
             <li key={i} className="text-sm leading-relaxed">
-              <span dangerouslySetInnerHTML={{ __html: inlineFormat(item) }} />
+              <span>{renderInline(item, `li-${listKey}-${i}`)}</span>
             </li>
           ))}
         </ul>
@@ -78,8 +155,9 @@ function renderMarkdown(content: string, colors: StorefrontColorScheme) {
           key={i}
           className="font-body mb-4 text-sm leading-relaxed"
           style={{ color: colors.text + "CC" }}
-          dangerouslySetInnerHTML={{ __html: inlineFormat(line) }}
-        />
+        >
+          {renderInline(line, `p-${i}`)}
+        </p>
       );
     }
   }

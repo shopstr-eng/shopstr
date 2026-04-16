@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 import { Image } from "@heroui/react";
 import { ArrowLeftIcon } from "@heroicons/react/24/outline";
+import { safeJsonLdString } from "@/utils/safe-json-ld";
 import {
   BLACKBUTTONCLASSNAMES,
   WHITEBUTTONCLASSNAMES,
@@ -54,7 +55,7 @@ export default function ContactPage() {
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
+            __html: safeJsonLdString({
               "@context": "https://schema.org",
               "@type": "ContactPage",
               name: "Contact Milk Market",

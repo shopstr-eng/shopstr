@@ -2,6 +2,7 @@ import Head from "next/head";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { ArrowLeftIcon } from "@heroicons/react/24/outline";
+import { safeJsonLdString } from "@/utils/safe-json-ld";
 import {
   PRIMARYBUTTONCLASSNAMES,
   WHITEBUTTONCLASSNAMES,
@@ -39,7 +40,6 @@ export default function AboutPage() {
         <meta
           name="twitter:description"
           content="Decentralized marketplace connecting local dairy farmers directly with consumers. Zero platform fees."
-        />
       </Head>
 
       <div className="min-h-screen bg-white font-sans text-black">
