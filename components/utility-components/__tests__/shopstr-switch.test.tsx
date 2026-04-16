@@ -1,6 +1,7 @@
 import { render, screen, fireEvent } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import ShopstrSwitch from "../shopstr-switch";
+import { UIContext } from "@/utils/context/context";
 
 const mockUseTheme = { theme: "light" };
 jest.mock("next-themes", () => ({
@@ -45,13 +46,25 @@ describe("ShopstrSwitch", () => {
     expect(mockSetWotFilter).toHaveBeenCalledWith(true);
   });
 
-  it("should call router.push when the 'Trust' label is clicked", () => {
-    render(<ShopstrSwitch wotFilter={false} setWotFilter={mockSetWotFilter} />);
+  it("should call setPreferencesModalOpen when the 'Trust' label is clicked", () => {
+    const mockSetPreferencesModalOpen = jest.fn();
+
+    render(
+      <UIContext.Provider
+        value={{
+          isPreferencesModalOpen: false,
+          setPreferencesModalOpen: mockSetPreferencesModalOpen,
+        }}
+      >
+        <ShopstrSwitch wotFilter={false} setWotFilter={jest.fn()} />
+      </UIContext.Provider>
+    );
+
     const trustLabel = screen.getByText("Trust");
 
     fireEvent.click(trustLabel);
 
-    expect(mockRouterPush).toHaveBeenCalledWith("/settings/preferences");
+    expect(mockSetPreferencesModalOpen).toHaveBeenCalledWith(true);
   });
 
   it('should have the "secondary" color in light mode', () => {

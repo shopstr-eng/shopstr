@@ -1,5 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
-import { useRouter } from "next/router";
+import { useState, useEffect, useMemo, useContext } from "react";
 import { getLocalStorageData } from "@/utils/nostr/nostr-helper-functions";
 import MintButton from "../../components/wallet/mint-button";
 import ReceiveButton from "../../components/wallet/receive-button";
@@ -8,6 +7,7 @@ import PayButton from "../../components/wallet/pay-button";
 import Transactions from "../../components/wallet/transactions";
 import { CashuMint, CashuWallet, MintKeyset, Proof } from "@cashu/cashu-ts";
 import ProtectedRoute from "@/components/utility-components/protected-route";
+import { UIContext } from "@/utils/context/context";
 
 const Wallet = () => {
   const [totalBalance, setTotalBalance] = useState(0);
@@ -15,7 +15,6 @@ const Wallet = () => {
   const [mint, setMint] = useState("");
   const [wallet, setWallet] = useState<CashuWallet>();
   const [mintKeySetIds, setMintKeySetIds] = useState<MintKeyset[]>([]);
-  const router = useRouter();
 
   const localStorageData = useMemo(() => getLocalStorageData(), []);
   const { mints, tokens } = localStorageData;
@@ -96,8 +95,10 @@ const Wallet = () => {
     return () => clearInterval(interval);
   }, [mintKeySetIds]);
 
+  const { setPreferencesModalOpen } = useContext(UIContext);
+
   const handleMintClick = () => {
-    router.push("/settings/preferences");
+    setPreferencesModalOpen(true);
   };
 
   return (

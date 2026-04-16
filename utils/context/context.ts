@@ -176,3 +176,13 @@ export const CommunityContext = createContext({
   isLoading: true,
   addCommunity: (_community: Community) => {},
 } as CommunityContextInterface);
+
+export interface UIContextInterface {
+  isPreferencesModalOpen: boolean;
+  setPreferencesModalOpen: (open: boolean) => void;
+}
+
+export const UIContext = createContext<UIContextInterface>({
+  isPreferencesModalOpen: false,
+  setPreferencesModalOpen: () => {},
+});

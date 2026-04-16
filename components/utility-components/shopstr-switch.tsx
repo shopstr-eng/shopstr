@@ -1,6 +1,7 @@
 import { Switch } from "@heroui/react";
-import { useRouter } from "next/router";
 import { useTheme } from "next-themes";
+import { UIContext } from "@/utils/context/context";
+import { useContext } from "react";
 
 const ShopstrSwitch = ({
   wotFilter,
@@ -9,11 +10,11 @@ const ShopstrSwitch = ({
   wotFilter: boolean;
   setWotFilter: (value: boolean) => void;
 }) => {
-  const router = useRouter();
   const { theme } = useTheme();
+  const { setPreferencesModalOpen } = useContext(UIContext);
 
   const handleTrustClick = () => {
-    router.push("/settings/preferences");
+    setPreferencesModalOpen(true);
   };
 
   return (
