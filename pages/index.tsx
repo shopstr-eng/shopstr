@@ -31,11 +31,12 @@ export default function Landing() {
   const [parsedProducts, setParsedProducts] = useState<ProductData[]>([]);
   const [listingCount, setListingCount] = useState<number | null>(null);
   const [sellerCount, setSellerCount] = useState<number | null>(null);
+  const productEventsLength = productEventContext.productEvents.length;
 
   const signerContext = useContext(SignerContext);
 
   useEffect(() => {
-    fetch("/api/db/marketplace-stats")
+    fetch("/api/db/marketplace-stats", { cache: "no-store" })
       .then((r) => r.json())
       .then((data) => {
         if (typeof data.listingCount === "number")
@@ -46,7 +47,7 @@ export default function Landing() {
       .catch((error) => {
         console.error("Failed to fetch marketplace stats:", error);
       });
-  }, []);
+  }, [productEventsLength]);
   useEffect(() => {
     if (router.pathname === "/" && signerContext.isLoggedIn) {
       router.push("/marketplace");
