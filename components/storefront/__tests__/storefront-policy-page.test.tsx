@@ -10,12 +10,13 @@ const colors = {
 };
 
 describe("StorefrontPolicyPage", () => {
-  it("renders the supported markdown subset without injecting HTML", () => {
+  it("renders the supported markdown subset as real elements", () => {
     render(
       <StorefrontPolicyPage
         policy={{
           enabled: true,
-          content: "# Terms\n\nPlain **bold** and *italic* text.\n\n- First\n- Second",
+          content:
+            "# Terms\n\nPlain **bold** and *italic* text.\n\n- First\n- Second",
         }}
         colors={colors}
       />
@@ -24,8 +25,13 @@ describe("StorefrontPolicyPage", () => {
     expect(
       screen.getByRole("heading", { level: 1, name: "Terms" })
     ).toBeInTheDocument();
-    expect(screen.getByText("bold")).toContainHTML("<strong>bold</strong>");
-    expect(screen.getByText("italic")).toContainHTML("<em>italic</em>");
+
+    const bold = screen.getByText("bold");
+    expect(bold.tagName).toBe("STRONG");
+
+    const italic = screen.getByText("italic");
+    expect(italic.tagName).toBe("EM");
+
     expect(screen.getByText("First")).toBeInTheDocument();
     expect(screen.getByText("Second")).toBeInTheDocument();
   });
@@ -48,5 +54,55 @@ describe("StorefrontPolicyPage", () => {
         '<img alt="proof" src="x" onerror="window.__shopstrXss = 1">'
       )
     ).toBeInTheDocument();
+    expect(
+      (window as unknown as { __shopstrXss?: number }).__shopstrXss
+    ).toBeUndefined();
+  });
+
+  it("treats a backslash-escaped asterisk as a literal character", () => {
+    render(
+      <StorefrontPolicyPage
+        policy={{
+          enabled: true,
+          content: "Use \\*literal\\* stars, not emphasis.",
+        }}
+        colors={colors}
+      />
+    );
+
+    expect(
+      screen.getByText("Use *literal* stars, not emphasis.")
+    ).toBeInTheDocument();
+    expect(screen.queryByText("literal")).not.toBeInTheDocument();
+  });
+
+  it("leaves an unmatched asterisk as a literal character", () => {
+    render(
+      <StorefrontPolicyPage
+        policy={{
+          enabled: true,
+          content: "Price: 5 * 2 = 10.",
+        }}
+        colors={colors}
+      />
+    );
+
+    expect(screen.getByText("Price: 5 * 2 = 10.")).toBeInTheDocument();
+  });
+
+  it("nests italic inside bold", () => {
+    render(
+      <StorefrontPolicyPage
+        policy={{
+          enabled: true,
+          content: "This is **bold with *nested* italic** here.",
+        }}
+        colors={colors}
+      />
+    );
+
+    const nested = screen.getByText("nested");
+    expect(nested.tagName).toBe("EM");
+    expect(nested.parentElement?.tagName).toBe("STRONG");
   });
 });

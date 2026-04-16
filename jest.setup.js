@@ -38,17 +38,21 @@ jest.mock("@braintree/sanitize-url", () => ({
   sanitizeUrl: jest.fn((url) => (typeof url === "string" ? url : "")),
 }));
 
-jest.mock("@heroui/ripple", () => {
-  const React = jest.requireActual("react");
-  return {
-    Ripple: () => null,
-    useRipple: () => ({
-      ripples: [],
-      onClear: jest.fn(),
-      onPress: jest.fn(),
-    }),
-  };
-}, { virtual: true });
+jest.mock(
+  "@heroui/ripple",
+  () => {
+    const React = jest.requireActual("react");
+    return {
+      Ripple: () => null,
+      useRipple: () => ({
+        ripples: [],
+        onClear: jest.fn(),
+        onPress: jest.fn(),
+      }),
+    };
+  },
+  { virtual: true }
+);
 
 jest.mock("framer-motion", () => {
   const actual = jest.requireActual("framer-motion");
@@ -62,109 +66,113 @@ jest.mock("framer-motion", () => {
   };
 });
 
-jest.mock("@heroui/modal", () => {
-  const React = jest.requireActual("react");
-  const ReactDOM = jest.requireActual("react-dom");
+jest.mock(
+  "@heroui/modal",
+  () => {
+    const React = jest.requireActual("react");
+    const ReactDOM = jest.requireActual("react-dom");
 
-  const extractText = (node) => {
-    if (node == null || typeof node === "boolean") return "";
-    if (typeof node === "string" || typeof node === "number")
-      return String(node);
-    if (Array.isArray(node)) return node.map(extractText).join(" ").trim();
-    if (React.isValidElement(node)) return extractText(node.props?.children);
-    return "";
-  };
-
-  const findHeaderText = (node) => {
-    if (node == null || typeof node === "boolean") return "";
-    if (Array.isArray(node)) {
-      for (const child of node) {
-        const result = findHeaderText(child);
-        if (result) return result;
-      }
+    const extractText = (node) => {
+      if (node == null || typeof node === "boolean") return "";
+      if (typeof node === "string" || typeof node === "number")
+        return String(node);
+      if (Array.isArray(node)) return node.map(extractText).join(" ").trim();
+      if (React.isValidElement(node)) return extractText(node.props?.children);
       return "";
-    }
-    if (!React.isValidElement(node)) return "";
-    if (node.type === ModalHeader) return extractText(node.props?.children);
-    return findHeaderText(node.props?.children);
-  };
+    };
 
-  const wrap =
-    (Component) =>
-    ({ children, isOpen = true, ...props }) =>
-      isOpen ? React.createElement(Component, props, children) : null;
+    const findHeaderText = (node) => {
+      if (node == null || typeof node === "boolean") return "";
+      if (Array.isArray(node)) {
+        for (const child of node) {
+          const result = findHeaderText(child);
+          if (result) return result;
+        }
+        return "";
+      }
+      if (!React.isValidElement(node)) return "";
+      if (node.type === ModalHeader) return extractText(node.props?.children);
+      return findHeaderText(node.props?.children);
+    };
 
-  const ModalHeader = wrap("div");
-  const ModalContent = wrap("div");
-  const ModalBody = wrap("div");
-  const ModalFooter = wrap("div");
+    const wrap =
+      (Component) =>
+      ({ children, isOpen = true, ...props }) =>
+        isOpen ? React.createElement(Component, props, children) : null;
 
-  const Modal = ({ children, isOpen = true, ...props }) => {
-    const portalRoot = React.useMemo(() => {
-      const element = document.createElement("div");
-      document.body.appendChild(element);
-      return element;
-    }, []);
+    const ModalHeader = wrap("div");
+    const ModalContent = wrap("div");
+    const ModalBody = wrap("div");
+    const ModalFooter = wrap("div");
 
-    React.useEffect(() => {
-      if (!isOpen) return undefined;
+    const Modal = ({ children, isOpen = true, ...props }) => {
+      const portalRoot = React.useMemo(() => {
+        const element = document.createElement("div");
+        document.body.appendChild(element);
+        return element;
+      }, []);
 
-      const siblings = Array.from(document.body.children).filter(
-        (child) => child !== portalRoot
+      React.useEffect(() => {
+        if (!isOpen) return undefined;
+
+        const siblings = Array.from(document.body.children).filter(
+          (child) => child !== portalRoot
+        );
+        const previousValues = siblings.map((child) =>
+          child.getAttribute("aria-hidden")
+        );
+
+        siblings.forEach((child) => child.setAttribute("aria-hidden", "true"));
+
+        return () => {
+          siblings.forEach((child, index) => {
+            const previousValue = previousValues[index];
+            if (previousValue === null) {
+              child.removeAttribute("aria-hidden");
+            } else {
+              child.setAttribute("aria-hidden", previousValue);
+            }
+          });
+        };
+      }, [isOpen, portalRoot]);
+
+      React.useEffect(
+        () => () => {
+          portalRoot.remove();
+        },
+        [portalRoot]
       );
-      const previousValues = siblings.map((child) =>
-        child.getAttribute("aria-hidden")
-      );
 
-      siblings.forEach((child) => child.setAttribute("aria-hidden", "true"));
+      if (!isOpen) return null;
 
-      return () => {
-        siblings.forEach((child, index) => {
-          const previousValue = previousValues[index];
-          if (previousValue === null) {
-            child.removeAttribute("aria-hidden");
-          } else {
-            child.setAttribute("aria-hidden", previousValue);
-          }
-        });
-      };
-    }, [isOpen, portalRoot]);
+      const ariaLabel = findHeaderText(children) || props["aria-label"];
 
-    React.useEffect(
-      () => () => {
-        portalRoot.remove();
-      },
-      [portalRoot]
-    );
-
-    if (!isOpen) return null;
-
-    const ariaLabel = findHeaderText(children) || props["aria-label"];
-
-    return ReactDOM.createPortal(
-      React.createElement(
-        "div",
-        { role: "dialog", "aria-label": ariaLabel, ...props },
+      return ReactDOM.createPortal(
         React.createElement(
-          "button",
-          {
-            type: "button",
-            "aria-label": "Close",
-            onClick: props.onClose,
-          },
-          "Close"
+          "div",
+          { role: "dialog", "aria-label": ariaLabel, ...props },
+          React.createElement(
+            "button",
+            {
+              type: "button",
+              "aria-label": "Close",
+              onClick: props.onClose,
+            },
+            "Close"
+          ),
+          children
         ),
-        children
-      ),
-      portalRoot
-    );
-  };
+        portalRoot
+      );
+    };
 
-  return {
-    Modal,
-    ModalContent,
-    ModalBody,
-    ModalFooter,
-    ModalHeader,
-  };
-}, { virtual: true });
+    return {
+      Modal,
+      ModalContent,
+      ModalBody,
+      ModalFooter,
+      ModalHeader,
+    };
+  },
+  { virtual: true }
+);
