@@ -48,24 +48,25 @@ export default async function handler(
   res: NextApiResponse
 ) {
   if (req.method === "DELETE") {
-    const { pubkey } = req.body;
-    if (!pubkey) {
-      return res.status(400).json({ error: "pubkey is required" });
-    }
-
+    const signedEvent = extractSignedEventFromRequest(req);
+    const ownerPubkey = signedEvent?.pubkey ?? "";
     const verification = verifySignedHttpRequestProof(
-      extractSignedEventFromRequest(req),
-      buildStorefrontSlugDeleteProof(pubkey)
+      signedEvent,
+      buildStorefrontSlugDeleteProof(ownerPubkey)
     );
 
     if (!verification.ok) {
-      return res.status(verification.status).json({ error: verification.error });
+      return res
+        .status(verification.status)
+        .json({ error: verification.error });
     }
 
     try {
-      await pool.query("DELETE FROM shop_slugs WHERE pubkey = $1", [pubkey]);
+      await pool.query("DELETE FROM shop_slugs WHERE pubkey = $1", [
+        ownerPubkey,
+      ]);
       await pool.query("DELETE FROM custom_domains WHERE pubkey = $1", [
-        pubkey,
+        ownerPubkey,
       ]);
       return res.status(200).json({ success: true });
     } catch (error) {
@@ -78,10 +79,10 @@ export default async function handler(
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { pubkey, slug } = req.body;
+  const { slug } = req.body ?? {};
 
-  if (!pubkey || !slug) {
-    return res.status(400).json({ error: "pubkey and slug are required" });
+  if (!slug) {
+    return res.status(400).json({ error: "slug is required" });
   }
 
   const sanitized = sanitizeSlug(slug);
@@ -92,14 +93,12 @@ export default async function handler(
       .json({ error: "Slug must be at least 2 characters" });
   }
 
-  if (RESERVED_SLUGS.includes(sanitized)) {
-    return res.status(400).json({ error: "This shop name is reserved" });
-  }
-
+  const signedEvent = extractSignedEventFromRequest(req);
+  const ownerPubkey = signedEvent?.pubkey ?? "";
   const verification = verifySignedHttpRequestProof(
-    extractSignedEventFromRequest(req),
+    signedEvent,
     buildStorefrontSlugCreateProof({
-      pubkey,
+      pubkey: ownerPubkey,
       slug: sanitized,
     })
   );
@@ -108,12 +107,16 @@ export default async function handler(
     return res.status(verification.status).json({ error: verification.error });
   }
 
+  if (RESERVED_SLUGS.includes(sanitized)) {
+    return res.status(400).json({ error: "This shop name is reserved" });
+  }
+
   try {
     await pool.query(
       `INSERT INTO shop_slugs (pubkey, slug) 
        VALUES ($1, $2) 
        ON CONFLICT (pubkey) DO UPDATE SET slug = $2, updated_at = NOW()`,
-      [pubkey, sanitized]
+      [ownerPubkey, sanitized]
     );
 
     return res.status(200).json({ slug: sanitized });

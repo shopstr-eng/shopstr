@@ -1,6 +1,10 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { type Event, verifyEvent } from "nostr-tools";
 import { cacheEvents } from "@/utils/db/db-service";
+import {
+  CACHE_EVENTS_MAX_BATCH_SIZE,
+  isCacheableEventShape,
+} from "@/utils/db/cache-event-policy";
 import { NostrEvent } from "@/utils/types/types";
 
 export const config = {
@@ -27,7 +31,19 @@ export default async function handler(
         .json({ error: "Invalid request body: expected an array of events" });
     }
 
-    if (events.some((event) => !event || !verifyEvent(event as Event))) {
+    if (events.length > CACHE_EVENTS_MAX_BATCH_SIZE) {
+      return res
+        .status(413)
+        .json({ error: "Too many events in a single request" });
+    }
+
+    if (events.some((event) => !isCacheableEventShape(event))) {
+      return res
+        .status(400)
+        .json({ error: "Event kind is not permitted for caching" });
+    }
+
+    if (events.some((event) => !verifyEvent(event as Event))) {
       return res.status(401).json({ error: "Invalid or unsigned Nostr event" });
     }
 

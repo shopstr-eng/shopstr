@@ -36,10 +36,7 @@ function createResponse() {
   };
 }
 
-function createRequest(
-  method: string,
-  body: unknown
-): NextApiRequest {
+function createRequest(method: string, body: unknown): NextApiRequest {
   return {
     method,
     body,
@@ -57,13 +54,14 @@ describe("/api/storefront/register-slug", () => {
     verifySignedHttpRequestProofMock.mockReturnValue({
       ok: false,
       status: 401,
-      error: "A signed Nostr request proof is required to prove pubkey ownership.",
+      error:
+        "A signed Nostr request proof is required to prove pubkey ownership.",
     });
 
     const req = createRequest("POST", {
-        pubkey: "victim-pubkey",
-        slug: "victim-shop",
-      });
+      pubkey: "victim-pubkey",
+      slug: "victim-shop",
+    });
     const res = createResponse();
 
     await handler(req, res as unknown as NextApiResponse);
@@ -77,6 +75,9 @@ describe("/api/storefront/register-slug", () => {
   });
 
   it("allows signed slug registration for the matching owner", async () => {
+    extractSignedEventFromRequestMock.mockReturnValue({
+      pubkey: "owner-pubkey",
+    });
     verifySignedHttpRequestProofMock.mockReturnValue({
       ok: true,
       status: 200,
@@ -84,9 +85,9 @@ describe("/api/storefront/register-slug", () => {
     queryMock.mockResolvedValue({ rows: [] });
 
     const req = createRequest("POST", {
-        pubkey: "owner-pubkey",
-        slug: "Owner Shop!!",
-      });
+      pubkey: "body-pubkey-is-ignored",
+      slug: "Owner Shop!!",
+    });
     const res = createResponse();
 
     await handler(req, res as unknown as NextApiResponse);
@@ -97,5 +98,33 @@ describe("/api/storefront/register-slug", () => {
     );
     expect(res.statusCode).toBe(200);
     expect(res.jsonBody).toEqual({ slug: "owner-shop" });
+  });
+
+  it("uses the signed event pubkey, ignoring the body pubkey", async () => {
+    extractSignedEventFromRequestMock.mockReturnValue({
+      pubkey: "owner-pubkey",
+    });
+    verifySignedHttpRequestProofMock.mockReturnValue({
+      ok: true,
+      status: 200,
+    });
+    queryMock.mockResolvedValue({ rows: [] });
+
+    const req = createRequest("DELETE", {
+      pubkey: "attacker-pubkey",
+    });
+    const res = createResponse();
+
+    await handler(req, res as unknown as NextApiResponse);
+
+    expect(queryMock).toHaveBeenCalledWith(
+      "DELETE FROM shop_slugs WHERE pubkey = $1",
+      ["owner-pubkey"]
+    );
+    expect(queryMock).toHaveBeenCalledWith(
+      "DELETE FROM custom_domains WHERE pubkey = $1",
+      ["owner-pubkey"]
+    );
+    expect(res.statusCode).toBe(200);
   });
 });

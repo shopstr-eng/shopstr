@@ -31,10 +31,7 @@ function createResponse() {
   };
 }
 
-function createRequest(
-  method: string,
-  body: unknown
-): NextApiRequest {
+function createRequest(method: string, body: unknown): NextApiRequest {
   return {
     method,
     body,
@@ -52,11 +49,11 @@ describe("/api/db/cache-event", () => {
     verifyEventMock.mockReturnValue(false);
 
     const req = createRequest("POST", {
-        id: "evt-forged",
-        pubkey: "attacker-pubkey",
-        kind: 30019,
-        content: "{}",
-      });
+      id: "evt-forged",
+      pubkey: "attacker-pubkey",
+      kind: 30019,
+      content: "{}",
+    });
     const res = createResponse();
 
     await cacheEventHandler(req, res as unknown as NextApiResponse);
@@ -68,25 +65,74 @@ describe("/api/db/cache-event", () => {
     });
   });
 
+  it("rejects single-event writes with disallowed kinds", async () => {
+    verifyEventMock.mockReturnValue(true);
+
+    const req = createRequest("POST", {
+      id: "evt-wrong-kind",
+      pubkey: "attacker-pubkey",
+      kind: 1,
+      content: "spam",
+    });
+    const res = createResponse();
+
+    await cacheEventHandler(req, res as unknown as NextApiResponse);
+
+    expect(cacheEventMock).not.toHaveBeenCalled();
+    expect(verifyEventMock).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(400);
+    expect(res.jsonBody).toEqual({
+      error: "Event kind is not permitted for caching",
+    });
+  });
+
+  it("rejects batch writes containing disallowed kinds", async () => {
+    verifyEventMock.mockReturnValue(true);
+
+    const req = createRequest("POST", [
+      {
+        id: "evt-good",
+        pubkey: "pubkey-1",
+        kind: 30019,
+        content: "{}",
+      },
+      {
+        id: "evt-wrong-kind",
+        pubkey: "pubkey-2",
+        kind: 1,
+        content: "spam",
+      },
+    ]);
+    const res = createResponse();
+
+    await cacheEventsHandler(req, res as unknown as NextApiResponse);
+
+    expect(cacheEventsMock).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(400);
+    expect(res.jsonBody).toEqual({
+      error: "Event kind is not permitted for caching",
+    });
+  });
+
   it("rejects forged batch cache writes", async () => {
     verifyEventMock.mockImplementation((event: { id: string }) => {
       return event.id !== "evt-forged";
     });
 
     const req = createRequest("POST", [
-        {
-          id: "evt-good",
-          pubkey: "pubkey-1",
-          kind: 30019,
-          content: "{}",
-        },
-        {
-          id: "evt-forged",
-          pubkey: "pubkey-2",
-          kind: 30019,
-          content: "{}",
-        },
-      ]);
+      {
+        id: "evt-good",
+        pubkey: "pubkey-1",
+        kind: 30019,
+        content: "{}",
+      },
+      {
+        id: "evt-forged",
+        pubkey: "pubkey-2",
+        kind: 30019,
+        content: "{}",
+      },
+    ]);
     const res = createResponse();
 
     await cacheEventsHandler(req, res as unknown as NextApiResponse);

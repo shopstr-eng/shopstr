@@ -14,28 +14,32 @@ export default async function handler(
   res: NextApiResponse
 ) {
   if (req.method === "POST") {
-    const { pubkey, domain } = req.body;
+    const { domain } = req.body ?? {};
 
-    if (!pubkey || !domain) {
-      return res.status(400).json({ error: "pubkey and domain are required" });
+    if (!domain) {
+      return res.status(400).json({ error: "domain is required" });
     }
 
     const cleanDomain = domain.toLowerCase().trim();
+    const signedEvent = extractSignedEventFromRequest(req);
+    const ownerPubkey = signedEvent?.pubkey ?? "";
     const verification = verifySignedHttpRequestProof(
-      extractSignedEventFromRequest(req),
+      signedEvent,
       buildCustomDomainCreateProof({
-        pubkey,
+        pubkey: ownerPubkey,
         domain: cleanDomain,
       })
     );
 
     if (!verification.ok) {
-      return res.status(verification.status).json({ error: verification.error });
+      return res
+        .status(verification.status)
+        .json({ error: verification.error });
     }
 
     const slugResult = await pool.query(
       "SELECT slug FROM shop_slugs WHERE pubkey = $1",
-      [pubkey]
+      [ownerPubkey]
     );
     if (slugResult.rows.length === 0) {
       return res
@@ -48,7 +52,7 @@ export default async function handler(
         `INSERT INTO custom_domains (pubkey, domain, shop_slug, verified) 
          VALUES ($1, $2, $3, false) 
          ON CONFLICT (pubkey) DO UPDATE SET domain = $2, shop_slug = $3, verified = false, updated_at = NOW()`,
-        [pubkey, cleanDomain, slugResult.rows[0].slug]
+        [ownerPubkey, cleanDomain, slugResult.rows[0].slug]
       );
 
       return res.status(200).json({
@@ -94,23 +98,22 @@ export default async function handler(
   }
 
   if (req.method === "DELETE") {
-    const { pubkey } = req.body;
-    if (!pubkey) {
-      return res.status(400).json({ error: "pubkey is required" });
-    }
-
+    const signedEvent = extractSignedEventFromRequest(req);
+    const ownerPubkey = signedEvent?.pubkey ?? "";
     const verification = verifySignedHttpRequestProof(
-      extractSignedEventFromRequest(req),
-      buildCustomDomainDeleteProof(pubkey)
+      signedEvent,
+      buildCustomDomainDeleteProof(ownerPubkey)
     );
 
     if (!verification.ok) {
-      return res.status(verification.status).json({ error: verification.error });
+      return res
+        .status(verification.status)
+        .json({ error: verification.error });
     }
 
     try {
       await pool.query("DELETE FROM custom_domains WHERE pubkey = $1", [
-        pubkey,
+        ownerPubkey,
       ]);
       return res.status(200).json({ success: true });
     } catch (error) {

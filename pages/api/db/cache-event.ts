@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { type Event, verifyEvent } from "nostr-tools";
 import { cacheEvent } from "@/utils/db/db-service";
+import { isCacheableEventShape } from "@/utils/db/cache-event-policy";
 import { NostrEvent } from "@/utils/types/types";
 
 export default async function handler(
@@ -13,7 +14,12 @@ export default async function handler(
 
   try {
     const event: NostrEvent = req.body;
-    if (!event || typeof event !== "object" || !verifyEvent(event as Event)) {
+    if (!isCacheableEventShape(event)) {
+      return res
+        .status(400)
+        .json({ error: "Event kind is not permitted for caching" });
+    }
+    if (!verifyEvent(event as Event)) {
       return res.status(401).json({ error: "Invalid or unsigned Nostr event" });
     }
     await cacheEvent(event);
