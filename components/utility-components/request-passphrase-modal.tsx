@@ -101,33 +101,33 @@ export default function PassphraseChallengeModal({
           Enter Passphrase
         </ModalHeader>
         <ModalBody>
-          <div className="flex items-center gap-1">
-            <Input
-              className="text-light-text dark:text-dark-text"
-              autoFocus
-              ref={passphraseInputRef}
-              variant="flat"
-              label="Passphrase"
-              labelPlacement="inside"
-              type={showPassword ? "text" : "password"}
-              onChange={(e) => setPassphraseInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") onSubmit();
-              }}
-              value={passphraseInput}
-            />
-            <button
-              className="cursor-pointer"
-              onClick={() => setShowPassword((prev) => !prev)}
-            >
-              {" "}
-              {showPassword ? (
-                <EyeSlashIcon className="h-6 w-6" />
-              ) : (
-                <EyeIcon className="h-6 w-6" />
-              )}
-            </button>
-          </div>
+          <Input
+            className="text-light-text dark:text-dark-text"
+            autoFocus
+            ref={passphraseInputRef}
+            variant="flat"
+            label="Passphrase"
+            labelPlacement="inside"
+            type={showPassword ? "text" : "password"}
+            onChange={(e) => setPassphraseInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") onSubmit();
+            }}
+            value={passphraseInput}
+            endContent={
+              <button
+                type="button"
+                onClick={() => setShowPassword((prev) => !prev)}
+                className="text-gray-400"
+              >
+                {showPassword ? (
+                  <EyeSlashIcon className="h-5 w-5" />
+                ) : (
+                  <EyeIcon className="h-5 w-5" />
+                )}
+              </button>
+            }
+          />
           <div className="mt-4 flex items-center gap-2">
             <input
               type="checkbox"
