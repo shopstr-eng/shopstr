@@ -31,14 +31,14 @@ export default function CompactPriceDisplay({
   };
 
   return (
-    <div className="flex min-w-0 flex-col items-end gap-1">
+    <div className="flex min-w-0 flex-col items-start gap-1">
       <div className="shadow-neo inline-flex items-center rounded-md border-2 border-black bg-black px-2 py-1">
         <span className="text-xs font-bold whitespace-nowrap text-white">
           {formatter.format(Number(price))} {currency}
         </span>
       </div>
       {monetaryInfo.shippingType && (
-        <div className="w-full max-w-[120px] text-right text-[10px] font-semibold text-black">
+        <div className="w-full max-w-[120px] text-left text-[10px] font-semibold text-black">
           <span className="block truncate px-1">{getShippingLabel()}</span>
         </div>
       )}

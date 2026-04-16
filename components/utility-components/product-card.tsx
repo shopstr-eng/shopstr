@@ -281,7 +281,7 @@ export default function ProductCard({
             {!isZapsnag ? (
               <CompactPriceDisplay monetaryInfo={productData} />
             ) : (
-              <div className="flex items-center justify-center rounded-md bg-black/10 px-2 py-1">
+              <div className="flex items-center justify-start rounded-md bg-black/10 px-2 py-1">
                 <span className="text-sm font-bold text-yellow-600">
                   ⚡ {productData.price} {productData.currency}
                 </span>
