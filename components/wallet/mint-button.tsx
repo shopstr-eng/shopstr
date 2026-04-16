@@ -25,6 +25,7 @@ import {
   getLocalStorageData,
   publishProofEvent,
 } from "@/utils/nostr/nostr-helper-functions";
+import { storage, STORAGE_KEYS } from "@/utils/storage";
 import { CashuMint, CashuWallet } from "@cashu/cashu-ts";
 import QRCode from "qrcode";
 import FailureModal from "@/components/utility-components/failure-modal";
@@ -127,18 +128,15 @@ const MintButton = () => {
             const proofs = await wallet.mintProofs(numSats, hash);
             if (proofs && proofs.length > 0) {
               const proofArray = [...tokens, ...proofs];
-              localStorage.setItem("tokens", JSON.stringify(proofArray));
-              localStorage.setItem(
-                "history",
-                JSON.stringify([
-                  {
-                    type: 3,
-                    amount: numSats,
-                    date: Math.floor(Date.now() / 1000),
-                  },
-                  ...history,
-                ])
-              );
+              storage.setJson(STORAGE_KEYS.TOKENS, proofArray);
+              storage.setJson(STORAGE_KEYS.HISTORY, [
+                {
+                  type: 3,
+                  amount: numSats,
+                  date: Math.floor(Date.now() / 1000),
+                },
+                ...history,
+              ]);
               await publishProofEvent(
                 nostr!,
                 signer!,

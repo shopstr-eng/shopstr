@@ -21,9 +21,9 @@ import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
   createBlossomServerEvent,
   createNostrRelayEvent,
-  getLocalStorageData,
   publishWalletEvent,
 } from "@/utils/nostr/nostr-helper-functions";
+import { storage, STORAGE_KEYS } from "@/utils/storage";
 import { useTheme } from "next-themes";
 import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs";
 import ShopstrSlider from "../../components/utility-components/shopstr-slider";
@@ -61,24 +61,24 @@ const PreferencesPage = () => {
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      setMints(getLocalStorageData().mints);
-      setRelays(getLocalStorageData().relays);
-      setReadRelays(getLocalStorageData().readRelays);
-      setWriteRelays(getLocalStorageData().writeRelays);
-      setBlossomServers(getLocalStorageData().blossomServers);
+      setMints(storage.getJson(STORAGE_KEYS.MINTS, []));
+      setRelays(storage.getJson(STORAGE_KEYS.RELAYS, []));
+      setReadRelays(storage.getJson(STORAGE_KEYS.READ_RELAYS, []));
+      setWriteRelays(storage.getJson(STORAGE_KEYS.WRITE_RELAYS, []));
+      setBlossomServers(storage.getJson(STORAGE_KEYS.BLOSSOM_SERVERS, []));
     }
     setIsLoaded(true);
   }, [signer]);
 
   useEffect(() => {
-    if (mints.length != 0) {
-      localStorage.setItem("mints", JSON.stringify(mints));
+    if (mints.length !== 0) {
+      storage.setJson(STORAGE_KEYS.MINTS, mints);
     }
   }, [mints]);
 
   useEffect(() => {
-    if (blossomServers.length != 0) {
-      localStorage.setItem("blossomServers", JSON.stringify(blossomServers));
+    if (blossomServers.length !== 0) {
+      storage.setJson(STORAGE_KEYS.BLOSSOM_SERVERS, blossomServers);
     }
   }, [blossomServers]);
 
@@ -132,14 +132,14 @@ const PreferencesPage = () => {
   };
 
   useEffect(() => {
-    if (relays.length != 0) {
-      localStorage.setItem("relays", JSON.stringify(relays));
+    if (relays.length !== 0) {
+      storage.setJson(STORAGE_KEYS.RELAYS, relays);
     }
-    if (readRelays.length != 0) {
-      localStorage.setItem("readRelays", JSON.stringify(readRelays));
+    if (readRelays.length !== 0) {
+      storage.setJson(STORAGE_KEYS.READ_RELAYS, readRelays);
     }
-    if (writeRelays.length != 0) {
-      localStorage.setItem("writeRelays", JSON.stringify(writeRelays));
+    if (writeRelays.length !== 0) {
+      storage.setJson(STORAGE_KEYS.WRITE_RELAYS, writeRelays);
     }
   }, [relays, readRelays, writeRelays]);
 
@@ -968,10 +968,10 @@ const PreferencesPage = () => {
               label="Select your prefered theme:"
               orientation={"horizontal"}
               defaultValue={
-                (localStorage.getItem("theme") as string) || theme || "system"
+                (storage.getItem(STORAGE_KEYS.THEME) as string) || theme || "system"
               }
               onChange={(e) => {
-                localStorage.setItem("theme", e.target.value);
+                storage.setItem(STORAGE_KEYS.THEME, e.target.value);
                 setTheme(e.target.value);
               }}
             >

@@ -65,6 +65,7 @@ import {
 } from "@/components/utility-components/nostr-context-provider";
 import { retryFailedRelayPublishes } from "@/utils/nostr/retry-service";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
+import { storage, STORAGE_KEYS } from "@/utils/storage";
 
 function Shopstr({ props }: { props: AppProps }) {
   const { Component, pageProps } = props;
@@ -571,7 +572,7 @@ function Shopstr({ props }: { props: AppProps }) {
 
         if (allRelays.length === 0) {
           allRelays = getDefaultRelays();
-          localStorage.setItem("relays", JSON.stringify(allRelays));
+          storage.setJson(STORAGE_KEYS.RELAYS, allRelays);
         }
 
         // Fire them first and in parellel since independent of each other and other depend on it
@@ -596,14 +597,14 @@ function Shopstr({ props }: { props: AppProps }) {
         if (!isCurrentRun()) return;
 
         if (relayResult && relayResult.relayList.length !== 0) {
-          localStorage.setItem("relays", JSON.stringify(relayResult.relayList));
-          localStorage.setItem(
-            "readRelays",
-            JSON.stringify(relayResult.readRelayList)
+          storage.setJson(STORAGE_KEYS.RELAYS, relayResult.relayList);
+          storage.setJson(
+            STORAGE_KEYS.READ_RELAYS,
+            relayResult.readRelayList
           );
-          localStorage.setItem(
-            "writeRelays",
-            JSON.stringify(relayResult.writeRelayList)
+          storage.setJson(
+            STORAGE_KEYS.WRITE_RELAYS,
+            relayResult.writeRelayList
           );
           allRelays = [...relayResult.relayList, ...relayResult.readRelayList];
         }
@@ -756,20 +757,20 @@ function Shopstr({ props }: { props: AppProps }) {
         if (!isCurrentRun()) return;
 
         if (blossomResult?.blossomServers?.length) {
-          localStorage.setItem(
-            "blossomServers",
-            JSON.stringify(blossomResult.blossomServers)
+          storage.setJson(
+            STORAGE_KEYS.BLOSSOM_SERVERS,
+            blossomResult.blossomServers
           );
         }
 
         if (walletResult?.cashuMints?.length && walletResult.cashuProofs) {
-          localStorage.setItem(
-            "mints",
-            JSON.stringify(walletResult.cashuMints)
+          storage.setJson(
+            STORAGE_KEYS.MINTS,
+            walletResult.cashuMints
           );
-          localStorage.setItem(
-            "tokens",
-            JSON.stringify(walletResult.cashuProofs)
+          storage.setJson(
+            STORAGE_KEYS.TOKENS,
+            walletResult.cashuProofs
           );
         }
 

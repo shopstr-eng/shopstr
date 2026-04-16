@@ -18,9 +18,9 @@ import {
   Spinner,
 } from "@heroui/react";
 import {
-  getLocalStorageData,
   publishProofEvent,
 } from "@/utils/nostr/nostr-helper-functions";
+import { storage, STORAGE_KEYS } from "@/utils/storage";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { CashuMint, CashuWallet, MintKeyset, Proof } from "@cashu/cashu-ts";
 import { formatWithCommas } from "../utility-components/display-monetary-info";
@@ -43,7 +43,9 @@ const PayButton = () => {
   const { signer } = useContext(SignerContext);
   const { nostr } = useContext(NostrContext);
 
-  const { mints, tokens, history } = getLocalStorageData();
+  const mints = storage.getJson<string[]>(STORAGE_KEYS.MINTS, []);
+  const tokens = storage.getJson<any[]>(STORAGE_KEYS.TOKENS, []);
+  const history = storage.getJson<any[]>(STORAGE_KEYS.HISTORY, []);
 
   const { theme } = useTheme();
 
@@ -145,23 +147,20 @@ const PayButton = () => {
       } else {
         proofArray = [...remainingProofs];
       }
-      localStorage.setItem("tokens", JSON.stringify(proofArray));
+      storage.setJson(STORAGE_KEYS.TOKENS, proofArray);
       const filteredTokenAmount = filteredProofs.reduce(
         (acc, token: Proof) => acc + token.amount,
         0
       );
       const transactionAmount = filteredTokenAmount - changeAmount;
-      localStorage.setItem(
-        "history",
-        JSON.stringify([
-          {
-            type: 4,
-            amount: transactionAmount,
-            date: Math.floor(Date.now() / 1000),
-          },
-          ...history,
-        ])
-      );
+      storage.setJson(STORAGE_KEYS.HISTORY, [
+        {
+          type: 4,
+          amount: transactionAmount,
+          date: Math.floor(Date.now() / 1000),
+        },
+        ...history,
+      ]);
       await publishProofEvent(
         nostr!,
         signer!,

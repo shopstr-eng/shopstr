@@ -31,7 +31,7 @@ import { ShopMapContext, ProfileMapContext } from "@/utils/context/context";
 import { nip19 } from "nostr-tools";
 import StorefrontThemeWrapper from "@/components/storefront/storefront-theme-wrapper";
 import ProtectedRoute from "@/components/utility-components/protected-route";
-import { getLocalStorageJson } from "@/utils/safe-json";
+import { storage, STORAGE_KEYS } from "@/utils/storage";
 import { CartDiscountsMap, isCartDiscountsMap } from "@/utils/cart-discounts";
 
 interface QuantitySelectorProps {
@@ -183,32 +183,19 @@ export default function Component() {
   const router = useRouter();
 
   useEffect(() => {
-    const stored =
-      sessionStorage.getItem("sf_seller_pubkey") ||
-      localStorage.getItem("sf_seller_pubkey");
+    const stored = storage.getSessionItem(STORAGE_KEYS.SF_SELLER_PUBKEY) || storage.getItem(STORAGE_KEYS.SF_SELLER_PUBKEY);
     if (stored) setSfSellerPubkey(stored);
-    const storedSlug =
-      sessionStorage.getItem("sf_shop_slug") ||
-      localStorage.getItem("sf_shop_slug");
+    const storedSlug = storage.getSessionItem(STORAGE_KEYS.SF_SHOP_SLUG) || storage.getItem(STORAGE_KEYS.SF_SHOP_SLUG);
     if (storedSlug) setSfShopSlug(storedSlug);
   }, []);
 
   useEffect(() => {
     let isCancelled = false;
-
     const loadCart = async () => {
-      if (typeof window === "undefined") {
-        return;
-      }
+      if (typeof window === "undefined") return;
 
-      const sfPk =
-        sessionStorage.getItem("sf_seller_pubkey") ||
-        localStorage.getItem("sf_seller_pubkey") ||
-        "";
-      const fullCart = getLocalStorageJson<ProductData[]>("cart", [], {
-        removeOnError: true,
-        validate: Array.isArray,
-      });
+      const sfPk = storage.getSessionItem(STORAGE_KEYS.SF_SELLER_PUBKEY) || storage.getItem(STORAGE_KEYS.SF_SELLER_PUBKEY) || "";
+      const fullCart = storage.getJson<ProductData[]>(STORAGE_KEYS.CART, []);
 
       let cartList = fullCart;
       if (sfPk) {
@@ -231,19 +218,13 @@ export default function Component() {
         }
       }
 
-      if (cartList.length === 0) {
+      if (cartList.length === 0) return;
+
+      const discounts = storage.getJson<CartDiscountsMap>(STORAGE_KEYS.CART_DISCOUNTS, {});
+      if (!isCartDiscountsMap(discounts)) {
+        storage.removeItem(STORAGE_KEYS.CART_DISCOUNTS);
         return;
       }
-
-      const discounts = getLocalStorageJson<CartDiscountsMap>(
-        "cartDiscounts",
-        {},
-        {
-          removeOnError: true,
-          removeOnValidationError: true,
-          validate: isCartDiscountsMap,
-        }
-      );
 
       if (Object.keys(discounts).length === 0) {
         return;
@@ -318,12 +299,9 @@ export default function Component() {
       setIsValidatingDiscounts(false);
 
       if (Object.keys(refreshedDiscounts).length > 0) {
-        localStorage.setItem(
-          "cartDiscounts",
-          JSON.stringify(refreshedDiscounts)
-        );
+        storage.setJson(STORAGE_KEYS.CART_DISCOUNTS, refreshedDiscounts);
       } else {
-        localStorage.removeItem("cartDiscounts");
+        storage.removeItem(STORAGE_KEYS.CART_DISCOUNTS);
       }
     };
 
@@ -423,16 +401,13 @@ export default function Component() {
   };
 
   const handleRemoveFromCart = (productId: string) => {
-    const cartContent = getLocalStorageJson<ProductData[]>("cart", [], {
-      removeOnError: true,
-      validate: Array.isArray,
-    });
+    const cartContent = storage.getJson<ProductData[]>(STORAGE_KEYS.CART, []);
     if (cartContent.length > 0) {
       const updatedCart = cartContent.filter(
         (obj: ProductData) => obj.id !== productId
       );
       setProducts(updatedCart);
-      localStorage.setItem("cart", JSON.stringify(updatedCart));
+      storage.setJson(STORAGE_KEYS.CART, updatedCart);
     }
   };
 
@@ -470,20 +445,12 @@ export default function Component() {
         });
         setDiscountErrors({ ...discountErrors, [pubkey]: "" });
 
-        // Save to localStorage
-        const discounts = getLocalStorageJson<CartDiscountsMap>(
-          "cartDiscounts",
-          {},
-          {
-            removeOnError: true,
-            removeOnValidationError: true,
-            validate: isCartDiscountsMap,
-          }
-        );
+        // Save to storage
+        const discounts = storage.getJson<CartDiscountsMap>(STORAGE_KEYS.CART_DISCOUNTS, {});
         discounts[pubkey] = {
           code: code,
         };
-        localStorage.setItem("cartDiscounts", JSON.stringify(discounts));
+        storage.setJson(STORAGE_KEYS.CART_DISCOUNTS, discounts);
       } else {
         setDiscountErrors({
           ...discountErrors,
@@ -506,19 +473,11 @@ export default function Component() {
     setAppliedDiscounts({ ...appliedDiscounts, [pubkey]: 0 });
     setDiscountErrors({ ...discountErrors, [pubkey]: "" });
 
-    // Remove from localStorage
-    const discounts = getLocalStorageJson<CartDiscountsMap>(
-      "cartDiscounts",
-      {},
-      {
-        removeOnError: true,
-        removeOnValidationError: true,
-        validate: isCartDiscountsMap,
-      }
-    );
+    // Remove from storage
+    const discounts = storage.getJson<CartDiscountsMap>(STORAGE_KEYS.CART_DISCOUNTS, {});
     if (Object.keys(discounts).length > 0) {
       delete discounts[pubkey];
-      localStorage.setItem("cartDiscounts", JSON.stringify(discounts));
+      storage.setJson(STORAGE_KEYS.CART_DISCOUNTS, discounts);
     }
   };
 
