@@ -14,11 +14,14 @@ const CACHE_TTL = 1000 * 60 * 30;
 
 function isPrivateIPv4(ip: string): boolean {
   const parts = ip.split(".").map(Number);
-  if (parts.length !== 4 || parts.some((n) => Number.isNaN(n) || n < 0 || n > 255)) {
+  if (
+    parts.length !== 4 ||
+    parts.some((n) => Number.isNaN(n) || n < 0 || n > 255)
+  ) {
     return true;
   }
 
-  const [a, b] = parts;
+  const [a, b] = parts as [number, number, number, number];
   if (a === 10) return true;
   if (a === 127) return true;
   if (a === 169 && b === 254) return true;
@@ -42,7 +45,11 @@ function isPrivateIPv6(ip: string): boolean {
 
 async function isSafePublicHostname(hostname: string): Promise<boolean> {
   const lowered = hostname.toLowerCase();
-  if (lowered === "localhost" || lowered.endsWith(".localhost") || lowered.endsWith(".local")) {
+  if (
+    lowered === "localhost" ||
+    lowered.endsWith(".localhost") ||
+    lowered.endsWith(".local")
+  ) {
     return false;
   }
 
