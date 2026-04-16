@@ -1,4 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
+import { type Event, verifyEvent } from "nostr-tools";
 import { cacheEvents } from "@/utils/db/db-service";
 import { NostrEvent } from "@/utils/types/types";
 
@@ -24,6 +25,10 @@ export default async function handler(
       return res
         .status(400)
         .json({ error: "Invalid request body: expected an array of events" });
+    }
+
+    if (events.some((event) => !event || !verifyEvent(event as Event))) {
+      return res.status(401).json({ error: "Invalid or unsigned Nostr event" });
     }
 
     // Handle large batches by splitting them

@@ -1,5 +1,11 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getDbPool } from "@/utils/db/db-service";
+import {
+  buildStorefrontSlugCreateProof,
+  buildStorefrontSlugDeleteProof,
+  extractSignedEventFromRequest,
+  verifySignedHttpRequestProof,
+} from "@/utils/nostr/request-auth";
 
 const pool = getDbPool();
 
@@ -46,6 +52,16 @@ export default async function handler(
     if (!pubkey) {
       return res.status(400).json({ error: "pubkey is required" });
     }
+
+    const verification = verifySignedHttpRequestProof(
+      extractSignedEventFromRequest(req),
+      buildStorefrontSlugDeleteProof(pubkey)
+    );
+
+    if (!verification.ok) {
+      return res.status(verification.status).json({ error: verification.error });
+    }
+
     try {
       await pool.query("DELETE FROM shop_slugs WHERE pubkey = $1", [pubkey]);
       await pool.query("DELETE FROM custom_domains WHERE pubkey = $1", [
@@ -78,6 +94,18 @@ export default async function handler(
 
   if (RESERVED_SLUGS.includes(sanitized)) {
     return res.status(400).json({ error: "This shop name is reserved" });
+  }
+
+  const verification = verifySignedHttpRequestProof(
+    extractSignedEventFromRequest(req),
+    buildStorefrontSlugCreateProof({
+      pubkey,
+      slug: sanitized,
+    })
+  );
+
+  if (!verification.ok) {
+    return res.status(verification.status).json({ error: verification.error });
   }
 
   try {
