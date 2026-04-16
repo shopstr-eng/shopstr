@@ -3,7 +3,6 @@ import {
   screen,
   fireEvent,
   waitFor,
-  waitForElementToBeRemoved,
   within,
 } from "@testing-library/react";
 import "@testing-library/jest-dom";
@@ -142,9 +141,11 @@ describe("PayButton Component", () => {
 
     const cancelButton = screen.getByRole("button", { name: "Cancel" });
     fireEvent.click(cancelButton);
-    await waitForElementToBeRemoved(() =>
-      screen.queryByText("Pay Lightning Invoice")
-    );
+    await waitFor(() => {
+      expect(
+        screen.queryByText("Pay Lightning Invoice")
+      ).not.toBeInTheDocument();
+    });
   });
 
   test("shows validation error for invalid invoice prefix", async () => {

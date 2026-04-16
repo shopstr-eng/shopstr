@@ -32,6 +32,7 @@ import { nip19 } from "nostr-tools";
 import StorefrontThemeWrapper from "@/components/storefront/storefront-theme-wrapper";
 import ProtectedRoute from "@/components/utility-components/protected-route";
 import { getLocalStorageJson } from "@/utils/safe-json";
+import { CartDiscountsMap, isCartDiscountsMap } from "@/utils/cart-discounts";
 
 interface QuantitySelectorProps {
   value: number;
@@ -41,26 +42,6 @@ interface QuantitySelectorProps {
   min: number;
   max: number;
 }
-
-type CartDiscountsMap = Record<string, { code: string; percentage: number }>;
-
-const isCartDiscountsMap = (value: unknown): value is CartDiscountsMap => {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return false;
-  }
-
-  return Object.values(value).every((entry) => {
-    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
-      return false;
-    }
-
-    const candidate = entry as { code?: unknown; percentage?: unknown };
-    return (
-      typeof candidate.code === "string" &&
-      typeof candidate.percentage === "number"
-    );
-  });
-};
 
 function QuantitySelector({
   value,
@@ -152,6 +133,7 @@ export default function Component() {
   const [discountErrors, setDiscountErrors] = useState<{
     [pubkey: string]: string;
   }>({});
+  const [isValidatingDiscounts, setIsValidatingDiscounts] = useState(false);
 
   // Group products by seller pubkey
   const productsBySeller = products.reduce(
@@ -212,7 +194,13 @@ export default function Component() {
   }, []);
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
+    let isCancelled = false;
+
+    const loadCart = async () => {
+      if (typeof window === "undefined") {
+        return;
+      }
+
       const sfPk =
         sessionStorage.getItem("sf_seller_pubkey") ||
         localStorage.getItem("sf_seller_pubkey") ||
@@ -225,11 +213,13 @@ export default function Component() {
       let cartList = fullCart;
       if (sfPk) {
         const filtered = fullCart.filter((item) => item.pubkey === sfPk);
-        setExcludedItemCount(fullCart.length - filtered.length);
+        if (!isCancelled) {
+          setExcludedItemCount(fullCart.length - filtered.length);
+        }
         cartList = filtered;
       }
 
-      if (cartList && cartList.length > 0) {
+      if (!isCancelled && cartList.length > 0) {
         setProducts(cartList);
         for (const item of cartList as ProductData[]) {
           if (item.selectedQuantity) {
@@ -241,7 +231,10 @@ export default function Component() {
         }
       }
 
-      // Load saved discount codes
+      if (cartList.length === 0) {
+        return;
+      }
+
       const discounts = getLocalStorageJson<CartDiscountsMap>(
         "cartDiscounts",
         {},
@@ -251,25 +244,94 @@ export default function Component() {
           validate: isCartDiscountsMap,
         }
       );
-      if (Object.keys(discounts).length > 0) {
-        const codes: { [pubkey: string]: string } = {};
-        const applied: { [pubkey: string]: number } = {};
 
-        Object.entries(discounts).forEach(([pubkey, data]) => {
-          if (!data || typeof data !== "object") return;
-          const code = (data as { code?: unknown }).code;
-          const percentage = (data as { percentage?: unknown }).percentage;
-          if (typeof code !== "string" || typeof percentage !== "number") {
-            return;
-          }
-          codes[pubkey] = code;
-          applied[pubkey] = percentage;
-        });
-
-        setDiscountCodes(codes);
-        setAppliedDiscounts(applied);
+      if (Object.keys(discounts).length === 0) {
+        return;
       }
-    }
+
+      if (!isCancelled) {
+        setIsValidatingDiscounts(true);
+      }
+
+      const validatedDiscounts = await Promise.all(
+        Object.entries(discounts).map(async ([pubkey, data]) => {
+          if (!data || typeof data !== "object") return null;
+
+          const code = (data as { code?: unknown }).code;
+          if (typeof code !== "string" || !code.trim()) return null;
+
+          try {
+            const response = await fetch(
+              `/api/db/discount-codes?validate=true&code=${encodeURIComponent(
+                code
+              )}&pubkey=${pubkey}`
+            );
+
+            if (!response.ok) {
+              console.warn(
+                `Could not verify discount code for ${pubkey} (server error ${response.status}); keeping for next load.`
+              );
+              return { pubkey, code, percentage: null as null };
+            }
+
+            const result = await response.json();
+            if (
+              result.valid &&
+              typeof result.discount_percentage === "number" &&
+              result.discount_percentage > 0
+            ) {
+              return { pubkey, code, percentage: result.discount_percentage };
+            }
+
+            return null;
+          } catch (error) {
+            console.error(
+              `Network error revalidating discount code for ${pubkey}; keeping for next load.`,
+              error
+            );
+            return { pubkey, code, percentage: null as null };
+          }
+        })
+      );
+
+      if (isCancelled) {
+        return;
+      }
+
+      const codes: { [pubkey: string]: string } = {};
+      const applied: { [pubkey: string]: number } = {};
+      const refreshedDiscounts: CartDiscountsMap = {};
+
+      validatedDiscounts.forEach((entry) => {
+        if (!entry) return;
+
+        refreshedDiscounts[entry.pubkey] = { code: entry.code };
+
+        if (entry.percentage !== null) {
+          codes[entry.pubkey] = entry.code;
+          applied[entry.pubkey] = entry.percentage;
+        }
+      });
+
+      setDiscountCodes(codes);
+      setAppliedDiscounts(applied);
+      setIsValidatingDiscounts(false);
+
+      if (Object.keys(refreshedDiscounts).length > 0) {
+        localStorage.setItem(
+          "cartDiscounts",
+          JSON.stringify(refreshedDiscounts)
+        );
+      } else {
+        localStorage.removeItem("cartDiscounts");
+      }
+    };
+
+    loadCart();
+
+    return () => {
+      isCancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -420,7 +482,6 @@ export default function Component() {
         );
         discounts[pubkey] = {
           code: code,
-          percentage: result.discount_percentage,
         };
         localStorage.setItem("cartDiscounts", JSON.stringify(discounts));
       } else {
@@ -669,48 +730,58 @@ export default function Component() {
                             <h3 className="mb-3 font-semibold">
                               Have a discount code from this seller?
                             </h3>
-                            <div className="flex gap-2">
-                              <Input
-                                label="Discount Code"
-                                placeholder="Enter code"
-                                value={discountCodes[sellerPubkey] || ""}
-                                onChange={(e) =>
-                                  setDiscountCodes({
-                                    ...discountCodes,
-                                    [sellerPubkey]:
-                                      e.target.value.toUpperCase(),
-                                  })
-                                }
-                                className="text-light-text dark:text-dark-text flex-1"
-                                disabled={appliedDiscounts[sellerPubkey]! > 0}
-                                isInvalid={!!discountErrors[sellerPubkey]}
-                                errorMessage={discountErrors[sellerPubkey]}
-                              />
-                              {appliedDiscounts[sellerPubkey]! > 0 ? (
-                                <Button
-                                  color="warning"
-                                  onClick={() =>
-                                    handleRemoveDiscount(sellerPubkey)
-                                  }
-                                >
-                                  Remove
-                                </Button>
-                              ) : (
-                                <Button
-                                  className={SHOPSTRBUTTONCLASSNAMES}
-                                  onClick={() =>
-                                    handleApplyDiscount(sellerPubkey)
-                                  }
-                                >
-                                  Apply
-                                </Button>
-                              )}
-                            </div>
-                            {appliedDiscounts[sellerPubkey]! > 0 && (
-                              <p className="mt-2 text-sm text-green-600 dark:text-green-400">
-                                {appliedDiscounts[sellerPubkey]}% discount
-                                applied to all items from this seller!
+                            {isValidatingDiscounts ? (
+                              <p className="text-sm text-gray-500 dark:text-gray-400">
+                                Verifying saved discount codes&hellip;
                               </p>
+                            ) : (
+                              <>
+                                <div className="flex gap-2">
+                                  <Input
+                                    label="Discount Code"
+                                    placeholder="Enter code"
+                                    value={discountCodes[sellerPubkey] || ""}
+                                    onChange={(e) =>
+                                      setDiscountCodes({
+                                        ...discountCodes,
+                                        [sellerPubkey]:
+                                          e.target.value.toUpperCase(),
+                                      })
+                                    }
+                                    className="text-light-text dark:text-dark-text flex-1"
+                                    disabled={
+                                      appliedDiscounts[sellerPubkey]! > 0
+                                    }
+                                    isInvalid={!!discountErrors[sellerPubkey]}
+                                    errorMessage={discountErrors[sellerPubkey]}
+                                  />
+                                  {appliedDiscounts[sellerPubkey]! > 0 ? (
+                                    <Button
+                                      color="warning"
+                                      onClick={() =>
+                                        handleRemoveDiscount(sellerPubkey)
+                                      }
+                                    >
+                                      Remove
+                                    </Button>
+                                  ) : (
+                                    <Button
+                                      className={SHOPSTRBUTTONCLASSNAMES}
+                                      onClick={() =>
+                                        handleApplyDiscount(sellerPubkey)
+                                      }
+                                    >
+                                      Apply
+                                    </Button>
+                                  )}
+                                </div>
+                                {appliedDiscounts[sellerPubkey]! > 0 && (
+                                  <p className="mt-2 text-sm text-green-600 dark:text-green-400">
+                                    {appliedDiscounts[sellerPubkey]}% discount
+                                    applied to all items from this seller!
+                                  </p>
+                                )}
+                              </>
                             )}
                           </div>
                           {(() => {

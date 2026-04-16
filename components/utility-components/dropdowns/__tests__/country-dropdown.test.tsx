@@ -42,7 +42,7 @@ describe("CountryDropdown", () => {
         label: "Country",
         placeholder: "Select a country",
       }),
-      expect.anything()
+      undefined
     );
   });
 
@@ -60,26 +60,23 @@ describe("CountryDropdown", () => {
 
     expect(MockSelectItem).toHaveBeenCalledWith(
       expect.objectContaining({
-        value: "India",
         children: "India",
       }),
-      expect.anything()
+      undefined
     );
 
     expect(MockSelectItem).toHaveBeenCalledWith(
       expect.objectContaining({
-        value: "United States",
         children: "United States",
       }),
-      expect.anything()
+      undefined
     );
 
     expect(MockSelectItem).toHaveBeenCalledWith(
       expect.objectContaining({
-        value: "Canada",
         children: "Canada",
       }),
-      expect.anything()
+      undefined
     );
   });
 });

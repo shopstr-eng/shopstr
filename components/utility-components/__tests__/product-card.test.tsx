@@ -7,6 +7,7 @@ import { ProductData } from "@/utils/parsers/product-parser-functions";
 
 const mockRouter = {
   pathname: "/product-page",
+  push: jest.fn(),
 };
 jest.mock("next/router", () => ({
   useRouter: () => mockRouter,
@@ -18,7 +19,9 @@ jest.mock("../profile/profile-dropdown", () => ({
       data-testid="profile-dropdown"
       data-pubkey={props.pubkey}
       data-keys={JSON.stringify(props.dropDownKeys)}
-    ></div>
+    >
+      <button data-testid="profile-dropdown-trigger">Seller</button>
+    </div>
   ),
 }));
 jest.mock(
@@ -63,6 +66,12 @@ const mockProductData: ProductData = {
   totalCost: 1000,
 };
 
+const mockSellerZapsnagProduct: ProductData = {
+  ...mockProductData,
+  d: "zapsnag",
+  categories: ["zapsnag"],
+};
+
 const renderWithContext = (
   ui: React.ReactElement,
   userPubkey: string | null = null
@@ -77,6 +86,10 @@ const renderWithContext = (
 };
 
 describe("ProductCard", () => {
+  beforeEach(() => {
+    mockRouter.push.mockClear();
+  });
+
   it("returns null if no productData is provided", () => {
     // @ts-expect-error: Intentionally passing null to test component's null-handling
     const { container } = render(<ProductCard productData={null} />);
@@ -105,6 +118,70 @@ describe("ProductCard", () => {
         mockProductData,
         expect.any(Object)
       );
+    });
+
+    it("navigates via router.push when href is provided", () => {
+      renderWithContext(
+        <ProductCard productData={mockProductData} href="/listing/test-slug" />
+      );
+
+      fireEvent.click(screen.getByTestId("image-carousel").parentElement!);
+      expect(mockRouter.push).toHaveBeenCalledWith("/listing/test-slug");
+    });
+
+    it("navigates when pressing Enter on the linked card itself", () => {
+      renderWithContext(
+        <ProductCard productData={mockProductData} href="/listing/test-slug" />
+      );
+
+      fireEvent.keyDown(screen.getByRole("link"), { key: "Enter" });
+      expect(mockRouter.push).toHaveBeenCalledWith("/listing/test-slug");
+    });
+
+    it("does not navigate when clicking seller dropdown area", () => {
+      renderWithContext(
+        <ProductCard productData={mockProductData} href="/listing/test-slug" />
+      );
+
+      fireEvent.click(screen.getByTestId("profile-dropdown-trigger"));
+      expect(mockRouter.push).not.toHaveBeenCalled();
+    });
+
+    it("does not navigate if onProductClick prevents default", () => {
+      const onProductClick = jest.fn((_product, event) =>
+        event?.preventDefault()
+      );
+
+      renderWithContext(
+        <ProductCard
+          productData={mockProductData}
+          href="/listing/test-slug"
+          onProductClick={onProductClick}
+        />
+      );
+
+      fireEvent.click(screen.getByTestId("image-carousel").parentElement!);
+      expect(onProductClick).toHaveBeenCalled();
+      expect(mockRouter.push).not.toHaveBeenCalled();
+    });
+
+    it("does not navigate when pressing Enter on nested controls inside a linked seller card", () => {
+      renderWithContext(
+        <ProductCard
+          productData={mockSellerZapsnagProduct}
+          href="/listing/test-slug"
+        />,
+        "owner_pubkey"
+      );
+
+      fireEvent.keyDown(
+        screen.getByRole("button", {
+          name: /open flash sale in nostr client/i,
+        }),
+        { key: "Enter" }
+      );
+
+      expect(mockRouter.push).not.toHaveBeenCalled();
     });
 
     it('shows "shop_profile" dropdown key for the owner', () => {
