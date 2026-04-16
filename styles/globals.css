@@ -116,3 +116,15 @@ body {
 body.sf-active [data-main-nav] {
   display: none !important;
 }
+
+.carousel-root,
+.carousel-root .carousel,
+.carousel-root .carousel .slider-wrapper,
+.carousel-root .carousel .slider-wrapper .slider,
+.carousel-root .carousel .slider-wrapper .slider .slide {
+  height: 100%;
+}
+
+.carousel-root .carousel .slider-wrapper .slider .slide > div {
+  height: 100%;
+}

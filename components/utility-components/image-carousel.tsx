@@ -21,8 +21,12 @@ export default function ImageCarousel({
   const containerClass = `flex items-center justify-center ${classname}`;
 
   const imageClass = fixedHeight
-    ? "h-full w-full object-cover rounded-md transition-transform duration-300 ease-in-out hover:scale-105"
-    : "w-full object-cover rounded-md";
+    ? "h-full w-full object-cover transition-transform duration-300 ease-in-out hover:scale-105"
+    : "w-full object-cover";
+
+  const wrapperClass = fixedHeight
+    ? "h-full w-full !rounded-none overflow-hidden"
+    : "w-full !rounded-none overflow-hidden";
 
   const displayImages = () => {
     if (!images || images.length === 0) {
@@ -30,8 +34,10 @@ export default function ImageCarousel({
         <div className={containerClass} key="no-image">
           <Image
             src="/no-image-placeholder.png"
-            className={imageClass}
+            className={wrapperClass}
+            classNames={{ img: imageClass }}
             alt="No product image available - dairy listing placeholder"
+            radius="none"
           />
         </div>,
       ];
@@ -44,7 +50,8 @@ export default function ImageCarousel({
             src={image}
             srcSet={buildSrcSet(image)}
             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 384px"
-            className={imageClass}
+            className={wrapperClass}
+            classNames={{ img: imageClass }}
             alt={`Product image ${index + 1} - farm-fresh dairy listing`}
             radius="none"
             style={{
