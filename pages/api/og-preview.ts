@@ -1,4 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
+import { lookup } from "dns/promises";
+import net from "net";
 
 type OGData = {
   title?: string;
@@ -9,6 +11,63 @@ type OGData = {
 
 const cache = new Map<string, { data: OGData; timestamp: number }>();
 const CACHE_TTL = 1000 * 60 * 30;
+
+function isPrivateIPv4(ip: string): boolean {
+  const parts = ip.split(".").map(Number);
+  if (parts.length !== 4 || parts.some((n) => Number.isNaN(n) || n < 0 || n > 255)) {
+    return true;
+  }
+
+  const [a, b] = parts;
+  if (a === 10) return true;
+  if (a === 127) return true;
+  if (a === 169 && b === 254) return true;
+  if (a === 172 && b >= 16 && b <= 31) return true;
+  if (a === 192 && b === 168) return true;
+  if (a === 0) return true;
+  if (a === 100 && b >= 64 && b <= 127) return true;
+  if (a >= 224) return true;
+
+  return false;
+}
+
+function isPrivateIPv6(ip: string): boolean {
+  const normalized = ip.toLowerCase();
+  if (normalized === "::1") return true;
+  if (normalized.startsWith("fe80:")) return true;
+  if (normalized.startsWith("fc") || normalized.startsWith("fd")) return true;
+  if (normalized === "::") return true;
+  return false;
+}
+
+async function isSafePublicHostname(hostname: string): Promise<boolean> {
+  const lowered = hostname.toLowerCase();
+  if (lowered === "localhost" || lowered.endsWith(".localhost") || lowered.endsWith(".local")) {
+    return false;
+  }
+
+  const ipType = net.isIP(hostname);
+  if (ipType === 4) return !isPrivateIPv4(hostname);
+  if (ipType === 6) return !isPrivateIPv6(hostname);
+
+  try {
+    const addresses = await lookup(hostname, { all: true });
+    if (addresses.length === 0) return false;
+
+    for (const addr of addresses) {
+      if (
+        (addr.family === 4 && isPrivateIPv4(addr.address)) ||
+        (addr.family === 6 && isPrivateIPv6(addr.address))
+      ) {
+        return false;
+      }
+    }
+
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 function decodeHTMLEntities(str: string): string {
   return str
@@ -64,7 +123,13 @@ export default async function handler(
     return res.status(400).json({ error: "Invalid URL" });
   }
 
-  const cached = cache.get(url);
+  const isSafeHost = await isSafePublicHostname(parsedUrl.hostname);
+  if (!isSafeHost) {
+    return res.status(400).json({ error: "URL host is not allowed" });
+  }
+
+  const normalizedUrl = parsedUrl.toString();
+  const cached = cache.get(normalizedUrl);
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
     res.setHeader("Cache-Control", "public, max-age=1800");
     return res.status(200).json(cached.data);
@@ -73,7 +138,7 @@ export default async function handler(
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 6000);
-    const response = await fetch(url, {
+    const response = await fetch(normalizedUrl, {
       signal: controller.signal,
       headers: {
         "User-Agent":
@@ -120,10 +185,10 @@ export default async function handler(
       }
     }
 
-    ogData.url = extractMeta(html, "og:url") ?? url;
+    ogData.url = extractMeta(html, "og:url") ?? normalizedUrl;
 
     if (ogData.title) {
-      cache.set(url, { data: ogData, timestamp: Date.now() });
+      cache.set(normalizedUrl, { data: ogData, timestamp: Date.now() });
     }
 
     res.setHeader("Cache-Control", "public, max-age=1800");
