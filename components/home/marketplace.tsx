@@ -1,4 +1,7 @@
-import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
+import {
+  MagnifyingGlassIcon,
+  InformationCircleIcon,
+} from "@heroicons/react/24/outline";
 import {
   Button,
   Chip,
@@ -6,6 +9,7 @@ import {
   SelectItem,
   SelectSection,
   Input,
+  Tooltip,
   useDisclosure,
   Dropdown,
   DropdownTrigger,
@@ -415,10 +419,18 @@ function MarketplacePage({
                   mainWrapper: "bg-white",
                 }}
                 isClearable
-                placeholder="Title, summary, price, naddr1..., npub1..."
+                placeholder="Search by name, price, or seller"
                 value={selectedSearch}
                 startContent={
                   <MagnifyingGlassIcon className="h-5 w-5 text-black" />
+                }
+                endContent={
+                  <Tooltip
+                    content="You can also search by Nostr identifier (naddr1… or npub1…)"
+                    placement="bottom"
+                  >
+                    <InformationCircleIcon className="h-4 w-4 cursor-default text-black" />
+                  </Tooltip>
                 }
                 onChange={(event) => {
                   const value = event.target.value;
@@ -508,10 +520,18 @@ function MarketplacePage({
                     mainWrapper: "bg-white",
                   }}
                   isClearable
-                  placeholder="Title, summary, price, naddr1..., npub1..."
+                  placeholder="Search by name, price, or seller"
                   value={selectedSearch}
                   startContent={
                     <MagnifyingGlassIcon className="h-5 w-5 text-black" />
+                  }
+                  endContent={
+                    <Tooltip
+                      content="You can also search by Nostr identifier (naddr1… or npub1…)"
+                      placement="bottom"
+                    >
+                      <InformationCircleIcon className="h-4 w-4 cursor-default text-gray-400" />
+                    </Tooltip>
                   }
                   onChange={(event) => {
                     const value = event.target.value;

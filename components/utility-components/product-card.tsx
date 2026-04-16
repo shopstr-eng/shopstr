@@ -169,121 +169,144 @@ export default function ProductCard({
 
   const contentBody = (
     <div className="flex h-full flex-col">
-      {/* Image Section with Title Overlay */}
+      {/* Image Section */}
       <div className="relative h-64 w-full overflow-hidden border-b-4 border-black bg-gray-200">
         <ImageCarousel
           images={productData.images}
           classname="w-full h-full object-cover"
           showThumbs={false}
         />
-
-        {/* Title Overlay at Bottom of Image */}
-        <div className="absolute right-0 bottom-0 left-0 border-t-2 border-black bg-white/95 p-3 backdrop-blur-sm">
-          <h2 className="truncate text-2xl font-bold text-black">
-            {productData.title}
-          </h2>
-          {isZapsnag && productData.pubkey === userPubkey && (
-            <button
-              onClick={handleNjumpClick}
-              className="inline-flex flex-shrink-0 items-center text-xs text-yellow-500 underline hover:text-yellow-700"
-              title="Track Sales on Nostr"
-              aria-label="Open Flash Sale in Nostr client"
-            >
-              <span>View on Nostr</span>
-              <ArrowTopRightOnSquareIcon className="ml-1 h-4 w-4" />
-            </button>
-          )}
-        </div>
       </div>
 
       {/* Card Content */}
       <div className="flex min-h-0 flex-1 flex-col space-y-3 bg-white p-4">
-        {/* Profile Section */}
-        <div className="flex min-w-0 items-center justify-between gap-2">
-          <div
-            className="min-w-0 flex-1 overflow-hidden"
-            data-profile-dropdown
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-            }}
-          >
-            <ProfileWithDropdown
-              pubkey={productData.pubkey}
-              dropDownKeys={
-                productData.pubkey === userPubkey
-                  ? ["shop_profile"]
-                  : ["shop", "storefront", "inquiry", "copy_npub"]
-              }
-              bg="light"
-            />
-          </div>
-          {/* Status Badge */}
-          {isExpired && (
-            <Chip color="warning" size="sm" variant="flat" className="mr-2">
-              Outdated
-            </Chip>
-          )}
-          {productData.status === "active" && (
-            <Chip className="flex-shrink-0 border-2 border-black bg-green-500 text-xs font-bold text-white">
-              Active
-            </Chip>
-          )}
-          {productData.status === "sold" && (
-            <Chip className="flex-shrink-0 border-2 border-black bg-red-500 text-xs font-bold text-white">
-              Sold
-            </Chip>
-          )}
-          {productData.status === "soon" && (
-            <Chip className="flex-shrink-0 border-2 border-black bg-yellow-500 text-xs font-bold text-black">
-              Soon
-            </Chip>
-          )}
-          {productData.rawEvent && (
-            <Dropdown
-              classNames={{
-                content:
-                  "rounded-md border-2 border-black bg-white shadow-neo p-0",
-              }}
-            >
-              <DropdownTrigger>
-                <Button
-                  isIconOnly
-                  variant="light"
-                  size="sm"
-                  className="shadow-neo h-8 min-w-8 rounded-md border-2 border-black bg-white"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                  }}
-                >
-                  <EllipsisVerticalIcon className="h-5 w-5 text-black" />
-                </Button>
-              </DropdownTrigger>
-              <DropdownMenu
-                aria-label="Event Actions"
-                classNames={{
-                  base: "p-1",
-                }}
-                itemClasses={{
-                  base: "rounded-md text-black data-[hover=true]:bg-primary-yellow data-[hover=true]:text-black",
-                }}
-              >
-                <DropdownItem
-                  key="view-raw"
-                  onPress={() => setShowRawEventModal(true)}
-                >
-                  View Raw Event
-                </DropdownItem>
-                <DropdownItem
-                  key="view-id"
-                  onPress={() => setShowEventIdModal(true)}
-                >
-                  View Event ID
-                </DropdownItem>
-              </DropdownMenu>
-            </Dropdown>
-          )}
+        {router.pathname !== "/" && (
+          <>
+            {/* Title row with actions */}
+            <div className="flex items-start justify-between gap-2">
+              <h2 className="line-clamp-2 min-w-0 flex-1 text-xl leading-snug font-bold text-black">
+                {productData.title}
+              </h2>
+              <div className="flex flex-shrink-0 items-center gap-1">
+                {isZapsnag && productData.pubkey === userPubkey && (
+                  <button
+                    onClick={handleNjumpClick}
+                    className="inline-flex items-center text-xs text-yellow-500 underline hover:text-yellow-700"
+                    title="Track Sales on Nostr"
+                    aria-label="Open Flash Sale in Nostr client"
+                  >
+                    <span>View on Nostr</span>
+                    <ArrowTopRightOnSquareIcon className="ml-1 h-4 w-4" />
+                  </button>
+                )}
+                {productData.rawEvent && (
+                  <Dropdown
+                    classNames={{
+                      content:
+                        "rounded-md border-2 border-black bg-white shadow-neo p-0",
+                    }}
+                  >
+                    <DropdownTrigger>
+                      <Button
+                        isIconOnly
+                        variant="light"
+                        size="sm"
+                        className="shadow-neo h-8 min-w-8 rounded-md border-2 border-black bg-white"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                        }}
+                      >
+                        <EllipsisVerticalIcon className="h-5 w-5 text-black" />
+                      </Button>
+                    </DropdownTrigger>
+                    <DropdownMenu
+                      aria-label="Event Actions"
+                      classNames={{
+                        base: "p-1",
+                      }}
+                      itemClasses={{
+                        base: "rounded-md text-black data-[hover=true]:bg-primary-yellow data-[hover=true]:text-black",
+                      }}
+                    >
+                      <DropdownItem
+                        key="view-raw"
+                        onPress={() => setShowRawEventModal(true)}
+                      >
+                        View Raw Event
+                      </DropdownItem>
+                      <DropdownItem
+                        key="view-id"
+                        onPress={() => setShowEventIdModal(true)}
+                      >
+                        View Event ID
+                      </DropdownItem>
+                    </DropdownMenu>
+                  </Dropdown>
+                )}
+              </div>
+            </div>
+
+            {/* Status badges - Active only shown on /my-listings */}
+            {(isExpired ||
+              router.pathname === "/my-listings" ||
+              productData.status === "sold" ||
+              productData.status === "soon") && (
+              <div className="flex items-center gap-2">
+                {isExpired && (
+                  <Chip color="warning" size="sm" variant="flat">
+                    Outdated
+                  </Chip>
+                )}
+                {router.pathname === "/my-listings" &&
+                  productData.status === "active" && (
+                    <Chip className="flex-shrink-0 border-2 border-black bg-green-500 text-xs font-bold text-white">
+                      Active
+                    </Chip>
+                  )}
+                {productData.status === "sold" && (
+                  <Chip className="flex-shrink-0 border-2 border-black bg-red-500 text-xs font-bold text-white">
+                    Sold
+                  </Chip>
+                )}
+                {productData.status === "soon" && (
+                  <Chip className="flex-shrink-0 border-2 border-black bg-yellow-500 text-xs font-bold text-black">
+                    Soon
+                  </Chip>
+                )}
+              </div>
+            )}
+
+            {/* Price */}
+            {!isZapsnag ? (
+              <CompactPriceDisplay monetaryInfo={productData} />
+            ) : (
+              <div className="flex items-center justify-center rounded-md bg-black/10 px-2 py-1">
+                <span className="text-sm font-bold text-yellow-600">
+                  ⚡ {productData.price} {productData.currency}
+                </span>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Seller – supporting text */}
+        <div
+          className="mb-2"
+          data-profile-dropdown
+          onClick={(e) => {
+            e.stopPropagation();
+          }}
+        >
+          <ProfileWithDropdown
+            pubkey={productData.pubkey}
+            dropDownKeys={
+              productData.pubkey === userPubkey
+                ? ["shop_profile"]
+                : ["shop", "storefront", "inquiry", "copy_npub"]
+            }
+            bg="light"
+          />
         </div>
 
         {productData.beefinit_donation_percentage != null &&
@@ -293,28 +316,15 @@ export default function ProductCard({
             </div>
           )}
 
-        {/* Location and Price - with proper spacing */}
+        {/* Location */}
         {router.pathname !== "/" && (
-          <div className="mt-auto flex min-w-0 items-center justify-between gap-3 pt-2">
-            <div className="max-w-[60%] min-w-0 flex-shrink-0">
-              <Chip
-                startContent={locationAvatar(productData.location)}
-                className="bg-primary-blue max-w-full truncate border-2 border-black text-xs font-semibold text-white"
-              >
-                <span className="truncate">{productData.location}</span>
-              </Chip>
-            </div>
-            {!isZapsnag ? (
-              <div className="min-w-0 flex-shrink-0">
-                <CompactPriceDisplay monetaryInfo={productData} />
-              </div>
-            ) : (
-              <div className="flex items-center justify-center rounded-md bg-black/10 px-2 py-1">
-                <span className="text-sm font-bold text-yellow-600">
-                  ⚡ {productData.price} {productData.currency}
-                </span>
-              </div>
-            )}
+          <div className="mt-auto pt-2">
+            <Chip
+              startContent={locationAvatar(productData.location)}
+              className="bg-primary-blue max-w-full truncate border-2 border-black text-xs font-semibold text-white"
+            >
+              <span className="truncate">{productData.location}</span>
+            </Chip>
           </div>
         )}
       </div>

@@ -16,6 +16,7 @@ import {
 } from "@heroui/react";
 import ClaimButton from "../utility-components/claim-button";
 import PDFAnnotator from "../utility-components/pdf-annotator";
+import LinkPreview from "./link-preview";
 import { NostrMessageEvent } from "../../utils/types/types";
 import { timeSinceMessageDisplayText } from "../../utils/messages/utils";
 import { getDecodedToken } from "@cashu/cashu-ts";
@@ -599,26 +600,36 @@ const ChatMessage = ({
       );
     }
 
-    const words = content.split(/(\s+)/);
-    return words.map((word, index) => {
-      const npubMatch = word.match(/npub[a-zA-Z0-9]+/);
-      if (npubMatch) {
+    const parts = content.split(/(https?:\/\/[^\s<>"']+)/g);
+    return parts.map((part, index) => {
+      if (/^https?:\/\//.test(part)) {
         return (
-          <span
-            key={index}
-            className="cursor-pointer text-yellow-600 hover:underline"
-            onClick={() => {
-              router.replace({
-                pathname: "/orders",
-                query: { pk: npubMatch[0], isInquiry: true },
-              });
-            }}
-          >
-            {word}
+          <span key={index} className="block">
+            <LinkPreview url={part} isUserMessage={isUserMessage} />
           </span>
         );
       }
-      return word;
+      const subParts = part.split(/(\s+)/);
+      return subParts.map((sub, subIndex) => {
+        const npubMatch = sub.match(/npub[a-zA-Z0-9]+/);
+        if (npubMatch) {
+          return (
+            <span
+              key={`${index}-${subIndex}`}
+              className="cursor-pointer text-yellow-600 hover:underline"
+              onClick={() => {
+                router.replace({
+                  pathname: "/orders",
+                  query: { pk: npubMatch[0], isInquiry: true },
+                });
+              }}
+            >
+              {sub}
+            </span>
+          );
+        }
+        return sub;
+      });
     });
   };
 
@@ -643,7 +654,7 @@ const ChatMessage = ({
               : "bg-[#2C3E50] text-white"
           }`}
         >
-          <div className="inline-block flex-wrap overflow-x-hidden break-normal">
+          <div className="flex flex-col overflow-x-hidden break-words">
             {cashuPrefix && canDecodeToken && tokenAfterCashuVersion ? (
               <>
                 {renderMessageContent(contentBeforeCashu!)}

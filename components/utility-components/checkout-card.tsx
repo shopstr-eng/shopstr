@@ -47,27 +47,9 @@ import { RawEventModal, EventIdModal } from "./modals/event-modals";
 import SubscriptionPricingCards from "./subscription-pricing-cards";
 import SellerReviewReply from "./seller-review-reply";
 import { getLocalStorageJson } from "@/utils/safe-json";
+import { CartDiscountsMap, isCartDiscountsMap } from "@/utils/cart-discounts";
 
 const SUMMARY_CHARACTER_LIMIT = 200;
-type CartDiscountsMap = Record<string, { code: string; percentage: number }>;
-
-const isCartDiscountsMap = (value: unknown): value is CartDiscountsMap => {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return false;
-  }
-
-  return Object.values(value).every((entry) => {
-    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
-      return false;
-    }
-
-    const candidate = entry as { code?: unknown; percentage?: unknown };
-    return (
-      typeof candidate.code === "string" &&
-      typeof candidate.percentage === "number"
-    );
-  });
-};
 
 export default function CheckoutCard({
   productData,
@@ -408,7 +390,6 @@ export default function CheckoutCard({
         );
         discounts[productData.pubkey] = {
           code: discountCode,
-          percentage: appliedDiscount,
         };
         localStorage.setItem("cartDiscounts", JSON.stringify(discounts));
       }
@@ -441,9 +422,21 @@ export default function CheckoutCard({
 
   const handleSendMessage = (pubkeyToOpenChatWith: string) => {
     if (isLoggedIn) {
+      const allParsed = productEventContext.productEvents
+        .filter((e: Event) => e.kind !== 1)
+        .map((e: Event) => parseTags(e))
+        .filter((p: ProductData | undefined): p is ProductData => !!p);
+      const slug = getListingSlug(productData, allParsed);
+      const listingPath = slug || productData.id;
+      const productUrl = `${window.location.origin}/listing/${listingPath}`;
       router.push({
         pathname: "/orders",
-        query: { pk: nip19.npubEncode(pubkeyToOpenChatWith), isInquiry: true },
+        query: {
+          pk: nip19.npubEncode(pubkeyToOpenChatWith),
+          isInquiry: true,
+          productTitle: productData.title,
+          productUrl,
+        },
       });
     } else {
       onOpen();

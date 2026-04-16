@@ -56,6 +56,7 @@ const ChatPanel = ({
   chatsMap,
   isSendingDMLoading,
   isPayment,
+  initialMessage,
 }: {
   handleGoBack: () => void;
   handleSendMessage: (message: string) => Promise<void>;
@@ -63,6 +64,7 @@ const ChatPanel = ({
   chatsMap: Map<string, ChatObject>;
   isSendingDMLoading: boolean;
   isPayment: boolean;
+  initialMessage?: string;
 }) => {
   const FIELD_LABELS: Record<string, string> = {
     tracking: "Tracking number",
@@ -151,6 +153,12 @@ const ChatPanel = ({
   useEffect(() => {
     setMessages(chatsMap.get(currentChatPubkey)?.decryptedChat || []);
   }, [currentChatPubkey, chatsMap]);
+
+  useEffect(() => {
+    if (initialMessage) {
+      setMessageInput(initialMessage);
+    }
+  }, [initialMessage]);
 
   useEffect(() => {
     bottomDivRef.current?.scrollIntoView({ behavior: "smooth" });

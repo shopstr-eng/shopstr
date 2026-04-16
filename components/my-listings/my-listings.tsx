@@ -18,9 +18,6 @@ const MyListingsPage = () => {
   const { pubkey: usersPubkey } = useContext(SignerContext);
   const { isOpen, onOpen, onClose } = useDisclosure();
 
-  const [shopBannerURL, setShopBannerURL] = useState("");
-  const [isFetchingShop, setIsFetchingShop] = useState(false);
-
   const [selectedSection, setSelectedSection] = useState("Listings");
 
   const [selectedCategories] = useState(new Set<string>([]));
@@ -29,6 +26,11 @@ const MyListingsPage = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const shopMapContext = useContext(ShopMapContext);
+  const shopProfile: ShopProfile | undefined = usersPubkey
+    ? shopMapContext.shopData.get(usersPubkey)
+    : undefined;
+  const shopBanner = shopProfile?.content.ui.banner ?? "";
+  const shopAboutContent = shopProfile?.content.about ?? "";
 
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -44,22 +46,6 @@ const MyListingsPage = () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);
-
-  useEffect(() => {
-    setIsFetchingShop(true);
-    if (
-      usersPubkey &&
-      shopMapContext.shopData.has(usersPubkey) &&
-      typeof shopMapContext.shopData.get(usersPubkey) != "undefined"
-    ) {
-      const shopProfile: ShopProfile | undefined =
-        shopMapContext.shopData.get(usersPubkey);
-      if (shopProfile) {
-        setShopBannerURL(shopProfile.content.ui.banner);
-      }
-    }
-    setIsFetchingShop(false);
-  }, [usersPubkey, shopMapContext, shopBannerURL]);
 
   const handleCreateNewListing = () => {
     if (usersPubkey) {
@@ -143,11 +129,11 @@ const MyListingsPage = () => {
           returnPath="/my-listings?stripe=success"
           refreshPath="/my-listings?stripe=refresh"
         />
-        {shopBannerURL != "" && !isFetchingShop ? (
+        {shopBanner != "" ? (
           <>
             <div className="shadow-neo mb-6 flex h-auto w-full items-center justify-center overflow-hidden rounded-lg border-4 border-black">
               <img
-                src={sanitizeUrl(shopBannerURL)}
+                src={sanitizeUrl(shopBanner)}
                 alt="Shop Banner"
                 className="max-h-[210px] w-full object-cover"
                 fetchPriority="high"
