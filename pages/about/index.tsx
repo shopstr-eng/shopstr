@@ -40,6 +40,46 @@ export default function AboutPage() {
         <meta
           name="twitter:description"
           content="Decentralized marketplace connecting local dairy farmers directly with consumers. Zero platform fees."
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: safeJsonLdString({
+              "@context": "https://schema.org",
+              "@type": "AboutPage",
+              name: "About Milk Market",
+              url: "https://milk.market/about",
+              description:
+                "Milk Market is a decentralized marketplace connecting local dairy farmers directly with consumers. Learn about our mission for food sovereignty, zero-fee commerce, and empowering local producers.",
+              mainEntity: {
+                "@type": "Organization",
+                name: "Milk Market",
+                url: "https://milk.market",
+                logo: "https://milk.market/milk-market.png",
+                foundingDate: "2024",
+                description:
+                  "Decentralized, permissionless marketplace connecting local dairy farmers directly with consumers. Zero mandatory platform fees, direct payments via Bitcoin and traditional methods.",
+                founder: {
+                  "@type": "Person",
+                  name: "Milk Market Team",
+                  description:
+                    "Advocates for food sovereignty and direct farm-to-consumer commerce, with expertise in decentralized marketplace technology and dairy supply chains.",
+                },
+                areaServed: {
+                  "@type": "Country",
+                  name: "United States",
+                },
+                sameAs: [
+                  "https://github.com/shopstr-eng/milk-market",
+                  "https://x.com/milkmarketmedia",
+                  "https://www.youtube.com/@milkmarketmedia",
+                  "https://www.instagram.com/milkmarketmedia/",
+                  "https://www.tiktok.com/@milkmarket.media",
+                ],
+              },
+            }),
+          }}
+        />
       </Head>
 
       <div className="min-h-screen bg-white font-sans text-black">

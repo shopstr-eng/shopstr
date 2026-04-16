@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useRouter } from "next/router";
 import Head from "next/head";
 import { ArrowLeftIcon } from "@heroicons/react/24/outline";
+import { safeJsonLdString } from "@/utils/safe-json-ld";
 import { WHITEBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 
 export default function Faq() {
@@ -195,6 +196,27 @@ export default function Faq() {
         <meta
           name="keywords"
           content="milk market, FAQ, raw dairy, farm-fresh dairy, nostr marketplace, bitcoin payments, lightning network, cashu, peer-to-peer commerce"
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: safeJsonLdString({
+              "@context": "https://schema.org",
+              "@type": "FAQPage",
+              name: "Milk Market FAQ",
+              url: "https://milk.market/faq",
+              mainEntity: faqSections.flatMap((section) =>
+                section.items.map((item) => ({
+                  "@type": "Question",
+                  name: item.title,
+                  acceptedAnswer: {
+                    "@type": "Answer",
+                    text: item.content,
+                  },
+                }))
+              ),
+            }),
+          }}
         />
       </Head>
       {/* Main container with new background pattern */}
