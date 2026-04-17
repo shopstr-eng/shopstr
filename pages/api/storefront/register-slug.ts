@@ -53,7 +53,8 @@ export default async function handler(
     const authResult = verifyNostrAuth(
       signedEvent,
       pubkey,
-      "storefront-slug-write"
+      "storefront-slug-write",
+      { method: "DELETE", path: "/api/storefront/register-slug" }
     );
     if (!authResult.valid) {
       return res
@@ -87,7 +88,12 @@ export default async function handler(
   const authResult = verifyNostrAuth(
     signedEvent,
     pubkey,
-    "storefront-slug-write"
+    "storefront-slug-write",
+    {
+      method: "POST",
+      path: "/api/storefront/register-slug",
+      fields: { slug },
+    }
   );
   if (!authResult.valid) {
     return res

@@ -539,7 +539,15 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
     setSlugError("");
     try {
       const signedEvent = await signer.sign(
-        createSellerActionAuthEventTemplate(userPubkey, "storefront-slug-write")
+        createSellerActionAuthEventTemplate(
+          userPubkey,
+          "storefront-slug-write",
+          {
+            method: "POST",
+            path: "/api/storefront/register-slug",
+            fields: { slug: shopSlug },
+          }
+        )
       );
       const res = await fetch("/api/storefront/register-slug", {
         method: "POST",
@@ -572,7 +580,11 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
     if (!confirmed) return;
     try {
       const signedEvent = await signer.sign(
-        createSellerActionAuthEventTemplate(userPubkey, "storefront-slug-write")
+        createSellerActionAuthEventTemplate(
+          userPubkey,
+          "storefront-slug-write",
+          { method: "DELETE", path: "/api/storefront/register-slug" }
+        )
       );
       await fetch("/api/storefront/register-slug", {
         method: "DELETE",

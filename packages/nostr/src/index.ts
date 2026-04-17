@@ -23,7 +23,8 @@ export type SellerActionAuthTag =
   | "stripe-connect"
   | "notification-email-read"
   | "notification-email-write"
-  | "storefront-slug-write";
+  | "storefront-slug-write"
+  | "custom-domain-write";
 
 type EventTemplateWithPubkey = EventTemplate & {
   pubkey: string;
@@ -188,21 +189,68 @@ function getSellerActionAuthContent(action: SellerActionAuthTag): string {
       return "Authorize notification email updates";
     case "storefront-slug-write":
       return "Authorize storefront slug updates";
+    case "custom-domain-write":
+      return "Authorize storefront custom domain updates";
     case "stripe-connect":
     default:
       return "Authorize Stripe Connect account management";
   }
 }
 
+export type SellerActionAuthBindingFieldValue =
+  | string
+  | number
+  | null
+  | undefined;
+
+export type SellerActionAuthBinding = {
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+  path?: string;
+  fields?: Record<string, SellerActionAuthBindingFieldValue>;
+};
+
+function serializeBindingFieldValue(
+  value: SellerActionAuthBindingFieldValue
+): string | undefined {
+  if (value === undefined || value === null || value === "") {
+    return undefined;
+  }
+  return String(value);
+}
+
+export function buildSellerActionAuthBindingTags(
+  binding: SellerActionAuthBinding | undefined
+): string[][] {
+  if (!binding) return [];
+  const tags: string[][] = [];
+  if (binding.method) tags.push(["method", binding.method]);
+  if (binding.path) tags.push(["path", binding.path]);
+  if (binding.fields) {
+    const sorted = Object.entries(binding.fields)
+      .flatMap(([name, value]) => {
+        const normalized = serializeBindingFieldValue(value);
+        return normalized === undefined
+          ? []
+          : ([[name, normalized]] as Array<[string, string]>);
+      })
+      .sort(([a], [b]) => a.localeCompare(b));
+    for (const [name, value] of sorted) {
+      tags.push(["field", name, value]);
+    }
+  }
+  return tags;
+}
+
 export function createSellerActionAuthEventTemplate(
   pubkey: string,
-  action: SellerActionAuthTag
+  action: SellerActionAuthTag,
+  binding?: SellerActionAuthBinding
 ): EventTemplateWithPubkey {
   return {
     pubkey,
     kind: STRIPE_CONNECT_AUTH_KIND,
     created_at: Math.floor(Date.now() / 1000),
-    tags: [["action", action]],
+    tags: [["action", action], ...buildSellerActionAuthBindingTags(binding)],
     content: getSellerActionAuthContent(action),
   };
 }

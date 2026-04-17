@@ -81,4 +81,101 @@ describe("verifyNostrAuth", () => {
       })
     );
   });
+
+  test("accepts events with a matching method/path/fields binding", () => {
+    const secretKey = generateSecretKey();
+    const pubkey = getPublicKey(secretKey);
+    const signedEvent = finalizeEvent(
+      createAuthEventTemplate(pubkey, "storefront-slug-write", {
+        method: "POST",
+        path: "/api/storefront/register-slug",
+        fields: { slug: "my-shop" },
+      }),
+      secretKey
+    );
+
+    expect(
+      verifyNostrAuth(signedEvent, pubkey, "storefront-slug-write", {
+        method: "POST",
+        path: "/api/storefront/register-slug",
+        fields: { slug: "my-shop" },
+      })
+    ).toEqual({ valid: true, pubkey });
+  });
+
+  test("rejects events whose binding method does not match", () => {
+    const secretKey = generateSecretKey();
+    const pubkey = getPublicKey(secretKey);
+    const signedEvent = finalizeEvent(
+      createAuthEventTemplate(pubkey, "storefront-slug-write", {
+        method: "DELETE",
+        path: "/api/storefront/register-slug",
+      }),
+      secretKey
+    );
+
+    expect(
+      verifyNostrAuth(signedEvent, pubkey, "storefront-slug-write", {
+        method: "POST",
+        path: "/api/storefront/register-slug",
+      })
+    ).toEqual(
+      expect.objectContaining({
+        valid: false,
+        error: "Auth event does not match this request",
+      })
+    );
+  });
+
+  test("rejects events whose binding path does not match", () => {
+    const secretKey = generateSecretKey();
+    const pubkey = getPublicKey(secretKey);
+    const signedEvent = finalizeEvent(
+      createAuthEventTemplate(pubkey, "custom-domain-write", {
+        method: "POST",
+        path: "/api/storefront/custom-domain",
+        fields: { domain: "example.com" },
+      }),
+      secretKey
+    );
+
+    expect(
+      verifyNostrAuth(signedEvent, pubkey, "custom-domain-write", {
+        method: "POST",
+        path: "/api/storefront/register-slug",
+        fields: { domain: "example.com" },
+      })
+    ).toEqual(
+      expect.objectContaining({
+        valid: false,
+        error: "Auth event does not match this request",
+      })
+    );
+  });
+
+  test("rejects events whose binding field value does not match", () => {
+    const secretKey = generateSecretKey();
+    const pubkey = getPublicKey(secretKey);
+    const signedEvent = finalizeEvent(
+      createAuthEventTemplate(pubkey, "storefront-slug-write", {
+        method: "POST",
+        path: "/api/storefront/register-slug",
+        fields: { slug: "my-shop" },
+      }),
+      secretKey
+    );
+
+    expect(
+      verifyNostrAuth(signedEvent, pubkey, "storefront-slug-write", {
+        method: "POST",
+        path: "/api/storefront/register-slug",
+        fields: { slug: "different-shop" },
+      })
+    ).toEqual(
+      expect.objectContaining({
+        valid: false,
+        error: "Auth event does not match this request",
+      })
+    );
+  });
 });

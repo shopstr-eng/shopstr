@@ -1,16 +1,29 @@
 import { verifyEvent } from "nostr-tools";
 import {
+  buildSellerActionAuthBindingTags,
   createSellerActionAuthEventTemplate,
+  type SellerActionAuthBinding,
   type SellerActionAuthTag,
 } from "@milk-market/nostr";
 
 const AUTH_EVENT_KIND = 27235;
 const MAX_EVENT_AGE_SECONDS = 120;
 
+function tagsContain(eventTags: unknown, expected: string[]): boolean {
+  if (!Array.isArray(eventTags)) return false;
+  return eventTags.some(
+    (tag) =>
+      Array.isArray(tag) &&
+      tag.length >= expected.length &&
+      expected.every((value, idx) => tag[idx] === value)
+  );
+}
+
 export function verifyNostrAuth(
   signedEvent: any,
   expectedPubkey?: string,
-  expectedAction?: SellerActionAuthTag
+  expectedAction?: SellerActionAuthTag,
+  expectedBinding?: SellerActionAuthBinding
 ): { valid: boolean; pubkey: string; error?: string } {
   if (!signedEvent || typeof signedEvent !== "object") {
     return { valid: false, pubkey: "", error: "Missing signed auth event" };
@@ -57,15 +70,29 @@ export function verifyNostrAuth(
     }
   }
 
+  if (expectedBinding) {
+    const expectedTags = buildSellerActionAuthBindingTags(expectedBinding);
+    for (const expected of expectedTags) {
+      if (!tagsContain(signedEvent.tags, expected)) {
+        return {
+          valid: false,
+          pubkey: signedEvent.pubkey,
+          error: "Auth event does not match this request",
+        };
+      }
+    }
+  }
+
   return { valid: true, pubkey: signedEvent.pubkey };
 }
 
 export function createAuthEventTemplate(
   pubkey: string,
-  action: SellerActionAuthTag = "stripe-connect"
+  action: SellerActionAuthTag = "stripe-connect",
+  binding?: SellerActionAuthBinding
 ): any {
   return {
-    ...createSellerActionAuthEventTemplate(pubkey, action),
+    ...createSellerActionAuthEventTemplate(pubkey, action, binding),
     kind: AUTH_EVENT_KIND,
   };
 }

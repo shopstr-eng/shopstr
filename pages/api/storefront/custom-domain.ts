@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getDbPool } from "@/utils/db/db-service";
+import { verifyNostrAuth } from "@/utils/stripe/verify-nostr-auth";
 
 const pool = getDbPool();
 
@@ -8,13 +9,33 @@ export default async function handler(
   res: NextApiResponse
 ) {
   if (req.method === "POST") {
-    const { pubkey, domain } = req.body;
+    const { pubkey, domain, signedEvent } = req.body ?? {};
 
     if (!pubkey || !domain) {
       return res.status(400).json({ error: "pubkey and domain are required" });
     }
 
+    if (!signedEvent) {
+      return res.status(400).json({ error: "signedEvent is required" });
+    }
+
     const cleanDomain = domain.toLowerCase().trim();
+
+    const authResult = verifyNostrAuth(
+      signedEvent,
+      pubkey,
+      "custom-domain-write",
+      {
+        method: "POST",
+        path: "/api/storefront/custom-domain",
+        fields: { domain: cleanDomain },
+      }
+    );
+    if (!authResult.valid) {
+      return res
+        .status(401)
+        .json({ error: authResult.error || "Authentication failed" });
+    }
 
     const slugResult = await pool.query(
       "SELECT slug FROM shop_slugs WHERE pubkey = $1",
@@ -77,9 +98,25 @@ export default async function handler(
   }
 
   if (req.method === "DELETE") {
-    const { pubkey } = req.body;
+    const { pubkey, signedEvent } = req.body ?? {};
     if (!pubkey) {
       return res.status(400).json({ error: "pubkey is required" });
+    }
+
+    if (!signedEvent) {
+      return res.status(400).json({ error: "signedEvent is required" });
+    }
+
+    const authResult = verifyNostrAuth(
+      signedEvent,
+      pubkey,
+      "custom-domain-write",
+      { method: "DELETE", path: "/api/storefront/custom-domain" }
+    );
+    if (!authResult.valid) {
+      return res
+        .status(401)
+        .json({ error: authResult.error || "Authentication failed" });
     }
 
     try {
