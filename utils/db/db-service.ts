@@ -889,7 +889,7 @@ export async function cachedEventsBelongToPubkey(
     return result.rows.every((row) => row.pubkey === pubkey);
   } catch (error) {
     console.error("Failed to verify cached event ownership:", error);
-    return false;
+    throw error;
   } finally {
     if (client) {
       client.release();

@@ -100,6 +100,25 @@ describe("/api/db/delete-events", () => {
     });
   });
 
+  it("returns 500 when ownership verification fails unexpectedly", async () => {
+    extractSignedEventFromRequestMock.mockReturnValue({ pubkey: "owner-pubkey" });
+    verifySignedHttpRequestProofMock.mockReturnValue({ ok: true, status: 200 });
+    cachedEventsBelongToPubkeyMock.mockRejectedValue(new Error("db unavailable"));
+
+    const req = createRequest("POST", {
+      eventIds: ["evt-1"],
+    });
+    const res = createResponse();
+
+    await handler(req, res as unknown as NextApiResponse);
+
+    expect(deleteCachedEventsByIdsMock).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(500);
+    expect(res.jsonBody).toEqual({
+      error: "Failed to delete cached events",
+    });
+  });
+
   it("allows signed owners to delete their own cached events", async () => {
     extractSignedEventFromRequestMock.mockReturnValue({ pubkey: "owner-pubkey" });
     verifySignedHttpRequestProofMock.mockReturnValue({ ok: true, status: 200 });
