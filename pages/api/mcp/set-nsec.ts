@@ -1,12 +1,19 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getPublicKey, nip19 } from "nostr-tools";
-import { hexToBytes } from "@noble/hashes/utils";
+import { hexToBytes } from "@noble/hashes/utils.js";
 import {
   authenticateRequest,
   updateApiKeyNsec,
   ApiKeyPermission,
 } from "@/utils/mcp/auth";
 import { encryptNsec } from "@/utils/mcp/nostr-signing";
+import { applyRateLimit } from "@/utils/rate-limit";
+
+// Highly sensitive: writes the encrypted nsec for an API key. Tight per-IP
+// cap and a per-key cap to make brute-force / credential rotation abuse
+// infeasible.
+const RATE_LIMIT = { limit: 10, windowMs: 60 * 60 * 1000 };
+const PER_KEY_LIMIT = { limit: 5, windowMs: 60 * 60 * 1000 };
 
 export default async function handler(
   req: NextApiRequest,
@@ -16,8 +23,22 @@ export default async function handler(
     return res.status(405).json({ error: "Method not allowed. Use POST." });
   }
 
+  if (!applyRateLimit(req, res, "mcp-set-nsec:ip", RATE_LIMIT)) return;
+
   const apiKey = await authenticateRequest(req, res);
   if (!apiKey) return;
+
+  if (
+    !applyRateLimit(
+      req,
+      res,
+      "mcp-set-nsec:key",
+      PER_KEY_LIMIT,
+      String(apiKey.id)
+    )
+  ) {
+    return;
+  }
 
   const { nsec, permissions } = req.body || {};
 

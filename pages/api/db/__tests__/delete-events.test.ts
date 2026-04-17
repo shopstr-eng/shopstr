@@ -40,6 +40,7 @@ function createRequest(method: string, body: unknown): NextApiRequest {
   return {
     method,
     body,
+    headers: {},
   } as unknown as NextApiRequest;
 }
 

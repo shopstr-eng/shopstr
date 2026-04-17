@@ -11,11 +11,7 @@ import {
   DropdownItem,
   Button,
 } from "@heroui/react";
-import {
-  CheckCircleIcon,
-  XCircleIcon,
-  EllipsisVerticalIcon,
-} from "@heroicons/react/24/outline";
+import { XCircleIcon, EllipsisVerticalIcon } from "@heroicons/react/24/outline";
 import parseTags, {
   ProductData,
 } from "@/utils/parsers/product-parser-functions";
@@ -206,6 +202,19 @@ const Listing = ({ initialProductEvent }: ListingPageProps) => {
   const [invoiceGenerationFailed, setInvoiceGenerationFailed] = useState(false);
   const [cashuPaymentSent, setCashuPaymentSent] = useState(false);
   const [cashuPaymentFailed, setCashuPaymentFailed] = useState(false);
+
+  // Once payment lands, let the inline "Payment confirmed!" GIF play through
+  // once and then push straight to the order summary page. Avoids the prior
+  // friction of a "click X to dismiss" success modal.
+  useEffect(() => {
+    if (!invoiceIsPaid && !cashuPaymentSent) return;
+    const timer = setTimeout(() => {
+      setInvoiceIsPaid(false);
+      setCashuPaymentSent(false);
+      router.push("/order-summary");
+    }, 2500);
+    return () => clearTimeout(timer);
+  }, [invoiceIsPaid, cashuPaymentSent, router]);
 
   const productContext = useContext(ProductContext);
 
@@ -465,42 +474,6 @@ const Listing = ({ initialProductEvent }: ListingPageProps) => {
             <ShopstrSpinner />
           </div>
         )}
-        {invoiceIsPaid || cashuPaymentSent ? (
-          <>
-            <Modal
-              backdrop="blur"
-              isOpen={invoiceIsPaid || cashuPaymentSent}
-              onClose={() => {
-                setInvoiceIsPaid(false);
-                setCashuPaymentSent(false);
-                router.push("/order-summary");
-              }}
-              classNames={{
-                body: "py-6 ",
-                backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-                header: "border-b-[1px] border-[#292f46]",
-                footer: "border-t-[1px] border-[#292f46]",
-                closeButton: "hover:bg-black/5 active:bg-white/10",
-              }}
-              isDismissable={true}
-              scrollBehavior={"normal"}
-              placement={"center"}
-              size="2xl"
-            >
-              <ModalContent>
-                <ModalHeader className="text-light-text dark:text-dark-text flex items-center justify-center">
-                  <CheckCircleIcon className="h-6 w-6 text-green-500" />
-                  <div className="ml-2">Order successful!</div>
-                </ModalHeader>
-                <ModalBody className="text-light-text dark:text-dark-text flex flex-col overflow-hidden">
-                  <div className="flex items-center justify-center">
-                    The seller will receive a message with your order details.
-                  </div>
-                </ModalBody>
-              </ModalContent>
-            </Modal>
-          </>
-        ) : null}
         {invoiceGenerationFailed ? (
           <>
             <Modal
