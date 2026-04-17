@@ -64,7 +64,7 @@ describe("SettingsBreadCrumbs", () => {
 
   test("calls router.push with the correct path when a breadcrumb is clicked", () => {
     mockedUseRouter.mockReturnValue({
-      pathname: "/settings/preferences",
+      pathname: "/settings/user-profile",
       push: mockRouterPush,
     });
 
