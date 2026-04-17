@@ -1,6 +1,11 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { lookup } from "dns/promises";
 import net from "net";
+import { applyRateLimit } from "@/utils/rate-limit";
+
+// Each call performs an outbound HTTPS fetch + HTML parse; tight per-IP
+// cap to prevent us from being used as an SSRF amplifier.
+const RATE_LIMIT = { limit: 60, windowMs: 60 * 1000 };
 
 type OGData = {
   title?: string;
@@ -115,6 +120,8 @@ export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
+  if (!applyRateLimit(req, res, "og-preview", RATE_LIMIT)) return;
+
   const { url } = req.query;
   if (!url || typeof url !== "string") {
     return res.status(400).json({ error: "Missing url" });

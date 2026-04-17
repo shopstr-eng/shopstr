@@ -32,6 +32,12 @@ HeroUI v2.8.10 replaced `@nextui-org/react@2.2.9`. The heroui plugin correctly u
 
 ## Recent Changes
 
+### Broad API Rate Limiting
+
+Added `utils/rate-limit.ts` with `applyRateLimit(req, res, bucket, opts, key?)` and applied per-IP buckets across every public API route — read endpoints (`fetch-products`, `fetch-messages`, `fetch-profile(s)`, `fetch-blossom`, `fetch-communities`, `fetch-relays`, `fetch-reviews`, `fetch-wallet`, `get-order-statuses`, `marketplace-stats`, `get-failed-publishes`), write endpoints (`update-order-status`, `mark-messages-read`, `delete-events`, `track-failed-publish`, `clear-failed-publish`, `discount-codes`), storefront (`storefront/lookup`, `storefront/verify-domain`), MCP (`mcp/index`, `mcp/create-order`, `mcp/verify-payment`, `mcp/api-keys`, `mcp/set-nsec`, `mcp/status`), and side-effecting helpers (`nostr/verify-nip05`, `og-preview`). Authenticated write/MCP routes layer a tighter per-pubkey or per-key bucket after auth so a single compromised credential cannot exhaust the connection pool. Limits are sized per endpoint cost (10/hr for `set-nsec`, 30/min for credential mgmt and DNS-touching routes, 60–120/min for write/MCP, 120–600/min for read).
+
+**Deployment caveat**: the bucket store is a per-process in-memory `Map`. Under horizontal scaling the effective ceiling is `N × limit` where N is the instance count. This is intentionally a coarse safety net to keep one bad client from monopolising the DB pool — not a strict cryptographic bound. For a strict global limit, swap the store in `utils/rate-limit.ts` for Redis (interface is already `bucketName + key → { count, resetAt }`).
+
 ### Mint Operation Durability (Phase 4, P0)
 
 Hardened the highest-stakes Cashu flow — the user-paid → claim-proofs path — against network blips, mint outages, rate limiting, and tab closes. Two new modules under `utils/cashu/`:

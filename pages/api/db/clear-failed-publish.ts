@@ -3,6 +3,9 @@ import {
   ensureFailedRelayPublishesTable,
   getDbPool,
 } from "@/utils/db/db-service";
+import { applyRateLimit } from "@/utils/rate-limit";
+
+const RATE_LIMIT = { limit: 300, windowMs: 60 * 1000 };
 
 export default async function handler(
   req: NextApiRequest,
@@ -11,6 +14,8 @@ export default async function handler(
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
+
+  if (!applyRateLimit(req, res, "clear-failed-publish", RATE_LIMIT)) return;
 
   const dbPool = getDbPool();
   let client;

@@ -17,6 +17,14 @@ import {
   CreateOrderInput,
 } from "@/mcp/tools/purchase-tools";
 import { parseTags } from "@/utils/parsers/product-parser-functions";
+import { applyRateLimit } from "@/utils/rate-limit";
+
+// MCP create-order is on the payment critical path; the per-IP cap is
+// generous so a buyer cannot accidentally lock themselves out across
+// retries, but bounded enough to stop a runaway client from owning the
+// mint quote pipeline.
+const RATE_LIMIT = { limit: 60, windowMs: 60 * 1000 };
+const PER_KEY_LIMIT = { limit: 30, windowMs: 60 * 1000 };
 
 const DEFAULT_MINT_URL = "https://mint.minibits.cash/Bitcoin";
 
@@ -58,10 +66,29 @@ export default async function handler(
   res: NextApiResponse
 ) {
   const requestStart = Date.now();
+
+  if (!applyRateLimit(req, res, "mcp-create-order:ip", RATE_LIMIT)) {
+    recordRequest(Date.now() - requestStart, false, "create-order");
+    return;
+  }
+
   await ensureTables();
 
   const apiKey = await authenticateRequest(req, res, "read_write");
   if (!apiKey) {
+    recordRequest(Date.now() - requestStart, false, "create-order");
+    return;
+  }
+
+  if (
+    !applyRateLimit(
+      req,
+      res,
+      "mcp-create-order:key",
+      PER_KEY_LIMIT,
+      String(apiKey.id)
+    )
+  ) {
     recordRequest(Date.now() - requestStart, false, "create-order");
     return;
   }

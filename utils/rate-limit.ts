@@ -1,4 +1,4 @@
-import type { NextApiRequest } from "next";
+import type { NextApiRequest, NextApiResponse } from "next";
 
 export type RateLimitResult = {
   ok: boolean;
@@ -77,6 +77,37 @@ export function getRequestIp(req: NextApiRequest): string {
   if (realIpValue) return realIpValue.trim();
 
   return req.socket?.remoteAddress ?? "unknown";
+}
+
+/**
+ * Convenience wrapper for the common "check rate limit, set Retry-After,
+ * respond 429" pattern used in API route handlers. Returns `true` when the
+ * caller should continue handling the request, or `false` when a 429 has
+ * already been written and the handler should `return` immediately.
+ *
+ * NOTE: The underlying bucket store is an in-memory `Map` scoped to a single
+ * Node process. Under horizontal scaling the effective limit is roughly
+ * `N × limit` where N is the instance count. This is intentionally a coarse
+ * safety net to keep one bad client from monopolising the DB pool — not a
+ * cryptographically strict ceiling. See `replit.md` for deployment notes.
+ */
+export function applyRateLimit(
+  req: NextApiRequest,
+  res: NextApiResponse,
+  bucketName: string,
+  options: RateLimitOptions,
+  key?: string
+): boolean {
+  const rate = checkRateLimit(bucketName, key ?? getRequestIp(req), options);
+  if (!rate.ok) {
+    res.setHeader(
+      "Retry-After",
+      Math.max(1, Math.ceil((rate.resetAt - Date.now()) / 1000))
+    );
+    res.status(429).json({ error: "Too many requests" });
+    return false;
+  }
+  return true;
 }
 
 // Exported for tests only.
