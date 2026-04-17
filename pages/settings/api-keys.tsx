@@ -40,6 +40,7 @@ const ApiKeysPage = () => {
   const [newKeyName, setNewKeyName] = useState("");
   const [newKeyPermission, setNewKeyPermission] = useState("read");
   const [createdKey, setCreatedKey] = useState<string | null>(null);
+  const [showCreatedKey, setShowCreatedKey] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -256,10 +257,18 @@ const ApiKeysPage = () => {
           {createdKey && (
             <div className="mx-4 mb-6 rounded-lg border border-green-400 bg-green-50 p-4 dark:bg-green-900/20">
               <p className="mb-2 text-sm font-bold text-green-800 dark:text-green-300">
-                API key created! Copy it now — it won&apos;t be shown again.
+                API key created! Copy it now — it won&apos;t be shown again.{" "}
+                <button
+                  className="text-blue-500 underline hover:text-blue-700"
+                  onClick={() => setShowCreatedKey((prev) => !prev)}
+                >
+                  {showCreatedKey ? "Hide" : "Show"}
+                </button>
               </p>
               <div className="flex items-center gap-2">
-                <code className="bg-light-bg text-light-text dark:bg-dark-bg dark:text-dark-text flex-1 rounded-lg px-3 py-2 font-mono text-sm break-all">
+                <code
+                  className={`bg-light-bg text-light-text dark:bg-dark-bg dark:text-dark-text flex-1 rounded-lg px-3 py-2 font-mono text-sm break-all ${showCreatedKey ? "" : "blur-sm"}`}
+                >
                   {createdKey}
                 </code>
                 <button
