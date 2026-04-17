@@ -6,6 +6,14 @@ jest.mock("@/utils/db/db-service", () => ({
 
 import handler from "@/pages/api/db/get-order-statuses";
 
+const getExpectedMaxOrderIds = () => {
+  const configured = Number.parseInt(
+    process.env.MAX_ORDER_IDS_PER_REQUEST || "",
+    10
+  );
+  return Number.isFinite(configured) && configured > 0 ? configured : 200;
+};
+
 function createResponse() {
   return {
     statusCode: 200,
@@ -48,11 +56,15 @@ describe("/api/db/get-order-statuses", () => {
   });
 
   it("rejects requests with too many order IDs", async () => {
+    const maxOrderIds = getExpectedMaxOrderIds();
     const req = {
       method: "POST",
       headers: {},
       body: {
-        orderIds: Array.from({ length: 201 }, (_, index) => `order-${index}`),
+        orderIds: Array.from(
+          { length: maxOrderIds + 1 },
+          (_, index) => `order-${index}`
+        ),
       },
     } as any;
     const res = createResponse();
@@ -61,8 +73,23 @@ describe("/api/db/get-order-statuses", () => {
 
     expect(res.statusCode).toBe(413);
     expect(res.jsonBody).toEqual({
-      error: "Too many order IDs. Maximum allowed is 200.",
+      error: `Too many order IDs. Maximum allowed is ${maxOrderIds}.`,
     });
+  });
+
+  it("returns empty statuses when orderIds is omitted", async () => {
+    const req = {
+      method: "POST",
+      headers: {},
+      body: {},
+    } as any;
+    const res = createResponse();
+
+    await handler(req, res as any);
+
+    expect(getOrderStatusesMock).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(200);
+    expect(res.jsonBody).toEqual({ statuses: {} });
   });
 
   it("dedupes IDs before querying", async () => {

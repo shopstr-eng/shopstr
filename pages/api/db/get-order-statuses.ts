@@ -16,6 +16,10 @@ const MAX_ORDER_IDS_PER_REQUEST = (() => {
 const MAX_ORDER_ID_LENGTH = 128;
 
 function normalizeOrderIds(orderIds: unknown): string[] | null {
+  if (orderIds === null || orderIds === undefined) {
+    return [];
+  }
+
   if (typeof orderIds === "string") {
     const trimmed = orderIds.trim();
     return trimmed ? [trimmed] : [];
