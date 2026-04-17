@@ -18,6 +18,22 @@ function isDecodableToken(token: string): boolean {
   }
 }
 
+function decodeBuyerPubkeyFromContent(content: string): string | null {
+  const npubMatch = content.match(/npub[a-zA-Z0-9]+/);
+  if (!npubMatch) {
+    return null;
+  }
+
+  try {
+    const decoded = nip19.decode(npubMatch[0]);
+    return decoded.type === "npub" && typeof decoded.data === "string"
+      ? decoded.data
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 const ChatMessage = ({
   messageEvent,
   index = 0,
@@ -41,12 +57,8 @@ const ChatMessage = ({
 
   useEffect(() => {
     if (messageEvent?.content && messageEvent.content.includes("npub1")) {
-      // Find word containing npub using regex
-      const npubMatch = messageEvent.content.match(/npub[a-zA-Z0-9]+/);
-      if (npubMatch && setBuyerPubkey) {
-        const { data: buyerPubkey } = nip19.decode(npubMatch[0]);
-        setBuyerPubkey(buyerPubkey as string);
-      }
+      const buyerPubkey = decodeBuyerPubkeyFromContent(messageEvent.content);
+      setBuyerPubkey(buyerPubkey || "");
     } else {
       setBuyerPubkey("");
     }
