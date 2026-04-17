@@ -7,7 +7,7 @@ channel = "stable-22_11"
 [deployment]
 deploymentTarget = "autoscale"
 build = ["pnpm", "run", "build:deploy"]
-run = ["pnpm", "run", "start:deploy"]
+run = ["node", ".next/standalone/server.js"]
 
 [[ports]]
 localPort = 3000
