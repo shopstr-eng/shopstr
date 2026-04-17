@@ -84,12 +84,17 @@ import {
   ShopProfile,
 } from "@/utils/types/types";
 import { Controller } from "react-hook-form";
+import {
+  buildShippingAdjustedProductTotals,
+  ProductTotalsInSats,
+  sumProductTotalsInSats,
+} from "@/utils/cart-totals";
 
 export default function CartInvoiceCard({
   products,
   quantities,
   shippingTypes,
-  totalCostsInSats,
+  productTotalsInSats,
   subtotalCost,
   appliedDiscounts = {},
   discountCodes = {},
@@ -103,7 +108,7 @@ export default function CartInvoiceCard({
   products: ProductData[];
   quantities: { [key: string]: number };
   shippingTypes: { [key: string]: string };
-  totalCostsInSats: { [key: string]: number };
+  productTotalsInSats: ProductTotalsInSats;
   subtotalCost: number;
   appliedDiscounts?: { [key: string]: number };
   discountCodes?: { [key: string]: string };
@@ -191,7 +196,7 @@ export default function CartInvoiceCard({
         const cartItems = products.map((p: any) => ({
           title: p.title || p.productName,
           image: p.images?.[0] || "",
-          amount: String(totalCostsInSats[p.id] || 0),
+          amount: String(currentProductTotalsInSats[p.id] || 0),
           currency: "sats",
           quantity: quantities[p.id] || 1,
           shipping: shippingTypes[p.id] || "",
@@ -422,6 +427,8 @@ export default function CartInvoiceCard({
     [productId: string]: string;
   }>({});
 
+  const [currentProductTotalsInSats, setCurrentProductTotalsInSats] =
+    useState<ProductTotalsInSats>(productTotalsInSats);
   const [totalCost, setTotalCost] = useState<number>(subtotalCost);
 
   const {
@@ -449,6 +456,11 @@ export default function CartInvoiceCard({
   }, [uniqueShippingTypes, hasShippingPickupProducts]);
 
   const [requiredInfo, setRequiredInfo] = useState("");
+
+  useEffect(() => {
+    setCurrentProductTotalsInSats(productTotalsInSats);
+    setTotalCost(subtotalCost);
+  }, [productTotalsInSats, subtotalCost]);
 
   useEffect(() => {
     if (products && products.length > 0) {
@@ -927,77 +939,70 @@ export default function CartInvoiceCard({
     }
   };
 
+  const resetCurrentProductTotals = () => {
+    setCurrentProductTotalsInSats(productTotalsInSats);
+    setTotalCost(subtotalCost);
+  };
+
+  const buildShippingCostsInSats = async () => {
+    const shippingCostsInSats: { [productId: string]: number } = {};
+
+    for (const product of products) {
+      shippingCostsInSats[product.id] = await convertShippingToSats(product);
+    }
+
+    return shippingCostsInSats;
+  };
+
+  const applyCurrentProductTotals = async (
+    shouldAddShipping: (shippingType?: string) => boolean
+  ) => {
+    try {
+      const shippingCostsInSats = await buildShippingCostsInSats();
+      const updatedProductTotalsInSats = buildShippingAdjustedProductTotals({
+        products,
+        baseProductTotalsInSats: productTotalsInSats,
+        quantities,
+        shippingTypes,
+        shippingCostsInSats,
+        sellerFreeShippingStatus,
+        shouldAddShipping,
+      });
+
+      setCurrentProductTotalsInSats(updatedProductTotalsInSats);
+      setTotalCost(sumProductTotalsInSats(updatedProductTotalsInSats));
+
+      return true;
+    } catch (err) {
+      handleShippingConversionError(err);
+      return false;
+    }
+  };
+
   const handleOrderTypeSelection = async (selectedOrderType: string) => {
     setShowOrderTypeSelection(false);
 
     if (selectedOrderType === "shipping") {
       setFormType("shipping");
-      let shippingTotal = 0;
-      const updatedTotalCostsInSats: { [productId: string]: number } = {};
-
-      try {
-        for (const product of products) {
-          if (sellerFreeShippingStatus[product.pubkey]?.qualifies) {
-            updatedTotalCostsInSats[product.id] =
-              totalCostsInSats[product.id] || 0;
-            continue;
-          }
-          const shippingCostInSats = await convertShippingToSats(product);
-          const quantity = quantities[product.id] || 1;
-          const productShippingCost = Math.ceil(shippingCostInSats * quantity);
-          shippingTotal += productShippingCost;
-          updatedTotalCostsInSats[product.id] =
-            (totalCostsInSats[product.id] || 0) + productShippingCost;
-        }
-      } catch (err) {
-        handleShippingConversionError(err);
-        return;
-      }
-
-      setTotalCost(subtotalCost + shippingTotal);
+      if (!(await applyCurrentProductTotals(() => true))) return;
     } else if (selectedOrderType === "contact") {
       setFormType("contact");
       setIsFormValid(true);
-      setTotalCost(subtotalCost);
+      resetCurrentProductTotals();
     } else if (selectedOrderType === "combined") {
       setFormType("combined");
       if (hasMixedShippingWithPickup) {
         setShowFreePickupSelection(true);
+        resetCurrentProductTotals();
       } else {
-        let shippingTotal = 0;
-        const updatedTotalCostsInSats: { [productId: string]: number } = {};
-
-        try {
-          for (const product of products) {
-            if (sellerFreeShippingStatus[product.pubkey]?.qualifies) {
-              updatedTotalCostsInSats[product.id] =
-                totalCostsInSats[product.id] || 0;
-              continue;
-            }
-            const productShippingType = shippingTypes[product.id];
-            if (
-              productShippingType === "Added Cost" ||
-              productShippingType === "Free"
-            ) {
-              const shippingCostInSats = await convertShippingToSats(product);
-              const quantity = quantities[product.id] || 1;
-              const productShippingCost = Math.ceil(
-                shippingCostInSats * quantity
-              );
-              shippingTotal += productShippingCost;
-              updatedTotalCostsInSats[product.id] =
-                (totalCostsInSats[product.id] || 0) + productShippingCost;
-            } else {
-              updatedTotalCostsInSats[product.id] =
-                totalCostsInSats[product.id] || 0;
-            }
-          }
-        } catch (err) {
-          handleShippingConversionError(err);
+        if (
+          !(await applyCurrentProductTotals(
+            (shippingType) =>
+              shippingType === "Added Cost" || shippingType === "Free"
+          ))
+        ) {
           return;
         }
-
-        setTotalCost(subtotalCost + shippingTotal);
       }
     }
   };
@@ -1372,16 +1377,21 @@ export default function CartInvoiceCard({
       const title = product.title;
       const pubkey = product.pubkey;
       const required = product.required;
-      const tokenAmount = totalCostsInSats[pubkey];
+      const tokenAmount = currentProductTotalsInSats[product.id] || 0;
+      if (tokenAmount < 1) {
+        setFailureText("Failed to calculate cart totals for payment.");
+        setShowFailureModal(true);
+        return;
+      }
       let sellerToken;
       let donationToken;
       const sellerProfile = profileContext.profileData.get(pubkey);
       const donationPercentage =
         sellerProfile?.content?.shopstr_donation || 2.1;
       const donationAmount = Math.ceil(
-        (tokenAmount! * donationPercentage) / 100
+        (tokenAmount * donationPercentage) / 100
       );
-      const sellerAmount = tokenAmount! - donationAmount;
+      const sellerAmount = tokenAmount - donationAmount;
       let sellerProofs: Proof[] = [];
 
       let shippingData = data; // Assume data contains shipping info
@@ -1450,9 +1460,7 @@ export default function CartInvoiceCard({
       if (addressString) {
         orderInfoTags.push(["address", addressString]);
       }
-      if (tokenAmount) {
-        orderInfoTags.push(["amount", tokenAmount.toString()]);
-      }
+      orderInfoTags.push(["amount", tokenAmount.toString()]);
       if (donationAmount > 0) {
         orderInfoTags.push([
           "donation_amount",
@@ -3248,48 +3256,16 @@ export default function CartInvoiceCard({
                   onClick={async () => {
                     setShippingPickupPreference("shipping");
                     setShowFreePickupSelection(false);
-                    // Calculate total with all applicable shipping in sats
-                    let shippingTotal = 0;
-                    const updatedTotalCostsInSats: {
-                      [productId: string]: number;
-                    } = {};
-
-                    try {
-                      for (const product of products) {
-                        if (
-                          sellerFreeShippingStatus[product.pubkey]?.qualifies
-                        ) {
-                          updatedTotalCostsInSats[product.id] =
-                            totalCostsInSats[product.id] || 0;
-                          continue;
-                        }
-                        const productShippingType = shippingTypes[product.id];
-                        if (
-                          productShippingType === "Added Cost" ||
-                          productShippingType === "Free" ||
-                          productShippingType === "Free/Pickup"
-                        ) {
-                          const shippingCostInSats =
-                            await convertShippingToSats(product);
-                          const quantity = quantities[product.id] || 1;
-                          const productShippingCost = Math.ceil(
-                            shippingCostInSats * quantity
-                          );
-                          shippingTotal += productShippingCost;
-                          updatedTotalCostsInSats[product.id] =
-                            (totalCostsInSats[product.id] || 0) +
-                            productShippingCost;
-                        } else {
-                          updatedTotalCostsInSats[product.id] =
-                            totalCostsInSats[product.id] || 0;
-                        }
-                      }
-                    } catch (err) {
-                      handleShippingConversionError(err);
+                    if (
+                      !(await applyCurrentProductTotals(
+                        (shippingType) =>
+                          shippingType === "Added Cost" ||
+                          shippingType === "Free" ||
+                          shippingType === "Free/Pickup"
+                      ))
+                    ) {
                       return;
                     }
-
-                    setTotalCost(subtotalCost + shippingTotal);
                   }}
                   className={`w-full rounded-lg border p-4 text-left hover:bg-gray-50 dark:hover:bg-gray-600 ${
                     shippingPickupPreference === "shipping"
@@ -3306,46 +3282,15 @@ export default function CartInvoiceCard({
                   onClick={async () => {
                     setShippingPickupPreference("contact");
                     setShowFreePickupSelection(false);
-                    let shippingTotal = 0;
-                    const updatedTotalCostsInSats: {
-                      [productId: string]: number;
-                    } = {};
-
-                    try {
-                      for (const product of products) {
-                        if (
-                          sellerFreeShippingStatus[product.pubkey]?.qualifies
-                        ) {
-                          updatedTotalCostsInSats[product.id] =
-                            totalCostsInSats[product.id] || 0;
-                          continue;
-                        }
-                        const productShippingType = shippingTypes[product.id];
-                        if (
-                          productShippingType === "Added Cost" ||
-                          productShippingType === "Free"
-                        ) {
-                          const shippingCostInSats =
-                            await convertShippingToSats(product);
-                          const quantity = quantities[product.id] || 1;
-                          const productShippingCost = Math.ceil(
-                            shippingCostInSats * quantity
-                          );
-                          shippingTotal += productShippingCost;
-                          updatedTotalCostsInSats[product.id] =
-                            (totalCostsInSats[product.id] || 0) +
-                            productShippingCost;
-                        } else {
-                          updatedTotalCostsInSats[product.id] =
-                            totalCostsInSats[product.id] || 0;
-                        }
-                      }
-                    } catch (err) {
-                      handleShippingConversionError(err);
+                    if (
+                      !(await applyCurrentProductTotals(
+                        (shippingType) =>
+                          shippingType === "Added Cost" ||
+                          shippingType === "Free"
+                      ))
+                    ) {
                       return;
                     }
-
-                    setTotalCost(subtotalCost + shippingTotal);
                   }}
                   className={`w-full rounded-lg border p-4 text-left hover:bg-gray-50 dark:hover:bg-gray-600 ${
                     shippingPickupPreference === "contact"
