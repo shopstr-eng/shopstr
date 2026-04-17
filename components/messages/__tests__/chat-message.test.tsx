@@ -143,6 +143,17 @@ describe("ChatMessage", () => {
       expect(setBuyerPubkey).toHaveBeenCalledWith("");
     });
 
+    test("falls back to empty buyer pubkey when npub decoding fails", () => {
+      mockNip19Decode.mockImplementation(() => {
+        throw new Error("invalid npub");
+      });
+      const { setBuyerPubkey } = renderComponent({
+        messageEvent: { content: "Broken npub npub1abcde..." },
+      });
+      expect(mockNip19Decode).toHaveBeenCalledWith("npub1abcde");
+      expect(setBuyerPubkey).toHaveBeenCalledWith("");
+    });
+
     test("calls setCanReview(true) for order-related subjects", () => {
       const { setCanReview } = renderComponent({
         messageEvent: { tags: [["subject", "order-receipt"]] },
