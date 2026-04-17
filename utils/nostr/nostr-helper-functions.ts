@@ -455,7 +455,8 @@ export async function constructMessageGiftWrap(
 
 export async function sendGiftWrappedMessageEvent(
   nostr: NostrManager,
-  giftWrappedMessageEvent: NostrEvent
+  giftWrappedMessageEvent: NostrEvent,
+  signer?: NostrSigner
 ) {
   const { relays, writeRelays } = getLocalStorageData();
   const allWriteRelays = withBlastr([...writeRelays, ...relays]);
@@ -486,7 +487,8 @@ export async function sendGiftWrappedMessageEvent(
     await trackFailedRelayPublish(
       giftWrappedMessageEvent.id,
       giftWrappedMessageEvent,
-      allWriteRelays
+      allWriteRelays,
+      signer
     ).catch(console.error);
   }
 }
@@ -1022,7 +1024,8 @@ export async function finalizeAndSendNostrEvent(
       await trackFailedRelayPublish(
         signedEvent.id,
         signedEvent,
-        allWriteRelays
+        allWriteRelays,
+        signer
       ).catch(console.error);
     }
 

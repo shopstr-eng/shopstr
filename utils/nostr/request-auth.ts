@@ -262,3 +262,55 @@ export function buildCustomDomainDeleteProof(
     pubkey,
   };
 }
+
+export function buildTrackFailedRelayPublishProof({
+  pubkey,
+  eventId,
+}: {
+  pubkey: string;
+  eventId: string;
+}): SignedHttpRequestProof {
+  return {
+    action: "track_failed_relay_publish",
+    method: "POST",
+    path: "/api/db/track-failed-publish",
+    pubkey,
+    fields: {
+      eventId,
+    },
+  };
+}
+
+export function buildListFailedRelayPublishesProof(
+  pubkey: string
+): SignedHttpRequestProof {
+  return {
+    action: "list_failed_relay_publishes",
+    method: "GET",
+    path: "/api/db/get-failed-publishes",
+    pubkey,
+  };
+}
+
+export function buildClearFailedRelayPublishProof({
+  pubkey,
+  eventId,
+  incrementRetry,
+}: {
+  pubkey: string;
+  eventId: string;
+  incrementRetry?: boolean;
+}): SignedHttpRequestProof {
+  return {
+    action: incrementRetry
+      ? "increment_failed_relay_publish_retry"
+      : "clear_failed_relay_publish",
+    method: "POST",
+    path: "/api/db/clear-failed-publish",
+    pubkey,
+    fields: {
+      eventId,
+      incrementRetry: incrementRetry ? "true" : undefined,
+    },
+  };
+}

@@ -15,6 +15,7 @@ export async function ensureFailedRelayPublishesTable(
   await client.query(`
     CREATE TABLE IF NOT EXISTS failed_relay_publishes (
       event_id TEXT PRIMARY KEY,
+      owner_pubkey TEXT,
       event_data TEXT NOT NULL,
       relays TEXT NOT NULL,
       created_at BIGINT NOT NULL,
@@ -26,6 +27,142 @@ export async function ensureFailedRelayPublishesTable(
     ALTER TABLE failed_relay_publishes
     ADD COLUMN IF NOT EXISTS event_data TEXT
   `);
+
+  await client.query(`
+    ALTER TABLE failed_relay_publishes
+    ADD COLUMN IF NOT EXISTS owner_pubkey TEXT
+  `);
+}
+
+export async function trackFailedRelayPublishRecord({
+  eventId,
+  ownerPubkey,
+  event,
+  relays,
+}: {
+  eventId: string;
+  ownerPubkey: string;
+  event: NostrEvent;
+  relays: string[];
+}): Promise<boolean> {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    await ensureFailedRelayPublishesTable(client);
+
+    const result = await client.query(
+      `INSERT INTO failed_relay_publishes (
+         event_id,
+         owner_pubkey,
+         event_data,
+         relays,
+         created_at,
+         retry_count
+       )
+       VALUES ($1, $2, $3, $4, $5, 0)
+       ON CONFLICT (event_id) DO UPDATE SET
+         owner_pubkey = EXCLUDED.owner_pubkey,
+         event_data = EXCLUDED.event_data,
+         relays = EXCLUDED.relays,
+         created_at = EXCLUDED.created_at
+       WHERE failed_relay_publishes.owner_pubkey = EXCLUDED.owner_pubkey
+       RETURNING event_id`,
+      [
+        eventId,
+        ownerPubkey,
+        JSON.stringify(event),
+        JSON.stringify(relays),
+        Math.floor(Date.now() / 1000),
+      ]
+    );
+
+    return result.rowCount > 0;
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function getFailedRelayPublishesForOwner(ownerPubkey: string) {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    await ensureFailedRelayPublishesTable(client);
+
+    const result = await client.query(
+      `SELECT event_id, event_data, relays, retry_count
+       FROM failed_relay_publishes
+       WHERE owner_pubkey = $1
+         AND retry_count < 5
+         AND event_data IS NOT NULL
+       ORDER BY created_at ASC
+       LIMIT 50`,
+      [ownerPubkey]
+    );
+
+    return result.rows
+      .filter((row: any) => row.event_data)
+      .map((row: any) => {
+        try {
+          return {
+            eventId: row.event_id,
+            relays: JSON.parse(row.relays),
+            event: JSON.parse(row.event_data),
+            retryCount: row.retry_count,
+          };
+        } catch (error) {
+          console.error("Failed to parse row:", row.event_id, error);
+          return null;
+        }
+      })
+      .filter(Boolean);
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function clearFailedRelayPublishForOwner(
+  eventId: string,
+  ownerPubkey: string
+): Promise<void> {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    await ensureFailedRelayPublishesTable(client);
+    await client.query(
+      `DELETE FROM failed_relay_publishes
+       WHERE event_id = $1 AND owner_pubkey = $2`,
+      [eventId, ownerPubkey]
+    );
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function incrementFailedRelayPublishRetryForOwner(
+  eventId: string,
+  ownerPubkey: string
+): Promise<void> {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    await ensureFailedRelayPublishesTable(client);
+    await client.query(
+      `UPDATE failed_relay_publishes
+       SET retry_count = retry_count + 1
+       WHERE event_id = $1 AND owner_pubkey = $2`,
+      [eventId, ownerPubkey]
+    );
+  } finally {
+    if (client) client.release();
+  }
 }
 
 // Initialize the database connection pool
