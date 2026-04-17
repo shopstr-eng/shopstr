@@ -110,6 +110,7 @@ export function getMetrics() {
           : 0,
       recentRequests: recentRecords.length,
     },
+    toolUsage: { ...toolUsage },
   };
 }
 

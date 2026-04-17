@@ -65,6 +65,7 @@ import {
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
 import { retryFailedRelayPublishes } from "@/utils/nostr/retry-service";
+import { MintRecoveryBoot } from "@/components/utility-components/mint-recovery-boot";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
 
 function MilkMarket({ props }: { props: AppProps }) {
@@ -1350,6 +1351,7 @@ function App(props: AppProps) {
         <NextThemesProvider attribute="class">
           <NostrContextProvider>
             <SignerContextProvider>
+              <MintRecoveryBoot />
               <MilkMarket props={props} />
             </SignerContextProvider>
           </NostrContextProvider>

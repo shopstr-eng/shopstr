@@ -39,14 +39,19 @@ const mockCreateMeltQuote = jest.fn();
 const mockGetKeySets = jest.fn();
 const mockSend = jest.fn();
 const mockMeltProofs = jest.fn();
+const mockCheckMeltQuote = jest
+  .fn()
+  .mockResolvedValue({ state: "UNPAID", change: [] });
 
 jest.mock("@cashu/cashu-ts", () => ({
-  CashuMint: jest.fn().mockImplementation(() => ({})),
-  CashuWallet: jest.fn().mockImplementation(() => ({
-    createMeltQuote: mockCreateMeltQuote,
-    getKeySets: mockGetKeySets,
+  Mint: jest.fn().mockImplementation(() => ({})),
+  Wallet: jest.fn().mockImplementation(() => ({
+    loadMint: jest.fn().mockResolvedValue(undefined),
+    createMeltQuoteBolt11: mockCreateMeltQuote,
+    keyChain: { getKeysets: mockGetKeySets },
     send: mockSend,
-    meltProofs: mockMeltProofs,
+    meltProofsBolt11: mockMeltProofs,
+    checkMeltQuoteBolt11: mockCheckMeltQuote,
   })),
 }));
 

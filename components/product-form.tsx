@@ -17,6 +17,7 @@ import {
   Chip,
   Image,
   Switch,
+  Tooltip,
 } from "@heroui/react";
 import {
   ChevronLeftIcon,
@@ -526,6 +527,62 @@ export default function ProductForm({
   const watchCurrency = watch("Currency");
   const watchCategory = watch("Category");
 
+  // Per-currency numeric input rules:
+  //  - sats/sat → integer only (step="1")
+  //  - btc     → 8-decimal precision (step="0.00000001")
+  //  - others  → 2-decimal precision (step="0.01")
+  const getPriceStep = (currency: string | undefined): string => {
+    const c = (currency || "").toLowerCase();
+    if (c === "sats" || c === "sat") return "1";
+    if (c === "btc") return "0.00000001";
+    return "0.01";
+  };
+
+  const getMaxDecimals = (currency: string | undefined): number => {
+    const c = (currency || "").toLowerCase();
+    if (c === "sats" || c === "sat") return 0;
+    if (c === "btc") return 8;
+    return 2;
+  };
+
+  // Field-level validator for react-hook-form. Returns true or an error message.
+  const validatePriceDecimals = (
+    value: number | string | undefined,
+    currency: string | undefined
+  ): true | string => {
+    if (value === undefined || value === null || value === "") return true;
+    const str = String(value);
+    const max = getMaxDecimals(currency);
+    const cur = (currency || "").toUpperCase();
+    if (max === 0) {
+      if (!/^\d+$/.test(str)) {
+        return `${cur} prices must be whole numbers (no decimals).`;
+      }
+      return true;
+    }
+    const match = str.match(/^\d*(?:\.(\d+))?$/);
+    if (!match) return "Invalid price format.";
+    const decimals = match[1]?.length ?? 0;
+    if (decimals > max) {
+      return `${cur} prices support up to ${max} decimal place${max === 1 ? "" : "s"}.`;
+    }
+    return true;
+  };
+
+  // For Map-backed inputs (Volume/Weight Prices) we silently clamp the
+  // decimals on each keystroke to enforce the per-currency precision.
+  const clampPriceDecimals = (
+    raw: string,
+    currency: string | undefined
+  ): number => {
+    const max = getMaxDecimals(currency);
+    const num = parseFloat(raw);
+    if (!isFinite(num) || num < 0) return 0;
+    if (max === 0) return Math.floor(num);
+    const factor = Math.pow(10, max);
+    return Math.floor(num * factor) / factor;
+  };
+
   const deleteImage = (index: number) => () => {
     setImages((prevValues) => {
       const updatedImages = [...prevValues];
@@ -810,6 +867,7 @@ export default function ProductForm({
                 rules={{
                   required: "A price is required.",
                   min: { value: 0, message: "Price must be greater than 0" },
+                  validate: (v) => validatePriceDecimals(v, watchCurrency),
                 }}
                 render={({
                   field: { onChange, onBlur, value },
@@ -831,6 +889,13 @@ export default function ProductForm({
                             "border-2 border-black rounded-md shadow-none h-14 !bg-white data-[hover=true]:!bg-white data-[focus=true]:!bg-white data-[invalid=true]:!bg-white",
                         }}
                         type="number"
+                        step={getPriceStep(watchCurrency)}
+                        min="0"
+                        inputMode={
+                          getMaxDecimals(watchCurrency) === 0
+                            ? "numeric"
+                            : "decimal"
+                        }
                         variant="flat"
                         placeholder="0"
                         isInvalid={isErrored}
@@ -880,11 +945,17 @@ export default function ProductForm({
               />
 
               <div className="mx-0 my-4 flex items-start text-left">
-                <InformationCircleIcon className="mt-0.5 mr-2 h-5 w-5 flex-shrink-0 text-black" />
+                <Tooltip
+                  content="This donation helps fund Milk Market and keep the marketplace running. You can change it at any time."
+                  placement="top"
+                  className="max-w-xs"
+                >
+                  <InformationCircleIcon className="mt-0.5 mr-2 h-5 w-5 flex-shrink-0 cursor-help text-black" />
+                </Tooltip>
                 <p className="text-xs text-black">
                   Your donation rate on sales is set to{" "}
                   {profileContext.profileData.get(pubkey)?.content
-                    ?.shopstr_donation || 2.1}
+                    ?.mm_donation ?? 0}
                   %. You can modify this in your{" "}
                   <span
                     className="cursor-pointer underline hover:text-blue-600"
@@ -1033,6 +1104,7 @@ export default function ProductForm({
                       value: 0,
                       message: "Shipping Cost must be greater than 0",
                     },
+                    validate: (v) => validatePriceDecimals(v, watchCurrency),
                   }}
                   render={({
                     field: { onChange, onBlur, value },
@@ -1051,6 +1123,13 @@ export default function ProductForm({
                               "border-2 border-black rounded-md shadow-none h-14 !bg-white data-[hover=true]:!bg-white data-[focus=true]:!bg-white data-[invalid=true]:!bg-white",
                           }}
                           type="number"
+                          step={getPriceStep(watchCurrency)}
+                          min="0"
+                          inputMode={
+                            getMaxDecimals(watchCurrency) === 0
+                              ? "numeric"
+                              : "decimal"
+                          }
                           variant="flat"
                           placeholder="Shipping Cost"
                           isInvalid={isErrored}
@@ -1288,13 +1367,21 @@ export default function ProductForm({
                           <span className="mr-2 text-black">{volume}:</span>
                           <Input
                             type="number"
-                            step="0.01"
+                            step={getPriceStep(watchCurrency)}
                             min="0"
+                            inputMode={
+                              getMaxDecimals(watchCurrency) === 0
+                                ? "numeric"
+                                : "decimal"
+                            }
                             value={(value.get(volume) || 0).toString()}
                             onChange={(e) =>
                               handlePriceChange(
                                 volume,
-                                parseFloat(e.target.value) || 0
+                                clampPriceDecimals(
+                                  e.target.value,
+                                  watchCurrency
+                                )
                               )
                             }
                             className="w-32"
@@ -1426,13 +1513,21 @@ export default function ProductForm({
                           <span className="mr-2 text-black">{weight}:</span>
                           <Input
                             type="number"
-                            step="0.01"
+                            step={getPriceStep(watchCurrency)}
                             min="0"
+                            inputMode={
+                              getMaxDecimals(watchCurrency) === 0
+                                ? "numeric"
+                                : "decimal"
+                            }
                             value={(value.get(weight) || 0).toString()}
                             onChange={(e) =>
                               handlePriceChange(
                                 weight,
-                                parseFloat(e.target.value) || 0
+                                clampPriceDecimals(
+                                  e.target.value,
+                                  watchCurrency
+                                )
                               )
                             }
                             className="w-32"

@@ -17,7 +17,6 @@ import {
   PlusIcon,
   MinusIcon,
   ShoppingBagIcon,
-  CheckCircleIcon,
   XCircleIcon,
   InformationCircleIcon,
   TruckIcon,
@@ -300,6 +299,23 @@ export default function Component() {
 
   const router = useRouter();
 
+  // Once payment lands, let the inline "Payment confirmed!" indicator play
+  // through once and then push straight to the order summary page. Avoids
+  // the prior friction of a "click X to dismiss" success modal.
+  useEffect(() => {
+    if (!invoiceIsPaid && !cashuPaymentSent) return;
+    const timer = setTimeout(() => {
+      setInvoiceIsPaid(false);
+      setCashuPaymentSent(false);
+      if (sfSellerPubkey && sfShopSlug) {
+        router.push(`/shop/${sfShopSlug}/order-confirmation`);
+      } else {
+        router.push("/order-summary");
+      }
+    }, 2500);
+    return () => clearTimeout(timer);
+  }, [invoiceIsPaid, cashuPaymentSent, sfSellerPubkey, sfShopSlug, router]);
+
   const [excludedItemCount, setExcludedItemCount] = useState(0);
 
   useEffect(() => {
@@ -539,7 +555,7 @@ export default function Component() {
             ) {
               try {
                 const fiatVal = await getFiatValue({
-                  satoshi: Math.round(nativePrice * qty),
+                  satoshi: Math.ceil(nativePrice * qty),
                   currency: cartCurrencyUpper,
                 });
                 nativeSubtotal += fiatVal;
@@ -553,7 +569,7 @@ export default function Component() {
                   currency: product.currency,
                 });
                 const fiatVal = await getFiatValue({
-                  satoshi: Math.round(satVal),
+                  satoshi: Math.ceil(satVal),
                   currency: cartCurrencyUpper,
                 });
                 nativeSubtotal += fiatVal;
@@ -577,7 +593,7 @@ export default function Component() {
 
       setSatPrices(prices);
       setSubtotal(subtotalAmount);
-      setSubtotalNative(Math.round(nativeSubtotal * 100) / 100);
+      setSubtotalNative(Math.ceil(nativeSubtotal * 100) / 100);
       setCartCurrency(originalCurrency);
       setTotalCostsInSats(totals);
     };
@@ -756,7 +772,7 @@ export default function Component() {
           currency: product.currency,
         };
         const numSats = await getSatoshiValue(currencyData);
-        price = Math.round(numSats);
+        price = Math.ceil(numSats);
       } catch (err) {
         console.error("ERROR", err);
       }
@@ -790,7 +806,7 @@ export default function Component() {
           currency: product.currency,
         };
         const numSats = await getSatoshiValue(currencyData);
-        cost = Math.round(numSats);
+        cost = Math.ceil(numSats);
       } catch (err) {
         console.error("ERROR", err);
       }
@@ -1298,50 +1314,6 @@ export default function Component() {
           </div>
         </div>
       )}
-
-      {/* Success Modal */}
-      {invoiceIsPaid || cashuPaymentSent ? (
-        <>
-          <Modal
-            backdrop="blur"
-            isOpen={invoiceIsPaid || cashuPaymentSent}
-            onClose={() => {
-              setInvoiceIsPaid(false);
-              setCashuPaymentSent(false);
-              if (sfSellerPubkey && sfShopSlug) {
-                router.push(`/shop/${sfShopSlug}/order-confirmation`);
-              } else {
-                router.push("/order-summary");
-              }
-            }}
-            classNames={{
-              body: "py-6 bg-white",
-              backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-              header: "border-b-4 border-black bg-white rounded-t-md",
-              footer: "border-t-4 border-black bg-white rounded-b-md",
-              closeButton: "hover:bg-black/5 active:bg-white/10",
-              wrapper: "items-center justify-center",
-              base: "border-4 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] rounded-md",
-            }}
-            isDismissable={true}
-            scrollBehavior={"normal"}
-            placement={"center"}
-            size="2xl"
-          >
-            <ModalContent>
-              <ModalHeader className="flex items-center justify-center font-bold text-black">
-                <CheckCircleIcon className="h-6 w-6 text-green-500" />
-                <div className="ml-2">Order successful!</div>
-              </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden text-black">
-                <div className="flex items-center justify-center">
-                  The seller will receive a message with your order details.
-                </div>
-              </ModalBody>
-            </ModalContent>
-          </Modal>
-        </>
-      ) : null}
 
       {/* Invoice Generation Failed Modal */}
       {invoiceGenerationFailed ? (

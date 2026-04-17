@@ -21,6 +21,8 @@ export const config = {
     bodyParser: false,
   },
 };
+import { applyRateLimit } from "@/utils/rate-limit";
+import { claimStripeEvent } from "@/utils/stripe/processed-events";
 
 async function getRawBody(req: NextApiRequest): Promise<Buffer> {
   return new Promise((resolve, reject) => {
@@ -42,6 +44,9 @@ function formatFrequencyLabel(frequency: string): string {
   return map[frequency] || frequency;
 }
 
+// Rate limit: per-IP cap to bound abuse of payment endpoints.
+const RATE_LIMIT = { limit: 300, windowMs: 60000 };
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
@@ -49,6 +54,9 @@ export default async function handler(
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
+
+  if (!applyRateLimit(req, res, "stripe-subscription-webhook", RATE_LIMIT))
+    return;
 
   const webhookSecret = process.env.STRIPE_SUBSCRIPTION_WEBHOOK_SECRET;
   if (!webhookSecret) {
@@ -68,6 +76,19 @@ export default async function handler(
   }
 
   try {
+    let claimed = true;
+    try {
+      claimed = await claimStripeEvent(event.id, event.type);
+    } catch (claimErr) {
+      console.warn(
+        "claimStripeEvent failed (subscription webhook), processing anyway:",
+        claimErr
+      );
+    }
+    if (!claimed) {
+      return res.status(200).json({ received: true, deduped: true });
+    }
+
     switch (event.type) {
       case "invoice.upcoming": {
         const invoiceUpcoming = event.data.object as any;

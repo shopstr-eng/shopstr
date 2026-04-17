@@ -3,12 +3,19 @@ import {
   fetchAllProductsFromDb,
   fetchProductsByPubkeyFromDb,
 } from "@/utils/db/db-service";
+import { applyRateLimit } from "@/utils/rate-limit";
 
 export const config = {
   api: {
     responseLimit: false,
   },
 };
+
+// Generous per-IP cap. Marketplace listings are loaded by every visitor and
+// during reconnect storms; the limit is high enough to never bite a real
+// browser while still preventing a single scraper from monopolising the
+// shared Postgres pool.
+const RATE_LIMIT = { limit: 600, windowMs: 60 * 1000 };
 
 export default async function handler(
   req: NextApiRequest,
@@ -17,6 +24,8 @@ export default async function handler(
   if (req.method !== "GET") {
     return res.status(405).json({ error: "Method not allowed" });
   }
+
+  if (!applyRateLimit(req, res, "fetch-products", RATE_LIMIT)) return;
 
   try {
     const { pubkey } = req.query;

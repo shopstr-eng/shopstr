@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { randomBytes } from "crypto";
 import Stripe from "stripe";
-import { CashuMint, CashuWallet } from "@cashu/cashu-ts";
+import { Mint as CashuMint, Wallet as CashuWallet } from "@cashu/cashu-ts";
 import { authenticateRequest, initializeApiKeysTable } from "@/utils/mcp/auth";
 import {
   fetchAllProductsFromDb,
@@ -20,6 +20,14 @@ import {
 } from "@/mcp/tools/purchase-tools";
 import { parseTags } from "@/utils/parsers/product-parser-functions";
 import { checkAvailability, deductStock } from "@/utils/db/inventory-service";
+import { applyRateLimit } from "@/utils/rate-limit";
+
+// MCP create-order is on the payment critical path; the per-IP cap is
+// generous so a buyer cannot accidentally lock themselves out across
+// retries, but bounded enough to stop a runaway client from owning the
+// mint quote pipeline.
+const RATE_LIMIT = { limit: 60, windowMs: 60 * 1000 };
+const PER_KEY_LIMIT = { limit: 30, windowMs: 60 * 1000 };
 
 const DEFAULT_MINT_URL = "https://mint.minibits.cash/Bitcoin";
 
@@ -69,10 +77,29 @@ export default async function handler(
   res: NextApiResponse
 ) {
   const requestStart = Date.now();
+
+  if (!applyRateLimit(req, res, "mcp-create-order:ip", RATE_LIMIT)) {
+    recordRequest(Date.now() - requestStart, false, "create-order");
+    return;
+  }
+
   await ensureTables();
 
   const apiKey = await authenticateRequest(req, res, "read_write");
   if (!apiKey) {
+    recordRequest(Date.now() - requestStart, false, "create-order");
+    return;
+  }
+
+  if (
+    !applyRateLimit(
+      req,
+      res,
+      "mcp-create-order:key",
+      PER_KEY_LIMIT,
+      String(apiKey.id)
+    )
+  ) {
     recordRequest(Date.now() - requestStart, false, "create-order");
     return;
   }
@@ -486,9 +513,9 @@ async function handleLightningPayment(
 
   let amountInSats: number;
   if (currency.toLowerCase() === "sats" || currency.toLowerCase() === "sat") {
-    amountInSats = Math.round(totalAmount);
+    amountInSats = Math.ceil(totalAmount);
   } else {
-    amountInSats = Math.round(totalAmount);
+    amountInSats = Math.ceil(totalAmount);
   }
 
   if (amountInSats < 1) amountInSats = 1;
@@ -496,7 +523,8 @@ async function handleLightningPayment(
   try {
     const cashuMint = new CashuMint(mint);
     const wallet = new CashuWallet(cashuMint);
-    const mintQuote = await wallet.createMintQuote(amountInSats);
+    await wallet.loadMint();
+    const mintQuote = await wallet.createMintQuoteBolt11(amountInSats);
 
     const order = await createMcpOrder(
       orderId,
@@ -595,7 +623,7 @@ async function handleCashuPayment(
 
   try {
     const { getDecodedToken } = await import("@cashu/cashu-ts");
-    const decoded = getDecodedToken(cashuToken);
+    const decoded = getDecodedToken(cashuToken, []);
 
     if (!decoded || !decoded.proofs || decoded.proofs.length === 0) {
       return res.status(400).json({
@@ -610,9 +638,9 @@ async function handleCashuPayment(
 
     let requiredAmount: number;
     if (currency.toLowerCase() === "sats" || currency.toLowerCase() === "sat") {
-      requiredAmount = Math.round(totalAmount);
+      requiredAmount = Math.ceil(totalAmount);
     } else {
-      requiredAmount = Math.round(totalAmount);
+      requiredAmount = Math.ceil(totalAmount);
     }
 
     if (tokenAmount < requiredAmount) {
@@ -629,7 +657,14 @@ async function handleCashuPayment(
       try {
         const cashuMint = new CashuMint(tokenMintUrl);
         const wallet = new CashuWallet(cashuMint);
-        await wallet.receive(cashuToken);
+        await wallet.loadMint();
+        const { withMintRetry } =
+          await import("@/utils/cashu/mint-retry-service");
+        await withMintRetry(() => wallet.receive(cashuToken), {
+          maxAttempts: 4,
+          perAttemptTimeoutMs: 20000,
+          totalTimeoutMs: 90000,
+        });
       } catch (redeemError) {
         console.error("Cashu token redemption failed:", redeemError);
         return res.status(400).json({
@@ -837,7 +872,7 @@ async function handleStripePayment(
         apiVersion: "2025-09-30.clover",
       });
 
-      let amountInCents = Math.round(totalAmount * 100);
+      let amountInCents = Math.ceil(totalAmount * 100);
       if (amountInCents < 50) amountInCents = 50;
 
       const sellerPubkey = product.pubkey;

@@ -11,11 +11,7 @@ import {
   DropdownItem,
   Button,
 } from "@heroui/react";
-import {
-  CheckCircleIcon,
-  XCircleIcon,
-  EllipsisVerticalIcon,
-} from "@heroicons/react/24/outline";
+import { XCircleIcon, EllipsisVerticalIcon } from "@heroicons/react/24/outline";
 import { BLUEBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import parseTags, {
   ProductData,
@@ -210,6 +206,33 @@ const Listing = ({ initialProductEvent }: ListingPageProps) => {
   const [invoiceGenerationFailed, setInvoiceGenerationFailed] = useState(false);
   const [cashuPaymentSent, setCashuPaymentSent] = useState(false);
   const [cashuPaymentFailed, setCashuPaymentFailed] = useState(false);
+
+  // Once payment lands, let the inline confirmation render briefly and then
+  // push straight to the order summary (or storefront confirmation if the
+  // listing was opened from a custom storefront). Avoids the prior friction
+  // of a "click X to dismiss" success modal.
+  useEffect(() => {
+    if (!fiatOrderIsPlaced && !invoiceIsPaid && !cashuPaymentSent) return;
+    const timer = setTimeout(() => {
+      setFiatOrderIsPlaced(false);
+      setInvoiceIsPaid(false);
+      setCashuPaymentSent(false);
+      const sfSlug =
+        typeof window !== "undefined"
+          ? sessionStorage.getItem("sf_shop_slug")
+          : null;
+      const sfPk =
+        typeof window !== "undefined"
+          ? sessionStorage.getItem("sf_seller_pubkey")
+          : null;
+      if (sfPk && sfSlug) {
+        router.push(`/shop/${sfSlug}/order-confirmation`);
+      } else {
+        router.push("/order-summary");
+      }
+    }, 2500);
+    return () => clearTimeout(timer);
+  }, [fiatOrderIsPlaced, invoiceIsPaid, cashuPaymentSent, router]);
 
   const productContext = useContext(ProductContext);
 
@@ -476,50 +499,6 @@ const Listing = ({ initialProductEvent }: ListingPageProps) => {
             <MilkMarketSpinner />
           </div>
         )}
-        {fiatOrderIsPlaced || invoiceIsPaid || cashuPaymentSent ? (
-          <>
-            <Modal
-              backdrop="blur"
-              isOpen={fiatOrderIsPlaced || invoiceIsPaid || cashuPaymentSent}
-              onClose={() => {
-                setFiatOrderIsPlaced(false);
-                setInvoiceIsPaid(false);
-                setCashuPaymentSent(false);
-                const sfSlug = sessionStorage.getItem("sf_shop_slug");
-                const sfPk = sessionStorage.getItem("sf_seller_pubkey");
-                if (sfPk && sfSlug) {
-                  router.push(`/shop/${sfSlug}/order-confirmation`);
-                } else {
-                  router.push("/order-summary");
-                }
-              }}
-              classNames={{
-                body: "py-6 bg-white",
-                backdrop: "bg-black/50 backdrop-opacity-60",
-                header: "border-b-4 border-black bg-white rounded-t-lg",
-                footer: "border-t-4 border-black bg-white rounded-b-lg",
-                closeButton: "hover:bg-gray-100 active:bg-gray-200",
-                base: "border-4 border-black shadow-neo rounded-lg",
-              }}
-              isDismissable={true}
-              scrollBehavior={"normal"}
-              placement={"center"}
-              size="2xl"
-            >
-              <ModalContent>
-                <ModalHeader className="flex items-center justify-center text-black">
-                  <CheckCircleIcon className="h-6 w-6 text-green-600" />
-                  <div className="ml-2 font-bold">Order successful!</div>
-                </ModalHeader>
-                <ModalBody className="flex flex-col overflow-hidden text-black">
-                  <div className="flex items-center justify-center font-medium">
-                    The seller will receive a message with your order details.
-                  </div>
-                </ModalBody>
-              </ModalContent>
-            </Modal>
-          </>
-        ) : null}
         {invoiceGenerationFailed ? (
           <>
             <Modal

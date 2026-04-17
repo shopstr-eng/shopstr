@@ -83,7 +83,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
       lud16: "",
       payment_preference: "fiat",
       fiat_options: {} as FiatOptionsType,
-      shopstr_donation: 2.1,
+      mm_donation: 0,
     },
   });
 
@@ -92,7 +92,6 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
   const defaultImage = useMemo(() => {
     return "https://robohash.org/" + userPubkey;
   }, [userPubkey]);
-  const profileImageSrc = watchPicture || defaultImage;
 
   const contextLoadedRef = useRef(false);
   useEffect(() => {
@@ -178,10 +177,14 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
         ? profileMap.get(userPubkey)?.content
         : {};
 
-      const updatedData = {
+      const updatedData: Record<string, unknown> = {
         ...existingProfile,
         ...data,
       };
+      // Drop any legacy donation field; mm_donation is the canonical key.
+      if ("shopstr_donation" in updatedData) {
+        delete updatedData.shopstr_donation;
+      }
 
       try {
         localStorage.setItem(
@@ -1079,11 +1082,18 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
 
         {/* Milk Market Donation */}
         <div className="space-y-2">
-          <label className="block text-base font-bold text-black">
+          <label className="flex items-center gap-1.5 text-base font-bold text-black">
             Milk Market donation (%)
+            <Tooltip
+              content="This donation helps fund Milk Market and keep the marketplace running. You can change it at any time."
+              placement="top"
+              className="max-w-xs"
+            >
+              <InformationCircleIcon className="h-5 w-5 cursor-help text-black" />
+            </Tooltip>
           </label>
           <Controller
-            name="shopstr_donation"
+            name="mm_donation"
             control={control}
             render={({ field: { onChange, onBlur, value } }) => (
               <Input

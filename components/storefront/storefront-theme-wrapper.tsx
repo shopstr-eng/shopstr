@@ -15,8 +15,6 @@ import {
   StorefrontConfig,
   StorefrontColorScheme,
   StorefrontFooter,
-  StorefrontNavColors,
-  StorefrontFooterColors,
 } from "@/utils/types/types";
 import StorefrontFooterComponent from "./storefront-footer";
 

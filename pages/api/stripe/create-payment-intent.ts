@@ -9,9 +9,30 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
 
 interface SellerSplit {
   sellerPubkey: string;
-  amount: number;
+  // Preferred: per-seller subtotal already in seller-currency smallest units
+  // (cents for fiat, sats for sats, whole units for zero-decimal currencies).
+  // The frontend ceils each line to smallest units and sums them in the
+  // seller's native currency before sending. The API treats the sum of these
+  // as the source of truth for the buyer charge — no further per-split
+  // rounding can introduce a sum-of-splits-exceeds-total mismatch.
+  amountSmallest?: number;
+  // Legacy raw-amount field, kept for back-compat with any older callers.
+  amount?: number;
   currency: string;
 }
+import { applyRateLimit } from "@/utils/rate-limit";
+import {
+  withStripeRetry,
+  stableIdempotencyKey,
+} from "@/utils/stripe/retry-service";
+import {
+  recordPendingPayment,
+  updatePendingPayment,
+} from "@/utils/stripe/pending-payments";
+import { resolveDonationCut } from "@/utils/stripe/donation";
+
+// Rate limit: per-IP cap to bound abuse of payment endpoints.
+const RATE_LIMIT = { limit: 30, windowMs: 60000 };
 
 export default async function handler(
   req: NextApiRequest,
@@ -20,6 +41,9 @@ export default async function handler(
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
+
+  if (!applyRateLimit(req, res, "stripe-create-payment-intent", RATE_LIMIT))
+    return;
 
   try {
     const {
@@ -38,30 +62,29 @@ export default async function handler(
     if (isCrypto(currency)) {
       let sats = currency.toLowerCase() === "btc" ? amount * 100000000 : amount;
       const usdAmount = await satsToUSD(sats);
-      amountInSmallestUnit = Math.round(usdAmount * 100);
+      amountInSmallestUnit = Math.ceil(usdAmount * 100);
       stripeCurrency = "usd";
     } else {
       amountInSmallestUnit = toSmallestUnit(amount, currency);
       stripeCurrency = currency.toLowerCase();
     }
 
-    if (amountInSmallestUnit < 50) {
-      amountInSmallestUnit = 50;
-    }
-
     const isMultiMerchant =
       sellerSplits && Array.isArray(sellerSplits) && sellerSplits.length > 1;
 
+    let transferGroup = "";
+    const splitDetails: {
+      pubkey: string;
+      amountCents: number;
+      accountId: string;
+      donationPercent: number;
+      donationCutSmallest: number;
+    }[] = [];
+
     if (isMultiMerchant) {
-      const transferGroup = `cart_${Date.now()}_${Math.random()
+      transferGroup = `cart_${Date.now()}_${Math.random()
         .toString(36)
         .substring(2, 8)}`;
-
-      const splitDetails: {
-        pubkey: string;
-        amountCents: number;
-        accountId: string;
-      }[] = [];
 
       for (const split of sellerSplits as SellerSplit[]) {
         const isPlatformAccount =
@@ -85,23 +108,56 @@ export default async function handler(
 
         let splitAmountSmallest: number;
         if (isCrypto(split.currency)) {
-          let sats =
-            split.currency.toLowerCase() === "btc"
-              ? split.amount * 100000000
-              : split.amount;
-          const usdAmount = await satsToUSD(sats);
-          splitAmountSmallest = Math.round(usdAmount * 100);
+          // Crypto splits must be FX-converted to USD cents (Stripe never
+          // settles in sats/btc). The frontend has already aggregated the
+          // seller's lines and ceiled to satoshi precision, so this is the
+          // only remaining ceil — one per seller.
+          const sellerSats =
+            typeof split.amountSmallest === "number"
+              ? split.currency.toLowerCase() === "btc"
+                ? split.amountSmallest // BTC smallest unit IS sats
+                : split.amountSmallest
+              : split.currency.toLowerCase() === "btc"
+                ? Math.ceil((split.amount ?? 0) * 100000000)
+                : Math.ceil(split.amount ?? 0);
+          const usdAmount = await satsToUSD(sellerSats);
+          splitAmountSmallest = Math.ceil(usdAmount * 100);
+        } else if (typeof split.amountSmallest === "number") {
+          // Already in seller-currency smallest units — trust as-is.
+          splitAmountSmallest = split.amountSmallest;
         } else {
-          splitAmountSmallest = toSmallestUnit(split.amount, stripeCurrency);
+          // Legacy path for callers still sending raw amounts.
+          splitAmountSmallest = toSmallestUnit(
+            split.amount ?? 0,
+            stripeCurrency
+          );
         }
+
+        const { percent: donationPercent, cutSmallest: donationCutSmallest } =
+          await resolveDonationCut(split.sellerPubkey, splitAmountSmallest);
 
         splitDetails.push({
           pubkey: split.sellerPubkey,
           amountCents: splitAmountSmallest,
           accountId,
+          donationPercent,
+          donationCutSmallest,
         });
       }
 
+      // The sum of per-seller smallest-unit subtotals IS the buyer charge.
+      // The top-level `amount` from the request is informational only in
+      // multi-merchant mode — using sum-of-splits as truth guarantees that
+      // every transfer in process-transfers.ts can succeed (no
+      // sum-exceeds-total mismatch) and that the buyer is charged exactly
+      // what each seller is owed in aggregate.
+      const splitsSum = splitDetails.reduce((s, d) => s + d.amountCents, 0);
+      amountInSmallestUnit = Math.max(splitsSum, 50);
+    } else if (amountInSmallestUnit < 50) {
+      amountInSmallestUnit = 50;
+    }
+
+    if (isMultiMerchant) {
       const description = `${productTitle}${
         productDescription ? ` - ${productDescription}` : ""
       }`;
@@ -122,6 +178,8 @@ export default async function handler(
               pubkey: s.pubkey,
               amountCents: s.amountCents,
               accountId: s.accountId,
+              donationPercent: s.donationPercent,
+              donationCutSmallest: s.donationCutSmallest,
             }))
           ),
         },
@@ -134,8 +192,39 @@ export default async function handler(
         paymentIntentParams.receipt_email = customerEmail;
       }
 
-      const paymentIntent =
-        await stripe.paymentIntents.create(paymentIntentParams);
+      const intentRefMM = stableIdempotencyKey("mm", {
+        amount: amountInSmallestUnit,
+        currency: stripeCurrency,
+        customerEmail: customerEmail ?? null,
+        productTitle: productTitle ?? null,
+        productDescription: productDescription ?? null,
+        metadata: metadata ?? null,
+        sellerSplits: sellerSplits ?? null,
+        transferGroup,
+      });
+      try {
+        await recordPendingPayment({
+          intentRef: intentRefMM,
+          amount: amountInSmallestUnit,
+          currency: stripeCurrency,
+          metadata: { ...metadata, transferGroup },
+        });
+      } catch (e) {
+        console.warn("recordPendingPayment failed:", e);
+      }
+      const paymentIntent = await withStripeRetry(() =>
+        stripe.paymentIntents.create(paymentIntentParams, {
+          idempotencyKey: intentRefMM,
+        })
+      );
+      try {
+        await updatePendingPayment(intentRefMM, {
+          paymentIntentId: paymentIntent.id,
+          status: "created",
+        });
+      } catch (e) {
+        console.warn("updatePendingPayment failed:", e);
+      }
 
       return res.status(200).json({
         success: true,
@@ -148,6 +237,8 @@ export default async function handler(
           pubkey: s.pubkey,
           amountCents: s.amountCents,
           accountId: s.accountId,
+          donationPercent: s.donationPercent,
+          donationCutSmallest: s.donationCutSmallest,
         })),
       });
     }
@@ -171,6 +262,13 @@ export default async function handler(
       ? { stripeAccount: connectedAccountId }
       : undefined;
 
+    // Single-merchant donation cut: only applied for direct charges on a
+    // connected account (otherwise the funds are already on the platform).
+    const { percent: singleDonationPercent, cutSmallest: singleDonationCut } =
+      connectedAccountId
+        ? await resolveDonationCut(sellerPubkey, amountInSmallestUnit)
+        : { percent: 0, cutSmallest: 0 };
+
     const description = `${productTitle}${
       productDescription ? ` - ${productDescription}` : ""
     }`;
@@ -184,20 +282,56 @@ export default async function handler(
         originalAmount: amount.toString(),
         originalCurrency: currency,
         ...(connectedAccountId && { connectedAccountId }),
+        ...(singleDonationCut > 0 && {
+          mmDonationPercent: singleDonationPercent.toString(),
+          mmDonationCutSmallest: singleDonationCut.toString(),
+        }),
       },
       automatic_payment_methods: {
         enabled: true,
       },
+      ...(singleDonationCut > 0 && {
+        application_fee_amount: singleDonationCut,
+      }),
     };
 
     if (customerEmail) {
       paymentIntentParams.receipt_email = customerEmail;
     }
 
-    const paymentIntent = await stripe.paymentIntents.create(
-      paymentIntentParams,
-      stripeOptions
+    const intentRef = stableIdempotencyKey("pi", {
+      amount: amountInSmallestUnit,
+      currency: stripeCurrency,
+      customerEmail: customerEmail ?? null,
+      productTitle: productTitle ?? null,
+      productDescription: productDescription ?? null,
+      metadata: metadata ?? null,
+      connectedAccountId,
+    });
+    try {
+      await recordPendingPayment({
+        intentRef,
+        amount: amountInSmallestUnit,
+        currency: stripeCurrency,
+        metadata: { ...metadata, connectedAccountId },
+      });
+    } catch (e) {
+      console.warn("recordPendingPayment failed:", e);
+    }
+    const paymentIntent = await withStripeRetry(() =>
+      stripe.paymentIntents.create(paymentIntentParams, {
+        ...(stripeOptions ?? {}),
+        idempotencyKey: intentRef,
+      })
     );
+    try {
+      await updatePendingPayment(intentRef, {
+        paymentIntentId: paymentIntent.id,
+        status: "created",
+      });
+    } catch (e) {
+      console.warn("updatePendingPayment failed:", e);
+    }
 
     return res.status(200).json({
       success: true,

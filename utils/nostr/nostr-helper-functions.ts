@@ -268,6 +268,8 @@ export async function constructGiftWrappedEvent(
     address?: string;
     pickup?: string;
     buyerPubkey?: string;
+    buyerEmail?: string;
+    isGuest?: boolean;
     donationAmount?: number;
     donationPercentage?: number;
     selectedSize?: string;
@@ -303,6 +305,8 @@ export async function constructGiftWrappedEvent(
     address,
     pickup,
     buyerPubkey,
+    buyerEmail,
+    isGuest,
     donationAmount,
     donationPercentage,
     selectedSize,
@@ -322,6 +326,8 @@ export async function constructGiftWrappedEvent(
     tags.push(["order", orderId ? orderId : uuidv4()]);
 
     if (buyerPubkey) tags.push(["b", buyerPubkey]);
+    if (isGuest) tags.push(["buyer_type", "guest"]);
+    if (buyerEmail) tags.push(["buyer_email", buyerEmail]);
     if (type) tags.push(["type", type.toString()]);
     if (orderAmount) tags.push(["amount", orderAmount.toString()]);
     if (orderCurrency) tags.push(["currency", orderCurrency]);

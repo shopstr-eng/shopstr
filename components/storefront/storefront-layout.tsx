@@ -22,8 +22,6 @@ import {
   StorefrontConfig,
   StorefrontColorScheme,
   StorefrontNavLink,
-  StorefrontNavColors,
-  StorefrontFooterColors,
   StorefrontFooter,
 } from "@/utils/types/types";
 import { sanitizeUrl } from "@braintree/sanitize-url";
@@ -192,10 +190,6 @@ export default function StorefrontLayout({
   const navBg = storefront.navColors?.background || colors.secondary;
   const navText = storefront.navColors?.text || colors.background;
   const navAccent = storefront.navColors?.accent || colors.primary;
-
-  const ftBg = storefront.footerColors?.background || colors.secondary;
-  const ftText = storefront.footerColors?.text || colors.background;
-  const ftAccent = storefront.footerColors?.accent || colors.primary;
 
   const activeSections = useMemo(() => {
     if (currentPage && storefront.pages) {

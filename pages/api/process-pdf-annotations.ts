@@ -2,6 +2,9 @@ import { NextApiRequest, NextApiResponse } from "next";
 import formidable from "formidable";
 import fs from "fs";
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
+import { applyRateLimit } from "@/utils/rate-limit";
+
+const RATE_LIMIT = { limit: 10, windowMs: 60 * 1000 };
 
 // Disable body parsing for file uploads
 export const config = {
@@ -31,6 +34,8 @@ export default async function handler(
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
+
+  if (!applyRateLimit(req, res, "process-pdf-annotations", RATE_LIMIT)) return;
 
   try {
     const form = formidable({

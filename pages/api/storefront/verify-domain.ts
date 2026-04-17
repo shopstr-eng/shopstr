@@ -2,13 +2,17 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { getDbPool } from "@/utils/db/db-service";
 import dns from "dns";
 import { promisify } from "util";
+import { applyRateLimit } from "@/utils/rate-limit";
 
 const resolveCname = promisify(dns.resolveCname);
 const resolve4 = promisify(dns.resolve4);
 
 const pool = getDbPool();
 
-const VALID_TARGETS = ["milk.market", "milk-market.replit.app"];
+const VALID_TARGETS = ["milk.market"];
+
+// Each call performs DNS lookups + DB writes; tight per-IP cap.
+const RATE_LIMIT = { limit: 30, windowMs: 60 * 1000 };
 
 export default async function handler(
   req: NextApiRequest,
@@ -17,6 +21,8 @@ export default async function handler(
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
+
+  if (!applyRateLimit(req, res, "verify-domain", RATE_LIMIT)) return;
 
   const { pubkey } = req.body;
   if (!pubkey) {
@@ -65,7 +71,7 @@ export default async function handler(
       verified,
       message: verified
         ? "Domain verified successfully!"
-        : "DNS records not found yet. Make sure your CNAME record points to milk-market.replit.app and wait for DNS propagation (can take up to 48 hours).",
+        : "DNS records not found yet. Make sure your CNAME record points to milk.market and wait for DNS propagation (can take up to 48 hours).",
     });
   } catch (error) {
     console.error("Domain verification error:", error);

@@ -6,13 +6,21 @@ import {
 } from "@/utils/db/db-service";
 import {
   ZERO_DECIMAL_CURRENCIES,
-  isCrypto as isCryptoCurrency,
   convertToSmallestUnit,
 } from "@/utils/stripe/currency";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
   apiVersion: "2025-09-30.clover",
 });
+import { applyRateLimit } from "@/utils/rate-limit";
+import {
+  withStripeRetry,
+  stableIdempotencyKey,
+} from "@/utils/stripe/retry-service";
+import {
+  getSellerDonationPercent,
+  isPlatformPubkey,
+} from "@/utils/stripe/donation";
 
 const FREQUENCY_TO_INTERVAL: Record<
   string,
@@ -28,6 +36,9 @@ const FREQUENCY_TO_INTERVAL: Record<
   quarterly: { interval: "month", interval_count: 3 },
 };
 
+// Rate limit: per-IP cap to bound abuse of payment endpoints.
+const RATE_LIMIT = { limit: 30, windowMs: 60000 };
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
@@ -35,6 +46,9 @@ export default async function handler(
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
+
+  if (!applyRateLimit(req, res, "stripe-create-subscription", RATE_LIMIT))
+    return;
 
   try {
     const {
@@ -77,7 +91,7 @@ export default async function handler(
 
     const baseAmountSmallest = amountSmallest;
     const discount = discountPercent || 0;
-    const subscriptionAmountSmallest = Math.round(
+    const subscriptionAmountSmallest = Math.ceil(
       amountSmallest * (1 - discount / 100)
     );
 
@@ -152,26 +166,57 @@ export default async function handler(
       stripeOptions
     );
 
-    const subscription = await stripe.subscriptions.create(
-      {
-        customer: customer.id,
-        items: [{ price: price.id, quantity: quantity || 1 }],
-        payment_behavior: "default_incomplete",
-        payment_settings: {
-          save_default_payment_method: "on_subscription",
+    const subscriptionIdempotencyKey = stableIdempotencyKey("sub", {
+      customerId: customer.id,
+      priceId: price.id,
+      quantity: quantity || 1,
+      productEventId,
+      sellerPubkey,
+      buyerPubkey: buyerPubkey || "",
+      frequency,
+      discountPercent: discount,
+      originalAmount: amount,
+      originalCurrency: currency,
+    });
+    // Apply mm_donation as application_fee_percent for direct-charge
+    // subscriptions on a connected account (parity with Bitcoin paths).
+    const donationPercent =
+      connectedAccountId && !isPlatformPubkey(sellerPubkey)
+        ? await getSellerDonationPercent(sellerPubkey)
+        : 0;
+    const applicationFeePercent =
+      donationPercent > 0 && donationPercent < 100
+        ? Math.round(donationPercent * 100) / 100
+        : 0;
+
+    const subscription = await withStripeRetry(() =>
+      stripe.subscriptions.create(
+        {
+          customer: customer.id,
+          items: [{ price: price.id, quantity: quantity || 1 }],
+          payment_behavior: "default_incomplete",
+          payment_settings: {
+            save_default_payment_method: "on_subscription",
+          },
+          expand: ["latest_invoice.payment_intent"],
+          ...(applicationFeePercent > 0 && {
+            application_fee_percent: applicationFeePercent,
+          }),
+          metadata: {
+            productEventId,
+            sellerPubkey,
+            buyerPubkey: buyerPubkey || "",
+            frequency,
+            discountPercent: discount.toString(),
+            originalAmount: amount.toString(),
+            originalCurrency: currency,
+            ...(applicationFeePercent > 0 && {
+              mmDonationPercent: applicationFeePercent.toString(),
+            }),
+          },
         },
-        expand: ["latest_invoice.payment_intent"],
-        metadata: {
-          productEventId,
-          sellerPubkey,
-          buyerPubkey: buyerPubkey || "",
-          frequency,
-          discountPercent: discount.toString(),
-          originalAmount: amount.toString(),
-          originalCurrency: currency,
-        },
-      },
-      stripeOptions
+        { ...(stripeOptions ?? {}), idempotencyKey: subscriptionIdempotencyKey }
+      )
     );
 
     const subscriptionData = subscription as any;

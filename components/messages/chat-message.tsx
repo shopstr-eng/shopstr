@@ -40,7 +40,7 @@ import FailureModal from "../utility-components/failure-modal";
 
 function isDecodableToken(token: string): boolean {
   try {
-    getDecodedToken(token);
+    getDecodedToken(token, []);
     return true;
   } catch {
     return false;
@@ -648,10 +648,8 @@ const ChatMessage = ({
         }`}
       >
         <div
-          className={`flex max-w-[90%] flex-col rounded-lg px-4 py-3 ${
-            isUserMessage
-              ? "bg-[#E6C84F] text-black"
-              : "bg-[#2C3E50] text-white"
+          className={`shadow-neo flex max-w-[90%] flex-col rounded-md border-2 border-black px-4 py-3 ${
+            isUserMessage ? "bg-primary-blue text-white" : "bg-white text-black"
           }`}
         >
           <div className="flex flex-col overflow-x-hidden break-words">

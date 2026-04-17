@@ -3,6 +3,10 @@ import {
   getSubscriptionsByBuyerPubkey,
   getSubscriptionsByBuyerEmail,
 } from "@/utils/db/db-service";
+import { applyRateLimit } from "@/utils/rate-limit";
+
+// Rate limit: per-IP cap to bound abuse of payment endpoints.
+const RATE_LIMIT = { limit: 120, windowMs: 60000 };
 
 export default async function handler(
   req: NextApiRequest,
@@ -11,6 +15,8 @@ export default async function handler(
   if (req.method !== "GET") {
     return res.status(405).json({ error: "Method not allowed" });
   }
+
+  if (!applyRateLimit(req, res, "stripe-get-subscriptions", RATE_LIMIT)) return;
 
   try {
     const { pubkey, email } = req.query;

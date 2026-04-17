@@ -6,6 +6,9 @@ import {
 } from "@/utils/db/db-service";
 import { getUncachableSendGridClient } from "@/utils/email/sendgrid-client";
 import { popupDiscountEmail } from "@/utils/email/email-templates";
+import { applyRateLimit } from "@/utils/rate-limit";
+
+const RATE_LIMIT = { limit: 10, windowMs: 60 * 1000 };
 
 function generateDiscountCode(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -23,6 +26,8 @@ export default async function handler(
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
+
+  if (!applyRateLimit(req, res, "storefront-popup-capture", RATE_LIMIT)) return;
 
   const { sellerPubkey, email, phone, discountPercentage, shopName } = req.body;
 

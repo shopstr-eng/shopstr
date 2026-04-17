@@ -20,6 +20,9 @@ export const config = {
     bodyParser: false,
   },
 };
+import { applyRateLimit } from "@/utils/rate-limit";
+import { claimStripeEvent } from "@/utils/stripe/processed-events";
+import { markPendingPaymentByIntent } from "@/utils/stripe/pending-payments";
 
 async function getRawBody(req: NextApiRequest): Promise<Buffer> {
   return new Promise((resolve, reject) => {
@@ -30,6 +33,9 @@ async function getRawBody(req: NextApiRequest): Promise<Buffer> {
   });
 }
 
+// Rate limit: per-IP cap to bound abuse of payment endpoints.
+const RATE_LIMIT = { limit: 300, windowMs: 60000 };
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
@@ -37,6 +43,8 @@ export default async function handler(
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
+
+  if (!applyRateLimit(req, res, "stripe-webhook", RATE_LIMIT)) return;
 
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
   if (!webhookSecret) {
@@ -58,6 +66,19 @@ export default async function handler(
   }
 
   try {
+    let claimed = true;
+    try {
+      claimed = await claimStripeEvent(event.id, event.type);
+    } catch (claimErr) {
+      // If the claim table is unavailable, fail-open so we still process the
+      // event rather than silently dropping it. Duplicate handling will at
+      // worst send a duplicate email — preferable to silent loss.
+      console.warn("claimStripeEvent failed, processing anyway:", claimErr);
+    }
+    if (!claimed) {
+      return res.status(200).json({ received: true, deduped: true });
+    }
+
     switch (event.type) {
       case "invoice.paid": {
         const invoice = event.data.object as Stripe.Invoice;
@@ -67,6 +88,57 @@ export default async function handler(
       case "invoice.payment_failed": {
         const invoice = event.data.object as Stripe.Invoice;
         await handleInvoicePaymentFailed(invoice);
+        break;
+      }
+      case "payment_intent.succeeded": {
+        const pi = event.data.object as Stripe.PaymentIntent;
+        try {
+          await markPendingPaymentByIntent(pi.id, "succeeded");
+        } catch (e) {
+          console.warn("markPendingPaymentByIntent succeeded failed:", e);
+        }
+        break;
+      }
+      case "payment_intent.payment_failed": {
+        const pi = event.data.object as Stripe.PaymentIntent;
+        try {
+          await markPendingPaymentByIntent(
+            pi.id,
+            "failed_terminal",
+            pi.last_payment_error?.message ?? "payment_intent.payment_failed"
+          );
+        } catch (e) {
+          console.warn("markPendingPaymentByIntent failed terminal failed:", e);
+        }
+        break;
+      }
+      case "application_fee.created": {
+        // Donation collected on the platform account via Connect.
+        // Log for reconciliation against orders-dashboard donation totals.
+        const fee = event.data.object as Stripe.ApplicationFee;
+        const charge =
+          typeof fee.charge === "string" ? fee.charge : fee.charge?.id;
+        const originatingPi =
+          typeof (fee as any).originating_transaction === "string"
+            ? (fee as any).originating_transaction
+            : (fee as any).originating_transaction?.id;
+        console.log(
+          `STRIPE_DONATION_COLLECTED fee=${fee.id} amount=${fee.amount} ` +
+            `currency=${fee.currency} charge=${charge ?? "?"} ` +
+            `account=${
+              typeof fee.account === "string" ? fee.account : fee.account?.id
+            } pi=${originatingPi ?? "?"}`
+        );
+        break;
+      }
+      case "application_fee.refunded": {
+        const fee = event.data.object as Stripe.ApplicationFee;
+        console.log(
+          `STRIPE_DONATION_REFUNDED fee=${fee.id} amount_refunded=${fee.amount_refunded} ` +
+            `currency=${fee.currency} account=${
+              typeof fee.account === "string" ? fee.account : fee.account?.id
+            }`
+        );
         break;
       }
       default:

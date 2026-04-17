@@ -8,7 +8,7 @@ import {
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
 import { CashuWalletContext } from "@/utils/context/context";
-import { CashuWallet, getEncodedToken } from "@cashu/cashu-ts";
+import { Wallet as CashuWallet, getEncodedToken } from "@cashu/cashu-ts";
 import {
   getLocalStorageData,
   publishProofEvent,

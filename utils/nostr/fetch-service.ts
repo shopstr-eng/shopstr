@@ -5,7 +5,11 @@ import {
   ShopProfile,
   Community,
 } from "@/utils/types/types";
-import { CashuMint, CashuWallet, Proof } from "@cashu/cashu-ts";
+import {
+  Mint as CashuMint,
+  Wallet as CashuWallet,
+  Proof,
+} from "@cashu/cashu-ts";
 import { ChatsMap } from "@/utils/context/context";
 import {
   getLocalStorageData,
@@ -18,7 +22,7 @@ import {
 } from "@/utils/parsers/product-parser-functions";
 import { parseCommunityEvent } from "../parsers/community-parser-functions";
 import { calculateWeightedScore } from "@/utils/parsers/review-parser-functions";
-import { hashToCurve } from "@cashu/crypto/modules/common";
+import { hashToCurve } from "@cashu/cashu-ts";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
 import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 import { cacheEventsToDatabase } from "@/utils/db/db-client";
@@ -1694,6 +1698,7 @@ export const fetchCashuWallet = async (
       for (const mint of cashuMints) {
         try {
           const wallet = new CashuWallet(new CashuMint(mint));
+          await wallet.loadMint();
 
           // Filter proofs for this specific mint
           const mintProofs = cashuProofs.filter((proof) => {

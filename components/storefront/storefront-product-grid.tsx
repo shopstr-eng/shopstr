@@ -106,7 +106,7 @@ export default function StorefrontProductGrid({
             : "grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3"
         }
       >
-        {remainingProducts.map((product, index) => {
+        {remainingProducts.map((product) => {
           const slug = getListingSlug(product, products);
           const href = `/listing/${slug}`;
           return (

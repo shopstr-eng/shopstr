@@ -28,12 +28,22 @@ import {
   WalletIcon,
 } from "@heroicons/react/24/outline";
 import {
-  CashuMint,
-  CashuWallet,
+  Mint as CashuMint,
+  Wallet as CashuWallet,
   getEncodedToken,
   Proof,
-  MintKeyset,
+  Keyset as MintKeyset,
 } from "@cashu/cashu-ts";
+import { safeSwap } from "@/utils/cashu/swap-retry-service";
+import { safeMeltProofs } from "@/utils/cashu/melt-retry-service";
+import { stashProofsLocally } from "@/utils/cashu/local-wallet-stash";
+import {
+  recordPendingMintQuote,
+  markMintQuotePaid,
+  markMintQuoteClaimed,
+  removePendingMintQuote,
+} from "@/utils/cashu/pending-mint-operations";
+import WalletRecoveryModal from "@/components/utility-components/wallet-recovery-modal";
 import {
   constructGiftWrappedEvent,
   constructMessageSeal,
@@ -67,6 +77,13 @@ import {
 } from "@/utils/types/types";
 import { Controller } from "react-hook-form";
 import StripeCardForm from "./utility-components/stripe-card-form";
+import {
+  isSatsCurrency,
+  applyStripeFloor,
+  isAtStripeFloor,
+  STRIPE_MINIMUM_CHARGE_USD,
+  ZERO_DECIMAL_CURRENCIES,
+} from "@/utils/stripe/currency";
 
 export default function CartInvoiceCard({
   products,
@@ -297,6 +314,8 @@ export default function CartInvoiceCard({
     selectedVolume?: string;
     selectedWeight?: string;
     selectedBulkOption?: string;
+    donationAmount?: number;
+    donationPercentage?: number;
   }> | null>(null);
 
   const [buyerEmail, setBuyerEmail] = useState("");
@@ -322,6 +341,8 @@ export default function CartInvoiceCard({
     subscriptionFrequency?: string;
     productId?: string;
     quantity?: number;
+    donationAmount?: number;
+    donationPercentage?: number;
   }) => {
     try {
       const shouldIncludeBuyer = params.includeBuyerEmail !== false;
@@ -348,6 +369,8 @@ export default function CartInvoiceCard({
           subscriptionFrequency: params.subscriptionFrequency,
           productId: params.productId,
           quantity: params.quantity,
+          donationAmount: params.donationAmount,
+          donationPercentage: params.donationPercentage,
         }),
       });
     } catch (e) {
@@ -634,6 +657,12 @@ export default function CartInvoiceCard({
   };
 
   const [showFailureModal, setShowFailureModal] = useState(false);
+  const [walletRecovery, setWalletRecovery] = useState<{
+    isOpen: boolean;
+    amountSats: number;
+    mintUrl?: string;
+    pendingRecovery?: boolean;
+  }>({ isOpen: false, amountSats: 0 });
 
   // NWC State
   const [nwcInfo, setNwcInfo] = useState<any | null>(null);
@@ -742,8 +771,11 @@ export default function CartInvoiceCard({
                 ? product.volumePrice
                 : product.price;
         const qty = quantities[product.id] || 1;
-        const discountedPrice =
+        const rawDiscountedPrice =
           discount > 0 ? basePrice * (1 - discount / 100) : basePrice;
+        const discountedPrice = isSatsCurrency(product.currency)
+          ? Math.ceil(rawDiscountedPrice)
+          : Math.ceil(rawDiscountedPrice * 100) / 100;
         sellerSubtotal += discountedPrice * qty;
       });
       statusMap[pubkey] = {
@@ -791,7 +823,18 @@ export default function CartInvoiceCard({
     const compute = async () => {
       const { getSatoshiValue, getFiatValue } =
         await import("@getalby/lightning-tools");
-      let nativeSubtotal = 0;
+      const cartCurrencyUpper = cartCurrency.toUpperCase();
+      const cartIsZeroDecimal =
+        isSatsCurrency(cartCurrencyUpper) ||
+        ZERO_DECIMAL_CURRENCIES.has(cartCurrencyUpper.toLowerCase());
+      // Accumulate the cart total as an integer count of cart-currency smallest
+      // units (cents for normal fiat, whole sats for sats, whole units for
+      // zero-decimal fiat). This prevents floating-point drift from causing
+      // an over-ceiled grand total — e.g. summing 0.10 * 7 in floats yields
+      // 0.7000000000000001 which a final ceil would inflate to $0.71.
+      const lineToSmallest = (val: number): number =>
+        cartIsZeroDecimal ? Math.ceil(val) : Math.ceil(val * 100);
+      let totalSmallest = 0;
       for (const product of products) {
         const basePrice =
           product.bulkPrice !== undefined
@@ -802,13 +845,16 @@ export default function CartInvoiceCard({
                 ? product.volumePrice
                 : product.price;
         const discount = appliedDiscounts[product.pubkey] || 0;
-        const discountedPrice =
+        const rawDiscountedPrice =
           discount > 0 ? basePrice * (1 - discount / 100) : basePrice;
+        const discountedPrice = isSatsCurrency(product.currency)
+          ? Math.ceil(rawDiscountedPrice)
+          : Math.ceil(rawDiscountedPrice * 100) / 100;
         const qty = quantities[product.id] || 1;
         const productCurrencyUpper = product.currency.toUpperCase();
-        const cartCurrencyUpper = cartCurrency.toUpperCase();
+        let lineInCartCurrency: number;
         if (productCurrencyUpper === cartCurrencyUpper) {
-          nativeSubtotal += discountedPrice * qty;
+          lineInCartCurrency = discountedPrice * qty;
         } else {
           try {
             const satVal =
@@ -818,17 +864,16 @@ export default function CartInvoiceCard({
                     amount: discountedPrice * qty,
                     currency: product.currency,
                   });
-            const fiatVal = await getFiatValue({
-              satoshi: Math.round(satVal),
+            lineInCartCurrency = await getFiatValue({
+              satoshi: Math.ceil(satVal),
               currency: cartCurrencyUpper,
             });
-            nativeSubtotal += fiatVal;
           } catch {
-            nativeSubtotal += discountedPrice * qty;
+            lineInCartCurrency = discountedPrice * qty;
           }
         }
+        totalSmallest += lineToSmallest(lineInCartCurrency);
       }
-      let nativeShipping = 0;
       if (
         formType === "shipping" ||
         (formType === "combined" && shippingPickupPreference === "shipping")
@@ -841,20 +886,26 @@ export default function CartInvoiceCard({
           const sellerProducts = products.filter(
             (p) => p.pubkey === product.pubkey
           );
+          let shippingForSeller: number;
           if (sellerProducts.length > 1) {
             const { highestShippingCost } = getConsolidatedShippingForSeller(
               product.pubkey
             );
-            nativeShipping += highestShippingCost;
+            shippingForSeller = highestShippingCost;
           } else {
-            nativeShipping +=
+            shippingForSeller =
               (product.shippingCost || 0) * (quantities[product.id] || 1);
           }
+          // Shipping is denominated in the seller's product currency. If that
+          // matches the cart currency we add it directly; otherwise we'd need
+          // FX which the existing code path didn't do either, so preserve
+          // behavior and treat it as cart-currency.
+          totalSmallest += lineToSmallest(shippingForSeller);
         });
       }
       if (!cancelled) {
         setNativeTotalCost(
-          Math.round((nativeSubtotal + nativeShipping) * 100) / 100
+          cartIsZeroDecimal ? totalSmallest : totalSmallest / 100
         );
       }
     };
@@ -902,12 +953,17 @@ export default function CartInvoiceCard({
                 ? product.volumePrice
                 : product.price;
         const discount = appliedDiscounts[product.pubkey] || 0;
-        const discountedPrice =
+        const rawDiscountedPrice =
           discount > 0 ? basePrice * (1 - discount / 100) : basePrice;
+        const discountedPrice = isSatsCurrency(product.currency)
+          ? Math.ceil(rawDiscountedPrice)
+          : Math.ceil(rawDiscountedPrice * 100) / 100;
         const qty = quantities[product.id] || 1;
         const productCurrencyUpper = product.currency.toUpperCase();
         if (productCurrencyUpper === cartCurrencyUpper) {
-          map[product.id] = Math.round(discountedPrice * qty * 100) / 100;
+          map[product.id] = isSatsCurrency(cartCurrencyUpper)
+            ? Math.ceil(discountedPrice * qty)
+            : Math.ceil(discountedPrice * qty * 100) / 100;
         } else {
           try {
             const satVal =
@@ -918,12 +974,16 @@ export default function CartInvoiceCard({
                     currency: product.currency,
                   });
             const fiatVal = await getFiatValue({
-              satoshi: Math.round(satVal),
+              satoshi: Math.ceil(satVal),
               currency: cartCurrencyUpper,
             });
-            map[product.id] = Math.round(fiatVal * 100) / 100;
+            map[product.id] = isSatsCurrency(cartCurrencyUpper)
+              ? Math.ceil(fiatVal)
+              : Math.ceil(fiatVal * 100) / 100;
           } catch {
-            map[product.id] = Math.round(discountedPrice * qty * 100) / 100;
+            map[product.id] = isSatsCurrency(cartCurrencyUpper)
+              ? Math.ceil(discountedPrice * qty)
+              : Math.ceil(discountedPrice * qty * 100) / 100;
           }
         }
       }
@@ -948,7 +1008,7 @@ export default function CartInvoiceCard({
           currency: "USD",
         });
         if (satsPerUsd > 0) {
-          setUsdEstimate(Math.round((totalCost / satsPerUsd) * 100) / 100);
+          setUsdEstimate(Math.ceil((totalCost / satsPerUsd) * 100) / 100);
         }
       } catch {
         setUsdEstimate(null);
@@ -1239,6 +1299,9 @@ export default function CartInvoiceCard({
     },
     orderCurrency?: string
   ) => {
+    if (!pubkeyToReceiveMessage) {
+      return;
+    }
     const newKeys = await generateNewKeys();
     if (!newKeys) {
       setFailureText("Failed to generate new keys for messages!");
@@ -1325,6 +1388,9 @@ export default function CartInvoiceCard({
     },
     orderCurrency?: string
   ) => {
+    if (!pubkeyToReceiveMessage) {
+      return;
+    }
     if (!keys) {
       setFailureText("Message keys are required!");
       setShowFailureModal(true);
@@ -1336,10 +1402,15 @@ export default function CartInvoiceCard({
     const decodedRandomPubkeyForReceiver = nip19.decode(keys.receiverNpub);
     const decodedRandomPrivkeyForReceiver = nip19.decode(keys.receiverNsec);
 
-    let buyerPubkey = await signer?.getPubKey?.();
-    if (!buyerPubkey) {
-      buyerPubkey = decodedRandomPubkeyForSender.data as string;
-    }
+    const realBuyerPubkey = await signer?.getPubKey?.();
+    const isGuest = !realBuyerPubkey;
+    const buyerPubkey = realBuyerPubkey
+      ? realBuyerPubkey
+      : (decodedRandomPubkeyForSender.data as string);
+    const guestBuyerEmail =
+      isGuest && buyerEmail && buyerEmail.trim()
+        ? buyerEmail.trim()
+        : undefined;
 
     let messageSubject = "";
     let messageOptions: any = {};
@@ -1357,6 +1428,8 @@ export default function CartInvoiceCard({
         contact,
         address,
         buyerPubkey,
+        buyerEmail: guestBuyerEmail,
+        isGuest,
         pickup,
         donationAmount: donationAmountValue,
         donationPercentage: donationPercentageValue,
@@ -1415,6 +1488,8 @@ export default function CartInvoiceCard({
         contact,
         address,
         buyerPubkey,
+        buyerEmail: guestBuyerEmail,
+        isGuest,
         pickup,
         donationAmount: donationAmountValue,
         donationPercentage: donationPercentageValue,
@@ -1647,7 +1722,7 @@ export default function CartInvoiceCard({
             !isSatsCart && cartCurrency ? cartCurrency : "sats";
           const orderAmount =
             sellerAmountNative !== null
-              ? String(Math.round(sellerAmountNative * 100) / 100)
+              ? String(Math.ceil(sellerAmountNative * 100) / 100)
               : String(sellerAmountSats || price);
           const sellerSubFrequencies = sellerProducts
             .map((p: any) => subscriptionSelections[p.id])
@@ -1657,6 +1732,24 @@ export default function CartInvoiceCard({
             sellerSubFrequencies.length > 0
               ? sellerSubFrequencies[0]
               : undefined;
+          const sellerProfileForEmailDonation =
+            profileContext.profileData.get(sellerPubkey);
+          const isPlatformSeller =
+            sellerPubkey === process.env.NEXT_PUBLIC_MILK_MARKET_PK;
+          const onPlatformPayment =
+            paymentType === "cashu" ||
+            paymentType === "nwc" ||
+            paymentType === "lightning" ||
+            paymentType === "stripe";
+          const orderAmountNumeric = parseFloat(orderAmount) || 0;
+          const emailDonationPercentage =
+            !isPlatformSeller && onPlatformPayment
+              ? (sellerProfileForEmailDonation?.content?.mm_donation ?? 0)
+              : 0;
+          const emailDonationAmount =
+            emailDonationPercentage > 0 && orderAmountNumeric > 0
+              ? Math.ceil((orderAmountNumeric * emailDonationPercentage) / 100)
+              : 0;
           return {
             orderId: "",
             productTitle: sellerProductTitles,
@@ -1670,6 +1763,8 @@ export default function CartInvoiceCard({
               paymentData.contactEmail || paymentData.contactPhone || undefined,
             pickupLocation: sellerPickupSummary || undefined,
             subscriptionFrequency: sellerSubFrequency,
+            donationAmount: emailDonationAmount,
+            donationPercentage: emailDonationPercentage,
           };
         }
       );
@@ -1688,6 +1783,34 @@ export default function CartInvoiceCard({
       setShowFailureModal(true);
     }
   };
+
+  // Auto-skip the order-type selection screen when there is only one possible
+  // path. Buyers should never have to click a button that has no alternative.
+  // - Mixed shipping types: only "Mixed delivery" is offered, so auto-pick
+  //   "combined" (the downstream pickup-vs-shipping preference is a real
+  //   2-option choice and is preserved).
+  // - All-Free / All-Added-Cost cart: only shipping is offered, auto-pick it.
+  // - All-Pickup cart: only contact is offered, auto-pick it.
+  // - Single-type carts of "Free/Pickup" or "Added Cost/Pickup" still
+  //   present a genuine 2-option choice (shipping vs pickup) and are
+  //   left untouched.
+  useEffect(() => {
+    if (!showOrderTypeSelection) return;
+    if (products.length === 0) return;
+    if (uniqueShippingTypes.length === 0) return;
+    if (uniqueShippingTypes.length > 1) {
+      handleOrderTypeSelection("combined");
+      return;
+    }
+    const st = uniqueShippingTypes[0];
+    if (st === "Free/Pickup" || st === "Added Cost/Pickup") return;
+    if (st === "Free" || st === "Added Cost") {
+      handleOrderTypeSelection("shipping");
+    } else {
+      handleOrderTypeSelection("contact");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showOrderTypeSelection, uniqueShippingTypes, products.length]);
 
   const handleOrderTypeSelection = async (selectedOrderType: string) => {
     setShowOrderTypeSelection(false);
@@ -1844,7 +1967,13 @@ export default function CartInvoiceCard({
 
       const wallet = new CashuWallet(new CashuMint(mints[0]!));
       const { request: pr, quote: hash } =
-        await wallet.createMintQuote(convertedPrice);
+        await wallet.createMintQuoteBolt11(convertedPrice);
+      recordPendingMintQuote({
+        quoteId: hash,
+        mintUrl: mints[0]!,
+        amount: convertedPrice,
+        invoice: pr,
+      });
 
       const { nwcString } = getLocalStorageData();
       if (!nwcString) throw new Error("NWC connection not found.");
@@ -1986,7 +2115,19 @@ export default function CartInvoiceCard({
               const sellerProducts = products.filter(
                 (p) => p.pubkey === pubkey
               );
-              const sellerTotal = sellerProducts.reduce((sum, p) => {
+              const sellerCurrency = sellerProducts[0]?.currency || "usd";
+              const sellerCurrencyLower = sellerCurrency.toLowerCase();
+              const sellerIsZeroDecimal =
+                isSatsCurrency(sellerCurrencyLower) ||
+                ZERO_DECIMAL_CURRENCIES.has(sellerCurrencyLower);
+              // Sum each line in the seller's native currency, ceiling each
+              // line to the seller-currency smallest unit. Then ceil the
+              // shipping. The per-seller smallest-unit total is the single
+              // source of truth: the API sums these to compute the buyer
+              // charge, so the buyer is never billed less than the merchants
+              // expect to receive in aggregate.
+              let sellerSmallest = 0;
+              for (const p of sellerProducts) {
                 const price =
                   p.bulkPrice !== undefined
                     ? p.bulkPrice
@@ -1999,14 +2140,22 @@ export default function CartInvoiceCard({
                 const discount = appliedDiscounts[p.pubkey] || 0;
                 const discountedPrice =
                   discount > 0 ? price * (1 - discount / 100) : price;
-                return sum + discountedPrice * qty;
-              }, 0);
+                const lineNative = discountedPrice * qty;
+                sellerSmallest += sellerIsZeroDecimal
+                  ? Math.ceil(lineNative)
+                  : Math.ceil(lineNative * 100);
+              }
               const { highestShippingCost } =
                 getConsolidatedShippingForSeller(pubkey);
+              if (highestShippingCost > 0) {
+                sellerSmallest += sellerIsZeroDecimal
+                  ? Math.ceil(highestShippingCost)
+                  : Math.ceil(highestShippingCost * 100);
+              }
               return {
                 sellerPubkey: pubkey,
-                amount: sellerTotal + highestShippingCost,
-                currency: sellerProducts[0]?.currency || "usd",
+                amountSmallest: sellerSmallest,
+                currency: sellerCurrency,
               };
             })
           : undefined;
@@ -2175,6 +2324,16 @@ export default function CartInvoiceCard({
         const productCurrency =
           !isSatsCart && cartCurrency ? cartCurrency : "sats";
 
+        const sellerProfileForDonation = profileContext.profileData.get(
+          product.pubkey
+        );
+        const stripeDonationPercentage =
+          sellerProfileForDonation?.content?.mm_donation ?? 0;
+        const stripeDonationAmount =
+          stripeDonationPercentage > 0 && productAmount
+            ? Math.ceil((productAmount * stripeDonationPercentage) / 100)
+            : 0;
+
         await sendPaymentAndContactMessage(
           sellerPk,
           paymentMessage,
@@ -2192,8 +2351,8 @@ export default function CartInvoiceCard({
           undefined,
           addressTag,
           selectedPickupLocations[product.id] || undefined,
-          undefined,
-          undefined,
+          stripeDonationAmount,
+          stripeDonationPercentage,
           undefined,
           subInfo,
           productCurrency
@@ -2322,6 +2481,15 @@ export default function CartInvoiceCard({
           ") was processed successfully via Stripe. You should be receiving delivery information from " +
           sellerNames +
           " as soon as they review your order.";
+        const sellerProfileForReceiptDonation = profileContext.profileData.get(
+          product.pubkey
+        );
+        const receiptDonationPercentage =
+          sellerProfileForReceiptDonation?.content?.mm_donation ?? 0;
+        const receiptDonationAmount =
+          receiptDonationPercentage > 0
+            ? Math.ceil((productAmount * receiptDonationPercentage) / 100)
+            : 0;
         await sendPaymentAndContactMessage(
           userPubkey!,
           receiptMessage,
@@ -2339,8 +2507,8 @@ export default function CartInvoiceCard({
           undefined,
           addressTag,
           selectedPickupLocations[product.id] || undefined,
-          undefined,
-          undefined,
+          receiptDonationAmount,
+          receiptDonationPercentage,
           undefined,
           subInfo,
           productCurrency
@@ -2744,6 +2912,10 @@ export default function CartInvoiceCard({
             shippingAddress: emailAddressTag,
             buyerContact: data.contactEmail || data.contactPhone || undefined,
             pickupLocation: sellerPickupSummary || undefined,
+            // External fiat (Cash App / Venmo / Zelle / PayPal) — funds do
+            // not flow through the platform, so no donation is withheld.
+            donationAmount: 0,
+            donationPercentage: 0,
           };
         });
       } else {
@@ -2766,6 +2938,9 @@ export default function CartInvoiceCard({
               Object.values(selectedPickupLocations)
                 .filter(Boolean)
                 .join(", ") || undefined,
+            // External fiat path — no platform cut.
+            donationAmount: 0,
+            donationPercentage: 0,
           },
         ];
       }
@@ -2806,7 +2981,13 @@ export default function CartInvoiceCard({
       const wallet = new CashuWallet(new CashuMint(mints[0]!));
 
       const { request: pr, quote: hash } =
-        await wallet.createMintQuote(convertedPrice);
+        await wallet.createMintQuoteBolt11(convertedPrice);
+      recordPendingMintQuote({
+        quoteId: hash,
+        mintUrl: mints[0]!,
+        amount: convertedPrice,
+        invoice: pr,
+      });
 
       setInvoice(pr);
 
@@ -2864,14 +3045,36 @@ export default function CartInvoiceCard({
     while (retryCount < maxRetries) {
       try {
         // First check if the quote has been paid
-        const quoteState = await wallet.checkMintQuote(hash);
+        const quoteState = await wallet.checkMintQuoteBolt11(hash);
 
         if (quoteState.state === "PAID") {
+          markMintQuotePaid(hash);
           // Quote is paid, try to mint proofs
           try {
-            const proofs = await wallet.mintProofs(convertedPrice, hash);
+            const proofs = await wallet.mintProofsBolt11(convertedPrice, hash);
             if (proofs && proofs.length > 0) {
-              await sendTokens(wallet, proofs, data);
+              try {
+                await sendTokens(wallet, proofs, data);
+              } catch (sendErr) {
+                console.warn(
+                  "sendTokens failed after Lightning mint; stashing proofs locally:",
+                  sendErr
+                );
+                const stashed = stashProofsLocally(proofs, mints[0]!, {
+                  note: "Recovered from failed cart Lightning payment",
+                });
+                markMintQuoteClaimed(hash);
+                setWalletRecovery({
+                  isOpen: true,
+                  amountSats: stashed,
+                  mintUrl: mints[0],
+                });
+                setShowInvoiceCard(false);
+                setInvoice("");
+                setQrCodeUrl(null);
+                return;
+              }
+              markMintQuoteClaimed(hash);
               clearPurchasedFromCart();
               setPaymentConfirmed(true);
               if (discountCodes) {
@@ -2897,7 +3100,9 @@ export default function CartInvoiceCard({
               mintError instanceof Error &&
               mintError.message.includes("issued")
             ) {
-              // Quote was already processed, consider it successful
+              // Quote was already processed elsewhere — proofs are not
+              // recoverable client-side from this device.
+              removePendingMintQuote(hash);
               clearPurchasedFromCart();
               setPaymentConfirmed(true);
               setQrCodeUrl(null);
@@ -2915,7 +3120,8 @@ export default function CartInvoiceCard({
           await new Promise((resolve) => setTimeout(resolve, 2100));
           continue;
         } else if (quoteState.state === "ISSUED") {
-          // Quote was already processed successfully
+          // Quote was already processed successfully (likely on another tab/device).
+          removePendingMintQuote(hash);
           clearPurchasedFromCart();
           setPaymentConfirmed(true);
           setQrCodeUrl(null);
@@ -2943,19 +3149,19 @@ export default function CartInvoiceCard({
           break;
         }
 
-        // If we've exceeded max retries, show error
+        // If we've exceeded max retries, surface the recovery modal — the
+        // pending mint quote stays in localStorage so MintRecoveryBoot can
+        // finish the claim on next sign-in if the LN payment did settle.
         if (retryCount >= maxRetries) {
           setShowInvoiceCard(false);
           setInvoice("");
           setQrCodeUrl(null);
-          if (setInvoiceGenerationFailed) {
-            setInvoiceGenerationFailed(true);
-          } else {
-            setFailureText(
-              "Payment timed out! Please check your wallet balance or try again."
-            );
-            setShowFailureModal(true);
-          }
+          setWalletRecovery({
+            isOpen: true,
+            amountSats: convertedPrice,
+            mintUrl: mints[0],
+            pendingRecovery: true,
+          });
           break;
         }
 
@@ -3001,8 +3207,7 @@ export default function CartInvoiceCard({
       let donationToken;
       let beefDonationToken;
       const sellerProfile = profileContext.profileData.get(pubkey);
-      const donationPercentage =
-        sellerProfile?.content?.shopstr_donation || 2.1;
+      const donationPercentage = sellerProfile?.content?.mm_donation ?? 0;
       const beefDonationPercentage = product.beefinit_donation_percentage || 0;
 
       const donationAmount = Math.ceil(
@@ -3094,13 +3299,19 @@ export default function CartInvoiceCard({
       let paymentTags;
 
       if (sellerAmount > 0) {
-        const { keep, send } = await wallet.send(
+        const __swapOutcomeA_0 = await safeSwap(
+          wallet,
           sellerAmount,
           remainingProofs,
-          {
-            includeFees: true,
-          }
+          { sendConfig: { includeFees: true } }
         );
+        if (__swapOutcomeA_0.status !== "swapped") {
+          throw new Error(
+            __swapOutcomeA_0.errorMessage ??
+              `Swap did not complete (${__swapOutcomeA_0.status})`
+          );
+        }
+        const { keep, send } = __swapOutcomeA_0;
         sellerProofs = send;
         sellerToken = getEncodedToken({
           mint: mints[0]!,
@@ -3136,13 +3347,19 @@ export default function CartInvoiceCard({
 
       // Handle donation if applicable
       if (donationAmount > 0) {
-        const { keep, send } = await wallet.send(
+        const __swapOutcomeA_1 = await safeSwap(
+          wallet,
           donationAmount,
           remainingProofs,
-          {
-            includeFees: true,
-          }
+          { sendConfig: { includeFees: true } }
         );
+        if (__swapOutcomeA_1.status !== "swapped") {
+          throw new Error(
+            __swapOutcomeA_1.errorMessage ??
+              `Swap did not complete (${__swapOutcomeA_1.status})`
+          );
+        }
+        const { keep, send } = __swapOutcomeA_1;
         donationToken = getEncodedToken({
           mint: mints[0]!,
           proofs: send,
@@ -3151,13 +3368,19 @@ export default function CartInvoiceCard({
       }
 
       if (beefDonationAmount > 0) {
-        const { keep, send } = await wallet.send(
+        const __swapOutcomeA_2 = await safeSwap(
+          wallet,
           beefDonationAmount,
           remainingProofs,
-          {
-            includeFees: true,
-          }
+          { sendConfig: { includeFees: true } }
         );
+        if (__swapOutcomeA_2.status !== "swapped") {
+          throw new Error(
+            __swapOutcomeA_2.errorMessage ??
+              `Swap did not complete (${__swapOutcomeA_2.status})`
+          );
+        }
+        const { keep, send } = __swapOutcomeA_2;
         beefDonationProofs = send;
         beefDonationToken = getEncodedToken({
           mint: mints[0]!,
@@ -3180,24 +3403,43 @@ export default function CartInvoiceCard({
         await ln.fetch();
         const invoice = await ln.requestInvoice({ satoshi: newAmount });
         const invoicePaymentRequest = invoice.paymentRequest;
-        const meltQuote = await wallet.createMeltQuote(invoicePaymentRequest);
+        const meltQuote = await wallet.createMeltQuoteBolt11(
+          invoicePaymentRequest
+        );
         if (meltQuote) {
-          const meltQuoteTotal = meltQuote.amount + meltQuote.fee_reserve;
-          const { keep, send } = await wallet.send(
+          const meltQuoteTotal =
+            meltQuote.amount.toNumber() + meltQuote.fee_reserve.toNumber();
+          const __swapOutcomeA_3 = await safeSwap(
+            wallet,
             meltQuoteTotal,
             sellerProofs,
-            {
-              includeFees: true,
-            }
+            { sendConfig: { includeFees: true } }
           );
-          const meltResponse = await wallet.meltProofs(meltQuote, send);
+          if (__swapOutcomeA_3.status !== "swapped") {
+            throw new Error(
+              __swapOutcomeA_3.errorMessage ??
+                `Swap did not complete (${__swapOutcomeA_3.status})`
+            );
+          }
+          const { keep, send } = __swapOutcomeA_3;
+          const __meltOutcome_0 = await safeMeltProofs(wallet, meltQuote, send);
+          if (__meltOutcome_0.status !== "paid") {
+            throw new Error(
+              __meltOutcome_0.errorMessage ??
+                `Melt outcome ${__meltOutcome_0.status}`
+            );
+          }
+          const meltResponse = {
+            change: __meltOutcome_0.changeProofs,
+            quote: meltQuote,
+          };
           if (meltResponse.quote) {
-            const meltAmount = meltResponse.quote.amount;
+            const meltAmount = meltResponse.quote.amount.toNumber();
             const changeProofs = [...keep, ...meltResponse.change];
             const changeAmount =
               Array.isArray(changeProofs) && changeProofs.length > 0
                 ? changeProofs.reduce(
-                    (acc, current: Proof) => acc + current.amount,
+                    (acc, current: Proof) => acc + current.amount.toNumber(),
                     0
                   )
                 : 0;
@@ -3328,7 +3570,7 @@ export default function CartInvoiceCard({
             const unusedAmount =
               Array.isArray(unusedProofs) && unusedProofs.length > 0
                 ? unusedProofs.reduce(
-                    (acc, current: Proof) => acc + current.amount,
+                    (acc, current: Proof) => acc + current.amount.toNumber(),
                     0
                   )
                 : 0;
@@ -3522,18 +3764,25 @@ export default function CartInvoiceCard({
       // Step 2: Send donation message
       if (donationToken) {
         const donationMessage = "Sale donation: " + donationToken;
-        try {
-          await sendPaymentAndContactMessage(
-            "a37118a4888e02d28e8767c08caaf73b49abdac391ad7ff18a304891e416dc33",
-            donationMessage,
-            product,
-            false,
-            false,
-            true
+        const donationRecipient = process.env.NEXT_PUBLIC_MILK_MARKET_PK;
+        if (donationRecipient) {
+          try {
+            await sendPaymentAndContactMessage(
+              donationRecipient,
+              donationMessage,
+              product,
+              false,
+              false,
+              true
+            );
+            await new Promise((resolve) => setTimeout(resolve, 500));
+          } catch (error) {
+            console.error("Failed to send donation message:", error);
+          }
+        } else {
+          console.warn(
+            "NEXT_PUBLIC_MILK_MARKET_PK not set; skipping donation message."
           );
-          await new Promise((resolve) => setTimeout(resolve, 500));
-        } catch (error) {
-          console.error("Failed to send donation message:", error);
         }
       }
 
@@ -3565,23 +3814,39 @@ export default function CartInvoiceCard({
                 const invoice = await ln.requestInvoice({
                   satoshi: beefLnAmount,
                 });
-                const meltQuote = await wallet.createMeltQuote(
+                const meltQuote = await wallet.createMeltQuoteBolt11(
                   invoice.paymentRequest
                 );
                 if (meltQuote) {
                   const meltQuoteTotal =
-                    meltQuote.amount + meltQuote.fee_reserve;
-                  const { send } = await wallet.send(
+                    meltQuote.amount.toNumber() +
+                    meltQuote.fee_reserve.toNumber();
+                  const __swapOutcomeB_0 = await safeSwap(
+                    wallet,
                     meltQuoteTotal,
                     beefDonationProofs,
-                    {
-                      includeFees: true,
-                    }
+                    { sendConfig: { includeFees: true } }
                   );
-                  const meltResponse = await wallet.meltProofs(meltQuote, send);
-                  if (meltResponse.quote) {
-                    beefPaidViaLightning = true;
+                  if (__swapOutcomeB_0.status !== "swapped") {
+                    throw new Error(
+                      __swapOutcomeB_0.errorMessage ??
+                        `Swap did not complete (${__swapOutcomeB_0.status})`
+                    );
                   }
+                  const { send } = __swapOutcomeB_0;
+                  const __meltOutcome_1 = await safeMeltProofs(
+                    wallet,
+                    meltQuote,
+                    send
+                  );
+                  if (__meltOutcome_1.status !== "paid") {
+                    throw new Error(
+                      __meltOutcome_1.errorMessage ??
+                        `Melt outcome ${__meltOutcome_1.status}`
+                    );
+                  }
+                  void __meltOutcome_1;
+                  beefPaidViaLightning = true;
                 }
               }
             } catch (error) {
@@ -4134,7 +4399,8 @@ export default function CartInvoiceCard({
   const formatCartMethodCost = (
     native: number | null,
     sats: number,
-    mode: "lightning" | "card"
+    mode: "lightning" | "card",
+    options: { stripeFloor?: boolean } = {}
   ) => {
     if (mode === "lightning") {
       return native !== null && cartCurrency
@@ -4144,16 +4410,32 @@ export default function CartInvoiceCard({
           )})`
         : formatWithCommas(sats, "sats");
     }
+    // Card / Stripe path — surface Stripe's $0.50 minimum-charge floor.
+    const stripeFloor = options.stripeFloor === true;
     if (native !== null && cartCurrency) {
+      if (stripeFloor) {
+        const display = applyStripeFloor(native, cartCurrency);
+        const note = isAtStripeFloor(native, cartCurrency)
+          ? " · Stripe minimum"
+          : "";
+        return `${formatWithCommas(display, cartCurrency)}${note}`;
+      }
       return formatWithCommas(native, cartCurrency);
     }
     if (usdEstimate != null && totalCost > 0) {
       const ratio = sats / totalCost;
-      const methodUsd = Math.round(usdEstimate * ratio * 100) / 100;
+      const rawMethodUsd = Math.ceil(usdEstimate * ratio * 100) / 100;
+      const methodUsd = stripeFloor
+        ? Math.max(STRIPE_MINIMUM_CHARGE_USD, rawMethodUsd)
+        : rawMethodUsd;
+      const note =
+        stripeFloor && rawMethodUsd < STRIPE_MINIMUM_CHARGE_USD
+          ? " · Stripe minimum"
+          : "";
       return `${formatWithCommas(sats, "sats")} (≈ ${formatWithCommas(
         methodUsd,
         "USD"
-      )})`;
+      )}${note})`;
     }
     return formatWithCommas(sats, "sats");
   };
@@ -4167,12 +4449,15 @@ export default function CartInvoiceCard({
   const formattedCardCost = formatCartMethodCost(
     stripeCosts.nativeTotal,
     stripeCosts.satsTotal,
-    "card"
+    "card",
+    { stripeFloor: true }
   );
 
   const getFormattedFiatCost = (fiatKey: string) => {
     const costs = getFiatMethodCosts(fiatKey);
-    return formatCartMethodCost(costs.nativeTotal, costs.satsTotal, "card");
+    return formatCartMethodCost(costs.nativeTotal, costs.satsTotal, "card", {
+      stripeFloor: true,
+    });
   };
 
   const handleCashuPayment = async (price: number, data: any) => {
@@ -4189,13 +4474,21 @@ export default function CartInvoiceCard({
 
       const mint = new CashuMint(mints[0]!);
       const wallet = new CashuWallet(mint);
-      const mintKeySetIds = await wallet.getKeySets();
+      await wallet.loadMint();
+      const mintKeySetIds = await wallet.keyChain.getKeysets();
       const filteredProofs = tokens.filter((p: Proof) =>
         mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
       ) as Proof[];
-      const { keep, send } = await wallet.send(price, filteredProofs, {
-        includeFees: true,
+      const __swapOutcomeA_4 = await safeSwap(wallet, price, filteredProofs, {
+        sendConfig: { includeFees: true },
       });
+      if (__swapOutcomeA_4.status !== "swapped") {
+        throw new Error(
+          __swapOutcomeA_4.errorMessage ??
+            `Swap did not complete (${__swapOutcomeA_4.status})`
+        );
+      }
+      const { keep, send } = __swapOutcomeA_4;
       const deletedEventIds = [
         ...new Set([
           ...walletContext.proofEvents
@@ -4711,7 +5004,7 @@ export default function CartInvoiceCard({
                       // Calculate milk market donation for this product
                       const milkMarketDonationPercentage =
                         profileContext.profileData.get(product.pubkey)?.content
-                          ?.shopstr_donation || 0;
+                          ?.mm_donation ?? 0;
                       const milkMarketDonationAmount = Math.ceil(
                         (basePrice * milkMarketDonationPercentage) / 100
                       );
@@ -5176,7 +5469,7 @@ export default function CartInvoiceCard({
                     // Calculate milk market donation for this product
                     const milkMarketDonationPercentage =
                       profileContext.profileData.get(product.pubkey)?.content
-                        ?.shopstr_donation || 0;
+                        ?.mm_donation ?? 0;
                     const milkMarketDonationAmount = Math.ceil(
                       (basePrice * milkMarketDonationPercentage) / 100
                     );
@@ -5944,7 +6237,8 @@ export default function CartInvoiceCard({
                           return formatCartMethodCost(
                             nativeTotalCost,
                             totalCost,
-                            "card"
+                            "card",
+                            { stripeFloor: true }
                           );
                         })()}
                       </Button>
@@ -6383,6 +6677,15 @@ export default function CartInvoiceCard({
           setHasTimedOut(false);
           setStripeTimeoutSeconds(STRIPE_TIMEOUT_SECONDS);
         }}
+      />
+
+      <WalletRecoveryModal
+        isOpen={walletRecovery.isOpen}
+        onClose={() => setWalletRecovery({ isOpen: false, amountSats: 0 })}
+        amountSats={walletRecovery.amountSats}
+        mintUrl={walletRecovery.mintUrl}
+        isLoggedIn={isLoggedIn}
+        pendingRecovery={walletRecovery.pendingRecovery}
       />
     </div>
   );

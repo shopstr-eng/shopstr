@@ -130,6 +130,30 @@ export interface OrderEmailParams {
   selectedBulkOption?: string;
   buyerContact?: string;
   subscriptionFrequency?: string;
+  donationAmount?: number;
+  donationPercentage?: number;
+}
+
+function formatDonationPercent(pct: number): string {
+  const rounded = Math.round(pct * 10) / 10;
+  return rounded % 1 === 0
+    ? `${rounded.toFixed(0)}%`
+    : `${rounded.toFixed(1)}%`;
+}
+
+function buildDonationSection(params: OrderEmailParams): string {
+  const amt = params.donationAmount ?? 0;
+  const pct = params.donationPercentage ?? 0;
+  return `<tr>
+        <td style="padding:16px 0;border-top:1px solid #e5e7eb;">
+          <p style="margin:0 0 4px;color:#6b7280;font-size:13px;text-transform:uppercase;letter-spacing:0.05em;">Platform Donation (${formatDonationPercent(
+            pct
+          )})</p>
+          <p style="margin:0;color:#111827;font-size:15px;">${esc(
+            String(amt)
+          )} ${esc(params.currency)}</p>
+        </td>
+      </tr>`;
 }
 
 export function orderConfirmationEmail(params: OrderEmailParams): {
@@ -191,6 +215,7 @@ export function orderConfirmationEmail(params: OrderEmailParams): {
           )}</p>
         </td>
       </tr>
+      ${buildDonationSection(params)}
       ${subscriptionSection}
       ${deliverySection}
     </table>
@@ -272,6 +297,7 @@ export function sellerNewOrderEmail(params: OrderEmailParams): {
           )}</p>
         </td>
       </tr>
+      ${buildDonationSection(params)}
       ${subscriptionSection}
       ${deliverySection}
       ${buyerContactSection}

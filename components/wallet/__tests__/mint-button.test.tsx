@@ -11,7 +11,7 @@ import {
   NostrContext,
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
-import { CashuMint, CashuWallet } from "@cashu/cashu-ts";
+import { Mint as CashuMint, Wallet as CashuWallet } from "@cashu/cashu-ts";
 import * as NostrHelper from "@/utils/nostr/nostr-helper-functions";
 import QRCode from "qrcode";
 

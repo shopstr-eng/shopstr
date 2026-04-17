@@ -12,15 +12,22 @@ import {
   extractSignedEventFromRequest,
   verifySignedHttpRequestProof,
 } from "@/utils/nostr/request-auth";
+import { applyRateLimit } from "@/utils/rate-limit";
+
+// Low-volume CRUD for sellers; validation reads (GET with code+pubkey) sit
+// on the buyer checkout path, so the limit is generous enough to cover a
+// burst of cart adjustments.
+const RATE_LIMIT = { limit: 120, windowMs: 60 * 1000 };
 
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
+  if (!applyRateLimit(req, res, "discount-codes", RATE_LIMIT)) return;
+
   if (req.method === "POST") {
     try {
-      const { code, pubkey, discountPercentage, expiration, maxUses } =
-        req.body;
+      const { code, pubkey, discountPercentage, expiration } = req.body;
 
       if (!code || !pubkey || !discountPercentage) {
         return res.status(400).json({ error: "Missing required fields" });
@@ -43,13 +50,7 @@ export default async function handler(
           .json({ error: verification.error });
       }
 
-      await addDiscountCode(
-        code,
-        pubkey,
-        discountPercentage,
-        expiration,
-        maxUses
-      );
+      await addDiscountCode(code, pubkey, discountPercentage, expiration);
       res.status(200).json({ success: true });
     } catch (error) {
       console.error("Failed to add discount code:", error);

@@ -7,6 +7,9 @@ import {
   hashRecoveryKey,
   encryptNsecWithRecoveryKey,
 } from "@/utils/auth/recovery";
+import { applyRateLimit } from "@/utils/rate-limit";
+
+const RATE_LIMIT = { limit: 5, windowMs: 60 * 1000 };
 
 export default async function handler(
   req: NextApiRequest,
@@ -15,6 +18,8 @@ export default async function handler(
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
+
+  if (!applyRateLimit(req, res, "auth-email-signup", RATE_LIMIT)) return;
 
   const { email, password } = req.body;
 

@@ -1,10 +1,21 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { CashuMint, CashuWallet, MintQuoteState } from "@cashu/cashu-ts";
+import {
+  Mint as CashuMint,
+  Wallet as CashuWallet,
+  MintQuoteState,
+} from "@cashu/cashu-ts";
 import { authenticateRequest, initializeApiKeysTable } from "@/utils/mcp/auth";
 import { getMcpOrder, updateMcpOrderPayment } from "@/mcp/tools/purchase-tools";
 import { recordRequest } from "@/utils/mcp/metrics";
 import { pendingLightningPayments } from "./create-order";
 import { deductStock } from "@/utils/db/inventory-service";
+import { applyRateLimit } from "@/utils/rate-limit";
+
+// Polled by clients waiting for invoice settlement; the cap is generous
+// because polling cadence + retries can stack, but bounded so an open
+// invoice loop cannot saturate the mint quote-check pipeline.
+const RATE_LIMIT = { limit: 120, windowMs: 60 * 1000 };
+const PER_KEY_LIMIT = { limit: 60, windowMs: 60 * 1000 };
 
 let tablesReady = false;
 
@@ -26,8 +37,26 @@ export default async function handler(
     return res.status(405).json({ error: "Method not allowed. Use POST." });
   }
 
+  if (!applyRateLimit(req, res, "mcp-verify-payment:ip", RATE_LIMIT)) {
+    recordRequest(Date.now() - requestStart, false, "verify-payment");
+    return;
+  }
+
   const apiKey = await authenticateRequest(req, res, "read_write");
   if (!apiKey) {
+    recordRequest(Date.now() - requestStart, false, "verify-payment");
+    return;
+  }
+
+  if (
+    !applyRateLimit(
+      req,
+      res,
+      "mcp-verify-payment:key",
+      PER_KEY_LIMIT,
+      String(apiKey.id)
+    )
+  ) {
     recordRequest(Date.now() - requestStart, false, "verify-payment");
     return;
   }
@@ -91,7 +120,8 @@ export default async function handler(
 
     const cashuMint = new CashuMint(pending.mintUrl);
     const wallet = new CashuWallet(cashuMint);
-    const quoteStatus = await wallet.checkMintQuote(pending.quote);
+    await wallet.loadMint();
+    const quoteStatus = await wallet.checkMintQuoteBolt11(pending.quote);
 
     if (
       quoteStatus.state === MintQuoteState.PAID ||

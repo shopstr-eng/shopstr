@@ -127,9 +127,13 @@ const renderComponent = ({
             value={{
               merchantReviewsData: new Map(),
               productReviewsData: new Map(),
+              reviewEventIds: new Map(),
+              reviewReplies: new Map(),
               isLoading: false,
               updateMerchantReviewsData: jest.fn(),
               updateProductReviewsData: jest.fn(),
+              updateReviewEventId: jest.fn(),
+              addReviewReply: jest.fn(),
             }}
           >
             <FollowsContext.Provider

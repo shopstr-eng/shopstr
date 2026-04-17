@@ -166,12 +166,6 @@ function renderMarkdown(content: string, colors: StorefrontColorScheme) {
   return elements;
 }
 
-function inlineFormat(text: string): string {
-  return text
-    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-    .replace(/\*(.+?)\*/g, "<em>$1</em>");
-}
-
 export default function StorefrontPolicyPage({
   policy,
   colors,

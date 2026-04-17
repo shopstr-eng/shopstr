@@ -15,6 +15,7 @@ jest.mock("@/utils/db/db-service", () => ({
 
 import cacheEventHandler from "@/pages/api/db/cache-event";
 import cacheEventsHandler from "@/pages/api/db/cache-events";
+import { __resetRateLimitBuckets } from "@/utils/rate-limit";
 
 function createResponse() {
   return {
@@ -28,6 +29,9 @@ function createResponse() {
       this.jsonBody = payload;
       return this;
     },
+    setHeader() {
+      return this;
+    },
   };
 }
 
@@ -35,6 +39,8 @@ function createRequest(method: string, body: unknown): NextApiRequest {
   return {
     method,
     body,
+    headers: {},
+    socket: { remoteAddress: "127.0.0.1" },
   } as unknown as NextApiRequest;
 }
 
@@ -43,6 +49,7 @@ describe("/api/db/cache-event", () => {
     verifyEventMock.mockReset();
     cacheEventMock.mockReset();
     cacheEventsMock.mockReset();
+    __resetRateLimitBuckets();
   });
 
   it("rejects forged single-event cache writes", async () => {
@@ -112,6 +119,80 @@ describe("/api/db/cache-event", () => {
     expect(res.jsonBody).toEqual({
       error: "Event kind is not permitted for caching",
     });
+  });
+
+  it("throttles per pubkey, not per IP, so NAT-shared buyers don't trip each other", async () => {
+    verifyEventMock.mockReturnValue(true);
+    cacheEventMock.mockResolvedValue(undefined);
+
+    const makeReq = (pubkey: string) => {
+      const r = createRequest("POST", {
+        id: "evt-ok",
+        pubkey,
+        kind: 30019,
+        content: "{}",
+      });
+      (r as any).headers = { "x-forwarded-for": "10.0.0.1" };
+      (r as any).socket = { remoteAddress: "10.0.0.1" };
+      return r;
+    };
+
+    // One shopper bursts up to the per-pubkey limit (600/min).
+    for (let i = 0; i < 600; i++) {
+      const res = createResponse();
+      await cacheEventHandler(
+        makeReq("buyer-1"),
+        res as unknown as NextApiResponse
+      );
+      expect(res.statusCode).toBe(200);
+    }
+
+    const denied = createResponse();
+    await cacheEventHandler(
+      makeReq("buyer-1"),
+      denied as unknown as NextApiResponse
+    );
+    expect(denied.statusCode).toBe(429);
+
+    // A different shopper behind the *same* IP (CGNAT/office) is unaffected.
+    const sharedIpOtherBuyer = createResponse();
+    await cacheEventHandler(
+      makeReq("buyer-2"),
+      sharedIpOtherBuyer as unknown as NextApiResponse
+    );
+    expect(sharedIpOtherBuyer.statusCode).toBe(200);
+  });
+
+  it("enforces a coarse per-IP ceiling as a DoS backstop", async () => {
+    verifyEventMock.mockReturnValue(true);
+    cacheEventMock.mockResolvedValue(undefined);
+
+    // Rotate pubkeys per request so we only trip the IP limit (2000/min),
+    // not the per-pubkey limit.
+    const makeReq = (i: number) => {
+      const r = createRequest("POST", {
+        id: `evt-${i}`,
+        pubkey: `pubkey-${i}`,
+        kind: 30019,
+        content: "{}",
+      });
+      (r as any).headers = { "x-forwarded-for": "10.0.0.9" };
+      (r as any).socket = { remoteAddress: "10.0.0.9" };
+      return r;
+    };
+
+    for (let i = 0; i < 2000; i++) {
+      const res = createResponse();
+      await cacheEventHandler(makeReq(i), res as unknown as NextApiResponse);
+      expect(res.statusCode).toBe(200);
+    }
+
+    const denied = createResponse();
+    await cacheEventHandler(
+      makeReq(9999),
+      denied as unknown as NextApiResponse
+    );
+    expect(denied.statusCode).toBe(429);
   });
 
   it("rejects forged batch cache writes", async () => {

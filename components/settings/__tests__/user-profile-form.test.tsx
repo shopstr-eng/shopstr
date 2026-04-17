@@ -226,7 +226,7 @@ describe("UserProfileForm", () => {
       expect(mockCreateNostrProfileEvent).toHaveBeenCalledWith(
         expect.any(Object),
         expect.any(Object),
-        expect.stringContaining('"shopstr_donation":"5.5"')
+        expect.stringContaining('"mm_donation":"5.5"')
       );
     });
   });

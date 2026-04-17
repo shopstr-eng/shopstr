@@ -10,7 +10,18 @@ interface SellerSplit {
   sellerPubkey: string;
   amountCents: number;
   accountId?: string;
+  donationPercent?: number;
+  donationCutSmallest?: number;
 }
+import { applyRateLimit } from "@/utils/rate-limit";
+import { withStripeRetry } from "@/utils/stripe/retry-service";
+import {
+  resolveDonationCut,
+  computeDonationCutSmallest,
+} from "@/utils/stripe/donation";
+
+// Rate limit: per-IP cap to bound abuse of payment endpoints.
+const RATE_LIMIT = { limit: 30, windowMs: 60000 };
 
 export default async function handler(
   req: NextApiRequest,
@@ -19,6 +30,8 @@ export default async function handler(
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
+
+  if (!applyRateLimit(req, res, "stripe-process-transfers", RATE_LIMIT)) return;
 
   try {
     const { paymentIntentId, sellerSplits, transferGroup } = req.body as {
@@ -51,6 +64,8 @@ export default async function handler(
       transferId?: string;
       error?: string;
       skipped?: boolean;
+      donationCutSmallest?: number;
+      transferredAmount?: number;
     }[] = [];
 
     for (const split of sellerSplits) {
@@ -80,21 +95,78 @@ export default async function handler(
         accountId = connectAccount.stripe_account_id;
       }
 
-      try {
-        const transfer = await stripe.transfers.create({
-          amount: split.amountCents,
-          currency: transferCurrency,
-          destination: accountId,
-          transfer_group: transferGroup,
-          metadata: {
-            paymentIntentId,
-            sellerPubkey: split.sellerPubkey,
-          },
+      // Resolve the donation cut for this seller. Prefer values that the
+      // create-payment-intent endpoint already computed and embedded in the
+      // split (so on-chain math matches what was charged); fall back to a
+      // fresh profile lookup so older clients still get parity.
+      let donationCut = 0;
+      let donationPercent = 0;
+      if (
+        typeof split.donationCutSmallest === "number" &&
+        split.donationCutSmallest > 0
+      ) {
+        donationCut = Math.min(
+          split.donationCutSmallest,
+          split.amountCents - 1
+        );
+        donationPercent = split.donationPercent ?? 0;
+      } else if (
+        typeof split.donationPercent === "number" &&
+        split.donationPercent > 0
+      ) {
+        donationPercent = split.donationPercent;
+        donationCut = computeDonationCutSmallest(
+          split.amountCents,
+          donationPercent
+        );
+      } else {
+        const resolved = await resolveDonationCut(
+          split.sellerPubkey,
+          split.amountCents
+        );
+        donationPercent = resolved.percent;
+        donationCut = resolved.cutSmallest;
+      }
+
+      const transferAmount = Math.max(split.amountCents - donationCut, 0);
+      if (transferAmount <= 0) {
+        results.push({
+          sellerPubkey: split.sellerPubkey,
+          error:
+            "Computed transfer amount is zero after donation cut; skipping",
+          donationCutSmallest: donationCut,
+          transferredAmount: 0,
         });
+        continue;
+      }
+
+      try {
+        const transfer = await withStripeRetry(() =>
+          stripe.transfers.create(
+            {
+              amount: transferAmount,
+              currency: transferCurrency,
+              destination: accountId,
+              transfer_group: transferGroup,
+              metadata: {
+                paymentIntentId,
+                sellerPubkey: split.sellerPubkey,
+                grossAmount: split.amountCents.toString(),
+                mmDonationPercent: donationPercent.toString(),
+                mmDonationCutSmallest: donationCut.toString(),
+              },
+            },
+            {
+              idempotencyKey: `transfer-${paymentIntentId}-${split.sellerPubkey}`,
+            }
+          )
+        );
 
         results.push({
           sellerPubkey: split.sellerPubkey,
           transferId: transfer.id,
+          donationCutSmallest: donationCut,
+          transferredAmount: transferAmount,
         });
       } catch (transferError) {
         console.error(

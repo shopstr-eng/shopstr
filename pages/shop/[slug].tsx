@@ -56,8 +56,10 @@ export const getServerSideProps: GetServerSideProps<ShopPageProps> = async (
                 seo?.keywords ||
                 `${shopName}, farm fresh, raw milk, dairy, local farm, ${shopSlug}`,
               locale: seo?.locale || "en_US",
-              locationRegion: seo?.locationRegion || undefined,
-              locationCity: seo?.locationCity || undefined,
+              ...(seo?.locationRegion
+                ? { locationRegion: seo.locationRegion }
+                : {}),
+              ...(seo?.locationCity ? { locationCity: seo.locationCity } : {}),
               siteName: shopName,
               type: "business.business",
             },

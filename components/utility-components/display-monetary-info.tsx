@@ -85,11 +85,52 @@ export const calculateTotalCost = (
   return total;
 };
 
+const SATS_CURRENCIES = new Set(["sats", "sat", "satoshi"]);
+const ZERO_DECIMAL_FIAT = new Set([
+  "bif",
+  "clp",
+  "djf",
+  "gnf",
+  "jpy",
+  "kmf",
+  "krw",
+  "mga",
+  "pyg",
+  "rwf",
+  "ugx",
+  "vnd",
+  "vuv",
+  "xaf",
+  "xof",
+  "xpf",
+]);
+
 export function formatWithCommas(amount: number, currency: string) {
+  const cur = (currency || "").toLowerCase();
+  const isWholeUnit = SATS_CURRENCIES.has(cur) || ZERO_DECIMAL_FIAT.has(cur);
+  const isBtc = cur === "btc";
+
   if (!amount || amount === 0) {
     return `0 ${currency}`;
   }
-  const [integerPart, fractionalPart] = amount.toString().split(".");
+
+  let normalized: number;
+  if (isWholeUnit) {
+    normalized = Math.ceil(amount);
+  } else if (isBtc) {
+    // BTC has 1-satoshi precision (8 decimals)
+    normalized = Math.ceil(amount * 100000000) / 100000000;
+  } else {
+    normalized = Math.ceil(amount * 100) / 100;
+  }
+
+  const fixed = isWholeUnit
+    ? normalized.toString()
+    : isBtc
+      ? normalized.toFixed(8).replace(/\.?0+$/, "")
+      : normalized.toFixed(2);
+
+  const [integerPart, fractionalPart] = fixed.split(".");
   const integerWithCommas = integerPart!.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   const formattedAmount = fractionalPart
     ? `${integerWithCommas}.${fractionalPart}`

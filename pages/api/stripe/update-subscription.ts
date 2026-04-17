@@ -9,6 +9,10 @@ import {
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
   apiVersion: "2025-09-30.clover",
 });
+import { applyRateLimit } from "@/utils/rate-limit";
+
+// Rate limit: per-IP cap to bound abuse of payment endpoints.
+const RATE_LIMIT = { limit: 30, windowMs: 60000 };
 
 export default async function handler(
   req: NextApiRequest,
@@ -17,6 +21,9 @@ export default async function handler(
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
+
+  if (!applyRateLimit(req, res, "stripe-update-subscription", RATE_LIMIT))
+    return;
 
   try {
     const {

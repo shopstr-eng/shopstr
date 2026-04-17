@@ -33,7 +33,7 @@ jest.mock("nostr-tools", () => ({
   },
 }));
 
-jest.mock("@noble/hashes/utils", () => ({
+jest.mock("@noble/hashes/utils.js", () => ({
   bytesToHex: (...args: unknown[]) => bytesToHexMock(...args),
   hexToBytes: jest.fn(),
 }));

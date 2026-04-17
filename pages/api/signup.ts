@@ -1,5 +1,8 @@
 import { NextApiRequest, NextApiResponse } from "next";
 import { Client } from "pg";
+import { applyRateLimit } from "@/utils/rate-limit";
+
+const RATE_LIMIT = { limit: 5, windowMs: 60 * 1000 };
 
 interface SignupData {
   contact: string;
@@ -21,6 +24,8 @@ export default async function handler(
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
+
+  if (!applyRateLimit(req, res, "signup", RATE_LIMIT)) return;
 
   const { contact, contactType }: SignupData = req.body;
 

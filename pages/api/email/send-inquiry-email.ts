@@ -4,6 +4,9 @@ import {
   getSellerNotificationEmail,
   getUserAuthEmail,
 } from "@/utils/db/db-service";
+import { applyRateLimit } from "@/utils/rate-limit";
+
+const RATE_LIMIT = { limit: 20, windowMs: 60 * 1000 };
 
 async function getEmailForPubkey(pubkey: string): Promise<string | null> {
   let email = await getSellerNotificationEmail(pubkey);
@@ -20,6 +23,8 @@ export default async function handler(
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
+
+  if (!applyRateLimit(req, res, "email-send-inquiry", RATE_LIMIT)) return;
 
   const { senderPubkey, recipientPubkey, message, senderName } = req.body;
 

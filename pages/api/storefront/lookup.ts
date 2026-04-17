@@ -1,7 +1,12 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getDbPool } from "@/utils/db/db-service";
+import { applyRateLimit } from "@/utils/rate-limit";
 
 const pool = getDbPool();
+
+// Hit on every storefront page render (slug + custom-domain resolution).
+// Generous to cover normal browsing; tight enough to bound a crawler.
+const RATE_LIMIT = { limit: 600, windowMs: 60 * 1000 };
 
 export default async function handler(
   req: NextApiRequest,
@@ -10,6 +15,8 @@ export default async function handler(
   if (req.method !== "GET") {
     return res.status(405).json({ error: "Method not allowed" });
   }
+
+  if (!applyRateLimit(req, res, "storefront-lookup", RATE_LIMIT)) return;
 
   const { slug, domain } = req.query;
 

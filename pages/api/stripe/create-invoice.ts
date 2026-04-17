@@ -6,6 +6,15 @@ import { isCrypto, satsToUSD } from "@/utils/stripe/currency";
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
   apiVersion: "2025-09-30.clover",
 });
+import { applyRateLimit } from "@/utils/rate-limit";
+import {
+  withStripeRetry,
+  stableIdempotencyKey,
+} from "@/utils/stripe/retry-service";
+import { resolveDonationCut } from "@/utils/stripe/donation";
+
+// Rate limit: per-IP cap to bound abuse of payment endpoints.
+const RATE_LIMIT = { limit: 30, windowMs: 60000 };
 
 export default async function handler(
   req: NextApiRequest,
@@ -14,6 +23,8 @@ export default async function handler(
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
+
+  if (!applyRateLimit(req, res, "stripe-create-invoice", RATE_LIMIT)) return;
 
   try {
     const {
@@ -32,9 +43,9 @@ export default async function handler(
     if (isCrypto(currency)) {
       const sats = currencyLower === "btc" ? amount * 100000000 : amount;
       const usdAmount = await satsToUSD(sats);
-      amountInCents = Math.round(usdAmount * 100);
+      amountInCents = Math.ceil(usdAmount * 100);
     } else {
-      amountInCents = Math.round(amount * 100);
+      amountInCents = Math.ceil(amount * 100);
     }
 
     const sellerPubkey = metadata?.sellerPubkey;
@@ -52,7 +63,7 @@ export default async function handler(
       }
     }
 
-    let customer;
+    let customer: Stripe.Customer | undefined;
     if (customerEmail) {
       if (connectedAccountId) {
         const existingCustomers = await stripe.customers.list(
@@ -116,19 +127,43 @@ export default async function handler(
       ? { stripeAccount: connectedAccountId }
       : undefined;
 
-    const invoice = await stripe.invoices.create(
-      {
-        customer: customer?.id,
-        collection_method: "send_invoice",
-        days_until_due: 1,
-        metadata: {
-          ...metadata,
-          originalAmount: amount.toString(),
-          originalCurrency: currency,
-          ...(connectedAccountId && { connectedAccountId }),
+    // Donation cut applies only to direct-billed invoices on a connected
+    // account (parity with Bitcoin paths).
+    const { percent: invoiceDonationPercent, cutSmallest: invoiceDonationCut } =
+      connectedAccountId
+        ? await resolveDonationCut(sellerPubkey, amountInCents)
+        : { percent: 0, cutSmallest: 0 };
+
+    const invoiceIdempotencyKey = stableIdempotencyKey("inv", {
+      customerId: customer?.id ?? null,
+      amount: amountInCents,
+      currency: "usd",
+      productTitle: productTitle ?? null,
+      metadata: metadata ?? null,
+      connectedAccountId,
+    });
+    const invoice = await withStripeRetry(() =>
+      stripe.invoices.create(
+        {
+          customer: customer?.id,
+          collection_method: "send_invoice",
+          days_until_due: 1,
+          ...(invoiceDonationCut > 0 && {
+            application_fee_amount: invoiceDonationCut,
+          }),
+          metadata: {
+            ...metadata,
+            originalAmount: amount.toString(),
+            originalCurrency: currency,
+            ...(connectedAccountId && { connectedAccountId }),
+            ...(invoiceDonationCut > 0 && {
+              mmDonationPercent: invoiceDonationPercent.toString(),
+              mmDonationCutSmallest: invoiceDonationCut.toString(),
+            }),
+          },
         },
-      },
-      stripeOptions
+        { ...(stripeOptions ?? {}), idempotencyKey: invoiceIdempotencyKey }
+      )
     );
 
     const invoiceItemParams: any = {

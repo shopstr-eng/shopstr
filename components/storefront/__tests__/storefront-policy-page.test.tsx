@@ -41,8 +41,7 @@ describe("StorefrontPolicyPage", () => {
       <StorefrontPolicyPage
         policy={{
           enabled: true,
-          content:
-            '<img alt="proof" src="x" onerror="window.__shopstrXss = 1">',
+          content: '<img alt="proof" src="x" onerror="window.__mmXss = 1">',
         }}
         colors={colors}
       />
@@ -50,13 +49,9 @@ describe("StorefrontPolicyPage", () => {
 
     expect(screen.queryByAltText("proof")).not.toBeInTheDocument();
     expect(
-      screen.getByText(
-        '<img alt="proof" src="x" onerror="window.__shopstrXss = 1">'
-      )
+      screen.getByText('<img alt="proof" src="x" onerror="window.__mmXss = 1">')
     ).toBeInTheDocument();
-    expect(
-      (window as unknown as { __shopstrXss?: number }).__shopstrXss
-    ).toBeUndefined();
+    expect((window as unknown as { __mmXss?: number }).__mmXss).toBeUndefined();
   });
 
   it("treats a backslash-escaped asterisk as a literal character", () => {

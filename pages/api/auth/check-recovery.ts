@@ -1,5 +1,8 @@
 import { NextApiRequest, NextApiResponse } from "next";
 import { Client } from "pg";
+import { applyRateLimit } from "@/utils/rate-limit";
+
+const RATE_LIMIT = { limit: 20, windowMs: 60 * 1000 };
 
 function maskEmail(email: string): string {
   const [local, domain] = email.split("@");
@@ -15,6 +18,8 @@ export default async function handler(
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
+
+  if (!applyRateLimit(req, res, "auth-check-recovery", RATE_LIMIT)) return;
 
   const { pubkey } = req.body;
 

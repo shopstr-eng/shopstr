@@ -102,7 +102,7 @@ export interface ProfileData {
     nip05?: string;
     payment_preference?: string;
     fiat_options?: string[];
-    shopstr_donation?: number;
+    mm_donation?: number;
   };
   created_at: number;
 }

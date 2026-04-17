@@ -4,11 +4,16 @@ import {
   updateEmailFlow,
   deleteEmailFlow,
 } from "@/utils/db/db-service";
+import { applyRateLimit } from "@/utils/rate-limit";
+
+const RATE_LIMIT = { limit: 60, windowMs: 60 * 1000 };
 
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
+  if (!applyRateLimit(req, res, "email-flows-flow-id", RATE_LIMIT)) return;
+
   const { flowId } = req.query;
   const id = parseInt(flowId as string, 10);
 

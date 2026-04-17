@@ -6,6 +6,9 @@ import {
   getFlowEnrollments,
 } from "@/utils/db/db-service";
 import { FlowType } from "@/utils/email/flow-email-templates";
+import { applyRateLimit } from "@/utils/rate-limit";
+
+const RATE_LIMIT = { limit: 30, windowMs: 60 * 1000 };
 
 const VALID_FLOW_TYPES: FlowType[] = [
   "welcome_series",
@@ -21,6 +24,8 @@ export default async function handler(
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
+
+  if (!applyRateLimit(req, res, "email-flows-enroll", RATE_LIMIT)) return;
 
   const {
     flow_type,

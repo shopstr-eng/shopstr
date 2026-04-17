@@ -5,7 +5,7 @@
   "private": true,
   "packageManager": "pnpm@10.26.1",
   "engines": {
-    "node": ">=20.0.0",
+    "node": ">=22.4.0",
     "pnpm": ">=10.0.0"
   },
   "scripts": {
@@ -32,7 +32,7 @@
   },
   "dependencies": {
     "@braintree/sanitize-url": "7.1.2",
-    "@cashu/cashu-ts": "2.1.0",
+    "@cashu/cashu-ts": "4.1.0",
     "@ducanh2912/next-pwa": "10.2.9",
     "@getalby/lightning-tools": "8.1.0",
     "@getalby/sdk": "7.0.0",

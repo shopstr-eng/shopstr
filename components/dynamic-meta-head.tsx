@@ -1,7 +1,6 @@
 import Head from "next/head";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
-import { safeJsonLdString } from "@/utils/safe-json-ld";
 import { NostrEvent, ProfileData, ShopProfile } from "@/utils/types/types";
 import parseTags, {
   ProductData,

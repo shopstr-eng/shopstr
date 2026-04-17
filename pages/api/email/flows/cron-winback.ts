@@ -6,6 +6,7 @@ import {
   scheduleStepExecutions,
   getFlowEnrollments,
 } from "@/utils/db/db-service";
+import { applyRateLimit } from "@/utils/rate-limit";
 
 export default async function handler(
   req: NextApiRequest,
@@ -14,6 +15,11 @@ export default async function handler(
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
+
+  if (
+    !applyRateLimit(req, res, "cron-winback", { limit: 10, windowMs: 60_000 })
+  )
+    return;
 
   const secret = req.headers["x-flow-processor-secret"] || req.body?.secret;
   const expectedSecret = process.env.FLOW_PROCESSOR_SECRET;

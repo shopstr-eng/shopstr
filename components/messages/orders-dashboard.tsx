@@ -89,6 +89,8 @@ interface OrderData {
   orderGroupKey: string;
   statusLookupKeys: string[];
   buyerPubkey: string;
+  buyerEmail?: string;
+  isGuest?: boolean;
   productAddress: string;
   amount: number;
   timestamp: number;
@@ -285,7 +287,11 @@ const OrdersDashboard = ({
           const sats = await getSatoshiValue({ amount: 1, currency });
           return { currency: currency.toLowerCase(), rate: sats };
         } catch (err) {
-          console.error(`Failed to fetch rate for ${currency}:`, err);
+          // The third-party rate API 404s for some less-common currencies.
+          // Use console.warn (not console.error) so the Next.js dev
+          // overlay doesn't treat this benign, already-handled fallback
+          // as a Runtime Error popup.
+          console.warn(`Failed to fetch rate for ${currency}:`, err);
           return { currency: currency.toLowerCase(), rate: 0 };
         }
       });
@@ -397,6 +403,8 @@ const OrdersDashboard = ({
             const amount = parseFloat(amountStr);
             const status = tagsMap.get("status") || "pending";
             const buyerPubkey = tagsMap.get("b") || "";
+            const buyerEmailTag = tagsMap.get("buyer_email") || "";
+            const isGuest = (tagsMap.get("buyer_type") || "") === "guest";
             const address = tagsMap.get("address");
             const pickupLocation = tagsMap.get("pickup");
             const selectedSize = tagsMap.get("size");
@@ -490,6 +498,8 @@ const OrdersDashboard = ({
               orderGroupKey,
               statusLookupKeys,
               buyerPubkey,
+              buyerEmail: buyerEmailTag || undefined,
+              isGuest: isGuest || undefined,
               productAddress,
               amount: finalAmount,
               timestamp: messageEvent.created_at,
@@ -699,6 +709,8 @@ const OrdersDashboard = ({
               order.timestamp > existing.timestamp
                 ? order.messageEvent
                 : existing.messageEvent,
+            buyerEmail: order.buyerEmail || existing.buyerEmail,
+            isGuest: order.isGuest ?? existing.isGuest,
             isSale: order.isSale ?? existing.isSale,
             currency: order.currency || existing.currency,
             donationAmount: order.donationAmount ?? existing.donationAmount,
@@ -816,45 +828,49 @@ const OrdersDashboard = ({
     filterBySellerPubkey,
   ]);
 
+  const ceilCents = (n: number): number => Math.ceil(n * 100) / 100;
+
   const convertToSats = (amount: number, currency: string): number => {
     const curr = currency?.toLowerCase() || "sats";
-    if (curr === "sats" || curr === "sat" || curr === "satoshi") return amount;
-    if (curr === "btc") return Math.round(amount * 100000000);
+    if (curr === "sats" || curr === "sat" || curr === "satoshi") {
+      return Math.ceil(amount);
+    }
+    if (curr === "btc") return Math.ceil(amount * 100000000);
 
     const upperCurrency = currency.toUpperCase();
     if (!currencySelection.hasOwnProperty(upperCurrency)) {
-      return amount;
+      return Math.ceil(amount);
     }
 
     const rate = currencyRates[curr];
     if (rate && rate > 0) {
-      return Math.round(amount * rate);
+      return Math.ceil(amount * rate);
     }
-    return amount;
+    return Math.ceil(amount);
   };
 
   const convertToUSD = (amount: number, currency: string): number => {
     const usdRate = currencyRates["usd"];
-    if (!usdRate || usdRate === 0) return amount;
+    if (!usdRate || usdRate === 0) return ceilCents(amount);
 
     const curr = currency?.toLowerCase() || "sats";
-    if (curr === "usd") return amount;
+    if (curr === "usd") return ceilCents(amount);
     if (curr === "sats" || curr === "sat" || curr === "satoshi") {
-      return amount / usdRate;
+      return ceilCents(amount / usdRate);
     }
-    if (curr === "btc") return (amount * 100000000) / usdRate;
+    if (curr === "btc") return ceilCents((amount * 100000000) / usdRate);
 
     const upperCurrency = currency.toUpperCase();
     if (!currencySelection.hasOwnProperty(upperCurrency)) {
-      return amount;
+      return ceilCents(amount);
     }
 
     const currRate = currencyRates[curr];
     if (currRate && currRate > 0) {
       const sats = amount * currRate;
-      return sats / usdRate;
+      return ceilCents(sats / usdRate);
     }
-    return amount;
+    return ceilCents(amount);
   };
 
   const getConvertedAmount = (amount: number, currency: string): number => {
@@ -1002,40 +1018,42 @@ const OrdersDashboard = ({
         " tracking number is: " +
         trackingNumber;
 
-      const giftWrappedMessageEvent = await constructGiftWrappedEvent(
-        decodedRandomPubkeyForSender.data as string,
-        selectedOrder.buyerPubkey,
-        message,
-        "shipping-info",
-        {
-          productAddress: selectedOrder.productAddress,
-          type: 4, // Shipping update type
-          status: "shipped",
-          isOrder: true,
-          orderId: selectedOrder.orderId,
-          tracking: trackingNumber,
-          carrier: shippingCarrier,
-          eta: futureTimestamp,
-          buyerPubkey: selectedOrder.buyerPubkey,
-        }
-      );
+      if (!selectedOrder.isGuest) {
+        const giftWrappedMessageEvent = await constructGiftWrappedEvent(
+          decodedRandomPubkeyForSender.data as string,
+          selectedOrder.buyerPubkey,
+          message,
+          "shipping-info",
+          {
+            productAddress: selectedOrder.productAddress,
+            type: 4, // Shipping update type
+            status: "shipped",
+            isOrder: true,
+            orderId: selectedOrder.orderId,
+            tracking: trackingNumber,
+            carrier: shippingCarrier,
+            eta: futureTimestamp,
+            buyerPubkey: selectedOrder.buyerPubkey,
+          }
+        );
 
-      const sealedEvent = await constructMessageSeal(
-        signer,
-        giftWrappedMessageEvent,
-        decodedRandomPubkeyForSender.data as string,
-        selectedOrder.buyerPubkey,
-        decodedRandomPrivkeyForSender.data as Uint8Array
-      );
+        const sealedEvent = await constructMessageSeal(
+          signer,
+          giftWrappedMessageEvent,
+          decodedRandomPubkeyForSender.data as string,
+          selectedOrder.buyerPubkey,
+          decodedRandomPrivkeyForSender.data as Uint8Array
+        );
 
-      const giftWrappedEvent = await constructMessageGiftWrap(
-        sealedEvent,
-        decodedRandomPubkeyForReceiver.data as string,
-        decodedRandomPrivkeyForReceiver.data as Uint8Array,
-        selectedOrder.buyerPubkey
-      );
+        const giftWrappedEvent = await constructMessageGiftWrap(
+          sealedEvent,
+          decodedRandomPubkeyForReceiver.data as string,
+          decodedRandomPrivkeyForReceiver.data as Uint8Array,
+          selectedOrder.buyerPubkey
+        );
 
-      await sendGiftWrappedMessageEvent(nostr, giftWrappedEvent);
+        await sendGiftWrappedMessageEvent(nostr, giftWrappedEvent);
+      }
 
       // Update local state to shipped status (removes Send Shipping Update button)
       setOrders((prevOrders) =>
@@ -1916,6 +1934,27 @@ const OrdersDashboard = ({
                         </td>
                         <td className="px-4 py-4 text-sm text-black">
                           {(() => {
+                            if (order.isSale && order.isGuest) {
+                              return (
+                                <div className="flex flex-col gap-1">
+                                  <span className="inline-flex w-fit rounded-md border-2 border-black bg-yellow-200 px-2 py-0.5 text-xs font-bold text-black">
+                                    Guest
+                                  </span>
+                                  {order.buyerEmail ? (
+                                    <a
+                                      href={`mailto:${order.buyerEmail}`}
+                                      className="block break-all text-black underline hover:text-purple-700"
+                                    >
+                                      {order.buyerEmail}
+                                    </a>
+                                  ) : (
+                                    <span className="text-black">
+                                      No contact provided
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            }
                             const displayPubkey = order.isSale
                               ? order.buyerPubkey
                               : order.productAddress.split(":")[1] ||

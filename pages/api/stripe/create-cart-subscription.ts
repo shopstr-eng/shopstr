@@ -7,13 +7,22 @@ import {
 import {
   ZERO_DECIMAL_CURRENCIES,
   isCrypto as isCryptoCurrency,
-  toSmallestUnit,
   convertToSmallestUnit,
 } from "@/utils/stripe/currency";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
   apiVersion: "2025-09-30.clover",
 });
+import { applyRateLimit } from "@/utils/rate-limit";
+import {
+  withStripeRetry,
+  stableIdempotencyKey,
+} from "@/utils/stripe/retry-service";
+import {
+  getSellerDonationPercent,
+  isPlatformPubkey,
+  computeDonationCutSmallest,
+} from "@/utils/stripe/donation";
 
 const FREQUENCY_TO_INTERVAL: Record<
   string,
@@ -48,6 +57,9 @@ interface CartItem {
   };
 }
 
+// Rate limit: per-IP cap to bound abuse of payment endpoints.
+const RATE_LIMIT = { limit: 30, windowMs: 60000 };
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
@@ -55,6 +67,9 @@ export default async function handler(
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
+
+  if (!applyRateLimit(req, res, "stripe-create-cart-subscription", RATE_LIMIT))
+    return;
 
   try {
     const { items, customerEmail, sellerPubkey, buyerPubkey, shippingAddress } =
@@ -172,7 +187,7 @@ export default async function handler(
         item.currency
       );
       const discount = item.subscriptionDiscount || item.discountPercent || 0;
-      const finalAmount = Math.round(amountSmallest * (1 - discount / 100));
+      const finalAmount = Math.ceil(amountSmallest * (1 - discount / 100));
 
       if (finalAmount < 50) {
         return res.status(400).json({
@@ -218,7 +233,7 @@ export default async function handler(
         item.currency
       );
       const discount = item.discountPercent || 0;
-      const finalAmount = Math.round(amountSmallest * (1 - discount / 100));
+      const finalAmount = Math.ceil(amountSmallest * (1 - discount / 100));
 
       if (finalAmount < 50) {
         return res.status(400).json({
@@ -269,18 +284,43 @@ export default async function handler(
       primaryFrequency,
     };
 
-    const subscription = await stripe.subscriptions.create(
-      {
-        customer: customer.id,
-        items: subscriptionLineItems,
-        payment_behavior: "default_incomplete",
-        payment_settings: {
-          save_default_payment_method: "on_subscription",
+    // Apply mm_donation parity for direct-charge cart subscriptions.
+    const cartDonationPercent =
+      connectedAccountId && !isPlatformPubkey(effectiveSellerPubkey)
+        ? await getSellerDonationPercent(effectiveSellerPubkey)
+        : 0;
+    const cartApplicationFeePercent =
+      cartDonationPercent > 0 && cartDonationPercent < 100
+        ? Math.round(cartDonationPercent * 100) / 100
+        : 0;
+    if (cartApplicationFeePercent > 0) {
+      subscriptionMetadata.mmDonationPercent =
+        cartApplicationFeePercent.toString();
+    }
+
+    const cartSubIdempotencyKey = stableIdempotencyKey("cartsub", {
+      customerId: customer.id,
+      subscriptionLineItems,
+      oneTimeInvoiceItems,
+      metadata: subscriptionMetadata,
+    });
+    const subscription = await withStripeRetry(() =>
+      stripe.subscriptions.create(
+        {
+          customer: customer.id,
+          items: subscriptionLineItems,
+          payment_behavior: "default_incomplete",
+          payment_settings: {
+            save_default_payment_method: "on_subscription",
+          },
+          expand: ["latest_invoice.payment_intent"],
+          ...(cartApplicationFeePercent > 0 && {
+            application_fee_percent: cartApplicationFeePercent,
+          }),
+          metadata: subscriptionMetadata,
         },
-        expand: ["latest_invoice.payment_intent"],
-        metadata: subscriptionMetadata,
-      },
-      stripeOptions
+        { ...(stripeOptions ?? {}), idempotencyKey: cartSubIdempotencyKey }
+      )
     );
 
     const subscriptionData = subscription as any;
@@ -297,7 +337,7 @@ export default async function handler(
         item.currency
       );
       const discount = item.subscriptionDiscount || item.discountPercent || 0;
-      const finalAmount = Math.round(amountSmallest * (1 - discount / 100));
+      const finalAmount = Math.ceil(amountSmallest * (1 - discount / 100));
       const divisor = ZERO_DECIMAL_CURRENCIES.has(effectiveStripeCurrency)
         ? 1
         : 100;
@@ -400,6 +440,8 @@ async function handleMultiMerchantSubscription(
     pubkey: string;
     amountCents: number;
     accountId: string;
+    donationPercent: number;
+    donationCutSmallest: number;
   }[] = [];
   const sellerAmounts: Record<string, number> = {};
 
@@ -409,7 +451,7 @@ async function handleMultiMerchantSubscription(
       item.currency
     );
     const discount = item.subscriptionDiscount || item.discountPercent || 0;
-    const finalAmount = Math.round(amountSmallest * (1 - discount / 100));
+    const finalAmount = Math.ceil(amountSmallest * (1 - discount / 100));
 
     if (finalAmount < 50) {
       return res.status(400).json({
@@ -453,7 +495,7 @@ async function handleMultiMerchantSubscription(
       item.currency
     );
     const discount = item.discountPercent || 0;
-    const finalAmount = Math.round(amountSmallest * (1 - discount / 100));
+    const finalAmount = Math.ceil(amountSmallest * (1 - discount / 100));
 
     if (finalAmount < 50) {
       return res.status(400).json({
@@ -490,10 +532,18 @@ async function handleMultiMerchantSubscription(
 
   for (const [pubkey, amountCents] of Object.entries(sellerAmounts)) {
     const isPlatformAccount = pubkey === process.env.NEXT_PUBLIC_MILK_MARKET_PK;
+    const donationPercent = isPlatformAccount
+      ? 0
+      : await getSellerDonationPercent(pubkey);
+    const donationCutSmallest = isPlatformAccount
+      ? 0
+      : computeDonationCutSmallest(amountCents, donationPercent);
     sellerSplits.push({
       pubkey,
       amountCents,
       accountId: isPlatformAccount ? "" : sellerAccounts[pubkey] || "",
+      donationPercent,
+      donationCutSmallest,
     });
   }
 
@@ -545,7 +595,7 @@ async function handleMultiMerchantSubscription(
       item.currency
     );
     const discount = item.subscriptionDiscount || item.discountPercent || 0;
-    const finalAmount = Math.round(amountSmallest * (1 - discount / 100));
+    const finalAmount = Math.ceil(amountSmallest * (1 - discount / 100));
     const itemSeller = item.sellerPubkey || [...sellerPubkeys][0]!;
     const divisor = ZERO_DECIMAL_CURRENCIES.has(effectiveStripeCurrency)
       ? 1

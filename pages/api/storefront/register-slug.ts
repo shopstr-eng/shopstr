@@ -1,8 +1,11 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getDbPool } from "@/utils/db/db-service";
 import { verifyNostrAuth } from "@/utils/stripe/verify-nostr-auth";
+import { checkRateLimit, getRequestIp } from "@/utils/rate-limit";
 
 const pool = getDbPool();
+
+const RATE_LIMIT = { limit: 20, windowMs: 60 * 1000 };
 
 function sanitizeSlug(input: string): string {
   return input
@@ -42,6 +45,20 @@ export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
+  if (req.method === "POST" || req.method === "DELETE") {
+    const rate = checkRateLimit("register-slug", getRequestIp(req), RATE_LIMIT);
+    res.setHeader("X-RateLimit-Limit", String(rate.limit));
+    res.setHeader("X-RateLimit-Remaining", String(rate.remaining));
+    res.setHeader("X-RateLimit-Reset", String(Math.ceil(rate.resetAt / 1000)));
+    if (!rate.ok) {
+      res.setHeader(
+        "Retry-After",
+        String(Math.max(0, Math.ceil((rate.resetAt - Date.now()) / 1000)))
+      );
+      return res.status(429).json({ error: "Too many requests" });
+    }
+  }
+
   if (req.method === "DELETE") {
     const { pubkey, signedEvent } = req.body;
     if (typeof pubkey !== "string" || !signedEvent) {

@@ -68,7 +68,6 @@ import {
   StorefrontEmailPopup,
   StorefrontSeoMeta,
   PopupFlowStep,
-  PopupStyle,
 } from "@/utils/types/types";
 import SectionEditor from "./storefront/section-editor";
 import FooterEditor from "./storefront/footer-editor";
@@ -3822,7 +3821,7 @@ function PopupFlowEditor({
                   <option value="__capture__">→ Email capture</option>
                   {steps
                     .filter((s) => s.id !== step.id)
-                    .map((s, i) => (
+                    .map((s) => (
                       <option key={s.id} value={s.id}>
                         → Step {steps.findIndex((x) => x.id === s.id) + 1}
                         {s.question ? `: ${s.question.slice(0, 20)}` : ""}

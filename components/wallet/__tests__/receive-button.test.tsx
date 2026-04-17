@@ -13,7 +13,7 @@ import {
   NostrContext,
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
-import { getDecodedToken, CashuWallet } from "@cashu/cashu-ts";
+import { getDecodedToken, Wallet as CashuWallet } from "@cashu/cashu-ts";
 import {
   getLocalStorageData,
   publishProofEvent,

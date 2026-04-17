@@ -62,7 +62,7 @@ describe("CompactPriceDisplay", () => {
   });
 
   it('displays "Added Cost / Pickup" correctly', () => {
-    const monetaryInfo = {
+    const monetaryInfo: MonetaryInfo = {
       price: 1000,
       currency: "SATS",
       shippingType: "Added Cost/Pickup",
