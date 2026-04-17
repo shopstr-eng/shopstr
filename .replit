@@ -6,8 +6,8 @@ channel = "stable-22_11"
 
 [deployment]
 deploymentTarget = "autoscale"
-build = ["bash", "-c", "pnpm install --frozen-lockfile && pnpm run build && cp -r .next/static .next/standalone/.next/static && cp -r public .next/standalone/public && rm -rf node_modules packages/*/node_modules .next/cache"]
-run = ["node", ".next/standalone/server.js"]
+build = ["pnpm", "run", "build:deploy"]
+run = ["pnpm", "run", "start:deploy"]
 
 [[ports]]
 localPort = 3000
