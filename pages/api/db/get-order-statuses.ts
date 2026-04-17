@@ -6,7 +6,13 @@ import { applyRateLimit } from "@/utils/rate-limit";
 // so a tab opened on multiple orders does not throttle, but bounded so a
 // single client can't keep this hot path saturated.
 const RATE_LIMIT = { limit: 600, windowMs: 60 * 1000 };
-const MAX_ORDER_IDS_PER_REQUEST = 200;
+const MAX_ORDER_IDS_PER_REQUEST = (() => {
+  const configured = Number.parseInt(
+    process.env.MAX_ORDER_IDS_PER_REQUEST || "",
+    10
+  );
+  return Number.isFinite(configured) && configured > 0 ? configured : 200;
+})();
 const MAX_ORDER_ID_LENGTH = 128;
 
 function normalizeOrderIds(orderIds: unknown): string[] | null {
@@ -24,6 +30,7 @@ function normalizeOrderIds(orderIds: unknown): string[] | null {
     if (typeof value !== "string") {
       return null;
     }
+    // Normalize whitespace to avoid accidental client-side mismatches.
     const trimmed = value.trim();
     if (trimmed) {
       normalized.push(trimmed);
