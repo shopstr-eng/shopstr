@@ -1,6 +1,10 @@
 /** @type {import('next').NextConfig} */
 
 import withPWAInit from "@ducanh2912/next-pwa";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const withPWA = withPWAInit({
   dest: "public",
@@ -56,6 +60,9 @@ const nextConfig = {
   ],
   bundlePagesRouterDependencies: true,
   output: "standalone",
+  // Required so Next.js's file tracer walks up to the pnpm workspace root
+  // and bundles the workspace packages + their deps into .next/standalone.
+  outputFileTracingRoot: path.join(__dirname, "."),
   reactStrictMode: true,
   allowedDevOrigins: process.env.REPLIT_DEV_DOMAIN
     ? [process.env.REPLIT_DEV_DOMAIN]
