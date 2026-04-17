@@ -109,7 +109,7 @@ export default function Component() {
   const [satPrices, setSatPrices] = useState<{ [key: string]: number | null }>(
     {}
   );
-  const [totalCostsInSats, setTotalCostsInSats] = useState<{
+  const [productTotalsInSats, setProductTotalsInSats] = useState<{
     [key: string]: number;
   }>({});
   const [subtotal, setSubtotal] = useState<number>(0);
@@ -308,8 +308,8 @@ export default function Component() {
             }
             prices[product.id] = productSubtotal;
             shipping[product.id] = productShipping;
-            // Store just the product cost in totals for now
-            totals[product.pubkey] = productSubtotal;
+            // Store per-product totals so checkout can apply shipping later.
+            totals[product.id] = productSubtotal;
           }
         } catch (error) {
           console.error(
@@ -323,7 +323,7 @@ export default function Component() {
 
       setSatPrices(prices);
       setSubtotal(subtotalAmount);
-      setTotalCostsInSats(totals);
+      setProductTotalsInSats(totals);
     };
 
     fetchSatPrices();
@@ -841,7 +841,7 @@ export default function Component() {
                   products={products}
                   quantities={quantities}
                   shippingTypes={shippingTypes}
-                  totalCostsInSats={totalCostsInSats}
+                  productTotalsInSats={productTotalsInSats}
                   subtotalCost={subtotal}
                   appliedDiscounts={appliedDiscounts}
                   discountCodes={discountCodes}
