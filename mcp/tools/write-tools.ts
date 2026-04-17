@@ -2413,9 +2413,14 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
       try {
         const fileBuffer = Buffer.from(params.fileBase64, "base64");
-        const { createHash: cryptoCreateHash } = await import("crypto");
+        const binaryData = new Uint8Array(
+          fileBuffer.buffer as ArrayBuffer,
+          fileBuffer.byteOffset,
+          fileBuffer.byteLength
+        );
+        const { createHash: cryptoCreateHash } = await import("node:crypto");
         const hash = cryptoCreateHash("sha256")
-          .update(Uint8Array.from(fileBuffer))
+          .update(binaryData)
           .digest("hex");
 
         const authEvent: EventTemplate = {
@@ -2425,7 +2430,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           tags: [
             ["t", "upload"],
             ["x", hash],
-            ["size", fileBuffer.length.toString()],
+            ["size", binaryData.length.toString()],
             [
               "expiration",
               Math.floor((Date.now() + 24 * 60 * 60 * 1000) / 1000).toString(),
@@ -2444,7 +2449,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
         const response = await fetch(uploadUrl.toString(), {
           method: "PUT",
-          body: new Blob([Uint8Array.from(fileBuffer)], {
+          body: new Blob([binaryData], {
             type: params.mimeType,
           }),
           headers: {
@@ -2468,7 +2473,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           {
             url: result.url,
             sha256: result.sha256 || hash,
-            size: result.size || fileBuffer.length,
+            size: result.size || binaryData.length,
             serverUrl,
           },
           startTime
@@ -2724,7 +2729,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
       try {
         const { getDecodedToken } = await import("@cashu/cashu-ts");
-        const decoded = getDecodedToken(params.token);
+        const decoded = getDecodedToken(params.token, []);
         const mintUrl = decoded.mint;
         const proofs = decoded.proofs;
         const totalAmount = proofs.reduce(
@@ -2858,11 +2863,12 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
       if (!signer) return noSignerError();
 
       try {
-        const { CashuMint, CashuWallet } = await import("@cashu/cashu-ts");
+        const { Mint: CashuMint, Wallet: CashuWallet } =
+          await import("@cashu/cashu-ts");
         const mintUrl = params.mintUrl || "https://mint.minibits.cash/Bitcoin";
         const mint = new CashuMint(mintUrl);
-        const keys = await mint.getKeys();
-        const wallet = new CashuWallet(mint, { keys: keys.keysets[0] as any });
+        const wallet = new CashuWallet(mint);
+        await wallet.loadMint();
 
         const { fetchCachedEvents } = await import("@/utils/db/db-service");
         const pubkey = signer.getPubKey();
@@ -2892,8 +2898,17 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           );
         }
 
-        const meltQuote = await wallet.createMeltQuote(params.invoice);
-        const totalNeeded = meltQuote.amount + (meltQuote.fee_reserve || 0);
+        const { withMintRetry } =
+          await import("@/utils/cashu/mint-retry-service");
+        const { safeMeltProofs } =
+          await import("@/utils/cashu/melt-retry-service");
+        const meltQuote = await withMintRetry(
+          () => wallet.createMeltQuoteBolt11(params.invoice),
+          { maxAttempts: 4, perAttemptTimeoutMs: 15000, totalTimeoutMs: 60000 }
+        );
+        const totalNeeded =
+          meltQuote.amount.toNumber() +
+          (meltQuote.fee_reserve?.toNumber() || 0);
         const totalAvailable = availableProofs.reduce(
           (sum: number, p: any) => sum + (p.amount || 0),
           0
@@ -2907,20 +2922,35 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           );
         }
 
-        const meltResult = await wallet.meltProofs(meltQuote, availableProofs);
+        const meltOutcome = await safeMeltProofs(
+          wallet,
+          meltQuote,
+          availableProofs
+        );
+        if (meltOutcome.status !== "paid") {
+          return errorResponse(
+            meltOutcome.status === "pending"
+              ? "Mint payment pending"
+              : meltOutcome.status === "unknown"
+                ? "Cashu payment outcome unknown"
+                : "Cashu payment failed",
+            meltOutcome.errorMessage ??
+              `Mint reported melt status: ${meltOutcome.status}`,
+            startTime
+          );
+        }
 
         return successResponse(
           {
-            paid: (meltResult as any).quote?.paid || true,
+            paid: true,
             amount: meltQuote.amount,
             fee: meltQuote.fee_reserve || 0,
             mintUrl,
-            change: meltResult.change
-              ? meltResult.change.reduce(
-                  (sum: number, p: any) => sum + (p.amount || 0),
-                  0
-                )
-              : 0,
+            change: meltOutcome.changeProofs.reduce(
+              (sum: number, p: any) =>
+                sum + (p.amount?.toNumber?.() ?? p.amount ?? 0),
+              0
+            ),
           },
           startTime
         );

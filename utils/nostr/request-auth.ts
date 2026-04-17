@@ -204,3 +204,61 @@ export function buildDiscountCodeDeleteProof({
     },
   };
 }
+
+export function buildStorefrontSlugCreateProof({
+  pubkey,
+  slug,
+}: {
+  pubkey: string;
+  slug: string;
+}): SignedHttpRequestProof {
+  return {
+    action: "register_storefront_slug",
+    method: "POST",
+    path: "/api/storefront/register-slug",
+    pubkey,
+    fields: {
+      slug,
+    },
+  };
+}
+
+export function buildStorefrontSlugDeleteProof(
+  pubkey: string
+): SignedHttpRequestProof {
+  return {
+    action: "delete_storefront_slug",
+    method: "DELETE",
+    path: "/api/storefront/register-slug",
+    pubkey,
+  };
+}
+
+export function buildCustomDomainCreateProof({
+  pubkey,
+  domain,
+}: {
+  pubkey: string;
+  domain: string;
+}): SignedHttpRequestProof {
+  return {
+    action: "set_storefront_custom_domain",
+    method: "POST",
+    path: "/api/storefront/custom-domain",
+    pubkey,
+    fields: {
+      domain,
+    },
+  };
+}
+
+export function buildCustomDomainDeleteProof(
+  pubkey: string
+): SignedHttpRequestProof {
+  return {
+    action: "delete_storefront_custom_domain",
+    method: "DELETE",
+    path: "/api/storefront/custom-domain",
+    pubkey,
+  };
+}

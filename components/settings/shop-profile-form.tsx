@@ -18,6 +18,12 @@ import {
   NostrContext,
 } from "@/components/utility-components/nostr-context-provider";
 import { createNostrShopEvent } from "@/utils/nostr/nostr-helper-functions";
+import {
+  buildSignedHttpRequestProofTemplate,
+  buildStorefrontSlugCreateProof,
+  buildStorefrontSlugDeleteProof,
+  SIGNED_EVENT_HEADER,
+} from "@/utils/nostr/request-auth";
 import { FileUploaderButton } from "@/components/utility-components/file-uploader";
 import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
 import currencySelection from "@/public/currencySelection.json";
@@ -381,6 +387,12 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
   };
 
   const registerSlug = async () => {
+    if (!userPubkey || !signer) {
+      setSlugStatus("error");
+      setSlugMessage("You must be signed in to save your storefront");
+      return;
+    }
+
     const s = sanitizeSlug(slugInput);
     if (!s || s.length < 2) {
       setSlugStatus("error");
@@ -395,9 +407,20 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
     setSlugStatus("checking");
     setSlugMessage("Saving...");
     try {
+      const signedEvent = await signer.sign(
+        buildSignedHttpRequestProofTemplate(
+          buildStorefrontSlugCreateProof({
+            pubkey: userPubkey,
+            slug: s,
+          })
+        )
+      );
       const res = await fetch("/api/storefront/register-slug", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          [SIGNED_EVENT_HEADER]: JSON.stringify(signedEvent),
+        },
         body: JSON.stringify({ pubkey: userPubkey, slug: s }),
       });
       const data = await res.json();
@@ -420,15 +443,23 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
   };
 
   const handleRemoveStorefront = async () => {
-    if (!userPubkey) return;
+    if (!userPubkey || !signer) return;
     const confirmed = window.confirm(
       "Are you sure you want to remove your storefront? This will delete your shop URL, custom domain, and reset all storefront settings."
     );
     if (!confirmed) return;
     try {
+      const signedEvent = await signer.sign(
+        buildSignedHttpRequestProofTemplate(
+          buildStorefrontSlugDeleteProof(userPubkey)
+        )
+      );
       await fetch("/api/storefront/register-slug", {
         method: "DELETE",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          [SIGNED_EVENT_HEADER]: JSON.stringify(signedEvent),
+        },
         body: JSON.stringify({ pubkey: userPubkey }),
       });
       setShopSlug("");
