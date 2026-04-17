@@ -4,6 +4,19 @@ import { TextEncoder, TextDecoder } from "util";
 global.TextEncoder = TextEncoder;
 global.TextDecoder = TextDecoder;
 
+// cashu-ts v3+ uses Amount class with .toNumber(). Production code converts
+// at library boundaries (Choice B). Test mocks return raw numbers, so shim
+// Number.prototype.toNumber to keep mock data compatible.
+if (!Number.prototype.toNumber) {
+  Object.defineProperty(Number.prototype, "toNumber", {
+    value: function () {
+      return this.valueOf();
+    },
+    writable: true,
+    configurable: true,
+  });
+}
+
 const originalWarn = console.warn;
 const originalError = console.error;
 

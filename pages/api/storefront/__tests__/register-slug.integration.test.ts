@@ -20,6 +20,7 @@ jest.mock("@/utils/db/db-service", () => ({
 }));
 
 import handler from "@/pages/api/storefront/register-slug";
+import { __resetRateLimitBuckets } from "@/utils/rate-limit";
 
 function createResponse() {
   return {
@@ -31,6 +32,9 @@ function createResponse() {
     },
     json(payload: unknown) {
       this.jsonBody = payload;
+      return this;
+    },
+    setHeader() {
       return this;
     },
   };
@@ -45,6 +49,7 @@ function createRequest(
     method,
     body,
     headers,
+    socket: { remoteAddress: "127.0.0.1" },
   } as unknown as NextApiRequest;
 }
 
@@ -52,6 +57,7 @@ describe("/api/storefront/register-slug (integration)", () => {
   beforeEach(() => {
     queryMock.mockReset();
     queryMock.mockResolvedValue({ rows: [] });
+    __resetRateLimitBuckets();
   });
 
   it("accepts a POST with a genuinely signed proof", async () => {

@@ -20,6 +20,7 @@ jest.mock("@/utils/nostr/request-auth", () => ({
 }));
 
 import handler from "@/pages/api/storefront/register-slug";
+import { __resetRateLimitBuckets } from "@/utils/rate-limit";
 
 function createResponse() {
   return {
@@ -33,6 +34,9 @@ function createResponse() {
       this.jsonBody = payload;
       return this;
     },
+    setHeader() {
+      return this;
+    },
   };
 }
 
@@ -40,6 +44,8 @@ function createRequest(method: string, body: unknown): NextApiRequest {
   return {
     method,
     body,
+    headers: {},
+    socket: { remoteAddress: "127.0.0.1" },
   } as unknown as NextApiRequest;
 }
 
@@ -48,6 +54,7 @@ describe("/api/storefront/register-slug", () => {
     queryMock.mockReset();
     extractSignedEventFromRequestMock.mockReset();
     verifySignedHttpRequestProofMock.mockReset();
+    __resetRateLimitBuckets();
   });
 
   it("rejects unsigned slug registration attempts", async () => {

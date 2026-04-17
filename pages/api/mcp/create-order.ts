@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { randomBytes } from "crypto";
-import { CashuMint, CashuWallet } from "@cashu/cashu-ts";
+import { Mint as CashuMint, Wallet as CashuWallet } from "@cashu/cashu-ts";
+import { withMintRetry } from "@/utils/cashu/mint-retry-service";
 import { authenticateRequest, initializeApiKeysTable } from "@/utils/mcp/auth";
 import {
   fetchAllProductsFromDb,
@@ -360,7 +361,8 @@ async function handleLightningPayment(
   try {
     const cashuMint = new CashuMint(mint);
     const wallet = new CashuWallet(cashuMint);
-    const mintQuote = await wallet.createMintQuote(amountInSats);
+    await wallet.loadMint();
+    const mintQuote = await wallet.createMintQuoteBolt11(amountInSats);
 
     const order = await createMcpOrder(
       orderId,
@@ -441,7 +443,7 @@ async function handleCashuPayment(
 
   try {
     const { getDecodedToken } = await import("@cashu/cashu-ts");
-    const decoded = getDecodedToken(cashuToken);
+    const decoded = getDecodedToken(cashuToken, []);
 
     if (!decoded || !decoded.proofs || decoded.proofs.length === 0) {
       return res.status(400).json({
@@ -475,7 +477,12 @@ async function handleCashuPayment(
       try {
         const cashuMint = new CashuMint(tokenMintUrl);
         const wallet = new CashuWallet(cashuMint);
-        await wallet.receive(cashuToken);
+        await wallet.loadMint();
+        await withMintRetry(() => wallet.receive(cashuToken), {
+          maxAttempts: 4,
+          perAttemptTimeoutMs: 20000,
+          totalTimeoutMs: 90000,
+        });
       } catch (redeemError) {
         console.error("Cashu token redemption failed:", redeemError);
         return res.status(400).json({

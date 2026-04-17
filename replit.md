@@ -10,11 +10,14 @@ Preferred communication style: Simple, everyday language.
 
 ## Tech Stack Versions
 
+- **Node**: 22.22.0 / **npm**: 10.9.4 (engines `>=22.4.0`)
 - **Next.js**: 16.2.3 (Turbopack)
 - **React / React-DOM**: 19.2.5
 - **Tailwind CSS**: 4.2.2 via `@tailwindcss/postcss`
 - **@heroui/react**: 2.8.10 (HeroUI v2 — the maintained successor to `@nextui-org/react` v2)
 - **framer-motion**: 12.38.0
+- **@cashu/cashu-ts**: 4.1.0 (migrated from 2.1.0 — see `.agents/skills/cashu-ts-migration/SKILL.md`)
+- **@noble/hashes**: 2.x (requires explicit `.js` subpath imports, e.g. `@noble/hashes/utils.js`)
 
 ### Tailwind v4 Notes
 
@@ -28,6 +31,43 @@ HeroUI v2.8.10 replaced `@nextui-org/react@2.2.9`. The heroui plugin correctly u
 - `isLoading: true` during DB pre-load in `fetch-service.ts` to prevent premature 404 before relay fetch completes
 
 ## Recent Changes
+
+### Mint Operation Durability (Phase 4, P0)
+
+Hardened the highest-stakes Cashu flow — the user-paid → claim-proofs path — against network blips, mint outages, rate limiting, and tab closes. Two new modules under `utils/cashu/`:
+
+- **`mint-retry-service.ts`** — `withMintRetry()` wraps any cashu-ts call with bounded per-attempt timeouts (`newPromiseWithTimeout` + `AbortController`), exponential backoff with full jitter, total-time budget, and `RateLimitError.retryAfterMs` honoring. `isRetryableError()` retries 5xx `HttpResponseError`, `RateLimitError`, our own `Timeout` sentinel, and common network errors (`fetch failed`, `ECONNRESET`, etc.); 4xx-other-than-429 is treated as terminal. All failures wrap in a single `MintOperationError` with `cause` and `attempts` for callers to introspect.
+
+- **`pending-mint-operations.ts`** — durable localStorage record (`shopstr.pendingMintQuotes`) of every mint quote the user has touched, with status lifecycle `awaiting_payment → paid_unclaimed → claimed | failed_terminal`. `recoverPendingMintQuotes()` walks all pending entries on demand, re-checks state with the mint, and finishes the claim using the same retry primitives. Quotes older than 7 days (mints typically retain ~24 h) are abandoned to avoid unbounded retries.
+
+Wired into the app:
+
+- **`components/wallet/mint-button.tsx`** records the pending quote immediately after `createMintQuoteBolt11`, marks `paid_unclaimed` once the mint reports PAID, and marks `claimed` only after the local proof persistence + `publishProofEvent` both succeed. The fragile inline polling loop was replaced with bounded retries; transient claim failures now leave the pending record in place and surface a "We'll automatically retry the claim the next time you open the app" notice instead of losing the user's sats.
+
+- **`components/utility-components/mint-recovery-boot.tsx`** — single-shot boot component mounted in `pages/_app.tsx` inside both Nostr+Signer providers. On first signer availability it walks the pending store, finishes any unclaimed mints, and publishes the recovered proofs as a kind-7375 wallet event. Idempotent; cheap pre-check skips work when nothing is pending.
+
+Validation: `tsc --noEmit` exit 0; jest 666 pass / 10 pre-existing UI failures (no regressions); 31 new tests cover the retry service (rate-limit awareness, exponential backoff, timeout, abort) and pending-ops store (CRUD, recovery success, ISSUED-terminal handling, boot-callback failure preserves pending record).
+
+### `@cashu/cashu-ts` 2.1.0 → 4.1.0 Migration
+
+Bumped past two major versions to unlock v3+ rate-limit-aware retry primitives, the `Amount` boundary type, the `KeyChain` API, and BOLT-method-typed quote helpers. Migration playbook captured as a reusable skill at `.agents/skills/cashu-ts-migration/SKILL.md`.
+
+Highlights of changes applied to this codebase:
+
+- **Class renames**: aliased `Mint as CashuMint` / `Wallet as CashuWallet` in every import to keep the `CashuMint`/`CashuWallet` call-site names working.
+- **Method renames**: `createMintQuote` → `createMintQuoteBolt11`, `checkMintQuote` → `checkMintQuoteBolt11`, `mintProofs` → `mintProofsBolt11`, `createMeltQuote` → `createMeltQuoteBolt11`, `meltProofs` → `meltProofsBolt11`. Applied via bulk `sed` across components, MCP API routes, and tests.
+- **Keysets**: `wallet.getKeySets()` → `wallet.keyChain.getKeysets()`. Local `MintKeyset` annotations re-aliased as `Keyset as MintKeyset` because the keyChain returns the domain `Keyset` class (only `.id` is read by app code).
+- **`Amount` boundary (Choice B)**: kept internal types as `number` for this sat-only marketplace; converts at the cashu-ts boundary with `.toNumber()`. Pattern applied to every `acc + p.amount` reduce, every `meltQuote.amount + meltQuote.fee_reserve` arithmetic, and every formatter argument.
+- **`getDecodedToken(token, [])`**: new mandatory second arg. Passing `[]` is safe for shopstr's standard hex (v1) keyset IDs.
+- **Runtime `loadMint()`**: every `new CashuWallet(...)` site now calls `await wallet.loadMint()` before any other method (mint info / keysets are no longer constructor-loaded).
+- **Pre-cashu cleanup**: `@noble/hashes/utils` → `@noble/hashes/utils.js` in 6 files (v2 dropped implicit `.js` resolution); replaced dropped `@cashu/crypto/modules/common` import in `fetch-service.ts` with `@cashu/cashu-ts` (re-exports `hashToCurve`).
+- **Test mocks**: factory keys updated to new export names (`Mint`/`Wallet`), method keys to `Bolt11` variants, `getKeySets` wrapped as `keyChain: { getKeysets: ... }`, `loadMint: jest.fn().mockResolvedValue(undefined)` added to every wallet mock implementation. `jest.setup.js` adds a `Number.prototype.toNumber()` shim so raw numbers in mock fixtures stay compatible with production code that calls `.toNumber()` on `Amount`.
+
+Validation: `tsc --noEmit` exit 0; `jest` 635 pass / 10 pre-existing UI failures (no regressions); dev server compiles cleanly on Next.js 16.2.3 + Turbopack.
+
+### Node 18 → Node 22 Upgrade
+
+`engines.node` raised to `>=22.4.0`. Running on Node 22.22.0 / npm 10.9.4. Dev server clean, 635/645 tests pass (10 pre-existing UI failures unrelated to the bump).
 
 ### Dev Server Infinite-Loop Fix
 

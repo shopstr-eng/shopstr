@@ -11,7 +11,7 @@ import { SignerContext } from "@/components/utility-components/nostr-context-pro
 
 function isDecodableToken(token: string): boolean {
   try {
-    getDecodedToken(token);
+    getDecodedToken(token, []);
     return true;
   } catch {
     return false;

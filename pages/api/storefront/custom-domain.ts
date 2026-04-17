@@ -6,13 +6,27 @@ import {
   extractSignedEventFromRequest,
   verifySignedHttpRequestProof,
 } from "@/utils/nostr/request-auth";
+import { checkRateLimit, getRequestIp } from "@/utils/rate-limit";
 
 const pool = getDbPool();
+
+const RATE_LIMIT = { limit: 20, windowMs: 60 * 1000 };
 
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
+  if (req.method === "POST" || req.method === "DELETE") {
+    const rate = checkRateLimit("custom-domain", getRequestIp(req), RATE_LIMIT);
+    if (!rate.ok) {
+      res.setHeader(
+        "Retry-After",
+        Math.max(1, Math.ceil((rate.resetAt - Date.now()) / 1000))
+      );
+      return res.status(429).json({ error: "Too many requests" });
+    }
+  }
+
   if (req.method === "POST") {
     const { domain } = req.body ?? {};
 

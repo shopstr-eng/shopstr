@@ -5,7 +5,14 @@ import {
   CACHE_EVENTS_MAX_BATCH_SIZE,
   isCacheableEventShape,
 } from "@/utils/db/cache-event-policy";
+import { checkRateLimit, getRequestIp } from "@/utils/rate-limit";
 import { NostrEvent } from "@/utils/types/types";
+
+// Batches legitimately spike during first page load or post-reconnect
+// reconciliation (products, messages, reviews, wallet proofs, etc.). The limit
+// is generous because each call is capped at CACHE_EVENTS_MAX_BATCH_SIZE
+// events and every event is signature-verified below.
+const RATE_LIMIT = { limit: 300, windowMs: 60 * 1000 };
 
 export const config = {
   api: {
@@ -21,6 +28,15 @@ export default async function handler(
 ) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  const rate = checkRateLimit("cache-events", getRequestIp(req), RATE_LIMIT);
+  if (!rate.ok) {
+    res.setHeader(
+      "Retry-After",
+      Math.max(1, Math.ceil((rate.resetAt - Date.now()) / 1000))
+    );
+    return res.status(429).json({ error: "Too many requests" });
   }
 
   try {

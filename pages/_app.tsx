@@ -64,6 +64,7 @@ import {
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
 import { retryFailedRelayPublishes } from "@/utils/nostr/retry-service";
+import { MintRecoveryBoot } from "@/components/utility-components/mint-recovery-boot";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
 
 function Shopstr({ props }: { props: AppProps }) {
@@ -888,6 +889,7 @@ function App(props: AppProps) {
         <NextThemesProvider attribute="class">
           <NostrContextProvider>
             <SignerContextProvider>
+              <MintRecoveryBoot />
               <Shopstr props={props} />
             </SignerContextProvider>
           </NostrContextProvider>
