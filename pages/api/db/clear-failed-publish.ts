@@ -1,9 +1,14 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import {
-  ensureFailedRelayPublishesTable,
-  getDbPool,
+  clearFailedRelayPublishForOwner,
+  incrementFailedRelayPublishRetryForOwner,
 } from "@/utils/db/db-service";
 import { applyRateLimit } from "@/utils/rate-limit";
+import {
+  buildClearFailedRelayPublishProof,
+  extractSignedEventFromRequest,
+  verifySignedHttpRequestProof,
+} from "@/utils/nostr/request-auth";
 
 const RATE_LIMIT = { limit: 300, windowMs: 60 * 1000 };
 
@@ -17,40 +22,49 @@ export default async function handler(
 
   if (!applyRateLimit(req, res, "clear-failed-publish", RATE_LIMIT)) return;
 
-  const dbPool = getDbPool();
-  let client;
-
   try {
     const { eventId, incrementRetry } = req.body;
 
-    if (!eventId) {
+    if (typeof eventId !== "string") {
       return res.status(400).json({ error: "Invalid request body" });
     }
 
-    client = await dbPool.connect();
-    await ensureFailedRelayPublishesTable(client);
+    if (incrementRetry !== undefined && typeof incrementRetry !== "boolean") {
+      return res
+        .status(400)
+        .json({ error: "incrementRetry must be a boolean" });
+    }
 
-    if (incrementRetry) {
-      // Increment retry count
-      await client.query(
-        `UPDATE failed_relay_publishes SET retry_count = retry_count + 1 WHERE event_id = $1`,
-        [eventId]
+    const shouldIncrementRetry = incrementRetry === true;
+
+    const signedEvent = extractSignedEventFromRequest(req);
+    const verification = verifySignedHttpRequestProof(
+      signedEvent,
+      buildClearFailedRelayPublishProof({
+        pubkey: signedEvent?.pubkey || "",
+        eventId,
+        incrementRetry: shouldIncrementRetry,
+      })
+    );
+
+    if (!verification.ok) {
+      return res
+        .status(verification.status)
+        .json({ error: verification.error });
+    }
+
+    if (shouldIncrementRetry) {
+      await incrementFailedRelayPublishRetryForOwner(
+        eventId,
+        signedEvent!.pubkey
       );
     } else {
-      // Remove successful publish
-      await client.query(
-        `DELETE FROM failed_relay_publishes WHERE event_id = $1`,
-        [eventId]
-      );
+      await clearFailedRelayPublishForOwner(eventId, signedEvent!.pubkey);
     }
 
     return res.status(200).json({ success: true });
   } catch (error) {
     console.error("Error clearing failed relay publish:", error);
     return res.status(500).json({ error: "Internal server error" });
-  } finally {
-    if (client) {
-      client.release();
-    }
   }
 }

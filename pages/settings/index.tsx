@@ -87,7 +87,7 @@ const SettingsPage = () => {
                 classNames={listBoxClassnames}
                 startContent={<BanknotesIcon className={startIconClassnames} />}
                 onClick={() => {
-                  router.push("/settings/wallet");
+                  router.push("/settings/nostr-wallet-connect");
                 }}
               >
                 Nostr Wallet Connect

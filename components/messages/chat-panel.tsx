@@ -232,7 +232,7 @@ const ChatPanel = ({
         buyerPubkey
       );
 
-      await sendGiftWrappedMessageEvent(nostr, giftWrappedEvent);
+      await sendGiftWrappedMessageEvent(nostr, giftWrappedEvent, signer);
     } catch (error) {
       console.error("Error marking order as completed:", error);
     }
@@ -309,7 +309,7 @@ const ChatPanel = ({
         decodedRandomPrivkeyForReceiver.data as Uint8Array,
         buyerPubkey
       );
-      await sendGiftWrappedMessageEvent(nostr!, giftWrappedEvent);
+      await sendGiftWrappedMessageEvent(nostr!, giftWrappedEvent, signer);
       handleToggleShippingModal();
     } catch (error) {
       console.error(error);

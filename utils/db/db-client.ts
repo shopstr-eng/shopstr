@@ -1,10 +1,32 @@
 import { NostrEvent } from "@/utils/types/types";
-import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 import {
-  buildDeleteEventsProof,
+  buildClearFailedRelayPublishProof,
+  buildListFailedRelayPublishesProof,
   buildSignedHttpRequestProofTemplate,
+  buildTrackFailedRelayPublishProof,
   SIGNED_EVENT_HEADER,
 } from "@/utils/nostr/request-auth";
+
+type RequestProofSigner = {
+  getPubKey: () => string | Promise<string>;
+  sign: (event: any) => NostrEvent | Promise<NostrEvent>;
+};
+
+async function buildSignedRequestHeader(
+  signer: RequestProofSigner,
+  proof:
+    | ReturnType<typeof buildTrackFailedRelayPublishProof>
+    | ReturnType<typeof buildListFailedRelayPublishesProof>
+    | ReturnType<typeof buildClearFailedRelayPublishProof>
+) {
+  const signedEvent = await Promise.resolve(
+    signer.sign(buildSignedHttpRequestProofTemplate(proof))
+  );
+
+  return {
+    [SIGNED_EVENT_HEADER]: JSON.stringify(signedEvent),
+  };
+}
 
 export async function cacheEventToDatabase(event: NostrEvent): Promise<void> {
   try {
@@ -48,20 +70,13 @@ export async function cacheEventsToDatabase(
 }
 
 export async function deleteEventsFromDatabase(
-  signer: NostrSigner,
-  eventIds: string[]
+  eventIds: string[],
+  signedEvent: NostrEvent
 ): Promise<void> {
   if (eventIds.length === 0) return;
 
   try {
-    const pubkey = await signer.getPubKey();
-    const signedEvent = await signer.sign(
-      buildSignedHttpRequestProofTemplate(
-        buildDeleteEventsProof({ pubkey, eventIds })
-      )
-    );
-
-    const response = await fetch("/api/db/delete-events", {
+    await fetch("/api/db/delete-events", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -69,9 +84,6 @@ export async function deleteEventsFromDatabase(
       },
       body: JSON.stringify({ eventIds }),
     });
-    if (!response.ok) {
-      console.error("Failed to delete events from database");
-    }
   } catch (error) {
     console.error("Failed to delete events from database:", error);
   }
@@ -80,12 +92,29 @@ export async function deleteEventsFromDatabase(
 export async function trackFailedRelayPublish(
   eventId: string,
   event: NostrEvent,
-  relays: string[]
+  relays: string[],
+  signer?: RequestProofSigner
 ): Promise<void> {
   try {
+    if (!signer) {
+      console.warn("Skipping failed relay publish tracking without signer");
+      return;
+    }
+
+    const pubkey = await Promise.resolve(signer.getPubKey());
+    const signedHeaders = await buildSignedRequestHeader(
+      signer,
+      buildTrackFailedRelayPublishProof({
+        pubkey,
+        eventId,
+      })
+    );
     await fetch("/api/db/track-failed-publish", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...signedHeaders,
+      },
       body: JSON.stringify({ eventId, event, relays }),
     });
   } catch (error) {
@@ -93,7 +122,9 @@ export async function trackFailedRelayPublish(
   }
 }
 
-export async function getFailedRelayPublishes(): Promise<
+export async function getFailedRelayPublishes(
+  signer?: RequestProofSigner
+): Promise<
   Array<{
     eventId: string;
     relays: string[];
@@ -102,7 +133,18 @@ export async function getFailedRelayPublishes(): Promise<
   }>
 > {
   try {
-    const response = await fetch("/api/db/get-failed-publishes");
+    if (!signer) {
+      return [];
+    }
+
+    const pubkey = await Promise.resolve(signer.getPubKey());
+    const signedHeaders = await buildSignedRequestHeader(
+      signer,
+      buildListFailedRelayPublishesProof(pubkey)
+    );
+    const response = await fetch("/api/db/get-failed-publishes", {
+      headers: signedHeaders,
+    });
     if (!response.ok) {
       console.error("Failed to fetch failed relay publishes");
       return [];
@@ -114,12 +156,32 @@ export async function getFailedRelayPublishes(): Promise<
   }
 }
 
-export async function clearFailedRelayPublish(eventId: string): Promise<void> {
+export async function clearFailedRelayPublish(
+  eventId: string,
+  signer?: RequestProofSigner,
+  incrementRetry = false
+): Promise<void> {
   try {
+    if (!signer) {
+      return;
+    }
+
+    const pubkey = await Promise.resolve(signer.getPubKey());
+    const signedHeaders = await buildSignedRequestHeader(
+      signer,
+      buildClearFailedRelayPublishProof({
+        pubkey,
+        eventId,
+        incrementRetry,
+      })
+    );
     await fetch("/api/db/clear-failed-publish", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ eventId }),
+      headers: {
+        "Content-Type": "application/json",
+        ...signedHeaders,
+      },
+      body: JSON.stringify({ eventId, incrementRetry }),
     });
   } catch (error) {
     console.error("Failed to clear failed relay publish:", error);

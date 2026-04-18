@@ -154,7 +154,8 @@ export async function signAndPublishEvent(
       await trackFailedRelayPublish(
         signedEvent.id,
         signedEvent,
-        manager.getRelayUrls()
+        manager.getRelayUrls(),
+        signer
       );
     } catch (trackError) {
       console.error("Failed to track failed relay publish:", trackError);

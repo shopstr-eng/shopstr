@@ -389,8 +389,16 @@ export default function CartInvoiceCard({
         actualUserPubkey
       );
 
-      await sendGiftWrappedMessageEvent(nostr, giftWrappedEventForSeller);
-      await sendGiftWrappedMessageEvent(nostr, giftWrappedEventForBuyer);
+      await sendGiftWrappedMessageEvent(
+        nostr,
+        giftWrappedEventForSeller,
+        signer
+      );
+      await sendGiftWrappedMessageEvent(
+        nostr,
+        giftWrappedEventForBuyer,
+        signer
+      );
 
       // Add to local context for immediate UI feedback
       chatsContext.addNewlyCreatedMessageEvent(
@@ -767,7 +775,7 @@ export default function CartInvoiceCard({
       decodedRandomPrivkeyForReceiver.data as Uint8Array,
       pubkeyToReceiveMessage
     );
-    await sendGiftWrappedMessageEvent(nostr!, giftWrappedEvent);
+    await sendGiftWrappedMessageEvent(nostr!, giftWrappedEvent, signer);
 
     if (isReceipt) {
       chatsContext.addNewlyCreatedMessageEvent(
