@@ -5,7 +5,7 @@ modules = ["python-3.11", "postgresql-16", "nodejs-22"]
 channel = "stable-22_11"
 
 [deployment]
-deploymentTarget = "vm"
+deploymentTarget = "autoscale"
 build = ["pnpm", "run", "build:deploy"]
 run = ["node", ".next/standalone/server.js"]
 
