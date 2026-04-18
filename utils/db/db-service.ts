@@ -862,6 +862,8 @@ export async function cachedEventsBelongToPubkey(
 ): Promise<boolean> {
   if (eventIds.length === 0) return true;
 
+  const uniqueEventIds = Array.from(new Set(eventIds));
+
   const dbPool = getDbPool();
   let client;
 
@@ -883,10 +885,22 @@ export async function cachedEventsBelongToPubkey(
 
     const result = await client.query<{ id: string; pubkey: string }>(
       unionQuery,
-      [eventIds]
+      [uniqueEventIds]
     );
 
-    return result.rows.every((row) => row.pubkey === pubkey);
+    // Fail closed: every requested ID must exist somewhere in the cache AND
+    // every row found for those IDs must belong to the caller. An unknown ID
+    // (no row in any table) is treated as not-owned so the route refuses the
+    // whole batch instead of silently succeeding.
+    const ownedIds = new Set<string>();
+    for (const row of result.rows) {
+      if (row.pubkey !== pubkey) {
+        return false;
+      }
+      ownedIds.add(row.id);
+    }
+
+    return uniqueEventIds.every((id) => ownedIds.has(id));
   } catch (error) {
     console.error("Failed to verify cached event ownership:", error);
     throw error;
