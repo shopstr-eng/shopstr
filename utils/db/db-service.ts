@@ -32,6 +32,14 @@ export async function ensureFailedRelayPublishesTable(
     ALTER TABLE failed_relay_publishes
     ADD COLUMN IF NOT EXISTS owner_pubkey TEXT
   `);
+
+  // Legacy rows pre-dating the owner_pubkey column have NULL ownership and
+  // can no longer be listed, retried, cleared, or claimed by anyone, so they
+  // would otherwise sit in the table forever. Drop them once on schema setup.
+  await client.query(`
+    DELETE FROM failed_relay_publishes
+    WHERE owner_pubkey IS NULL
+  `);
 }
 
 export async function trackFailedRelayPublishRecord({
@@ -78,7 +86,7 @@ export async function trackFailedRelayPublishRecord({
       ]
     );
 
-    return result.rowCount > 0;
+    return (result.rowCount ?? 0) > 0;
   } finally {
     if (client) client.release();
   }

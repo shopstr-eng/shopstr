@@ -1,7 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import {
-  trackFailedRelayPublishRecord,
-} from "@/utils/db/db-service";
+import { trackFailedRelayPublishRecord } from "@/utils/db/db-service";
 import { applyRateLimit } from "@/utils/rate-limit";
 import { verifyEvent } from "nostr-tools";
 import {
@@ -51,7 +49,9 @@ export default async function handler(
     );
 
     if (!verification.ok) {
-      return res.status(verification.status).json({ error: verification.error });
+      return res
+        .status(verification.status)
+        .json({ error: verification.error });
     }
 
     if (event.id !== eventId) {

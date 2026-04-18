@@ -1,7 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import {
-  getFailedRelayPublishesForOwner,
-} from "@/utils/db/db-service";
+import { getFailedRelayPublishesForOwner } from "@/utils/db/db-service";
 import { applyRateLimit } from "@/utils/rate-limit";
 import {
   buildListFailedRelayPublishesProof,
@@ -30,7 +28,9 @@ export default async function handler(
     );
 
     if (!verification.ok) {
-      return res.status(verification.status).json({ error: verification.error });
+      return res
+        .status(verification.status)
+        .json({ error: verification.error });
     }
 
     const failedPublishes = await getFailedRelayPublishesForOwner(

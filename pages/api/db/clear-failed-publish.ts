@@ -24,11 +24,18 @@ export default async function handler(
 
   try {
     const { eventId, incrementRetry } = req.body;
-    const shouldIncrementRetry = incrementRetry === true;
 
     if (typeof eventId !== "string") {
       return res.status(400).json({ error: "Invalid request body" });
     }
+
+    if (incrementRetry !== undefined && typeof incrementRetry !== "boolean") {
+      return res
+        .status(400)
+        .json({ error: "incrementRetry must be a boolean" });
+    }
+
+    const shouldIncrementRetry = incrementRetry === true;
 
     const signedEvent = extractSignedEventFromRequest(req);
     const verification = verifySignedHttpRequestProof(
@@ -41,7 +48,9 @@ export default async function handler(
     );
 
     if (!verification.ok) {
-      return res.status(verification.status).json({ error: verification.error });
+      return res
+        .status(verification.status)
+        .json({ error: verification.error });
     }
 
     if (shouldIncrementRetry) {

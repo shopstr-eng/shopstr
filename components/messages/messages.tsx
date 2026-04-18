@@ -307,11 +307,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
         decodedRandomPrivkeyForReceiver.data as Uint8Array,
         currentChatPubkey
       );
-      await sendGiftWrappedMessageEvent(
-        nostr!,
-        senderGiftWrappedEvent,
-        signer
-      );
+      await sendGiftWrappedMessageEvent(nostr!, senderGiftWrappedEvent, signer);
       await sendGiftWrappedMessageEvent(
         nostr!,
         receiverGiftWrappedEvent,

@@ -330,9 +330,6 @@ export function buildClearFailedRelayPublishProof({
     method: "POST",
     path: "/api/db/clear-failed-publish",
     pubkey,
-    fields: {
-      eventId,
-      incrementRetry: incrementRetry ? "true" : undefined,
-    },
+    fields: incrementRetry ? { eventId, incrementRetry: "true" } : { eventId },
   };
 }

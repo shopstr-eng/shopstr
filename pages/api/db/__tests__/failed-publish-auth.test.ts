@@ -248,7 +248,7 @@ describe("failed relay publish queue auth", () => {
     expect(res.statusCode).toBe(200);
   });
 
-  it("does not treat truthy non-boolean incrementRetry values as a retry increment", async () => {
+  it("rejects non-boolean incrementRetry values with a 400 instead of silently coercing them", async () => {
     extractSignedEventFromRequestMock.mockReturnValue({
       pubkey: "owner-pubkey",
     });
@@ -262,11 +262,82 @@ describe("failed relay publish queue auth", () => {
 
     await clearHandler(req, res as unknown as NextApiResponse);
 
-    expect(clearFailedRelayPublishForOwnerMock).toHaveBeenCalledWith(
-      "evt-4",
-      "owner-pubkey"
-    );
+    expect(clearFailedRelayPublishForOwnerMock).not.toHaveBeenCalled();
     expect(incrementFailedRelayPublishRetryForOwnerMock).not.toHaveBeenCalled();
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(400);
+    expect(res.jsonBody).toEqual({
+      error: "incrementRetry must be a boolean",
+    });
+  });
+
+  it("rejects track requests when the signed proof is missing or invalid", async () => {
+    extractSignedEventFromRequestMock.mockReturnValue(undefined);
+    verifySignedHttpRequestProofMock.mockReturnValue({
+      ok: false,
+      status: 401,
+      error:
+        "A signed Nostr request proof is required to prove pubkey ownership.",
+    });
+
+    const req = createRequest("POST", {
+      eventId: "evt-unauth",
+      event: {
+        id: "evt-unauth",
+        pubkey: "anyone",
+        kind: 1,
+        tags: [],
+        content: "x",
+        sig: "sig",
+      },
+      relays: ["wss://relay.example"],
+    });
+    const res = createResponse();
+
+    await trackHandler(req, res as unknown as NextApiResponse);
+
+    expect(trackFailedRelayPublishRecordMock).not.toHaveBeenCalled();
+    expect(verifyEventMock).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(401);
+    expect(res.jsonBody).toEqual({
+      error:
+        "A signed Nostr request proof is required to prove pubkey ownership.",
+    });
+  });
+
+  it("rejects list requests when the signed proof is missing or invalid", async () => {
+    extractSignedEventFromRequestMock.mockReturnValue(undefined);
+    verifySignedHttpRequestProofMock.mockReturnValue({
+      ok: false,
+      status: 401,
+      error:
+        "A signed Nostr request proof is required to prove pubkey ownership.",
+    });
+
+    const req = createRequest("GET");
+    const res = createResponse();
+
+    await getHandler(req, res as unknown as NextApiResponse);
+
+    expect(getFailedRelayPublishesForOwnerMock).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(401);
+  });
+
+  it("rejects clear requests when the signed proof is missing or invalid", async () => {
+    extractSignedEventFromRequestMock.mockReturnValue(undefined);
+    verifySignedHttpRequestProofMock.mockReturnValue({
+      ok: false,
+      status: 401,
+      error:
+        "A signed Nostr request proof is required to prove pubkey ownership.",
+    });
+
+    const req = createRequest("POST", { eventId: "evt-unauth" });
+    const res = createResponse();
+
+    await clearHandler(req, res as unknown as NextApiResponse);
+
+    expect(clearFailedRelayPublishForOwnerMock).not.toHaveBeenCalled();
+    expect(incrementFailedRelayPublishRetryForOwnerMock).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(401);
   });
 });
