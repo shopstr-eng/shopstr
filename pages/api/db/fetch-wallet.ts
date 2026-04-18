@@ -3,6 +3,7 @@ import { fetchAllWalletEventsFromDb } from "@/utils/db/db-service";
 import { applyRateLimit } from "@/utils/rate-limit";
 
 const RATE_LIMIT = { limit: 600, windowMs: 60 * 1000 };
+const HEX_PUBKEY_REGEX = /^[0-9a-f]{64}$/;
 
 export default async function handler(
   req: NextApiRequest,
@@ -20,8 +21,8 @@ export default async function handler(
       return res.status(400).json({ error: "Invalid pubkey parameter" });
     }
 
-    const normalizedPubkey = pubkey.trim();
-    if (!normalizedPubkey) {
+    const normalizedPubkey = pubkey.trim().toLowerCase();
+    if (!HEX_PUBKEY_REGEX.test(normalizedPubkey)) {
       return res.status(400).json({ error: "Invalid pubkey parameter" });
     }
 
