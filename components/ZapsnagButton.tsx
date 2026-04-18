@@ -197,7 +197,7 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
         product.pubkey
       );
 
-      await sendGiftWrappedMessageEvent(nostrManager!, finalEvent);
+      await sendGiftWrappedMessageEvent(nostrManager!, finalEvent, signer);
 
       setStatus("Paying via Lightning...");
       const ln = new LightningAddress(lud16);

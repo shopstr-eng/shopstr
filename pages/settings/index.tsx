@@ -49,7 +49,7 @@ const SettingsPage = () => {
       route: "/settings/preferences",
     },
     {
-      id: "nwc",
+      id: "nostr-wallet-connect",
       title: "Nostr Wallet Connect",
       description: "Connect your NIP-47 Nostr Wallet",
       icon: BanknotesIcon,

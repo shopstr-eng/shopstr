@@ -317,7 +317,7 @@ export default function ClaimButton({ token }: { token: string }) {
               decodedRandomPrivkeyForReceiver.data as Uint8Array,
               userPubkey!
             );
-            await sendGiftWrappedMessageEvent(nostr!, giftWrappedEvent);
+            await sendGiftWrappedMessageEvent(nostr!, giftWrappedEvent, signer);
             chatsContext.addNewlyCreatedMessageEvent(
               {
                 ...giftWrappedMessageEvent,

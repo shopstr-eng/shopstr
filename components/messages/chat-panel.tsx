@@ -236,7 +236,7 @@ const ChatPanel = ({
         buyerPubkey
       );
 
-      await sendGiftWrappedMessageEvent(nostr, giftWrappedEvent);
+      await sendGiftWrappedMessageEvent(nostr, giftWrappedEvent, signer);
 
       const orderMessage = messages.find((msg) => {
         const subject = msg.tags.find((tag) => tag[0] === "subject")?.[1];
@@ -361,7 +361,7 @@ const ChatPanel = ({
         decodedRandomPrivkeyForReceiver.data as Uint8Array,
         buyerPubkey
       );
-      await sendGiftWrappedMessageEvent(nostr!, giftWrappedEvent);
+      await sendGiftWrappedMessageEvent(nostr!, giftWrappedEvent, signer);
       handleToggleShippingModal();
     } catch (error) {
       console.error(error);

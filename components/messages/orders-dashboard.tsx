@@ -1052,7 +1052,7 @@ const OrdersDashboard = ({
           selectedOrder.buyerPubkey
         );
 
-        await sendGiftWrappedMessageEvent(nostr, giftWrappedEvent);
+        await sendGiftWrappedMessageEvent(nostr, giftWrappedEvent, signer);
       }
 
       // Update local state to shipped status (removes Send Shipping Update button)
@@ -1359,7 +1359,7 @@ const OrdersDashboard = ({
         sellerPubkey
       );
 
-      await sendGiftWrappedMessageEvent(nostr, giftWrappedEvent);
+      await sendGiftWrappedMessageEvent(nostr, giftWrappedEvent, signer);
 
       setOrders((prevOrders) =>
         prevOrders.map((order) =>
@@ -1691,7 +1691,7 @@ const OrdersDashboard = ({
         sellerPubkey
       );
 
-      await sendGiftWrappedMessageEvent(nostr, giftWrappedEvent);
+      await sendGiftWrappedMessageEvent(nostr, giftWrappedEvent, signer);
 
       if (addressChangeOrder.subscriptionId) {
         fetch("/api/stripe/update-subscription", {

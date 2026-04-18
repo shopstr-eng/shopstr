@@ -961,9 +961,13 @@ function MilkMarket({ props }: { props: AppProps }) {
         }
 
         await runTask("retrying relay publishes", async () => {
+          if (!signer) {
+            return;
+          }
+
           const { relays, writeRelays } = getLocalStorageData();
           const retryNostr = new NostrManager([...relays, ...writeRelays]);
-          await retryFailedRelayPublishes(retryNostr);
+          await retryFailedRelayPublishes(retryNostr, signer);
         });
 
         setFullLoadComplete(true);

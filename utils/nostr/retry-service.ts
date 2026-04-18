@@ -1,4 +1,5 @@
 import { NostrManager } from "./nostr-manager";
+import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 import {
   getFailedRelayPublishes,
   clearFailedRelayPublish,
@@ -6,10 +7,15 @@ import {
 import { newPromiseWithTimeout } from "@/utils/timeout";
 
 export async function retryFailedRelayPublishes(
-  nostr: NostrManager
+  nostr: NostrManager,
+  signer?: NostrSigner
 ): Promise<void> {
   try {
-    const failedPublishes = await getFailedRelayPublishes();
+    if (!signer) {
+      return;
+    }
+
+    const failedPublishes = await getFailedRelayPublishes(signer);
 
     if (failedPublishes.length === 0) {
       return;
@@ -37,16 +43,11 @@ export async function retryFailedRelayPublishes(
         );
 
         // Success - clear the failed publish record
-        await clearFailedRelayPublish(eventId);
-        console.log(`Successfully republished event ${eventId}`);
+        await clearFailedRelayPublish(eventId, signer);
       } catch (error) {
         // Still failed - increment retry count
         console.warn(`Retry failed for event ${eventId}:`, error);
-        await fetch("/api/db/clear-failed-publish", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ eventId, incrementRetry: true }),
-        }).catch(console.error);
+        await clearFailedRelayPublish(eventId, signer, true);
       }
     }
   } catch (error) {

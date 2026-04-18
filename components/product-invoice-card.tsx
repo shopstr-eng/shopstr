@@ -323,8 +323,16 @@ export default function ProductInvoiceCard({
         userPubkey
       );
 
-      await sendGiftWrappedMessageEvent(nostr, giftWrappedEventForSeller);
-      await sendGiftWrappedMessageEvent(nostr, giftWrappedEventForBuyer);
+      await sendGiftWrappedMessageEvent(
+        nostr,
+        giftWrappedEventForSeller,
+        signer
+      );
+      await sendGiftWrappedMessageEvent(
+        nostr,
+        giftWrappedEventForBuyer,
+        signer
+      );
 
       // Add to local context for immediate UI feedback
       chatsContext.addNewlyCreatedMessageEvent(
@@ -772,7 +780,7 @@ export default function ProductInvoiceCard({
           pubkeyToReceiveMessage
         );
 
-        await sendGiftWrappedMessageEvent(nostr!, giftWrappedEvent);
+        await sendGiftWrappedMessageEvent(nostr!, giftWrappedEvent, signer);
 
         if (isReceipt || isHerdshare) {
           chatsContext.addNewlyCreatedMessageEvent(
