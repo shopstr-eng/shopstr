@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { generateSecretKey, getPublicKey, nip19 } from "nostr-tools";
-import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
+import { bytesToHex, hexToBytes } from "@noble/hashes/utils";
 import {
   createApiKey,
   initializeApiKeysTable,

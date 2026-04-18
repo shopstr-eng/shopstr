@@ -5,7 +5,7 @@ import {
   NostrEvent,
   finalizeEvent,
 } from "nostr-tools";
-import { hexToBytes } from "@noble/hashes/utils.js";
+import { hexToBytes } from "@noble/hashes/utils";
 import CryptoJS from "crypto-js";
 import { NostrEventTemplate } from "@/utils/nostr/nostr-manager";
 import {

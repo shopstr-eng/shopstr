@@ -6,7 +6,7 @@ import {
   generateSecretKey,
 } from "nostr-tools";
 import { newPromiseWithTimeout } from "@/utils/timeout";
-import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
+import { bytesToHex, hexToBytes } from "@noble/hashes/utils";
 import { NostrEventTemplate, NostrManager } from "@/utils/nostr/nostr-manager";
 import {
   ChallengeHandler,
