@@ -70,14 +70,18 @@ export async function cacheEventsToDatabase(
 }
 
 export async function deleteEventsFromDatabase(
-  eventIds: string[]
+  eventIds: string[],
+  signedEvent: NostrEvent
 ): Promise<void> {
   if (eventIds.length === 0) return;
 
   try {
     await fetch("/api/db/delete-events", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        [SIGNED_EVENT_HEADER]: JSON.stringify(signedEvent),
+      },
       body: JSON.stringify({ eventIds }),
     });
   } catch (error) {
