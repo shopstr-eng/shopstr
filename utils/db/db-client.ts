@@ -1,4 +1,10 @@
 import { NostrEvent } from "@/utils/types/types";
+import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
+import {
+  buildDeleteEventsProof,
+  buildSignedHttpRequestProofTemplate,
+  SIGNED_EVENT_HEADER,
+} from "@/utils/nostr/request-auth";
 
 export async function cacheEventToDatabase(event: NostrEvent): Promise<void> {
   try {
@@ -42,16 +48,30 @@ export async function cacheEventsToDatabase(
 }
 
 export async function deleteEventsFromDatabase(
+  signer: NostrSigner,
   eventIds: string[]
 ): Promise<void> {
   if (eventIds.length === 0) return;
 
   try {
-    await fetch("/api/db/delete-events", {
+    const pubkey = await signer.getPubKey();
+    const signedEvent = await signer.sign(
+      buildSignedHttpRequestProofTemplate(
+        buildDeleteEventsProof({ pubkey, eventIds })
+      )
+    );
+
+    const response = await fetch("/api/db/delete-events", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        [SIGNED_EVENT_HEADER]: JSON.stringify(signedEvent),
+      },
       body: JSON.stringify({ eventIds }),
     });
+    if (!response.ok) {
+      console.error("Failed to delete events from database");
+    }
   } catch (error) {
     console.error("Failed to delete events from database:", error);
   }

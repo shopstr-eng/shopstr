@@ -63,7 +63,7 @@ export async function deleteEvent(
   await finalizeAndSendNostrEvent(signer, nostr, deletionEvent);
 
   // Delete from database via API
-  deleteEventsFromDatabase(event_ids_to_delete).catch((error) =>
+  deleteEventsFromDatabase(signer, event_ids_to_delete).catch((error) =>
     console.error("Failed to delete events from database:", error)
   );
 }

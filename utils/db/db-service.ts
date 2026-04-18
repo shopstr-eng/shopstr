@@ -856,6 +856,46 @@ export async function deleteCachedEventsByIds(
   }
 }
 
+export async function getCachedEventPubkeys(
+  eventIds: string[]
+): Promise<Map<string, string>> {
+  if (eventIds.length === 0) return new Map();
+
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    const result = await client.query(
+      `SELECT id, pubkey FROM product_events WHERE id = ANY($1)
+       UNION ALL
+       SELECT id, pubkey FROM review_events WHERE id = ANY($1)
+       UNION ALL
+       SELECT id, pubkey FROM message_events WHERE id = ANY($1)
+       UNION ALL
+       SELECT id, pubkey FROM profile_events WHERE id = ANY($1)
+       UNION ALL
+       SELECT id, pubkey FROM wallet_events WHERE id = ANY($1)
+       UNION ALL
+       SELECT id, pubkey FROM community_events WHERE id = ANY($1)
+       UNION ALL
+       SELECT id, pubkey FROM config_events WHERE id = ANY($1)`,
+      [eventIds]
+    );
+
+    return new Map(
+      result.rows.map((row) => [row.id as string, row.pubkey as string])
+    );
+  } catch (error) {
+    console.error("Failed to fetch cached event pubkeys:", error);
+    return new Map();
+  } finally {
+    if (client) {
+      client.release();
+    }
+  }
+}
+
 // Fetch all products from database, returning only the latest version per
 // (pubkey, d-tag) so that updated or deleted-then-re-listed products never
 // show stale duplicates.

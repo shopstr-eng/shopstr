@@ -43,6 +43,12 @@ function getTagValue(event: Event, tagName: string): string | undefined {
   return event.tags.find((tag) => tag[0] === tagName)?.[1];
 }
 
+function normalizeEventIdsForProof(eventIds: string[]): string {
+  return [...new Set(eventIds.map((id) => id.trim()).filter(Boolean))]
+    .sort()
+    .join(",");
+}
+
 export function buildSignedHttpRequestProofTemplate(
   proof: SignedHttpRequestProof
 ): NostrEventTemplate {
@@ -260,5 +266,23 @@ export function buildCustomDomainDeleteProof(
     method: "DELETE",
     path: "/api/storefront/custom-domain",
     pubkey,
+  };
+}
+
+export function buildDeleteEventsProof({
+  pubkey,
+  eventIds,
+}: {
+  pubkey: string;
+  eventIds: string[];
+}): SignedHttpRequestProof {
+  return {
+    action: "delete_cached_events",
+    method: "POST",
+    path: "/api/db/delete-events",
+    pubkey,
+    fields: {
+      eventIds: normalizeEventIdsForProof(eventIds),
+    },
   };
 }
