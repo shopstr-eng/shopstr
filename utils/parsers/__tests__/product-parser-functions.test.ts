@@ -277,4 +277,14 @@ describe("parseTags", () => {
 
     expect(result.contentWarning).toBeFalsy();
   });
+
+  it("should map required_customer_info to required for UI consumers", () => {
+    const event = {
+      ...baseEvent,
+      tags: [["required_customer_info", "Phone number"]],
+    };
+    const result = parseTags(event)!;
+
+    expect(result.required).toBe("Phone number");
+  });
 });
