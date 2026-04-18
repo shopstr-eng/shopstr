@@ -4,6 +4,7 @@ import {
   NostrMessageEvent,
   ShopProfile,
   Community,
+  FilterParams
 } from "@/utils/types/types";
 import {
   Mint as CashuMint,
@@ -52,16 +53,114 @@ function isHexString(value: string): boolean {
 export const fetchAllPosts = async (
   nostr: NostrManager,
   relays: string[],
-  editProductContext: (productEvents: NostrEvent[], isLoading: boolean) => void
+  editProductContext: (
+    productEvents: NostrEvent[],
+    isLoading: boolean,
+    total?: number
+  ) => void,
+  until?: number,
+  filters?: FilterParams
 ): Promise<{
   productEvents: NostrEvent[];
   profileSetFromProducts: Set<string>;
 }> => {
   return new Promise(async function (resolve, reject) {
     try {
-      const BATCH_SIZE = 500;
+      // First, load from database to immediately populate the UI
+      let productArrayFromDb: NostrEvent[] = [];
+      let dbTotalCount = 0;
+      try {
+        let apiUrl = "/api/db/fetch-products";
+        const queryParams = new URLSearchParams();
+        if (until) {
+          queryParams.append("until", until.toString());
+        }
+        if (filters?.search) {
+          queryParams.append("search", filters.search);
+        }
+        if (filters?.categories && filters.categories.length > 0) {
+          queryParams.append("categories", filters.categories.join(","));
+        }
+        if (filters?.location) {
+          queryParams.append("location", filters.location);
+        }
+        if (filters?.pubkey) {
+          queryParams.append("pubkey", filters.pubkey as string);
+        }
+        
+        const queryString = queryParams.toString();
+        if (queryString) {
+          apiUrl += `?${queryString}`;
+        }
+        const response = await fetch(apiUrl);
+        if (response.ok) {
+          const data = await response.json();
+          productArrayFromDb = Array.isArray(data.events)
+            ? data.events
+            : Array.isArray(data)
+              ? data
+              : [];
+          dbTotalCount = data.total ?? productArrayFromDb.length;
+          if (productArrayFromDb.length > 0) {
+            editProductContext(productArrayFromDb, true, dbTotalCount);
+          }
+        }
+      } catch (error) {
+        console.error("Failed to fetch products from database: ", error);
+      }
+
+      // Now fetch from relays in parallel
+      const filter30402: any = {
+        kinds: [30402], // Listings
+        limit: 500,
+      };
+      
+      const filter1: any = {
+        kinds: [1], // Zapsnag notes
+        "#t": ["zapsnag"],
+        limit: 500,
+      };
+
+      if (until) {
+        filter30402.until = until;
+        filter1.until = until;
+      }
+      if (filters?.search) {
+        filter30402.search = filters.search;
+        filter1.search = filters.search;
+      }
+      if (filters?.categories && filters.categories.length > 0) {
+        filter30402["#t"] = filters.categories;
+        // Don't append selected categories to Zapsnags since Nostr matches them with OR when using #t
+      }
+      if (filters?.location) {
+        filter30402["#location"] = [filters.location];
+        filter1["#location"] = [filters.location];
+      }
+      if (filters?.pubkey) {
+        filter30402.authors = [filters.pubkey];
+        filter1.authors = [filters.pubkey];
+      }
       const profileSetFromProducts: Set<string> = new Set();
-      const dbProductsMap = new Map<string, NostrEvent>();
+      
+      const queryFilters = filters?.categories?.length ? [filter30402] : [filter30402, filter1];
+      
+      const fetchedEvents = await nostr.fetch(
+        queryFilters,
+        {},
+        relays
+      );
+
+      // Cache ALL valid relay events (products + zapsnags) to the database
+      // for future paginated queries. This is a background task.
+      const validCacheEvents = fetchedEvents.filter(
+        (e: NostrEvent) => e.id && e.sig && e.pubkey && (e.kind === 30402 || e.kind === 1)
+      );
+      if (validCacheEvents.length > 0) {
+        cacheEventsToDatabase(validCacheEvents).catch((error) =>
+          console.error("Failed to cache events to database:", error)
+        );
+      }
 
       const getEventKey = (event: NostrEvent): string => {
         if (event.kind === 30402) {
@@ -71,84 +170,41 @@ export const fetchAllPosts = async (
         return event.id;
       };
 
-      // Cascading DB fetch: load batches one at a time, displaying each as it arrives
-      let offset = 0;
-      let keepFetching = true;
-      while (keepFetching) {
-        try {
-          const response = await fetch(
-            `/api/db/fetch-products?limit=${BATCH_SIZE}&offset=${offset}`
-          );
-          if (!response.ok) break;
-          const batch: NostrEvent[] = await response.json();
-          if (!batch.length) break;
+      // Start with the DB-paginated batch as the display set
+      const displayProductsMap = new Map<string, NostrEvent>();
+      const dbEventKeys = new Set<string>();
 
-          for (const event of batch) {
-            if (event && event.id) {
-              const key = getEventKey(event);
-              const existing = dbProductsMap.get(key);
-              if (!existing || event.created_at > existing.created_at) {
-                dbProductsMap.set(key, event);
-              }
-              if (event.pubkey) profileSetFromProducts.add(event.pubkey);
-            }
-          }
-
-          editProductContext(Array.from(dbProductsMap.values()), true);
-
-          if (batch.length < BATCH_SIZE) break;
-          offset += BATCH_SIZE;
-        } catch (error) {
-          console.error("Failed to fetch products batch from database:", error);
-          break;
+      for (const event of productArrayFromDb) {
+        if (event && event.id) {
+          const key = getEventKey(event);
+          dbEventKeys.add(key);
+          displayProductsMap.set(key, event);
         }
       }
 
-      const filter: Filter = {
-        kinds: [30402],
-      };
-
-      const zapsnagFilter: Filter = {
-        kinds: [1],
-        "#t": ["shopstr-zapsnag", "zapsnag"],
-      };
-
-      const fetchedEvents = await nostr.fetch(
-        [filter, zapsnagFilter],
-        {},
-        relays
-      );
-      if (!fetchedEvents.length) {
-        console.error("No products found with filter: ", filter);
-      }
-
-      // Cache valid product events to database
-      const validProductEvents = fetchedEvents.filter(
-        (e) => e.id && e.sig && e.pubkey && (e.kind === 30402 || e.kind === 1)
-      );
-      if (validProductEvents.length > 0) {
-        cacheEventsToDatabase(validProductEvents).catch((error) =>
-          console.error("Failed to cache products to database:", error)
-        );
-      }
-
-      // Merge relay events on top of the accumulated DB products
+      // Collect pubkeys from ALL relay events (needed for profile fetching),
+      // and merge the display set to show fresh relay data immediately.
       for (const event of fetchedEvents) {
         if (!event || !event.id) continue;
-        const key = getEventKey(event);
-        const existing = dbProductsMap.get(key);
-        if (!existing || event.created_at >= existing.created_at) {
-          dbProductsMap.set(key, event);
-        }
+
+        // Always collect pubkeys for profile fetching
         profileSetFromProducts.add(event.pubkey);
+
+        const key = getEventKey(event);
+        const existing = displayProductsMap.get(key);
+        if (!existing || event.created_at >= existing.created_at) {
+          displayProductsMap.set(key, event);
+        }
       }
 
-      const mergedProductArray = Array.from(dbProductsMap.values());
+      const displayProductArray = Array.from(displayProductsMap.values())
+        .sort((a, b) => b.created_at - a.created_at);
 
-      editProductContext(mergedProductArray, false);
+      const effectiveTotalCount = Math.max(dbTotalCount, displayProductArray.length);
+      editProductContext(displayProductArray, false, effectiveTotalCount);
 
       resolve({
-        productEvents: mergedProductArray,
+        productEvents: displayProductArray,
         profileSetFromProducts,
       });
     } catch (error) {

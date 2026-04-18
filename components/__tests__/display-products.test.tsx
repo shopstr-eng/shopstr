@@ -80,7 +80,11 @@ describe("DisplayProducts search filtering", () => {
                       sig: "sig",
                     },
                   ],
+                  totalEvents: 0,
                   isLoading: false,
+                  setProductEvents: jest.fn(),
+                  loadMoreProducts: jest.fn(),
+                  refreshProducts: jest.fn(),
                   addNewlyCreatedProductEvent: jest.fn(),
                   removeDeletedProductEvent: jest.fn(),
                 }}
