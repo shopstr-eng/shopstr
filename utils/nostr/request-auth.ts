@@ -205,6 +205,28 @@ export function buildDiscountCodeDeleteProof({
   };
 }
 
+function serializeEventIds(eventIds: string[]): string {
+  return [...eventIds].sort().join(",");
+}
+
+export function buildDeleteCachedEventsProof({
+  pubkey,
+  eventIds,
+}: {
+  pubkey: string;
+  eventIds: string[];
+}): SignedHttpRequestProof {
+  return {
+    action: "delete_cached_events",
+    method: "POST",
+    path: "/api/db/delete-events",
+    pubkey,
+    fields: {
+      eventIds: serializeEventIds(eventIds),
+    },
+  };
+}
+
 export function buildStorefrontSlugCreateProof({
   pubkey,
   slug,
@@ -260,5 +282,54 @@ export function buildCustomDomainDeleteProof(
     method: "DELETE",
     path: "/api/storefront/custom-domain",
     pubkey,
+  };
+}
+
+export function buildTrackFailedRelayPublishProof({
+  pubkey,
+  eventId,
+}: {
+  pubkey: string;
+  eventId: string;
+}): SignedHttpRequestProof {
+  return {
+    action: "track_failed_relay_publish",
+    method: "POST",
+    path: "/api/db/track-failed-publish",
+    pubkey,
+    fields: {
+      eventId,
+    },
+  };
+}
+
+export function buildListFailedRelayPublishesProof(
+  pubkey: string
+): SignedHttpRequestProof {
+  return {
+    action: "list_failed_relay_publishes",
+    method: "GET",
+    path: "/api/db/get-failed-publishes",
+    pubkey,
+  };
+}
+
+export function buildClearFailedRelayPublishProof({
+  pubkey,
+  eventId,
+  incrementRetry,
+}: {
+  pubkey: string;
+  eventId: string;
+  incrementRetry?: boolean;
+}): SignedHttpRequestProof {
+  return {
+    action: incrementRetry
+      ? "increment_failed_relay_publish_retry"
+      : "clear_failed_relay_publish",
+    method: "POST",
+    path: "/api/db/clear-failed-publish",
+    pubkey,
+    fields: incrementRetry ? { eventId, incrementRetry: "true" } : { eventId },
   };
 }
