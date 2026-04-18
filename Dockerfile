@@ -8,7 +8,7 @@ COPY pnpm-lock.yaml pnpm-workspace.yaml package.json .npmrc ./
 COPY packages ./packages
 COPY apps ./apps
 
-RUN pnpm install --frozen-lockfile --prefer-offline
+RUN pnpm install --frozen-lockfile --prefer-offline --filter=milk-market... --filter=!@milk-market/mobile
 
 COPY . .
 
