@@ -267,6 +267,13 @@ export interface CombinedFormData {
   Required?: string;
 }
 
+export interface FilterParams {
+  search?: string;
+  categories?: string[];
+  location?: string;
+  pubkey?: string | string[];
+}
+
 declare global {
   interface Window {
     nostr: {

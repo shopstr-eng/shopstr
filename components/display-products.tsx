@@ -1,4 +1,5 @@
 import { useState, useEffect, useContext } from "react";
+import { FilterParams } from "../utils/types/types";
 import { deleteEvent } from "@/utils/nostr/nostr-helper-functions";
 import { NostrEvent } from "../utils/types/types";
 import { ProductContext, FollowsContext } from "../utils/context/context";
@@ -48,7 +49,7 @@ const DisplayProducts = ({
   const [showModal, setShowModal] = useState(false);
 
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 42;
+  const itemsPerPage = 60;
   const [filteredProducts, setFilteredProducts] = useState<ProductData[]>([]);
   const [totalPages, setTotalPages] = useState(1);
   const [isInitialized, setIsInitialized] = useState(false);
@@ -57,6 +58,8 @@ const DisplayProducts = ({
 
   const { nostr } = useContext(NostrContext);
   const { signer, pubkey: userPubkey } = useContext(SignerContext);
+
+  const totalEvents = productEventContext?.totalEvents ?? 0;
 
   // Load saved page from session storage on mount
   useEffect(() => {
@@ -164,10 +167,12 @@ const DisplayProducts = ({
     });
 
     setFilteredProducts(filtered);
-    const newTotalPages = Math.max(
-      1,
-      Math.ceil(filtered.length / itemsPerPage)
-    );
+
+    // We compute the invalidCount mathematically in the main component scope
+    // to dynamically bind it for renders without extra states.
+    // However, for totalPages state, we must evaluate it here with the newly filtered length.
+    const totalOnServer = productEventContext.totalEvents;
+    const newTotalPages = Math.max(1, Math.ceil(totalOnServer / itemsPerPage));
     setTotalPages(newTotalPages);
 
     // Check if filter actually changed (not just from initialization)
@@ -202,6 +207,59 @@ const DisplayProducts = ({
     isInitialized,
   ]);
 
+  // Refresh products when filters change (server-side)
+  useEffect(() => {
+    if (!isInitialized) return;
+
+    const filters: FilterParams = {
+      search: selectedSearch,
+      categories: Array.from(selectedCategories),
+      location: selectedLocation,
+      pubkey: focusedPubkey,
+    };
+
+    productEventContext.refreshProducts(filters);
+  }, [
+    selectedSearch,
+    selectedCategories,
+    selectedLocation,
+    focusedPubkey,
+    isInitialized,
+  ]);
+
+  useEffect(() => {
+    const productsNeeded = currentPage * itemsPerPage;
+    const totalOnServer = productEventContext.totalEvents;
+    const hasMoreOnServer =
+      productEventContext.productEvents &&
+      productEventContext.productEvents.length < totalOnServer;
+
+    if (
+      !productEventContext.isLoading &&
+      hasMoreOnServer &&
+      filteredProducts.length < productsNeeded
+    ) {
+      const filters: FilterParams = {
+        search: selectedSearch,
+        categories: Array.from(selectedCategories),
+        location: selectedLocation,
+        pubkey: focusedPubkey,
+      };
+      productEventContext.loadMoreProducts(filters);
+    }
+  }, [
+    currentPage,
+    productEventContext.isLoading,
+    productEventContext.totalEvents,
+    productEventContext.productEvents?.length,
+    filteredProducts.length,
+    itemsPerPage,
+    selectedSearch,
+    selectedCategories,
+    selectedLocation,
+    focusedPubkey,
+  ]);
+
   // Scroll effect only on page change
   useEffect(() => {
     // Skip initial render (currentPage === 1)
@@ -209,11 +267,11 @@ const DisplayProducts = ({
 
     const timer = requestAnimationFrame(() => {
       if (searchBarRef?.current) {
-        searchBarRef.current.scrollIntoView({
-          behavior: "smooth",
-          block: "start",
-        });
-        window.scrollBy(0, -80); // Adjust for fixed header
+        const y =
+          searchBarRef.current.getBoundingClientRect().top +
+          window.scrollY -
+          80;
+        window.scrollTo({ top: Math.max(0, y), behavior: "smooth" });
       } else {
         window.scrollTo({
           top: 0,
@@ -328,10 +386,17 @@ const DisplayProducts = ({
               </div>
             )}
 
-            <div className="text-light-text dark:text-dark-text mt-2 mb-6 text-center text-xs">
-              Showing {(currentPage - 1) * itemsPerPage + 1} to{" "}
-              {Math.min(filteredProducts.length, currentPage * itemsPerPage)} of{" "}
-              {filteredProducts.length} products
+            <div className="text-light-text dark:text-dark-text mt-2 mb-6 flex flex-col items-center text-center text-xs">
+              <div>
+                Showing {(currentPage - 1) * itemsPerPage + 1} to{" "}
+                {Math.min(totalEvents, currentPage * itemsPerPage)} of{" "}
+                {totalEvents} products
+              </div>
+              {productEventContext.isLoading && (
+                <div className="mt-2 text-purple-500">
+                  Loading more pages...
+                </div>
+              )}
             </div>
           </>
         )}
