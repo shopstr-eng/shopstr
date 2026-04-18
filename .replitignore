@@ -14,8 +14,9 @@ cache
 .turbo
 **/.turbo
 .pnpm-store
-node_modules
-**/node_modules
+/node_modules
+/packages/*/node_modules
+/apps/*/node_modules
 .parcel-cache
 coverage
 __tests__
