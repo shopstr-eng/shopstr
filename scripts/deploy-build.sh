@@ -102,7 +102,26 @@ node -e "
   }
 "
 
+echo "==> Bundling portable Node 22 binary for runtime"
+# We download the official portable Node 22 build (linux-x64) instead of
+# copying the Nix-store binary, because Nix binaries use a custom dynamic
+# linker path (/nix/store/...-glibc/lib/ld-linux-x86-64.so.2) that doesn't
+# exist in the autoscale runtime container. The official tarball is a
+# standard Linux binary that works on any glibc-based system.
+NODE_VERSION="v22.22.0"
+NODE_DIST="node-${NODE_VERSION}-linux-x64"
+mkdir -p .runtime
+if [ ! -x ".runtime/bin/node" ]; then
+  curl -fsSL "https://nodejs.org/dist/${NODE_VERSION}/${NODE_DIST}.tar.xz" -o /tmp/node.tar.xz
+  tar -xJf /tmp/node.tar.xz -C /tmp
+  mkdir -p .runtime/bin
+  cp "/tmp/${NODE_DIST}/bin/node" .runtime/bin/node
+  chmod +x .runtime/bin/node
+  rm -rf "/tmp/${NODE_DIST}" /tmp/node.tar.xz
+fi
+echo "    bundled $(./.runtime/bin/node --version) (portable, glibc-compatible)"
+
 echo "==> Final size:"
-du -sh . .next .next/standalone 2>/dev/null || true
+du -sh . .next .next/standalone .runtime 2>/dev/null || true
 echo "==> Top-level files preserved:"
 ls -la | head -30
