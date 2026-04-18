@@ -352,90 +352,108 @@ function Shopstr({ props }: { props: AppProps }) {
     });
   };
 
-  const loadMoreProducts = useCallback(async (filters?: FilterParams) => {
-    setProductContext((prev) => {
-      if (prev.isLoading || prev.productEvents.length === 0) return prev;
-      
-      const oldestEvent = [...prev.productEvents].sort((a, b) => a.created_at - b.created_at)[0];
-      if (!oldestEvent) return prev;
+  const loadMoreProducts = useCallback(
+    async (filters?: FilterParams) => {
+      setProductContext((prev) => {
+        if (prev.isLoading || prev.productEvents.length === 0) return prev;
 
-      const performFetch = async () => {
-        const relays = getLocalStorageData().relays || [];
-        const readRelays = getLocalStorageData().readRelays || [];
-        const allRelaysBeforeCheck = [...relays, ...readRelays];
-        const allRelays = allRelaysBeforeCheck.length > 0 ? allRelaysBeforeCheck : getDefaultRelays();
+        const oldestEvent = [...prev.productEvents].sort(
+          (a, b) => a.created_at - b.created_at
+        )[0];
+        if (!oldestEvent) return prev;
 
-        await fetchAllPosts(
-          nostr!,
-          allRelays,
-          (newEvents, isLoading, total) => {
-            setProductContext((current) => {
-              const currentIds = new Set(current.productEvents.map(e => e.id));
-              const merged = [...current.productEvents];
-              
-              newEvents.forEach(event => {
-                if (!currentIds.has(event.id)) {
-                  merged.push(event);
+        const performFetch = async () => {
+          const relays = getLocalStorageData().relays || [];
+          const readRelays = getLocalStorageData().readRelays || [];
+          const allRelaysBeforeCheck = [...relays, ...readRelays];
+          const allRelays =
+            allRelaysBeforeCheck.length > 0
+              ? allRelaysBeforeCheck
+              : getDefaultRelays();
+
+          await fetchAllPosts(
+            nostr!,
+            allRelays,
+            (newEvents, isLoading, total) => {
+              setProductContext((current) => {
+                const currentIds = new Set(
+                  current.productEvents.map((e) => e.id)
+                );
+                const merged = [...current.productEvents];
+
+                newEvents.forEach((event) => {
+                  if (!currentIds.has(event.id)) {
+                    merged.push(event);
+                  }
+                });
+
+                let finalTotal = total ?? current.totalEvents;
+                if (!isLoading && currentIds.size === merged.length) {
+                  finalTotal = merged.length;
                 }
+
+                return {
+                  ...current,
+                  productEvents: merged.sort(
+                    (a, b) => b.created_at - a.created_at
+                  ),
+                  isLoading: isLoading,
+                  totalEvents: finalTotal,
+                };
               });
+            },
+            oldestEvent.created_at,
+            filters
+          );
+        };
 
-              let finalTotal = total ?? current.totalEvents;
-              if (!isLoading && currentIds.size === merged.length) {
-                finalTotal = merged.length;
-              }
+        performFetch();
 
-              return {
-                ...current,
-                productEvents: merged.sort((a, b) => b.created_at - a.created_at),
-                isLoading: isLoading,
-                totalEvents: finalTotal
-              };
-            });
-          },
-          oldestEvent.created_at,
-          filters
-        );
-      };
+        return {
+          ...prev,
+          isLoading: true,
+        };
+      });
+    },
+    [nostr]
+  );
 
-      performFetch();
+  const refreshProducts = useCallback(
+    async (filters?: FilterParams) => {
+      setProductContext((prev) => ({ ...prev, isLoading: true }));
 
-      return {
-        ...prev,
-        isLoading: true
-      };
-    });
-  }, [nostr]);
+      const relays = getLocalStorageData().relays || [];
+      const readRelays = getLocalStorageData().readRelays || [];
+      const allRelaysBeforeCheck = [...relays, ...readRelays];
+      const allRelays =
+        allRelaysBeforeCheck.length > 0
+          ? allRelaysBeforeCheck
+          : getDefaultRelays();
 
-  const refreshProducts = useCallback(async (filters?: FilterParams) => {
-    setProductContext(prev => ({ ...prev, isLoading: true }));
-    
-    const relays = getLocalStorageData().relays || [];
-    const readRelays = getLocalStorageData().readRelays || [];
-    const allRelaysBeforeCheck = [...relays, ...readRelays];
-    const allRelays = allRelaysBeforeCheck.length > 0 ? allRelaysBeforeCheck : getDefaultRelays();
-
-    await fetchAllPosts(
-      nostr!,
-      allRelays,
-      (newEvents, isLoading, total) => {
-        setProductContext(current => ({
-          ...current,
-          productEvents: newEvents,
-          isLoading,
-          totalEvents: total ?? current.totalEvents
-        }));
-      },
-      undefined,
-      filters
-    );
-  }, [nostr]);
+      await fetchAllPosts(
+        nostr!,
+        allRelays,
+        (newEvents, isLoading, total) => {
+          setProductContext((current) => ({
+            ...current,
+            productEvents: newEvents,
+            isLoading,
+            totalEvents: total ?? current.totalEvents,
+          }));
+        },
+        undefined,
+        filters
+      );
+    },
+    [nostr]
+  );
 
   // Update the productContext with the actual loadMoreProducts and refreshProducts implementations
   useEffect(() => {
-    setProductContext(prev => ({
+    setProductContext((prev) => ({
       ...prev,
       loadMoreProducts,
-      refreshProducts
+      refreshProducts,
     }));
   }, [loadMoreProducts, refreshProducts]);
 

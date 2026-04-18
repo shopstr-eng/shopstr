@@ -36,8 +36,12 @@ export interface ProductContextInterface {
   totalEvents: number;
   isLoading: boolean;
   setProductEvents: (events: NostrEvent[], total?: number) => void;
-  loadMoreProducts: (filters?: import("../types/types").FilterParams) => Promise<void>;
-  refreshProducts: (filters?: import("../types/types").FilterParams) => Promise<void>;
+  loadMoreProducts: (
+    filters?: import("../types/types").FilterParams
+  ) => Promise<void>;
+  refreshProducts: (
+    filters?: import("../types/types").FilterParams
+  ) => Promise<void>;
   addNewlyCreatedProductEvent: (productEvent: NostrEvent) => void;
   removeDeletedProductEvent: (productId: string) => void;
 }
@@ -47,8 +51,12 @@ export const ProductContext = createContext({
   totalEvents: 0,
   isLoading: true,
   setProductEvents: (_events: NostrEvent[], _total?: number) => {},
-  loadMoreProducts: async (_filters?: import("../types/types").FilterParams) => {},
-  refreshProducts: async (_filters?: import("../types/types").FilterParams) => {},
+  loadMoreProducts: async (
+    _filters?: import("../types/types").FilterParams
+  ) => {},
+  refreshProducts: async (
+    _filters?: import("../types/types").FilterParams
+  ) => {},
   addNewlyCreatedProductEvent: (_productEvent: NostrEvent) => {},
   removeDeletedProductEvent: (_productId: string) => {},
 } as ProductContextInterface);

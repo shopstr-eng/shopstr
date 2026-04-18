@@ -167,15 +167,12 @@ const DisplayProducts = ({
     });
 
     setFilteredProducts(filtered);
-    
-    // We compute the invalidCount mathematically in the main component scope 
+
+    // We compute the invalidCount mathematically in the main component scope
     // to dynamically bind it for renders without extra states.
     // However, for totalPages state, we must evaluate it here with the newly filtered length.
     const totalOnServer = productEventContext.totalEvents;
-    const newTotalPages = Math.max(
-      1,
-      Math.ceil(totalOnServer / itemsPerPage)
-    );
+    const newTotalPages = Math.max(1, Math.ceil(totalOnServer / itemsPerPage));
     setTotalPages(newTotalPages);
 
     // Check if filter actually changed (not just from initialization)
@@ -222,7 +219,13 @@ const DisplayProducts = ({
     };
 
     productEventContext.refreshProducts(filters);
-  }, [selectedSearch, selectedCategories, selectedLocation, focusedPubkey, isInitialized]);
+  }, [
+    selectedSearch,
+    selectedCategories,
+    selectedLocation,
+    focusedPubkey,
+    isInitialized,
+  ]);
 
   useEffect(() => {
     const productsNeeded = currentPage * itemsPerPage;
@@ -264,7 +267,10 @@ const DisplayProducts = ({
 
     const timer = requestAnimationFrame(() => {
       if (searchBarRef?.current) {
-        const y = searchBarRef.current.getBoundingClientRect().top + window.scrollY - 80;
+        const y =
+          searchBarRef.current.getBoundingClientRect().top +
+          window.scrollY -
+          80;
         window.scrollTo({ top: Math.max(0, y), behavior: "smooth" });
       } else {
         window.scrollTo({
@@ -387,7 +393,9 @@ const DisplayProducts = ({
                 {totalEvents} products
               </div>
               {productEventContext.isLoading && (
-                <div className="mt-2 text-purple-500">Loading more pages...</div>
+                <div className="mt-2 text-purple-500">
+                  Loading more pages...
+                </div>
               )}
             </div>
           </>

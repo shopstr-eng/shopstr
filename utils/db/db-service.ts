@@ -1065,25 +1065,24 @@ export async function cachedEventsBelongToPubkey(
 // Fetch all products from database, returning only the latest version per
 // (pubkey, d-tag) so that updated or deleted-then-re-listed products never
 // show stale duplicates.
-export async function fetchAllProductsFromDb(
-  filters?: {
-    limit?: number;
-    offset?: number;
-    since?: number;
-    until?: number;
-    pubkey?: string | string[];
-    search?: string;
-    categories?: string[];
-    location?: string;
-  }
-): Promise<NostrEvent[]> {
+export async function fetchAllProductsFromDb(filters?: {
+  limit?: number;
+  offset?: number;
+  since?: number;
+  until?: number;
+  pubkey?: string | string[];
+  search?: string;
+  categories?: string[];
+  location?: string;
+}): Promise<NostrEvent[]> {
   const dbPool = getDbPool();
   let client;
 
   try {
     client = await dbPool.connect();
 
-    let whereClause = "WHERE p.kind IN (30402, 1) AND EXISTS (SELECT 1 FROM jsonb_array_elements(p.tags) AS t WHERE t->>0 = 'image') AND EXISTS (SELECT 1 FROM jsonb_array_elements(p.tags) AS t WHERE t->>0 = 'price')";
+    let whereClause =
+      "WHERE p.kind IN (30402, 1) AND EXISTS (SELECT 1 FROM jsonb_array_elements(p.tags) AS t WHERE t->>0 = 'image') AND EXISTS (SELECT 1 FROM jsonb_array_elements(p.tags) AS t WHERE t->>0 = 'price')";
     const params: any[] = [];
     let paramIndex = 1;
 
@@ -1179,23 +1178,22 @@ export async function fetchAllProductsFromDb(
   }
 }
 
-export async function getEventCount(
-  filters?: {
-    since?: number;
-    until?: number;
-    pubkey?: string | string[];
-    search?: string;
-    categories?: string[];
-    location?: string;
-  }
-): Promise<number> {
+export async function getEventCount(filters?: {
+  since?: number;
+  until?: number;
+  pubkey?: string | string[];
+  search?: string;
+  categories?: string[];
+  location?: string;
+}): Promise<number> {
   const dbPool = getDbPool();
   let client;
 
   try {
     client = await dbPool.connect();
 
-    let whereClause = "WHERE p.kind IN (30402, 1) AND EXISTS (SELECT 1 FROM jsonb_array_elements(p.tags) AS t WHERE t->>0 = 'image') AND EXISTS (SELECT 1 FROM jsonb_array_elements(p.tags) AS t WHERE t->>0 = 'price')";
+    let whereClause =
+      "WHERE p.kind IN (30402, 1) AND EXISTS (SELECT 1 FROM jsonb_array_elements(p.tags) AS t WHERE t->>0 = 'image') AND EXISTS (SELECT 1 FROM jsonb_array_elements(p.tags) AS t WHERE t->>0 = 'price')";
     const params: any[] = [];
     let paramIndex = 1;
 
@@ -1269,7 +1267,6 @@ export async function getEventCount(
     }
   }
 }
-
 
 // Fetch all reviews from database
 export async function fetchAllReviewsFromDb(): Promise<NostrEvent[]> {

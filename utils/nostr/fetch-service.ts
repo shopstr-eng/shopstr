@@ -4,7 +4,7 @@ import {
   NostrMessageEvent,
   ShopProfile,
   Community,
-  FilterParams
+  FilterParams,
 } from "@/utils/types/types";
 import {
   Mint as CashuMint,
@@ -87,7 +87,7 @@ export const fetchAllPosts = async (
         if (filters?.pubkey) {
           queryParams.append("pubkey", filters.pubkey as string);
         }
-        
+
         const queryString = queryParams.toString();
         if (queryString) {
           apiUrl += `?${queryString}`;
@@ -114,7 +114,7 @@ export const fetchAllPosts = async (
         kinds: [30402], // Listings
         limit: 500,
       };
-      
+
       const filter1: any = {
         kinds: [1], // Zapsnag notes
         "#t": ["zapsnag"],
@@ -142,19 +142,18 @@ export const fetchAllPosts = async (
         filter1.authors = [filters.pubkey];
       }
       const profileSetFromProducts: Set<string> = new Set();
-      
-      const queryFilters = filters?.categories?.length ? [filter30402] : [filter30402, filter1];
-      
-      const fetchedEvents = await nostr.fetch(
-        queryFilters,
-        {},
-        relays
-      );
+
+      const queryFilters = filters?.categories?.length
+        ? [filter30402]
+        : [filter30402, filter1];
+
+      const fetchedEvents = await nostr.fetch(queryFilters, {}, relays);
 
       // Cache ALL valid relay events (products + zapsnags) to the database
       // for future paginated queries. This is a background task.
       const validCacheEvents = fetchedEvents.filter(
-        (e: NostrEvent) => e.id && e.sig && e.pubkey && (e.kind === 30402 || e.kind === 1)
+        (e: NostrEvent) =>
+          e.id && e.sig && e.pubkey && (e.kind === 30402 || e.kind === 1)
       );
       if (validCacheEvents.length > 0) {
         cacheEventsToDatabase(validCacheEvents).catch((error) =>
@@ -197,10 +196,14 @@ export const fetchAllPosts = async (
         }
       }
 
-      const displayProductArray = Array.from(displayProductsMap.values())
-        .sort((a, b) => b.created_at - a.created_at);
+      const displayProductArray = Array.from(displayProductsMap.values()).sort(
+        (a, b) => b.created_at - a.created_at
+      );
 
-      const effectiveTotalCount = Math.max(dbTotalCount, displayProductArray.length);
+      const effectiveTotalCount = Math.max(
+        dbTotalCount,
+        displayProductArray.length
+      );
       editProductContext(displayProductArray, false, effectiveTotalCount);
 
       resolve({

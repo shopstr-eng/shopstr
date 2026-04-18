@@ -25,22 +25,28 @@ export default async function handler(
   if (!applyRateLimit(req, res, "fetch-products", RATE_LIMIT)) return;
 
   try {
-    const { limit, offset, until, since, pubkey, search, categories, location } = req.query;
+    const {
+      limit,
+      offset,
+      until,
+      since,
+      pubkey,
+      search,
+      categories,
+      location,
+    } = req.query;
 
     const limitNum = Math.min(
       parseInt((limit as string) || "500", 10) || 500,
       1000
     );
-    const offsetNum = Math.max(
-      parseInt((offset as string) || "0", 10) || 0,
-      0
-    );
+    const offsetNum = Math.max(parseInt((offset as string) || "0", 10) || 0, 0);
 
     // Parse categories if they come as a comma-separated string or array
     let categoriesArray: string[] | undefined = undefined;
     if (categories) {
-      categoriesArray = Array.isArray(categories) 
-        ? categories 
+      categoriesArray = Array.isArray(categories)
+        ? categories
         : (categories as string).split(",");
     }
 
