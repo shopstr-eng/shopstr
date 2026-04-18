@@ -44,6 +44,8 @@
     "@milk-market/domain": "file:./packages/domain",
     "@milk-market/nostr": "file:./packages/nostr",
     "@modelcontextprotocol/sdk": "1.29.0",
+    "@noble/hashes": "1.3.1",
+    "classnames": "2.5.1",
     "@sendgrid/mail": "8.1.6",
     "@stripe/react-stripe-js": "5.6.0",
     "@stripe/stripe-js": "8.8.0",
