@@ -14,7 +14,7 @@
     "dev:mobile": "pnpm --filter @milk-market/mobile dev",
     "build": "next build",
     "build:web": "next build",
-    "build:deploy": "pnpm install --frozen-lockfile --prefer-offline --filter=milk-market... --filter=!@milk-market/mobile && next build && cp -r .next/static .next/standalone/.next/static && cp -r public .next/standalone/public && rm -rf apps/mobile node_modules packages/*/node_modules apps/*/node_modules .next/cache .next/standalone/.next/cache .turbo .pnpm-store $HOME/.pnpm-store $HOME/.local/share/pnpm $HOME/.cache /tmp/* 2>/dev/null; true",
+    "build:deploy": "pnpm install --frozen-lockfile --prefer-offline --filter=milk-market... --filter=!@milk-market/mobile && next build && cp -r .next/static .next/standalone/.next/static && cp -r public .next/standalone/public && node -e \"const fs=require('fs'),p=require('path');const keep=new Set(['.next','.replit','package.json']);for(const f of fs.readdirSync('.')){if(!keep.has(f))fs.rmSync(f,{recursive:true,force:true})}for(const f of fs.readdirSync('.next')){if(f!=='standalone')fs.rmSync(p.join('.next',f),{recursive:true,force:true})}\" 2>/dev/null; true",
     "start:deploy": "node .next/standalone/server.js",
     "build:all": "turbo run build --filter=@milk-market/mobile --filter=@milk-market/domain --filter=@milk-market/nostr --filter=@milk-market/api-client",
     "start": "next start -H 0.0.0.0 -p ${PORT:-3000}",
