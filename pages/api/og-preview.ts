@@ -133,6 +133,9 @@ export default async function handler(
     if (!["http:", "https:"].includes(parsedUrl.protocol)) {
       return res.status(400).json({ error: "Invalid protocol" });
     }
+    if (parsedUrl.port && !["80", "443"].includes(parsedUrl.port)) {
+      return res.status(400).json({ error: "Invalid port" });
+    }
   } catch {
     return res.status(400).json({ error: "Invalid URL" });
   }
@@ -154,6 +157,7 @@ export default async function handler(
     const timeout = setTimeout(() => controller.abort(), 6000);
     const response = await fetch(normalizedUrl, {
       signal: controller.signal,
+      redirect: "manual",
       headers: {
         "User-Agent":
           "Mozilla/5.0 (compatible; MilkMarket/1.0; +https://milk.market)",
