@@ -130,9 +130,9 @@ describe("NostrNSecSigner", () => {
     const priv = await s._getPrivKey();
     expect(nip49.decrypt).toHaveBeenCalledWith(nip49Str, "passX");
     expect(priv).toEqual(new Uint8Array([0x0a, 0x0b, 0x0c]));
-    // caching behavior
-    expect((s as any).rememberedPassphrase).toBe("passX");
-    expect((s as any).inputPassphrase).toBe("passX");
+
+    await s._getPrivKey();
+    expect(mockCH).toHaveBeenCalledTimes(1);
   });
 
   it("getPubKey() with and without cache", async () => {
@@ -186,8 +186,6 @@ describe("NostrNSecSigner", () => {
 
   it("close()", async () => {
     const s = new NostrNSecSigner({ encryptedPrivKey: encrypted }, mockCH);
-    (s as any).rememberedPassphrase = "foo";
-    await s.close();
-    expect((s as any).rememberedPassphrase).toBeUndefined();
+    await expect(s.close()).resolves.toBeUndefined();
   });
 });

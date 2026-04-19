@@ -1,17 +1,20 @@
 import {
+  clearNWCConnection,
   getDefaultBlossomServer,
   getDefaultMint,
   getDefaultRelays,
   getLocalStorageData,
+  lockNWCConnection,
+  saveEncryptedNWCString,
   saveNWCInfo,
-  saveNWCString,
+  unlockNWCString,
 } from "../nostr-helper-functions";
 
 describe("getLocalStorageData", () => {
   beforeEach(() => {
     localStorage.clear();
     jest.restoreAllMocks();
-    saveNWCString("");
+    clearNWCConnection();
   });
 
   it("returns safe defaults for missing keys", () => {
@@ -74,8 +77,11 @@ describe("getLocalStorageData", () => {
     });
   });
 
-  it("keeps NWC credentials in runtime memory instead of localStorage", () => {
-    saveNWCString("nostr+walletconnect://wallet?relay=wss://relay&secret=abcd");
+  it("stores the NWC connection encrypted at rest and keeps the raw value in runtime memory", () => {
+    saveEncryptedNWCString(
+      "nostr+walletconnect://wallet?relay=wss://relay&secret=abcd",
+      "secret-passphrase"
+    );
     saveNWCInfo({ alias: "Alby", methods: ["pay_invoice"] });
 
     const data = getLocalStorageData();
@@ -86,15 +92,52 @@ describe("getLocalStorageData", () => {
     expect(data.nwcInfo).toBe(
       JSON.stringify({ alias: "Alby", methods: ["pay_invoice"] })
     );
+    expect(data.hasStoredNWCConnection).toBe(true);
     expect(localStorage.getItem("nwcString")).toBeNull();
-    expect(localStorage.getItem("nwcInfo")).toBeNull();
+    expect(localStorage.getItem("encryptedNWCString")).not.toBeNull();
+    expect(localStorage.getItem("nwcInfo")).toBe(
+      JSON.stringify({ alias: "Alby", methods: ["pay_invoice"] })
+    );
   });
 
-  it("removes legacy persisted NWC data on read", () => {
+  it("unlocks the stored NWC connection with the correct passphrase", () => {
+    saveEncryptedNWCString(
+      "nostr+walletconnect://wallet?relay=wss://relay&secret=abcd",
+      "secret-passphrase"
+    );
+    lockNWCConnection();
+
+    expect(getLocalStorageData().nwcString).toBeNull();
+
+    const unlocked = unlockNWCString("secret-passphrase");
+
+    expect(unlocked).toBe(
+      "nostr+walletconnect://wallet?relay=wss://relay&secret=abcd"
+    );
+    expect(getLocalStorageData().nwcString).toBe(
+      "nostr+walletconnect://wallet?relay=wss://relay&secret=abcd"
+    );
+  });
+
+  it("does not unlock the stored NWC connection with an incorrect passphrase", () => {
+    saveEncryptedNWCString(
+      "nostr+walletconnect://wallet?relay=wss://relay&secret=abcd",
+      "secret-passphrase"
+    );
+    lockNWCConnection();
+
+    expect(() => unlockNWCString("wrong-passphrase")).toThrow(
+      "Incorrect passphrase or invalid NWC connection."
+    );
+    expect(getLocalStorageData().nwcString).toBeNull();
+  });
+
+  it("removes legacy persisted plaintext NWC data on read", () => {
     localStorage.setItem(
       "nwcString",
       "nostr+walletconnect://wallet?relay=wss://relay&secret=legacysecret"
     );
+    localStorage.setItem("encryptedNWCString", "ciphertext");
     localStorage.setItem(
       "nwcInfo",
       JSON.stringify({ alias: "Legacy", methods: ["pay_invoice"] })
@@ -103,8 +146,10 @@ describe("getLocalStorageData", () => {
     const data = getLocalStorageData();
 
     expect(data.nwcString).toBeNull();
-    expect(data.nwcInfo).toBeNull();
+    expect(data.nwcInfo).toBe(
+      JSON.stringify({ alias: "Legacy", methods: ["pay_invoice"] })
+    );
+    expect(data.hasStoredNWCConnection).toBe(true);
     expect(localStorage.getItem("nwcString")).toBeNull();
-    expect(localStorage.getItem("nwcInfo")).toBeNull();
   });
 });
