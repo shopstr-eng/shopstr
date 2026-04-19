@@ -41,14 +41,18 @@ describe("parseZapsnagNote", () => {
     );
     const result = parseZapsnagNote(event);
 
-    expect(result.images[0]).toBe("https://example.com/image.jpg");
+    expect(result.images[0]).toBe(
+      "/api/product-image?url=https%3A%2F%2Fexample.com%2Fimage.jpg"
+    );
   });
 
   it("uses RoboHash fallback when no image is present", () => {
     const event = createEvent("Just text, no images", "unique-id-999");
     const result = parseZapsnagNote(event);
 
-    expect(result.images[0]).toBe("https://robohash.org/unique-id-999");
+    expect(result.images[0]).toBe(
+      "/api/product-image?url=https%3A%2F%2Frobohash.org%2Funique-id-999"
+    );
   });
 
   it("generates a clean title by removing price, tags, and URLs", () => {

@@ -1,4 +1,52 @@
-import { buildSrcSet } from "../images";
+import {
+  buildSrcSet,
+  normalizeProductImageUrl,
+  normalizeProductImageUrls,
+} from "../images";
+
+describe("normalizeProductImageUrl", () => {
+  it("proxies external https product images through the app", () => {
+    expect(normalizeProductImageUrl("https://example.com/image.jpg")).toBe(
+      "/api/product-image?url=https%3A%2F%2Fexample.com%2Fimage.jpg"
+    );
+  });
+
+  it("keeps local image paths unchanged", () => {
+    expect(normalizeProductImageUrl("/images/local-image.jpg")).toBe(
+      "/images/local-image.jpg"
+    );
+  });
+
+  it("falls back for blocked schemes", () => {
+    expect(normalizeProductImageUrl("javascript:alert(1)")).toBe(
+      "/no-image-placeholder.png"
+    );
+  });
+
+  it("falls back for non-http remote values", () => {
+    expect(normalizeProductImageUrl("not-a-url")).toBe(
+      "/no-image-placeholder.png"
+    );
+  });
+});
+
+describe("normalizeProductImageUrls", () => {
+  it("normalizes each product image in the array", () => {
+    expect(
+      normalizeProductImageUrls([
+        "https://example.com/a.jpg",
+        "/images/local-image.jpg",
+      ])
+    ).toEqual([
+      "/api/product-image?url=https%3A%2F%2Fexample.com%2Fa.jpg",
+      "/images/local-image.jpg",
+    ]);
+  });
+
+  it("returns an empty array when no images are provided", () => {
+    expect(normalizeProductImageUrls(undefined)).toEqual([]);
+  });
+});
 
 describe("buildSrcSet", () => {
   it("should return a formatted srcset for image.nostr.build URLs", () => {
