@@ -63,8 +63,8 @@ describe("parseTags", () => {
     const result = parseTags(event)!;
 
     expect(result.images).toEqual([
-      "/api/product-image?url=https%3A%2F%2Fexample.com%2Furl1.jpg",
-      "/api/product-image?url=https%3A%2F%2Fexample.com%2Furl2.jpg",
+      "https://example.com/url1.jpg",
+      "https://example.com/url2.jpg",
     ]);
     expect(result.categories).toEqual(["electronics", "nostr"]);
   });

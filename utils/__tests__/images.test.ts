@@ -5,9 +5,9 @@ import {
 } from "../images";
 
 describe("normalizeProductImageUrl", () => {
-  it("proxies external https product images through the app", () => {
+  it("keeps safe external https product images unchanged", () => {
     expect(normalizeProductImageUrl("https://example.com/image.jpg")).toBe(
-      "/api/product-image?url=https%3A%2F%2Fexample.com%2Fimage.jpg"
+      "https://example.com/image.jpg"
     );
   });
 
@@ -36,6 +36,21 @@ describe("normalizeProductImageUrl", () => {
       "/no-image-placeholder.png"
     );
   });
+
+  it("falls back for localhost remote hosts", () => {
+    expect(normalizeProductImageUrl("https://localhost/image.jpg")).toBe(
+      "/no-image-placeholder.png"
+    );
+  });
+
+  it("falls back for private IPv4 remote hosts", () => {
+    expect(normalizeProductImageUrl("http://127.0.0.1/image.jpg")).toBe(
+      "/no-image-placeholder.png"
+    );
+    expect(normalizeProductImageUrl("http://192.168.1.25/image.jpg")).toBe(
+      "/no-image-placeholder.png"
+    );
+  });
 });
 
 describe("normalizeProductImageUrls", () => {
@@ -46,7 +61,7 @@ describe("normalizeProductImageUrls", () => {
         "/images/local-image.jpg",
       ])
     ).toEqual([
-      "/api/product-image?url=https%3A%2F%2Fexample.com%2Fa.jpg",
+      "https://example.com/a.jpg",
       "/images/local-image.jpg",
     ]);
   });
