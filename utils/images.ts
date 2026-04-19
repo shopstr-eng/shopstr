@@ -3,6 +3,7 @@ import { sanitizeUrl } from "@braintree/sanitize-url";
 const BLOCKED_URL = "about:blank";
 const SAFE_IMAGE_PROTOCOL_RE = /^https?:$/i;
 const EXTERNAL_IMAGE_RE = /^https?:\/\//i;
+const BLOCKED_LOCAL_IMAGE_PATH_RE = /^\/api\//i;
 
 export function normalizeProductImageUrl(
   image: string | undefined,
@@ -12,6 +13,9 @@ export function normalizeProductImageUrl(
   if (!trimmed) return fallback;
 
   if (trimmed.startsWith("/")) {
+    if (BLOCKED_LOCAL_IMAGE_PATH_RE.test(trimmed)) {
+      return fallback;
+    }
     return trimmed;
   }
 

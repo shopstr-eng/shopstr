@@ -46,12 +46,13 @@ const createResponse = () => {
 
 const makeRequest = (
   query: NextApiRequest["query"],
-  method = "GET"
+  method = "GET",
+  headers: NextApiRequest["headers"] = {}
 ): NextApiRequest =>
   ({
     method,
     query,
-    headers: {},
+    headers,
   }) as Partial<NextApiRequest> as NextApiRequest;
 
 describe("/api/product-image", () => {
@@ -96,6 +97,24 @@ describe("/api/product-image", () => {
 
     expect(res.statusCode).toBe(400);
     expect(res.body).toEqual({ error: "URL host is not allowed" });
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it("returns 400 for same-host api targets", async () => {
+    lookupMock.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
+    const res = createResponse();
+
+    await handler(
+      makeRequest(
+        { url: "https://shopstr.store/api/product-image?url=https://example.com/tracker.jpg" },
+        "GET",
+        { host: "shopstr.store" }
+      ),
+      res
+    );
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toEqual({ error: "URL path is not allowed" });
     expect(global.fetch).not.toHaveBeenCalled();
   });
 

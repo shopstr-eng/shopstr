@@ -70,6 +70,30 @@ async function isSafePublicHostname(hostname: string): Promise<boolean> {
   }
 }
 
+function getRequestHostname(req: NextApiRequest): string | null {
+  const forwardedHost = req.headers["x-forwarded-host"];
+  const rawHost = Array.isArray(forwardedHost)
+    ? forwardedHost[0]
+    : forwardedHost || req.headers.host;
+
+  if (!rawHost) return null;
+
+  return rawHost.split(":")[0]?.toLowerCase() || null;
+}
+
+function isDisallowedShopstrApiTarget(
+  req: NextApiRequest,
+  parsedUrl: URL
+): boolean {
+  const requestHostname = getRequestHostname(req);
+  if (!requestHostname) return false;
+
+  return (
+    parsedUrl.hostname.toLowerCase() === requestHostname &&
+    parsedUrl.pathname.startsWith("/api/")
+  );
+}
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
@@ -101,6 +125,10 @@ export default async function handler(
   const isSafeHost = await isSafePublicHostname(parsedUrl.hostname);
   if (!isSafeHost) {
     return res.status(400).json({ error: "URL host is not allowed" });
+  }
+
+  if (isDisallowedShopstrApiTarget(req, parsedUrl)) {
+    return res.status(400).json({ error: "URL path is not allowed" });
   }
 
   try {

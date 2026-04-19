@@ -17,6 +17,14 @@ describe("normalizeProductImageUrl", () => {
     );
   });
 
+  it("falls back for local api paths", () => {
+    expect(
+      normalizeProductImageUrl(
+        "/api/product-image?url=https%3A%2F%2Fexample.com%2Fimage.jpg"
+      )
+    ).toBe("/no-image-placeholder.png");
+  });
+
   it("falls back for blocked schemes", () => {
     expect(normalizeProductImageUrl("javascript:alert(1)")).toBe(
       "/no-image-placeholder.png"
