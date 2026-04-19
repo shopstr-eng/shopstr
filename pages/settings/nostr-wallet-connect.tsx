@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useContext, useEffect, useState } from "react";
 import {
   Input,
   Button,
@@ -8,10 +8,6 @@ import {
   Spinner,
 } from "@heroui/react";
 import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs";
-import {
-  getLocalStorageData,
-  saveNWCString,
-} from "@/utils/nostr/nostr-helper-functions";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
   CheckCircleIcon,
@@ -21,40 +17,50 @@ import {
 import { NostrWebLNProvider } from "@getalby/sdk";
 import { formatWithCommas } from "@/components/utility-components/display-monetary-info";
 import ProtectedRoute from "@/components/utility-components/protected-route";
+import { NWCContext } from "@/components/utility-components/nostr-context-provider";
 
 const NWCSettingsPage = () => {
+  const {
+    nwcString: unlockedNWCString,
+    legacyNWCString,
+    nwcInfo: storedNWCInfo,
+    hasStoredConnection,
+    hasLegacyConnection,
+    isUnlocked,
+    saveConnection,
+    ensureUnlocked,
+    lockConnection,
+    removeConnection,
+  } = useContext(NWCContext);
   const [nwcString, setNwcString] = useState("");
+  const [passphrase, setPassphrase] = useState("");
   const [walletInfo, setWalletInfo] = useState<any>(null);
   const [balance, setBalance] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSaved, setIsSaved] = useState(false);
 
-  // Load existing connection and info on mount
   useEffect(() => {
-    const loadInfo = () => {
-      const { nwcString: savedString, nwcInfo: savedInfo } =
-        getLocalStorageData();
-      if (savedString) {
-        setNwcString(savedString);
+    setWalletInfo(storedNWCInfo || null);
+    if (unlockedNWCString) {
+      setNwcString(unlockedNWCString);
+      if (storedNWCInfo?.methods?.includes("get_balance")) {
+        fetchBalance(unlockedNWCString);
       }
-      if (savedInfo) {
-        try {
-          const info = JSON.parse(savedInfo);
-          setWalletInfo(info);
-          if (info.methods.includes("get_balance") && savedString) {
-            fetchBalance(savedString);
-          }
-        } catch (e) {
-          console.error("Failed to parse saved NWC info", e);
-        }
-      }
-    };
-    loadInfo();
-
-    window.addEventListener("storage", loadInfo);
-    return () => window.removeEventListener("storage", loadInfo);
-  }, []);
+    } else if (hasLegacyConnection && legacyNWCString) {
+      setNwcString(legacyNWCString);
+      setBalance(null);
+    } else {
+      setNwcString("");
+      setBalance(null);
+    }
+  }, [
+    hasLegacyConnection,
+    hasStoredConnection,
+    legacyNWCString,
+    storedNWCInfo,
+    unlockedNWCString,
+  ]);
 
   const fetchBalance = async (connectionString: string | null) => {
     if (!connectionString) return;
@@ -88,6 +94,9 @@ const NWCSettingsPage = () => {
           "Invalid Nostr Wallet Connect string. It must start with 'nostr+walletconnect://'"
         );
       }
+      if (!passphrase || passphrase.trim() === "") {
+        throw new Error("A passphrase is required to save this wallet.");
+      }
 
       const url = new URL(nwcString);
       const secret = url.searchParams.get("secret");
@@ -106,13 +115,11 @@ const NWCSettingsPage = () => {
       await nwc.enable();
       const info = await nwc.getInfo();
 
-      // Save successful connection
-      saveNWCString(nwcString);
-      localStorage.setItem("nwcInfo", JSON.stringify(info));
+      saveConnection?.(nwcString, info, passphrase.trim());
       setWalletInfo(info);
       setIsSaved(true);
+      setPassphrase("");
 
-      // Fetch balance if supported
       if (info.methods && info.methods.includes("get_balance")) {
         await fetchBalance(nwcString);
       }
@@ -124,8 +131,6 @@ const NWCSettingsPage = () => {
           "Please check the connection string and wallet permissions."
         }`
       );
-      saveNWCString("");
-      localStorage.removeItem("nwcInfo");
     } finally {
       setIsLoading(false);
       if (nwc) {
@@ -134,13 +139,34 @@ const NWCSettingsPage = () => {
     }
   };
 
+  const handleUnlock = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const connectionString = await ensureUnlocked?.();
+      if (walletInfo?.methods?.includes("get_balance")) {
+        await fetchBalance(connectionString || null);
+      }
+    } catch (e: any) {
+      setError(e?.message || "Failed to unlock NWC connection.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleRemove = () => {
     setNwcString("");
+    setPassphrase("");
     setWalletInfo(null);
     setBalance(null);
     setError(null);
-    saveNWCString("");
-    localStorage.removeItem("nwcInfo");
+    removeConnection?.();
+  };
+
+  const handleLock = () => {
+    setBalance(null);
+    setError(null);
+    lockConnection?.();
   };
 
   return (
@@ -155,8 +181,21 @@ const NWCSettingsPage = () => {
             <p className="text-light-text dark:text-dark-text mb-4 text-sm">
               Connect your wallet using a Nostr Wallet Connect (NIP-47)
               connection string (e.g., from Alby, Mutiny, or Umbrel). This
-              allows Shopstr to request payments directly from your wallet.
+              allows Shopstr to request payments directly from your wallet. The
+              raw connection secret stays encrypted at rest and is only kept in
+              memory after you unlock it for the active session.
             </p>
+
+            {hasLegacyConnection && !hasStoredConnection && (
+              <div className="mb-4 flex items-center rounded border border-yellow-400 bg-yellow-100 p-3 text-yellow-800">
+                <ExclamationCircleIcon className="mr-2 h-5 w-5" />
+                <span className="text-sm">
+                  This wallet connection was saved before encrypted storage was
+                  added. Add a passphrase and save it again to migrate it
+                  securely.
+                </span>
+              </div>
+            )}
 
             <Input
               isClearable
@@ -165,6 +204,21 @@ const NWCSettingsPage = () => {
               value={nwcString}
               onValueChange={setNwcString}
               className="mb-4"
+              isDisabled={hasStoredConnection && !isUnlocked}
+              classNames={{
+                label: "text-light-text dark:text-dark-text",
+                input: "text-light-text dark:text-dark-text",
+              }}
+            />
+
+            <Input
+              label="Wallet Passphrase"
+              placeholder="Enter a passphrase to encrypt this connection"
+              value={passphrase}
+              onValueChange={setPassphrase}
+              type="password"
+              className="mb-4"
+              isDisabled={hasStoredConnection && !isUnlocked}
               classNames={{
                 label: "text-light-text dark:text-dark-text",
                 input: "text-light-text dark:text-dark-text",
@@ -186,17 +240,31 @@ const NWCSettingsPage = () => {
             )}
 
             <div className="flex items-center">
-              <Button
-                className={SHOPSTRBUTTONCLASSNAMES}
-                onClick={handleSave}
-                isLoading={isLoading}
-              >
-                {isLoading
-                  ? "Connecting..."
-                  : isSaved
-                    ? "Saved!"
-                    : "Save Connection"}
-              </Button>
+              {hasStoredConnection && !isUnlocked ? (
+                <Button
+                  className={SHOPSTRBUTTONCLASSNAMES}
+                  onClick={handleUnlock}
+                  isLoading={isLoading}
+                >
+                  {isLoading ? "Unlocking..." : "Unlock Wallet"}
+                </Button>
+              ) : (
+                <Button
+                  className={SHOPSTRBUTTONCLASSNAMES}
+                  onClick={handleSave}
+                  isLoading={isLoading}
+                >
+                  {isLoading
+                    ? hasLegacyConnection && !hasStoredConnection
+                      ? "Migrating..."
+                      : "Connecting..."
+                    : isSaved
+                      ? "Saved!"
+                      : hasLegacyConnection && !hasStoredConnection
+                        ? "Migrate Connection"
+                        : "Save Connection"}
+                </Button>
+              )}
 
               {walletInfo && (
                 <Button
@@ -206,6 +274,12 @@ const NWCSettingsPage = () => {
                   onClick={handleRemove}
                 >
                   Disconnect Wallet
+                </Button>
+              )}
+
+              {walletInfo && isUnlocked && (
+                <Button variant="light" className="ml-4" onClick={handleLock}>
+                  Lock Wallet
                 </Button>
               )}
             </div>

@@ -6,13 +6,21 @@ import {
   useState,
   ReactNode,
 } from "react";
+import { useRouter } from "next/router";
 import { nip19 } from "nostr-tools";
 import {
   ChallengeHandler,
   NostrSigner,
 } from "@/utils/nostr/signers/nostr-signer";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
-import { getLocalStorageData } from "@/utils/nostr/nostr-helper-functions";
+import {
+  clearNWCConnection,
+  getLocalStorageData,
+  lockNWCConnection,
+  saveEncryptedNWCString,
+  saveNWCInfo,
+  unlockNWCString,
+} from "@/utils/nostr/nostr-helper-functions";
 import PassphraseChallengeModal from "@/components/utility-components/request-passphrase-modal";
 import AuthUrlChallengeModal from "@/components/utility-components/auth-challenge-modal";
 import { NostrNIP07Signer } from "@/utils/nostr/signers/nostr-nip07-signer";
@@ -43,9 +51,39 @@ interface NostrContextInterface {
   nostr?: NostrManager;
 }
 
+interface NWCContextInterface {
+  nwcString?: string | null;
+  legacyNWCString?: string | null;
+  nwcInfo?: Record<string, any> | null;
+  hasStoredConnection?: boolean;
+  hasLegacyConnection?: boolean;
+  isUnlocked?: boolean;
+  saveConnection?: (
+    nwcString: string,
+    info: Record<string, any>,
+    passphrase: string
+  ) => void;
+  ensureUnlocked?: () => Promise<string>;
+  lockConnection?: () => void;
+  removeConnection?: () => void;
+}
+
 export const NostrContext = createContext({
   nostr: {} as NostrManager,
 } as NostrContextInterface);
+
+export const NWCContext = createContext({
+  nwcString: null,
+  legacyNWCString: null,
+  nwcInfo: null,
+  hasStoredConnection: false,
+  hasLegacyConnection: false,
+  isUnlocked: false,
+  saveConnection: () => {},
+  ensureUnlocked: async () => "",
+  lockConnection: () => {},
+  removeConnection: () => {},
+} as NWCContextInterface);
 
 export function SignerContextProvider({ children }: { children: ReactNode }) {
   const [isPassphraseRequested, setIsPassphraseRequested] = useState(false);
@@ -343,6 +381,224 @@ export function NostrContextProvider({ children }: { children: ReactNode }) {
       >
         {children}
       </NostrContext.Provider>
+    </>
+  );
+}
+
+export function NWCContextProvider({ children }: { children: ReactNode }) {
+  const router = useRouter();
+  const [isPassphraseRequested, setIsPassphraseRequested] = useState(false);
+  const [challengeResolver, setChallengeResolver] = useState<
+    ((res: any) => void) | undefined
+  >(undefined);
+  const [error, setError] = useState<Error | undefined>(undefined);
+  const [abort, setAbort] = useState<() => void>(() => {});
+  const [nwcString, setNWCString] = useState<string | null>(null);
+  const [legacyNWCString, setLegacyNWCString] = useState<string | null>(null);
+  const [nwcInfo, setNWCInfo] = useState<Record<string, any> | null>(null);
+  const [hasStoredConnection, setHasStoredConnection] = useState(false);
+  const [hasLegacyConnection, setHasLegacyConnection] = useState(false);
+  const rememberedPassphraseRef = useRef<string | undefined>(undefined);
+  const inputPassphraseRef = useRef<string | undefined>(undefined);
+  const inputPassphraseClearerRef = useRef<
+    ReturnType<typeof setTimeout> | undefined
+  >(undefined);
+
+  const clearPassphraseState = useCallback(() => {
+    rememberedPassphraseRef.current = undefined;
+    inputPassphraseRef.current = undefined;
+    if (inputPassphraseClearerRef.current) {
+      clearTimeout(inputPassphraseClearerRef.current);
+      inputPassphraseClearerRef.current = undefined;
+    }
+  }, []);
+
+  const registerSuccessfulPassphrase = useCallback(
+    (passphrase: string, remember: boolean) => {
+      if (remember) {
+        rememberedPassphraseRef.current = passphrase;
+      }
+
+      if (inputPassphraseClearerRef.current) {
+        clearTimeout(inputPassphraseClearerRef.current);
+      }
+
+      inputPassphraseRef.current = passphrase;
+      inputPassphraseClearerRef.current = setTimeout(() => {
+        inputPassphraseRef.current = undefined;
+        inputPassphraseClearerRef.current = undefined;
+      }, 5000);
+    },
+    []
+  );
+
+  const loadNWCState = useCallback(() => {
+    const {
+      nwcString: storedString,
+      legacyNWCString: storedLegacyString,
+      nwcInfo: storedInfo,
+      hasStoredNWCConnection,
+      hasLegacyNWCConnection,
+    } = getLocalStorageData();
+
+    setNWCString(storedString || null);
+    setLegacyNWCString(storedLegacyString || null);
+    setHasStoredConnection(Boolean(hasStoredNWCConnection));
+    setHasLegacyConnection(Boolean(hasLegacyNWCConnection));
+
+    if (!hasStoredNWCConnection && !hasLegacyNWCConnection) {
+      clearPassphraseState();
+    }
+
+    if (storedInfo) {
+      try {
+        setNWCInfo(JSON.parse(storedInfo));
+      } catch (e) {
+        console.error("Failed to parse saved NWC info", e);
+        setNWCInfo(null);
+      }
+    } else {
+      setNWCInfo(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleStorage = () => loadNWCState();
+    window.addEventListener("storage", handleStorage);
+    loadNWCState();
+
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+    };
+  }, [loadNWCState]);
+
+  const requestPassphrase = useCallback(
+    (
+      currentError?: Error
+    ): Promise<{ passphrase: string; remember: boolean }> => {
+      return new Promise((resolve, reject) => {
+        setError(currentError);
+        setAbort(() => () => reject(new Error("Action cancelled by user")));
+        setChallengeResolver(() => {
+          return async ({ res, remind }: { res: string; remind: boolean }) => {
+            resolve({ passphrase: res, remember: remind });
+          };
+        });
+        setIsPassphraseRequested(true);
+      });
+    },
+    []
+  );
+
+  const getPassphrase = useCallback(
+    async (currentError?: Error): Promise<[string, boolean]> => {
+      if (rememberedPassphraseRef.current) {
+        return [rememberedPassphraseRef.current, false];
+      }
+
+      if (inputPassphraseRef.current) {
+        return [inputPassphraseRef.current, false];
+      }
+
+      const { passphrase, remember } = await requestPassphrase(currentError);
+      return [passphrase || "", remember];
+    },
+    [requestPassphrase]
+  );
+
+  const ensureUnlocked = useCallback(async (): Promise<string> => {
+    if (nwcString) return nwcString;
+    if (!hasStoredConnection) {
+      throw new Error("NWC connection not found.");
+    }
+
+    let currentError: Error | undefined;
+
+    while (true) {
+      const [passphrase, remember] = await getPassphrase(currentError);
+      try {
+        const unlocked = unlockNWCString(passphrase);
+        registerSuccessfulPassphrase(passphrase, remember);
+        setError(undefined);
+        setIsPassphraseRequested(false);
+        loadNWCState();
+        return unlocked;
+      } catch (e) {
+        currentError = e as Error;
+        setError(currentError);
+      }
+    }
+  }, [
+    getPassphrase,
+    hasStoredConnection,
+    loadNWCState,
+    nwcString,
+    registerSuccessfulPassphrase,
+  ]);
+
+  const saveConnection = useCallback(
+    (rawNWCString: string, info: Record<string, any>, passphrase: string) => {
+      saveEncryptedNWCString(rawNWCString, passphrase);
+      saveNWCInfo(info);
+      loadNWCState();
+    },
+    [loadNWCState]
+  );
+
+  const lockConnection = useCallback(() => {
+    clearPassphraseState();
+    lockNWCConnection();
+    loadNWCState();
+  }, [clearPassphraseState, loadNWCState]);
+
+  const removeConnection = useCallback(() => {
+    clearPassphraseState();
+    clearNWCConnection();
+    setError(undefined);
+    setIsPassphraseRequested(false);
+    loadNWCState();
+  }, [clearPassphraseState, loadNWCState]);
+
+  useEffect(() => {
+    return () => {
+      clearPassphraseState();
+    };
+  }, [clearPassphraseState]);
+
+  return (
+    <>
+      <NWCContext.Provider
+        value={{
+          nwcString,
+          legacyNWCString,
+          nwcInfo,
+          hasStoredConnection,
+          hasLegacyConnection,
+          isUnlocked: Boolean(nwcString),
+          saveConnection,
+          ensureUnlocked,
+          lockConnection,
+          removeConnection,
+        }}
+      >
+        <PassphraseChallengeModal
+          actionOnSubmit={(passphrase: string, remind: boolean) => {
+            if (challengeResolver) {
+              challengeResolver({ res: passphrase, remind });
+            }
+          }}
+          actionOnCancel={() => {
+            if (abort) {
+              abort();
+            }
+          }}
+          error={error}
+          isOpen={isPassphraseRequested}
+          setIsOpen={setIsPassphraseRequested}
+          onCancelRouteTo={router.asPath}
+        />
+        {children}
+      </NWCContext.Provider>
     </>
   );
 }

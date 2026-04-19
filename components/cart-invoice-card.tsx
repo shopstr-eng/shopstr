@@ -75,6 +75,7 @@ import FailureModal from "@/components/utility-components/failure-modal";
 import CountryDropdown from "./utility-components/dropdowns/country-dropdown";
 import {
   NostrContext,
+  NWCContext,
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
 import {
@@ -128,6 +129,8 @@ export default function CartInvoiceCard({
   const profileContext = useContext(ProfileMapContext);
 
   const { nostr } = useContext(NostrContext);
+  const { nwcInfo, hasStoredConnection, ensureUnlocked } =
+    useContext(NWCContext);
 
   const [showInvoiceCard, setShowInvoiceCard] = useState(false);
 
@@ -416,8 +419,6 @@ export default function CartInvoiceCard({
 
   const [showFailureModal, setShowFailureModal] = useState(false);
 
-  // NWC State
-  const [nwcInfo, setNwcInfo] = useState<any | null>(null);
   const [isNwcLoading, setIsNwcLoading] = useState(false);
   const [failureText, setFailureText] = useState("");
 
@@ -478,28 +479,6 @@ export default function CartInvoiceCard({
         product.pickupLocations.length > 0
     );
   }, [products]);
-
-  // Load NWC info and check cart for NWC compatibility
-  useEffect(() => {
-    const loadNwcInfo = () => {
-      const { nwcInfo: infoString } = getLocalStorageData();
-      if (infoString) {
-        try {
-          const info = JSON.parse(infoString);
-          setNwcInfo(info);
-        } catch (e) {
-          console.error("Failed to parse NWC info", e);
-          setNwcInfo(null);
-        }
-      } else {
-        setNwcInfo(null);
-      }
-    };
-
-    loadNwcInfo();
-    window.addEventListener("storage", loadNwcInfo);
-    return () => window.removeEventListener("storage", loadNwcInfo);
-  }, [products, profileContext.profileData]);
 
   // Validate form completion
   useEffect(() => {
@@ -1061,7 +1040,7 @@ export default function CartInvoiceCard({
       });
       invoicePollRef.current = { cancelled: false, activeQuoteId: hash };
 
-      const { nwcString } = getLocalStorageData();
+      const nwcString = await ensureUnlocked?.();
       if (!nwcString) throw new Error("NWC connection not found.");
 
       nwc = new NostrWebLNProvider({ nostrWalletConnectUrl: nwcString });
@@ -3476,7 +3455,7 @@ export default function CartInvoiceCard({
                   )}
 
                   {/* NWC Button */}
-                  {nwcInfo && (
+                  {nwcInfo && hasStoredConnection && (
                     <Button
                       className={`${SHOPSTRBUTTONCLASSNAMES} w-full ${
                         !isFormValid ? "cursor-not-allowed opacity-50" : ""

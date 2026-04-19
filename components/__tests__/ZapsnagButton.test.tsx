@@ -3,6 +3,7 @@ import { render, screen, fireEvent, act } from "@testing-library/react";
 import ZapsnagButton from "../ZapsnagButton";
 import {
   NostrContext,
+  NWCContext,
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
 import * as nostrHelpers from "@/utils/nostr/nostr-helper-functions";
@@ -122,14 +123,21 @@ const renderComponent = (contextOverrides = {}) => {
       isLoggedIn: true,
       pubkey: "buyer-pubkey",
     },
+    nwcContext: {
+      nwcString: null,
+      hasStoredConnection: false,
+      ensureUnlocked: jest.fn(),
+    },
     ...contextOverrides,
   };
 
   return render(
     <NostrContext.Provider value={defaultContext.nostrContext as any}>
-      <SignerContext.Provider value={defaultContext.signerContext as any}>
-        <ZapsnagButton product={mockProduct} />
-      </SignerContext.Provider>
+      <NWCContext.Provider value={defaultContext.nwcContext as any}>
+        <SignerContext.Provider value={defaultContext.signerContext as any}>
+          <ZapsnagButton product={mockProduct} />
+        </SignerContext.Provider>
+      </NWCContext.Provider>
     </NostrContext.Provider>
   );
 };
@@ -356,7 +364,6 @@ describe("ZapsnagButton Component", () => {
 
   test("handles NWC connection if nwcString exists", async () => {
     (nostrHelpers.getLocalStorageData as jest.Mock).mockReturnValue({
-      nwcString: "nostr+walletconnect://...",
       relays: [],
     });
 
@@ -367,7 +374,15 @@ describe("ZapsnagButton Component", () => {
       },
     ]);
 
-    renderComponent();
+    renderComponent({
+      nwcContext: {
+        nwcString: "nostr+walletconnect://...",
+        hasStoredConnection: true,
+        ensureUnlocked: jest
+          .fn()
+          .mockResolvedValue("nostr+walletconnect://..."),
+      },
+    });
     fireEvent.click(screen.getByText(/Zap to Buy/i));
 
     fireEvent.change(screen.getByLabelText("Full Name"), {
