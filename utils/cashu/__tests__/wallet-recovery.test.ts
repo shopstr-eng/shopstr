@@ -6,15 +6,19 @@ import {
 } from "../wallet-recovery";
 
 jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
+  clearPendingIncomingProofs: jest.fn(),
   getLocalStorageData: jest.fn(() => ({ tokens: [], history: [] })),
   publishProofEvent: jest.fn(),
   setLocalCashuTokens: jest.fn(),
+  stagePendingIncomingProofs: jest.fn().mockResolvedValue("pending-proof-id"),
 }));
 
 const helpers = jest.requireMock("@/utils/nostr/nostr-helper-functions") as {
+  clearPendingIncomingProofs: jest.Mock;
   getLocalStorageData: jest.Mock;
   publishProofEvent: jest.Mock;
   setLocalCashuTokens: jest.Mock;
+  stagePendingIncomingProofs: jest.Mock;
 };
 
 const mkProof = (secret: string, amount = 10): Proof =>
@@ -31,8 +35,11 @@ describe("recoverProofsToBuyerWallet", () => {
     helpers.getLocalStorageData.mockReset();
     helpers.publishProofEvent.mockReset();
     helpers.setLocalCashuTokens.mockReset();
+    helpers.stagePendingIncomingProofs.mockReset();
+    helpers.clearPendingIncomingProofs.mockReset();
     helpers.getLocalStorageData.mockReturnValue({ tokens: [], history: [] });
-    helpers.publishProofEvent.mockResolvedValue(undefined);
+    helpers.publishProofEvent.mockResolvedValue(true);
+    helpers.stagePendingIncomingProofs.mockResolvedValue("pending-proof-id");
   });
 
   it("appends proofs to the active wallet and writes a history entry", async () => {
@@ -46,6 +53,9 @@ describe("recoverProofsToBuyerWallet", () => {
     );
 
     expect(helpers.setLocalCashuTokens).toHaveBeenCalledWith(proofs);
+    expect(helpers.clearPendingIncomingProofs).toHaveBeenCalledWith([
+      "pending-proof-id",
+    ]);
     expect(window.localStorage.getItem("tokens")).toBeNull();
 
     const history = JSON.parse(window.localStorage.getItem("history") ?? "[]");
@@ -71,7 +81,7 @@ describe("recoverProofsToBuyerWallet", () => {
   });
 
   it("does not throw when proof event publish fails", async () => {
-    helpers.publishProofEvent.mockRejectedValueOnce(new Error("relay down"));
+    helpers.publishProofEvent.mockResolvedValueOnce(false);
     await expect(
       recoverProofsToBuyerWallet(
         {} as never,
@@ -82,6 +92,7 @@ describe("recoverProofsToBuyerWallet", () => {
       )
     ).resolves.toBeUndefined();
     expect(helpers.setLocalCashuTokens).toHaveBeenCalledWith([mkProof("s1", 5)]);
+    expect(helpers.clearPendingIncomingProofs).not.toHaveBeenCalled();
   });
 
   it("no-ops on empty proof array", async () => {

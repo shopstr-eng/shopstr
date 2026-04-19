@@ -738,7 +738,7 @@ export async function publishProofEvent(
   direction: "in" | "out",
   amount: string,
   deletedEventsArray?: string[]
-) {
+): Promise<boolean> {
   try {
     const userPubkey = await signer?.getPubKey?.();
 
@@ -774,8 +774,9 @@ export async function publishProofEvent(
       signedEvent && signedEvent.id ? signedEvent.id : "",
       deletedEventsArray
     );
+    return true;
   } catch {
-    return;
+    return false;
   }
 }
 
@@ -1249,6 +1250,7 @@ const LOCALSTORAGECONSTANTS = {
   mints: "mints",
   blossomServers: "blossomServers",
   tokens: "tokens",
+  pendingIncomingProofs: "pendingIncomingProofs",
   history: "history",
   wot: "wot",
   clientPubkey: "clientPubkey",
@@ -1263,6 +1265,105 @@ const LOCALSTORAGECONSTANTS = {
 
 let runtimeCashuTokens: Proof[] = [];
 
+interface PendingIncomingProofPayload {
+  mint: string;
+  proofs: Proof[];
+  amount: string;
+}
+
+interface PendingIncomingProofRecord {
+  id: string;
+  encryptedPayload: string;
+  createdAt: number;
+}
+
+function isPendingIncomingProofRecord(
+  value: unknown
+): value is PendingIncomingProofRecord {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+
+  const candidate = value as {
+    id?: unknown;
+    encryptedPayload?: unknown;
+    createdAt?: unknown;
+  };
+
+  return (
+    typeof candidate.id === "string" &&
+    typeof candidate.encryptedPayload === "string" &&
+    typeof candidate.createdAt === "number"
+  );
+}
+
+function readPendingIncomingProofRecords(): PendingIncomingProofRecord[] {
+  if (typeof window === "undefined") {
+    return [];
+  }
+
+  const records = getLocalStorageJson<unknown[]>(
+    LOCALSTORAGECONSTANTS.pendingIncomingProofs,
+    [],
+    {
+      removeOnError: true,
+      validate: Array.isArray,
+    }
+  );
+
+  const validRecords = records.filter(isPendingIncomingProofRecord);
+  if (validRecords.length !== records.length) {
+    if (validRecords.length > 0) {
+      localStorage.setItem(
+        LOCALSTORAGECONSTANTS.pendingIncomingProofs,
+        JSON.stringify(validRecords)
+      );
+    } else {
+      localStorage.removeItem(LOCALSTORAGECONSTANTS.pendingIncomingProofs);
+    }
+  }
+
+  return validRecords;
+}
+
+function writePendingIncomingProofRecords(
+  records: PendingIncomingProofRecord[]
+): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  if (records.length === 0) {
+    localStorage.removeItem(LOCALSTORAGECONSTANTS.pendingIncomingProofs);
+    return;
+  }
+
+  localStorage.setItem(
+    LOCALSTORAGECONSTANTS.pendingIncomingProofs,
+    JSON.stringify(records)
+  );
+}
+
+function isPendingIncomingProofPayload(
+  value: unknown
+): value is PendingIncomingProofPayload {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+
+  const candidate = value as {
+    mint?: unknown;
+    proofs?: unknown;
+    amount?: unknown;
+  };
+
+  return (
+    typeof candidate.mint === "string" &&
+    Array.isArray(candidate.proofs) &&
+    typeof candidate.amount === "string"
+  );
+}
+
 export function setLocalCashuTokens(tokens: Proof[]): void {
   runtimeCashuTokens = [...tokens];
   if (typeof window === "undefined") {
@@ -1270,6 +1371,79 @@ export function setLocalCashuTokens(tokens: Proof[]): void {
   }
   localStorage.removeItem(LOCALSTORAGECONSTANTS.tokens);
   window.dispatchEvent(new Event("storage"));
+}
+
+export async function stagePendingIncomingProofs(
+  signer: NostrSigner,
+  mint: string,
+  proofs: Proof[],
+  amount: string
+): Promise<string> {
+  const userPubkey = await signer.getPubKey();
+  const encryptedPayload = await signer.encrypt(
+    userPubkey,
+    JSON.stringify({ mint, proofs, amount })
+  );
+  const record: PendingIncomingProofRecord = {
+    id: uuidv4(),
+    encryptedPayload,
+    createdAt: Date.now(),
+  };
+
+  const records = readPendingIncomingProofRecords();
+  records.push(record);
+  writePendingIncomingProofRecords(records);
+  return record.id;
+}
+
+export function clearPendingIncomingProofs(recordIds: string[]): void {
+  if (recordIds.length === 0) {
+    return;
+  }
+
+  const records = readPendingIncomingProofRecords();
+  writePendingIncomingProofRecords(
+    records.filter((record) => !recordIds.includes(record.id))
+  );
+}
+
+export async function readPendingIncomingProofs(
+  signer: NostrSigner
+): Promise<Array<PendingIncomingProofPayload & { id: string }>> {
+  const records = readPendingIncomingProofRecords();
+  if (records.length === 0) {
+    return [];
+  }
+
+  const userPubkey = await signer.getPubKey();
+  const pendingProofs: Array<PendingIncomingProofPayload & { id: string }> = [];
+
+  for (const record of records) {
+    try {
+      const decryptedPayload = await signer.decrypt(
+        userPubkey,
+        record.encryptedPayload
+      );
+      const parsedPayload = JSON.parse(decryptedPayload);
+      if (!isPendingIncomingProofPayload(parsedPayload)) {
+        continue;
+      }
+
+      pendingProofs.push({
+        id: record.id,
+        mint: parsedPayload.mint,
+        proofs: parsedPayload.proofs,
+        amount: parsedPayload.amount,
+      });
+    } catch (error) {
+      console.warn(
+        "[cashu-wallet] failed to decrypt pending incoming proofs:",
+        error
+      );
+    }
+  }
+
+  return pendingProofs;
 }
 
 export const setLocalStorageDataOnSignIn = ({

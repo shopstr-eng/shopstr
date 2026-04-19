@@ -16,11 +16,13 @@ import {
 import { useTheme } from "next-themes";
 import { ProfileMapContext, ChatsContext } from "../../utils/context/context";
 import {
+  clearPendingIncomingProofs,
   generateKeys,
   getLocalStorageData,
   publishProofEvent,
   publishWalletEvent,
   setLocalCashuTokens,
+  stagePendingIncomingProofs,
   constructGiftWrappedEvent,
   constructMessageSeal,
   constructMessageGiftWrap,
@@ -197,12 +199,10 @@ export default function ClaimButton({ token }: { token: string }) {
           setIsRedeeming(false);
           return;
         }
-        await publishProofEvent(
-          nostr!,
+        const pendingProofId = await stagePendingIncomingProofs(
           signer!,
           tokenMint,
           uniqueProofs,
-          "in",
           tokenAmount.toString()
         );
         const tokenArray = [...tokens, ...uniqueProofs];
@@ -229,6 +229,17 @@ export default function ClaimButton({ token }: { token: string }) {
             ...history,
           ])
         );
+        const publishSucceeded = await publishProofEvent(
+          nostr!,
+          signer!,
+          tokenMint,
+          uniqueProofs,
+          "in",
+          tokenAmount.toString()
+        );
+        if (publishSucceeded) {
+          clearPendingIncomingProofs([pendingProofId]);
+        }
       } else {
         setIsSpent(true);
         setIsRedeeming(false);

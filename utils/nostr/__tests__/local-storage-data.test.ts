@@ -1,10 +1,13 @@
 import {
+  clearPendingIncomingProofs,
   LogOut,
   getDefaultBlossomServer,
   getDefaultMint,
   getDefaultRelays,
   getLocalStorageData,
+  readPendingIncomingProofs,
   setLocalCashuTokens,
+  stagePendingIncomingProofs,
 } from "../nostr-helper-functions";
 
 describe("getLocalStorageData", () => {
@@ -94,6 +97,86 @@ describe("getLocalStorageData", () => {
       },
     ]);
     expect(localStorage.getItem("tokens")).toBeNull();
+  });
+
+  it("stages incoming proofs as encrypted pending records", async () => {
+    const signer = {
+      getPubKey: jest.fn().mockResolvedValue("pubkey"),
+      encrypt: jest.fn().mockResolvedValue("cipher-text"),
+      decrypt: jest.fn().mockResolvedValue(
+        JSON.stringify({
+          mint: "https://mint.example",
+          proofs: [
+            {
+              id: "00d0a1b24d1c1a53",
+              amount: 9,
+              secret: "secret-9",
+              C: "C9",
+            },
+          ],
+          amount: "9",
+        })
+      ),
+    } as any;
+
+    const pendingId = await stagePendingIncomingProofs(
+      signer,
+      "https://mint.example",
+      [
+        {
+          id: "00d0a1b24d1c1a53",
+          amount: 9,
+          secret: "secret-9",
+          C: "C9",
+        } as any,
+      ],
+      "9"
+    );
+
+    expect(localStorage.getItem("pendingIncomingProofs")).toContain(
+      "cipher-text"
+    );
+
+    const pendingProofs = await readPendingIncomingProofs(signer);
+    expect(pendingProofs).toEqual([
+      {
+        id: pendingId,
+        mint: "https://mint.example",
+        proofs: [
+          {
+            id: "00d0a1b24d1c1a53",
+            amount: 9,
+            secret: "secret-9",
+            C: "C9",
+          },
+        ],
+        amount: "9",
+      },
+    ]);
+  });
+
+  it("clears pending incoming proof records after sync", async () => {
+    const signer = {
+      getPubKey: jest.fn().mockResolvedValue("pubkey"),
+      encrypt: jest.fn().mockResolvedValue("cipher-text"),
+      decrypt: jest.fn().mockResolvedValue(
+        JSON.stringify({
+          mint: "https://mint.example",
+          proofs: [],
+          amount: "0",
+        })
+      ),
+    } as any;
+
+    const pendingId = await stagePendingIncomingProofs(
+      signer,
+      "https://mint.example",
+      [],
+      "0"
+    );
+    clearPendingIncomingProofs([pendingId]);
+
+    expect(localStorage.getItem("pendingIncomingProofs")).toBeNull();
   });
 
   it("removes legacy persisted cashu proofs on read", () => {

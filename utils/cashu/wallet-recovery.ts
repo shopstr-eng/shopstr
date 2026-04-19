@@ -1,8 +1,10 @@
 import { Proof } from "@cashu/cashu-ts";
 import {
+  clearPendingIncomingProofs,
   getLocalStorageData,
   publishProofEvent,
   setLocalCashuTokens,
+  stagePendingIncomingProofs,
 } from "@/utils/nostr/nostr-helper-functions";
 
 type Nostr = Parameters<typeof publishProofEvent>[0];
@@ -30,6 +32,12 @@ export async function recoverProofsToBuyerWallet(
   if (!proofs || proofs.length === 0) return;
 
   const { tokens, history } = getLocalStorageData();
+  const pendingProofId = await stagePendingIncomingProofs(
+    signer,
+    mintUrl,
+    proofs,
+    amount.toString()
+  );
   const proofArray = [...tokens, ...proofs];
   setLocalCashuTokens(proofArray);
   window.localStorage.setItem(
@@ -44,11 +52,10 @@ export async function recoverProofsToBuyerWallet(
     ])
   );
 
-  // Best-effort wallet event publish; the active session wallet is updated first and
-  // sendGiftWrappedMessageEvent / publishProofEvent already cache to DB first
-  // so durability does not depend on relay reachability here.
+  // Keep an encrypted pending-proof record until the wallet event is accepted,
+  // so a refresh can recover these proofs even if the publish step misses.
   try {
-    await publishProofEvent(
+    const publishSucceeded = await publishProofEvent(
       nostr,
       signer,
       mintUrl,
@@ -56,6 +63,9 @@ export async function recoverProofsToBuyerWallet(
       "in",
       amount.toString()
     );
+    if (publishSucceeded) {
+      clearPendingIncomingProofs([pendingProofId]);
+    }
   } catch (err) {
     console.warn(
       "[wallet-recovery] proof event publish failed; tokens are safe in the active session wallet:",
