@@ -34,6 +34,15 @@ function decodeBuyerPubkeyFromContent(content: string): string | null {
   }
 }
 
+function isDecodableNpub(value: string): boolean {
+  try {
+    const decoded = nip19.decode(value);
+    return decoded.type === "npub" && typeof decoded.data === "string";
+  } catch {
+    return false;
+  }
+}
+
 const ChatMessage = ({
   messageEvent,
   index = 0,
@@ -133,7 +142,7 @@ const ChatMessage = ({
       const subParts = part.split(/(\s+)/);
       return subParts.map((sub, subIndex) => {
         const npubMatch = sub.match(/npub[a-zA-Z0-9]+/);
-        if (npubMatch) {
+        if (npubMatch && isDecodableNpub(npubMatch[0])) {
           return (
             <span
               key={`${index}-${subIndex}`}

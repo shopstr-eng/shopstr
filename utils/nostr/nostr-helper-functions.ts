@@ -1641,9 +1641,15 @@ export const LogOut = () => {
   window.dispatchEvent(new Event("storage"));
 };
 
-export const decryptNpub = (npub: string) => {
-  const { data } = nip19.decode(npub);
-  return data;
+export const decryptNpub = (npub: string): string | null => {
+  try {
+    const decoded = nip19.decode(npub);
+    return decoded.type === "npub" && typeof decoded.data === "string"
+      ? decoded.data
+      : null;
+  } catch {
+    return null;
+  }
 };
 
 export function nostrExtensionLoaded() {
