@@ -22,8 +22,10 @@ import { NWCContext } from "@/components/utility-components/nostr-context-provid
 const NWCSettingsPage = () => {
   const {
     nwcString: unlockedNWCString,
+    legacyNWCString,
     nwcInfo: storedNWCInfo,
     hasStoredConnection,
+    hasLegacyConnection,
     isUnlocked,
     saveConnection,
     ensureUnlocked,
@@ -45,11 +47,20 @@ const NWCSettingsPage = () => {
       if (storedNWCInfo?.methods?.includes("get_balance")) {
         fetchBalance(unlockedNWCString);
       }
+    } else if (hasLegacyConnection && legacyNWCString) {
+      setNwcString(legacyNWCString);
+      setBalance(null);
     } else {
       setNwcString("");
       setBalance(null);
     }
-  }, [hasStoredConnection, storedNWCInfo, unlockedNWCString]);
+  }, [
+    hasLegacyConnection,
+    hasStoredConnection,
+    legacyNWCString,
+    storedNWCInfo,
+    unlockedNWCString,
+  ]);
 
   const fetchBalance = async (connectionString: string | null) => {
     if (!connectionString) return;
@@ -175,6 +186,17 @@ const NWCSettingsPage = () => {
               memory after you unlock it for the active session.
             </p>
 
+            {hasLegacyConnection && !hasStoredConnection && (
+              <div className="mb-4 flex items-center rounded border border-yellow-400 bg-yellow-100 p-3 text-yellow-800">
+                <ExclamationCircleIcon className="mr-2 h-5 w-5" />
+                <span className="text-sm">
+                  This wallet connection was saved before encrypted storage was
+                  added. Add a passphrase and save it again to migrate it
+                  securely.
+                </span>
+              </div>
+            )}
+
             <Input
               isClearable
               label="Nostr Wallet Connect String"
@@ -233,10 +255,14 @@ const NWCSettingsPage = () => {
                   isLoading={isLoading}
                 >
                   {isLoading
-                    ? "Connecting..."
+                    ? hasLegacyConnection && !hasStoredConnection
+                      ? "Migrating..."
+                      : "Connecting..."
                     : isSaved
                       ? "Saved!"
-                      : "Save Connection"}
+                      : hasLegacyConnection && !hasStoredConnection
+                        ? "Migrate Connection"
+                        : "Save Connection"}
                 </Button>
               )}
 

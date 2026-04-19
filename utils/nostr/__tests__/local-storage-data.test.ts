@@ -132,7 +132,7 @@ describe("getLocalStorageData", () => {
     expect(getLocalStorageData().nwcString).toBeNull();
   });
 
-  it("removes legacy persisted plaintext NWC data on read", () => {
+  it("preserves legacy persisted plaintext NWC data for migration", () => {
     localStorage.setItem(
       "nwcString",
       "nostr+walletconnect://wallet?relay=wss://relay&secret=legacysecret"
@@ -146,9 +146,54 @@ describe("getLocalStorageData", () => {
     const data = getLocalStorageData();
 
     expect(data.nwcString).toBeNull();
+    expect(data.legacyNWCString).toBe(
+      "nostr+walletconnect://wallet?relay=wss://relay&secret=legacysecret"
+    );
     expect(data.nwcInfo).toBe(
       JSON.stringify({ alias: "Legacy", methods: ["pay_invoice"] })
     );
+    expect(data.hasStoredNWCConnection).toBe(true);
+    expect(data.hasLegacyNWCConnection).toBe(false);
+    expect(localStorage.getItem("nwcString")).toBe(
+      "nostr+walletconnect://wallet?relay=wss://relay&secret=legacysecret"
+    );
+  });
+
+  it("flags an unmigrated legacy plaintext NWC connection without treating it as unlocked", () => {
+    localStorage.setItem(
+      "nwcString",
+      "nostr+walletconnect://wallet?relay=wss://relay&secret=legacysecret"
+    );
+    localStorage.setItem(
+      "nwcInfo",
+      JSON.stringify({ alias: "Legacy", methods: ["pay_invoice"] })
+    );
+
+    const data = getLocalStorageData();
+
+    expect(data.nwcString).toBeNull();
+    expect(data.legacyNWCString).toBe(
+      "nostr+walletconnect://wallet?relay=wss://relay&secret=legacysecret"
+    );
+    expect(data.hasStoredNWCConnection).toBe(false);
+    expect(data.hasLegacyNWCConnection).toBe(true);
+  });
+
+  it("removes the legacy plaintext NWC value once it is re-encrypted", () => {
+    localStorage.setItem(
+      "nwcString",
+      "nostr+walletconnect://wallet?relay=wss://relay&secret=legacysecret"
+    );
+
+    saveEncryptedNWCString(
+      "nostr+walletconnect://wallet?relay=wss://relay&secret=legacysecret",
+      "secret-passphrase"
+    );
+
+    const data = getLocalStorageData();
+
+    expect(data.legacyNWCString).toBeNull();
+    expect(data.hasLegacyNWCConnection).toBe(false);
     expect(data.hasStoredNWCConnection).toBe(true);
     expect(localStorage.getItem("nwcString")).toBeNull();
   });

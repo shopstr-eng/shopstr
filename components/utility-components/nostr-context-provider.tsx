@@ -57,8 +57,10 @@ interface NostrContextInterface {
 
 interface NWCContextInterface {
   nwcString?: string | null;
+  legacyNWCString?: string | null;
   nwcInfo?: Record<string, any> | null;
   hasStoredConnection?: boolean;
+  hasLegacyConnection?: boolean;
   isUnlocked?: boolean;
   saveConnection?: (
     nwcString: string,
@@ -76,8 +78,10 @@ export const NostrContext = createContext({
 
 export const NWCContext = createContext({
   nwcString: null,
+  legacyNWCString: null,
   nwcInfo: null,
   hasStoredConnection: false,
+  hasLegacyConnection: false,
   isUnlocked: false,
   saveConnection: () => {},
   ensureUnlocked: async () => "",
@@ -394,21 +398,27 @@ export function NWCContextProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<Error | undefined>(undefined);
   const [abort, setAbort] = useState<() => void>(() => {});
   const [nwcString, setNWCString] = useState<string | null>(null);
+  const [legacyNWCString, setLegacyNWCString] = useState<string | null>(null);
   const [nwcInfo, setNWCInfo] = useState<Record<string, any> | null>(null);
   const [hasStoredConnection, setHasStoredConnection] = useState(false);
+  const [hasLegacyConnection, setHasLegacyConnection] = useState(false);
   const passphraseSessionRef = useRef<PassphraseSession | null>(null);
 
   const loadNWCState = useCallback(() => {
     const {
       nwcString: storedString,
+      legacyNWCString: storedLegacyString,
       nwcInfo: storedInfo,
       hasStoredNWCConnection,
+      hasLegacyNWCConnection,
     } = getLocalStorageData();
 
     setNWCString(storedString || null);
+    setLegacyNWCString(storedLegacyString || null);
     setHasStoredConnection(Boolean(hasStoredNWCConnection));
+    setHasLegacyConnection(Boolean(hasLegacyNWCConnection));
 
-    if (!hasStoredNWCConnection) {
+    if (!hasStoredNWCConnection && !hasLegacyNWCConnection) {
       passphraseSessionRef.current?.clearAll();
     }
 
@@ -440,13 +450,7 @@ export function NWCContextProvider({ children }: { children: ReactNode }) {
         setError(currentError);
         setAbort(() => () => reject(new Error("Action cancelled by user")));
         setChallengeResolver(() => {
-          return async ({
-            res,
-            remind,
-          }: {
-            res: string;
-            remind: boolean;
-          }) => {
+          return async ({ res, remind }: { res: string; remind: boolean }) => {
             resolve({ passphrase: res, remember: remind });
           };
         });
@@ -522,8 +526,10 @@ export function NWCContextProvider({ children }: { children: ReactNode }) {
       <NWCContext.Provider
         value={{
           nwcString,
+          legacyNWCString,
           nwcInfo,
           hasStoredConnection,
+          hasLegacyConnection,
           isUnlocked: Boolean(nwcString),
           saveConnection,
           ensureUnlocked,

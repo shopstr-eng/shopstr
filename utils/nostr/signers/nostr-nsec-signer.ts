@@ -48,15 +48,12 @@ export class NostrNSecSigner implements NostrSigner {
         },
         abortController.signal,
         error
-      ).then(
-        ({ res, remind }) => {
-          resolve({
-            passphrase: res,
-            remember: remind,
-          });
-        },
-        reject
-      );
+      ).then(({ res, remind }) => {
+        resolve({
+          passphrase: res,
+          remember: remind,
+        });
+      }, reject);
     });
   }
 

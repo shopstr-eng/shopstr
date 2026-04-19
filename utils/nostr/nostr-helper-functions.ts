@@ -1264,11 +1264,14 @@ const LOCALSTORAGECONSTANTS = {
 
 let runtimeNWCString: string | null = null;
 
-function clearLegacyNWCString(): void {
+function getLegacyNWCString(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(LOCALSTORAGECONSTANTS.nwcString);
+}
+
+function removeLegacyNWCString(): void {
   if (typeof window === "undefined") return;
-  if (localStorage.getItem(LOCALSTORAGECONSTANTS.nwcString)) {
-    localStorage.removeItem(LOCALSTORAGECONSTANTS.nwcString);
-  }
+  localStorage.removeItem(LOCALSTORAGECONSTANTS.nwcString);
 }
 
 export const setLocalStorageDataOnSignIn = ({
@@ -1390,8 +1393,10 @@ export interface LocalStorageInterface {
     | { type: "nip46"; bunker: string; appPrivKey?: string }
     | { type: "nsec"; encryptedPrivKey: string; pubkey?: string };
   nwcString?: string | null;
+  legacyNWCString?: string | null;
   nwcInfo?: string | null;
   hasStoredNWCConnection?: boolean;
+  hasLegacyNWCConnection?: boolean;
   migrationComplete?: boolean;
 }
 
@@ -1454,8 +1459,10 @@ export const getLocalStorageData = (): LocalStorageInterface => {
   let signer: LocalStorageInterface["signer"] | undefined;
   let migrationComplete;
   let nwcString = runtimeNWCString;
+  let legacyNWCString = null;
   let nwcInfo = null;
   let hasStoredNWCConnection = false;
+  let hasLegacyNWCConnection = false;
 
   if (typeof window !== "undefined") {
     encryptedPrivateKey = localStorage.getItem(
@@ -1627,13 +1634,17 @@ export const getLocalStorageData = (): LocalStorageInterface => {
       }
     }
 
-    clearLegacyNWCString();
+    legacyNWCString = getLegacyNWCString();
     nwcInfo = localStorage.getItem(LOCALSTORAGECONSTANTS.nwcInfo)
       ? localStorage.getItem(LOCALSTORAGECONSTANTS.nwcInfo)
       : null;
     hasStoredNWCConnection = Boolean(
       localStorage.getItem(LOCALSTORAGECONSTANTS.encryptedNWCString)
     );
+    hasLegacyNWCConnection =
+      !hasStoredNWCConnection &&
+      typeof legacyNWCString === "string" &&
+      legacyNWCString.startsWith("nostr+walletconnect://");
 
     migrationComplete = localStorage.getItem("migrationComplete") === "true";
   }
@@ -1654,8 +1665,10 @@ export const getLocalStorageData = (): LocalStorageInterface => {
     bunkerSecret: bunkerSecret?.toString(),
     signer,
     nwcString,
+    legacyNWCString,
     nwcInfo: nwcInfo as string | null,
     hasStoredNWCConnection,
+    hasLegacyNWCConnection,
     migrationComplete: migrationComplete || false,
   };
 };
@@ -1766,7 +1779,7 @@ export const saveEncryptedNWCString = (
     passphrase
   ).toString();
   runtimeNWCString = nwcString;
-  clearLegacyNWCString();
+  removeLegacyNWCString();
   localStorage.setItem(
     LOCALSTORAGECONSTANTS.encryptedNWCString,
     encryptedNWCString
@@ -1797,10 +1810,9 @@ export const unlockNWCString = (passphrase: string): string => {
 
   let decrypted = "";
   try {
-    decrypted = CryptoJS.AES.decrypt(
-      encryptedNWCString,
-      passphrase
-    ).toString(CryptoJS.enc.Utf8);
+    decrypted = CryptoJS.AES.decrypt(encryptedNWCString, passphrase).toString(
+      CryptoJS.enc.Utf8
+    );
   } catch {
     throw new Error("Incorrect passphrase or invalid NWC connection.");
   }
@@ -1810,7 +1822,6 @@ export const unlockNWCString = (passphrase: string): string => {
   }
 
   runtimeNWCString = decrypted;
-  clearLegacyNWCString();
   window.dispatchEvent(new Event("storage"));
   return decrypted;
 };
@@ -1822,7 +1833,7 @@ export const lockNWCConnection = () => {
 
 export const clearNWCConnection = () => {
   runtimeNWCString = null;
-  clearLegacyNWCString();
+  removeLegacyNWCString();
   localStorage.removeItem(LOCALSTORAGECONSTANTS.encryptedNWCString);
   localStorage.removeItem(LOCALSTORAGECONSTANTS.nwcInfo);
   window.dispatchEvent(new Event("storage"));

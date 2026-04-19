@@ -378,9 +378,9 @@ describe("ZapsnagButton Component", () => {
       nwcContext: {
         nwcString: "nostr+walletconnect://...",
         hasStoredConnection: true,
-        ensureUnlocked: jest.fn().mockResolvedValue(
-          "nostr+walletconnect://..."
-        ),
+        ensureUnlocked: jest
+          .fn()
+          .mockResolvedValue("nostr+walletconnect://..."),
       },
     });
     fireEvent.click(screen.getByText(/Zap to Buy/i));

@@ -46,8 +46,11 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
   });
 
   const { nostr: nostrManager } = useContext(NostrContext);
-  const { nwcString: unlockedNWCString, hasStoredConnection, ensureUnlocked } =
-    useContext(NWCContext);
+  const {
+    nwcString: unlockedNWCString,
+    hasStoredConnection,
+    ensureUnlocked,
+  } = useContext(NWCContext);
   const { signer, isLoggedIn, pubkey: userPubkey } = useContext(SignerContext);
 
   useEffect(() => {
