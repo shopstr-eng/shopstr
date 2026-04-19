@@ -3,12 +3,15 @@ import {
   getDefaultMint,
   getDefaultRelays,
   getLocalStorageData,
+  saveNWCInfo,
+  saveNWCString,
 } from "../nostr-helper-functions";
 
 describe("getLocalStorageData", () => {
   beforeEach(() => {
     localStorage.clear();
     jest.restoreAllMocks();
+    saveNWCString("");
   });
 
   it("returns safe defaults for missing keys", () => {
@@ -69,5 +72,39 @@ describe("getLocalStorageData", () => {
       type: "nsec",
       encryptedPrivKey: "ncryptsec1mock",
     });
+  });
+
+  it("keeps NWC credentials in runtime memory instead of localStorage", () => {
+    saveNWCString("nostr+walletconnect://wallet?relay=wss://relay&secret=abcd");
+    saveNWCInfo({ alias: "Alby", methods: ["pay_invoice"] });
+
+    const data = getLocalStorageData();
+
+    expect(data.nwcString).toBe(
+      "nostr+walletconnect://wallet?relay=wss://relay&secret=abcd"
+    );
+    expect(data.nwcInfo).toBe(
+      JSON.stringify({ alias: "Alby", methods: ["pay_invoice"] })
+    );
+    expect(localStorage.getItem("nwcString")).toBeNull();
+    expect(localStorage.getItem("nwcInfo")).toBeNull();
+  });
+
+  it("removes legacy persisted NWC data on read", () => {
+    localStorage.setItem(
+      "nwcString",
+      "nostr+walletconnect://wallet?relay=wss://relay&secret=legacysecret"
+    );
+    localStorage.setItem(
+      "nwcInfo",
+      JSON.stringify({ alias: "Legacy", methods: ["pay_invoice"] })
+    );
+
+    const data = getLocalStorageData();
+
+    expect(data.nwcString).toBeNull();
+    expect(data.nwcInfo).toBeNull();
+    expect(localStorage.getItem("nwcString")).toBeNull();
+    expect(localStorage.getItem("nwcInfo")).toBeNull();
   });
 });
