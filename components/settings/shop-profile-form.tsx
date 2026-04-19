@@ -74,6 +74,7 @@ import FooterEditor from "./storefront/footer-editor";
 import PageEditor from "./storefront/page-editor";
 import StorefrontPreviewModal from "./storefront/storefront-preview-modal";
 import StorefrontPreviewPanel from "./storefront/storefront-preview-panel";
+import { sanitizeStorefrontConfigLinks } from "@/utils/storefront-links";
 
 interface ShopProfileFormProps {
   isOnboarding?: boolean;
@@ -757,7 +758,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
       transformedData.paymentMethodDiscounts = parsedDiscounts;
     }
     if (shopSlug) {
-      const storefrontConfig: StorefrontConfig = {
+      const storefrontConfig: StorefrontConfig = sanitizeStorefrontConfigLinks({
         colorScheme,
         productLayout,
         landingPageStyle,
@@ -786,7 +787,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
         showWalletPage: showWalletPage || undefined,
         emailPopup: emailPopup.enabled ? emailPopup : undefined,
         seoMeta: buildSeoMetaForSave(data),
-      };
+      });
       transformedData.storefront = storefrontConfig;
     }
 

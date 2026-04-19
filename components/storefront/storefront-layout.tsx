@@ -42,6 +42,10 @@ import StorefrontPolicyPage from "./storefront-policy-page";
 import StorefrontEmailPopupComponent from "./storefront-email-popup";
 import { POLICY_SLUGS, getDefaultPolicies } from "@/utils/storefront-policies";
 import { StorefrontPolicies } from "@/utils/types/types";
+import {
+  isExternalStorefrontHref,
+  sanitizeStorefrontNavHref,
+} from "@/utils/storefront-links";
 
 const DEFAULT_COLORS: StorefrontColorScheme = {
   primary: "#FFD23F",
@@ -313,13 +317,6 @@ export default function StorefrontLayout({
 
   const homeHref = shopSlug ? `/shop/${shopSlug}` : "/marketplace";
 
-  const resolveNavHref = (link: StorefrontNavLink) => {
-    if (link.isPage) return `/shop/${shopSlug}/${link.href}`;
-    if (link.href.startsWith("/") || link.href.startsWith("http"))
-      return link.href;
-    return `/shop/${shopSlug}/${link.href}`;
-  };
-
   const themedCss = `
     .sf-layout .bg-primary-yellow { background-color: var(--sf-primary) !important; }
     .sf-layout .bg-primary-blue { background-color: var(--sf-secondary) !important; }
@@ -451,18 +448,43 @@ export default function StorefrontLayout({
             {defaultNavLinks.length > 0 && (
               <div className="hidden items-center gap-1 lg:flex">
                 {defaultNavLinks.map((link, idx) => {
-                  const href = resolveNavHref(link);
+                  const href = sanitizeStorefrontNavHref(
+                    link,
+                    shopSlug,
+                    homeHref
+                  );
                   const isActive = currentPage
                     ? link.href === currentPage
                     : link.href === "" || link.href === "/";
+                  const linkStyle = {
+                    color: isActive ? navAccent : navText + "CC",
+                  };
+                  const linkClass =
+                    "rounded-md px-3 py-2 text-sm font-medium transition-colors";
+                  if (isExternalStorefrontHref(href)) {
+                    return (
+                      <a
+                        key={idx}
+                        href={href}
+                        target={href.startsWith("http") ? "_blank" : undefined}
+                        rel={
+                          href.startsWith("http")
+                            ? "noopener noreferrer"
+                            : undefined
+                        }
+                        className={linkClass}
+                        style={linkStyle}
+                      >
+                        {link.label}
+                      </a>
+                    );
+                  }
                   return (
                     <Link
                       key={idx}
                       href={href}
-                      className="rounded-md px-3 py-2 text-sm font-medium transition-colors"
-                      style={{
-                        color: isActive ? navAccent : navText + "CC",
-                      }}
+                      className={linkClass}
+                      style={linkStyle}
                     >
                       {link.label}
                     </Link>
@@ -543,13 +565,38 @@ export default function StorefrontLayout({
             >
               {defaultNavLinks.length > 0 &&
                 defaultNavLinks.map((link, idx) => {
-                  const href = resolveNavHref(link);
+                  const href = sanitizeStorefrontNavHref(
+                    link,
+                    shopSlug,
+                    homeHref
+                  );
+                  const mobileClass = "block px-6 py-3 text-sm font-medium";
+                  const mobileStyle = { color: navText + "CC" };
+                  if (isExternalStorefrontHref(href)) {
+                    return (
+                      <a
+                        key={idx}
+                        href={href}
+                        target={href.startsWith("http") ? "_blank" : undefined}
+                        rel={
+                          href.startsWith("http")
+                            ? "noopener noreferrer"
+                            : undefined
+                        }
+                        className={mobileClass}
+                        style={mobileStyle}
+                        onClick={() => setMobileMenuOpen(false)}
+                      >
+                        {link.label}
+                      </a>
+                    );
+                  }
                   return (
                     <Link
                       key={idx}
                       href={href}
-                      className="block px-6 py-3 text-sm font-medium"
-                      style={{ color: navText + "CC" }}
+                      className={mobileClass}
+                      style={mobileStyle}
                       onClick={() => setMobileMenuOpen(false)}
                     >
                       {link.label}

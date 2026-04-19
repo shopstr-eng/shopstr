@@ -10,6 +10,11 @@ import {
   POLICY_SLUGS,
   getDefaultPolicies,
 } from "@/utils/storefront-policies";
+import {
+  isExternalStorefrontHref,
+  sanitizeStorefrontNavHref,
+  sanitizeStorefrontSocialLink,
+} from "@/utils/storefront-links";
 
 interface StorefrontFooterProps {
   footer: StorefrontFooter;
@@ -87,9 +92,27 @@ export default function StorefrontFooterComponent({
           {navLinks.length > 0 && (
             <div className="flex flex-wrap justify-center gap-x-6 gap-y-2">
               {navLinks.map((link, idx) => {
-                const href = link.isPage
-                  ? `/shop/${shopSlug}/${link.href}`
-                  : link.href;
+                const href = sanitizeStorefrontNavHref(link, shopSlug);
+
+                if (isExternalStorefrontHref(href)) {
+                  return (
+                    <a
+                      key={idx}
+                      href={href}
+                      target={href.startsWith("http") ? "_blank" : undefined}
+                      rel={
+                        href.startsWith("http")
+                          ? "noopener noreferrer"
+                          : undefined
+                      }
+                      className="font-body text-sm opacity-60 transition-opacity hover:opacity-100"
+                      style={{ color: text }}
+                    >
+                      {link.label}
+                    </a>
+                  );
+                }
+
                 return (
                   <Link
                     key={idx}
@@ -106,32 +129,40 @@ export default function StorefrontFooterComponent({
 
           {socialLinks.length > 0 && (
             <div className="flex gap-4">
-              {socialLinks.map((social, idx) => (
-                <a
-                  key={idx}
-                  href={social.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex h-10 w-10 items-center justify-center rounded-full text-lg transition-transform hover:scale-110"
-                  style={{
-                    backgroundColor: accent + "22",
-                    color: accent,
-                  }}
-                  title={social.label || social.platform}
-                >
-                  {SOCIAL_IMAGE_ICONS[social.platform] ? (
-                    <img
-                      src={SOCIAL_IMAGE_ICONS[social.platform]}
-                      alt={social.label || social.platform}
-                      className="h-5 w-5 object-contain"
-                      loading="lazy"
-                    />
-                  ) : (
-                    SOCIAL_EMOJI_ICONS[social.platform] ||
-                    SOCIAL_EMOJI_ICONS.other
-                  )}
-                </a>
-              ))}
+              {socialLinks.map((social, idx) => {
+                const href = sanitizeStorefrontSocialLink(social.url);
+
+                return (
+                  <a
+                    key={idx}
+                    href={href}
+                    target={href.startsWith("http") ? "_blank" : undefined}
+                    rel={
+                      href.startsWith("http")
+                        ? "noopener noreferrer"
+                        : undefined
+                    }
+                    className="flex h-10 w-10 items-center justify-center rounded-full text-lg transition-transform hover:scale-110"
+                    style={{
+                      backgroundColor: accent + "22",
+                      color: accent,
+                    }}
+                    title={social.label || social.platform}
+                  >
+                    {SOCIAL_IMAGE_ICONS[social.platform] ? (
+                      <img
+                        src={SOCIAL_IMAGE_ICONS[social.platform]}
+                        alt={social.label || social.platform}
+                        className="h-5 w-5 object-contain"
+                        loading="lazy"
+                      />
+                    ) : (
+                      SOCIAL_EMOJI_ICONS[social.platform] ||
+                      SOCIAL_EMOJI_ICONS.other
+                    )}
+                  </a>
+                );
+              })}
             </div>
           )}
         </div>
