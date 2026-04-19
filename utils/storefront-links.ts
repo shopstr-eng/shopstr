@@ -11,14 +11,42 @@ import {
 const BLOCKED_URL = "about:blank";
 const ABSOLUTE_SCHEME_RE = /^[a-zA-Z][a-zA-Z\d+.-]*:/;
 const EXTERNAL_HREF_RE = /^(https?:|mailto:|tel:)/i;
+const SECTION_CTA_SCHEME_RE = /^https?:/i;
+const BLOCKED_SCHEME_RE = /^(javascript|vbscript|data|file|blob):/i;
+const STRIP_INVISIBLE_RE =
+  /[\u0000-\u001F\u007F-\u009F\u200B-\u200F\u2028\u2029\uFEFF\s]/g;
+
+function stripInvisible(value: string): string {
+  return value.replace(STRIP_INVISIBLE_RE, "");
+}
 
 function hasBlockedScheme(value: string): boolean {
-  return /^(javascript|vbscript|data|file):/i.test(value.trim());
+  return BLOCKED_SCHEME_RE.test(stripInvisible(value));
+}
+
+function safeSegment(segment: string): string {
+  if (!segment || segment === "." || segment === "..") return "";
+  try {
+    return encodeURIComponent(decodeURIComponent(segment));
+  } catch {
+    return encodeURIComponent(segment);
+  }
 }
 
 function normalizeRelativeShopPath(value: string, shopSlug: string): string {
-  const trimmed = value.trim().replace(/^\/+/, "");
-  return shopSlug ? `/shop/${shopSlug}/${trimmed}` : `/${trimmed}`;
+  const [pathPart, ...rest] = value.trim().split(/[?#]/);
+  const suffix = rest.length
+    ? value.slice(value.indexOf(pathPart) + pathPart.length)
+    : "";
+  const segments = pathPart
+    .replace(/^\/+/, "")
+    .split("/")
+    .map(safeSegment)
+    .filter(Boolean);
+  const safePath = segments.join("/");
+  const base = shopSlug ? `/shop/${shopSlug}` : "";
+  if (!safePath) return base || "/";
+  return `${base}/${safePath}${suffix}`;
 }
 
 export function sanitizeStorefrontHref(
@@ -32,6 +60,7 @@ export function sanitizeStorefrontHref(
 
   const sanitized = sanitizeUrl(trimmed);
   if (!sanitized || sanitized === BLOCKED_URL) return fallback;
+  if (hasBlockedScheme(sanitized)) return fallback;
 
   return sanitized;
 }
@@ -40,7 +69,16 @@ export function sanitizeStorefrontSectionLink(
   value: string | undefined,
   fallback = "#products"
 ): string {
-  return sanitizeStorefrontHref(value, fallback);
+  const trimmed = value?.trim();
+  if (!trimmed) return fallback;
+  if (trimmed.startsWith("#")) return trimmed;
+  if (trimmed.startsWith("/")) {
+    const sanitized = sanitizeStorefrontHref(trimmed, fallback);
+    return sanitized.startsWith("/") ? sanitized : fallback;
+  }
+  const cleaned = stripInvisible(trimmed);
+  if (!SECTION_CTA_SCHEME_RE.test(cleaned)) return fallback;
+  return sanitizeStorefrontHref(trimmed, fallback);
 }
 
 export function sanitizeStorefrontSocialLink(
@@ -61,15 +99,15 @@ export function sanitizeStorefrontNavHref(
   if (!trimmed) return safeFallback;
   if (link.isPage) return normalizeRelativeShopPath(trimmed, shopSlug);
   if (trimmed.startsWith("#")) return trimmed;
-  if (trimmed.startsWith("/")) return sanitizeStorefrontHref(trimmed, safeFallback);
-  if (ABSOLUTE_SCHEME_RE.test(trimmed)) {
+  if (trimmed.startsWith("/")) {
+    if (hasBlockedScheme(trimmed)) return safeFallback;
+    return sanitizeStorefrontHref(trimmed, safeFallback);
+  }
+  if (ABSOLUTE_SCHEME_RE.test(stripInvisible(trimmed))) {
     return sanitizeStorefrontHref(trimmed, safeFallback);
   }
 
-  return sanitizeStorefrontHref(
-    normalizeRelativeShopPath(trimmed, shopSlug),
-    safeFallback
-  );
+  return normalizeRelativeShopPath(trimmed, shopSlug);
 }
 
 export function isExternalStorefrontHref(href: string): boolean {
@@ -92,7 +130,10 @@ function sanitizePage(page: StorefrontPage): StorefrontPage {
   };
 }
 
-function sanitizeFooter(footer: StorefrontFooter, shopSlug: string): StorefrontFooter {
+function sanitizeFooter(
+  footer: StorefrontFooter,
+  shopSlug: string
+): StorefrontFooter {
   return {
     ...footer,
     socialLinks: footer.socialLinks?.map(

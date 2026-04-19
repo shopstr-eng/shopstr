@@ -422,7 +422,11 @@ export default function StorefrontLayout({
             {defaultNavLinks.length > 0 && (
               <div className="hidden items-center gap-1 lg:flex">
                 {defaultNavLinks.map((link, idx) => {
-                  const href = sanitizeStorefrontNavHref(link, shopSlug, homeHref);
+                  const href = sanitizeStorefrontNavHref(
+                    link,
+                    shopSlug,
+                    homeHref
+                  );
                   const isActive = currentPage
                     ? link.href === currentPage
                     : link.href === "" || link.href === "/";
@@ -534,7 +538,11 @@ export default function StorefrontLayout({
             >
               {defaultNavLinks.length > 0 &&
                 defaultNavLinks.map((link, idx) => {
-                  const href = sanitizeStorefrontNavHref(link, shopSlug, homeHref);
+                  const href = sanitizeStorefrontNavHref(
+                    link,
+                    shopSlug,
+                    homeHref
+                  );
                   const mobileClass = "block px-6 py-3 text-sm font-medium";
                   const mobileStyle = { color: navTextColor + "CC" };
                   if (isExternalStorefrontHref(href)) {
