@@ -130,6 +130,7 @@ describe("NostrNSecSigner", () => {
     const priv = await s._getPrivKey();
     expect(nip49.decrypt).toHaveBeenCalledWith(nip49Str, "passX");
     expect(priv).toEqual(new Uint8Array([0x0a, 0x0b, 0x0c]));
+    // caching behavior
     expect((s as any).rememberedPassphrase).toBe("passX");
     expect((s as any).inputPassphrase).toBe("passX");
   });

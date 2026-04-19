@@ -171,6 +171,7 @@ export class NostrNSecSigner implements NostrSigner {
           this.rememberedPassphrase = passphrase;
         }
 
+        // save input passphrase for few seconds, improve ux by not asking for passphrase again for multiple close actions
         if (this.inputPassphraseClearer)
           clearTimeout(this.inputPassphraseClearer);
         this.inputPassphraseClearer = setTimeout(() => {
