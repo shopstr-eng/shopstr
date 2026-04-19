@@ -20,6 +20,9 @@ import {
 import { getListingSlug } from "@/utils/url-slugs";
 import { productSatisfiesAllFilters } from "@/utils/parsers/product-filter-helpers";
 
+const BLOCKED_MARKETPLACE_SELLER =
+  "3da2082b7aa5b76a8f0c134deab3f7848c3b5e3a3079c65947d88422b69c1755";
+
 const DisplayProducts = ({
   focusedPubkey,
   selectedCategories,
@@ -60,6 +63,35 @@ const DisplayProducts = ({
   const { signer, pubkey: userPubkey } = useContext(SignerContext);
 
   const totalEvents = productEventContext?.totalEvents ?? 0;
+
+  const getServerFilters = (): FilterParams | null => {
+    if (wotFilter && followsContext.isLoading) {
+      return null;
+    }
+
+    let pubkeyFilter: string | string[] | undefined;
+    if (wotFilter) {
+      const followList = followsContext.followList ?? [];
+      pubkeyFilter = focusedPubkey
+        ? followList.includes(focusedPubkey)
+          ? focusedPubkey
+          : []
+        : followList;
+    } else if (focusedPubkey) {
+      pubkeyFilter = focusedPubkey;
+    }
+
+    return {
+      search: selectedSearch,
+      categories: Array.from(selectedCategories),
+      location: selectedLocation,
+      pubkey: pubkeyFilter,
+      excludePubkeys:
+        userPubkey === BLOCKED_MARKETPLACE_SELLER
+          ? undefined
+          : [BLOCKED_MARKETPLACE_SELLER],
+    };
+  };
 
   // Load saved page from session storage on mount
   useEffect(() => {
@@ -158,7 +190,7 @@ const DisplayProducts = ({
       if (product.contentWarning) return false;
       if (
         product.pubkey ===
-          "3da2082b7aa5b76a8f0c134deab3f7848c3b5e3a3079c65947d88422b69c1755" &&
+          BLOCKED_MARKETPLACE_SELLER &&
         userPubkey !== product.pubkey
       ) {
         return false;
@@ -210,13 +242,13 @@ const DisplayProducts = ({
   // Refresh products when filters change (server-side)
   useEffect(() => {
     if (!isInitialized) return;
+    const filters = getServerFilters();
+    if (!filters) return;
 
-    const filters: FilterParams = {
-      search: selectedSearch,
-      categories: Array.from(selectedCategories),
-      location: selectedLocation,
-      pubkey: focusedPubkey,
-    };
+    if (Array.isArray(filters.pubkey) && filters.pubkey.length === 0) {
+      productEventContext.setProductEvents([], 0);
+      return;
+    }
 
     productEventContext.refreshProducts(filters);
   }, [
@@ -225,9 +257,17 @@ const DisplayProducts = ({
     selectedLocation,
     focusedPubkey,
     isInitialized,
+    wotFilter,
+    followsContext.isLoading,
+    followsContext.followList,
+    userPubkey,
   ]);
 
   useEffect(() => {
+    const filters = getServerFilters();
+    if (!filters) return;
+    if (Array.isArray(filters.pubkey) && filters.pubkey.length === 0) return;
+
     const productsNeeded = currentPage * itemsPerPage;
     const totalOnServer = productEventContext.totalEvents;
     const hasMoreOnServer =
@@ -239,12 +279,6 @@ const DisplayProducts = ({
       hasMoreOnServer &&
       filteredProducts.length < productsNeeded
     ) {
-      const filters: FilterParams = {
-        search: selectedSearch,
-        categories: Array.from(selectedCategories),
-        location: selectedLocation,
-        pubkey: focusedPubkey,
-      };
       productEventContext.loadMoreProducts(filters);
     }
   }, [
@@ -258,6 +292,10 @@ const DisplayProducts = ({
     selectedCategories,
     selectedLocation,
     focusedPubkey,
+    wotFilter,
+    followsContext.isLoading,
+    followsContext.followList,
+    userPubkey,
   ]);
 
   // Scroll effect only on page change

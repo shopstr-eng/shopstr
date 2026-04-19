@@ -14,6 +14,16 @@ export const config = {
 // shared Postgres pool.
 const RATE_LIMIT = { limit: 600, windowMs: 60 * 1000 };
 
+function parseStringArrayParam(
+  value: string | string[] | undefined
+): string[] | undefined {
+  if (!value) return undefined;
+
+  const rawValues = Array.isArray(value) ? value : value.split(",");
+  const parsed = rawValues.map((entry) => entry.trim()).filter(Boolean);
+  return parsed.length > 0 ? parsed : undefined;
+}
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
@@ -34,6 +44,7 @@ export default async function handler(
       search,
       categories,
       location,
+      excludePubkeys,
     } = req.query;
 
     const limitNum = Math.min(
@@ -42,30 +53,34 @@ export default async function handler(
     );
     const offsetNum = Math.max(parseInt((offset as string) || "0", 10) || 0, 0);
 
-    // Parse categories if they come as a comma-separated string or array
-    let categoriesArray: string[] | undefined = undefined;
-    if (categories) {
-      categoriesArray = Array.isArray(categories)
-        ? categories
-        : (categories as string).split(",");
-    }
+    const categoriesArray = parseStringArrayParam(
+      categories as string | string[] | undefined
+    );
+    const pubkeys = parseStringArrayParam(pubkey as string | string[] | undefined);
+    const excludedPubkeys = parseStringArrayParam(
+      excludePubkeys as string | string[] | undefined
+    );
+    const pubkeyFilter =
+      pubkeys && pubkeys.length === 1 ? pubkeys[0] : pubkeys;
 
     const filters = {
       limit: limitNum,
       offset: offsetNum,
       until: until ? parseInt(until as string, 10) : undefined,
       since: since ? parseInt(since as string, 10) : undefined,
-      pubkey: pubkey as string | string[],
+      pubkey: pubkeyFilter,
       search: search as string,
       categories: categoriesArray,
       location: location as string,
+      excludePubkeys: excludedPubkeys,
     };
 
     const countFilters = {
-      pubkey: pubkey as string | string[],
+      pubkey: pubkeyFilter,
       search: search as string,
       categories: categoriesArray,
       location: location as string,
+      excludePubkeys: excludedPubkeys,
     };
 
     const [products, total] = await Promise.all([

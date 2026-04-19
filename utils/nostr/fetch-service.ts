@@ -50,6 +50,72 @@ function isHexString(value: string): boolean {
   return /^[0-9a-fA-F]{64}$/.test(value);
 }
 
+function appendFilterParam(
+  queryParams: URLSearchParams,
+  key: string,
+  value?: string | string[]
+) {
+  if (!value) return;
+  if (Array.isArray(value)) {
+    value.forEach((entry) => {
+      if (entry) {
+        queryParams.append(key, entry);
+      }
+    });
+    return;
+  }
+  queryParams.append(key, value);
+}
+
+function eventHasTag(
+  event: NostrEvent,
+  key: string,
+  value?: string | string[]
+): boolean {
+  return event.tags.some((tag: string[]) => {
+    if (tag[0] !== key) return false;
+    if (value === undefined) return true;
+    if (Array.isArray(value)) {
+      return value.includes(tag[1]);
+    }
+    return tag[1] === value;
+  });
+}
+
+function hasContentWarningTag(event: NostrEvent): boolean {
+  return event.tags.some((tag: string[]) => {
+    if (tag[0] === "content-warning") return true;
+    if (tag[0] === "L" && tag[1] === "content-warning") return true;
+    if (tag[0] === "l" && tag[2] === "content-warning") return true;
+    return false;
+  });
+}
+
+function isEligibleProductRelayEvent(
+  event: NostrEvent,
+  excludePubkeys: Set<string>
+): boolean {
+  if (!event.id || !event.sig || !event.pubkey) return false;
+  if (excludePubkeys.has(event.pubkey)) return false;
+
+  if (event.kind === 30402) {
+    return (
+      eventHasTag(event, "image") &&
+      eventHasTag(event, "price") &&
+      !hasContentWarningTag(event)
+    );
+  }
+
+  if (event.kind === 1) {
+    return (
+      eventHasTag(event, "image") &&
+      eventHasTag(event, "t", ["zapsnag", "shopstr-zapsnag"])
+    );
+  }
+
+  return false;
+}
+
 export const fetchAllPosts = async (
   nostr: NostrManager,
   relays: string[],
@@ -84,9 +150,12 @@ export const fetchAllPosts = async (
         if (filters?.location) {
           queryParams.append("location", filters.location);
         }
-        if (filters?.pubkey) {
-          queryParams.append("pubkey", filters.pubkey as string);
-        }
+        appendFilterParam(queryParams, "pubkey", filters?.pubkey);
+        appendFilterParam(
+          queryParams,
+          "excludePubkeys",
+          filters?.excludePubkeys
+        );
 
         const queryString = queryParams.toString();
         if (queryString) {
@@ -109,6 +178,16 @@ export const fetchAllPosts = async (
         console.error("Failed to fetch products from database: ", error);
       }
 
+      const requestedAuthors =
+        filters?.pubkey === undefined
+          ? undefined
+          : Array.isArray(filters.pubkey)
+            ? filters.pubkey
+            : [filters.pubkey];
+      const excludePubkeys = new Set(filters?.excludePubkeys ?? []);
+      const shouldFetchRelayEvents =
+        requestedAuthors === undefined || requestedAuthors.length > 0;
+
       // Now fetch from relays in parallel
       const filter30402: any = {
         kinds: [30402], // Listings
@@ -117,7 +196,7 @@ export const fetchAllPosts = async (
 
       const filter1: any = {
         kinds: [1], // Zapsnag notes
-        "#t": ["zapsnag"],
+        "#t": ["zapsnag", "shopstr-zapsnag"],
         limit: 500,
       };
 
@@ -131,29 +210,34 @@ export const fetchAllPosts = async (
       }
       if (filters?.categories && filters.categories.length > 0) {
         filter30402["#t"] = filters.categories;
-        // Don't append selected categories to Zapsnags since Nostr matches them with OR when using #t
       }
       if (filters?.location) {
         filter30402["#location"] = [filters.location];
         filter1["#location"] = [filters.location];
       }
-      if (filters?.pubkey) {
-        filter30402.authors = [filters.pubkey];
-        filter1.authors = [filters.pubkey];
+      if (requestedAuthors) {
+        filter30402.authors = requestedAuthors;
+        filter1.authors = requestedAuthors;
       }
       const profileSetFromProducts: Set<string> = new Set();
 
-      const queryFilters = filters?.categories?.length
-        ? [filter30402]
-        : [filter30402, filter1];
+      const shouldFetchZapsnags =
+        !filters?.categories?.length ||
+        filters.categories.some((category) =>
+          ["zapsnag", "shopstr-zapsnag"].includes(category)
+        );
+      const queryFilters = shouldFetchZapsnags
+        ? [filter30402, filter1]
+        : [filter30402];
 
-      const fetchedEvents = await nostr.fetch(queryFilters, {}, relays);
+      const fetchedEvents = shouldFetchRelayEvents
+        ? await nostr.fetch(queryFilters, {}, relays)
+        : [];
 
       // Cache ALL valid relay events (products + zapsnags) to the database
       // for future paginated queries. This is a background task.
       const validCacheEvents = fetchedEvents.filter(
-        (e: NostrEvent) =>
-          e.id && e.sig && e.pubkey && (e.kind === 30402 || e.kind === 1)
+        (e: NostrEvent) => isEligibleProductRelayEvent(e, excludePubkeys)
       );
       if (validCacheEvents.length > 0) {
         cacheEventsToDatabase(validCacheEvents).catch((error) =>
@@ -185,6 +269,7 @@ export const fetchAllPosts = async (
       // and merge the display set to show fresh relay data immediately.
       for (const event of fetchedEvents) {
         if (!event || !event.id) continue;
+        if (!isEligibleProductRelayEvent(event, excludePubkeys)) continue;
 
         // Always collect pubkeys for profile fetching
         profileSetFromProducts.add(event.pubkey);

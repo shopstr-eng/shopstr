@@ -78,7 +78,14 @@ function Shopstr({ props }: { props: AppProps }) {
       productEvents: [],
       totalEvents: 0,
       isLoading: true,
-      setProductEvents: (_events: NostrEvent[], _total?: number) => {},
+      setProductEvents: (events: NostrEvent[], total?: number) => {
+        setProductContext((productContext) => ({
+          ...productContext,
+          productEvents: events,
+          totalEvents: total ?? events.length,
+          isLoading: false,
+        }));
+      },
       loadMoreProducts: async () => {},
       refreshProducts: async () => {},
       addNewlyCreatedProductEvent: (productEvent: NostrEvent) => {

@@ -272,6 +272,7 @@ export interface FilterParams {
   categories?: string[];
   location?: string;
   pubkey?: string | string[];
+  excludePubkeys?: string[];
 }
 
 declare global {

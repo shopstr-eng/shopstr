@@ -1062,10 +1062,7 @@ export async function cachedEventsBelongToPubkey(
   }
 }
 
-// Fetch all products from database, returning only the latest version per
-// (pubkey, d-tag) so that updated or deleted-then-re-listed products never
-// show stale duplicates.
-export async function fetchAllProductsFromDb(filters?: {
+type ProductQueryFilters = {
   limit?: number;
   offset?: number;
   since?: number;
@@ -1074,71 +1071,134 @@ export async function fetchAllProductsFromDb(filters?: {
   search?: string;
   categories?: string[];
   location?: string;
-}): Promise<NostrEvent[]> {
+  excludePubkeys?: string[];
+};
+
+const PRODUCT_EVENTS_BASE_WHERE = `WHERE (
+  (
+    p.kind = 30402
+    AND EXISTS (
+      SELECT 1 FROM jsonb_array_elements(p.tags) AS t
+      WHERE t->>0 = 'image'
+    )
+    AND EXISTS (
+      SELECT 1 FROM jsonb_array_elements(p.tags) AS t
+      WHERE t->>0 = 'price'
+    )
+    AND NOT EXISTS (
+      SELECT 1 FROM jsonb_array_elements(p.tags) AS t
+      WHERE t->>0 = 'content-warning'
+    )
+    AND NOT EXISTS (
+      SELECT 1 FROM jsonb_array_elements(p.tags) AS t
+      WHERE t->>0 = 'L' AND t->>1 = 'content-warning'
+    )
+    AND NOT EXISTS (
+      SELECT 1 FROM jsonb_array_elements(p.tags) AS t
+      WHERE t->>0 = 'l' AND t->>2 = 'content-warning'
+    )
+  )
+  OR (
+    p.kind = 1
+    AND EXISTS (
+      SELECT 1 FROM jsonb_array_elements(p.tags) AS t
+      WHERE t->>0 = 'image'
+    )
+    AND EXISTS (
+      SELECT 1 FROM jsonb_array_elements(p.tags) AS t
+      WHERE t->>0 = 't' AND t->>1 IN ('zapsnag', 'shopstr-zapsnag')
+    )
+  )
+)`;
+
+function buildLatestProductFilters(
+  alias: string,
+  filters?: ProductQueryFilters
+): { whereClause: string; params: any[]; nextParamIndex: number } {
+  let whereClause = "WHERE 1=1";
+  const params: any[] = [];
+  let paramIndex = 1;
+
+  if (filters?.pubkey) {
+    if (Array.isArray(filters.pubkey)) {
+      whereClause += ` AND ${alias}.pubkey = ANY($${paramIndex++})`;
+      params.push(filters.pubkey);
+    } else {
+      whereClause += ` AND ${alias}.pubkey = $${paramIndex++}`;
+      params.push(filters.pubkey);
+    }
+  }
+
+  if (filters?.excludePubkeys && filters.excludePubkeys.length > 0) {
+    whereClause += ` AND NOT (${alias}.pubkey = ANY($${paramIndex++}))`;
+    params.push(filters.excludePubkeys);
+  }
+
+  if (filters?.since) {
+    whereClause += ` AND ${alias}.created_at >= $${paramIndex++}`;
+    params.push(filters.since);
+  }
+
+  if (filters?.until) {
+    whereClause += ` AND ${alias}.created_at <= $${paramIndex++}`;
+    params.push(filters.until);
+  }
+
+  if (filters?.search) {
+    whereClause += ` AND (${alias}.content ILIKE $${paramIndex} OR ${alias}.tags::text ILIKE $${paramIndex++})`;
+    params.push(`%${filters.search}%`);
+  }
+
+  if (filters?.categories && filters.categories.length > 0) {
+    whereClause += ` AND EXISTS (
+      SELECT 1 FROM jsonb_array_elements(${alias}.tags) AS t
+      WHERE t->>0 = 't' AND t->>1 = ANY($${paramIndex++})
+    )`;
+    params.push(filters.categories);
+  }
+
+  if (filters?.location) {
+    whereClause += ` AND EXISTS (
+      SELECT 1 FROM jsonb_array_elements(${alias}.tags) AS t
+      WHERE t->>0 = 'location' AND t->>1 ILIKE $${paramIndex++}
+    )`;
+    params.push(`%${filters.location}%`);
+  }
+
+  return { whereClause, params, nextParamIndex: paramIndex };
+}
+
+// Fetch all products from database, returning only the latest version per
+// (pubkey, d-tag) so that updated or deleted-then-re-listed products never
+// show stale duplicates.
+export async function fetchAllProductsFromDb(
+  filters?: ProductQueryFilters
+): Promise<NostrEvent[]> {
   const dbPool = getDbPool();
   let client;
 
   try {
+    if (Array.isArray(filters?.pubkey) && filters.pubkey.length === 0) {
+      return [];
+    }
+
     client = await dbPool.connect();
 
-    let whereClause =
-      "WHERE p.kind IN (30402, 1) AND EXISTS (SELECT 1 FROM jsonb_array_elements(p.tags) AS t WHERE t->>0 = 'image') AND EXISTS (SELECT 1 FROM jsonb_array_elements(p.tags) AS t WHERE t->>0 = 'price')";
-    const params: any[] = [];
-    let paramIndex = 1;
-
-    if (filters?.pubkey) {
-      if (Array.isArray(filters.pubkey)) {
-        whereClause += ` AND p.pubkey = ANY($${paramIndex++})`;
-        params.push(filters.pubkey);
-      } else {
-        whereClause += ` AND p.pubkey = $${paramIndex++}`;
-        params.push(filters.pubkey);
-      }
-    }
-
-    if (filters?.since) {
-      whereClause += ` AND p.created_at >= $${paramIndex++}`;
-      params.push(filters.since);
-    }
-
-    if (filters?.until) {
-      whereClause += ` AND p.created_at <= $${paramIndex++}`;
-      params.push(filters.until);
-    }
-
-    if (filters?.search) {
-      whereClause += ` AND (p.content ILIKE $${paramIndex} OR p.tags::text ILIKE $${paramIndex++})`;
-      params.push(`%${filters.search}%`);
-    }
-
-    if (filters?.categories && filters.categories.length > 0) {
-      whereClause += ` AND EXISTS (
-        SELECT 1 FROM jsonb_array_elements(p.tags) AS t
-        WHERE t->>0 = 't' AND t->>1 = ANY($${paramIndex++})
-      )`;
-      params.push(filters.categories);
-    }
-
-    if (filters?.location) {
-      whereClause += ` AND EXISTS (
-        SELECT 1 FROM jsonb_array_elements(p.tags) AS t
-        WHERE t->>0 = 'location' AND t->>1 ILIKE $${paramIndex++}
-      )`;
-      params.push(`%${filters.location}%`);
-    }
+    const { whereClause, params, nextParamIndex } = buildLatestProductFilters(
+      "latest_products",
+      filters
+    );
 
     const limit = filters?.limit ?? 500;
     const offset = filters?.offset ?? 0;
 
-    const limitIndex = paramIndex++;
+    const limitIndex = nextParamIndex;
     params.push(limit);
-    const offsetIndex = paramIndex++;
+    const offsetIndex = nextParamIndex + 1;
     params.push(offset);
 
     const result = await client.query(
-      `SELECT pe.id, pe.pubkey, pe.created_at, pe.kind,
-              pe.tags, pe.content, pe.sig
-       FROM (
+      `WITH latest_products AS (
          SELECT DISTINCT ON (p.pubkey, d.d_tag)
            p.id, p.pubkey, p.created_at, p.kind, p.tags, p.content, p.sig
          FROM product_events p,
@@ -1146,15 +1206,21 @@ export async function fetchAllProductsFromDb(filters?: {
            SELECT COALESCE(
              (SELECT elem->>'1'
               FROM jsonb_array_elements(p.tags) elem
-              WHERE elem->>'0' = 'd'
+             WHERE elem->>'0' = 'd'
               LIMIT 1),
              p.id
            ) AS d_tag
          ) d
-         ${whereClause}
+         ${PRODUCT_EVENTS_BASE_WHERE}
          ORDER BY p.pubkey, d.d_tag, p.created_at DESC
-       ) pe
-       ORDER BY pe.created_at DESC
+       )
+       SELECT latest_products.id, latest_products.pubkey,
+              latest_products.created_at, latest_products.kind,
+              latest_products.tags, latest_products.content,
+              latest_products.sig
+       FROM latest_products
+       ${whereClause}
+       ORDER BY latest_products.created_at DESC
        LIMIT $${limitIndex} OFFSET $${offsetIndex}`,
       params
     );
@@ -1178,70 +1244,28 @@ export async function fetchAllProductsFromDb(filters?: {
   }
 }
 
-export async function getEventCount(filters?: {
-  since?: number;
-  until?: number;
-  pubkey?: string | string[];
-  search?: string;
-  categories?: string[];
-  location?: string;
-}): Promise<number> {
+export async function getEventCount(
+  filters?: ProductQueryFilters
+): Promise<number> {
   const dbPool = getDbPool();
   let client;
 
   try {
+    if (Array.isArray(filters?.pubkey) && filters.pubkey.length === 0) {
+      return 0;
+    }
+
     client = await dbPool.connect();
 
-    let whereClause =
-      "WHERE p.kind IN (30402, 1) AND EXISTS (SELECT 1 FROM jsonb_array_elements(p.tags) AS t WHERE t->>0 = 'image') AND EXISTS (SELECT 1 FROM jsonb_array_elements(p.tags) AS t WHERE t->>0 = 'price')";
-    const params: any[] = [];
-    let paramIndex = 1;
-
-    if (filters?.pubkey) {
-      if (Array.isArray(filters.pubkey)) {
-        whereClause += ` AND p.pubkey = ANY($${paramIndex++})`;
-        params.push(filters.pubkey);
-      } else {
-        whereClause += ` AND p.pubkey = $${paramIndex++}`;
-        params.push(filters.pubkey);
-      }
-    }
-
-    if (filters?.since) {
-      whereClause += ` AND p.created_at >= $${paramIndex++}`;
-      params.push(filters.since);
-    }
-
-    if (filters?.until) {
-      whereClause += ` AND p.created_at <= $${paramIndex++}`;
-      params.push(filters.until);
-    }
-
-    if (filters?.search) {
-      whereClause += ` AND (p.content ILIKE $${paramIndex} OR p.tags::text ILIKE $${paramIndex++})`;
-      params.push(`%${filters.search}%`);
-    }
-
-    if (filters?.categories && filters.categories.length > 0) {
-      whereClause += ` AND EXISTS (
-        SELECT 1 FROM jsonb_array_elements(p.tags) AS t
-        WHERE t->>0 = 't' AND t->>1 = ANY($${paramIndex++})
-      )`;
-      params.push(filters.categories);
-    }
-
-    if (filters?.location) {
-      whereClause += ` AND EXISTS (
-        SELECT 1 FROM jsonb_array_elements(p.tags) AS t
-        WHERE t->>0 = 'location' AND t->>1 ILIKE $${paramIndex++}
-      )`;
-      params.push(`%${filters.location}%`);
-    }
+    const { whereClause, params } = buildLatestProductFilters(
+      "latest_products",
+      filters
+    );
 
     const result = await client.query(
-      `SELECT COUNT(*) FROM (
+      `WITH latest_products AS (
          SELECT DISTINCT ON (p.pubkey, d.d_tag)
-           p.id
+           p.id, p.pubkey, p.created_at, p.kind, p.tags, p.content, p.sig
          FROM product_events p,
          LATERAL (
            SELECT COALESCE(
@@ -1252,8 +1276,11 @@ export async function getEventCount(filters?: {
              p.id
            ) AS d_tag
          ) d
-         ${whereClause}
-       ) pe`,
+         ${PRODUCT_EVENTS_BASE_WHERE}
+         ORDER BY p.pubkey, d.d_tag, p.created_at DESC
+       )
+       SELECT COUNT(*) FROM latest_products
+       ${whereClause}`,
       params
     );
 
