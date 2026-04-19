@@ -163,6 +163,15 @@ export function buildDiscountCodesListProof(
   };
 }
 
+export function buildMessagesListProof(pubkey: string): SignedHttpRequestProof {
+  return {
+    action: "list_messages",
+    method: "GET",
+    path: "/api/db/fetch-messages",
+    pubkey,
+  };
+}
+
 export function buildDiscountCodeCreateProof({
   code,
   pubkey,

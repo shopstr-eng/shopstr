@@ -26,6 +26,11 @@ import { hashToCurve } from "@cashu/cashu-ts";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
 import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 import { cacheEventsToDatabase } from "@/utils/db/db-client";
+import {
+  buildMessagesListProof,
+  buildSignedHttpRequestProofTemplate,
+  SIGNED_EVENT_HEADER,
+} from "@/utils/nostr/request-auth";
 
 interface NipProfile {
   pubkey: string;
@@ -568,8 +573,22 @@ export const fetchGiftWrappedChatsAndMessages = async (
       const chatMessagesFromCache = new Map<string, NostrMessageEvent>();
 
       try {
+        const responseInit: RequestInit = {};
+
+        if (signer) {
+          const signedEvent = await signer.sign(
+            buildSignedHttpRequestProofTemplate(
+              buildMessagesListProof(userPubkey)
+            )
+          );
+          responseInit.headers = {
+            [SIGNED_EVENT_HEADER]: JSON.stringify(signedEvent),
+          };
+        }
+
         const response = await fetch(
-          `/api/db/fetch-messages?pubkey=${userPubkey}`
+          `/api/db/fetch-messages?pubkey=${userPubkey}`,
+          responseInit
         );
         if (response.ok) {
           const messagesFromDb = await response.json();
