@@ -34,10 +34,9 @@ function safeSegment(segment: string): string {
 }
 
 function normalizeRelativeShopPath(value: string, shopSlug: string): string {
-  const [pathPart, ...rest] = value.trim().split(/[?#]/);
-  const suffix = rest.length
-    ? value.slice(value.indexOf(pathPart) + pathPart.length)
-    : "";
+  const trimmed = value.trim();
+  const [pathPart = "", ...rest] = trimmed.split(/[?#]/);
+  const suffix = rest.length ? trimmed.slice(pathPart.length) : "";
   const segments = pathPart
     .replace(/^\/+/, "")
     .split("/")
