@@ -40,6 +40,7 @@ import SectionEditor from "./storefront/section-editor";
 import FooterEditor from "./storefront/footer-editor";
 import PageEditor from "./storefront/page-editor";
 import StorefrontPreviewModal from "./storefront/storefront-preview-modal";
+import { sanitizeStorefrontConfigLinks } from "@/utils/storefront-links";
 
 interface ShopProfileFormProps {
   isOnboarding?: boolean;
@@ -352,7 +353,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
       transformedData.freeShippingCurrency = freeShippingCurrency;
     }
     if (shopSlug) {
-      const storefrontConfig: StorefrontConfig = {
+      const storefrontConfig = sanitizeStorefrontConfigLinks({
         colorScheme: colors,
         productLayout,
         landingPageStyle,
@@ -367,7 +368,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
         showCommunityPage: showCommunityPage || undefined,
         showWalletPage: showWalletPage || undefined,
         contactEmail: contactEmail || undefined,
-      };
+      });
       transformedData.storefront = storefrontConfig;
     }
     await createNostrShopEvent(
@@ -500,22 +501,23 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
     }
   };
 
-  const buildStorefrontConfig = (): StorefrontConfig => ({
-    colorScheme: colors,
-    productLayout,
-    landingPageStyle,
-    shopSlug: shopSlug || undefined,
-    customDomain: customDomain || undefined,
-    fontHeading: fontHeading || undefined,
-    fontBody: fontBody || undefined,
-    sections: sections.length > 0 ? sections : undefined,
-    pages: pages.length > 0 ? pages : undefined,
-    footer,
-    navLinks: navLinks.length > 0 ? navLinks : undefined,
-    showCommunityPage: showCommunityPage || undefined,
-    showWalletPage: showWalletPage || undefined,
-    contactEmail: contactEmail || undefined,
-  });
+  const buildStorefrontConfig = (): StorefrontConfig =>
+    sanitizeStorefrontConfigLinks({
+      colorScheme: colors,
+      productLayout,
+      landingPageStyle,
+      shopSlug: shopSlug || undefined,
+      customDomain: customDomain || undefined,
+      fontHeading: fontHeading || undefined,
+      fontBody: fontBody || undefined,
+      sections: sections.length > 0 ? sections : undefined,
+      pages: pages.length > 0 ? pages : undefined,
+      footer,
+      navLinks: navLinks.length > 0 ? navLinks : undefined,
+      showCommunityPage: showCommunityPage || undefined,
+      showWalletPage: showWalletPage || undefined,
+      contactEmail: contactEmail || undefined,
+    });
 
   const saveStorefront = async () => {
     const newSf = buildStorefrontConfig();
