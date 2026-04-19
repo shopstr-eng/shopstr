@@ -100,6 +100,7 @@ const ApiKeysPage = () => {
     setIsCreating(true);
     setError(null);
     setCreatedKey(null);
+    setShowCreatedKey(false);
     try {
       const trimmedName = newKeyName.trim();
       const permissions = normalizeApiKeysPermission(newKeyPermission);
