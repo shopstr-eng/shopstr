@@ -236,6 +236,22 @@ describe("Messages Component", () => {
     });
   });
 
+  it("should ignore malformed pubkeys from router query", async () => {
+    mockRouter.query.pk = "broken_npub";
+    mockChatsContextValue.isLoading = false;
+    mockChatsContextValue.chatsMap = mockChatsMap;
+    mockNostrHelper.decryptNpub.mockReturnValue(null as any);
+
+    renderComponent();
+
+    await waitFor(() => {
+      expect(
+        screen.getByTestId(`chat-button-${mockChatPubkey1}`)
+      ).toBeInTheDocument();
+      expect(screen.queryByTestId("chat-button-null")).not.toBeInTheDocument();
+    });
+  });
+
   it("should send a gift-wrapped message successfully", async () => {
     mockChatsContextValue.isLoading = false;
     mockChatsContextValue.chatsMap = mockChatsMap;
