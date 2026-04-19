@@ -51,6 +51,7 @@ import {
   getLocalStorageData,
   publishProofEvent,
   generateKeys,
+  getSavedAddresses,
 } from "@/utils/nostr/nostr-helper-functions";
 import { LightningAddress } from "@getalby/lightning-tools";
 import QRCode from "qrcode";
@@ -64,11 +65,16 @@ import SignInModal from "./sign-in/SignInModal";
 import currencySelection from "../public/currencySelection.json";
 import FailureModal from "@/components/utility-components/failure-modal";
 import CountryDropdown from "./utility-components/dropdowns/country-dropdown";
+import AddressPicker from "./utility-components/address-picker";
 import {
   NostrContext,
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
-import { ShippingFormData, ContactFormData } from "@/utils/types/types";
+import {
+  ShippingFormData,
+  ContactFormData,
+  SavedAddress,
+} from "@/utils/types/types";
 import { Controller } from "react-hook-form";
 
 export default function ProductInvoiceCard({
@@ -182,6 +188,7 @@ export default function ProductInvoiceCard({
 
   const [formType, setFormType] = useState<"shipping" | "contact" | null>(null);
   const [showOrderTypeSelection, setShowOrderTypeSelection] = useState(true);
+  const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
 
   const sendInquiryDM = async (sellerPubkey: string, productTitle: string) => {
     if (!signer || !nostr || !userPubkey) return;
@@ -313,6 +320,7 @@ export default function ProductInvoiceCard({
     handleSubmit: handleFormSubmit,
     control: formControl,
     watch,
+    setValue,
   } = useForm();
 
   // Watch form values to validate completion
@@ -321,10 +329,18 @@ export default function ProductInvoiceCard({
     string | null
   >(null);
 
+  const normalizedShippingType = (productData.shippingType || "")
+    .toLowerCase()
+    .trim();
+  const supportsShipping =
+    normalizedShippingType.includes("free") ||
+    normalizedShippingType.includes("added cost") ||
+    (productData.shippingCost ?? 0) > 0;
+  const supportsPickup = normalizedShippingType.includes("pickup");
+
   // Check if product requires pickup location selection (pickup-type shipping with pickup locations defined)
   const requiresPickupLocation =
-    (productData.shippingType === "Pickup" ||
-      productData.shippingType === "Free/Pickup") &&
+    supportsPickup &&
     productData.pickupLocations &&
     productData.pickupLocations.length > 0;
 
@@ -367,6 +383,16 @@ export default function ProductInvoiceCard({
     window.addEventListener("storage", loadNwcInfo);
     return () => window.removeEventListener("storage", loadNwcInfo);
   }, [productData.pubkey, profileContext.profileData]);
+
+  // Load saved addresses on mount
+  useEffect(() => {
+    const loadSavedAddresses = () => {
+      setSavedAddresses(getSavedAddresses());
+    };
+    loadSavedAddresses();
+    window.addEventListener("storage", loadSavedAddresses);
+    return () => window.removeEventListener("storage", loadSavedAddresses);
+  }, []);
 
   // Validate form completion
   useEffect(() => {
@@ -731,6 +757,16 @@ export default function ProductInvoiceCard({
       // For contact orders, only set valid if no pickup location is required
       setIsFormValid(!requiresPickupLocation);
     }
+  };
+
+  const applySavedAddress = (addr: SavedAddress) => {
+    setValue("Name", addr.name);
+    setValue("Address", addr.address);
+    setValue("Unit", addr.unit);
+    setValue("City", addr.city);
+    setValue("State/Province", addr.state);
+    setValue("Postal Code", addr.zip);
+    setValue("Country", addr.country);
   };
 
   const handleNWCError = (error: any) => {
@@ -2007,13 +2043,45 @@ export default function ProductInvoiceCard({
           </div>
         );
       }
-      return null;
+      return (
+        <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm dark:border-gray-700 dark:bg-gray-800">
+          <h3 className="mb-2 text-base font-semibold">Pickup Details</h3>
+          <p className="text-gray-600 dark:text-gray-300">
+            This listing supports pickup, but no pickup locations were provided.
+            You can continue and coordinate pickup details with the seller after
+            payment.
+          </p>
+        </div>
+      );
     }
 
     return (
       <div className="space-y-4">
         {formType === "shipping" && (
           <>
+            <div className="mb-6">
+              <h3 className="mb-3 text-lg font-semibold">Saved Addresses</h3>
+              {savedAddresses.length > 0 ? (
+                <AddressPicker
+                  onSelect={applySavedAddress}
+                  forceExpanded={true}
+                  autoSelect={false}
+                  compact={true}
+                  allowInlineAdd={false}
+                  selectable={true}
+                />
+              ) : (
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  No saved addresses yet. You can continue with the form below
+                  for this order, or add one from Preferences to reuse later.
+                </p>
+              )}
+            </div>
+
+            <div className="my-4 border-t pt-4">
+              <h3 className="mb-3 text-lg font-semibold">Shipping Address</h3>
+            </div>
+
             <Controller
               name="Name"
               control={formControl}
@@ -2614,13 +2682,17 @@ export default function ProductInvoiceCard({
             <>
               <h2 className="mb-6 text-2xl font-bold">Select Order Type</h2>
               <div className="space-y-4">
-                {productData.shippingType === "Free/Pickup" ? (
+                {supportsShipping && supportsPickup ? (
                   <>
                     <button
                       onClick={() => handleOrderTypeSelection("shipping")}
                       className="w-full rounded-lg border border-gray-300 bg-white p-4 text-left hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:hover:bg-gray-600"
                     >
-                      <div className="font-medium">Free shipping</div>
+                      <div className="font-medium">
+                        {normalizedShippingType.includes("free")
+                          ? "Free shipping"
+                          : "Shipping"}
+                      </div>
                       <div className="text-sm text-gray-500 dark:text-gray-400">
                         Get it shipped to your address
                       </div>
@@ -2635,8 +2707,7 @@ export default function ProductInvoiceCard({
                       </div>
                     </button>
                   </>
-                ) : productData.shippingType === "Free" ||
-                  productData.shippingType === "Added Cost" ? (
+                ) : supportsShipping ? (
                   <button
                     onClick={() => handleOrderTypeSelection("shipping")}
                     className="w-full rounded-lg border border-gray-300 bg-white p-4 text-left hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:hover:bg-gray-600"

@@ -23,6 +23,7 @@ import {
   Select,
   SelectItem,
   Input,
+  Checkbox,
 } from "@heroui/react";
 import {
   BanknotesIcon,
@@ -57,10 +58,12 @@ import {
   constructGiftWrappedEvent,
   constructMessageSeal,
   constructMessageGiftWrap,
+  getSavedAddresses,
   sendGiftWrappedMessageEvent,
   generateKeys,
   getLocalStorageData,
   publishProofEvent,
+  saveAddress,
 } from "@/utils/nostr/nostr-helper-functions";
 import { LightningAddress } from "@getalby/lightning-tools";
 import QRCode from "qrcode";
@@ -73,6 +76,7 @@ import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import SignInModal from "./sign-in/SignInModal";
 import FailureModal from "@/components/utility-components/failure-modal";
 import CountryDropdown from "./utility-components/dropdowns/country-dropdown";
+import AddressPicker from "./utility-components/address-picker";
 import {
   NostrContext,
   SignerContext,
@@ -81,6 +85,7 @@ import {
   ShippingFormData,
   ContactFormData,
   CombinedFormData,
+  SavedAddress,
   ShopProfile,
 } from "@/utils/types/types";
 import { Controller } from "react-hook-form";
@@ -133,6 +138,12 @@ export default function CartInvoiceCard({
 
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
   const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
+  const [saveDetails, setSaveDetails] = useState(false);
+  const [saveAddressLabel, setSaveAddressLabel] = useState("");
+  const [selectedSavedAddressId, setSelectedSavedAddressId] = useState<
+    string | null
+  >(null);
+  const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
   const [invoice, setInvoice] = useState("");
   const [copiedToClipboard, setCopiedToClipboard] = useState(false);
 
@@ -436,6 +447,7 @@ export default function CartInvoiceCard({
     handleSubmit: handleFormSubmit,
     control: formControl,
     watch,
+    setValue,
   } = useForm();
 
   // Watch form values to validate completion
@@ -457,6 +469,13 @@ export default function CartInvoiceCard({
   }, [uniqueShippingTypes, hasShippingPickupProducts]);
 
   const [requiredInfo, setRequiredInfo] = useState("");
+  const defaultSavedAddress = useMemo(
+    () =>
+      savedAddresses.find((address) => address.isDefault) ||
+      savedAddresses[0] ||
+      null,
+    [savedAddresses]
+  );
 
   useEffect(() => {
     if (products && products.length > 0) {
@@ -467,6 +486,19 @@ export default function CartInvoiceCard({
       setRequiredInfo(requiredFields);
     }
   }, [products]);
+
+  useEffect(() => {
+    const loadSavedAddresses = () => {
+      setSavedAddresses(getSavedAddresses());
+    };
+
+    loadSavedAddresses();
+    window.addEventListener("storage", loadSavedAddresses);
+
+    return () => {
+      window.removeEventListener("storage", loadSavedAddresses);
+    };
+  }, []);
 
   // Check if any products have pickup locations
   const productsWithPickupLocations = useMemo(() => {
@@ -530,6 +562,7 @@ export default function CartInvoiceCard({
         watchedValues["Postal Code"]?.trim() &&
         watchedValues["State/Province"]?.trim() &&
         watchedValues.Country?.trim() &&
+        (!saveDetails || saveAddressLabel.trim()) &&
         (!requiredInfo || watchedValues.Required?.trim()) &&
         pickupLocationValid
       );
@@ -543,6 +576,7 @@ export default function CartInvoiceCard({
         watchedValues["Postal Code"]?.trim() &&
         watchedValues["State/Province"]?.trim() &&
         watchedValues.Country?.trim() &&
+        (!saveDetails || saveAddressLabel.trim()) &&
         (!requiredInfo || watchedValues.Required?.trim()) &&
         pickupLocationValid
       );
@@ -555,6 +589,8 @@ export default function CartInvoiceCard({
     requiredInfo,
     productsWithPickupLocations,
     shippingPickupPreference,
+    saveDetails,
+    saveAddressLabel,
   ]);
 
   const generateNewKeys = async () => {
@@ -854,7 +890,6 @@ export default function CartInvoiceCard({
       if (price < 1) {
         throw new Error("Total price is less than 1 sat.");
       }
-
       const commonData = {
         additionalInfo: data["Required"],
       };
@@ -883,6 +918,26 @@ export default function CartInvoiceCard({
           shippingState: data["State/Province"],
           shippingCountry: data["Country"],
         };
+      }
+
+      if (
+        saveDetails &&
+        (formType === "shipping" || formType === "combined") &&
+        paymentData.shippingName &&
+        paymentData.shippingAddress
+      ) {
+        saveAddress({
+          id: selectedSavedAddressId || undefined,
+          name: paymentData.shippingName,
+          address: paymentData.shippingAddress,
+          unit: paymentData.shippingUnitNo || "",
+          city: paymentData.shippingCity,
+          state: paymentData.shippingState,
+          zip: paymentData.shippingPostalCode,
+          country: paymentData.shippingCountry,
+          label: saveAddressLabel.trim(),
+          isDefault: false,
+        });
       }
 
       const addressTag =
@@ -2443,6 +2498,39 @@ export default function CartInvoiceCard({
     }
   };
 
+  const applySavedAddress = (addr: SavedAddress) => {
+    setSelectedSavedAddressId(addr.id);
+    setSaveAddressLabel(addr.label);
+    setValue("Name", addr.name, {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
+    setValue("Address", addr.address, {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
+    setValue("Unit", addr.unit || "", {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
+    setValue("City", addr.city, {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
+    setValue("State/Province", addr.state, {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
+    setValue("Postal Code", addr.zip, {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
+    setValue("Country", addr.country, {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
+  };
+
   const renderContactForm = () => {
     if (!formType) return null;
 
@@ -2454,6 +2542,12 @@ export default function CartInvoiceCard({
       <div className="space-y-4">
         {(formType === "shipping" || formType === "combined") && (
           <>
+            <AddressPicker
+              autoSelect={false}
+              compact
+              allowInlineAdd={false}
+              onSelect={applySavedAddress}
+            />
             <Controller
               name="Name"
               control={formControl}
@@ -2666,6 +2760,48 @@ export default function CartInvoiceCard({
                 )}
               />
             </div>
+
+            <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <Checkbox
+                isSelected={saveDetails}
+                onValueChange={setSaveDetails}
+                classNames={{
+                  base: "mt-0",
+                  label: "text-sm",
+                }}
+              >
+                Save this address for future use
+              </Checkbox>
+
+              <Button
+                size="sm"
+                variant="flat"
+                onClick={() => {
+                  if (defaultSavedAddress) {
+                    applySavedAddress(defaultSavedAddress);
+                  }
+                }}
+                isDisabled={!defaultSavedAddress}
+              >
+                Use default address
+              </Button>
+            </div>
+
+            {saveDetails && (
+              <Input
+                variant="bordered"
+                fullWidth={true}
+                label={
+                  <span>
+                    Save address as <span className="text-red-500">*</span>
+                  </span>
+                }
+                labelPlacement="inside"
+                placeholder="e.g. Home, Office"
+                value={saveAddressLabel}
+                onChange={(e) => setSaveAddressLabel(e.target.value)}
+              />
+            )}
           </>
         )}
 
