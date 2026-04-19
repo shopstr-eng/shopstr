@@ -20,6 +20,7 @@ import {
 import {
   getLocalStorageData,
   publishProofEvent,
+  setLocalCashuTokens,
 } from "@/utils/nostr/nostr-helper-functions";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
@@ -169,7 +170,7 @@ const PayButton = () => {
             ) || !send.some((s) => s.secret === p.secret)
         ) as Proof[];
         const quarantineProofArray = [...remainingProofsAfterMelt, ...keep];
-        localStorage.setItem("tokens", JSON.stringify(quarantineProofArray));
+        setLocalCashuTokens(quarantineProofArray);
         throw new Error(meltOutcome.errorMessage ?? "Melt outcome ambiguous");
       }
       const changeProofs = [...keep, ...meltOutcome.changeProofs];
@@ -190,7 +191,7 @@ const PayButton = () => {
       } else {
         proofArray = [...remainingProofs];
       }
-      localStorage.setItem("tokens", JSON.stringify(proofArray));
+      setLocalCashuTokens(proofArray);
       const filteredTokenAmount = filteredProofs.reduce(
         (acc, token: Proof) => acc + token.amount.toNumber(),
         0

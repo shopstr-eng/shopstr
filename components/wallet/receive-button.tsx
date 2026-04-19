@@ -17,9 +17,12 @@ import {
 } from "@heroui/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
+  clearPendingIncomingProofs,
   getLocalStorageData,
   publishProofEvent,
   publishWalletEvent,
+  setLocalCashuTokens,
+  stagePendingIncomingProofs,
 } from "@/utils/nostr/nostr-helper-functions";
 import {
   Mint as CashuMint,
@@ -89,8 +92,18 @@ const ReceiveButton = () => {
           setIsDuplicateToken(true);
           return;
         }
+        const transactionAmount = tokenProofs.reduce(
+          (acc, token: Proof) => acc + token.amount.toNumber(),
+          0
+        );
+        const pendingProofId = await stagePendingIncomingProofs(
+          signer!,
+          tokenMint,
+          uniqueProofs,
+          transactionAmount.toString()
+        );
         const tokenArray = [...tokens, ...uniqueProofs];
-        localStorage.setItem("tokens", JSON.stringify(tokenArray));
+        setLocalCashuTokens(tokenArray);
         if (!mints.includes(tokenMint)) {
           const updatedMints = [...mints, tokenMint];
           localStorage.setItem("mints", JSON.stringify(updatedMints));
@@ -98,10 +111,6 @@ const ReceiveButton = () => {
         }
         setIsClaimed(true);
         handleToggleReceiveModal();
-        const transactionAmount = tokenProofs.reduce(
-          (acc, token: Proof) => acc + token.amount.toNumber(),
-          0
-        );
         localStorage.setItem(
           "history",
           JSON.stringify([
@@ -113,7 +122,7 @@ const ReceiveButton = () => {
             ...history,
           ])
         );
-        await publishProofEvent(
+        const publishSucceeded = await publishProofEvent(
           nostr!,
           signer!,
           tokenMint,
@@ -121,6 +130,9 @@ const ReceiveButton = () => {
           "in",
           transactionAmount.toString()
         );
+        if (publishSucceeded) {
+          clearPendingIncomingProofs([pendingProofId]);
+        }
       } else {
         setIsSpent(true);
       }

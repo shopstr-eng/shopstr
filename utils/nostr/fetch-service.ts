@@ -12,8 +12,11 @@ import {
 } from "@cashu/cashu-ts";
 import { ChatsMap } from "@/utils/context/context";
 import {
+  clearPendingIncomingProofs,
   getLocalStorageData,
   deleteEvent,
+  publishProofEvent,
+  readPendingIncomingProofs,
   verifyNip05Identifier,
 } from "@/utils/nostr/nostr-helper-functions";
 import {
@@ -1325,6 +1328,9 @@ export const fetchCashuWallet = async (
       const cashuMintSet: Set<string> = new Set();
       let cashuProofs: Proof[] = [...tokens]; // Start with existing tokens
       const incomingSpendingHistory: [][] = [];
+      const pendingIncomingProofs = signer
+        ? await readPendingIncomingProofs(signer)
+        : [];
 
       // Load wallet events from database first
       try {
@@ -1727,6 +1733,36 @@ export const fetchCashuWallet = async (
 
       // Final deduplication
       cashuProofs = getUniqueProofs(cashuProofs);
+
+      for (const pendingProof of pendingIncomingProofs) {
+        cashuProofs = getUniqueProofs([
+          ...cashuProofs,
+          ...pendingProof.proofs,
+        ]);
+        if (!cashuMintSet.has(pendingProof.mint)) {
+          cashuMintSet.add(pendingProof.mint);
+          cashuMints.push(pendingProof.mint);
+        }
+      }
+
+      const replayedPendingProofIds: string[] = [];
+      for (const pendingProof of pendingIncomingProofs) {
+        const publishSucceeded = await publishProofEvent(
+          nostr,
+          signer!,
+          pendingProof.mint,
+          pendingProof.proofs,
+          "in",
+          pendingProof.amount
+        );
+        if (publishSucceeded) {
+          replayedPendingProofIds.push(pendingProof.id);
+        }
+      }
+
+      if (replayedPendingProofIds.length > 0) {
+        clearPendingIncomingProofs(replayedPendingProofIds);
+      }
 
       editCashuWalletContext(proofEvents, cashuMints, cashuProofs, false);
 

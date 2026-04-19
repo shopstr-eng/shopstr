@@ -25,6 +25,7 @@ import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
   getLocalStorageData,
   publishProofEvent,
+  setLocalCashuTokens,
 } from "@/utils/nostr/nostr-helper-functions";
 import {
   Mint as CashuMint,
@@ -147,7 +148,7 @@ const SendButton = () => {
       } else {
         proofArray = [...remainingProofs];
       }
-      localStorage.setItem("tokens", JSON.stringify(proofArray));
+      setLocalCashuTokens(proofArray);
       localStorage.setItem(
         "history",
         JSON.stringify([
