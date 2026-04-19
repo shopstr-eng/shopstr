@@ -26,10 +26,6 @@ import AuthUrlChallengeModal from "@/components/utility-components/auth-challeng
 import { NostrNIP07Signer } from "@/utils/nostr/signers/nostr-nip07-signer";
 import { NostrNIP46Signer } from "@/utils/nostr/signers/nostr-nip46-signer";
 import { NostrNSecSigner } from "@/utils/nostr/signers/nostr-nsec-signer";
-import {
-  PassphrasePromptResult,
-  PassphraseSession,
-} from "@/utils/nostr/signers/passphrase-session";
 import { needsMigration } from "@/utils/nostr/encryption-migration";
 import MigrationPromptModal from "./migration-prompt-modal";
 
@@ -402,7 +398,39 @@ export function NWCContextProvider({ children }: { children: ReactNode }) {
   const [nwcInfo, setNWCInfo] = useState<Record<string, any> | null>(null);
   const [hasStoredConnection, setHasStoredConnection] = useState(false);
   const [hasLegacyConnection, setHasLegacyConnection] = useState(false);
-  const passphraseSessionRef = useRef<PassphraseSession | null>(null);
+  const rememberedPassphraseRef = useRef<string | undefined>(undefined);
+  const inputPassphraseRef = useRef<string | undefined>(undefined);
+  const inputPassphraseClearerRef = useRef<
+    ReturnType<typeof setTimeout> | undefined
+  >(undefined);
+
+  const clearPassphraseState = useCallback(() => {
+    rememberedPassphraseRef.current = undefined;
+    inputPassphraseRef.current = undefined;
+    if (inputPassphraseClearerRef.current) {
+      clearTimeout(inputPassphraseClearerRef.current);
+      inputPassphraseClearerRef.current = undefined;
+    }
+  }, []);
+
+  const registerSuccessfulPassphrase = useCallback(
+    (passphrase: string, remember: boolean) => {
+      if (remember) {
+        rememberedPassphraseRef.current = passphrase;
+      }
+
+      if (inputPassphraseClearerRef.current) {
+        clearTimeout(inputPassphraseClearerRef.current);
+      }
+
+      inputPassphraseRef.current = passphrase;
+      inputPassphraseClearerRef.current = setTimeout(() => {
+        inputPassphraseRef.current = undefined;
+        inputPassphraseClearerRef.current = undefined;
+      }, 5000);
+    },
+    []
+  );
 
   const loadNWCState = useCallback(() => {
     const {
@@ -419,7 +447,7 @@ export function NWCContextProvider({ children }: { children: ReactNode }) {
     setHasLegacyConnection(Boolean(hasLegacyNWCConnection));
 
     if (!hasStoredNWCConnection && !hasLegacyNWCConnection) {
-      passphraseSessionRef.current?.clearAll();
+      clearPassphraseState();
     }
 
     if (storedInfo) {
@@ -445,7 +473,9 @@ export function NWCContextProvider({ children }: { children: ReactNode }) {
   }, [loadNWCState]);
 
   const requestPassphrase = useCallback(
-    (currentError?: Error): Promise<PassphrasePromptResult> => {
+    (
+      currentError?: Error
+    ): Promise<{ passphrase: string; remember: boolean }> => {
       return new Promise((resolve, reject) => {
         setError(currentError);
         setAbort(() => () => reject(new Error("Action cancelled by user")));
@@ -460,9 +490,21 @@ export function NWCContextProvider({ children }: { children: ReactNode }) {
     []
   );
 
-  if (!passphraseSessionRef.current) {
-    passphraseSessionRef.current = new PassphraseSession(requestPassphrase);
-  }
+  const getPassphrase = useCallback(
+    async (currentError?: Error): Promise<[string, boolean]> => {
+      if (rememberedPassphraseRef.current) {
+        return [rememberedPassphraseRef.current, false];
+      }
+
+      if (inputPassphraseRef.current) {
+        return [inputPassphraseRef.current, false];
+      }
+
+      const { passphrase, remember } = await requestPassphrase(currentError);
+      return [passphrase || "", remember];
+    },
+    [requestPassphrase]
+  );
 
   const ensureUnlocked = useCallback(async (): Promise<string> => {
     if (nwcString) return nwcString;
@@ -473,14 +515,10 @@ export function NWCContextProvider({ children }: { children: ReactNode }) {
     let currentError: Error | undefined;
 
     while (true) {
-      const [passphrase, remember] =
-        await passphraseSessionRef.current!.getPassphrase(currentError);
+      const [passphrase, remember] = await getPassphrase(currentError);
       try {
         const unlocked = unlockNWCString(passphrase);
-        passphraseSessionRef.current!.registerSuccessfulPassphrase(
-          passphrase,
-          remember
-        );
+        registerSuccessfulPassphrase(passphrase, remember);
         setError(undefined);
         setIsPassphraseRequested(false);
         loadNWCState();
@@ -490,7 +528,13 @@ export function NWCContextProvider({ children }: { children: ReactNode }) {
         setError(currentError);
       }
     }
-  }, [hasStoredConnection, loadNWCState, nwcString]);
+  }, [
+    getPassphrase,
+    hasStoredConnection,
+    loadNWCState,
+    nwcString,
+    registerSuccessfulPassphrase,
+  ]);
 
   const saveConnection = useCallback(
     (rawNWCString: string, info: Record<string, any>, passphrase: string) => {
@@ -502,24 +546,24 @@ export function NWCContextProvider({ children }: { children: ReactNode }) {
   );
 
   const lockConnection = useCallback(() => {
-    passphraseSessionRef.current?.clearAll();
+    clearPassphraseState();
     lockNWCConnection();
     loadNWCState();
-  }, [loadNWCState]);
+  }, [clearPassphraseState, loadNWCState]);
 
   const removeConnection = useCallback(() => {
-    passphraseSessionRef.current?.clearAll();
+    clearPassphraseState();
     clearNWCConnection();
     setError(undefined);
     setIsPassphraseRequested(false);
     loadNWCState();
-  }, [loadNWCState]);
+  }, [clearPassphraseState, loadNWCState]);
 
   useEffect(() => {
     return () => {
-      passphraseSessionRef.current?.clearAll();
+      clearPassphraseState();
     };
-  }, []);
+  }, [clearPassphraseState]);
 
   return (
     <>

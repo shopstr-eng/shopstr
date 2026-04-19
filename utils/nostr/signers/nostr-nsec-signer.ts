@@ -13,7 +13,6 @@ import {
   NostrSigner,
 } from "@/utils/nostr/signers/nostr-signer";
 import * as nip49 from "nostr-tools/nip49";
-import { PassphraseSession } from "@/utils/nostr/signers/passphrase-session";
 
 export type PassphraseResponse = {
   passphrase: string;
@@ -23,39 +22,13 @@ export type PassphraseResponse = {
 export class NostrNSecSigner implements NostrSigner {
   private readonly encryptedPrivKey: string;
   private readonly challengeHandler: ChallengeHandler;
-  private readonly passphraseSession: PassphraseSession;
 
   public passphrase?: string;
   private pubkey?: string;
+  private rememberedPassphrase?: string;
+  private inputPassphrase?: string;
+  private inputPassphraseClearer?: any;
   private isNip49Format: boolean = false;
-
-  private async requestPassphraseWithChallenge(
-    error?: Error
-  ): Promise<PassphraseResponse> {
-    if (!this.challengeHandler) {
-      return { passphrase: "", remember: false };
-    }
-
-    return await new Promise((resolve, reject) => {
-      const abortController = new AbortController();
-
-      this.challengeHandler(
-        "passphrase",
-        "Enter passphrase",
-        () => {
-          abortController.abort();
-          reject(new Error("Action cancelled by user"));
-        },
-        abortController.signal,
-        error
-      ).then(({ res, remind }) => {
-        resolve({
-          passphrase: res,
-          remember: remind,
-        });
-      }, reject);
-    });
-  }
 
   public static getEncryptedNSEC(
     privKey: Uint8Array | string,
@@ -103,10 +76,6 @@ export class NostrNSecSigner implements NostrSigner {
     this.pubkey = pubkey;
     this.passphrase = passphrase;
     this.isNip49Format = encryptedPrivKey.startsWith("ncryptsec");
-    this.passphraseSession = new PassphraseSession(
-      (error?: Error) => this.requestPassphraseWithChallenge(error),
-      () => this.passphrase
-    );
   }
 
   static fromJSON(
@@ -142,15 +111,46 @@ export class NostrNSecSigner implements NostrSigner {
     return "connected";
   }
 
+  private async getPassphrase(
+    abort: () => void,
+    error?: Error
+  ): Promise<[string, boolean]> {
+    let passphrase: string | undefined = this.passphrase;
+    let remind: boolean = false;
+    if (!passphrase && this.rememberedPassphrase) {
+      return [this.rememberedPassphrase, false];
+    }
+    if (!passphrase && this.inputPassphrase) {
+      return [this.inputPassphrase, false];
+    }
+    if (!passphrase && this.challengeHandler) {
+      const abortController = new AbortController();
+      const res = await this.challengeHandler(
+        "passphrase",
+        "Enter passphrase",
+        () => {
+          abortController.abort();
+          return abort();
+        },
+        abortController.signal,
+        error
+      );
+      ({ res: passphrase, remind } = res);
+    }
+    if (!passphrase) passphrase = "";
+    return [passphrase, remind];
+  }
+
   public async _getPrivKey(): Promise<Uint8Array> {
     let error: Error | undefined;
 
     let aborted = false;
     do {
       try {
-        const [passphrase, remember] =
-          await this.passphraseSession.getPassphrase(error);
-
+        const [passphrase, remember] = await this.getPassphrase(
+          () => (aborted = true),
+          error
+        );
         let privKeyBytes: Uint8Array;
 
         if (this.isNip49Format) {
@@ -167,16 +167,21 @@ export class NostrNSecSigner implements NostrSigner {
             : hexToBytes(privkey);
         }
 
-        this.passphraseSession.registerSuccessfulPassphrase(
-          passphrase,
-          remember
-        );
+        if (remember) {
+          this.rememberedPassphrase = passphrase;
+        }
+
+        if (this.inputPassphraseClearer)
+          clearTimeout(this.inputPassphraseClearer);
+        this.inputPassphraseClearer = setTimeout(() => {
+          this.inputPassphrase = undefined;
+        }, 5000);
+        this.inputPassphrase = passphrase;
 
         return privKeyBytes;
       } catch (e) {
         console.error(e);
         error = e as Error;
-        aborted = error.message === "Action cancelled by user";
       }
     } while (!aborted);
     throw new Error("Action cancelled by user");
@@ -217,6 +222,6 @@ export class NostrNSecSigner implements NostrSigner {
   }
 
   public async close(): Promise<void> {
-    this.passphraseSession.clearRememberedPassphrase();
+    this.rememberedPassphrase = undefined;
   }
 }
