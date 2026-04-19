@@ -1261,6 +1261,9 @@ const LOCALSTORAGECONSTANTS = {
   nwcInfo: "nwcInfo",
 };
 
+let runtimeNWCString: string | null = null;
+let runtimeNWCInfo: string | null = null;
+
 export const setLocalStorageDataOnSignIn = ({
   encryptedPrivateKey,
   relays,
@@ -1379,6 +1382,7 @@ export interface LocalStorageInterface {
     | { type: "nip07" }
     | { type: "nip46"; bunker: string; appPrivKey?: string }
     | { type: "nsec"; encryptedPrivKey: string; pubkey?: string };
+  // NWC credentials are kept in runtime memory only for the active session.
   nwcString?: string | null;
   nwcInfo?: string | null;
   migrationComplete?: boolean;
@@ -1442,8 +1446,8 @@ export const getLocalStorageData = (): LocalStorageInterface => {
   let bunkerSecret;
   let signer: LocalStorageInterface["signer"] | undefined;
   let migrationComplete;
-  let nwcString;
-  let nwcInfo;
+  let nwcString = runtimeNWCString;
+  let nwcInfo = runtimeNWCInfo;
 
   if (typeof window !== "undefined") {
     encryptedPrivateKey = localStorage.getItem(
@@ -1615,13 +1619,16 @@ export const getLocalStorageData = (): LocalStorageInterface => {
       }
     }
 
-    nwcString = localStorage.getItem(LOCALSTORAGECONSTANTS.nwcString)
-      ? localStorage.getItem(LOCALSTORAGECONSTANTS.nwcString)
-      : null;
+    // Legacy cleanup: older builds persisted the full NWC credential, including
+    // its secret, in localStorage. Remove any stored copies on read and keep
+    // NWC state in runtime memory only for the current session.
+    if (localStorage.getItem(LOCALSTORAGECONSTANTS.nwcString)) {
+      localStorage.removeItem(LOCALSTORAGECONSTANTS.nwcString);
+    }
+    if (localStorage.getItem(LOCALSTORAGECONSTANTS.nwcInfo)) {
+      localStorage.removeItem(LOCALSTORAGECONSTANTS.nwcInfo);
+    }
 
-    nwcInfo = localStorage.getItem(LOCALSTORAGECONSTANTS.nwcInfo)
-      ? localStorage.getItem(LOCALSTORAGECONSTANTS.nwcInfo)
-      : null;
     migrationComplete = localStorage.getItem("migrationComplete") === "true";
   }
   return {
@@ -1640,8 +1647,8 @@ export const getLocalStorageData = (): LocalStorageInterface => {
     bunkerRelays: bunkerRelays || [],
     bunkerSecret: bunkerSecret?.toString(),
     signer,
-    nwcString: nwcString as string | null,
-    nwcInfo: nwcInfo as string | null,
+    nwcString,
+    nwcInfo,
     migrationComplete: migrationComplete || false,
   };
 };
@@ -1737,11 +1744,19 @@ export async function verifyNip05Identifier(
 
 export const saveNWCString = (nwcString: string) => {
   if (nwcString) {
-    localStorage.setItem(LOCALSTORAGECONSTANTS.nwcString, nwcString);
+    runtimeNWCString = nwcString;
   } else {
+    runtimeNWCString = null;
+    runtimeNWCInfo = null;
     localStorage.removeItem(LOCALSTORAGECONSTANTS.nwcString);
     localStorage.removeItem(LOCALSTORAGECONSTANTS.nwcInfo);
   }
+  window.dispatchEvent(new Event("storage"));
+};
+
+export const saveNWCInfo = (info: unknown) => {
+  runtimeNWCInfo = info ? JSON.stringify(info) : null;
+  localStorage.removeItem(LOCALSTORAGECONSTANTS.nwcInfo);
   window.dispatchEvent(new Event("storage"));
 };
 

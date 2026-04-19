@@ -7,7 +7,10 @@ import {
   ExclamationCircleIcon,
 } from "@heroicons/react/24/outline";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
-import { saveNWCString } from "@/utils/nostr/nostr-helper-functions";
+import {
+  saveNWCInfo,
+  saveNWCString,
+} from "@/utils/nostr/nostr-helper-functions";
 import { NostrWebLNProvider } from "@getalby/sdk";
 
 const OnboardingWallet = () => {
@@ -42,7 +45,7 @@ const OnboardingWallet = () => {
       const info = await nwc.getInfo();
 
       saveNWCString(nwcString);
-      localStorage.setItem("nwcInfo", JSON.stringify(info));
+      saveNWCInfo(info);
 
       handleNext();
     } catch (e: any) {
@@ -81,7 +84,8 @@ const OnboardingWallet = () => {
               </h2>
               <p className="text-light-text dark:text-dark-text">
                 Connect your NWC-enabled Lightning wallet to pay invoices
-                seamlessly.
+                seamlessly. The connection secret is kept only for the current
+                browser session.
               </p>
             </div>
 

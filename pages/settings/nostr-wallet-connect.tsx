@@ -10,6 +10,7 @@ import {
 import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs";
 import {
   getLocalStorageData,
+  saveNWCInfo,
   saveNWCString,
 } from "@/utils/nostr/nostr-helper-functions";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
@@ -108,7 +109,7 @@ const NWCSettingsPage = () => {
 
       // Save successful connection
       saveNWCString(nwcString);
-      localStorage.setItem("nwcInfo", JSON.stringify(info));
+      saveNWCInfo(info);
       setWalletInfo(info);
       setIsSaved(true);
 
@@ -125,7 +126,6 @@ const NWCSettingsPage = () => {
         }`
       );
       saveNWCString("");
-      localStorage.removeItem("nwcInfo");
     } finally {
       setIsLoading(false);
       if (nwc) {
@@ -140,7 +140,6 @@ const NWCSettingsPage = () => {
     setBalance(null);
     setError(null);
     saveNWCString("");
-    localStorage.removeItem("nwcInfo");
   };
 
   return (
@@ -155,7 +154,9 @@ const NWCSettingsPage = () => {
             <p className="text-light-text dark:text-dark-text mb-4 text-sm">
               Connect your wallet using a Nostr Wallet Connect (NIP-47)
               connection string (e.g., from Alby, Mutiny, or Umbrel). This
-              allows Shopstr to request payments directly from your wallet.
+              allows Shopstr to request payments directly from your wallet. For
+              security, the connection secret is kept only in memory for the
+              current browser session.
             </p>
 
             <Input
