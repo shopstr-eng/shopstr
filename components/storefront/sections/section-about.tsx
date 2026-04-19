@@ -41,7 +41,6 @@ export default function SectionAbout({ section }: SectionAboutProps) {
               alt={section.heading || "About"}
               className="w-full rounded-xl object-cover shadow-lg"
               style={{ maxHeight: "400px" }}
-              loading="lazy"
             />
           </div>
         )}

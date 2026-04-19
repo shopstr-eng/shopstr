@@ -261,7 +261,7 @@ API keys are created via the `/settings/api-keys` UI page, the `/api/mcp/api-key
 
 ### On-Page SEO
 
-- **Alt Text & Image Optimization**: All images across landing page (`pages/index.tsx`), producers page (`pages/producer-guide/index.tsx`), and image carousel (`components/utility-components/image-carousel.tsx`) have descriptive alt text, explicit `width`/`height` attributes, and `loading="lazy"` for below-the-fold images.
+- **Alt Text & Image Optimization**: All images across landing page (`pages/index.tsx`), producers page (`pages/producer-guide/index.tsx`), and image carousel (`components/utility-components/image-carousel.tsx`) have descriptive alt text and explicit `width`/`height` attributes.
 - **Structured Data (JSON-LD)**: Global `Organization`, `WebSite`, `LocalBusiness`, and `FAQPage` schemas injected via `components/structured-data.tsx` (loaded in `_app.tsx`). Contact page has its own `ContactPage` schema.
 - **robots.txt**: `public/robots.txt` allows all crawlers, disallows admin/API paths, and references the sitemap.
 - **XML Sitemap**: Dynamic sitemap at `pages/api/sitemap.xml.ts`, accessible via `/sitemap.xml` (Next.js rewrite in `next.config.mjs`). Covers all 9 public pages.

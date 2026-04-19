@@ -65,7 +65,6 @@ export default function SectionTestimonials({
                     src={sanitizeUrl(t.image)}
                     alt={t.author}
                     className="h-10 w-10 rounded-full object-cover"
-                    loading="lazy"
                   />
                 )}
                 <span className="font-heading text-sm font-bold">

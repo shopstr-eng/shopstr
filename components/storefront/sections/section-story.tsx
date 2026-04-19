@@ -78,7 +78,6 @@ export default function SectionStory({ section, colors }: SectionStoryProps) {
                       alt={item.heading}
                       className="mt-4 rounded-lg object-cover shadow"
                       style={{ maxHeight: "200px" }}
-                      loading="lazy"
                     />
                   )}
                 </div>

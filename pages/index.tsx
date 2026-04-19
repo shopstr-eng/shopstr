@@ -301,7 +301,6 @@ export default function StandaloneLanding() {
             width={80}
             height={80}
             className="h-20 w-20"
-            loading="lazy"
           />
         </div>
         <div className="pointer-events-none absolute top-[20%] right-[12%] opacity-[0.05]">
@@ -311,7 +310,6 @@ export default function StandaloneLanding() {
             width={100}
             height={100}
             className="h-25 w-25"
-            loading="lazy"
           />
         </div>
         <div className="pointer-events-none absolute bottom-[20%] left-[8%] opacity-[0.07]">
@@ -321,7 +319,6 @@ export default function StandaloneLanding() {
             width={90}
             height={90}
             className="h-22 w-22"
-            loading="lazy"
           />
         </div>
         <div className="pointer-events-none absolute right-[15%] bottom-[15%] opacity-[0.05]">
@@ -331,7 +328,6 @@ export default function StandaloneLanding() {
             width={70}
             height={70}
             className="h-18 w-18"
-            loading="lazy"
           />
         </div>
 
@@ -475,7 +471,6 @@ export default function StandaloneLanding() {
             width={95}
             height={95}
             className="h-24 w-24"
-            loading="lazy"
           />
         </div>
         <div className="pointer-events-none absolute right-[10%] bottom-[15%] opacity-[0.05]">
@@ -485,7 +480,6 @@ export default function StandaloneLanding() {
             width={85}
             height={85}
             className="h-21 w-21"
-            loading="lazy"
           />
         </div>
 
@@ -652,7 +646,6 @@ export default function StandaloneLanding() {
             width={90}
             height={90}
             className="h-22 w-22"
-            loading="lazy"
           />
         </div>
         <div className="pointer-events-none absolute right-[8%] bottom-[20%] opacity-[0.05]">
@@ -662,7 +655,6 @@ export default function StandaloneLanding() {
             width={80}
             height={80}
             className="h-20 w-20"
-            loading="lazy"
           />
         </div>
 
@@ -842,7 +834,6 @@ export default function StandaloneLanding() {
                 width={32}
                 height={32}
                 className="h-8 w-8"
-                loading="lazy"
               />
               <span className="text-xl font-bold">Milk Market</span>
             </div>
@@ -881,7 +872,6 @@ export default function StandaloneLanding() {
                   alt="Milk Market open source code on GitHub"
                   width={24}
                   height={24}
-                  loading="lazy"
                 />
               </a>
               <a
@@ -895,7 +885,6 @@ export default function StandaloneLanding() {
                   alt="Milk Market on Nostr decentralized network"
                   width={32}
                   height={32}
-                  loading="lazy"
                 />
               </a>
               <a
@@ -909,7 +898,6 @@ export default function StandaloneLanding() {
                   alt="Follow Milk Market on X (Twitter)"
                   width={24}
                   height={24}
-                  loading="lazy"
                 />
               </a>
               <a
@@ -923,7 +911,6 @@ export default function StandaloneLanding() {
                   alt="Milk Market YouTube channel - dairy farming videos"
                   width={24}
                   height={24}
-                  loading="lazy"
                 />
               </a>
               <a
@@ -937,7 +924,6 @@ export default function StandaloneLanding() {
                   alt="Milk Market on Instagram"
                   width={24}
                   height={24}
-                  loading="lazy"
                 />
               </a>
               <a
@@ -951,7 +937,6 @@ export default function StandaloneLanding() {
                   alt="Milk Market on TikTok"
                   width={24}
                   height={24}
-                  loading="lazy"
                 />
               </a>
             </div>

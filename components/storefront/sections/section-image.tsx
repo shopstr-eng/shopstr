@@ -25,7 +25,6 @@ export default function SectionImage({ section }: SectionImageProps) {
           style={
             section.fullWidth ? { maxHeight: "500px" } : { maxHeight: "600px" }
           }
-          loading="lazy"
         />
         {section.caption && (
           <figcaption
