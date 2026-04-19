@@ -108,7 +108,8 @@ describe("/api/db/fetch-messages", () => {
     verifySignedHttpRequestProofMock.mockReturnValue({
       ok: false,
       status: 401,
-      error: "A signed Nostr request proof is required to prove pubkey ownership.",
+      error:
+        "A signed Nostr request proof is required to prove pubkey ownership.",
     });
     const res = createResponse();
 
