@@ -1,13 +1,15 @@
 import {
+  LogOut,
   getDefaultBlossomServer,
   getDefaultMint,
   getDefaultRelays,
   getLocalStorageData,
+  setLocalCashuTokens,
 } from "../nostr-helper-functions";
 
 describe("getLocalStorageData", () => {
   beforeEach(() => {
-    localStorage.clear();
+    LogOut();
     jest.restoreAllMocks();
   });
 
@@ -69,5 +71,54 @@ describe("getLocalStorageData", () => {
       type: "nsec",
       encryptedPrivKey: "ncryptsec1mock",
     });
+  });
+
+  it("keeps cashu proofs in runtime memory only", () => {
+    setLocalCashuTokens([
+      {
+        id: "00d0a1b24d1c1a53",
+        amount: 5,
+        secret: "secret-1",
+        C: "C1",
+      } as any,
+    ]);
+
+    const data = getLocalStorageData();
+
+    expect(data.tokens).toEqual([
+      {
+        id: "00d0a1b24d1c1a53",
+        amount: 5,
+        secret: "secret-1",
+        C: "C1",
+      },
+    ]);
+    expect(localStorage.getItem("tokens")).toBeNull();
+  });
+
+  it("removes legacy persisted cashu proofs on read", () => {
+    localStorage.setItem(
+      "tokens",
+      JSON.stringify([
+        {
+          id: "00d0a1b24d1c1a53",
+          amount: 7,
+          secret: "legacy-secret",
+          C: "legacy-C",
+        },
+      ])
+    );
+
+    const data = getLocalStorageData();
+
+    expect(data.tokens).toEqual([
+      {
+        id: "00d0a1b24d1c1a53",
+        amount: 7,
+        secret: "legacy-secret",
+        C: "legacy-C",
+      },
+    ]);
+    expect(localStorage.getItem("tokens")).toBeNull();
   });
 });

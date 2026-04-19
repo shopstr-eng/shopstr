@@ -61,6 +61,7 @@ import {
   generateKeys,
   getLocalStorageData,
   publishProofEvent,
+  setLocalCashuTokens,
 } from "@/utils/nostr/nostr-helper-functions";
 import { LightningAddress } from "@getalby/lightning-tools";
 import QRCode from "qrcode";
@@ -2410,7 +2411,7 @@ export default function CartInvoiceCard({
       } else {
         proofArray = [...remainingProofs];
       }
-      localStorage.setItem("tokens", JSON.stringify(proofArray));
+      setLocalCashuTokens(proofArray);
       localStorage.setItem(
         "history",
         JSON.stringify([

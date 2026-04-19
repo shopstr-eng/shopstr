@@ -2,6 +2,7 @@ import { Proof } from "@cashu/cashu-ts";
 import {
   getLocalStorageData,
   publishProofEvent,
+  setLocalCashuTokens,
 } from "@/utils/nostr/nostr-helper-functions";
 
 type Nostr = Parameters<typeof publishProofEvent>[0];
@@ -10,7 +11,7 @@ type Signer = Parameters<typeof publishProofEvent>[1];
 /**
  * Persist freshly-minted proofs into the buyer's local wallet when the
  * downstream seller-DM hand-off fails. Mirrors the wallet-top-up bookkeeping
- * done by the mint-button claim path: localStorage `tokens`, history entry,
+ * done by the mint-button claim path: local wallet tokens, history entry,
  * and a kind-7375 wallet event so other devices can sync.
  *
  * Idempotency: callers must only invoke this once per failed claim. The
@@ -30,7 +31,7 @@ export async function recoverProofsToBuyerWallet(
 
   const { tokens, history } = getLocalStorageData();
   const proofArray = [...tokens, ...proofs];
-  window.localStorage.setItem("tokens", JSON.stringify(proofArray));
+  setLocalCashuTokens(proofArray);
   window.localStorage.setItem(
     "history",
     JSON.stringify([
@@ -43,7 +44,7 @@ export async function recoverProofsToBuyerWallet(
     ])
   );
 
-  // Best-effort wallet event publish; localStorage is the source of truth and
+  // Best-effort wallet event publish; the active session wallet is updated first and
   // sendGiftWrappedMessageEvent / publishProofEvent already cache to DB first
   // so durability does not depend on relay reachability here.
   try {
@@ -57,7 +58,7 @@ export async function recoverProofsToBuyerWallet(
     );
   } catch (err) {
     console.warn(
-      "[wallet-recovery] proof event publish failed; tokens are safe in localStorage:",
+      "[wallet-recovery] proof event publish failed; tokens are safe in the active session wallet:",
       err
     );
   }

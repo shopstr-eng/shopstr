@@ -20,6 +20,7 @@ import {
   getLocalStorageData,
   publishProofEvent,
   publishWalletEvent,
+  setLocalCashuTokens,
   constructGiftWrappedEvent,
   constructMessageSeal,
   constructMessageGiftWrap,
@@ -205,7 +206,7 @@ export default function ClaimButton({ token }: { token: string }) {
           tokenAmount.toString()
         );
         const tokenArray = [...tokens, ...uniqueProofs];
-        localStorage.setItem("tokens", JSON.stringify(tokenArray));
+        setLocalCashuTokens(tokenArray);
         if (!mints.includes(tokenMint)) {
           const updatedMints = [...mints, tokenMint];
           localStorage.setItem("mints", JSON.stringify(updatedMints));

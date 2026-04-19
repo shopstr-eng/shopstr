@@ -20,6 +20,7 @@ import {
   getLocalStorageData,
   publishProofEvent,
   publishWalletEvent,
+  setLocalCashuTokens,
 } from "@/utils/nostr/nostr-helper-functions";
 import {
   Mint as CashuMint,
@@ -90,7 +91,7 @@ const ReceiveButton = () => {
           return;
         }
         const tokenArray = [...tokens, ...uniqueProofs];
-        localStorage.setItem("tokens", JSON.stringify(tokenArray));
+        setLocalCashuTokens(tokenArray);
         if (!mints.includes(tokenMint)) {
           const updatedMints = [...mints, tokenMint];
           localStorage.setItem("mints", JSON.stringify(updatedMints));

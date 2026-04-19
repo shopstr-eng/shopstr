@@ -12,6 +12,7 @@ import {
 import {
   getLocalStorageData,
   publishProofEvent,
+  setLocalCashuTokens,
 } from "@/utils/nostr/nostr-helper-functions";
 import {
   NostrContext,
@@ -61,7 +62,7 @@ export function MintRecoveryBoot(): null {
             if (cancelled) return;
             const { tokens, history } = getLocalStorageData();
             const proofArray = [...tokens, ...proofs];
-            window.localStorage.setItem("tokens", JSON.stringify(proofArray));
+            setLocalCashuTokens(proofArray);
             window.localStorage.setItem(
               "history",
               JSON.stringify([

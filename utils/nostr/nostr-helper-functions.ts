@@ -1261,6 +1261,17 @@ const LOCALSTORAGECONSTANTS = {
   nwcInfo: "nwcInfo",
 };
 
+let runtimeCashuTokens: Proof[] = [];
+
+export function setLocalCashuTokens(tokens: Proof[]): void {
+  runtimeCashuTokens = [...tokens];
+  if (typeof window === "undefined") {
+    return;
+  }
+  localStorage.removeItem(LOCALSTORAGECONSTANTS.tokens);
+  window.dispatchEvent(new Event("storage"));
+}
+
 export const setLocalStorageDataOnSignIn = ({
   encryptedPrivateKey,
   relays,
@@ -1433,7 +1444,7 @@ export const getLocalStorageData = (): LocalStorageInterface => {
   let writeRelays;
   let mints;
   let blossomServers;
-  let tokens;
+  let tokens = runtimeCashuTokens;
   let history;
   let wot;
   let clientPrivkey;
@@ -1526,15 +1537,22 @@ export const getLocalStorageData = (): LocalStorageInterface => {
       );
     }
 
-    tokens = getLocalStorageJson<unknown[]>(LOCALSTORAGECONSTANTS.tokens, [], {
-      removeOnError: true,
-      validate: isArray,
-    });
-    if (
-      tokens.length === 0 &&
-      !localStorage.getItem(LOCALSTORAGECONSTANTS.tokens)
-    ) {
-      localStorage.setItem(LOCALSTORAGECONSTANTS.tokens, JSON.stringify([]));
+    const persistedTokens = getLocalStorageJson<Proof[]>(
+      LOCALSTORAGECONSTANTS.tokens,
+      [],
+      {
+        removeOnError: true,
+        validate: isArray,
+      }
+    );
+    if (persistedTokens.length > 0) {
+      runtimeCashuTokens = [...persistedTokens];
+      localStorage.removeItem(LOCALSTORAGECONSTANTS.tokens);
+    }
+    if (runtimeCashuTokens.length === 0) {
+      tokens = persistedTokens;
+    } else {
+      tokens = runtimeCashuTokens;
     }
 
     history = getLocalStorageJson<unknown[]>(
@@ -1647,6 +1665,8 @@ export const getLocalStorageData = (): LocalStorageInterface => {
 };
 
 export const LogOut = () => {
+  runtimeCashuTokens = [];
+
   // remove old data
   localStorage.removeItem("npub");
   localStorage.removeItem("signIn");

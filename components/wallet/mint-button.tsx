@@ -24,6 +24,7 @@ import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
   getLocalStorageData,
   publishProofEvent,
+  setLocalCashuTokens,
 } from "@/utils/nostr/nostr-helper-functions";
 import { Mint as CashuMint, Wallet as CashuWallet } from "@cashu/cashu-ts";
 import QRCode from "qrcode";
@@ -208,7 +209,7 @@ const MintButton = () => {
         );
         if (proofs && proofs.length > 0) {
           const proofArray = [...tokens, ...proofs];
-          localStorage.setItem("tokens", JSON.stringify(proofArray));
+          setLocalCashuTokens(proofArray);
           localStorage.setItem(
             "history",
             JSON.stringify([
