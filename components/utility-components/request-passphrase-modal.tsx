@@ -19,7 +19,6 @@ export default function PassphraseChallengeModal({
   setIsOpen,
   onCancelRouteTo,
   error,
-  showRememberToggle = true,
 }: {
   actionOnSubmit?: (passphrase: string, remind: boolean) => void;
   actionOnCancel?: () => void;
@@ -27,7 +26,6 @@ export default function PassphraseChallengeModal({
   setIsOpen: (value: boolean) => void;
   onCancelRouteTo?: string; // route to go to on cancel
   error?: Error;
-  showRememberToggle?: boolean;
 }) {
   const [remindToggled, setRemindToggled] = useState(false);
   const [passphraseInput, setPassphraseInput] = useState("");
@@ -115,18 +113,16 @@ export default function PassphraseChallengeModal({
             }}
             value={passphraseInput}
           />
-          {showRememberToggle && (
-            <div className="mt-4 flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={remindToggled}
-                onChange={() => setRemindToggled(!remindToggled)}
-              />
-              <label className="text-light-text dark:text-dark-text">
-                Remember passphrase for this session
-              </label>
-            </div>
-          )}
+          <div className="mt-4 flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={remindToggled}
+              onChange={() => setRemindToggled(!remindToggled)}
+            />
+            <label className="text-light-text dark:text-dark-text">
+              Remember passphrase for this session
+            </label>
+          </div>
           {error && (
             <div className="mt-2 text-sm text-red-500">{error.message}</div>
           )}
