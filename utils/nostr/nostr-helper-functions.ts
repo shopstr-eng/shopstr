@@ -1261,6 +1261,17 @@ const LOCALSTORAGECONSTANTS = {
   nwcInfo: "nwcInfo",
 };
 
+export type StoredSignerData =
+  | { type: "nip07" }
+  | { type: "nip46"; bunker: string; appPrivKey?: string }
+  | { type: "nsec"; encryptedPrivKey: string; pubkey?: string };
+
+let runtimeSignerData: StoredSignerData | undefined;
+
+function shouldPersistSignerData(signerData: StoredSignerData): boolean {
+  return signerData.type !== "nip46";
+}
+
 export const setLocalStorageDataOnSignIn = ({
   encryptedPrivateKey,
   relays,
@@ -1347,7 +1358,17 @@ export const setLocalStorageDataOnSignIn = ({
   }
 
   if (signer) {
-    localStorage.setItem(LOCALSTORAGECONSTANTS.signer, JSON.stringify(signer));
+    const signerData = signer.toJSON() as StoredSignerData;
+    runtimeSignerData = signerData;
+
+    if (shouldPersistSignerData(signerData)) {
+      localStorage.setItem(
+        LOCALSTORAGECONSTANTS.signer,
+        JSON.stringify(signerData)
+      );
+    } else {
+      localStorage.removeItem(LOCALSTORAGECONSTANTS.signer);
+    }
   }
 
   if (migrationComplete) {
@@ -1375,10 +1396,7 @@ export interface LocalStorageInterface {
   bunkerRemotePubkey?: string;
   bunkerRelays?: string[];
   bunkerSecret?: string;
-  signer?:
-    | { type: "nip07" }
-    | { type: "nip46"; bunker: string; appPrivKey?: string }
-    | { type: "nsec"; encryptedPrivKey: string; pubkey?: string };
+  signer?: StoredSignerData;
   nwcString?: string | null;
   nwcInfo?: string | null;
   migrationComplete?: boolean;
@@ -1386,7 +1404,7 @@ export interface LocalStorageInterface {
 
 function isStoredSignerData(
   value: unknown
-): value is NonNullable<LocalStorageInterface["signer"]> {
+): value is StoredSignerData {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return false;
   }
@@ -1440,7 +1458,7 @@ export const getLocalStorageData = (): LocalStorageInterface => {
   let bunkerRemotePubkey;
   let bunkerRelays;
   let bunkerSecret;
-  let signer: LocalStorageInterface["signer"] | undefined;
+  let signer: StoredSignerData | undefined = runtimeSignerData;
   let migrationComplete;
   let nwcString;
   let nwcInfo;
@@ -1576,7 +1594,7 @@ export const getLocalStorageData = (): LocalStorageInterface => {
       ? localStorage.getItem(LOCALSTORAGECONSTANTS.bunkerSecret)
       : undefined;
 
-    signer = getLocalStorageJson<LocalStorageInterface["signer"] | undefined>(
+    const persistedSigner = getLocalStorageJson<StoredSignerData | undefined>(
       LOCALSTORAGECONSTANTS.signer,
       undefined,
       {
@@ -1584,6 +1602,12 @@ export const getLocalStorageData = (): LocalStorageInterface => {
         validate: isStoredSignerData,
       }
     );
+    if (persistedSigner?.type === "nip46") {
+      localStorage.removeItem(LOCALSTORAGECONSTANTS.signer);
+    } else if (persistedSigner) {
+      signer = persistedSigner;
+    }
+
     if (!signer) {
       switch (signInMethod) {
         case "extension":
@@ -1647,6 +1671,8 @@ export const getLocalStorageData = (): LocalStorageInterface => {
 };
 
 export const LogOut = () => {
+  runtimeSignerData = undefined;
+
   // remove old data
   localStorage.removeItem("npub");
   localStorage.removeItem("signIn");

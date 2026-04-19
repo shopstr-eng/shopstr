@@ -207,12 +207,20 @@ export function SignerContextProvider({ children }: { children: ReactNode }) {
     loadKeys(signerObject);
 
     const isAlreadyLoaded = localStorage.getItem("signer");
-    if (
-      !isAlreadyLoaded ||
-      JSON.stringify(existingSigner) !== isAlreadyLoaded
-    ) {
-      localStorage.setItem("signer", JSON.stringify(existingSigner));
+    const shouldPersistSigner = existingSigner?.type !== "nip46";
+    const serializedSigner = JSON.stringify(existingSigner);
+    const hasStorageMismatch =
+      !isAlreadyLoaded || serializedSigner !== isAlreadyLoaded;
 
+    if (shouldPersistSigner && hasStorageMismatch) {
+      localStorage.setItem("signer", serializedSigner);
+    }
+
+    if (!shouldPersistSigner && isAlreadyLoaded) {
+      localStorage.removeItem("signer");
+    }
+
+    if (hasStorageMismatch || (!shouldPersistSigner && isAlreadyLoaded)) {
       const shouldReloadSigner = false;
       window.dispatchEvent(
         new CustomEvent("storage", { detail: { shouldReloadSigner } })

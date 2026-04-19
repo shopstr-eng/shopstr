@@ -1,13 +1,15 @@
 import {
+  LogOut,
   getDefaultBlossomServer,
   getDefaultMint,
   getDefaultRelays,
   getLocalStorageData,
+  setLocalStorageDataOnSignIn,
 } from "../nostr-helper-functions";
 
 describe("getLocalStorageData", () => {
   beforeEach(() => {
-    localStorage.clear();
+    LogOut();
     jest.restoreAllMocks();
   });
 
@@ -69,5 +71,42 @@ describe("getLocalStorageData", () => {
       type: "nsec",
       encryptedPrivKey: "ncryptsec1mock",
     });
+  });
+
+  it("keeps bunker signer data in runtime memory only", () => {
+    setLocalStorageDataOnSignIn({
+      signer: {
+        toJSON: () => ({
+          type: "nip46",
+          bunker: "bunker://pubkey?secret=supersecret",
+          appPrivKey: "app-private-key",
+        }),
+      } as any,
+    });
+
+    const data = getLocalStorageData();
+
+    expect(data.signer).toEqual({
+      type: "nip46",
+      bunker: "bunker://pubkey?secret=supersecret",
+      appPrivKey: "app-private-key",
+    });
+    expect(localStorage.getItem("signer")).toBeNull();
+  });
+
+  it("removes legacy persisted bunker signer data on read", () => {
+    localStorage.setItem(
+      "signer",
+      JSON.stringify({
+        type: "nip46",
+        bunker: "bunker://pubkey?secret=legacysecret",
+        appPrivKey: "legacy-app-privkey",
+      })
+    );
+
+    const data = getLocalStorageData();
+
+    expect(data.signer).toBeUndefined();
+    expect(localStorage.getItem("signer")).toBeNull();
   });
 });
