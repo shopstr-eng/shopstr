@@ -43,6 +43,10 @@ import StorefrontMyListings from "./storefront-my-listings";
 import StorefrontOrderConfirmation from "./storefront-order-confirmation";
 import StorefrontPolicyPage from "./storefront-policy-page";
 import { storage, STORAGE_KEYS } from "@/utils/storage";
+import {
+  isExternalStorefrontHref,
+  sanitizeStorefrontNavHref,
+} from "@/utils/storefront-links";
 
 const DEFAULT_COLORS: StorefrontColorScheme = {
   primary: "#a438ba",
@@ -349,19 +353,10 @@ export default function StorefrontLayout({
 
   const homeHref = shopSlug ? `/shop/${shopSlug}` : "/marketplace";
 
-  const resolveNavHref = (link: StorefrontNavLink) => {
-    if (link.isPage) return `/shop/${shopSlug}/${link.href}`;
-    if (
-      link.href.startsWith("/") ||
-      link.href.startsWith("http") ||
-      link.href.startsWith("mailto:")
-    )
-      return link.href;
-    return `/shop/${shopSlug}/${link.href}`;
-  };
+  const resolveNavHref = (link: StorefrontNavLink) =>
+    sanitizeStorefrontNavHref(link, shopSlug);
 
-  const isExternalNavHref = (href: string) =>
-    href.startsWith("http") || href.startsWith("mailto:");
+  const isExternalNavHref = (href: string) => isExternalStorefrontHref(href);
 
   const themedCss = `
     body.sf-active [data-overlay-container] .border-black { border-color: var(--sf-secondary) !important; }
