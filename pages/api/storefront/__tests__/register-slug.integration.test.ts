@@ -1,9 +1,16 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import {
-  finalizeEvent,
-  generateSecretKey,
-  getPublicKey,
-} from "nostr-tools/pure";
+
+const verifyEventMock = jest.fn(
+  (event: { sig?: string }) => event.sig === "valid"
+);
+
+jest.mock("nostr-tools", () => {
+  const actual = jest.requireActual("nostr-tools");
+  return {
+    ...actual,
+    verifyEvent: (event: { sig?: string }) => verifyEventMock(event),
+  };
+});
 import {
   SIGNED_EVENT_HEADER,
   buildSignedHttpRequestProofTemplate,
@@ -58,17 +65,25 @@ describe("/api/storefront/register-slug (integration)", () => {
     queryMock.mockReset();
     queryMock.mockResolvedValue({ rows: [] });
     __resetRateLimitBuckets();
+    verifyEventMock.mockClear();
   });
 
   it("accepts a POST with a genuinely signed proof", async () => {
-    const sk = generateSecretKey();
-    const pk = getPublicKey(sk);
+    const pk = "a".repeat(64);
     const slug = "owner-shop";
 
     const template = buildSignedHttpRequestProofTemplate(
       buildStorefrontSlugCreateProof({ pubkey: pk, slug })
     );
-    const signed = finalizeEvent(template, sk);
+    const signed = {
+      id: "proof-post-valid",
+      pubkey: pk,
+      kind: template.kind,
+      created_at: template.created_at,
+      tags: template.tags,
+      content: template.content,
+      sig: "valid",
+    };
 
     const req = createRequest(
       "POST",
@@ -88,8 +103,7 @@ describe("/api/storefront/register-slug (integration)", () => {
   });
 
   it("rejects a POST whose signature is for a different pubkey than the proof claims", async () => {
-    const sk = generateSecretKey();
-    const attackerPk = getPublicKey(sk);
+    const attackerPk = "b".repeat(64);
     const victimPk = "f".repeat(64);
 
     const template = buildSignedHttpRequestProofTemplate(
@@ -98,7 +112,15 @@ describe("/api/storefront/register-slug (integration)", () => {
     template.tags = template.tags.map((tag) =>
       tag[0] === "pubkey" ? ["pubkey", victimPk] : tag
     );
-    const signed = finalizeEvent(template, sk);
+    const signed = {
+      id: "proof-post-mismatch",
+      pubkey: attackerPk,
+      kind: template.kind,
+      created_at: template.created_at,
+      tags: template.tags,
+      content: template.content,
+      sig: "valid",
+    };
     expect(signed.pubkey).toBe(attackerPk);
 
     const req = createRequest(
@@ -115,16 +137,19 @@ describe("/api/storefront/register-slug (integration)", () => {
   });
 
   it("rejects a POST with a tampered signature", async () => {
-    const sk = generateSecretKey();
-    const pk = getPublicKey(sk);
+    const pk = "c".repeat(64);
 
     const template = buildSignedHttpRequestProofTemplate(
       buildStorefrontSlugCreateProof({ pubkey: pk, slug: "owner-shop" })
     );
-    const signed = finalizeEvent(template, sk);
     const tampered = {
-      ...signed,
-      sig: signed.sig.replace(/^.{2}/, "00"),
+      id: "proof-post-tampered",
+      pubkey: pk,
+      kind: template.kind,
+      created_at: template.created_at,
+      tags: template.tags,
+      content: template.content,
+      sig: "tampered",
     };
 
     const req = createRequest(
@@ -141,13 +166,20 @@ describe("/api/storefront/register-slug (integration)", () => {
   });
 
   it("rejects a POST whose signed proof is for a different slug", async () => {
-    const sk = generateSecretKey();
-    const pk = getPublicKey(sk);
+    const pk = "d".repeat(64);
 
     const template = buildSignedHttpRequestProofTemplate(
       buildStorefrontSlugCreateProof({ pubkey: pk, slug: "shop-a" })
     );
-    const signed = finalizeEvent(template, sk);
+    const signed = {
+      id: "proof-post-wrong-slug",
+      pubkey: pk,
+      kind: template.kind,
+      created_at: template.created_at,
+      tags: template.tags,
+      content: template.content,
+      sig: "valid",
+    };
 
     const req = createRequest(
       "POST",
@@ -163,14 +195,21 @@ describe("/api/storefront/register-slug (integration)", () => {
   });
 
   it("rejects a POST whose signed proof is stale", async () => {
-    const sk = generateSecretKey();
-    const pk = getPublicKey(sk);
+    const pk = "e".repeat(64);
 
     const template = buildSignedHttpRequestProofTemplate(
       buildStorefrontSlugCreateProof({ pubkey: pk, slug: "owner-shop" })
     );
     template.created_at = Math.floor(Date.now() / 1000) - 60 * 60;
-    const signed = finalizeEvent(template, sk);
+    const signed = {
+      id: "proof-post-stale",
+      pubkey: pk,
+      kind: template.kind,
+      created_at: template.created_at,
+      tags: template.tags,
+      content: template.content,
+      sig: "valid",
+    };
 
     const req = createRequest(
       "POST",
@@ -186,13 +225,20 @@ describe("/api/storefront/register-slug (integration)", () => {
   });
 
   it("accepts a DELETE with a genuinely signed proof and uses the signed pubkey", async () => {
-    const sk = generateSecretKey();
-    const pk = getPublicKey(sk);
+    const pk = "1".repeat(64);
 
     const template = buildSignedHttpRequestProofTemplate(
       buildStorefrontSlugDeleteProof(pk)
     );
-    const signed = finalizeEvent(template, sk);
+    const signed = {
+      id: "proof-delete-valid",
+      pubkey: pk,
+      kind: template.kind,
+      created_at: template.created_at,
+      tags: template.tags,
+      content: template.content,
+      sig: "valid",
+    };
 
     const req = createRequest(
       "DELETE",

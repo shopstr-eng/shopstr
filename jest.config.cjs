@@ -20,6 +20,7 @@ const customJestConfig = {
   moduleNameMapper: {
     // Handle module aliases
     "^@/(.*)$": "<rootDir>/$1",
+    "^@heroui/react$": "<rootDir>/test/mocks/heroui-react.tsx",
     "^react-responsive-carousel$":
       "<rootDir>/test/mocks/react-responsive-carousel.tsx",
   },

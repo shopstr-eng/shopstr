@@ -5,8 +5,7 @@ import { ProductData } from "@/utils/parsers/product-parser-functions";
 describe("productMatchesMarketplaceSearch", () => {
   const baseProduct: ProductData = {
     id: "product-1",
-    pubkey:
-      "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    pubkey: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
     createdAt: 0,
     title: "Handmade Coffee Mug",
     summary: "Stoneware mug for espresso and tea.",
@@ -29,9 +28,7 @@ describe("productMatchesMarketplaceSearch", () => {
   });
 
   it("matches against the product summary", () => {
-    expect(productMatchesMarketplaceSearch(baseProduct, "espresso")).toBe(
-      true
-    );
+    expect(productMatchesMarketplaceSearch(baseProduct, "espresso")).toBe(true);
   });
 
   it("matches against the exact product price", () => {
@@ -82,4 +79,3 @@ describe("productMatchesMarketplaceSearch", () => {
     expect(productMatchesMarketplaceSearch(baseProduct, npub)).toBe(false);
   });
 });
-

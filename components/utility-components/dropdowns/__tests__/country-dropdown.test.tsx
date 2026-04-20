@@ -37,12 +37,12 @@ describe("CountryDropdown", () => {
   it("should render the select component with all passed props", () => {
     render(<CountryDropdown label="Country" placeholder="Select a country" />);
 
-    expect(MockSelect).toHaveBeenCalledWith(
+    expect(MockSelect).toHaveBeenCalled();
+    expect(MockSelect.mock.calls[0]?.[0]).toEqual(
       expect.objectContaining({
         label: "Country",
         placeholder: "Select a country",
-      }),
-      undefined
+      })
     );
   });
 
@@ -58,25 +58,12 @@ describe("CountryDropdown", () => {
   it("should pass the correct value and children props to each SelectItem", () => {
     render(<CountryDropdown />);
 
-    expect(MockSelectItem).toHaveBeenCalledWith(
-      expect.objectContaining({
-        children: "India",
-      }),
-      undefined
+    const renderedLabels = MockSelectItem.mock.calls.map(
+      ([props]) => props?.children
     );
 
-    expect(MockSelectItem).toHaveBeenCalledWith(
-      expect.objectContaining({
-        children: "United States",
-      }),
-      undefined
-    );
-
-    expect(MockSelectItem).toHaveBeenCalledWith(
-      expect.objectContaining({
-        children: "Canada",
-      }),
-      undefined
+    expect(renderedLabels).toEqual(
+      expect.arrayContaining(["India", "United States", "Canada"])
     );
   });
 });

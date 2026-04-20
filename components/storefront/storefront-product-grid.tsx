@@ -132,7 +132,7 @@ export default function StorefrontProductGrid({
               }`,
             }}
             style={{
-              // @ts-expect-error CSS custom property for HeroUI theme color
+              // CSS custom property for the storefront accent color
               "--heroui-primary": colors.accent,
             }}
           />

@@ -744,7 +744,7 @@ export default function CheckoutCard({
                               label="Discount Code"
                               placeholder="Enter code"
                               value={discountCode}
-                              onChange={(e) =>
+                              onChange={(e: any) =>
                                 setDiscountCode(e.target.value.toUpperCase())
                               }
                               className="text-light-text dark:text-dark-text flex-1"

@@ -8,7 +8,12 @@ import {
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
 import { CashuWalletContext } from "@/utils/context/context";
-import { Wallet as CashuWallet, getEncodedToken } from "@cashu/cashu-ts";
+import {
+  Mint as CashuMint,
+  Wallet as CashuWallet,
+  getEncodedToken,
+} from "@cashu/cashu-ts";
+import { safeSwap } from "@/utils/cashu/swap-retry-service";
 import {
   getLocalStorageData,
   publishProofEvent,
@@ -19,8 +24,15 @@ import { ChallengeHandler } from "@/utils/nostr/signers/nostr-signer";
 
 jest.setTimeout(20000);
 
-jest.mock("@cashu/cashu-ts");
+jest.mock("@cashu/cashu-ts", () => ({
+  Mint: jest.fn(),
+  Wallet: jest.fn(),
+  getEncodedToken: jest.fn(),
+}));
 jest.mock("@/utils/nostr/nostr-helper-functions");
+jest.mock("@/utils/cashu/swap-retry-service", () => ({
+  safeSwap: jest.fn(),
+}));
 jest.mock("@/utils/nostr/signers/nostr-nip46-signer");
 jest.mock("@/utils/nostr/nostr-manager");
 
@@ -47,6 +59,8 @@ jest.mock("@heroicons/react/24/outline", () => ({
 const mockGetLocalStorageData = getLocalStorageData as jest.Mock;
 const mockPublishProofEvent = publishProofEvent as jest.Mock;
 const mockGetEncodedToken = getEncodedToken as jest.Mock;
+const mockSafeSwap = safeSwap as jest.Mock;
+const MockCashuMint = CashuMint as jest.Mock;
 const MockCashuWallet = CashuWallet as jest.Mock;
 
 const mockSigner = {
@@ -97,19 +111,16 @@ const renderWithProviders = (
 
 describe("SendButton", () => {
   let setItemSpy: jest.SpyInstance;
-  let mockSend: jest.Mock;
 
   beforeEach(() => {
     jest.clearAllMocks();
     jest.spyOn(Date, "now").mockImplementation(() => 1758309680000);
-
-    mockSend = jest.fn();
+    MockCashuMint.mockImplementation(() => ({ mintUrl: "https://test.mint" }));
     MockCashuWallet.mockImplementation(() => ({
       loadMint: jest.fn().mockResolvedValue(undefined),
       keyChain: {
         getKeysets: jest.fn().mockResolvedValue([{ id: "keyset_id_1" }]),
       },
-      send: mockSend,
     }));
 
     setItemSpy = jest.spyOn(Storage.prototype, "setItem");
@@ -123,17 +134,22 @@ describe("SendButton", () => {
       value: { writeText: jest.fn().mockResolvedValue(undefined) },
       writable: true,
     });
+    mockSafeSwap.mockResolvedValue({
+      status: "swapped",
+      keep: [{ id: "keyset_id_1", amount: 900, secret: "keep-1" }],
+      send: [{ id: "keyset_id_1", amount: 100, secret: "send-1" }],
+    });
   });
 
   afterEach(() => {
-    setItemSpy.mockRestore();
+    setItemSpy?.mockRestore();
     jest.useRealTimers();
     jest.restoreAllMocks();
   });
 
   test("renders button and handles modal open/close", async () => {
     renderWithProviders(<SendButton />);
-    await userEvent.click(screen.getByRole("button", { name: /Send/i }));
+    await userEvent.click(screen.getAllByRole("button", { name: /Send/i })[0]!);
     const modal = await screen.findByRole("dialog");
     await userEvent.click(
       within(modal).getByRole("button", { name: /Cancel/i })
@@ -145,7 +161,7 @@ describe("SendButton", () => {
 
   test("shows validation errors for invalid input", async () => {
     renderWithProviders(<SendButton />);
-    await userEvent.click(screen.getByRole("button", { name: /Send/i }));
+    await userEvent.click(screen.getAllByRole("button", { name: /Send/i })[0]!);
     const modal = await screen.findByRole("dialog");
     await userEvent.click(within(modal).getByRole("button", { name: /Send/i }));
     expect(
@@ -154,15 +170,16 @@ describe("SendButton", () => {
   });
 
   test("handles a successful send transaction", async () => {
-    const mockSendResult = {
+    const mockSwapResult = {
+      status: "swapped",
       keep: [{ id: "keyset_id_1", amount: 900 }],
       send: [{ id: "keyset_id_1", amount: 100 }],
     };
-    mockSend.mockResolvedValue(mockSendResult);
+    mockSafeSwap.mockResolvedValue(mockSwapResult);
     mockGetEncodedToken.mockReturnValue("cashuA_mock_token");
 
     renderWithProviders(<SendButton />);
-    await userEvent.click(screen.getByRole("button", { name: /Send/i }));
+    await userEvent.click(screen.getAllByRole("button", { name: /Send/i })[0]!);
     const modal = await screen.findByRole("dialog");
     await userEvent.type(
       within(modal).getByLabelText(/Token amount in sats/i),
@@ -184,15 +201,16 @@ describe("SendButton", () => {
   });
 
   test("handles send with no change proofs", async () => {
-    const mockSendResult = {
+    const mockSwapResult = {
+      status: "swapped",
       keep: [],
       send: [{ id: "keyset_id_1", amount: 100 }],
     };
-    mockSend.mockResolvedValue(mockSendResult);
+    mockSafeSwap.mockResolvedValue(mockSwapResult);
     mockGetEncodedToken.mockReturnValue("cashuA_mock_token_no_change");
 
     renderWithProviders(<SendButton />);
-    await userEvent.click(screen.getByRole("button", { name: /Send/i }));
+    await userEvent.click(screen.getAllByRole("button", { name: /Send/i })[0]!);
     const modal = await screen.findByRole("dialog");
     await userEvent.type(
       within(modal).getByLabelText(/Token amount in sats/i),
@@ -214,7 +232,7 @@ describe("SendButton", () => {
 
   test("handles input validation for non-numeric values", async () => {
     renderWithProviders(<SendButton />);
-    await userEvent.click(screen.getByRole("button", { name: /Send/i }));
+    await userEvent.click(screen.getAllByRole("button", { name: /Send/i })[0]!);
     const modal = await screen.findByRole("dialog");
     const input = within(modal).getByLabelText(/Token amount in sats/i);
 
@@ -228,7 +246,7 @@ describe("SendButton", () => {
 
   test("handles input validation for values exceeding max length", async () => {
     renderWithProviders(<SendButton />);
-    await userEvent.click(screen.getByRole("button", { name: /Send/i }));
+    await userEvent.click(screen.getAllByRole("button", { name: /Send/i })[0]!);
     const modal = await screen.findByRole("dialog");
     const input = within(modal).getByLabelText(/Token amount in sats/i);
 
@@ -242,10 +260,10 @@ describe("SendButton", () => {
   });
 
   test("resets form and states when modal is toggled", async () => {
-    mockSend.mockRejectedValue(new Error("Insufficient funds"));
+    mockSafeSwap.mockRejectedValue(new Error("Insufficient funds"));
 
     renderWithProviders(<SendButton />);
-    await userEvent.click(screen.getByRole("button", { name: /Send/i }));
+    await userEvent.click(screen.getAllByRole("button", { name: /Send/i })[0]!);
     let modal = await screen.findByRole("dialog");
     await userEvent.type(
       within(modal).getByLabelText(/Token amount in sats/i),
@@ -262,7 +280,7 @@ describe("SendButton", () => {
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
 
-    await userEvent.click(screen.getByRole("button", { name: /Send/i }));
+    await userEvent.click(screen.getAllByRole("button", { name: /Send/i })[0]!);
     modal = await screen.findByRole("dialog");
 
     expect(within(modal).getByLabelText(/Token amount in sats/i)).toHaveValue(
@@ -289,16 +307,17 @@ describe("SendButton", () => {
           .fn()
           .mockResolvedValue([{ id: "keyset_id_1" }, { id: "keyset_id_2" }]),
       },
-      send: jest.fn().mockResolvedValue({
-        keep: [{ id: "keyset_id_1", amount: 400 }],
-        send: [{ id: "keyset_id_1", amount: 100 }],
-      }),
     }));
+    mockSafeSwap.mockResolvedValue({
+      status: "swapped",
+      keep: [{ id: "keyset_id_1", amount: 400, secret: "keep-2" }],
+      send: [{ id: "keyset_id_1", amount: 100, secret: "send-2" }],
+    });
 
     mockGetEncodedToken.mockReturnValue("cashuA_filtered_token");
 
     renderWithProviders(<SendButton />);
-    await userEvent.click(screen.getByRole("button", { name: /Send/i }));
+    await userEvent.click(screen.getAllByRole("button", { name: /Send/i })[0]!);
     const modal = await screen.findByRole("dialog");
     await userEvent.type(
       within(modal).getByLabelText(/Token amount in sats/i),
@@ -317,10 +336,10 @@ describe("SendButton", () => {
   });
 
   test("handles a failed send transaction", async () => {
-    mockSend.mockRejectedValue(new Error("Insufficient funds"));
+    mockSafeSwap.mockRejectedValue(new Error("Insufficient funds"));
 
     renderWithProviders(<SendButton />);
-    await userEvent.click(screen.getByRole("button", { name: /Send/i }));
+    await userEvent.click(screen.getAllByRole("button", { name: /Send/i })[0]!);
     const modal = await screen.findByRole("dialog");
     await userEvent.type(
       within(modal).getByLabelText(/Token amount in sats/i),
@@ -340,7 +359,7 @@ describe("SendButton", () => {
       mockChallengeHandler
     );
     renderWithProviders(<SendButton />, { signer: nip46Signer });
-    await userEvent.click(screen.getByRole("button", { name: /Send/i }));
+    await userEvent.click(screen.getAllByRole("button", { name: /Send/i })[0]!);
 
     expect(
       await screen.findByText(/If the token is taking a while to be generated/i)
@@ -348,11 +367,12 @@ describe("SendButton", () => {
   });
 
   test("handles send to nostr contact", async () => {
-    const mockSendResult = {
+    const mockSwapResult = {
+      status: "swapped",
       keep: [{ id: "keyset_id_1", amount: 900 }],
       send: [{ id: "keyset_id_1", amount: 100 }],
     };
-    mockSend.mockResolvedValue(mockSendResult);
+    mockSafeSwap.mockResolvedValue(mockSwapResult);
     mockGetEncodedToken.mockReturnValue("cashuA_mock_token_nostr");
 
     const nip46Signer = new MockedNostrNIP46Signer(
@@ -360,7 +380,7 @@ describe("SendButton", () => {
       mockChallengeHandler
     );
     renderWithProviders(<SendButton />, { signer: nip46Signer });
-    await userEvent.click(screen.getByRole("button", { name: /Send/i }));
+    await userEvent.click(screen.getAllByRole("button", { name: /Send/i })[0]!);
     const modal = await screen.findByRole("dialog");
     await userEvent.type(
       within(modal).getByLabelText(/Token amount in sats/i),

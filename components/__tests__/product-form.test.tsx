@@ -50,35 +50,38 @@ jest.mock("@/components/utility-components/file-uploader", () => ({
   ),
 }));
 
-jest.mock("@/components/utility-components/dropdowns/location-dropdown", () => ({
-  __esModule: true,
-  default: ({
-    label,
-    value,
-    onChange,
-    onBlur,
-    errorMessage,
-    isInvalid,
-  }: {
-    label?: string;
-    value?: string;
-    onChange?: (event: React.ChangeEvent<HTMLInputElement>) => void;
-    onBlur?: () => void;
-    errorMessage?: string;
-    isInvalid?: boolean;
-  }) => (
-    <label>
-      {label || "Location"}
-      <input
-        aria-invalid={isInvalid ? "true" : "false"}
-        value={value || ""}
-        onChange={onChange}
-        onBlur={onBlur}
-      />
-      {isInvalid && errorMessage ? <span>{errorMessage}</span> : null}
-    </label>
-  ),
-}));
+jest.mock(
+  "@/components/utility-components/dropdowns/location-dropdown",
+  () => ({
+    __esModule: true,
+    default: ({
+      label,
+      value,
+      onChange,
+      onBlur,
+      errorMessage,
+      isInvalid,
+    }: {
+      label?: string;
+      value?: string;
+      onChange?: (event: React.ChangeEvent<HTMLInputElement>) => void;
+      onBlur?: () => void;
+      errorMessage?: string;
+      isInvalid?: boolean;
+    }) => (
+      <label>
+        {label || "Location"}
+        <input
+          aria-invalid={isInvalid ? "true" : "false"}
+          value={value || ""}
+          onChange={onChange}
+          onBlur={onBlur}
+        />
+        {isInvalid && errorMessage ? <span>{errorMessage}</span> : null}
+      </label>
+    ),
+  })
+);
 
 jest.mock(
   "@/components/utility-components/dropdowns/confirm-action-dropdown",
@@ -103,20 +106,51 @@ jest.mock(
   })
 );
 
-jest.mock("@nextui-org/react", () => {
+jest.mock("@heroui/react", () => {
+  const React = jest.requireActual("react");
   const inputId = (label?: string, placeholder?: string) =>
     (label || placeholder || "field").replace(/\s+/g, "-").toLowerCase();
+  const renderSelectOptions = (children: React.ReactNode): React.ReactNode[] =>
+    React.Children.toArray(children).flatMap((child: any) => {
+      if (!React.isValidElement(child)) return [];
+      if (child.type === React.Fragment) {
+        return renderSelectOptions(child.props.children);
+      }
+
+      const nestedOptions = child.props?.children
+        ? renderSelectOptions(child.props.children)
+        : [];
+      if (nestedOptions.length > 0) {
+        return nestedOptions;
+      }
+
+      const optionValue =
+        child.props?.value ||
+        (typeof child.key === "string" ? child.key.replace(/^\.\$/, "") : "") ||
+        String(child.props?.children ?? "");
+
+      return [
+        React.createElement(
+          "option",
+          { key: String(child.key ?? optionValue), value: optionValue },
+          child.props?.children
+        ),
+      ];
+    });
 
   return {
-    Modal: ({ children, isOpen }: { children: React.ReactNode; isOpen: boolean }) =>
-      isOpen ? <div role="dialog">{children}</div> : null,
+    Modal: ({
+      children,
+      isOpen,
+    }: {
+      children: React.ReactNode;
+      isOpen: boolean;
+    }) => (isOpen ? <div role="dialog">{children}</div> : null),
     ModalContent: ({
       children,
     }: {
       children: React.ReactNode | (() => React.ReactNode);
-    }) => (
-      <div>{typeof children === "function" ? children() : children}</div>
-    ),
+    }) => <div>{typeof children === "function" ? children() : children}</div>,
     ModalHeader: ({ children }: { children: React.ReactNode }) => (
       <h2>{children}</h2>
     ),
@@ -265,7 +299,7 @@ jest.mock("@nextui-org/react", () => {
             onBlur={onBlur}
           >
             <option value="">Select...</option>
-            {children}
+            {renderSelectOptions(children)}
           </select>
           {isInvalid && errorMessage ? <span>{errorMessage}</span> : null}
         </div>
@@ -274,14 +308,12 @@ jest.mock("@nextui-org/react", () => {
     SelectSection: ({ children }: { children: React.ReactNode }) => (
       <>{children}</>
     ),
-    SelectItem: ({
-      children,
-      value,
-    }: {
-      children: React.ReactNode;
-      value?: string;
-    }) => <option value={value || String(children)}>{children}</option>,
-    Chip: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
+    SelectItem: ({ children }: { children: React.ReactNode }) => (
+      <>{children}</>
+    ),
+    Chip: ({ children }: { children: React.ReactNode }) => (
+      <span>{children}</span>
+    ),
     Image: ({ alt, src }: { alt: string; src: string }) => (
       <img alt={alt} src={src} />
     ),
@@ -406,8 +438,9 @@ describe("ProductForm", () => {
     renderProductForm();
 
     expect(screen.getByRole("dialog")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: /add new product listing/i }))
-      .toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: /add new product listing/i })
+    ).toBeInTheDocument();
     expect(screen.getByLabelText(/product name/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/description/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/price/i)).toBeInTheDocument();
@@ -422,8 +455,9 @@ describe("ProductForm", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /list product/i }));
 
-    expect(await screen.findByText("A description is required."))
-      .toBeInTheDocument();
+    expect(
+      await screen.findByText("A description is required.")
+    ).toBeInTheDocument();
     expect(screen.getByText("A price is required.")).toBeInTheDocument();
     expect(screen.getByText("Please specify a location.")).toBeInTheDocument();
     expect(screen.getByText("A category is required.")).toBeInTheDocument();
@@ -432,8 +466,9 @@ describe("ProductForm", () => {
     fillRequiredFields();
     fireEvent.click(screen.getByRole("button", { name: /list product/i }));
 
-    expect(await screen.findByText("At least one image is required."))
-      .toBeInTheDocument();
+    expect(
+      await screen.findByText("At least one image is required.")
+    ).toBeInTheDocument();
     expect(PostListing).not.toHaveBeenCalled();
   });
 
@@ -480,7 +515,9 @@ describe("ProductForm", () => {
     fireEvent.change(await screen.findByLabelText(/pickup location 1/i), {
       target: { value: "Farm stand, Saturday morning" },
     });
-    fireEvent.click(screen.getByRole("button", { name: /additional options/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /additional options/i })
+    );
     fireEvent.change(await screen.findByLabelText(/quantity/i), {
       target: { value: "5" },
     });
@@ -521,9 +558,13 @@ describe("ProductForm", () => {
     renderProductForm();
 
     fillRequiredFields();
-    fireEvent.click(screen.getByRole("button", { name: /additional options/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /additional options/i })
+    );
     fireEvent.click(screen.getAllByRole("switch")[0]!);
-    fireEvent.click(await screen.findByRole("button", { name: /add bulk tier/i }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: /add bulk tier/i })
+    );
 
     const unitInputs = screen.getAllByLabelText(/units/i);
     const totalPriceInputs = screen.getAllByLabelText(/total price/i);
@@ -538,11 +579,7 @@ describe("ProductForm", () => {
     });
 
     const tags = (PostListing as jest.Mock).mock.calls[0][0];
-    expect(tags).toEqual(
-      expect.arrayContaining([
-        ["bulk", "3", "5000"],
-      ])
-    );
+    expect(tags).toEqual(expect.arrayContaining([["bulk", "3", "5000"]]));
   });
 
   it("disables the submit button while a listing is being posted", async () => {
@@ -559,15 +596,17 @@ describe("ProductForm", () => {
     fireEvent.click(screen.getByRole("button", { name: /list product/i }));
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /list product/i }))
-        .toBeDisabled();
+      expect(
+        screen.getByRole("button", { name: /list product/i })
+      ).toBeDisabled();
     });
 
     resolvePost({ id: "event-after-delay" });
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /list product/i }))
-        .toBeEnabled();
+      expect(
+        screen.getByRole("button", { name: /list product/i })
+      ).toBeEnabled();
     });
   });
 
@@ -629,15 +668,16 @@ describe("ProductForm", () => {
       expect(finalizeAndSendNostrEvent).toHaveBeenCalledTimes(1);
     });
 
-    expect((finalizeAndSendNostrEvent as jest.Mock).mock.calls[0][2])
-      .toMatchObject({
-        kind: 1,
-        tags: expect.arrayContaining([
-          ["t", "zapsnag"],
-          ["t", "shopstr-zapsnag"],
-          ["image", "https://cdn.example/product.webp"],
-        ]),
-        content: expect.stringContaining("#zapsnag"),
-      });
+    expect(
+      (finalizeAndSendNostrEvent as jest.Mock).mock.calls[0][2]
+    ).toMatchObject({
+      kind: 1,
+      tags: expect.arrayContaining([
+        ["t", "zapsnag"],
+        ["t", "shopstr-zapsnag"],
+        ["image", "https://cdn.example/product.webp"],
+      ]),
+      content: expect.stringContaining("#zapsnag"),
+    });
   });
 });

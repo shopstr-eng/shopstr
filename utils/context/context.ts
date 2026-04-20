@@ -7,7 +7,8 @@ import {
   Community,
   CommunityPost,
 } from "../types/types";
-import { Proof } from "@cashu/cashu-ts";
+
+type Proof = any;
 
 export interface ProfileContextInterface {
   profileData: Map<string, any>;

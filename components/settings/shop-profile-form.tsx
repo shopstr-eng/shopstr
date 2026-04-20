@@ -361,21 +361,21 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
       if (shopSlug) {
         const storefrontConfig: StorefrontConfig =
           sanitizeStorefrontConfigLinks({
-          colorScheme: colors,
-          productLayout,
-          landingPageStyle,
-          shopSlug,
-          customDomain: customDomain || undefined,
-          fontHeading: fontHeading || undefined,
-          fontBody: fontBody || undefined,
-          sections: sections.length > 0 ? sections : undefined,
-          pages: pages.length > 0 ? pages : undefined,
-          footer,
-          navLinks: navLinks.length > 0 ? navLinks : undefined,
-          showCommunityPage: showCommunityPage || undefined,
-          showWalletPage: showWalletPage || undefined,
-          contactEmail: contactEmail || undefined,
-        });
+            colorScheme: colors,
+            productLayout,
+            landingPageStyle,
+            shopSlug,
+            customDomain: customDomain || undefined,
+            fontHeading: fontHeading || undefined,
+            fontBody: fontBody || undefined,
+            sections: sections.length > 0 ? sections : undefined,
+            pages: pages.length > 0 ? pages : undefined,
+            footer,
+            navLinks: navLinks.length > 0 ? navLinks : undefined,
+            showCommunityPage: showCommunityPage || undefined,
+            showWalletPage: showWalletPage || undefined,
+            contactEmail: contactEmail || undefined,
+          });
         transformedData.storefront = storefrontConfig;
       }
       await createNostrShopEvent(
@@ -733,14 +733,16 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                     step="0.01"
                     placeholder="e.g. 50.00"
                     value={freeShippingThreshold}
-                    onChange={(e) => setFreeShippingThreshold(e.target.value)}
+                    onChange={(e: any) =>
+                      setFreeShippingThreshold(e.target.value)
+                    }
                   />
                 </div>
                 <div className="w-32">
                   <Select
                     variant="bordered"
                     selectedKeys={[freeShippingCurrency]}
-                    onChange={(e) => {
+                    onChange={(e: any) => {
                       if (e.target.value)
                         setFreeShippingCurrency(e.target.value);
                     }}
@@ -805,7 +807,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                   variant="bordered"
                   placeholder="your-shop-name"
                   value={slugInput}
-                  onChange={(e) => {
+                  onChange={(e: any) => {
                     setSlugInput(sanitizeSlug(e.target.value));
                     setSlugStatus("idle");
                     setSlugMessage("");
@@ -1003,7 +1005,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                       <Input
                         variant="bordered"
                         value={colors[key]}
-                        onChange={(e) => {
+                        onChange={(e: any) => {
                           if (/^#[0-9A-Fa-f]{6}$/.test(e.target.value)) {
                             setColors((prev) => ({
                               ...prev,
@@ -1042,7 +1044,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                   label="Heading Font"
                   labelPlacement="outside"
                   selectedKeys={[fontHeading]}
-                  onChange={(e) => setFontHeading(e.target.value)}
+                  onChange={(e: any) => setFontHeading(e.target.value)}
                   aria-label="Heading font"
                 >
                   {GOOGLE_FONTS.map((f) => (
@@ -1056,7 +1058,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                   label="Body Font"
                   labelPlacement="outside"
                   selectedKeys={[fontBody]}
-                  onChange={(e) => setFontBody(e.target.value)}
+                  onChange={(e: any) => setFontBody(e.target.value)}
                   aria-label="Body font"
                 >
                   {GOOGLE_FONTS.map((f) => (
@@ -1084,7 +1086,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                       variant="bordered"
                       size="sm"
                       value={link.label}
-                      onChange={(e) => {
+                      onChange={(e: any) => {
                         const updated = [...navLinks];
                         updated[idx] = { ...link, label: e.target.value };
                         setNavLinks(updated);
@@ -1096,7 +1098,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                       variant="bordered"
                       size="sm"
                       value={link.href}
-                      onChange={(e) => {
+                      onChange={(e: any) => {
                         const updated = [...navLinks];
                         updated[idx] = { ...link, href: e.target.value };
                         setNavLinks(updated);
@@ -1314,7 +1316,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                 type="email"
                 placeholder="hello@yourshop.com"
                 value={contactEmail}
-                onChange={(e) => setContactEmail(e.target.value)}
+                onChange={(e: any) => setContactEmail(e.target.value)}
                 classNames={{
                   label: "text-light-text dark:text-dark-text font-medium pb-1",
                 }}

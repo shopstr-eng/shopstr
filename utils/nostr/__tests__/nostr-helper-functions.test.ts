@@ -85,17 +85,18 @@ describe("nostr-helper-functions", () => {
     it("creates a delete event with event ids and optional deleted kind", () => {
       jest.spyOn(Date, "now").mockReturnValue(1_700_000_000_000);
 
-      expect(createNostrDeleteEvent(["event-a", "event-b"], "delete", 30402))
-        .toEqual({
-          kind: 5,
-          content: "delete",
-          created_at: 1_700_000_000,
-          tags: [
-            ["e", "event-a"],
-            ["e", "event-b"],
-            ["k", "30402"],
-          ],
-        });
+      expect(
+        createNostrDeleteEvent(["event-a", "event-b"], "delete", 30402)
+      ).toEqual({
+        kind: 5,
+        content: "delete",
+        created_at: 1_700_000_000,
+        tags: [
+          ["e", "event-a"],
+          ["e", "event-b"],
+          ["k", "30402"],
+        ],
+      });
     });
 
     it("omits the kind tag when deleted kind is not supplied", () => {
@@ -215,7 +216,9 @@ describe("nostr-helper-functions", () => {
       expect(data.tokens).toEqual([]);
       expect(data.history).toEqual([]);
       expect(data.signer).toBeUndefined();
-      expect(localStorage.getItem("signer")).toBe(JSON.stringify({ type: "nip46" }));
+      expect(localStorage.getItem("signer")).toBe(
+        JSON.stringify({ type: "nip46" })
+      );
     });
 
     it("migrates legacy sign-in methods into signer metadata", () => {
@@ -272,15 +275,16 @@ describe("nostr-helper-functions", () => {
     it("returns true when the well-known response maps the name to pubkey", async () => {
       (globalThis.fetch as jest.Mock).mockResolvedValue({
         ok: true,
-        json: async () => ({ names: { alice: validPubkey } }),
+        json: async () => ({ verified: true }),
       });
 
       await expect(
         verifyNip05Identifier("alice@example.com", validPubkey)
       ).resolves.toBe(true);
       expect(globalThis.fetch).toHaveBeenCalledWith(
-        "https://example.com/.well-known/nostr.json?name=alice",
-        expect.objectContaining({ signal: expect.any(AbortSignal) })
+        expect.stringContaining(
+          `/api/nostr/verify-nip05?nip05=alice%40example.com&pubkey=${validPubkey}`
+        )
       );
     });
 
@@ -548,12 +552,16 @@ describe("nostr-helper-functions", () => {
       };
 
       await expect(
-        finalizeAndSendNostrEvent(signer as any, { publish: jest.fn() } as any, {
-          kind: 1,
-          content: "",
-          tags: [],
-          created_at: 1,
-        })
+        finalizeAndSendNostrEvent(
+          signer as any,
+          { publish: jest.fn() } as any,
+          {
+            kind: 1,
+            content: "",
+            tags: [],
+            created_at: 1,
+          }
+        )
       ).rejects.toThrow("sign failed");
     });
   });

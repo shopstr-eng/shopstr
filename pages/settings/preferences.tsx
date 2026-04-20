@@ -385,7 +385,7 @@ const PreferencesPage = () => {
                             onChange={onChange} // send value to hook form
                             onBlur={onBlur} // notify when input is touched/blur
                             value={value}
-                            onKeyDown={(e) => {
+                            onKeyDown={(e: any) => {
                               if (e.key === "Enter") {
                                 e.preventDefault();
                                 handleMintSubmit(onMintSubmit)();
@@ -514,7 +514,7 @@ const PreferencesPage = () => {
                           onChange={onChange} // send value to hook form
                           onBlur={onBlur} // notify when input is touched/blur
                           value={value}
-                          onKeyDown={(e) => {
+                          onKeyDown={(e: any) => {
                             if (e.key === "Enter") {
                               e.preventDefault();
                               handleRelaySubmit(onRelaySubmit)();
@@ -644,7 +644,7 @@ const PreferencesPage = () => {
                           onChange={onChange} // send value to hook form
                           onBlur={onBlur} // notify when input is touched/blur
                           value={value}
-                          onKeyDown={(e) => {
+                          onKeyDown={(e: any) => {
                             if (e.key === "Enter") {
                               e.preventDefault();
                               handleRelaySubmit(onRelaySubmit)();
@@ -774,7 +774,7 @@ const PreferencesPage = () => {
                           onChange={onChange} // send value to hook form
                           onBlur={onBlur} // notify when input is touched/blur
                           value={value}
-                          onKeyDown={(e) => {
+                          onKeyDown={(e: any) => {
                             if (e.key === "Enter") {
                               e.preventDefault();
                               handleRelaySubmit(onRelaySubmit)();
@@ -913,7 +913,7 @@ const PreferencesPage = () => {
                           onChange={onChange} // send value to hook form
                           onBlur={onBlur} // notify when input is touched/blur
                           value={value}
-                          onKeyDown={(e) => {
+                          onKeyDown={(e: any) => {
                             if (e.key === "Enter") {
                               e.preventDefault();
                               handleBlossomSubmit(onBlossomSubmit)();
@@ -970,7 +970,7 @@ const PreferencesPage = () => {
               defaultValue={
                 (localStorage.getItem("theme") as string) || theme || "system"
               }
-              onChange={(e) => {
+              onChange={(e: any) => {
                 localStorage.setItem("theme", e.target.value);
                 setTheme(e.target.value);
               }}

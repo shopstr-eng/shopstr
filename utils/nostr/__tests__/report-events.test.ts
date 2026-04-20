@@ -1,7 +1,4 @@
-import {
-  buildNip56ReportEvent,
-  Nip56ReportEventDraft,
-} from "../report-events";
+import { buildNip56ReportEvent, Nip56ReportEventDraft } from "../report-events";
 
 describe("buildNip56ReportEvent", () => {
   const realDateNow = Date.now;

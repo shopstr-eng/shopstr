@@ -150,7 +150,7 @@ export default function PageEditor({ pages, onChange }: PageEditorProps) {
                   size="sm"
                   label="Page Title"
                   value={page.title}
-                  onChange={(e) => {
+                  onChange={(e: any) => {
                     const title = e.target.value;
                     updatePage(i, {
                       title,
@@ -163,7 +163,7 @@ export default function PageEditor({ pages, onChange }: PageEditorProps) {
                   size="sm"
                   label="URL Slug"
                   value={page.slug}
-                  onChange={(e) =>
+                  onChange={(e: any) =>
                     updatePage(i, { slug: slugify(e.target.value) })
                   }
                   startContent={

@@ -167,13 +167,13 @@ describe("fetch-service database and relay fallback behavior", () => {
       json: async () => [olderProduct],
     });
 
-    const result = await fetchAllPosts(nostr as any, relays, editProductContext);
-
-    expect(editProductContext).toHaveBeenNthCalledWith(
-      1,
-      [olderProduct],
-      false
+    const result = await fetchAllPosts(
+      nostr as any,
+      relays,
+      editProductContext
     );
+
+    expect(editProductContext).toHaveBeenNthCalledWith(1, [olderProduct], true);
     expect(result.productEvents).toEqual([newerProduct, zapsnagPost]);
     expect(result.profileSetFromProducts).toEqual(
       new Set([pubkey, "feed-author"])
@@ -191,7 +191,11 @@ describe("fetch-service database and relay fallback behavior", () => {
     const nostr = { fetch: jest.fn().mockResolvedValue([]) };
     (global.fetch as jest.Mock).mockRejectedValue(new Error("db down"));
 
-    const result = await fetchAllPosts(nostr as any, relays, editProductContext);
+    const result = await fetchAllPosts(
+      nostr as any,
+      relays,
+      editProductContext
+    );
 
     expect(result).toEqual({
       productEvents: [],
@@ -199,7 +203,7 @@ describe("fetch-service database and relay fallback behavior", () => {
     });
     expect(editProductContext).toHaveBeenCalledWith([], false);
     expect(errorSpy).toHaveBeenCalledWith(
-      "Failed to fetch products from database: ",
+      "Failed to fetch products batch from database:",
       expect.any(Error)
     );
 
@@ -274,7 +278,9 @@ describe("fetch-service database and relay fallback behavior", () => {
 
   it("fetchAllPosts rejects when the relay fetch fails", async () => {
     const { fetchAllPosts } = await setupFetchService();
-    const nostr = { fetch: jest.fn().mockRejectedValue(new Error("relay down")) };
+    const nostr = {
+      fetch: jest.fn().mockRejectedValue(new Error("relay down")),
+    };
     (global.fetch as jest.Mock).mockResolvedValue({
       ok: true,
       json: async () => [],
@@ -287,15 +293,17 @@ describe("fetch-service database and relay fallback behavior", () => {
 
   it("fetchProfile preserves existing profiles when no pubkeys are requested", async () => {
     const { fetchProfile } = await setupFetchService();
-    const existing = new Map([[
-      pubkey,
-      {
+    const existing = new Map([
+      [
         pubkey,
-        created_at: 100,
-        content: { name: "Existing" },
-        nip05Verified: false,
-      },
-    ]]);
+        {
+          pubkey,
+          created_at: 100,
+          content: { name: "Existing" },
+          nip05Verified: false,
+        },
+      ],
+    ]);
     const editProfileContext = jest.fn();
 
     const result = await fetchProfile(
@@ -384,10 +392,7 @@ describe("fetch-service database and relay fallback behavior", () => {
     );
 
     expect(result.profileMap).toEqual(new Map());
-    expect(editProfileContext).toHaveBeenCalledWith(
-      new Map(),
-      false
-    );
+    expect(editProfileContext).toHaveBeenCalledWith(new Map(), false);
 
     errorSpy.mockRestore();
   });
@@ -456,12 +461,7 @@ describe("fetch-service database and relay fallback behavior", () => {
     const { fetchAllRelays } = await setupFetchService();
 
     await expect(
-      fetchAllRelays(
-        { fetch: jest.fn() } as any,
-        undefined,
-        relays,
-        jest.fn()
-      )
+      fetchAllRelays({ fetch: jest.fn() } as any, undefined, relays, jest.fn())
     ).resolves.toEqual({
       relayList: [],
       readRelayList: [],
@@ -680,9 +680,10 @@ describe("fetch-service database and relay fallback behavior", () => {
     );
 
     expect(
-      result.productReviewsMap.get(merchantPubkey)?.get("product-1")?.get(
-        "reviewer"
-      )
+      result.productReviewsMap
+        .get(merchantPubkey)
+        ?.get("product-1")
+        ?.get("reviewer")
     ).toEqual([
       ["comment", "db review"],
       ["rating", "quality", "5"],

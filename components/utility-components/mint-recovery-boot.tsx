@@ -1,9 +1,5 @@
 import { useContext, useEffect, useRef } from "react";
-import {
-  Mint as CashuMint,
-  Wallet as CashuWallet,
-  Proof,
-} from "@cashu/cashu-ts";
+import * as Cashu from "@cashu/cashu-ts";
 import {
   PendingMintQuote,
   recoverPendingMintQuotes,
@@ -17,6 +13,8 @@ import {
   NostrContext,
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
+
+type Proof = Cashu.Proof;
 
 /**
  * Mounted once near the root of the app. On first signer/nostr availability,
@@ -53,7 +51,7 @@ export function MintRecoveryBoot(): null {
       try {
         const result = await recoverPendingMintQuotes({
           buildWallet: async (mintUrl: string) => {
-            const wallet = new CashuWallet(new CashuMint(mintUrl));
+            const wallet = new Cashu.Wallet(new Cashu.Mint(mintUrl));
             await wallet.loadMint();
             return wallet;
           },

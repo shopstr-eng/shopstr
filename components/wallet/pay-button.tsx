@@ -22,12 +22,7 @@ import {
   publishProofEvent,
 } from "@/utils/nostr/nostr-helper-functions";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
-import {
-  Mint as CashuMint,
-  Wallet as CashuWallet,
-  Keyset as MintKeyset,
-  Proof,
-} from "@cashu/cashu-ts";
+import * as Cashu from "@cashu/cashu-ts";
 import { safeMeltProofs } from "@/utils/cashu/melt-retry-service";
 import { safeSwap } from "@/utils/cashu/swap-retry-service";
 import { formatWithCommas } from "../utility-components/display-monetary-info";
@@ -37,6 +32,9 @@ import {
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
 import { NostrNIP46Signer } from "@/utils/nostr/signers/nostr-nip46-signer";
+
+type Proof = Cashu.Proof;
+type MintKeyset = Cashu.Keyset;
 
 const PayButton = () => {
   const [showPayModal, setShowPayModal] = useState(false);
@@ -77,14 +75,12 @@ const PayButton = () => {
   const calculateFee = async (invoice: string) => {
     setFeeReserveAmount("");
     if (invoice && /^lnbc/.test(invoice)) {
-      const mint = new CashuMint(mints[0]!);
-      const wallet = new CashuWallet(mint);
+      const mint = new Cashu.Mint(mints[0]!);
+      const wallet = new Cashu.Wallet(mint);
       await wallet.loadMint();
       const meltQuote = await wallet?.createMeltQuoteBolt11(invoice);
       if (meltQuote) {
-        setFeeReserveAmount(
-          formatWithCommas(meltQuote.fee_reserve.toNumber(), "sats")
-        );
+        setFeeReserveAmount(formatWithCommas(meltQuote.fee_reserve, "sats"));
       } else {
         setFeeReserveAmount("");
       }
@@ -98,16 +94,15 @@ const PayButton = () => {
     setPaymentFailed(false);
     setIsRedeeming(true);
     try {
-      const mint = new CashuMint(mints[0]!);
-      const wallet = new CashuWallet(mint);
+      const mint = new Cashu.Mint(mints[0]!);
+      const wallet = new Cashu.Wallet(mint);
       await wallet.loadMint();
       const mintKeySetIds = await wallet.keyChain.getKeysets();
       const filteredProofs = tokens.filter((p: Proof) =>
         mintKeySetIds.some((keyset: MintKeyset) => keyset.id === p.id)
       ) as Proof[];
       const meltQuote = await wallet.createMeltQuoteBolt11(invoiceString);
-      const meltQuoteTotal =
-        meltQuote.amount.toNumber() + meltQuote.fee_reserve.toNumber();
+      const meltQuoteTotal = meltQuote.amount + meltQuote.fee_reserve;
       const swapOutcome = await safeSwap(
         wallet,
         meltQuoteTotal,
@@ -176,7 +171,7 @@ const PayButton = () => {
       const changeAmount =
         Array.isArray(changeProofs) && changeProofs.length > 0
           ? changeProofs.reduce(
-              (acc, current: Proof) => acc + current.amount.toNumber(),
+              (acc, current: Proof) => acc + current.amount,
               0
             )
           : 0;
@@ -192,7 +187,7 @@ const PayButton = () => {
       }
       localStorage.setItem("tokens", JSON.stringify(proofArray));
       const filteredTokenAmount = filteredProofs.reduce(
-        (acc, token: Proof) => acc + token.amount.toNumber(),
+        (acc, token: Proof) => acc + token.amount,
         0
       );
       const transactionAmount = filteredTokenAmount - changeAmount;
@@ -288,7 +283,7 @@ const PayButton = () => {
                         labelPlacement="inside"
                         isInvalid={isErrored}
                         errorMessage={errorMessage}
-                        onChange={async (e) => {
+                        onChange={async (e: any) => {
                           const newValue = e.target.value;
                           onChange(newValue);
                           try {

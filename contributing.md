@@ -223,6 +223,42 @@ npm run test:watch
 - Use descriptive test names
 - Follow existing test patterns
 
+### Test Setup Overview
+
+This project uses **Jest** as the primary testing framework.
+
+- Tests run in a jsdom environment for UI components
+- A global `fetch` mock is configured in `jest.setup.js`
+- Mocks are reset after each test to avoid leakage between tests
+
+### Running Tests
+
+```bash
+npm test
+```
+
+To run coverage:
+
+```bash
+npm test -- --coverage --runInBand
+```
+
+### Coverage
+
+- Coverage reports are generated in the `coverage/` folder
+- Important files like:
+  - utils/nostr/fetch-service.ts
+  - utils/nostr/nostr-helper-functions.ts
+    are properly tested
+
+### CI Testing Workflow
+
+- Tests run automatically on every pull request
+- CI runs:
+  - npm run type-check
+  - npm run lint
+  - npm test -- --runInBand
+
 ## Creating a Pull Request
 
 Before creating a pull request, ensure your code meets quality standards by running:

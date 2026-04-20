@@ -107,8 +107,8 @@ export default function PassphraseChallengeModal({
             label="Passphrase"
             labelPlacement="inside"
             type="password"
-            onChange={(e) => setPassphraseInput(e.target.value)}
-            onKeyDown={(e) => {
+            onChange={(e: any) => setPassphraseInput(e.target.value)}
+            onKeyDown={(e: any) => {
               if (e.key === "Enter") onSubmit();
             }}
             value={passphraseInput}

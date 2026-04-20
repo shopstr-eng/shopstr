@@ -21,17 +21,14 @@ import {
   publishProofEvent,
   publishWalletEvent,
 } from "@/utils/nostr/nostr-helper-functions";
-import {
-  Mint as CashuMint,
-  Wallet as CashuWallet,
-  getDecodedToken,
-  Proof,
-} from "@cashu/cashu-ts";
+import * as Cashu from "@cashu/cashu-ts";
 import {
   NostrContext,
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
 import { NostrNIP46Signer } from "@/utils/nostr/signers/nostr-nip46-signer";
+
+type Proof = Cashu.Proof;
 
 const ReceiveButton = () => {
   const [showReceiveModal, setShowReceiveModal] = useState(false);
@@ -70,10 +67,10 @@ const ReceiveButton = () => {
     setIsSpent(false);
     setIsInvalidToken(false);
     try {
-      const token = getDecodedToken(tokenString, []);
+      const token = Cashu.getDecodedToken(tokenString, []);
       const tokenMint = token.mint;
       const tokenProofs = token.proofs;
-      const wallet = new CashuWallet(new CashuMint(tokenMint));
+      const wallet = new Cashu.Wallet(new Cashu.Mint(tokenMint));
       await wallet.loadMint();
       const proofsStates = await wallet.checkProofsStates(tokenProofs);
       const spentYs = new Set(
@@ -99,7 +96,7 @@ const ReceiveButton = () => {
         setIsClaimed(true);
         handleToggleReceiveModal();
         const transactionAmount = tokenProofs.reduce(
-          (acc, token: Proof) => acc + token.amount.toNumber(),
+          (acc: number, token: Proof) => acc + token.amount,
           0
         );
         localStorage.setItem(

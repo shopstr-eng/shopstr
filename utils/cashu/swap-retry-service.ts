@@ -1,12 +1,36 @@
-import {
-  Wallet as CashuWallet,
-  Proof,
-  CheckStateEnum,
-  AmountLike,
-  SendConfig,
-  OutputConfig,
-} from "@cashu/cashu-ts";
+type CashuWallet = any;
+type Proof = any;
+type CheckStateEnum = "SPENT" | "UNSPENT" | "PENDING" | string;
+type AmountLike = number;
+type SendConfig = Record<string, any>;
+type OutputConfig = Record<string, any>;
 import { withMintRetry, MintRetryOptions } from "./mint-retry-service";
+
+function getErrorMessage(error: unknown): string {
+  const seen = new Set<unknown>();
+  const collectMessages = (value: unknown): string[] => {
+    if (value == null || seen.has(value)) return [];
+    if (typeof value === "object") {
+      seen.add(value);
+    }
+    if (typeof value === "string") return [value];
+    if (typeof value !== "object") return [String(value)];
+
+    const candidate = value as {
+      message?: unknown;
+      cause?: unknown;
+    };
+    const ownMessage =
+      typeof candidate.message === "string" ? [candidate.message] : [];
+    const stringified = String(value);
+    const ownString =
+      stringified && !ownMessage.includes(stringified) ? [stringified] : [];
+    return [...ownMessage, ...ownString, ...collectMessages(candidate.cause)];
+  };
+
+  const messages = collectMessages(error).filter(Boolean);
+  return messages.join(": ");
+}
 
 /**
  * Outcome of a `safeSwap` call. The `status` field reflects the **mint's
@@ -87,7 +111,7 @@ export async function safeSwap(
 
   let originalError: unknown;
   try {
-    const response = await withMintRetry(
+    const response = (await withMintRetry(
       () =>
         wallet.send(
           amount,
@@ -96,7 +120,7 @@ export async function safeSwap(
           options.outputConfig
         ),
       swapOpts
-    );
+    )) as { keep?: Proof[]; send?: Proof[] };
     return {
       status: "swapped",
       keep: response.keep ?? [],
@@ -106,10 +130,7 @@ export async function safeSwap(
     originalError = error;
   }
 
-  const originalMessage =
-    originalError instanceof Error
-      ? originalError.message
-      : String(originalError);
+  const originalMessage = getErrorMessage(originalError);
 
   // Terminal errors: the swap definitively did not happen.
   const lowered = originalMessage.toLowerCase();

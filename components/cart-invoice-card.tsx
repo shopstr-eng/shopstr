@@ -31,13 +31,7 @@ import {
   ClipboardIcon,
   WalletIcon,
 } from "@heroicons/react/24/outline";
-import {
-  Mint as CashuMint,
-  Wallet as CashuWallet,
-  getEncodedToken,
-  Proof,
-  Keyset as MintKeyset,
-} from "@cashu/cashu-ts";
+import * as Cashu from "@cashu/cashu-ts";
 import { safeMeltProofs } from "@/utils/cashu/melt-retry-service";
 import { safeSwap } from "@/utils/cashu/swap-retry-service";
 import { withMintRetry } from "@/utils/cashu/mint-retry-service";
@@ -84,6 +78,11 @@ import {
   ShopProfile,
 } from "@/utils/types/types";
 import { Controller } from "react-hook-form";
+import { getSatsForAmount } from "@/utils/cashu/cashu-compat";
+
+type Proof = Cashu.Proof;
+type MintKeyset = Cashu.Keyset;
+type CashuWallet = Cashu.Wallet;
 
 export default function CartInvoiceCard({
   products,
@@ -1047,12 +1046,12 @@ export default function CartInvoiceCard({
     try {
       validatePaymentData(convertedPrice, data);
 
-      const wallet = new CashuWallet(new CashuMint(mints[0]!));
+      const wallet = new Cashu.Wallet(new Cashu.Mint(mints[0]!));
       await wallet.loadMint();
-      const { request: pr, quote: hash } = await withMintRetry(
+      const { request: pr, quote: hash } = (await withMintRetry(
         () => wallet.createMintQuoteBolt11(convertedPrice),
         { maxAttempts: 4, perAttemptTimeoutMs: 15000, totalTimeoutMs: 60000 }
-      );
+      )) as { request: string; quote: string };
       recordPendingMintQuote({
         quoteId: hash,
         mintUrl: mints[0]!,
@@ -1082,13 +1081,13 @@ export default function CartInvoiceCard({
       validatePaymentData(convertedPrice, data);
 
       setShowInvoiceCard(true);
-      const wallet = new CashuWallet(new CashuMint(mints[0]!));
+      const wallet = new Cashu.Wallet(new Cashu.Mint(mints[0]!));
       await wallet.loadMint();
 
-      const { request: pr, quote: hash } = await withMintRetry(
+      const { request: pr, quote: hash } = (await withMintRetry(
         () => wallet.createMintQuoteBolt11(convertedPrice),
         { maxAttempts: 4, perAttemptTimeoutMs: 15000, totalTimeoutMs: 60000 }
-      );
+      )) as { request: string; quote: string };
       recordPendingMintQuote({
         quoteId: hash,
         mintUrl: mints[0]!,
@@ -1489,7 +1488,7 @@ export default function CartInvoiceCard({
         }
         const { keep, send } = swapOutcome;
         sellerProofs = send;
-        sellerToken = getEncodedToken({
+        sellerToken = Cashu.getEncodedToken({
           mint: mints[0]!,
           proofs: send,
         });
@@ -1536,7 +1535,7 @@ export default function CartInvoiceCard({
           );
         }
         const { keep, send } = swapOutcome;
-        donationToken = getEncodedToken({
+        donationToken = Cashu.getEncodedToken({
           mint: mints[0]!,
           proofs: send,
         });
@@ -1556,13 +1555,12 @@ export default function CartInvoiceCard({
         await wallet.loadMint();
         await ln.fetch();
         const invoice = await ln.requestInvoice({ satoshi: newAmount });
-        const invoicePaymentRequest = invoice.paymentRequest;
+        const invoicePaymentRequest = invoice.paymentRequest as string;
         const meltQuote = await wallet.createMeltQuoteBolt11(
           invoicePaymentRequest
         );
         if (meltQuote) {
-          const meltQuoteTotal =
-            meltQuote.amount.toNumber() + meltQuote.fee_reserve.toNumber();
+          const meltQuoteTotal = meltQuote.amount + meltQuote.fee_reserve;
           const swapOutcome = await safeSwap(
             wallet,
             meltQuoteTotal,
@@ -1584,12 +1582,12 @@ export default function CartInvoiceCard({
             );
           }
           if (meltOutcome.meltQuote) {
-            const meltAmount = meltOutcome.meltQuote.amount.toNumber();
+            const meltAmount = meltOutcome.meltQuote.amount;
             const changeProofs = [...keep, ...meltOutcome.changeProofs];
             const changeAmount =
               Array.isArray(changeProofs) && changeProofs.length > 0
                 ? changeProofs.reduce(
-                    (acc, current: Proof) => acc + current.amount.toNumber(),
+                    (acc, current: Proof) => acc + current.amount,
                     0
                   )
                 : 0;
@@ -1687,7 +1685,7 @@ export default function CartInvoiceCard({
               // Add delay between messages to prevent browser throttling
               await new Promise((resolve) => setTimeout(resolve, 500));
 
-              const encodedChange = getEncodedToken({
+              const encodedChange = Cashu.getEncodedToken({
                 mint: mints[0]!,
                 proofs: changeProofs,
               });
@@ -1722,11 +1720,11 @@ export default function CartInvoiceCard({
             const unusedAmount =
               Array.isArray(unusedProofs) && unusedProofs.length > 0
                 ? unusedProofs.reduce(
-                    (acc, current: Proof) => acc + current.amount.toNumber(),
+                    (acc, current: Proof) => acc + current.amount,
                     0
                   )
                 : 0;
-            const unusedToken = getEncodedToken({
+            const unusedToken = Cashu.getEncodedToken({
               mint: mints[0]!,
               proofs: unusedProofs,
             });
@@ -2313,8 +2311,7 @@ export default function CartInvoiceCard({
         amount: shippingCost,
         currency: product.currency,
       };
-      const { getSatoshiValue } = await import("@getalby/lightning-tools");
-      const numSats = await getSatoshiValue(currencyData);
+      const numSats = await getSatsForAmount(currencyData);
       return Math.round(numSats);
     } catch (err) {
       // Use console.warn so the Next.js dev overlay doesn't escalate
@@ -2354,8 +2351,8 @@ export default function CartInvoiceCard({
 
       validatePaymentData(price, data);
 
-      const mint = new CashuMint(mints[0]!);
-      const wallet = new CashuWallet(mint);
+      const mint = new Cashu.Mint(mints[0]!);
+      const wallet = new Cashu.Wallet(mint);
       await wallet.loadMint();
       const mintKeySetIds = await wallet.keyChain.getKeysets();
       const filteredProofs = tokens.filter((p: Proof) =>
@@ -2698,7 +2695,7 @@ export default function CartInvoiceCard({
                       placeholder="Select pickup location"
                       isInvalid={!!error}
                       errorMessage={error?.message}
-                      onChange={(e) => {
+                      onChange={(e: any) => {
                         onChange(e);
                         setSelectedPickupLocations((prev) => ({
                           ...prev,
@@ -3383,7 +3380,7 @@ export default function CartInvoiceCard({
                           label="Select pickup location"
                           placeholder="Choose a pickup location"
                           value={selectedPickupLocations[product.id] || ""}
-                          onChange={(e) => {
+                          onChange={(e: any) => {
                             setSelectedPickupLocations((prev) => ({
                               ...prev,
                               [product.id]: e.target.value,

@@ -23,7 +23,7 @@ export function productMatchesMarketplaceSearch(
         );
       }
       return false;
-    } catch (_) {
+    } catch {
       return false;
     }
   }
@@ -35,7 +35,7 @@ export function productMatchesMarketplaceSearch(
         return parsedNpub.data === product.pubkey;
       }
       return false;
-    } catch (_) {
+    } catch {
       return false;
     }
   }
@@ -57,7 +57,7 @@ export function productMatchesMarketplaceSearch(
     }
 
     return false;
-  } catch (_) {
+  } catch {
     return false;
   }
 }

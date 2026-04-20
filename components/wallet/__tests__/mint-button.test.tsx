@@ -16,8 +16,8 @@ import { Mint as CashuMint, Wallet as CashuWallet } from "@cashu/cashu-ts";
 import * as NostrHelper from "@/utils/nostr/nostr-helper-functions";
 import QRCode from "qrcode";
 
-jest.mock("@nextui-org/react", () => {
-  const actual = jest.requireActual("@nextui-org/react");
+jest.mock("@heroui/react", () => {
+  const actual = jest.requireActual("@heroui/react");
 
   return {
     ...actual,
@@ -43,7 +43,10 @@ jest.mock("@nextui-org/react", () => {
   };
 });
 
-jest.mock("@cashu/cashu-ts");
+jest.mock("@cashu/cashu-ts", () => ({
+  Mint: jest.fn(),
+  Wallet: jest.fn(),
+}));
 const mockCreateMintQuote = jest.fn();
 const mockCheckMintQuote = jest.fn();
 const mockMintProofs = jest.fn();
@@ -145,6 +148,18 @@ const clickMintButton = () => {
 describe("MintButton Component", () => {
   beforeEach(() => {
     jest.useFakeTimers();
+    mockCreateMintQuote.mockReset();
+    mockCheckMintQuote.mockReset();
+    mockMintProofs.mockReset();
+    mockWebLN.enable.mockReset();
+    mockWebLN.isEnabled.mockReset();
+    mockWebLN.sendPayment.mockReset();
+    mockCreateMintQuote.mockResolvedValue({
+      request: "lnbc-default",
+      quote: "default-quote",
+    });
+    mockCheckMintQuote.mockResolvedValue({ state: "UNPAID" });
+    mockMintProofs.mockResolvedValue([{ id: "proof1" }]);
     mockGetLocalStorageData.mockReturnValue(mockLocalStorage);
     mockToDataURL.mockResolvedValue("data:image/png;base64,mock-qr-code");
     mockPublishProofEvent.mockResolvedValue(undefined);
@@ -189,7 +204,9 @@ describe("MintButton Component", () => {
     renderComponent();
     clickMintButton();
     await waitFor(() => expect(screen.getByRole("dialog")).toBeVisible());
-    fireEvent.click(getMintDialogScope().getByRole("button", { name: /Cancel/i }));
+    fireEvent.click(
+      getMintDialogScope().getByRole("button", { name: /Cancel/i })
+    );
     act(() => {
       jest.runOnlyPendingTimers();
     });

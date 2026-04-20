@@ -5,11 +5,7 @@ import {
   ShopProfile,
   Community,
 } from "@/utils/types/types";
-import {
-  Mint as CashuMint,
-  Wallet as CashuWallet,
-  Proof,
-} from "@cashu/cashu-ts";
+import * as Cashu from "@cashu/cashu-ts";
 import { ChatsMap } from "@/utils/context/context";
 import {
   getLocalStorageData,
@@ -22,7 +18,6 @@ import {
 } from "@/utils/parsers/product-parser-functions";
 import { parseCommunityEvent } from "../parsers/community-parser-functions";
 import { calculateWeightedScore } from "@/utils/parsers/review-parser-functions";
-import { hashToCurve } from "@cashu/cashu-ts";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
 import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 import { cacheEventsToDatabase } from "@/utils/db/db-client";
@@ -31,6 +26,9 @@ import {
   buildSignedHttpRequestProofTemplate,
   SIGNED_EVENT_HEADER,
 } from "@/utils/nostr/request-auth";
+import { getProofSecretFingerprint } from "@/utils/cashu/cashu-compat";
+
+type Proof = Cashu.Proof;
 
 interface NipProfile {
   pubkey: string;
@@ -1317,7 +1315,6 @@ export const fetchCashuWallet = async (
     }
 
     try {
-      const enc = new TextEncoder();
       let mostRecentWalletEvent: NostrEvent | null = null;
       const proofEvents: any[] = [];
       const cashuRelays: string[] = [];
@@ -1600,7 +1597,7 @@ export const fetchCashuWallet = async (
 
       for (const mint of cashuMints) {
         try {
-          const wallet = new CashuWallet(new CashuMint(mint));
+          const wallet = new Cashu.Wallet(new Cashu.Mint(mint));
           await wallet.loadMint();
 
           // Filter proofs for this specific mint
@@ -1615,8 +1612,8 @@ export const fetchCashuWallet = async (
 
           if (mintProofs.length > 0) {
             // Check proof states for this mint
-            const Ys = mintProofs.map((p: Proof) =>
-              hashToCurve(enc.encode(p.secret)).toHex(true)
+            const Ys = await Promise.all(
+              mintProofs.map((p: Proof) => getProofSecretFingerprint(p.secret))
             );
 
             const proofsStates = await wallet.checkProofsStates(mintProofs);
@@ -1640,8 +1637,10 @@ export const fetchCashuWallet = async (
             // Mark fully spent proof events for deletion
             for (const proofEvent of proofEvents) {
               if (proofEvent.mint === mint) {
-                const eventYs = proofEvent.proofs.map((p: Proof) =>
-                  hashToCurve(enc.encode(p.secret)).toHex(true)
+                const eventYs = await Promise.all(
+                  proofEvent.proofs.map((p: Proof) =>
+                    getProofSecretFingerprint(p.secret)
+                  )
                 );
                 const allSpent = eventYs.every((y: string) => spentYs.has(y));
                 if (allSpent && eventYs.length > 0) {

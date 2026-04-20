@@ -20,14 +20,7 @@ import {
   ClipboardIcon,
   WalletIcon,
 } from "@heroicons/react/24/outline";
-import { getSatoshiValue } from "@getalby/lightning-tools";
-import {
-  Mint as CashuMint,
-  Wallet as CashuWallet,
-  getEncodedToken,
-  Keyset as MintKeyset,
-  Proof,
-} from "@cashu/cashu-ts";
+import * as Cashu from "@cashu/cashu-ts";
 import { safeMeltProofs } from "@/utils/cashu/melt-retry-service";
 import { safeSwap } from "@/utils/cashu/swap-retry-service";
 import { withMintRetry } from "@/utils/cashu/mint-retry-service";
@@ -70,6 +63,11 @@ import {
 } from "@/components/utility-components/nostr-context-provider";
 import { ShippingFormData, ContactFormData } from "@/utils/types/types";
 import { Controller } from "react-hook-form";
+import { getSatsForAmount } from "@/utils/cashu/cashu-compat";
+
+type Proof = Cashu.Proof;
+type MintKeyset = Cashu.Keyset;
+type CashuWallet = Cashu.Wallet;
 
 export default function ProductInvoiceCard({
   productData,
@@ -643,7 +641,7 @@ export default function ProductInvoiceCard({
             amount: price,
             currency: productData.currency,
           };
-          const numSats = await getSatoshiValue(currencyData);
+          const numSats = await getSatsForAmount(currencyData);
           price = Math.round(numSats);
         } catch (err) {
           // Use console.warn so the Next.js dev overlay doesn't escalate
@@ -790,12 +788,12 @@ export default function ProductInvoiceCard({
         validatePaymentData(convertedPrice);
       }
 
-      const wallet = new CashuWallet(new CashuMint(mints[0]!));
+      const wallet = new Cashu.Wallet(new Cashu.Mint(mints[0]!));
       await wallet.loadMint();
-      const { request: pr, quote: hash } = await withMintRetry(
+      const { request: pr, quote: hash } = (await withMintRetry(
         () => wallet.createMintQuoteBolt11(convertedPrice),
         { maxAttempts: 4, perAttemptTimeoutMs: 15000, totalTimeoutMs: 60000 }
-      );
+      )) as { request: string; quote: string };
       recordPendingMintQuote({
         quoteId: hash,
         mintUrl: mints[0]!,
@@ -865,13 +863,13 @@ export default function ProductInvoiceCard({
       }
 
       setShowInvoiceCard(true);
-      const wallet = new CashuWallet(new CashuMint(mints[0]!));
+      const wallet = new Cashu.Wallet(new Cashu.Mint(mints[0]!));
       await wallet.loadMint();
 
-      const { request: pr, quote: hash } = await withMintRetry(
+      const { request: pr, quote: hash } = (await withMintRetry(
         () => wallet.createMintQuoteBolt11(convertedPrice),
         { maxAttempts: 4, perAttemptTimeoutMs: 15000, totalTimeoutMs: 60000 }
-      );
+      )) as { request: string; quote: string };
       recordPendingMintQuote({
         quoteId: hash,
         mintUrl: mints[0]!,
@@ -1190,7 +1188,7 @@ export default function ProductInvoiceCard({
       }
       const { keep, send } = swapOutcome;
       sellerProofs = send;
-      sellerToken = getEncodedToken({
+      sellerToken = Cashu.getEncodedToken({
         mint: mints[0]!,
         proofs: send,
       });
@@ -1211,7 +1209,7 @@ export default function ProductInvoiceCard({
         );
       }
       const { keep, send } = swapOutcome;
-      donationToken = getEncodedToken({
+      donationToken = Cashu.getEncodedToken({
         mint: mints[0]!,
         proofs: send,
       });
@@ -1241,13 +1239,12 @@ export default function ProductInvoiceCard({
       await wallet.loadMint();
       await ln.fetch();
       const invoice = await ln.requestInvoice({ satoshi: newAmount });
-      const invoicePaymentRequest = invoice.paymentRequest;
+      const invoicePaymentRequest = invoice.paymentRequest as string;
       const meltQuote = await wallet.createMeltQuoteBolt11(
         invoicePaymentRequest
       );
       if (meltQuote) {
-        const meltQuoteTotal =
-          meltQuote.amount.toNumber() + meltQuote.fee_reserve.toNumber();
+        const meltQuoteTotal = meltQuote.amount + meltQuote.fee_reserve;
         const swapOutcome = await safeSwap(
           wallet,
           meltQuoteTotal,
@@ -1269,12 +1266,12 @@ export default function ProductInvoiceCard({
           );
         }
         if (meltOutcome.meltQuote) {
-          const meltAmount = meltOutcome.meltQuote.amount.toNumber();
+          const meltAmount = meltOutcome.meltQuote.amount;
           const changeProofs = [...keep, ...meltOutcome.changeProofs];
           const changeAmount =
             Array.isArray(changeProofs) && changeProofs.length > 0
               ? changeProofs.reduce(
-                  (acc, current: Proof) => acc + current.amount.toNumber(),
+                  (acc, current: Proof) => acc + current.amount,
                   0
                 )
               : 0;
@@ -1341,7 +1338,7 @@ export default function ProductInvoiceCard({
             // Add delay between messages to prevent browser throttling
             await new Promise((resolve) => setTimeout(resolve, 500));
 
-            const encodedChange = getEncodedToken({
+            const encodedChange = Cashu.getEncodedToken({
               mint: mints[0]!,
               proofs: changeProofs,
             });
@@ -1369,11 +1366,11 @@ export default function ProductInvoiceCard({
           const unusedAmount =
             Array.isArray(unusedProofs) && unusedProofs.length > 0
               ? unusedProofs.reduce(
-                  (acc, current: Proof) => acc + current.amount.toNumber(),
+                  (acc, current: Proof) => acc + current.amount,
                   0
                 )
               : 0;
-          const unusedToken = getEncodedToken({
+          const unusedToken = Cashu.getEncodedToken({
             mint: mints[0]!,
             proofs: unusedProofs,
           });
@@ -1872,8 +1869,8 @@ export default function ProductInvoiceCard({
         validatePaymentData(price);
       }
 
-      const mint = new CashuMint(mints[0]!);
-      const wallet = new CashuWallet(mint);
+      const mint = new Cashu.Mint(mints[0]!);
+      const wallet = new Cashu.Wallet(mint);
       await wallet.loadMint();
       const mintKeySetIds = await wallet.keyChain.getKeysets();
       const filteredProofs = tokens.filter((p: Proof) =>
@@ -1997,7 +1994,7 @@ export default function ProductInvoiceCard({
               selectedKeys={
                 selectedPickupLocation ? [selectedPickupLocation] : []
               }
-              onChange={(e) => setSelectedPickupLocation(e.target.value)}
+              onChange={(e: any) => setSelectedPickupLocation(e.target.value)}
               isRequired
             >
               {(productData.pickupLocations || []).map((location) => (

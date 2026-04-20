@@ -1,9 +1,33 @@
-import {
-  Wallet as CashuWallet,
-  MeltQuoteBolt11Response,
-  Proof,
-} from "@cashu/cashu-ts";
+type CashuWallet = any;
+type MeltQuoteBolt11Response = any;
+type Proof = any;
 import { withMintRetry, MintRetryOptions } from "./mint-retry-service";
+
+function getErrorMessage(error: unknown): string {
+  const seen = new Set<unknown>();
+  const collectMessages = (value: unknown): string[] => {
+    if (value == null || seen.has(value)) return [];
+    if (typeof value === "object") {
+      seen.add(value);
+    }
+    if (typeof value === "string") return [value];
+    if (typeof value !== "object") return [String(value)];
+
+    const candidate = value as {
+      message?: unknown;
+      cause?: unknown;
+    };
+    const ownMessage =
+      typeof candidate.message === "string" ? [candidate.message] : [];
+    const stringified = String(value);
+    const ownString =
+      stringified && !ownMessage.includes(stringified) ? [stringified] : [];
+    return [...ownMessage, ...ownString, ...collectMessages(candidate.cause)];
+  };
+
+  const messages = collectMessages(error).filter(Boolean);
+  return messages.join(": ");
+}
 
 /**
  * Outcome of a `safeMeltProofs` call. The `status` field is the **truth of
@@ -86,10 +110,10 @@ export async function safeMeltProofs(
 
   let originalError: unknown;
   try {
-    const meltResponse = await withMintRetry(
+    const meltResponse = (await withMintRetry(
       () => wallet.meltProofsBolt11(meltQuote, proofsToSend),
       meltOpts
-    );
+    )) as { change?: Proof[] };
     return {
       status: "paid",
       meltQuote,
@@ -100,10 +124,7 @@ export async function safeMeltProofs(
     originalError = error;
   }
 
-  const originalMessage =
-    originalError instanceof Error
-      ? originalError.message
-      : String(originalError);
+  const originalMessage = getErrorMessage(originalError);
 
   // Distinguish "definitely no payment happened" (terminal client errors like
   // "insufficient funds", "invalid quote") from ambiguous ones. For terminal

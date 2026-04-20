@@ -1,9 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import {
-  Mint as CashuMint,
-  Wallet as CashuWallet,
-  MintQuoteState,
-} from "@cashu/cashu-ts";
+import * as Cashu from "@cashu/cashu-ts";
 import { authenticateRequest, initializeApiKeysTable } from "@/utils/mcp/auth";
 import { getMcpOrder, updateMcpOrderPayment } from "@/mcp/tools/purchase-tools";
 import { recordRequest } from "@/utils/mcp/metrics";
@@ -105,14 +101,14 @@ export default async function handler(
       });
     }
 
-    const cashuMint = new CashuMint(pending.mintUrl);
-    const wallet = new CashuWallet(cashuMint);
+    const cashuMint = new Cashu.Mint(pending.mintUrl);
+    const wallet = new Cashu.Wallet(cashuMint);
     await wallet.loadMint();
     const quoteStatus = await wallet.checkMintQuoteBolt11(pending.quote);
 
     if (
-      quoteStatus.state === MintQuoteState.PAID ||
-      quoteStatus.state === MintQuoteState.ISSUED
+      quoteStatus.state === Cashu.MintQuoteState.PAID ||
+      quoteStatus.state === Cashu.MintQuoteState.ISSUED
     ) {
       await updateMcpOrderPayment(orderId, `ln_${pending.quote}`, "paid");
       pendingLightningPayments.delete(orderId);

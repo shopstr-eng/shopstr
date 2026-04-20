@@ -25,7 +25,7 @@ import {
   getLocalStorageData,
   publishProofEvent,
 } from "@/utils/nostr/nostr-helper-functions";
-import { Mint as CashuMint, Wallet as CashuWallet } from "@cashu/cashu-ts";
+import * as Cashu from "@cashu/cashu-ts";
 import QRCode from "qrcode";
 import FailureModal from "@/components/utility-components/failure-modal";
 import {
@@ -90,13 +90,13 @@ const MintButton = () => {
   };
 
   const handleMint = async (numSats: number) => {
-    const wallet = new CashuWallet(new CashuMint(mints[0]!));
+    const wallet = new Cashu.Wallet(new Cashu.Mint(mints[0]!));
     await wallet.loadMint();
 
-    const { request: pr, quote: hash } = await withMintRetry(
+    const { request: pr, quote: hash } = (await withMintRetry(
       () => wallet.createMintQuoteBolt11(numSats),
       { maxAttempts: 4, perAttemptTimeoutMs: 15000, totalTimeoutMs: 60000 }
-    );
+    )) as { request: string; quote: string };
 
     // Record the pending quote durably so a tab close / network failure
     // between "invoice paid" and "proofs minted" can be recovered on next boot.
@@ -145,7 +145,7 @@ const MintButton = () => {
    * pending record so the boot-time recovery hook can finish the claim later.
    */
   async function invoiceHasBeenPaid(
-    wallet: CashuWallet,
+    wallet: Cashu.Wallet,
     numSats: number,
     hash: string
   ) {
@@ -461,11 +461,7 @@ const MintButton = () => {
             </ModalBody>
 
             <ModalFooter>
-              <Button
-                color="danger"
-                variant="light"
-                onClick={closeMintModal}
-              >
+              <Button color="danger" variant="light" onClick={closeMintModal}>
                 Cancel
               </Button>
 

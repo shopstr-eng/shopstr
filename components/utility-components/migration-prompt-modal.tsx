@@ -92,8 +92,8 @@ export default function MigrationPromptModal({
               placeholder="Enter your passphrase..."
               width="100%"
               value={passphrase}
-              onChange={(e) => setPassphrase(e.target.value)}
-              onKeyDown={(e) => {
+              onChange={(e: any) => setPassphrase(e.target.value)}
+              onKeyDown={(e: any) => {
                 if (e.key === "Enter" && passphrase) handleMigration();
               }}
               isInvalid={!!error}

@@ -53,7 +53,6 @@ import {
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { calculateWeightedScore } from "@/utils/parsers/review-parser-functions";
 import { createNip98AuthorizationHeader } from "@/utils/nostr/nip98-auth";
-import { getSatoshiValue } from "@getalby/lightning-tools";
 import currencySelection from "@/public/currencySelection.json";
 import {
   Chart as ChartJS,
@@ -66,6 +65,7 @@ import {
   Legend,
 } from "chart.js";
 import { Line } from "react-chartjs-2";
+import { getSatsForAmount } from "@/utils/cashu/cashu-compat";
 
 ChartJS.register(
   CategoryScale,
@@ -260,7 +260,7 @@ const OrdersDashboard = () => {
 
       const ratePromises = currenciesToFetch.map(async (currency) => {
         try {
-          const sats = await getSatoshiValue({ amount: 1, currency });
+          const sats = await getSatsForAmount({ amount: 1, currency });
           return { currency: currency.toLowerCase(), rate: sats };
         } catch (err) {
           // The third-party rate API 404s for some less-common currencies.

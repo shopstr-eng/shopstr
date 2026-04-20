@@ -45,7 +45,7 @@ const ShopstrSlider = () => {
           minValue={1}
           value={wot}
           className="text-light-text dark:text-dark-text max-w-md"
-          onChangeEnd={(value) => {
+          onChangeEnd={(value: any) => {
             if (Array.isArray(value)) {
               setWot(value[0]!);
             } else {

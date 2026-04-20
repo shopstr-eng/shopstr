@@ -133,8 +133,8 @@ const Keys = () => {
                   size="lg"
                   value={passphrase}
                   placeholder="Enter a passphrase of your choice..."
-                  onChange={(e) => setPassphrase(e.target.value)}
-                  onKeyDown={(e) => {
+                  onChange={(e: any) => setPassphrase(e.target.value)}
+                  onKeyDown={(e: any) => {
                     if (
                       e.key === "Enter" &&
                       !(passphrase === "" || passphrase === null)

@@ -1,5 +1,11 @@
 import React from "react";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import "@testing-library/jest-dom";
 import { FileUploaderButton } from "../file-uploader";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
@@ -14,9 +20,16 @@ jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
 }));
 
 jest.mock("framer-motion", () => ({
-  AnimatePresence: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  AnimatePresence: ({ children }: { children: React.ReactNode }) => (
+    <>{children}</>
+  ),
   motion: {
-    div: ({ children, ...props }: any) => <div {...props}>{children}</div>,
+    div: ({
+      children,
+      ...props
+    }: React.HTMLAttributes<HTMLDivElement> & {
+      children?: React.ReactNode;
+    }) => <div {...props}>{children}</div>,
   },
 }));
 
@@ -27,8 +40,8 @@ jest.mock("@heroicons/react/24/outline", () => ({
   XMarkIcon: () => <div data-testid="close-icon" />,
 }));
 
-jest.mock("@nextui-org/react", () => {
-  const React = require("react");
+jest.mock("@heroui/react", () => {
+  const React = require("react") as typeof import("react");
 
   return {
     Button: ({
@@ -39,15 +52,27 @@ jest.mock("@nextui-org/react", () => {
       startContent,
       ...props
     }: any) => (
-      <button onClick={onClick} disabled={disabled} data-loading={isLoading} {...props}>
+      <button
+        onClick={onClick}
+        disabled={disabled}
+        data-loading={isLoading}
+        {...props}
+      >
         {startContent}
         {children}
       </button>
     ),
-    Input: React.forwardRef(({ className, ...props }: any, ref) => (
+    Input: React.forwardRef(({ className, ...props }: any, ref: any) => (
       <input ref={ref} className={className} {...props} />
     )),
-    Progress: ({ value, classNames, ...props }: any) => (
+    Progress: ({
+      value,
+      classNames: _classNames,
+      ...props
+    }: {
+      value?: number;
+      classNames?: Record<string, string>;
+    } & React.HTMLAttributes<HTMLDivElement>) => (
       <div aria-label="Upload progress" data-value={value} {...props} />
     ),
   };
@@ -85,7 +110,9 @@ describe("FileUploaderButton", () => {
     jest.clearAllMocks();
     jest.useFakeTimers();
     mockGetLocalStorageData.mockReturnValue({ blossomServers: [] });
-    mockBlossomUploadImages.mockResolvedValue([["url", "https://cdn.example/image.jpg"]]);
+    mockBlossomUploadImages.mockResolvedValue([
+      ["url", "https://cdn.example/image.jpg"],
+    ]);
     mockCreateObjectURL.mockImplementation((file: File) => `blob:${file.name}`);
     mockRevokeObjectURL.mockImplementation(() => undefined);
 
@@ -107,19 +134,14 @@ describe("FileUploaderButton", () => {
       }),
     });
 
-    jest
-      .spyOn(HTMLCanvasElement.prototype, "getContext")
-      .mockReturnValue({
-        drawImage: jest.fn(),
-        fillRect: jest.fn(),
-      } as any);
+    jest.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
+      drawImage: jest.fn(),
+      fillRect: jest.fn(),
+    } as any);
 
     jest
       .spyOn(HTMLCanvasElement.prototype, "toBlob")
-      .mockImplementation(function (
-        callback: BlobCallback,
-        type?: string
-      ) {
+      .mockImplementation(function (callback: BlobCallback, type?: string) {
         callback?.(new Blob(["image-bytes"], { type: type || "image/jpeg" }));
       });
   });
@@ -145,7 +167,9 @@ describe("FileUploaderButton", () => {
     const { container } = renderWithSigner(
       <FileUploaderButton imgCallbackOnUpload={onUpload} />
     );
-    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    const input = container.querySelector(
+      'input[type="file"]'
+    ) as HTMLInputElement;
     const invalidFile = new File(["hello"], "notes.txt", {
       type: "text/plain",
     });
@@ -174,7 +198,9 @@ describe("FileUploaderButton", () => {
     const { container } = renderWithSigner(
       <FileUploaderButton imgCallbackOnUpload={onUpload} />
     );
-    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    const input = container.querySelector(
+      'input[type="file"]'
+    ) as HTMLInputElement;
     const imageFile = new File(["image"], "banner.jpg", {
       type: "image/jpeg",
     });
@@ -209,7 +235,9 @@ describe("FileUploaderButton", () => {
     });
 
     await waitFor(() => {
-      expect(screen.queryByLabelText("Upload progress")).not.toBeInTheDocument();
+      expect(
+        screen.queryByLabelText("Upload progress")
+      ).not.toBeInTheDocument();
     });
     expect(mockRevokeObjectURL).toHaveBeenCalledWith("blob:banner.jpg");
     expect(input.value).toBe("");
@@ -227,7 +255,9 @@ describe("FileUploaderButton", () => {
     const { container } = renderWithSigner(
       <FileUploaderButton imgCallbackOnUpload={onUpload} isProductUpload />
     );
-    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    const input = container.querySelector(
+      'input[type="file"]'
+    ) as HTMLInputElement;
     const firstFile = new File(["first"], "first.jpg", {
       type: "image/jpeg",
     });
@@ -285,20 +315,14 @@ describe("FileUploaderButton", () => {
 
     const toBlobSpy = jest
       .spyOn(HTMLCanvasElement.prototype, "toBlob")
-      .mockImplementationOnce(function (
-        callback: BlobCallback,
-        type?: string
-      ) {
+      .mockImplementationOnce(function (callback: BlobCallback, type?: string) {
         callback?.(
           new Blob([new Uint8Array(21 * 1024 * 1024)], {
             type: type || "image/png",
           })
         );
       })
-      .mockImplementationOnce(function (
-        callback: BlobCallback,
-        type?: string
-      ) {
+      .mockImplementationOnce(function (callback: BlobCallback, type?: string) {
         callback?.(new Blob(["compressed"], { type: type || "image/jpeg" }));
       });
 
@@ -306,7 +330,9 @@ describe("FileUploaderButton", () => {
     const { container } = renderWithSigner(
       <FileUploaderButton imgCallbackOnUpload={onUpload} />
     );
-    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    const input = container.querySelector(
+      'input[type="file"]'
+    ) as HTMLInputElement;
 
     await act(async () => {
       fireEvent.change(input, { target: { files: [oversizedPng] } });
@@ -333,7 +359,9 @@ describe("FileUploaderButton", () => {
     const { container } = renderWithSigner(
       <FileUploaderButton imgCallbackOnUpload={jest.fn()} />
     );
-    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    const input = container.querySelector(
+      'input[type="file"]'
+    ) as HTMLInputElement;
     const imageFile = new File(["image"], "banner.jpg", {
       type: "image/jpeg",
     });
@@ -357,5 +385,279 @@ describe("FileUploaderButton", () => {
         )
       ).not.toBeInTheDocument();
     });
+  });
+
+  it("shows a failure message without attempting uploads when the user is logged out", async () => {
+    const onUpload = jest.fn();
+    const { container } = renderWithSigner(
+      <FileUploaderButton imgCallbackOnUpload={onUpload} />,
+      false
+    );
+    const input = container.querySelector(
+      'input[type="file"]'
+    ) as HTMLInputElement;
+    const imageFile = new File(["image"], "logged-out.jpg", {
+      type: "image/jpeg",
+    });
+
+    await act(async () => {
+      fireEvent.change(input, { target: { files: [imageFile] } });
+    });
+
+    expect(mockBlossomUploadImages).not.toHaveBeenCalled();
+    expect(onUpload).not.toHaveBeenCalled();
+    expect(
+      await screen.findByText(
+        /Image upload failed to yield a URL! Change your Blossom media server/i
+      )
+    ).toBeInTheDocument();
+  });
+
+  it("falls back to the original file when metadata stripping fails", async () => {
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    const imageFile = new File(["original-image"], "fallback.jpg", {
+      type: "image/jpeg",
+    });
+
+    (global.createImageBitmap as jest.Mock).mockRejectedValueOnce(
+      new Error("bitmap failure")
+    );
+
+    const { container } = renderWithSigner(
+      <FileUploaderButton imgCallbackOnUpload={jest.fn()} />
+    );
+    const input = container.querySelector(
+      'input[type="file"]'
+    ) as HTMLInputElement;
+
+    await act(async () => {
+      fireEvent.change(input, { target: { files: [imageFile] } });
+    });
+
+    await waitFor(() => {
+      expect(mockBlossomUploadImages).toHaveBeenCalledWith(
+        imageFile,
+        expect.any(Object),
+        ["https://cdn.nostrcheck.me"]
+      );
+    });
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      "Metadata stripping failed, using original file:",
+      expect.any(Error)
+    );
+  });
+
+  it("uploads files dropped onto the drop zone and resets the dragging state", async () => {
+    const onUpload = jest.fn();
+    const { container } = renderWithSigner(
+      <FileUploaderButton imgCallbackOnUpload={onUpload} />
+    );
+    const input = container.querySelector(
+      'input[type="file"]'
+    ) as HTMLInputElement;
+    const dropZone = input.parentElement as HTMLDivElement;
+    const imageFile = new File(["drop-image"], "dropped.jpg", {
+      type: "image/jpeg",
+    });
+
+    fireEvent.dragEnter(dropZone);
+    expect(screen.getByText("Drop to upload")).toBeInTheDocument();
+
+    fireEvent.dragOver(dropZone);
+    fireEvent.dragLeave(dropZone);
+    expect(screen.queryByText("Drop to upload")).not.toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.drop(dropZone, {
+        dataTransfer: { files: [imageFile] },
+      });
+    });
+
+    await waitFor(() => {
+      expect(onUpload).toHaveBeenCalledWith("https://cdn.example/image.jpg");
+    });
+  });
+
+  it("opens the file picker once per tick when placeholder mode is clicked", () => {
+    const inputClickSpy = jest
+      .spyOn(HTMLInputElement.prototype, "click")
+      .mockImplementation(() => undefined);
+
+    renderWithSigner(
+      <FileUploaderButton imgCallbackOnUpload={jest.fn()} isPlaceholder />
+    );
+
+    const placeholderText = screen.getByText("Drag & Drop Images Here");
+
+    fireEvent.click(placeholderText);
+    fireEvent.click(placeholderText);
+
+    expect(inputClickSpy).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      jest.runOnlyPendingTimers();
+    });
+
+    fireEvent.click(placeholderText);
+    expect(inputClickSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it("rescales large images during preprocessing before uploading", async () => {
+    Object.defineProperty(global, "createImageBitmap", {
+      writable: true,
+      value: jest.fn().mockResolvedValue({
+        width: 6000,
+        height: 4500,
+        close: jest.fn(),
+      }),
+    });
+
+    const largePng = new File(["png"], "scaled.png", {
+      type: "image/png",
+    });
+    Object.defineProperty(largePng, "size", {
+      configurable: true,
+      value: 21 * 1024 * 1024,
+    });
+
+    const { container } = renderWithSigner(
+      <FileUploaderButton imgCallbackOnUpload={jest.fn()} />
+    );
+    const input = container.querySelector(
+      'input[type="file"]'
+    ) as HTMLInputElement;
+
+    await act(async () => {
+      fireEvent.change(input, { target: { files: [largePng] } });
+    });
+
+    await waitFor(() => {
+      expect(mockBlossomUploadImages).toHaveBeenCalledWith(
+        expect.any(File),
+        expect.any(Object),
+        ["https://cdn.nostrcheck.me"]
+      );
+    });
+
+    expect(HTMLCanvasElement.prototype.toBlob).toHaveBeenCalled();
+  });
+
+  it("skips metadata stripping for extra-large files and falls back when compression fails", async () => {
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    const hugeJpeg = new File(["huge-image"], "huge.jpg", {
+      type: "image/jpeg",
+    });
+    Object.defineProperty(hugeJpeg, "size", {
+      configurable: true,
+      value: 26 * 1024 * 1024,
+    });
+
+    (global.createImageBitmap as jest.Mock).mockRejectedValueOnce(
+      new Error("compression failure")
+    );
+
+    const { container } = renderWithSigner(
+      <FileUploaderButton imgCallbackOnUpload={jest.fn()} />
+    );
+    const input = container.querySelector(
+      'input[type="file"]'
+    ) as HTMLInputElement;
+
+    await act(async () => {
+      fireEvent.change(input, { target: { files: [hugeJpeg] } });
+    });
+
+    await waitFor(() => {
+      expect(mockBlossomUploadImages).toHaveBeenCalledWith(
+        hugeJpeg,
+        expect.any(Object),
+        ["https://cdn.nostrcheck.me"]
+      );
+    });
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      "Image compression failed, using original file:",
+      expect.any(Error)
+    );
+  });
+
+  it("uses the smallest attempted compressed file when it stays above the threshold", async () => {
+    const hugeJpeg = new File(["huge-image"], "huge.jpg", {
+      type: "image/jpeg",
+    });
+    Object.defineProperty(hugeJpeg, "size", {
+      configurable: true,
+      value: 26 * 1024 * 1024,
+    });
+
+    jest
+      .spyOn(HTMLCanvasElement.prototype, "toBlob")
+      .mockImplementation(function (callback: BlobCallback, type?: string) {
+        callback?.(
+          new Blob([new Uint8Array(21 * 1024 * 1024)], {
+            type: type || "image/jpeg",
+          })
+        );
+      });
+
+    const { container } = renderWithSigner(
+      <FileUploaderButton imgCallbackOnUpload={jest.fn()} />
+    );
+    const input = container.querySelector(
+      'input[type="file"]'
+    ) as HTMLInputElement;
+
+    await act(async () => {
+      fireEvent.change(input, { target: { files: [hugeJpeg] } });
+    });
+
+    await waitFor(() => {
+      expect(mockBlossomUploadImages).toHaveBeenCalled();
+    });
+
+    const uploadedFile = mockBlossomUploadImages.mock.calls[0][0] as File;
+    expect(uploadedFile).not.toBe(hugeJpeg);
+    expect(uploadedFile.name).toBe("huge.jpg");
+    expect(uploadedFile.type).toBe("image/jpeg");
+  });
+
+  it("keeps the original file when compression does not reduce the size", async () => {
+    const hugeJpeg = new File(["huge-image"], "no-gain.jpg", {
+      type: "image/jpeg",
+    });
+    Object.defineProperty(hugeJpeg, "size", {
+      configurable: true,
+      value: 26 * 1024 * 1024,
+    });
+
+    jest
+      .spyOn(HTMLCanvasElement.prototype, "toBlob")
+      .mockImplementation(function (callback: BlobCallback, type?: string) {
+        callback?.(
+          new Blob([new Uint8Array(27 * 1024 * 1024)], {
+            type: type || "image/jpeg",
+          })
+        );
+      });
+
+    const { container } = renderWithSigner(
+      <FileUploaderButton imgCallbackOnUpload={jest.fn()} />
+    );
+    const input = container.querySelector(
+      'input[type="file"]'
+    ) as HTMLInputElement;
+
+    await act(async () => {
+      fireEvent.change(input, { target: { files: [hugeJpeg] } });
+    });
+
+    await waitFor(() => {
+      expect(mockBlossomUploadImages).toHaveBeenCalled();
+    });
+
+    expect(mockBlossomUploadImages.mock.calls[0][0]).toBe(hugeJpeg);
   });
 });

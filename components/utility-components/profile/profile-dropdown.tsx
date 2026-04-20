@@ -343,7 +343,7 @@ export const ProfileWithDropdown = ({
             variant="flat"
             items={dropDownKeys.map((key) => dropDownItems[key]())}
           >
-            {(item) => {
+            {(item: any) => {
               return (
                 <DropdownItem
                   key={item.key}

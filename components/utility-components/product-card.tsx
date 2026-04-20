@@ -206,7 +206,7 @@ export default function ProductCard({
                         variant="light"
                         size="sm"
                         className="h-8 min-w-8"
-                        onClick={(e) => {
+                        onClick={(e: any) => {
                           e.preventDefault();
                           e.stopPropagation();
                         }}

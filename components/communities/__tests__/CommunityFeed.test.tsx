@@ -247,7 +247,10 @@ describe("CommunityFeed", () => {
         "Your reply has been submitted for approval. It will appear once a moderator approves it."
       );
 
-      fireEvent.click(replyButton!);
+      const refreshedReplyButton = (
+        await screen.findAllByRole("button", { name: "Reply" })
+      )[1];
+      fireEvent.click(refreshedReplyButton!);
       const cancelButton = await screen.findByRole("button", {
         name: "Cancel",
       });
@@ -376,12 +379,12 @@ describe("CommunityFeed", () => {
       const approvedByOtherText = await screen.findByText(
         /This was approved by another mod/i
       );
-      const postCard = approvedByOtherText.closest(
-        'div[tabindex="-1"]'
-      ) as HTMLElement;
+      const postCard = approvedByOtherText.closest("div");
 
       expect(
-        within(postCard).queryByRole("button", { name: /Retract Approval/i })
+        within(postCard as HTMLElement).queryByRole("button", {
+          name: /Retract Approval/i,
+        })
       ).not.toBeInTheDocument();
     });
   });
