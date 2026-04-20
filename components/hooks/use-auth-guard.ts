@@ -1,6 +1,6 @@
 import { useContext, useEffect } from "react";
 import { useRouter } from "next/router";
-import { useDisclosure } from "@nextui-org/react";
+import { useDisclosure } from "@heroui/react";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 
 export function useAuthGuard() {
@@ -29,4 +29,3 @@ export function useAuthGuard() {
     handleClose,
   };
 }
-

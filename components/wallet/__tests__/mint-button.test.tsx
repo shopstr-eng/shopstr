@@ -12,7 +12,7 @@ import {
   NostrContext,
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
-import { CashuMint, CashuWallet } from "@cashu/cashu-ts";
+import { Mint as CashuMint, Wallet as CashuWallet } from "@cashu/cashu-ts";
 import * as NostrHelper from "@/utils/nostr/nostr-helper-functions";
 import QRCode from "qrcode";
 
@@ -48,9 +48,10 @@ const mockCreateMintQuote = jest.fn();
 const mockCheckMintQuote = jest.fn();
 const mockMintProofs = jest.fn();
 (CashuWallet as jest.Mock).mockImplementation(() => ({
-  createMintQuote: mockCreateMintQuote,
-  checkMintQuote: mockCheckMintQuote,
-  mintProofs: mockMintProofs,
+  loadMint: jest.fn().mockResolvedValue(undefined),
+  createMintQuoteBolt11: mockCreateMintQuote,
+  checkMintQuoteBolt11: mockCheckMintQuote,
+  mintProofsBolt11: mockMintProofs,
 }));
 (CashuMint as unknown as jest.Mock).mockImplementation(() => ({}));
 
@@ -604,9 +605,12 @@ describe("MintButton Component", () => {
     });
     clickMintButton();
 
-    await waitFor(() => {
-      expect(screen.getByTestId("failure-modal")).toBeVisible();
-    });
+    await waitFor(
+      () => {
+        expect(screen.getByTestId("failure-modal")).toBeVisible();
+      },
+      { timeout: 5000 }
+    );
 
     fireEvent.click(screen.getByTestId("failure-modal-close"));
 

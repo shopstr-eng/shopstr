@@ -1,6 +1,7 @@
 import Head from "next/head";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
+import { safeJsonLdString } from "@/utils/safe-json-ld";
 import { NostrEvent, ProfileData, ShopProfile } from "@/utils/types/types";
 import parseTags, {
   ProductData,
@@ -300,7 +301,7 @@ const DynamicHead = ({
       {isHomepage && (
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
+          dangerouslySetInnerHTML={{ __html: safeJsonLdString(structuredData) }}
         />
       )}
     </Head>

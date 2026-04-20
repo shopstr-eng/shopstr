@@ -1,5 +1,6 @@
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, within } from "@testing-library/react";
 import "@testing-library/jest-dom";
+import type { ComponentProps } from "react";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import { ShopMapContext } from "@/utils/context/context";
 import { ShopProfile } from "@/utils/types/types";
@@ -15,8 +16,8 @@ import router from "next/router";
 const mockRouterPush = router.push as jest.Mock;
 
 const mockOnOpen = jest.fn();
-jest.mock("@nextui-org/react", () => ({
-  ...jest.requireActual("@nextui-org/react"),
+jest.mock("@heroui/react", () => ({
+  ...jest.requireActual("@heroui/react"),
   useDisclosure: () => ({
     isOpen: false,
     onOpen: mockOnOpen,
@@ -82,7 +83,15 @@ const mockShopDataContextEmpty = {
   updateShopData: jest.fn(),
 };
 
-const renderComponent = (signerContextValue: any, shopContextValue: any) => {
+type SignerContextValue = ComponentProps<
+  typeof SignerContext.Provider
+>["value"];
+type ShopContextValue = ComponentProps<typeof ShopMapContext.Provider>["value"];
+
+const renderComponent = (
+  signerContextValue: SignerContextValue,
+  shopContextValue: ShopContextValue
+) => {
   return render(
     <SignerContext.Provider value={signerContextValue}>
       <ShopMapContext.Provider value={shopContextValue}>
@@ -158,6 +167,73 @@ describe("MyListingsPage", () => {
         expect(screen.getByTestId("display-products-mock")).toBeInTheDocument();
         expect(screen.getByTestId("side-shop-nav-mock")).toBeInTheDocument();
       });
+
+      test("updates the About section when the shop profile changes but the banner stays the same", () => {
+        const sharedBanner = "http://example.com/banner.jpg";
+        const initialShopContext = {
+          ...mockShopDataContextWithProfile,
+          shopData: new Map([
+            [
+              loggedInUser.pubkey,
+              {
+                ...shopProfile,
+                content: {
+                  ...shopProfile.content,
+                  about: "Initial about text",
+                  ui: {
+                    ...shopProfile.content.ui,
+                    banner: sharedBanner,
+                  },
+                },
+              },
+            ],
+          ]),
+        };
+
+        const { container, rerender } = renderComponent(
+          loggedInUser,
+          initialShopContext
+        );
+        const currentView = within(container);
+
+        fireEvent.click(
+          currentView.getAllByRole("button", { name: "About" })[0]!
+        );
+        expect(currentView.getByText("Initial about text")).toBeInTheDocument();
+
+        const updatedShopContext = {
+          ...initialShopContext,
+          shopData: new Map([
+            [
+              loggedInUser.pubkey,
+              {
+                ...shopProfile,
+                content: {
+                  ...shopProfile.content,
+                  about: "Updated about text",
+                  ui: {
+                    ...shopProfile.content.ui,
+                    banner: sharedBanner,
+                  },
+                },
+              },
+            ],
+          ]),
+        };
+
+        rerender(
+          <SignerContext.Provider value={loggedInUser}>
+            <ShopMapContext.Provider value={updatedShopContext}>
+              <MyListingsPage />
+            </ShopMapContext.Provider>
+          </SignerContext.Provider>
+        );
+
+        expect(currentView.getByText("Updated about text")).toBeInTheDocument();
+        expect(
+          currentView.queryByText("Initial about text")
+        ).not.toBeInTheDocument();
+      });
     });
 
     describe("and has no shop profile", () => {
@@ -176,6 +252,25 @@ describe("MyListingsPage", () => {
           screen.getByText("Set up your shop in settings!")
         ).toBeInTheDocument();
       });
+
+      test("clears stale shop banner when shop data is removed after render", () => {
+        const { rerender } = renderComponent(
+          loggedInUser,
+          mockShopDataContextWithProfile
+        );
+
+        expect(screen.getByAltText("Shop Banner")).toBeInTheDocument();
+
+        rerender(
+          <SignerContext.Provider value={loggedInUser}>
+            <ShopMapContext.Provider value={mockShopDataContextEmpty}>
+              <MyListingsPage />
+            </ShopMapContext.Provider>
+          </SignerContext.Provider>
+        );
+
+        expect(screen.queryByAltText("Shop Banner")).not.toBeInTheDocument();
+      });
     });
 
     test("navigates correctly when clicking action buttons", () => {
@@ -185,7 +280,7 @@ describe("MyListingsPage", () => {
       expect(mockRouterPush).toHaveBeenCalledWith("?addNewListing");
 
       fireEvent.click(screen.getAllByText("Edit Shop")[0]!);
-      expect(mockRouterPush).toHaveBeenCalledWith("settings/shop-profile");
+      expect(mockRouterPush).toHaveBeenCalledWith("/settings/shop-profile");
 
       fireEvent.click(screen.getAllByRole("button", { name: "Orders" })[0]!);
       expect(mockRouterPush).toHaveBeenCalledWith("/orders");

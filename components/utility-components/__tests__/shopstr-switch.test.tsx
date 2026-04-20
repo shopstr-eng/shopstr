@@ -14,11 +14,11 @@ jest.mock("next/router", () => ({
   }),
 }));
 
-jest.mock("@nextui-org/react", () => ({
+jest.mock("@heroui/react", () => ({
   Switch: (props: {
-    color: string;
-    isSelected: boolean;
     onValueChange: (value: boolean) => void;
+    isSelected: boolean;
+    color: string;
   }) => (
     <button
       role="switch"

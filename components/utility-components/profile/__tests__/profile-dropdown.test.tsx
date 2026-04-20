@@ -1,4 +1,10 @@
-import { render, screen, fireEvent, act, waitFor } from "@testing-library/react";
+import {
+  render,
+  screen,
+  fireEvent,
+  act,
+  waitFor,
+} from "@testing-library/react";
 import "@testing-library/jest-dom";
 import { ProfileWithDropdown } from "../profile-dropdown";
 import { ProfileMapContext } from "@/utils/context/context";
@@ -6,6 +12,9 @@ import { SignerContext } from "@/components/utility-components/nostr-context-pro
 import { LogOut } from "@/utils/nostr/nostr-helper-functions";
 import { nip19 } from "nostr-tools";
 import React from "react";
+
+const mockFetch = jest.fn();
+global.fetch = mockFetch as unknown as typeof fetch;
 
 const mockRouterPush = jest.fn();
 jest.mock("next/router", () => ({
@@ -20,8 +29,8 @@ jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
 }));
 
 const mockOnOpen = jest.fn();
-jest.mock("@nextui-org/react", () => {
-  const originalModule = jest.requireActual("@nextui-org/react");
+jest.mock("@heroui/react", () => {
+  const originalModule = jest.requireActual("@heroui/react");
   const React = jest.requireActual("react");
   const DropdownContext = React.createContext({
     isOpen: false,
@@ -161,6 +170,9 @@ describe("ProfileWithDropdown", () => {
     mockOnOpen.mockClear();
     (LogOut as jest.Mock).mockClear();
     (navigator.clipboard.writeText as jest.Mock).mockClear();
+    mockFetch.mockResolvedValue({
+      json: jest.fn().mockResolvedValue({ profile: { content: null } }),
+    });
   });
 
   it("renders with fallback data and correct dropdown items", () => {

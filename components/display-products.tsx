@@ -5,7 +5,7 @@ import { ProductContext, FollowsContext } from "../utils/context/context";
 import ProductCard from "./utility-components/product-card";
 import DisplayProductModal from "./display-product-modal";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
-import { Button, Pagination } from "@nextui-org/react";
+import { Button, Pagination } from "@heroui/react";
 import ShopstrSpinner from "./utility-components/shopstr-spinner";
 import { useRouter } from "next/router";
 import parseTags, {
@@ -17,7 +17,7 @@ import {
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
 import { getListingSlug } from "@/utils/url-slugs";
-import { productMatchesMarketplaceSearch } from "@/utils/search/marketplace-search";
+import { productSatisfiesAllFilters } from "@/utils/parsers/product-filter-helpers";
 
 const DisplayProducts = ({
   focusedPubkey,
@@ -38,7 +38,7 @@ const DisplayProducts = ({
   isMyListings?: boolean;
   setCategories?: (categories: string[]) => void;
   onFilteredProductsChange?: (products: ProductData[]) => void;
-  searchBarRef?: React.RefObject<HTMLDivElement>;
+  searchBarRef?: React.RefObject<HTMLDivElement | null>;
 }) => {
   const [productEvents, setProductEvents] = useState<ProductData[]>([]);
   const [isProductsLoading, setIsProductLoading] = useState(true);
@@ -77,8 +77,10 @@ const DisplayProducts = ({
 
   useEffect(() => {
     if (!productEventContext) return;
-    if (!productEventContext.isLoading && productEventContext.productEvents) {
-      setIsProductLoading(true);
+    const hasProducts =
+      productEventContext.productEvents &&
+      productEventContext.productEvents.length > 0;
+    if (hasProducts) {
       const sortedProductEvents = [...productEventContext.productEvents].sort(
         (a: NostrEvent, b: NostrEvent) => b.created_at - a.created_at
       );
@@ -111,11 +113,15 @@ const DisplayProducts = ({
         }
       });
       setProductEvents(parsedProductData);
-      if (parsedProductData.length >= itemsPerPage) {
-        setIsProductLoading(false);
-      } else if (!productEventContext.isLoading) {
+      if (
+        parsedProductData.length >= itemsPerPage ||
+        !productEventContext.isLoading
+      ) {
         setIsProductLoading(false);
       }
+    } else if (!productEventContext.isLoading) {
+      setProductEvents([]);
+      setIsProductLoading(false);
     }
   }, [productEventContext, wotFilter]);
 
@@ -136,7 +142,14 @@ const DisplayProducts = ({
 
     const filtered = productEvents.filter((product) => {
       if (focusedPubkey && product.pubkey !== focusedPubkey) return false;
-      if (!productSatisfiesAllFilters(product)) return false;
+      if (
+        !productSatisfiesAllFilters(product, {
+          selectedCategories,
+          selectedLocation,
+          selectedSearch,
+        })
+      )
+        return false;
       if (!product.currency) return false;
       if (product.images.length === 0) return false;
       if (product.contentWarning) return false;
@@ -247,7 +260,10 @@ const DisplayProducts = ({
     return `/listing/${product.id}`;
   };
 
-  const onProductClick = (product: ProductData, e?: React.MouseEvent) => {
+  const onProductClick = (
+    product: ProductData,
+    e?: React.MouseEvent<HTMLElement> | React.KeyboardEvent<HTMLElement>
+  ) => {
     setFocusedProduct(product);
     if (product.pubkey === userPubkey) {
       e?.preventDefault();
@@ -255,33 +271,6 @@ const DisplayProducts = ({
     } else {
       setShowModal(false);
     }
-  };
-
-  const productSatisfiesCategoryFilter = (productData: ProductData) => {
-    if (selectedCategories.size === 0) return true;
-    return Array.from(selectedCategories).some((selectedCategory) => {
-      const re = new RegExp(selectedCategory, "gi");
-      return productData?.categories?.some((category) => {
-        const match = category.match(re);
-        return match && match.length > 0;
-      });
-    });
-  };
-
-  const productSatisfieslocationFilter = (productData: ProductData) => {
-    return !selectedLocation || productData.location === selectedLocation;
-  };
-
-  const productSatisfiesSearchFilter = (productData: ProductData) => {
-    return productMatchesMarketplaceSearch(productData, selectedSearch);
-  };
-
-  const productSatisfiesAllFilters = (productData: ProductData) => {
-    return (
-      productSatisfiesCategoryFilter(productData) &&
-      productSatisfieslocationFilter(productData) &&
-      productSatisfiesSearchFilter(productData)
-    );
   };
 
   const getCurrentPageProducts = () => {
@@ -306,11 +295,11 @@ const DisplayProducts = ({
     <>
       <div className="w-full md:pl-4">
         {!isMyListings && isProductsLoading ? (
-          <div className="mb-6 mt-6 flex items-center justify-center">
+          <div className="mt-6 mb-6 flex items-center justify-center">
             <ShopstrSpinner />
           </div>
         ) : null}
-        {filteredProducts.length > 0 ? (
+        {filteredProducts.length > 0 && (
           <>
             <div className="grid max-w-full grid-cols-[repeat(auto-fill,minmax(280px,1fr))] justify-items-stretch gap-4 overflow-x-hidden">
               {getCurrentPageProducts().map(
@@ -339,36 +328,36 @@ const DisplayProducts = ({
               </div>
             )}
 
-            <div className="mb-6 mt-2 text-center text-xs text-light-text dark:text-dark-text">
+            <div className="text-light-text dark:text-dark-text mt-2 mb-6 text-center text-xs">
               Showing {(currentPage - 1) * itemsPerPage + 1} to{" "}
               {Math.min(filteredProducts.length, currentPage * itemsPerPage)} of{" "}
               {filteredProducts.length} products
             </div>
           </>
-        ) : (
-          wotFilter &&
-          !isProductsLoading && (
+        )}
+        {!isMyListings &&
+          !isProductsLoading &&
+          filteredProducts.length === 0 && (
             <div className="mt-20 flex flex-grow items-center justify-center py-10">
-              <div className="w-full max-w-lg rounded-lg bg-light-fg p-8 text-center shadow-lg dark:bg-dark-fg">
-                <p className="text-3xl font-semibold text-light-text dark:text-dark-text">
+              <div className="bg-light-fg dark:bg-dark-fg w-full max-w-lg rounded-lg p-8 text-center shadow-lg">
+                <p className="text-light-text dark:text-dark-text text-3xl font-semibold">
                   No products found...
                 </p>
-                <p className="mt-4 text-lg text-light-text dark:text-dark-text">
-                  Try turning off the trust filter!
+                <p className="text-light-text dark:text-dark-text mt-4 text-lg">
+                  Try changing your search or clearing some filters.
                 </p>
               </div>
             </div>
-          )
-        )}
+          )}
         {isMyListings &&
           !isProductsLoading &&
           !productEvents.some((product) => product.pubkey === userPubkey) && (
             <div className="mt-20 flex flex-grow items-center justify-center py-10">
-              <div className="w-full max-w-lg rounded-lg bg-light-fg p-8 text-center shadow-lg dark:bg-dark-fg">
-                <p className="text-3xl font-semibold text-light-text dark:text-dark-text">
+              <div className="bg-light-fg dark:bg-dark-fg w-full max-w-lg rounded-lg p-8 text-center shadow-lg">
+                <p className="text-light-text dark:text-dark-text text-3xl font-semibold">
                   No products found...
                 </p>
-                <p className="mt-4 text-lg text-light-text dark:text-dark-text">
+                <p className="text-light-text dark:text-dark-text mt-4 text-lg">
                   Try adding a new listing!
                 </p>
                 <Button

@@ -8,7 +8,7 @@ import {
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
 import { CashuWalletContext } from "@/utils/context/context";
-import { CashuWallet, getEncodedToken } from "@cashu/cashu-ts";
+import { Wallet as CashuWallet, getEncodedToken } from "@cashu/cashu-ts";
 import {
   getLocalStorageData,
   publishProofEvent,
@@ -105,7 +105,10 @@ describe("SendButton", () => {
 
     mockSend = jest.fn();
     MockCashuWallet.mockImplementation(() => ({
-      getKeySets: jest.fn().mockResolvedValue([{ id: "keyset_id_1" }]),
+      loadMint: jest.fn().mockResolvedValue(undefined),
+      keyChain: {
+        getKeysets: jest.fn().mockResolvedValue([{ id: "keyset_id_1" }]),
+      },
       send: mockSend,
     }));
 
@@ -280,9 +283,12 @@ describe("SendButton", () => {
     });
 
     MockCashuWallet.mockImplementation(() => ({
-      getKeySets: jest
-        .fn()
-        .mockResolvedValue([{ id: "keyset_id_1" }, { id: "keyset_id_2" }]),
+      loadMint: jest.fn().mockResolvedValue(undefined),
+      keyChain: {
+        getKeysets: jest
+          .fn()
+          .mockResolvedValue([{ id: "keyset_id_1" }, { id: "keyset_id_2" }]),
+      },
       send: jest.fn().mockResolvedValue({
         keep: [{ id: "keyset_id_1", amount: 400 }],
         send: [{ id: "keyset_id_1", amount: 100 }],

@@ -6,7 +6,7 @@ import {
   ModalHeader,
   Button,
   Spinner,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import {
   ArrowDownTrayIcon,
   BoltIcon,
@@ -29,12 +29,14 @@ import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { LightningAddress } from "@getalby/lightning-tools";
 import { nip19 } from "nostr-tools";
 import {
-  CashuMint,
-  CashuWallet,
+  Mint as CashuMint,
+  Wallet as CashuWallet,
   Proof,
   getDecodedToken,
   getEncodedToken,
 } from "@cashu/cashu-ts";
+import { safeMeltProofs } from "@/utils/cashu/melt-retry-service";
+import { safeSwap } from "@/utils/cashu/swap-retry-service";
 import { formatWithCommas } from "./display-monetary-info";
 import {
   NostrContext,
@@ -92,7 +94,7 @@ export default function ClaimButton({ token }: { token: string }) {
 
   useEffect(() => {
     try {
-      const decodedToken = getDecodedToken(token);
+      const decodedToken = getDecodedToken(token, []);
       const mint = decodedToken.mint;
       setTokenMint(mint);
       const proofs = decodedToken.proofs;
@@ -101,7 +103,10 @@ export default function ClaimButton({ token }: { token: string }) {
       setWallet(newWallet);
       const totalAmount =
         Array.isArray(proofs) && proofs.length > 0
-          ? proofs.reduce((acc, current: Proof) => acc + current.amount, 0)
+          ? proofs.reduce(
+              (acc, current: Proof) => acc + current.amount.toNumber(),
+              0
+            )
           : 0;
 
       setTokenAmount(totalAmount);
@@ -245,18 +250,34 @@ export default function ClaimButton({ token }: { token: string }) {
         await ln.fetch();
         const invoice = await ln.requestInvoice({ satoshi: newAmount });
         const invoicePaymentRequest = invoice.paymentRequest;
-        const meltQuote = await wallet.createMeltQuote(invoicePaymentRequest);
+        const meltQuote = await wallet.createMeltQuoteBolt11(
+          invoicePaymentRequest
+        );
         if (meltQuote) {
-          const meltQuoteTotal = meltQuote.amount + meltQuote.fee_reserve;
-          const { keep, send } = await wallet.send(meltQuoteTotal, proofs, {
-            includeFees: true,
+          const meltQuoteTotal =
+            meltQuote.amount.toNumber() + meltQuote.fee_reserve.toNumber();
+          const swapOutcome = await safeSwap(wallet, meltQuoteTotal, proofs, {
+            sendConfig: { includeFees: true },
           });
-          const meltResponse = await wallet.meltProofs(meltQuote, send);
-          const changeProofs = [...keep, ...meltResponse.change];
+          if (swapOutcome.status !== "swapped") {
+            throw new Error(
+              swapOutcome.errorMessage ??
+                `Pre-melt swap did not complete (${swapOutcome.status})`
+            );
+          }
+          const { keep, send } = swapOutcome;
+          const meltOutcome = await safeMeltProofs(wallet, meltQuote, send);
+          if (meltOutcome.status !== "paid") {
+            throw new Error(
+              meltOutcome.errorMessage ??
+                `Melt did not complete (${meltOutcome.status})`
+            );
+          }
+          const changeProofs = [...keep, ...meltOutcome.changeProofs];
           const changeAmount =
             Array.isArray(changeProofs) && changeProofs.length > 0
               ? changeProofs.reduce(
-                  (acc, current: Proof) => acc + current.amount,
+                  (acc, current: Proof) => acc + current.amount.toNumber(),
                   0
                 )
               : 0;
@@ -295,7 +316,7 @@ export default function ClaimButton({ token }: { token: string }) {
               decodedRandomPrivkeyForReceiver.data as Uint8Array,
               userPubkey!
             );
-            await sendGiftWrappedMessageEvent(nostr!, giftWrappedEvent);
+            await sendGiftWrappedMessageEvent(nostr!, giftWrappedEvent, signer);
             chatsContext.addNewlyCreatedMessageEvent(
               {
                 ...giftWrappedMessageEvent,
@@ -372,7 +393,7 @@ export default function ClaimButton({ token }: { token: string }) {
         size="2xl"
       >
         <ModalContent>
-          <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+          <ModalBody className="text-light-text dark:text-dark-text flex flex-col overflow-hidden">
             <div className="flex items-center justify-center">
               Would you like to claim the token directly to your Shopstr wallet,
               or to your Lightning address?
@@ -420,11 +441,11 @@ export default function ClaimButton({ token }: { token: string }) {
             size="2xl"
           >
             <ModalContent>
-              <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+              <ModalHeader className="text-light-text dark:text-dark-text flex items-center justify-center">
                 <XCircleIcon className="h-6 w-6 text-red-500" />
                 <div className="ml-2">No valid Lightning address found!</div>
               </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+              <ModalBody className="text-light-text dark:text-dark-text flex flex-col overflow-hidden">
                 <div className="flex items-center justify-center">
                   Check your Shopstr wallet for your sats.
                 </div>
@@ -453,11 +474,11 @@ export default function ClaimButton({ token }: { token: string }) {
             size="2xl"
           >
             <ModalContent>
-              <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+              <ModalHeader className="text-light-text dark:text-dark-text flex items-center justify-center">
                 <CheckCircleIcon className="h-6 w-6 text-green-500" />
                 <div className="ml-2">Token successfully claimed!</div>
               </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+              <ModalBody className="text-light-text dark:text-dark-text flex flex-col overflow-hidden">
                 <div className="flex items-center justify-center">
                   Check your Shopstr wallet for your sats.
                 </div>
@@ -486,11 +507,11 @@ export default function ClaimButton({ token }: { token: string }) {
             size="2xl"
           >
             <ModalContent>
-              <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+              <ModalHeader className="text-light-text dark:text-dark-text flex items-center justify-center">
                 <XCircleIcon className="h-6 w-6 text-red-500" />
                 <div className="ml-2">Duplicate token!</div>
               </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+              <ModalBody className="text-light-text dark:text-dark-text flex flex-col overflow-hidden">
                 <div className="flex items-center justify-center">
                   The token you are trying to claim is already in your Shopstr
                   wallet.
@@ -520,11 +541,11 @@ export default function ClaimButton({ token }: { token: string }) {
             size="2xl"
           >
             <ModalContent>
-              <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+              <ModalHeader className="text-light-text dark:text-dark-text flex items-center justify-center">
                 <XCircleIcon className="h-6 w-6 text-red-500" />
                 <div className="ml-2">Spent token!</div>
               </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+              <ModalBody className="text-light-text dark:text-dark-text flex flex-col overflow-hidden">
                 <div className="flex items-center justify-center">
                   The token you are trying to claim has already been redeemed.
                 </div>
@@ -553,11 +574,11 @@ export default function ClaimButton({ token }: { token: string }) {
             size="2xl"
           >
             <ModalContent>
-              <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+              <ModalHeader className="text-light-text dark:text-dark-text flex items-center justify-center">
                 <CheckCircleIcon className="h-6 w-6 text-green-500" />
                 <div className="ml-2">Token successfully redeemed!</div>
               </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+              <ModalBody className="text-light-text dark:text-dark-text flex flex-col overflow-hidden">
                 <div className="flex items-center justify-center">
                   Check your Lightning address ({lnurl}) for your sats.
                 </div>
@@ -585,11 +606,11 @@ export default function ClaimButton({ token }: { token: string }) {
             size="2xl"
           >
             <ModalContent>
-              <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+              <ModalHeader className="text-light-text dark:text-dark-text flex items-center justify-center">
                 <XCircleIcon className="h-6 w-6 text-red-500" />
                 <div className="ml-2">Token redemption failed!</div>
               </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+              <ModalBody className="text-light-text dark:text-dark-text flex flex-col overflow-hidden">
                 <div className="flex items-center justify-center">
                   You are attempting to redeem a token that has already been
                   redeemed, is too small/large, or for which there were no

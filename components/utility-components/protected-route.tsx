@@ -6,7 +6,7 @@ export default function ProtectedRoute({ children }: { children: ReactNode }) {
   const { isAuthResolved, isGuarded, isOpen, handleClose } = useAuthGuard();
 
   if (!isAuthResolved) {
-    return <div className="min-h-screen bg-light-bg dark:bg-dark-bg" />;
+    return <div className="bg-light-bg dark:bg-dark-bg min-h-screen" />;
   }
 
   if (isGuarded) {
