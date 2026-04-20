@@ -4,6 +4,16 @@ import { TextEncoder, TextDecoder } from "util";
 global.TextEncoder = TextEncoder;
 global.TextDecoder = TextDecoder;
 
+const mockFetchData = { profile: null };
+const createFetchMock = () =>
+  jest.fn(() =>
+    Promise.resolve({
+      json: () => Promise.resolve(mockFetchData),
+    })
+  );
+
+globalThis.fetch = createFetchMock();
+
 const originalWarn = console.warn;
 const originalError = console.error;
 
@@ -32,6 +42,11 @@ const errorSpy = jest.spyOn(console, "error").mockImplementation((...args) => {
 afterAll(() => {
   warnSpy.mockRestore();
   errorSpy.mockRestore();
+});
+
+afterEach(() => {
+  jest.clearAllMocks();
+  globalThis.fetch = createFetchMock();
 });
 
 jest.mock("@braintree/sanitize-url", () => ({

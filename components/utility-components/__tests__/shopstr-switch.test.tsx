@@ -15,8 +15,17 @@ jest.mock("next/router", () => ({
 }));
 
 jest.mock("@nextui-org/react", () => ({
-  Switch: (props: { onClick: () => void; color: string }) => (
-    <button role="switch" onClick={props.onClick} data-color={props.color} />
+  Switch: (props: {
+    color: string;
+    isSelected: boolean;
+    onValueChange: (value: boolean) => void;
+  }) => (
+    <button
+      role="switch"
+      aria-checked={props.isSelected}
+      onClick={() => props.onValueChange(!props.isSelected)}
+      data-color={props.color}
+    />
   ),
 }));
 
