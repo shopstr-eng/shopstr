@@ -17,7 +17,7 @@ export function productSatisfiesCategoryFilter(
   if (selectedCategories.size === 0) return true;
 
   return Array.from(selectedCategories).some((selectedCategory) => {
-    const re = new RegExp(selectedCategory, "gi");
+    const re = new RegExp(escapeRegExp(selectedCategory), "gi");
 
     return productData.categories?.some((category) => {
       const match = category.match(re);
@@ -86,11 +86,18 @@ export function productSatisfiesSearchFilter(
   }
 }
 
+export function productSatisfiesPriceFilter(
+  productData: ProductData
+): boolean {
+  return Number(productData.price) >= 1;
+}
+
 export function productSatisfiesAllFilters(
   productData: ProductData,
   filters: ListingFilters
 ): boolean {
   return (
+    productSatisfiesPriceFilter(productData) &&
     productSatisfiesCategoryFilter(productData, filters.selectedCategories) &&
     productSatisfiesLocationFilter(productData, filters.selectedLocation) &&
     productSatisfiesSearchFilter(productData, filters.selectedSearch)

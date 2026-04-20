@@ -4,6 +4,7 @@ import {
   productSatisfiesAllFilters,
   productSatisfiesCategoryFilter,
   productSatisfiesLocationFilter,
+  productSatisfiesPriceFilter,
   productSatisfiesSearchFilter,
 } from "../listing-filters";
 
@@ -148,6 +149,20 @@ describe("productSatisfiesCategoryFilter", () => {
       productSatisfiesCategoryFilter(product, new Set(["electronics"]))
     ).toBe(true);
   });
+
+  it("treats regex special characters in categories literally", () => {
+    const product = makeProduct({ categories: ["A.B", "C*D", "E(F)"] });
+
+    expect(productSatisfiesCategoryFilter(product, new Set(["A.B"]))).toBe(
+      true
+    );
+    expect(productSatisfiesCategoryFilter(product, new Set(["C*D"]))).toBe(
+      true
+    );
+    expect(productSatisfiesCategoryFilter(product, new Set(["E(F)"]))).toBe(
+      true
+    );
+  });
 });
 
 describe("productSatisfiesLocationFilter", () => {
@@ -164,6 +179,19 @@ describe("productSatisfiesLocationFilter", () => {
 });
 
 describe("productSatisfiesAllFilters", () => {
+  it("returns false for products priced below 1", () => {
+    expect(productSatisfiesPriceFilter(makeProduct({ price: 0.5 }))).toBe(
+      false
+    );
+    expect(
+      productSatisfiesAllFilters(makeProduct({ price: 0.5 }), {
+        selectedSearch: "",
+        selectedCategories: new Set(),
+        selectedLocation: "",
+      })
+    ).toBe(false);
+  });
+
   it("returns true when all filters pass", () => {
     const product = makeProduct({
       title: "Vintage Jacket",
