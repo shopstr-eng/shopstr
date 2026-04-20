@@ -26,7 +26,7 @@ export default function WeightSelector({
       label="Select Weight"
       labelPlacement="inside"
       selectedKeys={selectedWeight ? new Set([selectedWeight]) : new Set()}
-      onSelectionChange={(keys) => {
+      onSelectionChange={(keys: any) => {
         const selectedKey = Array.from(keys)[0] as string;
         if (selectedKey) {
           onWeightChange(selectedKey);

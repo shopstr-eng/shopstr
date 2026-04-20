@@ -28,11 +28,12 @@ export const SettingsBreadCrumbs = () => {
           const itemClassName =
             "ml-2 text-light-text dark:text-dark-text text-2xl font-bold" +
             (i !== path.length - 1 ? " opacity-50 hover:opacity-100" : "");
+          const breadcrumbPath = `/${path.slice(0, i + 1).join("/")}`;
           return (
             <BreadcrumbItem
               key={i}
               onClick={() => {
-                router.push(`/${p}`);
+                router.push(breadcrumbPath);
               }}
               classNames={{
                 item: itemClassName,

@@ -26,13 +26,7 @@ import {
   getLocalStorageData,
   publishProofEvent,
 } from "@/utils/nostr/nostr-helper-functions";
-import {
-  Mint as CashuMint,
-  Wallet as CashuWallet,
-  getEncodedToken,
-  Keyset as MintKeyset,
-  Proof,
-} from "@cashu/cashu-ts";
+import * as Cashu from "@cashu/cashu-ts";
 import { safeSwap } from "@/utils/cashu/swap-retry-service";
 import { CashuWalletContext } from "../../utils/context/context";
 import {
@@ -40,6 +34,9 @@ import {
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
 import { NostrNIP46Signer } from "@/utils/nostr/signers/nostr-nip46-signer";
+
+type Proof = Cashu.Proof;
+type MintKeyset = Cashu.Keyset;
 
 const SendButton = () => {
   const [showSendModal, setShowSendModal] = useState(false);
@@ -83,8 +80,8 @@ const SendButton = () => {
   const handleSend = async (numSats: number) => {
     setSendFailed(false);
     try {
-      const mint = new CashuMint(mints[0]!);
-      const wallet = new CashuWallet(mint);
+      const mint = new Cashu.Mint(mints[0]!);
+      const wallet = new Cashu.Wallet(mint);
       await wallet.loadMint();
       const mintKeySetIds = await wallet.keyChain.getKeysets();
       const filteredProofs = tokens.filter((p: Proof) =>
@@ -130,7 +127,7 @@ const SendButton = () => {
         ]),
       ];
 
-      const encodedSendToken = getEncodedToken({
+      const encodedSendToken = Cashu.getEncodedToken({
         mint: mints[0]!,
         proofs: send,
       });

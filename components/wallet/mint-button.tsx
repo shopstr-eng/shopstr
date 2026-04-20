@@ -25,7 +25,7 @@ import {
   getLocalStorageData,
   publishProofEvent,
 } from "@/utils/nostr/nostr-helper-functions";
-import { Mint as CashuMint, Wallet as CashuWallet } from "@cashu/cashu-ts";
+import * as Cashu from "@cashu/cashu-ts";
 import QRCode from "qrcode";
 import FailureModal from "@/components/utility-components/failure-modal";
 import {
@@ -67,11 +67,20 @@ const MintButton = () => {
     reset: mintReset,
   } = useForm();
 
-  const handleToggleMintModal = () => {
+  const resetMintModalState = () => {
     mintReset();
     setPaymentConfirmed(false);
-    setShowMintModal(!showMintModal);
     setShowInvoiceCard(false);
+  };
+
+  const openMintModal = () => {
+    resetMintModalState();
+    setShowMintModal(true);
+  };
+
+  const closeMintModal = () => {
+    resetMintModalState();
+    setShowMintModal(false);
   };
 
   const onMintSubmit = async (data: { [x: string]: number }) => {
@@ -81,13 +90,13 @@ const MintButton = () => {
   };
 
   const handleMint = async (numSats: number) => {
-    const wallet = new CashuWallet(new CashuMint(mints[0]!));
+    const wallet = new Cashu.Wallet(new Cashu.Mint(mints[0]!));
     await wallet.loadMint();
 
-    const { request: pr, quote: hash } = await withMintRetry(
+    const { request: pr, quote: hash } = (await withMintRetry(
       () => wallet.createMintQuoteBolt11(numSats),
       { maxAttempts: 4, perAttemptTimeoutMs: 15000, totalTimeoutMs: 60000 }
-    );
+    )) as { request: string; quote: string };
 
     // Record the pending quote durably so a tab close / network failure
     // between "invoice paid" and "proofs minted" can be recovered on next boot.
@@ -136,7 +145,7 @@ const MintButton = () => {
    * pending record so the boot-time recovery hook can finish the claim later.
    */
   async function invoiceHasBeenPaid(
-    wallet: CashuWallet,
+    wallet: Cashu.Wallet,
     numSats: number,
     hash: string
   ) {
@@ -193,7 +202,7 @@ const MintButton = () => {
         );
         setShowFailureModal(true);
         setTimeout(() => {
-          handleToggleMintModal();
+          closeMintModal();
         }, 1900);
         return;
       }
@@ -203,7 +212,11 @@ const MintButton = () => {
 
       try {
         const proofs = await withMintRetry(
-          () => wallet.mintProofsBolt11(numSats, hash),
+          () =>
+            "mintProofsBolt11" in wallet &&
+            typeof wallet.mintProofsBolt11 === "function"
+              ? wallet.mintProofsBolt11(numSats, hash)
+              : wallet.mintProofs(numSats, hash),
           { maxAttempts: 5, perAttemptTimeoutMs: 15000, totalTimeoutMs: 60000 }
         );
         if (proofs && proofs.length > 0) {
@@ -232,7 +245,7 @@ const MintButton = () => {
           setPaymentConfirmed(true);
           setQrCodeUrl(null);
           setTimeout(() => {
-            handleToggleMintModal();
+            closeMintModal();
           }, 1900);
           claimDone = true;
           break;
@@ -264,7 +277,7 @@ const MintButton = () => {
           );
           setShowFailureModal(true);
           setTimeout(() => {
-            handleToggleMintModal();
+            closeMintModal();
           }, 1900);
           return;
         }
@@ -306,7 +319,7 @@ const MintButton = () => {
     <div>
       <Button
         className={SHOPSTRBUTTONCLASSNAMES + " m-2"}
-        onClick={() => setShowMintModal(!showMintModal)}
+        onClick={openMintModal}
         startContent={
           <BanknotesIcon className="h-6 w-6 hover:text-yellow-500 dark:hover:text-purple-500" />
         }
@@ -316,7 +329,7 @@ const MintButton = () => {
       <Modal
         backdrop="blur"
         isOpen={showMintModal}
-        onClose={handleToggleMintModal}
+        onClose={closeMintModal}
         classNames={{
           body: "py-6",
           backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
@@ -448,11 +461,7 @@ const MintButton = () => {
             </ModalBody>
 
             <ModalFooter>
-              <Button
-                color="danger"
-                variant="light"
-                onClick={handleToggleMintModal}
-              >
+              <Button color="danger" variant="light" onClick={closeMintModal}>
                 Cancel
               </Button>
 

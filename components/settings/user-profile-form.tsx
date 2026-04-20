@@ -477,7 +477,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
               label="Payment preference (for sellers)"
               labelPlacement="outside"
               selectedKeys={value ? [value] : []}
-              onChange={(e) => onChange(e.target.value)}
+              onChange={(e: any) => onChange(e.target.value)}
               onBlur={onBlur}
             >
               <SelectItem
@@ -523,7 +523,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
         <Button
           className={`mb-10 w-full ${SHOPSTRBUTTONCLASSNAMES}`}
           type="submit"
-          onKeyDown={(e) => {
+          onKeyDown={(e: any) => {
             if (e.key === "Enter") {
               e.preventDefault();
               handleSubmit(onSubmit as any)();

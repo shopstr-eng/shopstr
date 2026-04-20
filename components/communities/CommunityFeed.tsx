@@ -285,7 +285,7 @@ const CommunityFeed: React.FC<CommunityFeedProps> = ({ community }) => {
             <h3 className="mb-2 text-lg font-bold">Create an Announcement</h3>
             <Textarea
               value={newPostContent}
-              onChange={(e) => setNewPostContent(e.target.value)}
+              onChange={(e: any) => setNewPostContent(e.target.value)}
               placeholder="What's on your mind?"
               minRows={3}
             />
@@ -361,7 +361,7 @@ const CommunityFeed: React.FC<CommunityFeedProps> = ({ community }) => {
                     <div className="mt-4 border-t-2 pt-4 dark:border-zinc-800">
                       <Textarea
                         value={replyContent}
-                        onChange={(e) => setReplyContent(e.target.value)}
+                        onChange={(e: any) => setReplyContent(e.target.value)}
                         placeholder={`Replying to ${post.pubkey.slice(
                           0,
                           8
@@ -431,7 +431,7 @@ const CommunityFeed: React.FC<CommunityFeedProps> = ({ community }) => {
                             <div className="mt-4 border-t-2 pt-4 dark:border-zinc-800">
                               <Textarea
                                 value={replyContent}
-                                onChange={(e) =>
+                                onChange={(e: any) =>
                                   setReplyContent(e.target.value)
                                 }
                                 placeholder={`Replying to ${reply.pubkey.slice(

@@ -164,7 +164,8 @@ describe("ChatPanel Component", () => {
     it("should send a message by clicking the send button", async () => {
       await renderComponent();
       const input = screen.getByPlaceholderText(/Type your message/i);
-      const sendButton = screen.getByRole("button", { name: /Send/i });
+      const sendButtons = screen.getAllByRole("button", { name: /Send/i });
+      const sendButton = sendButtons[0]!;
 
       await userEvent.type(input, "This is a test");
       await userEvent.click(sendButton);

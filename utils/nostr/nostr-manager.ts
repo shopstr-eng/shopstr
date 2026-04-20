@@ -148,7 +148,7 @@ export class NostrManager {
       filters.map((f) => ({ url: r.url, filter: f }))
     );
     const sub: NostrSub = {
-      _sub: this.pool.subscribeMap(requests, params ?? {}),
+      _sub: (this.pool as any).subscribeMap(requests, params ?? {}),
       close: async () => {
         sub._sub.close();
         for (const relay of relays) {

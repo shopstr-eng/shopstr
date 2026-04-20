@@ -4,6 +4,18 @@ import { TextEncoder, TextDecoder } from "util";
 global.TextEncoder = TextEncoder;
 global.TextDecoder = TextDecoder;
 
+const mockFetchData = { profile: null };
+const createFetchMock = () =>
+  jest.fn(() =>
+    Promise.resolve({
+      ok: true,
+      text: () => Promise.resolve(JSON.stringify(mockFetchData)),
+      json: () => Promise.resolve(mockFetchData),
+    })
+  );
+
+globalThis.fetch = createFetchMock();
+
 // cashu-ts v3+ uses Amount class with .toNumber(). Production code converts
 // at library boundaries (Choice B). Test mocks return raw numbers, so shim
 // Number.prototype.toNumber to keep mock data compatible.
@@ -45,6 +57,11 @@ const errorSpy = jest.spyOn(console, "error").mockImplementation((...args) => {
 afterAll(() => {
   warnSpy.mockRestore();
   errorSpy.mockRestore();
+});
+
+afterEach(() => {
+  jest.clearAllMocks();
+  globalThis.fetch = createFetchMock();
 });
 
 jest.mock("@braintree/sanitize-url", () => ({

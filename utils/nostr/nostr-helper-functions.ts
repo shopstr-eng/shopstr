@@ -16,7 +16,6 @@ import {
   ProductFormValues,
 } from "@/utils/types/types";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
-import { Proof } from "@cashu/cashu-ts";
 import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
 import {
@@ -29,6 +28,8 @@ import {
 } from "@/utils/nostr/request-auth";
 import { newPromiseWithTimeout } from "@/utils/timeout";
 import { getLocalStorageJson } from "@/utils/safe-json";
+
+type Proof = any;
 
 function containsRelay(relays: string[], relay: string): boolean {
   return relays.some((r) => r.includes(relay));
@@ -188,7 +189,7 @@ export async function PostListing(
   const handlerDTag = uuidv4();
 
   const origin =
-    window && typeof window !== undefined
+    typeof window !== "undefined"
       ? window.location.origin
       : "https://shopstr.market";
 

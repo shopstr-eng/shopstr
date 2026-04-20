@@ -22,6 +22,7 @@ jest.mock("@heroui/react", () => ({
   }) => (
     <button
       role="switch"
+      aria-checked={props.isSelected}
       onClick={() => props.onValueChange(!props.isSelected)}
       data-color={props.color}
     />

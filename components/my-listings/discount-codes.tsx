@@ -171,7 +171,7 @@ export default function DiscountCodes() {
             label="Code"
             placeholder="SUMMER2024"
             value={newCode}
-            onChange={(e) => setNewCode(e.target.value.toUpperCase())}
+            onChange={(e: any) => setNewCode(e.target.value.toUpperCase())}
             className="text-light-text dark:text-dark-text"
           />
           <Input
@@ -182,7 +182,7 @@ export default function DiscountCodes() {
             max="100"
             step="0.01"
             value={newDiscount}
-            onChange={(e) => setNewDiscount(e.target.value)}
+            onChange={(e: any) => setNewDiscount(e.target.value)}
             endContent={<span className="text-default-400">%</span>}
             className="text-light-text dark:text-dark-text"
           />
@@ -191,7 +191,7 @@ export default function DiscountCodes() {
             label="Expiration (Optional)"
             placeholder="Select expiration date"
             value={newExpiration}
-            onChange={(e) => setNewExpiration(e.target.value)}
+            onChange={(e: any) => setNewExpiration(e.target.value)}
             min={formatCurrentDateTimeLocalValue()}
             className="text-light-text dark:text-dark-text"
           />

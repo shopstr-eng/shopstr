@@ -6,13 +6,12 @@ import ReceiveButton from "../../components/wallet/receive-button";
 import SendButton from "../../components/wallet/send-button";
 import PayButton from "../../components/wallet/pay-button";
 import Transactions from "../../components/wallet/transactions";
-import {
-  Mint as CashuMint,
-  Wallet as CashuWallet,
-  Keyset as MintKeyset,
-  Proof,
-} from "@cashu/cashu-ts";
+import * as Cashu from "@cashu/cashu-ts";
 import ProtectedRoute from "@/components/utility-components/protected-route";
+
+type Proof = Cashu.Proof;
+type MintKeyset = Cashu.Keyset;
+type CashuWallet = Cashu.Wallet;
 
 const Wallet = () => {
   const [totalBalance, setTotalBalance] = useState(0);
@@ -26,9 +25,9 @@ const Wallet = () => {
   const { mints, tokens } = localStorageData;
 
   useEffect(() => {
-    const currentMint = new CashuMint(mints[0]!);
+    const currentMint = new Cashu.Mint(mints[0]!);
     setMint(mints[0]!);
-    const cashuWallet = new CashuWallet(currentMint);
+    const cashuWallet = new Cashu.Wallet(currentMint);
     setWallet(cashuWallet);
   }, [mints]);
 
@@ -57,17 +56,14 @@ const Wallet = () => {
     if (tokens) {
       const tokensTotal =
         tokens.length >= 1
-          ? tokens.reduce(
-              (acc, token: Proof) => acc + token.amount.toNumber(),
-              0
-            )
+          ? tokens.reduce((acc, token: Proof) => acc + token.amount, 0)
           : 0;
       setTotalBalance(tokensTotal);
     }
 
     const walletTotal =
       filteredProofs.length >= 1
-        ? filteredProofs.reduce((acc, p: Proof) => acc + p.amount.toNumber(), 0)
+        ? filteredProofs.reduce((acc, p: Proof) => acc + p.amount, 0)
         : 0;
     setWalletBalance(walletTotal);
   }, [tokens, filteredProofs]);
@@ -79,7 +75,7 @@ const Wallet = () => {
         const tokensTotal =
           newTokens.length >= 1
             ? newTokens.reduce(
-                (acc: number, token: Proof) => acc + token.amount.toNumber(),
+                (acc: number, token: Proof) => acc + token.amount,
                 0
               )
             : 0;
@@ -92,7 +88,7 @@ const Wallet = () => {
           const newWalletTotal =
             newFilteredProofs.length >= 1
               ? newFilteredProofs.reduce(
-                  (acc: number, p: Proof) => acc + p.amount.toNumber(),
+                  (acc: number, p: Proof) => acc + p.amount,
                   0
                 )
               : 0;

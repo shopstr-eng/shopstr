@@ -294,7 +294,7 @@ const ApiKeysPage = () => {
               <Select
                 label="Permissions"
                 selectedKeys={[newKeyPermission]}
-                onChange={(e) => setNewKeyPermission(e.target.value)}
+                onChange={(e: any) => setNewKeyPermission(e.target.value)}
                 classNames={{
                   label: "text-light-text dark:text-dark-text",
                   value: "text-light-text dark:text-dark-text",

@@ -509,7 +509,7 @@ export default function ProductForm({
                             radius="full"
                             className="bg-gradient-to-tr from-blue-950 to-red-950 text-white"
                             variant="bordered"
-                            onClick={(e) => e.stopPropagation()}
+                            onClick={(e: any) => e.stopPropagation()}
                           >
                             <TrashIcon style={{ padding: 4 }} />
                           </Button>
@@ -521,7 +521,7 @@ export default function ProductForm({
                         width={350}
                         src={image}
                         srcSet={buildSrcSet(image)}
-                        onClick={(e) => e.preventDefault()} // Prevent form submission
+                        onClick={(e: any) => e.preventDefault()} // Prevent form submission
                       />
                     </div>
                   ))
@@ -827,7 +827,7 @@ export default function ProductForm({
                               index + 1
                             } (e.g., 123 Main St, City, State)`}
                             value={location}
-                            onChange={(e) => {
+                            onChange={(e: any) => {
                               const newLocations = [...value];
                               newLocations[index] = e.target.value;
                               onChange(newLocations);
@@ -916,10 +916,10 @@ export default function ProductForm({
                       base: "mt-4",
                       trigger: "min-h-unit-12 py-2",
                     }}
-                    renderValue={(items) => {
+                    renderValue={(items: any[]) => {
                       return (
                         <div className="flex flex-wrap gap-2">
-                          {items.map((item) => (
+                          {items.map((item: any) => (
                             <Chip key={item.key}>
                               {item.key
                                 ? (item.key as string)
@@ -1026,7 +1026,7 @@ export default function ProductForm({
                             label="Units"
                             labelPlacement="inside"
                             value={units > 0 ? units.toString() : ""}
-                            onChange={(e) =>
+                            onChange={(e: any) =>
                               handleUnitsChange(
                                 units,
                                 parseInt(e.target.value) || 0
@@ -1041,7 +1041,7 @@ export default function ProductForm({
                             label="Total Price"
                             labelPlacement="inside"
                             value={price > 0 ? price.toString() : ""}
-                            onChange={(e) =>
+                            onChange={(e: any) =>
                               handlePriceChange(
                                 units,
                                 parseFloat(e.target.value) || 0
@@ -1153,7 +1153,7 @@ export default function ProductForm({
                           label="Quantity"
                           labelPlacement="inside"
                           value={value}
-                          onChange={(e) =>
+                          onChange={(e: any) =>
                             onChange(parseInt(e.target.value) || 1)
                           }
                           className="w-20"
@@ -1199,7 +1199,7 @@ export default function ProductForm({
                         selectionMode="multiple"
                         isInvalid={isErrored}
                         errorMessage={errorMessage}
-                        onChange={(e) => handleSizeChange(e.target.value)}
+                        onChange={(e: any) => handleSizeChange(e.target.value)}
                         onBlur={onBlur}
                         value={selectedSizes}
                         defaultSelectedKeys={new Set(selectedSizes)}
@@ -1257,7 +1257,9 @@ export default function ProductForm({
                         selectionMode="multiple"
                         isInvalid={isErrored}
                         errorMessage={errorMessage}
-                        onChange={(e) => handleVolumeChange(e.target.value)}
+                        onChange={(e: any) =>
+                          handleVolumeChange(e.target.value)
+                        }
                         onBlur={onBlur}
                         value={selectedVolumes}
                         defaultSelectedKeys={new Set(selectedVolumes)}
@@ -1315,7 +1317,7 @@ export default function ProductForm({
                               step="0.01"
                               min="0"
                               value={(value.get(volume) || 0).toString()}
-                              onChange={(e) =>
+                              onChange={(e: any) =>
                                 handlePriceChange(
                                   volume,
                                   parseFloat(e.target.value) || 0
@@ -1379,7 +1381,9 @@ export default function ProductForm({
                         selectionMode="multiple"
                         isInvalid={isErrored}
                         errorMessage={errorMessage}
-                        onChange={(e) => handleWeightChange(e.target.value)}
+                        onChange={(e: any) =>
+                          handleWeightChange(e.target.value)
+                        }
                         onBlur={onBlur}
                         value={selectedWeights}
                         defaultSelectedKeys={new Set(selectedWeights)}
@@ -1442,7 +1446,7 @@ export default function ProductForm({
                               step="0.01"
                               min="0"
                               value={(value.get(weight) || 0).toString()}
-                              onChange={(e) =>
+                              onChange={(e: any) =>
                                 handlePriceChange(
                                   weight,
                                   parseFloat(e.target.value) || 0
@@ -1501,7 +1505,7 @@ export default function ProductForm({
                               type="number"
                               min="0"
                               value={(value.get(size) || 0).toString()}
-                              onChange={(e) =>
+                              onChange={(e: any) =>
                                 handleQuantityChange(
                                   size,
                                   parseInt(e.target.value) || 0
@@ -1736,13 +1740,13 @@ export default function ProductForm({
             <Button
               className={SHOPSTRBUTTONCLASSNAMES}
               type="submit"
-              onClick={(e) => {
+              onClick={(e: any) => {
                 if (signer && isLoggedIn) {
                   e.preventDefault();
                   handleSubmit(onSubmit as any)();
                 }
               }}
-              onKeyDown={(e) => {
+              onKeyDown={(e: any) => {
                 if (e.key === "Enter") {
                   e.preventDefault(); // Prevent default to avoid submitting the form again
                   handleSubmit(onSubmit as any)(); // Programmatic submit

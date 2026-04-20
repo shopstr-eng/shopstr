@@ -451,7 +451,7 @@ export default function SignInModal({
                           size="lg"
                           value={bunkerToken}
                           placeholder="Paste your bunker token (bunker://)..."
-                          onChange={(e) => setBunkerToken(e.target.value)}
+                          onChange={(e: any) => setBunkerToken(e.target.value)}
                         />
                       </div>
                       <div>
@@ -507,7 +507,7 @@ export default function SignInModal({
                           size="lg"
                           value={privateKey}
                           placeholder="Paste your nsec or ncryptsec..."
-                          onChange={(e) => setPrivateKey(e.target.value)}
+                          onChange={(e: any) => setPrivateKey(e.target.value)}
                           endContent={
                             <button
                               type="button"
@@ -546,8 +546,8 @@ export default function SignInModal({
                               ? "Enter the passphrase used to encrypt..."
                               : "Enter a passphrase of your choice..."
                           }
-                          onChange={(e) => setPassphrase(e.target.value)}
-                          onKeyDown={(e) => {
+                          onChange={(e: any) => setPassphrase(e.target.value)}
+                          onKeyDown={(e: any) => {
                             if (
                               e.key === "Enter" &&
                               (validPrivateKey === "success" || isNcryptsec)
@@ -668,7 +668,7 @@ export default function SignInModal({
                           size="lg"
                           value={bunkerToken}
                           placeholder="Paste your bunker token (bunker://)..."
-                          onChange={(e) => setBunkerToken(e.target.value)}
+                          onChange={(e: any) => setBunkerToken(e.target.value)}
                         />
                       </div>
                       <div>
@@ -722,7 +722,7 @@ export default function SignInModal({
                         size="lg"
                         value={privateKey}
                         placeholder="Paste your nsec or ncryptsec..."
-                        onChange={(e) => setPrivateKey(e.target.value)}
+                        onChange={(e: any) => setPrivateKey(e.target.value)}
                         endContent={
                           <button
                             type="button"
@@ -761,8 +761,8 @@ export default function SignInModal({
                             ? "Enter the passphrase used to encrypt..."
                             : "Enter a passphrase of your choice..."
                         }
-                        onChange={(e) => setPassphrase(e.target.value)}
-                        onKeyDown={(e) => {
+                        onChange={(e: any) => setPassphrase(e.target.value)}
+                        onKeyDown={(e: any) => {
                           if (
                             e.key === "Enter" &&
                             (validPrivateKey === "success" || isNcryptsec)

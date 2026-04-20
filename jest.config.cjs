@@ -8,9 +8,21 @@ const createJestConfig = nextJest({
 const customJestConfig = {
   setupFilesAfterEnv: ["<rootDir>/jest.setup.js"],
   testEnvironment: "jest-environment-jsdom",
+  collectCoverage: true,
+  coverageThreshold: {
+    global: {
+      branches: 40,
+      functions: 50,
+      lines: 55,
+      statements: 55,
+    },
+  },
   moduleNameMapper: {
     // Handle module aliases
     "^@/(.*)$": "<rootDir>/$1",
+    "^@heroui/react$": "<rootDir>/test/mocks/heroui-react.tsx",
+    "^react-responsive-carousel$":
+      "<rootDir>/test/mocks/react-responsive-carousel.tsx",
   },
 };
 

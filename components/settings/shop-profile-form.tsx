@@ -243,6 +243,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
   const watchBanner = watch("banner");
   const watchPicture = watch("picture");
   const defaultImage = "/shopstr-2000x2000.png";
+  const isSubmittingRef = useRef(false);
 
   // Tracks whether relay-context data has been applied so DB pre-load doesn't
   // override more authoritative data that arrived later.
@@ -333,57 +334,66 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
   }, [shopContext, userPubkey, applyShopConfig]);
 
   const onSubmit = async (data: { [x: string]: string }) => {
+    if (isSubmittingRef.current) {
+      return;
+    }
+    isSubmittingRef.current = true;
     setIsUploadingShopProfile(true);
-    const thresholdValue = freeShippingThreshold
-      ? parseFloat(freeShippingThreshold)
-      : undefined;
-    const transformedData: any = {
-      name: data.name || "",
-      about: data.about || "",
-      ui: {
-        picture: data.picture || "",
-        banner: data.banner || "",
-        theme: "",
-        darkMode: false,
-      },
-      merchants: [userPubkey!],
-    };
-    if (thresholdValue && thresholdValue > 0) {
-      transformedData.freeShippingThreshold = thresholdValue;
-      transformedData.freeShippingCurrency = freeShippingCurrency;
-    }
-    if (shopSlug) {
-      const storefrontConfig = sanitizeStorefrontConfigLinks({
-        colorScheme: colors,
-        productLayout,
-        landingPageStyle,
-        shopSlug,
-        customDomain: customDomain || undefined,
-        fontHeading: fontHeading || undefined,
-        fontBody: fontBody || undefined,
-        sections: sections.length > 0 ? sections : undefined,
-        pages: pages.length > 0 ? pages : undefined,
-        footer,
-        navLinks: navLinks.length > 0 ? navLinks : undefined,
-        showCommunityPage: showCommunityPage || undefined,
-        showWalletPage: showWalletPage || undefined,
-        contactEmail: contactEmail || undefined,
+    try {
+      const thresholdValue = freeShippingThreshold
+        ? parseFloat(freeShippingThreshold)
+        : undefined;
+      const transformedData: any = {
+        name: data.name || "",
+        about: data.about || "",
+        ui: {
+          picture: data.picture || "",
+          banner: data.banner || "",
+          theme: "",
+          darkMode: false,
+        },
+        merchants: [userPubkey!],
+      };
+      if (thresholdValue && thresholdValue > 0) {
+        transformedData.freeShippingThreshold = thresholdValue;
+        transformedData.freeShippingCurrency = freeShippingCurrency;
+      }
+      if (shopSlug) {
+        const storefrontConfig: StorefrontConfig =
+          sanitizeStorefrontConfigLinks({
+            colorScheme: colors,
+            productLayout,
+            landingPageStyle,
+            shopSlug,
+            customDomain: customDomain || undefined,
+            fontHeading: fontHeading || undefined,
+            fontBody: fontBody || undefined,
+            sections: sections.length > 0 ? sections : undefined,
+            pages: pages.length > 0 ? pages : undefined,
+            footer,
+            navLinks: navLinks.length > 0 ? navLinks : undefined,
+            showCommunityPage: showCommunityPage || undefined,
+            showWalletPage: showWalletPage || undefined,
+            contactEmail: contactEmail || undefined,
+          });
+        transformedData.storefront = storefrontConfig;
+      }
+      await createNostrShopEvent(
+        nostr!,
+        signer!,
+        JSON.stringify(transformedData)
+      );
+      shopContext.updateShopData({
+        pubkey: userPubkey!,
+        content: transformedData,
+        created_at: 0,
       });
-      transformedData.storefront = storefrontConfig;
-    }
-    await createNostrShopEvent(
-      nostr!,
-      signer!,
-      JSON.stringify(transformedData)
-    );
-    shopContext.updateShopData({
-      pubkey: userPubkey!,
-      content: transformedData,
-      created_at: 0,
-    });
-    setIsUploadingShopProfile(false);
-    if (isOnboarding) {
-      router.push("/marketplace");
+      if (isOnboarding) {
+        router.push("/marketplace");
+      }
+    } finally {
+      isSubmittingRef.current = false;
+      setIsUploadingShopProfile(false);
     }
   };
 
@@ -723,14 +733,16 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                     step="0.01"
                     placeholder="e.g. 50.00"
                     value={freeShippingThreshold}
-                    onChange={(e) => setFreeShippingThreshold(e.target.value)}
+                    onChange={(e: any) =>
+                      setFreeShippingThreshold(e.target.value)
+                    }
                   />
                 </div>
                 <div className="w-32">
                   <Select
                     variant="bordered"
                     selectedKeys={[freeShippingCurrency]}
-                    onChange={(e) => {
+                    onChange={(e: any) => {
                       if (e.target.value)
                         setFreeShippingCurrency(e.target.value);
                     }}
@@ -795,7 +807,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                   variant="bordered"
                   placeholder="your-shop-name"
                   value={slugInput}
-                  onChange={(e) => {
+                  onChange={(e: any) => {
                     setSlugInput(sanitizeSlug(e.target.value));
                     setSlugStatus("idle");
                     setSlugMessage("");
@@ -993,7 +1005,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                       <Input
                         variant="bordered"
                         value={colors[key]}
-                        onChange={(e) => {
+                        onChange={(e: any) => {
                           if (/^#[0-9A-Fa-f]{6}$/.test(e.target.value)) {
                             setColors((prev) => ({
                               ...prev,
@@ -1032,7 +1044,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                   label="Heading Font"
                   labelPlacement="outside"
                   selectedKeys={[fontHeading]}
-                  onChange={(e) => setFontHeading(e.target.value)}
+                  onChange={(e: any) => setFontHeading(e.target.value)}
                   aria-label="Heading font"
                 >
                   {GOOGLE_FONTS.map((f) => (
@@ -1046,7 +1058,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                   label="Body Font"
                   labelPlacement="outside"
                   selectedKeys={[fontBody]}
-                  onChange={(e) => setFontBody(e.target.value)}
+                  onChange={(e: any) => setFontBody(e.target.value)}
                   aria-label="Body font"
                 >
                   {GOOGLE_FONTS.map((f) => (
@@ -1074,7 +1086,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                       variant="bordered"
                       size="sm"
                       value={link.label}
-                      onChange={(e) => {
+                      onChange={(e: any) => {
                         const updated = [...navLinks];
                         updated[idx] = { ...link, label: e.target.value };
                         setNavLinks(updated);
@@ -1086,7 +1098,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                       variant="bordered"
                       size="sm"
                       value={link.href}
-                      onChange={(e) => {
+                      onChange={(e: any) => {
                         const updated = [...navLinks];
                         updated[idx] = { ...link, href: e.target.value };
                         setNavLinks(updated);
@@ -1304,7 +1316,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                 type="email"
                 placeholder="hello@yourshop.com"
                 value={contactEmail}
-                onChange={(e) => setContactEmail(e.target.value)}
+                onChange={(e: any) => setContactEmail(e.target.value)}
                 classNames={{
                   label: "text-light-text dark:text-dark-text font-medium pb-1",
                 }}

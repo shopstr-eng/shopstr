@@ -1,6 +1,28 @@
 /**
  * @jest-environment node
  */
+jest.mock("@cashu/cashu-ts", () => {
+  class HttpResponseError extends Error {
+    status: number;
+    constructor(message: string, status: number) {
+      super(message);
+      this.name = "HttpResponseError";
+      this.status = status;
+    }
+  }
+
+  class RateLimitError extends Error {
+    retryAfterMs: number;
+    constructor(message: string, retryAfterMs: number) {
+      super(message);
+      this.name = "RateLimitError";
+      this.retryAfterMs = retryAfterMs;
+    }
+  }
+
+  return { HttpResponseError, RateLimitError };
+});
+
 import { HttpResponseError, RateLimitError } from "@cashu/cashu-ts";
 import {
   computeRetryDelay,

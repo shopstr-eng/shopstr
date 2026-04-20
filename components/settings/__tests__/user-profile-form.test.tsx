@@ -9,7 +9,12 @@ import {
   SignerContext,
   NostrContext,
 } from "@/components/utility-components/nostr-context-provider";
-import { createNostrProfileEvent } from "@/utils/nostr/nostr-helper-functions";
+import {
+  createNostrProfileEvent,
+  getLocalUserProfileKey,
+  parseLocalProfileFallback,
+  isProfileContentPopulated,
+} from "@/utils/nostr/nostr-helper-functions";
 
 const mockRouterPush = jest.fn();
 jest.mock("next/router", () => ({
@@ -18,8 +23,18 @@ jest.mock("next/router", () => ({
 
 jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
   createNostrProfileEvent: jest.fn(),
+  getLocalUserProfileKey: jest.fn(
+    (pubkey: string) => `shopstr:user-profile:${pubkey}`
+  ),
+  parseLocalProfileFallback: jest.fn(() => null),
+  isProfileContentPopulated: jest.fn((content) =>
+    Boolean(content && Object.keys(content).length > 0)
+  ),
 }));
 const mockCreateNostrProfileEvent = createNostrProfileEvent as jest.Mock;
+const mockGetLocalUserProfileKey = getLocalUserProfileKey as jest.Mock;
+const mockParseLocalProfileFallback = parseLocalProfileFallback as jest.Mock;
+const mockIsProfileContentPopulated = isProfileContentPopulated as jest.Mock;
 
 jest.mock("@/components/utility-components/file-uploader", () => ({
   FileUploaderButton: jest.fn(
@@ -82,6 +97,13 @@ describe("UserProfileForm", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     localStorage.clear();
+    mockGetLocalUserProfileKey.mockImplementation(
+      (pubkey: string) => `shopstr:user-profile:${pubkey}`
+    );
+    mockParseLocalProfileFallback.mockReturnValue(null);
+    mockIsProfileContentPopulated.mockImplementation((content) =>
+      Boolean(content && Object.keys(content).length > 0)
+    );
   });
 
   test("displays the form after initial data load", async () => {

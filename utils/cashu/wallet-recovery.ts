@@ -1,4 +1,4 @@
-import { Proof } from "@cashu/cashu-ts";
+type Proof = any;
 import {
   getLocalStorageData,
   publishProofEvent,

@@ -2728,8 +2728,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
       if (!signer) return noSignerError();
 
       try {
-        const { getDecodedToken } = await import("@cashu/cashu-ts");
-        const decoded = getDecodedToken(params.token, []);
+        const Cashu = await import("@cashu/cashu-ts");
+        const decoded = Cashu.getDecodedToken(params.token, []);
         const mintUrl = decoded.mint;
         const proofs = decoded.proofs;
         const totalAmount = proofs.reduce(
@@ -2863,11 +2863,10 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
       if (!signer) return noSignerError();
 
       try {
-        const { Mint: CashuMint, Wallet: CashuWallet } =
-          await import("@cashu/cashu-ts");
+        const Cashu = await import("@cashu/cashu-ts");
         const mintUrl = params.mintUrl || "https://mint.minibits.cash/Bitcoin";
-        const mint = new CashuMint(mintUrl);
-        const wallet = new CashuWallet(mint);
+        const mint = new Cashu.Mint(mintUrl);
+        const wallet = new Cashu.Wallet(mint);
         await wallet.loadMint();
 
         const { fetchCachedEvents } = await import("@/utils/db/db-service");
@@ -2906,9 +2905,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           () => wallet.createMeltQuoteBolt11(params.invoice),
           { maxAttempts: 4, perAttemptTimeoutMs: 15000, totalTimeoutMs: 60000 }
         );
-        const totalNeeded =
-          meltQuote.amount.toNumber() +
-          (meltQuote.fee_reserve?.toNumber() || 0);
+        const totalNeeded = meltQuote.amount + (meltQuote.fee_reserve || 0);
         const totalAvailable = availableProofs.reduce(
           (sum: number, p: any) => sum + (p.amount || 0),
           0

@@ -38,7 +38,7 @@ export default function BulkSelector({
       selectedKeys={
         selectedBulkOption ? new Set([selectedBulkOption]) : new Set(["1"])
       }
-      onSelectionChange={(keys) => {
+      onSelectionChange={(keys: any) => {
         const selectedKey = Array.from(keys)[0] as string;
         if (selectedKey) {
           onBulkChange(selectedKey);

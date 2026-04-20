@@ -26,7 +26,7 @@ export default function VolumeSelector({
       label="Select Volume"
       labelPlacement="inside"
       selectedKeys={selectedVolume ? new Set([selectedVolume]) : new Set()}
-      onSelectionChange={(keys) => {
+      onSelectionChange={(keys: any) => {
         const selectedKey = Array.from(keys)[0] as string;
         if (selectedKey) {
           onVolumeChange(selectedKey);

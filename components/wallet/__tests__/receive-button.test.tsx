@@ -13,7 +13,11 @@ import {
   NostrContext,
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
-import { getDecodedToken, Wallet as CashuWallet } from "@cashu/cashu-ts";
+import {
+  Mint as CashuMint,
+  getDecodedToken,
+  Wallet as CashuWallet,
+} from "@cashu/cashu-ts";
 import {
   getLocalStorageData,
   publishProofEvent,
@@ -29,7 +33,7 @@ jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
   publishWalletEvent: jest.fn(),
 }));
 jest.mock("@cashu/cashu-ts", () => ({
-  ...jest.requireActual("@cashu/cashu-ts"),
+  Mint: jest.fn(),
   getDecodedToken: jest.fn(),
   Wallet: jest.fn().mockImplementation(() => ({
     loadMint: jest.fn().mockResolvedValue(undefined),
@@ -48,6 +52,7 @@ const mockGetLocalStorageData = getLocalStorageData as jest.Mock;
 const mockGetDecodedToken = getDecodedToken as jest.Mock;
 const mockPublishProofEvent = publishProofEvent as jest.Mock;
 const mockPublishWalletEvent = publishWalletEvent as jest.Mock;
+const MockCashuMint = CashuMint as jest.Mock;
 const MockCashuWallet = CashuWallet as jest.Mock;
 const mockSigner = {
   connect: jest.fn(),
@@ -79,6 +84,9 @@ const VALID_TOKEN =
 describe("ReceiveButton", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    MockCashuMint.mockImplementation(() => ({
+      mintUrl: "https://testmint.com",
+    }));
     Storage.prototype.setItem = jest.fn();
     mockGetLocalStorageData.mockReturnValue({
       mints: [],
@@ -91,8 +99,7 @@ describe("ReceiveButton", () => {
 
   test("renders the receive button and opens/closes the modal", async () => {
     renderWithProviders(<ReceiveButton />);
-    const receiveButton = screen.getByRole("button", { name: /Receive/i });
-    fireEvent.click(receiveButton);
+    fireEvent.click(screen.getAllByRole("button", { name: /Receive/i })[0]!);
     const modal = await screen.findByRole("dialog");
     expect(modal).toBeInTheDocument();
     const cancelButton = within(modal).getByRole("button", { name: /Cancel/i });
@@ -104,7 +111,7 @@ describe("ReceiveButton", () => {
 
   test("shows validation error for empty token submission", async () => {
     renderWithProviders(<ReceiveButton />);
-    fireEvent.click(screen.getByRole("button", { name: /Receive/i }));
+    fireEvent.click(screen.getAllByRole("button", { name: /Receive/i })[0]!);
     const modal = await screen.findByRole("dialog");
     const submitButton = within(modal).getByRole("button", {
       name: /Receive/i,
@@ -118,7 +125,7 @@ describe("ReceiveButton", () => {
   test("shows validation error for invalid token format", async () => {
     const user = userEvent.setup();
     renderWithProviders(<ReceiveButton />);
-    fireEvent.click(screen.getByRole("button", { name: /Receive/i }));
+    fireEvent.click(screen.getAllByRole("button", { name: /Receive/i })[0]!);
     const modal = await screen.findByRole("dialog");
     const tokenInput = within(modal).getByLabelText(/Cashu token string/i);
     await user.type(tokenInput, "invalid-token-string");
@@ -146,7 +153,7 @@ describe("ReceiveButton", () => {
     }));
 
     renderWithProviders(<ReceiveButton />);
-    fireEvent.click(screen.getByRole("button", { name: /Receive/i }));
+    fireEvent.click(screen.getAllByRole("button", { name: /Receive/i })[0]!);
 
     const receiveModal = await screen.findByRole("dialog");
     const tokenInput =
@@ -184,7 +191,7 @@ describe("ReceiveButton", () => {
     }));
 
     renderWithProviders(<ReceiveButton />);
-    fireEvent.click(screen.getByRole("button", { name: /Receive/i }));
+    fireEvent.click(screen.getAllByRole("button", { name: /Receive/i })[0]!);
 
     const receiveModal = await screen.findByRole("dialog");
     const tokenInput =
@@ -225,7 +232,7 @@ describe("ReceiveButton", () => {
     }));
 
     renderWithProviders(<ReceiveButton />);
-    fireEvent.click(screen.getByRole("button", { name: /Receive/i }));
+    fireEvent.click(screen.getAllByRole("button", { name: /Receive/i })[0]!);
 
     const receiveModal = await screen.findByRole("dialog");
     await user.type(
@@ -253,7 +260,7 @@ describe("ReceiveButton", () => {
     });
 
     renderWithProviders(<ReceiveButton />);
-    fireEvent.click(screen.getByRole("button", { name: /Receive/i }));
+    fireEvent.click(screen.getAllByRole("button", { name: /Receive/i })[0]!);
 
     const receiveModal = await screen.findByRole("dialog");
     await user.type(
@@ -280,7 +287,7 @@ describe("ReceiveButton", () => {
       jest.fn()
     );
     renderWithProviders(<ReceiveButton />, { signer: nip46Signer as any });
-    fireEvent.click(screen.getByRole("button", { name: /Receive/i }));
+    fireEvent.click(screen.getAllByRole("button", { name: /Receive/i })[0]!);
     const modal = await screen.findByRole("dialog");
     const infoMessage =
       "If the token is taking a while to be received, make sure to check your bunker application to approve the transaction events.";

@@ -1,7 +1,34 @@
-import { Wallet as CashuWallet, Proof } from "@cashu/cashu-ts";
+type CashuWallet = any;
+type Proof = any;
 import { withMintRetry } from "./mint-retry-service";
 
 const STORAGE_KEY = "shopstr.pendingMintQuotes";
+
+function getErrorMessage(error: unknown): string {
+  const seen = new Set<unknown>();
+  const collectMessages = (value: unknown): string[] => {
+    if (value == null || seen.has(value)) return [];
+    if (typeof value === "object") {
+      seen.add(value);
+    }
+    if (typeof value === "string") return [value];
+    if (typeof value !== "object") return [String(value)];
+
+    const candidate = value as {
+      message?: unknown;
+      cause?: unknown;
+    };
+    const ownMessage =
+      typeof candidate.message === "string" ? [candidate.message] : [];
+    const stringified = String(value);
+    const ownString =
+      stringified && !ownMessage.includes(stringified) ? [stringified] : [];
+    return [...ownMessage, ...ownString, ...collectMessages(candidate.cause)];
+  };
+
+  const messages = collectMessages(error).filter(Boolean);
+  return messages.join(": ");
+}
 
 export type PendingMintQuoteStatus =
   | "awaiting_payment"
@@ -173,10 +200,10 @@ export async function recoverPendingMintQuotes(
 
     try {
       const wallet = await deps.buildWallet(quote.mintUrl);
-      const state = await withMintRetry(
+      const state = (await withMintRetry(
         () => wallet.checkMintQuoteBolt11(quote.quoteId),
         { maxAttempts: 3, perAttemptTimeoutMs: 10000, totalTimeoutMs: 45000 }
-      );
+      )) as { state?: string };
 
       if (state.state === "UNPAID") {
         result.stillPending++;
@@ -192,10 +219,10 @@ export async function recoverPendingMintQuotes(
       }
 
       try {
-        const proofs = await withMintRetry(
+        const proofs = (await withMintRetry(
           () => wallet.mintProofsBolt11(quote.amount, quote.quoteId),
           { maxAttempts: 4, perAttemptTimeoutMs: 15000, totalTimeoutMs: 90000 }
-        );
+        )) as Proof[];
         if (proofs && proofs.length > 0) {
           await deps.onProofsClaimed(quote, proofs);
           markMintQuoteClaimed(quote.quoteId);
@@ -209,8 +236,7 @@ export async function recoverPendingMintQuotes(
           result.failed++;
         }
       } catch (mintError) {
-        const message =
-          mintError instanceof Error ? mintError.message : String(mintError);
+        const message = getErrorMessage(mintError);
         if (
           message.toLowerCase().includes("issued") ||
           message.toLowerCase().includes("already")

@@ -421,7 +421,7 @@ function MarketplacePage({
                     <InformationCircleIcon className="h-4 w-4 cursor-default text-gray-400" />
                   </Tooltip>
                 }
-                onChange={(event) => {
+                onChange={(event: any) => {
                   const value = event.target.value;
                   setSelectedSearch(value);
                 }}
@@ -509,7 +509,7 @@ function MarketplacePage({
                     <InformationCircleIcon className="h-4 w-4 cursor-default text-gray-400" />
                   </Tooltip>
                 }
-                onChange={(event) => {
+                onChange={(event: any) => {
                   const value = event.target.value;
                   setSelectedSearch(value);
                 }}
@@ -522,7 +522,7 @@ function MarketplacePage({
                 label="Categories"
                 placeholder="All"
                 selectedKeys={selectedCategories}
-                onChange={(event) => {
+                onChange={(event: any) => {
                   if (event.target.value === "") {
                     setSelectedCategories(new Set([]));
                   } else {

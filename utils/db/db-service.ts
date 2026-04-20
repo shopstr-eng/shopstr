@@ -83,7 +83,7 @@ export async function trackFailedRelayPublishRecord({
         JSON.stringify(event),
         JSON.stringify(relays),
         Math.floor(Date.now() / 1000),
-      ]
+      ] as any[]
     );
 
     return (result.rowCount ?? 0) > 0;

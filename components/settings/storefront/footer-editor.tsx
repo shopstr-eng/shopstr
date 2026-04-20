@@ -81,7 +81,7 @@ export default function FooterEditor({
           minRows={2}
           placeholder="e.g. © 2025 My Shop. All rights reserved."
           value={footer.text || ""}
-          onChange={(e) => update({ text: e.target.value })}
+          onChange={(e: any) => update({ text: e.target.value })}
         />
       </div>
 
@@ -140,7 +140,7 @@ export default function FooterEditor({
                       variant="bordered"
                       size="sm"
                       value={policy.content}
-                      onChange={(e) =>
+                      onChange={(e: any) =>
                         updatePolicy(key, { content: e.target.value })
                       }
                       minRows={10}
@@ -177,7 +177,7 @@ export default function FooterEditor({
               <select
                 className="bg-light-fg text-light-text dark:bg-dark-fg dark:text-dark-text rounded border border-gray-300 p-1.5 text-xs dark:border-gray-600"
                 value={link.platform}
-                onChange={(e) => {
+                onChange={(e: any) => {
                   const links = [...(footer.socialLinks || [])];
                   links[i] = {
                     ...links[i]!,
@@ -198,7 +198,7 @@ export default function FooterEditor({
                 size="sm"
                 placeholder="URL"
                 value={link.url}
-                onChange={(e) => {
+                onChange={(e: any) => {
                   const links = [...(footer.socialLinks || [])];
                   links[i] = { ...links[i]!, url: e.target.value };
                   update({ socialLinks: links });
@@ -248,7 +248,7 @@ export default function FooterEditor({
                 size="sm"
                 placeholder="Label"
                 value={link.label}
-                onChange={(e) => {
+                onChange={(e: any) => {
                   const links = [...(footer.navLinks || [])];
                   links[i] = { ...links[i]!, label: e.target.value };
                   update({ navLinks: links });
@@ -260,7 +260,7 @@ export default function FooterEditor({
                 size="sm"
                 placeholder="URL"
                 value={link.href}
-                onChange={(e) => {
+                onChange={(e: any) => {
                   const links = [...(footer.navLinks || [])];
                   links[i] = { ...links[i]!, href: e.target.value };
                   update({ navLinks: links });

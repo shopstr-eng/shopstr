@@ -520,7 +520,7 @@ const UserProfilePage = () => {
                       label="Bitcoin payment preference"
                       labelPlacement="outside"
                       selectedKeys={value ? [value] : []}
-                      onChange={(e) => onChange(e.target.value)}
+                      onChange={(e: any) => onChange(e.target.value)}
                       onBlur={onBlur}
                     >
                       <SelectItem
@@ -566,7 +566,7 @@ const UserProfilePage = () => {
                 <Button
                   className={`mb-10 w-full ${SHOPSTRBUTTONCLASSNAMES}`}
                   type="submit"
-                  onKeyDown={(e) => {
+                  onKeyDown={(e: any) => {
                     if (e.key === "Enter") {
                       e.preventDefault(); // Prevent default to avoid submitting the form again
                       handleSubmit(onSubmit as any)(); // Programmatic submit

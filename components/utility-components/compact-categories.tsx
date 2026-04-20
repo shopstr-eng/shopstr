@@ -23,7 +23,7 @@ const CompactCategories = ({ categories }: { categories: string[] }) => {
             <div className="flex w-fit flex-col gap-2">{categoryChips}</div>
           }
           isOpen={isOpen}
-          onOpenChange={(open) => setIsOpen(open)}
+          onOpenChange={(open: any) => setIsOpen(open)}
           placement="bottom"
           offset={-32}
           motionProps={{

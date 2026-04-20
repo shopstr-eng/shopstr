@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { randomBytes } from "crypto";
-import { Mint as CashuMint, Wallet as CashuWallet } from "@cashu/cashu-ts";
+import * as Cashu from "@cashu/cashu-ts";
 import { withMintRetry } from "@/utils/cashu/mint-retry-service";
 import { authenticateRequest, initializeApiKeysTable } from "@/utils/mcp/auth";
 import {
@@ -386,8 +386,8 @@ async function handleLightningPayment(
   if (amountInSats < 1) amountInSats = 1;
 
   try {
-    const cashuMint = new CashuMint(mint);
-    const wallet = new CashuWallet(cashuMint);
+    const cashuMint = new Cashu.Mint(mint);
+    const wallet = new Cashu.Wallet(cashuMint);
     await wallet.loadMint();
     const mintQuote = await wallet.createMintQuoteBolt11(amountInSats);
 
@@ -402,11 +402,11 @@ async function handleLightningPayment(
       totalAmount,
       currency,
       shippingAddress,
-      `ln_${mintQuote.quote}`
+      `ln_${String(mintQuote.quote)}`
     );
 
     pendingLightningPayments.set(orderId, {
-      quote: mintQuote.quote,
+      quote: String(mintQuote.quote),
       mintUrl: mint,
       amount: amountInSats,
       orderId,
@@ -469,8 +469,8 @@ async function handleCashuPayment(
   }
 
   try {
-    const { getDecodedToken } = await import("@cashu/cashu-ts");
-    const decoded = getDecodedToken(cashuToken, []);
+    const CashuLib = await import("@cashu/cashu-ts");
+    const decoded = CashuLib.getDecodedToken(cashuToken, []);
 
     if (!decoded || !decoded.proofs || decoded.proofs.length === 0) {
       return res.status(400).json({
@@ -502,8 +502,8 @@ async function handleCashuPayment(
     const tokenMintUrl = decoded.mint;
     if (tokenMintUrl) {
       try {
-        const cashuMint = new CashuMint(tokenMintUrl);
-        const wallet = new CashuWallet(cashuMint);
+        const cashuMint = new Cashu.Mint(tokenMintUrl);
+        const wallet = new Cashu.Wallet(cashuMint);
         await wallet.loadMint();
         await withMintRetry(() => wallet.receive(cashuToken), {
           maxAttempts: 4,

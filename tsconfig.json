@@ -14,10 +14,11 @@
     "isolatedModules": true,
     "jsx": "react-jsx",
     "incremental": true,
+    "ignoreDeprecations": "6.0",
     "paths": {
       "@/*": ["./*"]
     },
-    "ignoreDeprecations": "6.0",
+
     "baseUrl": ".",
     "noUnusedLocals": true,
     "noUnusedParameters": true,
@@ -25,6 +26,6 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedIndexedAccess": true
   },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx"],
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", "types/**/*.d.ts"],
   "exclude": ["node_modules", ".next", "out"]
 }

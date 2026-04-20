@@ -1,5 +1,12 @@
 import { newPromiseWithTimeout } from "@/utils/timeout";
-import { HttpResponseError, RateLimitError } from "@cashu/cashu-ts";
+import * as Cashu from "@cashu/cashu-ts";
+
+function isInstanceOf(
+  value: unknown,
+  ctor: unknown
+): value is Error & Record<string, unknown> {
+  return typeof ctor === "function" && value instanceof ctor;
+}
 
 export class MintOperationError extends Error {
   public readonly attempts: number;
@@ -33,8 +40,8 @@ const DEFAULTS: Required<Omit<MintRetryOptions, "onAttempt" | "signal">> = {
 };
 
 export function isRetryableError(error: unknown): boolean {
-  if (error instanceof RateLimitError) return true;
-  if (error instanceof HttpResponseError) {
+  if (isInstanceOf(error, Cashu.RateLimitError)) return true;
+  if (isInstanceOf(error, Cashu.HttpResponseError)) {
     const status = (error as { status?: number }).status;
     if (typeof status === "number") {
       return status >= 500 && status < 600;
@@ -73,7 +80,7 @@ export function computeRetryDelay(
   opts: { baseDelayMs: number; maxDelayMs: number; jitter: boolean }
 ): number {
   if (
-    error instanceof RateLimitError &&
+    isInstanceOf(error, Cashu.RateLimitError) &&
     typeof error.retryAfterMs === "number"
   ) {
     return Math.min(Math.max(error.retryAfterMs, 0), opts.maxDelayMs);

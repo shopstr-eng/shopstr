@@ -180,7 +180,7 @@ const BuyerProfileForm = ({ isOnboarding }: BuyerProfileFormProps) => {
         <Button
           className={`mb-4 w-full ${SHOPSTRBUTTONCLASSNAMES}`}
           type="submit"
-          onKeyDown={(e) => {
+          onKeyDown={(e: any) => {
             if (e.key === "Enter") {
               e.preventDefault();
               handleSubmit(onSubmit as any)();

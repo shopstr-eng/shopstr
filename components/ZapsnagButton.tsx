@@ -277,7 +277,7 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
                 label="Full Name"
                 placeholder="Satoshi Nakamoto"
                 value={shippingInfo.name}
-                onValueChange={(v) =>
+                onValueChange={(v: any) =>
                   setShippingInfo({ ...shippingInfo, name: v })
                 }
                 isRequired
@@ -286,7 +286,7 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
                 label="Street Address"
                 placeholder="123 Bitcoin Blvd"
                 value={shippingInfo.address}
-                onValueChange={(v) =>
+                onValueChange={(v: any) =>
                   setShippingInfo({ ...shippingInfo, address: v })
                 }
                 isRequired
@@ -295,7 +295,7 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
                 label="Apartment, Suite, Unit (Optional)"
                 placeholder="Apt 4B"
                 value={shippingInfo.unit}
-                onValueChange={(v) =>
+                onValueChange={(v: any) =>
                   setShippingInfo({ ...shippingInfo, unit: v })
                 }
               />
@@ -306,7 +306,7 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
                   placeholder="New York"
                   className="flex-1"
                   value={shippingInfo.city}
-                  onValueChange={(v) =>
+                  onValueChange={(v: any) =>
                     setShippingInfo({ ...shippingInfo, city: v })
                   }
                   isRequired
@@ -316,7 +316,7 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
                   placeholder="NY"
                   className="w-1/3"
                   value={shippingInfo.state}
-                  onValueChange={(v) =>
+                  onValueChange={(v: any) =>
                     setShippingInfo({ ...shippingInfo, state: v })
                   }
                 />
@@ -328,7 +328,7 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
                   placeholder="10001"
                   className="w-1/2"
                   value={shippingInfo.zip}
-                  onValueChange={(v) =>
+                  onValueChange={(v: any) =>
                     setShippingInfo({ ...shippingInfo, zip: v })
                   }
                   isRequired
@@ -338,7 +338,7 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
                   placeholder="USA"
                   className="w-1/2"
                   value={shippingInfo.country}
-                  onValueChange={(v) =>
+                  onValueChange={(v: any) =>
                     setShippingInfo({ ...shippingInfo, country: v })
                   }
                   isRequired

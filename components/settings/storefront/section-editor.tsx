@@ -120,7 +120,7 @@ export default function SectionEditor({
               size="sm"
               label="Heading"
               value={section.heading || ""}
-              onChange={(e) => update({ heading: e.target.value })}
+              onChange={(e: any) => update({ heading: e.target.value })}
             />
           )}
 
@@ -137,7 +137,7 @@ export default function SectionEditor({
                   ? section.subheading || ""
                   : section.body || ""
               }
-              onChange={(e) =>
+              onChange={(e: any) =>
                 update(
                   section.type === "hero"
                     ? { subheading: e.target.value }
@@ -209,14 +209,14 @@ export default function SectionEditor({
                   size="sm"
                   label="CTA Button Text"
                   value={section.ctaText || ""}
-                  onChange={(e) => update({ ctaText: e.target.value })}
+                  onChange={(e: any) => update({ ctaText: e.target.value })}
                 />
                 <Input
                   variant="bordered"
                   size="sm"
                   label="CTA Button Link"
                   value={section.ctaLink || ""}
-                  onChange={(e) => update({ ctaLink: e.target.value })}
+                  onChange={(e: any) => update({ ctaLink: e.target.value })}
                 />
               </div>
               <div>
@@ -254,7 +254,7 @@ export default function SectionEditor({
                 size="sm"
                 label="Subheading"
                 value={section.subheading || ""}
-                onChange={(e) => update({ subheading: e.target.value })}
+                onChange={(e: any) => update({ subheading: e.target.value })}
               />
               <div className="flex gap-3">
                 <div className="flex-1">
@@ -264,7 +264,7 @@ export default function SectionEditor({
                   <select
                     className="bg-light-fg text-light-text dark:bg-dark-fg dark:text-dark-text w-full rounded border border-gray-300 p-1.5 text-xs dark:border-gray-600"
                     value={section.productLayout || "grid"}
-                    onChange={(e) =>
+                    onChange={(e: any) =>
                       update({
                         productLayout: e.target.value as
                           | "grid"
@@ -287,7 +287,7 @@ export default function SectionEditor({
                     min={1}
                     max={50}
                     value={String(section.productLimit || "")}
-                    onChange={(e) =>
+                    onChange={(e: any) =>
                       update({
                         productLimit: e.target.value
                           ? parseInt(e.target.value)
@@ -335,7 +335,7 @@ export default function SectionEditor({
                 size="sm"
                 label="Caption (optional)"
                 value={section.caption || ""}
-                onChange={(e) => update({ caption: e.target.value })}
+                onChange={(e: any) => update({ caption: e.target.value })}
               />
               <label className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
                 <input
@@ -357,21 +357,21 @@ export default function SectionEditor({
                 label="Email"
                 type="email"
                 value={section.email || ""}
-                onChange={(e) => update({ email: e.target.value })}
+                onChange={(e: any) => update({ email: e.target.value })}
               />
               <Input
                 variant="bordered"
                 size="sm"
                 label="Phone"
                 value={section.phone || ""}
-                onChange={(e) => update({ phone: e.target.value })}
+                onChange={(e: any) => update({ phone: e.target.value })}
               />
               <Input
                 variant="bordered"
                 size="sm"
                 label="Address"
                 value={section.address || ""}
-                onChange={(e) => update({ address: e.target.value })}
+                onChange={(e: any) => update({ address: e.target.value })}
               />
             </div>
           )}
@@ -391,7 +391,7 @@ export default function SectionEditor({
                         size="sm"
                         label="Question"
                         value={item.question}
-                        onChange={(e) => {
+                        onChange={(e: any) => {
                           const items = [...(section.items || [])];
                           items[i] = { ...items[i]!, question: e.target.value };
                           update({ items });
@@ -403,7 +403,7 @@ export default function SectionEditor({
                         label="Answer"
                         minRows={2}
                         value={item.answer}
-                        onChange={(e) => {
+                        onChange={(e: any) => {
                           const items = [...(section.items || [])];
                           items[i] = { ...items[i]!, answer: e.target.value };
                           update({ items });
@@ -458,7 +458,7 @@ export default function SectionEditor({
                         label="Quote"
                         minRows={2}
                         value={t.quote}
-                        onChange={(e) => {
+                        onChange={(e: any) => {
                           const ts = [...(section.testimonials || [])];
                           ts[i] = { ...ts[i]!, quote: e.target.value };
                           update({ testimonials: ts });
@@ -469,7 +469,7 @@ export default function SectionEditor({
                         size="sm"
                         label="Author"
                         value={t.author}
-                        onChange={(e) => {
+                        onChange={(e: any) => {
                           const ts = [...(section.testimonials || [])];
                           ts[i] = { ...ts[i]!, author: e.target.value };
                           update({ testimonials: ts });
@@ -522,7 +522,7 @@ export default function SectionEditor({
                       size="sm"
                       label="Name"
                       value={item.name}
-                      onChange={(e) => {
+                      onChange={(e: any) => {
                         const items = [...(section.ingredientItems || [])];
                         items[i] = { ...items[i]!, name: e.target.value };
                         update({ ingredientItems: items });
@@ -533,7 +533,7 @@ export default function SectionEditor({
                       size="sm"
                       label="Description (optional)"
                       value={item.description || ""}
-                      onChange={(e) => {
+                      onChange={(e: any) => {
                         const items = [...(section.ingredientItems || [])];
                         items[i] = {
                           ...items[i]!,

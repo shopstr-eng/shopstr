@@ -24,7 +24,6 @@ import {
 } from "@/utils/STATIC-VARIABLES";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
 import CartInvoiceCard from "../../components/cart-invoice-card";
-import { getSatoshiValue } from "@getalby/lightning-tools";
 import currencySelection from "../../public/currencySelection.json";
 import { ShopMapContext, ProfileMapContext } from "@/utils/context/context";
 import { nip19 } from "nostr-tools";
@@ -32,6 +31,7 @@ import StorefrontThemeWrapper from "@/components/storefront/storefront-theme-wra
 import ProtectedRoute from "@/components/utility-components/protected-route";
 import { getLocalStorageJson } from "@/utils/safe-json";
 import { CartDiscountsMap, isCartDiscountsMap } from "@/utils/cart-discounts";
+import { getSatsForAmount } from "@/utils/cashu/cashu-compat";
 
 interface QuantitySelectorProps {
   value: number;
@@ -567,7 +567,7 @@ export default function Component() {
           amount: basePrice,
           currency: product.currency,
         };
-        const numSats = await getSatoshiValue(currencyData);
+        const numSats = await getSatsForAmount(currencyData);
         price = Math.round(numSats);
       } catch (err) {
         // Use console.warn (not console.error) so the Next.js dev overlay
@@ -605,7 +605,7 @@ export default function Component() {
           amount: shippingCost,
           currency: product.currency,
         };
-        const numSats = await getSatoshiValue(currencyData);
+        const numSats = await getSatsForAmount(currencyData);
         cost = Math.round(numSats);
       } catch (err) {
         // Use console.warn (not console.error) so the Next.js dev overlay
@@ -765,7 +765,7 @@ export default function Component() {
                                     label="Discount Code"
                                     placeholder="Enter code"
                                     value={discountCodes[sellerPubkey] || ""}
-                                    onChange={(e) =>
+                                    onChange={(e: any) =>
                                       setDiscountCodes({
                                         ...discountCodes,
                                         [sellerPubkey]:
