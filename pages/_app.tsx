@@ -1,7 +1,6 @@
-import "tailwindcss/tailwind.css";
 import type { AppProps } from "next/app";
 import "../styles/globals.css";
-import { useState, useEffect, useCallback, useContext } from "react";
+import { useState, useEffect, useCallback, useContext, useRef } from "react";
 import { useRouter } from "next/router";
 import {
   ProfileMapContext,
@@ -31,7 +30,8 @@ import {
   getDefaultRelays,
   LogOut,
 } from "@/utils/nostr/nostr-helper-functions";
-import { NextUIProvider } from "@nextui-org/react";
+import { createNip98AuthorizationHeader } from "@/utils/nostr/nip98-auth";
+import { HeroUIProvider } from "@heroui/react";
 import { ThemeProvider as NextThemesProvider } from "next-themes";
 import {
   fetchAllPosts,
@@ -54,6 +54,7 @@ import {
 } from "../utils/types/types";
 import { Proof } from "@cashu/cashu-ts";
 import TopNav from "@/components/nav-top";
+import PageLoadingBar from "@/components/page-loading-bar";
 import DynamicHead from "../components/dynamic-meta-head";
 import StructuredData from "../components/structured-data";
 import {
@@ -63,6 +64,7 @@ import {
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
 import { retryFailedRelayPublishes } from "@/utils/nostr/retry-service";
+import { MintRecoveryBoot } from "@/components/utility-components/mint-recovery-boot";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
 
 function Shopstr({ props }: { props: AppProps }) {
@@ -74,7 +76,7 @@ function Shopstr({ props }: { props: AppProps }) {
     {
       productEvents: [],
       isLoading: true,
-      addNewlyCreatedProductEvent: (productEvent: any) => {
+      addNewlyCreatedProductEvent: (productEvent: NostrEvent) => {
         setProductContext((productContext) => {
           const productEvents = [...productContext.productEvents, productEvent];
           return {
@@ -248,10 +250,20 @@ function Shopstr({ props }: { props: AppProps }) {
       try {
         const idsForDb =
           wrappedEventIds.length > 0 ? wrappedEventIds : unreadMessageIds;
+        const body = JSON.stringify({ messageIds: idsForDb });
+        const authHeader = await createNip98AuthorizationHeader(
+          signer!,
+          `${window.location.origin}/api/db/mark-messages-read`,
+          "POST",
+          body
+        );
         await fetch("/api/db/mark-messages-read", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ messageIds: idsForDb }),
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: authHeader,
+          },
+          body,
         });
 
         setNewOrderIds(new Set(unreadMessageIds));
@@ -273,7 +285,7 @@ function Shopstr({ props }: { props: AppProps }) {
     }
 
     return unreadMessageIds;
-  }, [chatsMap]);
+  }, [chatsMap, signer]);
 
   const [followsContext, setFollowsContext] = useState<FollowsContextInterface>(
     {
@@ -323,12 +335,12 @@ function Shopstr({ props }: { props: AppProps }) {
     });
 
   const editProductContext = (
-    productEvents: NostrEvent[],
+    productEvents: NostrEvent[] | null,
     isLoading: boolean
   ) => {
     setProductContext((productContext) => {
       return {
-        productEvents: productEvents,
+        productEvents: productEvents ?? productContext.productEvents,
         isLoading: isLoading,
         addNewlyCreatedProductEvent: productContext.addNewlyCreatedProductEvent,
         removeDeletedProductEvent: productContext.removeDeletedProductEvent,
@@ -370,8 +382,32 @@ function Shopstr({ props }: { props: AppProps }) {
     isLoading: boolean
   ) => {
     setProfileContext((profileContext) => {
+      const mergedProfileData = new Map(profileContext.profileData);
+
+      profileData.forEach((incomingProfile, pubkey) => {
+        const existingProfile = mergedProfileData.get(pubkey);
+        if (
+          !existingProfile ||
+          (incomingProfile?.created_at ?? 0) >
+            (existingProfile?.created_at ?? 0)
+        ) {
+          mergedProfileData.set(pubkey, incomingProfile);
+          return;
+        }
+
+        if (
+          (incomingProfile?.created_at ?? 0) ===
+          (existingProfile?.created_at ?? 0)
+        ) {
+          mergedProfileData.set(pubkey, {
+            ...existingProfile,
+            ...incomingProfile,
+          });
+        }
+      });
+
       return {
-        profileData,
+        profileData: mergedProfileData,
         isLoading,
         updateProfileData: profileContext.updateProfileData,
       };
@@ -445,10 +481,73 @@ function Shopstr({ props }: { props: AppProps }) {
   const [selectedSection, setSelectedSection] = useState("");
 
   const router = useRouter();
+  const initializationRunRef = useRef(0);
 
   /** FETCH initial FOLLOWS, RELAYS, PRODUCTS, and PROFILES **/
   useEffect(() => {
     async function fetchData() {
+      const runId = ++initializationRunRef.current;
+      const isCurrentRun = () => runId === initializationRunRef.current;
+      type EditorFn = (...args: any[]) => void;
+
+      const guard = <TFn extends EditorFn>(fn: TFn) => {
+        return ((...args: Parameters<TFn>) => {
+          if (!isCurrentRun()) return;
+          fn(...args);
+        }) as TFn;
+      };
+      const createGuardedEditors = <T extends Record<string, EditorFn>>(
+        editors: T
+      ): T => {
+        const guardedEditors = {} as T;
+
+        (Object.keys(editors) as Array<keyof T>).forEach((key) => {
+          guardedEditors[key] = guard(editors[key]);
+        });
+
+        return guardedEditors;
+      };
+
+      const {
+        guardedEditProductContext,
+        guardedEditReviewsContext,
+        guardedEditShopContext,
+        guardedEditProfileContext,
+        guardedEditChatContext,
+        guardedEditFollowsContext,
+        guardedEditRelaysContext,
+        guardedEditBlossomContext,
+        guardedEditCashuWalletContext,
+        guardedEditCommunityContext,
+      } = createGuardedEditors({
+        guardedEditProductContext: editProductContext,
+        guardedEditReviewsContext: editReviewsContext,
+        guardedEditShopContext: editShopContext,
+        guardedEditProfileContext: editProfileContext,
+        guardedEditChatContext: editChatContext,
+        guardedEditFollowsContext: editFollowsContext,
+        guardedEditRelaysContext: editRelaysContext,
+        guardedEditBlossomContext: editBlossomContext,
+        guardedEditCashuWalletContext: editCashuWalletContext,
+        guardedEditCommunityContext: editCommunityContext,
+      });
+
+      const runTask = async <T,>(
+        taskName: string,
+        task: () => Promise<T>,
+        onError?: () => void
+      ): Promise<T | undefined> => {
+        try {
+          return await task();
+        } catch (error) {
+          console.error(`Error ${taskName}:`, error);
+          if (isCurrentRun()) {
+            onError?.();
+          }
+          return undefined;
+        }
+      };
+
       try {
         // Check login status
         if (getLocalStorageData().signInMethod === "amber") {
@@ -476,196 +575,231 @@ function Shopstr({ props }: { props: AppProps }) {
           localStorage.setItem("relays", JSON.stringify(allRelays));
         }
 
-        // Sequential fetch for critical data with individual error handling
-        try {
-          const { relayList, readRelayList, writeRelayList } =
-            await fetchAllRelays(nostr!, signer!, allRelays, editRelaysContext);
-
-          if (relayList.length !== 0) {
-            localStorage.setItem("relays", JSON.stringify(relayList));
-            localStorage.setItem("readRelays", JSON.stringify(readRelayList));
-            localStorage.setItem("writeRelays", JSON.stringify(writeRelayList));
-            allRelays = [...relayList, ...readRelayList];
-          }
-        } catch (error) {
-          console.error("Error fetching relays:", error);
-          editRelaysContext([], [], [], false);
-        }
-
-        try {
-          const { blossomServers } = await fetchAllBlossomServers(
-            nostr!,
-            signer!,
-            allRelays,
-            editBlossomContext
-          );
-
-          if (blossomServers.length != 0) {
-            localStorage.setItem(
-              "blossomServers",
-              JSON.stringify(blossomServers)
-            );
-          }
-        } catch (error) {
-          console.error("Error fetching blossom servers:", error);
-          editBlossomContext([], false);
-        }
-
-        // Fetch products and collect profile pubkeys
-        let productEvents: NostrEvent[] = [];
-        let profileSetFromProducts = new Set<string>();
-        try {
-          const result = await fetchAllPosts(
-            nostr!,
-            allRelays,
-            editProductContext
-          );
-          productEvents = result.productEvents;
-          profileSetFromProducts = result.profileSetFromProducts;
-        } catch (error) {
-          console.error("Error fetching products:", error);
-          editProductContext([], false);
-        }
-
-        // Handle profile fetching
-        let pubkeysToFetchProfilesFor = [...profileSetFromProducts];
-        const userPubkey = (await signer?.getPubKey()) || undefined;
-        const profileSetFromChats = new Set<string>();
-
-        if (isLoggedIn) {
-          try {
-            const { profileSetFromChats: newProfileSetFromChats } =
-              await fetchGiftWrappedChatsAndMessages(
+        // Fire them first and in parellel since independent of each other and other depend on it
+        const [relayResult, userPubkey] = await Promise.all([
+          runTask(
+            "fetching relays",
+            () =>
+              fetchAllRelays(
                 nostr!,
                 signer!,
                 allRelays,
-                editChatContext,
-                userPubkey
-              );
+                guardedEditRelaysContext
+              ),
+            () => guardedEditRelaysContext([], [], [], false)
+          ),
+          runTask(
+            "resolving signer pubkey",
+            async () => (await signer?.getPubKey()) || undefined
+          ),
+        ]);
 
-            newProfileSetFromChats.forEach((profile) =>
-              profileSetFromChats.add(profile)
-            );
-          } catch (error) {
-            console.error("Error fetching chats:", error);
-            editChatContext(new Map(), false);
-          }
-        }
+        if (!isCurrentRun()) return;
 
-        if (userPubkey && profileSetFromChats.size != 0) {
-          pubkeysToFetchProfilesFor = [
-            userPubkey as string,
-            ...pubkeysToFetchProfilesFor,
-            ...profileSetFromChats,
-          ];
-        } else if (userPubkey) {
-          pubkeysToFetchProfilesFor = [
-            userPubkey as string,
-            ...pubkeysToFetchProfilesFor,
-          ];
-        }
-
-        try {
-          await fetchProfile(
-            nostr!,
-            allRelays,
-            pubkeysToFetchProfilesFor,
-            editProfileContext
+        if (relayResult && relayResult.relayList.length !== 0) {
+          localStorage.setItem("relays", JSON.stringify(relayResult.relayList));
+          localStorage.setItem(
+            "readRelays",
+            JSON.stringify(relayResult.readRelayList)
           );
-        } catch (error) {
-          console.error("Error fetching profiles:", error);
-          editProfileContext(new Map(), false);
-        }
-
-        try {
-          await fetchShopProfile(
-            nostr!,
-            allRelays,
-            pubkeysToFetchProfilesFor,
-            editShopContext
+          localStorage.setItem(
+            "writeRelays",
+            JSON.stringify(relayResult.writeRelayList)
           );
-        } catch (error) {
-          console.error("Error fetching shop profiles:", error);
-          editShopContext(new Map(), false);
+          allRelays = [...relayResult.relayList, ...relayResult.readRelayList];
         }
 
-        try {
-          await fetchReviews(
-            nostr!,
-            allRelays,
-            productEvents,
-            editReviewsContext
-          );
-        } catch (error) {
-          console.error("Error fetching reviews:", error);
-          editReviewsContext(new Map(), new Map(), false);
-        }
-
-        try {
-          await fetchAllCommunities(nostr!, allRelays, editCommunityContext);
-        } catch (error) {
-          console.error("Error fetching communities:", error);
-          editCommunityContext(new Map(), false);
-        }
-
-        // Fetch wallet if logged in
-        if (isLoggedIn) {
-          try {
-            const { cashuMints, cashuProofs } = await fetchCashuWallet(
+        // We just fire them and not await them so that they just update their context and not block others
+        const blossomPromise = runTask(
+          "fetching blossom servers",
+          () =>
+            fetchAllBlossomServers(
               nostr!,
               signer!,
               allRelays,
-              editCashuWalletContext
-            );
+              guardedEditBlossomContext
+            ),
+          () => guardedEditBlossomContext([], false)
+        );
 
-            if (cashuMints.length !== 0 && cashuProofs) {
-              localStorage.setItem("mints", JSON.stringify(cashuMints));
-              localStorage.setItem("tokens", JSON.stringify(cashuProofs));
-            }
-          } catch (error) {
-            console.error("Error fetching wallet:", error);
-            editCashuWalletContext([], [], [], false);
-          }
+        const walletPromise = isLoggedIn
+          ? runTask(
+              "fetching wallet",
+              () =>
+                fetchCashuWallet(
+                  nostr!,
+                  signer!,
+                  allRelays,
+                  guardedEditCashuWalletContext
+                ),
+              () => guardedEditCashuWalletContext([], [], [], false)
+            )
+          : Promise.resolve(undefined);
+
+        const followsPromise = runTask(
+          "fetching follows",
+          () =>
+            fetchAllFollows(
+              nostr!,
+              allRelays,
+              guardedEditFollowsContext,
+              userPubkey
+            ),
+          () => guardedEditFollowsContext([], 0, false)
+        );
+
+        const communitiesPromise = runTask(
+          "fetching communities",
+          () =>
+            fetchAllCommunities(nostr!, allRelays, guardedEditCommunityContext),
+          () => guardedEditCommunityContext(new Map(), false)
+        );
+
+        const productsPromise = runTask(
+          "fetching products",
+          () => fetchAllPosts(nostr!, allRelays, guardedEditProductContext),
+          () => guardedEditProductContext(null, false)
+        );
+
+        const chatsPromise = isLoggedIn
+          ? runTask(
+              "fetching chats",
+              () =>
+                fetchGiftWrappedChatsAndMessages(
+                  nostr!,
+                  signer!,
+                  allRelays,
+                  guardedEditChatContext,
+                  userPubkey
+                ),
+              () => guardedEditChatContext(new Map(), false)
+            )
+          : Promise.resolve(undefined);
+
+        // Run them in parellel first since required for profile/shops/reviews
+        const [productsResult, chatsResult] = await Promise.all([
+          productsPromise,
+          chatsPromise,
+        ]);
+
+        if (!isCurrentRun()) return;
+
+        // Derive the pubkey list
+        const productEvents = productsResult?.productEvents ?? [];
+        const profileSetFromProducts =
+          productsResult?.profileSetFromProducts ?? new Set<string>();
+        const profileSetFromChats =
+          chatsResult?.profileSetFromChats ?? new Set<string>();
+
+        const pubkeySet = new Set<string>([
+          ...profileSetFromProducts,
+          ...profileSetFromChats,
+        ]);
+
+        if (userPubkey) {
+          pubkeySet.add(userPubkey);
         }
 
-        try {
-          await fetchAllFollows(
-            nostr!,
-            allRelays,
-            editFollowsContext,
-            userPubkey
+        const pubkeysToFetchProfilesFor = Array.from(pubkeySet);
+
+        // These start immediately — no waiting for wallet, blossom, follows, or communities.
+        await Promise.all([
+          runTask(
+            "fetching profiles",
+            () =>
+              fetchProfile(
+                nostr!,
+                allRelays,
+                pubkeysToFetchProfilesFor,
+                guardedEditProfileContext,
+                profileContext.profileData
+              ),
+            () =>
+              guardedEditProfileContext(
+                new Map(profileContext.profileData),
+                false
+              )
+          ),
+          runTask(
+            "fetching shop profiles",
+            () =>
+              fetchShopProfile(
+                nostr!,
+                allRelays,
+                pubkeysToFetchProfilesFor,
+                guardedEditShopContext
+              ),
+            () => guardedEditShopContext(new Map(), false)
+          ),
+          runTask(
+            "fetching reviews",
+            () =>
+              fetchReviews(
+                nostr!,
+                allRelays,
+                productEvents,
+                guardedEditReviewsContext
+              ),
+            () => guardedEditReviewsContext(new Map(), new Map(), false)
+          ),
+        ]);
+
+        if (!isCurrentRun()) return;
+
+        // By now these are likely already done; we await to catch errors and read results.
+        const [blossomResult, walletResult] = await Promise.all([
+          blossomPromise,
+          walletPromise,
+          followsPromise,
+          communitiesPromise,
+        ]);
+
+        if (!isCurrentRun()) return;
+
+        if (blossomResult?.blossomServers?.length) {
+          localStorage.setItem(
+            "blossomServers",
+            JSON.stringify(blossomResult.blossomServers)
           );
-        } catch (error) {
-          console.error("Error fetching follows:", error);
-          editFollowsContext([], 0, false);
         }
 
-        // After all fetching operations complete, retry failed relay publishes
-        try {
+        if (walletResult?.cashuMints?.length && walletResult.cashuProofs) {
+          localStorage.setItem(
+            "mints",
+            JSON.stringify(walletResult.cashuMints)
+          );
+          localStorage.setItem(
+            "tokens",
+            JSON.stringify(walletResult.cashuProofs)
+          );
+        }
+
+        await runTask("retrying relay publishes", async () => {
+          if (!signer) {
+            return;
+          }
+
           const { relays, writeRelays } = getLocalStorageData();
           const retryNostr = new NostrManager([...relays, ...writeRelays]);
-          await retryFailedRelayPublishes(retryNostr);
-        } catch (error) {
-          console.error("Failed to retry relay publishes:", error);
-        }
+          await retryFailedRelayPublishes(retryNostr, signer);
+        });
       } catch (error) {
         console.error("Critical error during app initialization:", error);
-        editProductContext([], false);
-        editReviewsContext(new Map(), new Map(), false);
-        editShopContext(new Map(), false);
-        editProfileContext(new Map(), false);
-        editChatContext(new Map(), false);
-        editFollowsContext([], 0, false);
-        editRelaysContext([], [], [], false);
-        editBlossomContext([], false);
-        editCashuWalletContext([], [], [], false);
-        editCommunityContext(new Map(), false);
+        if (!isCurrentRun()) return;
+        guardedEditProductContext([], false);
+        guardedEditReviewsContext(new Map(), new Map(), false);
+        guardedEditShopContext(new Map(), false);
+        guardedEditProfileContext(new Map(), false);
+        guardedEditChatContext(new Map(), false);
+        guardedEditFollowsContext([], 0, false);
+        guardedEditRelaysContext([], [], [], false);
+        guardedEditBlossomContext([], false);
+        guardedEditCashuWalletContext([], [], [], false);
+        guardedEditCommunityContext(new Map(), false);
       }
     }
 
     fetchData();
-    window.addEventListener("storage", fetchData);
-    return () => window.removeEventListener("storage", fetchData);
   }, [nostr, signer, isLoggedIn]);
 
   useEffect(() => {
@@ -692,6 +826,7 @@ function Shopstr({ props }: { props: AppProps }) {
         ssrOgMeta={pageProps.ogMeta ?? null}
       />
       <StructuredData />
+      <PageLoadingBar />
       <CommunityContext.Provider value={communityContext}>
         <RelaysContext.Provider value={relaysContext}>
           <BlossomContext.Provider value={blossomContext}>
@@ -754,15 +889,16 @@ function Shopstr({ props }: { props: AppProps }) {
 function App(props: AppProps) {
   return (
     <>
-      <NextUIProvider>
+      <HeroUIProvider>
         <NextThemesProvider attribute="class">
           <NostrContextProvider>
             <SignerContextProvider>
+              <MintRecoveryBoot />
               <Shopstr props={props} />
             </SignerContextProvider>
           </NostrContextProvider>
         </NextThemesProvider>
-      </NextUIProvider>
+      </HeroUIProvider>
     </>
   );
 }

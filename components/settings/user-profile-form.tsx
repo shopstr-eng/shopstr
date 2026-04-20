@@ -8,7 +8,7 @@ import {
   Select,
   SelectItem,
   Tooltip,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import { ProfileMapContext } from "@/utils/context/context";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
@@ -16,7 +16,12 @@ import {
   NostrContext,
 } from "@/components/utility-components/nostr-context-provider";
 import { NostrNSecSigner } from "@/utils/nostr/signers/nostr-nsec-signer";
-import { createNostrProfileEvent } from "@/utils/nostr/nostr-helper-functions";
+import {
+  createNostrProfileEvent,
+  getLocalUserProfileKey,
+  parseLocalProfileFallback,
+  isProfileContentPopulated,
+} from "@/utils/nostr/nostr-helper-functions";
 import { FileUploaderButton } from "@/components/utility-components/file-uploader";
 import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
 
@@ -63,16 +68,57 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
   const defaultImage = useMemo(() => {
     return "https://robohash.org/" + userPubkey;
   }, [userPubkey]);
+  const profileImageSrc = watchPicture || defaultImage;
 
   useEffect(() => {
     if (!userPubkey) return;
     setIsFetchingProfile(true);
+
+    const localFallback = parseLocalProfileFallback(
+      localStorage.getItem(getLocalUserProfileKey(userPubkey))
+    );
+
     const profileMap = profileContext.profileData;
     const profile = profileMap.has(userPubkey)
       ? profileMap.get(userPubkey)
       : undefined;
+
     if (profile) {
-      reset(profile.content);
+      const profileCreatedAt = profile.created_at || 0;
+      const shouldUseLocalFallback =
+        !!localFallback &&
+        localFallback.updatedAt > profileCreatedAt &&
+        isProfileContentPopulated(localFallback.content);
+
+      if (shouldUseLocalFallback) {
+        reset(localFallback.content);
+      } else {
+        reset(profile.content);
+      }
+
+      try {
+        localStorage.setItem(
+          getLocalUserProfileKey(userPubkey),
+          JSON.stringify({
+            content: shouldUseLocalFallback
+              ? localFallback!.content
+              : profile.content,
+            updatedAt: shouldUseLocalFallback
+              ? localFallback!.updatedAt
+              : profileCreatedAt,
+          })
+        );
+      } catch (error) {
+        console.error("Failed to persist profile fallback locally:", error);
+      }
+    } else {
+      try {
+        if (localFallback?.content) {
+          reset(localFallback.content);
+        }
+      } catch (error) {
+        console.error("Failed to read local profile fallback:", error);
+      }
     }
     setIsFetchingProfile(false);
 
@@ -94,29 +140,54 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
   }, [profileContext, userPubkey, signer, reset]);
 
   const onSubmit = async (data: { [x: string]: string }) => {
-    if (!userPubkey) throw new Error("pubkey is undefined");
+    if (!userPubkey) {
+      console.error("Cannot save profile: pubkey is undefined");
+      return;
+    }
+
     setIsUploadingProfile(true);
+    try {
+      const profileMap = profileContext.profileData;
+      const existingProfile = profileMap.has(userPubkey)
+        ? profileMap.get(userPubkey)?.content
+        : {};
 
-    const profileMap = profileContext.profileData;
-    const existingProfile = profileMap.has(userPubkey)
-      ? profileMap.get(userPubkey)?.content
-      : {};
+      const updatedData = {
+        ...existingProfile,
+        ...data,
+      };
 
-    const updatedData = {
-      ...existingProfile,
-      ...data,
-    };
+      try {
+        localStorage.setItem(
+          getLocalUserProfileKey(userPubkey),
+          JSON.stringify({
+            content: updatedData,
+            updatedAt: Math.floor(Date.now() / 1000),
+          })
+        );
+      } catch (error) {
+        console.error("Failed to save local profile fallback:", error);
+      }
 
-    await createNostrProfileEvent(nostr!, signer!, JSON.stringify(updatedData));
-    profileContext.updateProfileData({
-      pubkey: userPubkey!,
-      content: updatedData,
-      created_at: 0,
-    });
-    setIsUploadingProfile(false);
+      if (!nostr || !signer) {
+        console.error("Cannot save profile: nostr or signer is unavailable");
+        return;
+      }
 
-    if (isOnboarding) {
-      router.push("/onboarding/wallet?type=seller");
+      await createNostrProfileEvent(nostr, signer, JSON.stringify(updatedData));
+      profileContext.updateProfileData({
+        pubkey: userPubkey,
+        content: updatedData,
+        created_at: Math.floor(Date.now() / 1000),
+      });
+
+      if (isOnboarding) {
+        router.push("/onboarding/wallet?type=seller");
+      }
+    } catch (error) {
+      console.error("Failed to save user profile:", error);
+    } finally {
+      setIsUploadingProfile(false);
     }
   };
 
@@ -130,29 +201,22 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
         <div className="relative h-24 w-24">
           <FileUploaderButton
             isIconOnly
-            className={`absolute bottom-[-0.5rem] right-[-0.5rem] z-20 ${SHOPSTRBUTTONCLASSNAMES}`}
+            className={`absolute right-[-0.5rem] bottom-[-0.5rem] z-20 ${SHOPSTRBUTTONCLASSNAMES}`}
             imgCallbackOnUpload={(imgUrl) => setValue("picture", imgUrl)}
           />
-          {watchPicture ? (
-            <Image
-              src={watchPicture}
-              alt="user profile picture"
-              className="rounded-full"
-            />
-          ) : (
-            <Image
-              src={defaultImage}
-              alt="user profile picture"
-              className="rounded-full"
-            />
-          )}
+          <Image
+            key={profileImageSrc}
+            src={profileImageSrc}
+            alt="user profile picture"
+            className="rounded-full"
+          />
         </div>
       </div>
 
       {/* NPub Display */}
       {!isOnboarding && userNPub && (
         <div className="border-light-border dark:border-dark-border mb-4 flex items-center justify-between gap-2 overflow-hidden rounded-lg border p-3">
-          <p className="break-all font-mono text-sm font-medium text-light-text dark:text-dark-text">
+          <p className="text-light-text dark:text-dark-text font-mono text-sm font-medium break-all">
             {userNPub}
           </p>
           <Tooltip
@@ -178,7 +242,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
       {/* NSec Display */}
       {!isOnboarding && userNSec ? (
         <div className="border-light-border dark:border-dark-border mb-4 flex items-center justify-between gap-2 overflow-hidden rounded-lg border p-3">
-          <p className="break-all font-mono text-sm font-medium text-light-text dark:text-dark-text">
+          <p className="text-light-text dark:text-dark-text font-mono text-sm font-medium break-all">
             {isNSecVisible
               ? userNSec
               : "•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••"}
@@ -225,7 +289,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
         <div className="border-light-border dark:border-dark-border mb-4 flex items-center justify-between gap-2 overflow-hidden rounded-lg border p-3">
           <div className="min-w-0 flex-1">
             <p className="mb-1 text-xs font-bold text-gray-500">ncryptsec</p>
-            <p className="break-all font-mono text-sm font-medium text-light-text dark:text-dark-text">
+            <p className="text-light-text dark:text-dark-text font-mono text-sm font-medium break-all">
               {isNcryptsecVisible
                 ? userNcryptsec
                 : "•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••"}
@@ -288,7 +352,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
             const errorMessage: string = error?.message ? error.message : "";
             return (
               <Input
-                className="pb-4 text-light-text dark:text-dark-text"
+                className="text-light-text dark:text-dark-text pb-4"
                 classNames={{
                   label: "text-light-text dark:text-dark-text text-lg",
                 }}
@@ -318,7 +382,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
             const errorMessage: string = error?.message ? error.message : "";
             return (
               <Input
-                className="pb-4 text-light-text dark:text-dark-text"
+                className="text-light-text dark:text-dark-text pb-4"
                 classNames={{
                   label: "text-light-text dark:text-dark-text text-lg",
                 }}
@@ -349,7 +413,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
               const errorMessage: string = error?.message ? error.message : "";
               return (
                 <Input
-                  className="pb-4 text-light-text dark:text-dark-text"
+                  className="text-light-text dark:text-dark-text pb-4"
                   classNames={{
                     label: "text-light-text dark:text-dark-text text-lg",
                   }}
@@ -380,7 +444,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
             const errorMessage: string = error?.message ? error.message : "";
             return (
               <Input
-                className="pb-4 text-light-text dark:text-dark-text"
+                className="text-light-text dark:text-dark-text pb-4"
                 classNames={{
                   label: "text-light-text dark:text-dark-text text-lg",
                 }}
@@ -404,7 +468,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
           control={control}
           render={({ field: { onChange, onBlur, value } }) => (
             <Select
-              className="pb-4 text-light-text dark:text-dark-text"
+              className="text-light-text dark:text-dark-text pb-4"
               classNames={{
                 label: "text-light-text dark:text-dark-text text-lg",
               }}
@@ -418,14 +482,12 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
             >
               <SelectItem
                 key="ecash"
-                value="ecash"
                 className="text-light-text dark:text-dark-text"
               >
                 Cashu (Bitcoin)
               </SelectItem>
               <SelectItem
                 key="lightning"
-                value="lightning"
                 className="text-light-text dark:text-dark-text"
               >
                 Lightning (Bitcoin)
@@ -443,7 +505,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
               min={0}
               max={100}
               step={0.1}
-              className="pb-4 text-light-text dark:text-dark-text"
+              className="text-light-text dark:text-dark-text pb-4"
               classNames={{
                 label: "text-light-text dark:text-dark-text text-lg",
               }}
@@ -453,7 +515,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
               labelPlacement="outside"
               onChange={onChange}
               onBlur={onBlur}
-              value={value.toString()}
+              value={value?.toString() || ""}
             />
           )}
         />

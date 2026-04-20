@@ -5,7 +5,7 @@ import {
   ModalBody,
   ModalFooter,
   Button,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { useRouter } from "next/router";
 
@@ -67,7 +67,7 @@ export default function AuthChallengeModal({
       isDismissable={false}
     >
       <ModalContent>
-        <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
+        <ModalHeader className="text-light-text dark:text-dark-text flex flex-col gap-1">
           Waiting for confirmation
         </ModalHeader>
         <ModalBody>

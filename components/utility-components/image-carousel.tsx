@@ -1,7 +1,7 @@
 import { Carousel } from "react-responsive-carousel";
 import "react-responsive-carousel/lib/styles/carousel.min.css";
 import { ChevronLeftIcon, ChevronRightIcon } from "@heroicons/react/24/outline";
-import { Image } from "@nextui-org/react";
+import { Image } from "@heroui/react";
 import { buildSrcSet } from "@/utils/images";
 import { useRouter } from "next/router";
 import { PREVNEXTBUTTONSTYLES } from "@/utils/STATIC-VARIABLES";

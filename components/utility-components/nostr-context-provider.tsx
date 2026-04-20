@@ -2,6 +2,7 @@ import {
   createContext,
   useCallback,
   useEffect,
+  useRef,
   useState,
   ReactNode,
 } from "react";
@@ -23,6 +24,7 @@ import MigrationPromptModal from "./migration-prompt-modal";
 interface SignerContextInterface {
   signer?: NostrSigner;
   isLoggedIn?: boolean;
+  isAuthStateResolved?: boolean;
   pubkey?: string;
   npub?: string;
   newSigner?: (type: string, args: any) => NostrSigner;
@@ -31,6 +33,7 @@ interface SignerContextInterface {
 export const SignerContext = createContext({
   signer: {} as NostrSigner,
   isLoggedIn: false,
+  isAuthStateResolved: false,
   pubkey: "",
   npub: "",
   newSigner: {},
@@ -59,8 +62,10 @@ export function SignerContextProvider({ children }: { children: ReactNode }) {
   const [abort, setAbort] = useState<() => void>(() => {});
   const [pubkey, setPubKey] = useState<string | undefined>(undefined);
   const [npub, setNPub] = useState<string | undefined>(undefined);
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
+  const [isAuthStateResolved, setIsAuthStateResolved] = useState(false);
   const [showMigrationModal, setShowMigrationModal] = useState(false);
+  const isLoggedIn = !!(signer && pubkey);
+  const lastSuccessfulSignerKeyRef = useRef<string>("");
 
   const challengeHandler: ChallengeHandler = (
     type,
@@ -113,6 +118,8 @@ export function SignerContextProvider({ children }: { children: ReactNode }) {
       }
       setPubKey(undefined);
       setNPub(undefined);
+    } finally {
+      setIsAuthStateResolved(true);
     }
   };
 
@@ -161,11 +168,20 @@ export function SignerContextProvider({ children }: { children: ReactNode }) {
         }
       }
     } else {
+      lastSuccessfulSignerKeyRef.current = "";
       setSigner(undefined);
       setPubKey(undefined);
       setNPub(undefined);
+      setIsAuthStateResolved(true);
       return;
     }
+
+    const signerKey = JSON.stringify(existingSigner);
+    if (signerKey === lastSuccessfulSignerKeyRef.current) {
+      return;
+    }
+
+    setIsAuthStateResolved(false);
 
     let signerObject: NostrSigner;
     try {
@@ -175,12 +191,18 @@ export function SignerContextProvider({ children }: { children: ReactNode }) {
         existingSigner?.type === "nip07" || signInMethod === "extension";
       if (isExtension && retryCount < 10) {
         setTimeout(() => loadSigner(retryCount + 1), 500);
+      } else {
+        setSigner(undefined);
+        setPubKey(undefined);
+        setNPub(undefined);
+        setIsAuthStateResolved(true);
       }
       return;
     }
 
     if (!signerObject) return;
 
+    lastSuccessfulSignerKeyRef.current = signerKey;
     setSigner(signerObject);
     loadKeys(signerObject);
 
@@ -213,10 +235,6 @@ export function SignerContextProvider({ children }: { children: ReactNode }) {
       window.removeEventListener("storage", handleStorage);
     };
   }, [loadSigner]);
-
-  useEffect(() => {
-    setIsLoggedIn(!!(signer && pubkey));
-  }, [signer, pubkey]);
 
   useEffect(() => {
     if (isLoggedIn) {
@@ -252,6 +270,7 @@ export function SignerContextProvider({ children }: { children: ReactNode }) {
         value={{
           signer,
           isLoggedIn,
+          isAuthStateResolved,
           pubkey,
           npub,
           newSigner,

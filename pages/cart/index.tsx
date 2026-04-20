@@ -10,12 +10,11 @@ import {
   ModalHeader,
   ModalBody,
   Input,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import {
   PlusIcon,
   MinusIcon,
   ShoppingBagIcon,
-  CheckCircleIcon,
   XCircleIcon,
   TruckIcon,
 } from "@heroicons/react/24/outline";
@@ -25,11 +24,14 @@ import {
 } from "@/utils/STATIC-VARIABLES";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
 import CartInvoiceCard from "../../components/cart-invoice-card";
-import { fiat } from "@getalby/lightning-tools";
+import { getSatoshiValue } from "@getalby/lightning-tools";
 import currencySelection from "../../public/currencySelection.json";
 import { ShopMapContext, ProfileMapContext } from "@/utils/context/context";
 import { nip19 } from "nostr-tools";
 import StorefrontThemeWrapper from "@/components/storefront/storefront-theme-wrapper";
+import ProtectedRoute from "@/components/utility-components/protected-route";
+import { getLocalStorageJson } from "@/utils/safe-json";
+import { CartDiscountsMap, isCartDiscountsMap } from "@/utils/cart-discounts";
 
 interface QuantitySelectorProps {
   value: number;
@@ -66,8 +68,7 @@ function QuantitySelector({
         }}
         min={min}
         max={max}
-        className="w-12 rounded-md bg-white text-center text-gray-900 outline-none dark:bg-gray-800 dark:text-gray-100
-          [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+        className="w-12 rounded-md bg-white text-center text-gray-900 outline-none dark:bg-gray-800 dark:text-gray-100 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
       />
       <button
         onClick={onIncrease}
@@ -131,6 +132,7 @@ export default function Component() {
   const [discountErrors, setDiscountErrors] = useState<{
     [pubkey: string]: string;
   }>({});
+  const [isValidatingDiscounts, setIsValidatingDiscounts] = useState(false);
 
   // Group products by seller pubkey
   const productsBySeller = products.reduce(
@@ -179,6 +181,19 @@ export default function Component() {
 
   const router = useRouter();
 
+  // Once payment lands, let the inline "Payment confirmed!" GIF play through
+  // once and then push straight to the order summary page. Avoids the prior
+  // friction of a "click X to dismiss" success modal.
+  useEffect(() => {
+    if (!invoiceIsPaid && !cashuPaymentSent) return;
+    const timer = setTimeout(() => {
+      setInvoiceIsPaid(false);
+      setCashuPaymentSent(false);
+      router.push("/order-summary");
+    }, 2500);
+    return () => clearTimeout(timer);
+  }, [invoiceIsPaid, cashuPaymentSent, router]);
+
   useEffect(() => {
     const stored =
       sessionStorage.getItem("sf_seller_pubkey") ||
@@ -191,27 +206,32 @@ export default function Component() {
   }, []);
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
+    let isCancelled = false;
+
+    const loadCart = async () => {
+      if (typeof window === "undefined") {
+        return;
+      }
+
       const sfPk =
         sessionStorage.getItem("sf_seller_pubkey") ||
         localStorage.getItem("sf_seller_pubkey") ||
         "";
-      let fullCart: ProductData[] = [];
-      try {
-        const raw = localStorage.getItem("cart");
-        if (raw) fullCart = JSON.parse(raw);
-      } catch {
-        localStorage.removeItem("cart");
-      }
+      const fullCart = getLocalStorageJson<ProductData[]>("cart", [], {
+        removeOnError: true,
+        validate: Array.isArray,
+      });
 
       let cartList = fullCart;
       if (sfPk) {
         const filtered = fullCart.filter((item) => item.pubkey === sfPk);
-        setExcludedItemCount(fullCart.length - filtered.length);
+        if (!isCancelled) {
+          setExcludedItemCount(fullCart.length - filtered.length);
+        }
         cartList = filtered;
       }
 
-      if (cartList && cartList.length > 0) {
+      if (!isCancelled && cartList.length > 0) {
         setProducts(cartList);
         for (const item of cartList as ProductData[]) {
           if (item.selectedQuantity) {
@@ -223,28 +243,107 @@ export default function Component() {
         }
       }
 
-      // Load saved discount codes
-      const storedDiscounts = localStorage.getItem("cartDiscounts");
-      if (storedDiscounts) {
-        let discounts;
-        try {
-          discounts = JSON.parse(storedDiscounts);
-        } catch {
-          localStorage.removeItem("cartDiscounts");
-          return;
-        }
-        const codes: { [pubkey: string]: string } = {};
-        const applied: { [pubkey: string]: number } = {};
-
-        Object.entries(discounts).forEach(([pubkey, data]: [string, any]) => {
-          codes[pubkey] = data.code;
-          applied[pubkey] = data.percentage;
-        });
-
-        setDiscountCodes(codes);
-        setAppliedDiscounts(applied);
+      if (cartList.length === 0) {
+        return;
       }
-    }
+
+      const discounts = getLocalStorageJson<CartDiscountsMap>(
+        "cartDiscounts",
+        {},
+        {
+          removeOnError: true,
+          removeOnValidationError: true,
+          validate: isCartDiscountsMap,
+        }
+      );
+
+      if (Object.keys(discounts).length === 0) {
+        return;
+      }
+
+      if (!isCancelled) {
+        setIsValidatingDiscounts(true);
+      }
+
+      const validatedDiscounts = await Promise.all(
+        Object.entries(discounts).map(async ([pubkey, data]) => {
+          if (!data || typeof data !== "object") return null;
+
+          const code = (data as { code?: unknown }).code;
+          if (typeof code !== "string" || !code.trim()) return null;
+
+          try {
+            const response = await fetch(
+              `/api/db/discount-codes?validate=true&code=${encodeURIComponent(
+                code
+              )}&pubkey=${pubkey}`
+            );
+
+            if (!response.ok) {
+              console.warn(
+                `Could not verify discount code for ${pubkey} (server error ${response.status}); keeping for next load.`
+              );
+              return { pubkey, code, percentage: null as null };
+            }
+
+            const result = await response.json();
+            if (
+              result.valid &&
+              typeof result.discount_percentage === "number" &&
+              result.discount_percentage > 0
+            ) {
+              return { pubkey, code, percentage: result.discount_percentage };
+            }
+
+            return null;
+          } catch (error) {
+            console.error(
+              `Network error revalidating discount code for ${pubkey}; keeping for next load.`,
+              error
+            );
+            return { pubkey, code, percentage: null as null };
+          }
+        })
+      );
+
+      if (isCancelled) {
+        return;
+      }
+
+      const codes: { [pubkey: string]: string } = {};
+      const applied: { [pubkey: string]: number } = {};
+      const refreshedDiscounts: CartDiscountsMap = {};
+
+      validatedDiscounts.forEach((entry) => {
+        if (!entry) return;
+
+        refreshedDiscounts[entry.pubkey] = { code: entry.code };
+
+        if (entry.percentage !== null) {
+          codes[entry.pubkey] = entry.code;
+          applied[entry.pubkey] = entry.percentage;
+        }
+      });
+
+      setDiscountCodes(codes);
+      setAppliedDiscounts(applied);
+      setIsValidatingDiscounts(false);
+
+      if (Object.keys(refreshedDiscounts).length > 0) {
+        localStorage.setItem(
+          "cartDiscounts",
+          JSON.stringify(refreshedDiscounts)
+        );
+      } else {
+        localStorage.removeItem("cartDiscounts");
+      }
+    };
+
+    loadCart();
+
+    return () => {
+      isCancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -287,7 +386,11 @@ export default function Component() {
             totals[product.pubkey] = productSubtotal;
           }
         } catch (error) {
-          console.error(
+          // Outer guard for any unexpected failure during cart pricing.
+          // console.warn (not console.error) keeps the Next.js dev overlay
+          // from popping for a benign per-row failure — the row simply
+          // renders as un-priced and is excluded from checkout.
+          console.warn(
             `Error converting price for product ${product.id}:`,
             error
           );
@@ -336,13 +439,10 @@ export default function Component() {
   };
 
   const handleRemoveFromCart = (productId: string) => {
-    let cartContent: ProductData[] = [];
-    try {
-      const raw = localStorage.getItem("cart");
-      if (raw) cartContent = JSON.parse(raw);
-    } catch {
-      localStorage.removeItem("cart");
-    }
+    const cartContent = getLocalStorageJson<ProductData[]>("cart", [], {
+      removeOnError: true,
+      validate: Array.isArray,
+    });
     if (cartContent.length > 0) {
       const updatedCart = cartContent.filter(
         (obj: ProductData) => obj.id !== productId
@@ -387,16 +487,17 @@ export default function Component() {
         setDiscountErrors({ ...discountErrors, [pubkey]: "" });
 
         // Save to localStorage
-        const storedDiscounts = localStorage.getItem("cartDiscounts");
-        let discounts: { [pubkey: string]: { code: string; percentage: number } } = {};
-        try {
-          if (storedDiscounts) discounts = JSON.parse(storedDiscounts);
-        } catch {
-          localStorage.removeItem("cartDiscounts");
-        }
+        const discounts = getLocalStorageJson<CartDiscountsMap>(
+          "cartDiscounts",
+          {},
+          {
+            removeOnError: true,
+            removeOnValidationError: true,
+            validate: isCartDiscountsMap,
+          }
+        );
         discounts[pubkey] = {
           code: code,
-          percentage: result.discount_percentage,
         };
         localStorage.setItem("cartDiscounts", JSON.stringify(discounts));
       } else {
@@ -422,15 +523,16 @@ export default function Component() {
     setDiscountErrors({ ...discountErrors, [pubkey]: "" });
 
     // Remove from localStorage
-    const storedDiscounts = localStorage.getItem("cartDiscounts");
-    if (storedDiscounts) {
-      let discounts;
-      try {
-        discounts = JSON.parse(storedDiscounts);
-      } catch {
-        localStorage.removeItem("cartDiscounts");
-        return;
+    const discounts = getLocalStorageJson<CartDiscountsMap>(
+      "cartDiscounts",
+      {},
+      {
+        removeOnError: true,
+        removeOnValidationError: true,
+        validate: isCartDiscountsMap,
       }
+    );
+    if (Object.keys(discounts).length > 0) {
       delete discounts[pubkey];
       localStorage.setItem("cartDiscounts", JSON.stringify(discounts));
     }
@@ -465,10 +567,14 @@ export default function Component() {
           amount: basePrice,
           currency: product.currency,
         };
-        const numSats = await fiat.getSatoshiValue(currencyData);
+        const numSats = await getSatoshiValue(currencyData);
         price = Math.round(numSats);
       } catch (err) {
-        console.error("ERROR", err);
+        // Use console.warn (not console.error) so the Next.js dev overlay
+        // doesn't escalate this expected, already-handled fallback into a
+        // Runtime Error popup. The product simply renders without a sats
+        // price and is excluded from checkout downstream.
+        console.warn("Failed to convert price to sats:", err);
       }
     } else if (product.currency.toLowerCase() === "btc") {
       price = basePrice * 100000000;
@@ -499,10 +605,14 @@ export default function Component() {
           amount: shippingCost,
           currency: product.currency,
         };
-        const numSats = await fiat.getSatoshiValue(currencyData);
+        const numSats = await getSatoshiValue(currencyData);
         cost = Math.round(numSats);
       } catch (err) {
-        console.error("ERROR", err);
+        // Use console.warn (not console.error) so the Next.js dev overlay
+        // doesn't escalate this expected, already-handled fallback into a
+        // Runtime Error popup. Shipping falls back to 0 sats and the
+        // outer try/catch on the caller side prevents an inconsistent row.
+        console.warn("Failed to convert shipping cost to sats:", err);
       }
     } else if (product.currency.toLowerCase() === "btc") {
       cost = shippingCost * 100000000;
@@ -511,8 +621,8 @@ export default function Component() {
   };
 
   return (
-    <StorefrontThemeWrapper sellerPubkey={sfSellerPubkey}>
-      <>
+    <ProtectedRoute>
+      <StorefrontThemeWrapper sellerPubkey={sfSellerPubkey}>
         {excludedItemCount > 0 && sfSellerPubkey && (
           <div className="mx-auto mt-20 max-w-4xl px-4">
             <div className="rounded-lg border-2 border-yellow-400 bg-yellow-50 p-3 text-sm text-yellow-800 dark:border-yellow-600 dark:bg-yellow-900/20 dark:text-yellow-200">
@@ -526,7 +636,7 @@ export default function Component() {
           </div>
         )}
         {!isBeingPaid ? (
-          <div className="flex min-h-screen flex-col bg-light-bg p-4 text-light-text dark:bg-dark-bg dark:text-dark-text">
+          <div className="bg-light-bg text-light-text dark:bg-dark-bg dark:text-dark-text flex min-h-screen flex-col p-4">
             <div className="mx-auto w-full max-w-4xl pt-20">
               <div className="mb-6 flex items-center">
                 <h1 className="w-full text-left text-2xl font-bold">
@@ -542,7 +652,7 @@ export default function Component() {
                           {sellerProducts.map((product) => (
                             <div
                               key={product.id}
-                              className="flex flex-col rounded-lg border border-gray-300 p-4 shadow-sm dark:border-gray-700 md:flex-row md:items-start md:justify-between"
+                              className="flex flex-col rounded-lg border border-gray-300 p-4 shadow-sm md:flex-row md:items-start md:justify-between dark:border-gray-700"
                             >
                               <div className="flex w-full md:w-auto">
                                 <img
@@ -644,48 +754,58 @@ export default function Component() {
                             <h3 className="mb-3 font-semibold">
                               Have a discount code from this seller?
                             </h3>
-                            <div className="flex gap-2">
-                              <Input
-                                label="Discount Code"
-                                placeholder="Enter code"
-                                value={discountCodes[sellerPubkey] || ""}
-                                onChange={(e) =>
-                                  setDiscountCodes({
-                                    ...discountCodes,
-                                    [sellerPubkey]:
-                                      e.target.value.toUpperCase(),
-                                  })
-                                }
-                                className="flex-1 text-light-text dark:text-dark-text"
-                                disabled={appliedDiscounts[sellerPubkey]! > 0}
-                                isInvalid={!!discountErrors[sellerPubkey]}
-                                errorMessage={discountErrors[sellerPubkey]}
-                              />
-                              {appliedDiscounts[sellerPubkey]! > 0 ? (
-                                <Button
-                                  color="warning"
-                                  onClick={() =>
-                                    handleRemoveDiscount(sellerPubkey)
-                                  }
-                                >
-                                  Remove
-                                </Button>
-                              ) : (
-                                <Button
-                                  className={SHOPSTRBUTTONCLASSNAMES}
-                                  onClick={() =>
-                                    handleApplyDiscount(sellerPubkey)
-                                  }
-                                >
-                                  Apply
-                                </Button>
-                              )}
-                            </div>
-                            {appliedDiscounts[sellerPubkey]! > 0 && (
-                              <p className="mt-2 text-sm text-green-600 dark:text-green-400">
-                                {appliedDiscounts[sellerPubkey]}% discount
-                                applied to all items from this seller!
+                            {isValidatingDiscounts ? (
+                              <p className="text-sm text-gray-500 dark:text-gray-400">
+                                Verifying saved discount codes&hellip;
                               </p>
+                            ) : (
+                              <>
+                                <div className="flex gap-2">
+                                  <Input
+                                    label="Discount Code"
+                                    placeholder="Enter code"
+                                    value={discountCodes[sellerPubkey] || ""}
+                                    onChange={(e) =>
+                                      setDiscountCodes({
+                                        ...discountCodes,
+                                        [sellerPubkey]:
+                                          e.target.value.toUpperCase(),
+                                      })
+                                    }
+                                    className="text-light-text dark:text-dark-text flex-1"
+                                    disabled={
+                                      appliedDiscounts[sellerPubkey]! > 0
+                                    }
+                                    isInvalid={!!discountErrors[sellerPubkey]}
+                                    errorMessage={discountErrors[sellerPubkey]}
+                                  />
+                                  {appliedDiscounts[sellerPubkey]! > 0 ? (
+                                    <Button
+                                      color="warning"
+                                      onClick={() =>
+                                        handleRemoveDiscount(sellerPubkey)
+                                      }
+                                    >
+                                      Remove
+                                    </Button>
+                                  ) : (
+                                    <Button
+                                      className={SHOPSTRBUTTONCLASSNAMES}
+                                      onClick={() =>
+                                        handleApplyDiscount(sellerPubkey)
+                                      }
+                                    >
+                                      Apply
+                                    </Button>
+                                  )}
+                                </div>
+                                {appliedDiscounts[sellerPubkey]! > 0 && (
+                                  <p className="mt-2 text-sm text-green-600 dark:text-green-400">
+                                    {appliedDiscounts[sellerPubkey]}% discount
+                                    applied to all items from this seller!
+                                  </p>
+                                )}
+                              </>
                             )}
                           </div>
                           {(() => {
@@ -710,15 +830,15 @@ export default function Component() {
                             const isFreeShipping = sellerSubtotal >= threshold;
                             const sellerName = getSellerName(sellerPubkey);
                             return (
-                              <div className="rounded-lg border border-gray-300 bg-light-fg p-4 shadow-sm dark:border-gray-700 dark:bg-dark-fg">
+                              <div className="bg-light-fg dark:bg-dark-fg rounded-lg border border-gray-300 p-4 shadow-sm dark:border-gray-700">
                                 <div className="mb-2 flex items-center gap-2">
-                                  <TruckIcon className="h-5 w-5 text-shopstr-purple dark:text-shopstr-yellow" />
+                                  <TruckIcon className="text-shopstr-purple dark:text-shopstr-yellow h-5 w-5" />
                                   {isFreeShipping ? (
                                     <p className="text-sm font-bold text-green-600 dark:text-green-400">
                                       Free shipping from {sellerName}!
                                     </p>
                                   ) : (
-                                    <p className="text-sm font-bold text-light-text dark:text-dark-text">
+                                    <p className="text-light-text dark:text-dark-text text-sm font-bold">
                                       You&apos;re {remaining.toFixed(2)}{" "}
                                       {thresholdCurrency} away from free
                                       shipping from {sellerName}!
@@ -727,7 +847,7 @@ export default function Component() {
                                 </div>
                                 <div className="h-3 w-full overflow-hidden rounded-full border border-gray-300 bg-gray-200 dark:border-gray-600 dark:bg-gray-700">
                                   <div
-                                    className={`h-full rounded-full duration-500 transition-all ${
+                                    className={`h-full rounded-full transition-all duration-500 ${
                                       isFreeShipping
                                         ? "bg-green-500"
                                         : "bg-shopstr-purple dark:bg-shopstr-yellow"
@@ -787,7 +907,7 @@ export default function Component() {
                   <div className="mb-8 flex items-center justify-center rounded-full border border-gray-300 bg-gray-100 p-6 dark:border-gray-600 dark:bg-gray-700">
                     <ShoppingBagIcon className="h-16 w-16 text-gray-800 dark:text-gray-200" />
                   </div>
-                  <h2 className="mb-2 text-center text-3xl font-bold text-light-text dark:text-dark-text">
+                  <h2 className="text-light-text dark:text-dark-text mb-2 text-center text-3xl font-bold">
                     Your cart is empty . . .
                   </h2>
                   <p className="mb-6 max-w-md text-center text-gray-500 dark:text-gray-400">
@@ -809,7 +929,7 @@ export default function Component() {
             </div>
           </div>
         ) : (
-          <div className="flex min-h-screen w-full bg-light-bg text-light-text dark:bg-dark-bg dark:text-dark-text sm:items-center sm:justify-center">
+          <div className="bg-light-bg text-light-text dark:bg-dark-bg dark:text-dark-text flex min-h-screen w-full sm:items-center sm:justify-center">
             <div className="mx-auto flex w-full flex-col pt-20">
               <div className="flex flex-col items-center">
                 <CartInvoiceCard
@@ -832,44 +952,6 @@ export default function Component() {
           </div>
         )}
 
-        {/* Success Modal */}
-        {invoiceIsPaid || cashuPaymentSent ? (
-          <>
-            <Modal
-              backdrop="blur"
-              isOpen={invoiceIsPaid || cashuPaymentSent}
-              onClose={() => {
-                setInvoiceIsPaid(false);
-                setCashuPaymentSent(false);
-                router.push("/order-summary");
-              }}
-              classNames={{
-                body: "py-6 ",
-                backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-                header: "border-b-[1px] border-[#292f46]",
-                footer: "border-t-[1px] border-[#292f46]",
-                closeButton: "hover:bg-black/5 active:bg-white/10",
-              }}
-              isDismissable={true}
-              scrollBehavior={"normal"}
-              placement={"center"}
-              size="2xl"
-            >
-              <ModalContent>
-                <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
-                  <CheckCircleIcon className="h-6 w-6 text-green-500" />
-                  <div className="ml-2">Order successful!</div>
-                </ModalHeader>
-                <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
-                  <div className="flex items-center justify-center">
-                    The seller will receive a message with your order details.
-                  </div>
-                </ModalBody>
-              </ModalContent>
-            </Modal>
-          </>
-        ) : null}
-
         {/* Invoice Generation Failed Modal */}
         {invoiceGenerationFailed ? (
           <>
@@ -890,11 +972,11 @@ export default function Component() {
               size="2xl"
             >
               <ModalContent>
-                <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+                <ModalHeader className="text-light-text dark:text-dark-text flex items-center justify-center">
                   <XCircleIcon className="h-6 w-6 text-red-500" />
                   <div className="ml-2">Invoice generation failed!</div>
                 </ModalHeader>
-                <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+                <ModalBody className="text-light-text dark:text-dark-text flex flex-col overflow-hidden">
                   <div className="flex items-center justify-center">
                     The price and/or currency set for this listing was invalid.
                   </div>
@@ -924,11 +1006,11 @@ export default function Component() {
               size="2xl"
             >
               <ModalContent>
-                <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+                <ModalHeader className="text-light-text dark:text-dark-text flex items-center justify-center">
                   <XCircleIcon className="h-6 w-6 text-red-500" />
                   <div className="ml-2">Purchase failed!</div>
                 </ModalHeader>
-                <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+                <ModalBody className="text-light-text dark:text-dark-text flex flex-col overflow-hidden">
                   <div className="flex items-center justify-center">
                     You didn&apos;t have enough balance in your wallet to pay.
                   </div>
@@ -937,7 +1019,7 @@ export default function Component() {
             </Modal>
           </>
         ) : null}
-      </>
-    </StorefrontThemeWrapper>
+      </StorefrontThemeWrapper>
+    </ProtectedRoute>
   );
 }

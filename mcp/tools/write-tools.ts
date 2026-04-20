@@ -16,6 +16,13 @@ import {
   canActorSendShippingUpdate,
   canActorUpdateMcpOrderStatus,
 } from "./order-status-auth";
+import {
+  buildDiscountCodeCreateProof,
+  buildDiscountCodeDeleteProof,
+  buildDiscountCodesListProof,
+  buildSignedHttpRequestProofTemplate,
+  SIGNED_EVENT_HEADER,
+} from "@/utils/nostr/request-auth";
 
 const resolveCname = promisify(dns.resolveCname);
 const resolve4 = promisify(dns.resolve4);
@@ -1397,9 +1404,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         } = await import("nostr-tools");
 
         const senderPubkey = signer.getPubKey();
-        const { getDefaultRelays, withBlastr } = await import(
-          "@/utils/nostr/nostr-helper-functions"
-        );
+        const { getDefaultRelays, withBlastr } =
+          await import("@/utils/nostr/nostr-helper-functions");
 
         const defaultRelays = getDefaultRelays();
         const relayHint = defaultRelays[0] || "wss://relay.damus.io";
@@ -1574,9 +1580,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
       if (!signer) return noSignerError();
 
       try {
-        const { updateMcpOrderAddress } = await import(
-          "@/mcp/tools/purchase-tools"
-        );
+        const { updateMcpOrderAddress } =
+          await import("@/mcp/tools/purchase-tools");
 
         const updatedOrder = await updateMcpOrderAddress(
           params.orderId,
@@ -1604,9 +1609,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           await import("nostr-tools");
 
         const senderPubkey = signer.getPubKey();
-        const { getDefaultRelays, withBlastr } = await import(
-          "@/utils/nostr/nostr-helper-functions"
-        );
+        const { getDefaultRelays, withBlastr } =
+          await import("@/utils/nostr/nostr-helper-functions");
         const defaultRelays = getDefaultRelays();
 
         const innerEvent = {
@@ -1735,9 +1739,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
       if (!signer) return noSignerError();
 
       try {
-        const { getMcpOrder, updateMcpOrderStatus } = await import(
-          "@/mcp/tools/purchase-tools"
-        );
+        const { getMcpOrder, updateMcpOrderStatus } =
+          await import("@/mcp/tools/purchase-tools");
         const order = await getMcpOrder(params.orderId);
 
         if (!order) {
@@ -1748,7 +1751,9 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           );
         }
 
-        if (!canActorSendShippingUpdate(order, apiKey.pubkey, params.buyerPubkey)) {
+        if (
+          !canActorSendShippingUpdate(order, apiKey.pubkey, params.buyerPubkey)
+        ) {
           return errorResponse(
             "Unauthorized order update",
             "Only the seller for this order can send shipping updates to the recorded buyer.",
@@ -1758,9 +1763,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
         const { generateSecretKey, finalizeEvent, getEventHash, nip44 } =
           await import("nostr-tools");
-        const { getDefaultRelays, withBlastr } = await import(
-          "@/utils/nostr/nostr-helper-functions"
-        );
+        const { getDefaultRelays, withBlastr } =
+          await import("@/utils/nostr/nostr-helper-functions");
 
         const senderPubkey = signer.getPubKey();
         const defaultRelays = getDefaultRelays();
@@ -1939,9 +1943,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
       if (!signer) return noSignerError();
 
       try {
-        const { getMcpOrder, updateMcpOrderStatus } = await import(
-          "@/mcp/tools/purchase-tools"
-        );
+        const { getMcpOrder, updateMcpOrderStatus } =
+          await import("@/mcp/tools/purchase-tools");
         const order = await getMcpOrder(params.orderId);
 
         if (!order) {
@@ -1952,7 +1955,9 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           );
         }
 
-        if (!canActorUpdateMcpOrderStatus(order, params.status, apiKey.pubkey)) {
+        if (
+          !canActorUpdateMcpOrderStatus(order, params.status, apiKey.pubkey)
+        ) {
           return errorResponse(
             "Unauthorized order update",
             params.status === "cancelled"
@@ -1991,9 +1996,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           try {
             const { generateSecretKey, finalizeEvent, getEventHash, nip44 } =
               await import("nostr-tools");
-            const { getDefaultRelays, withBlastr } = await import(
-              "@/utils/nostr/nostr-helper-functions"
-            );
+            const { getDefaultRelays, withBlastr } =
+              await import("@/utils/nostr/nostr-helper-functions");
 
             const senderPubkey = signer.getPubKey();
             const defaultRelays = getDefaultRelays();
@@ -2137,9 +2141,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
       if (!signer) return noSignerError();
 
       try {
-        const { fetchAllMessagesFromDb } = await import(
-          "@/utils/db/db-service"
-        );
+        const { fetchAllMessagesFromDb } =
+          await import("@/utils/db/db-service");
 
         const allMessages = await fetchAllMessagesFromDb(apiKey.pubkey);
 
@@ -2410,9 +2413,14 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
       try {
         const fileBuffer = Buffer.from(params.fileBase64, "base64");
-        const { createHash: cryptoCreateHash } = await import("crypto");
+        const binaryData = new Uint8Array(
+          fileBuffer.buffer as ArrayBuffer,
+          fileBuffer.byteOffset,
+          fileBuffer.byteLength
+        );
+        const { createHash: cryptoCreateHash } = await import("node:crypto");
         const hash = cryptoCreateHash("sha256")
-          .update(fileBuffer)
+          .update(binaryData)
           .digest("hex");
 
         const authEvent: EventTemplate = {
@@ -2422,7 +2430,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           tags: [
             ["t", "upload"],
             ["x", hash],
-            ["size", fileBuffer.length.toString()],
+            ["size", binaryData.length.toString()],
             [
               "expiration",
               Math.floor((Date.now() + 24 * 60 * 60 * 1000) / 1000).toString(),
@@ -2441,7 +2449,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
         const response = await fetch(uploadUrl.toString(), {
           method: "PUT",
-          body: new Blob([Uint8Array.from(fileBuffer)], {
+          body: new Blob([binaryData], {
             type: params.mimeType,
           }),
           headers: {
@@ -2465,7 +2473,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           {
             url: result.url,
             sha256: result.sha256 || hash,
-            size: result.size || fileBuffer.length,
+            size: result.size || binaryData.length,
             serverUrl,
           },
           startTime
@@ -2500,9 +2508,22 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
       try {
         const pubkey = signer.getPubKey();
+        const signedEvent = signer.sign(
+          buildSignedHttpRequestProofTemplate(
+            buildDiscountCodeCreateProof({
+              code: params.code,
+              pubkey,
+              discountPercentage: params.discountPercentage,
+              expiration: params.expiration,
+            })
+          )
+        );
         const res = await fetch(`${baseUrl}/api/db/discount-codes`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            [SIGNED_EVENT_HEADER]: JSON.stringify(signedEvent),
+          },
           body: JSON.stringify({
             code: params.code,
             pubkey,
@@ -2551,9 +2572,20 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
       try {
         const pubkey = signer.getPubKey();
+        const signedEvent = signer.sign(
+          buildSignedHttpRequestProofTemplate(
+            buildDiscountCodeDeleteProof({
+              code: params.code,
+              pubkey,
+            })
+          )
+        );
         const res = await fetch(`${baseUrl}/api/db/discount-codes`, {
           method: "DELETE",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            [SIGNED_EVENT_HEADER]: JSON.stringify(signedEvent),
+          },
           body: JSON.stringify({ code: params.code, pubkey }),
         });
         const data = await res.json();
@@ -2588,8 +2620,18 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
       try {
         const pubkey = signer.getPubKey();
+        const signedEvent = signer.sign(
+          buildSignedHttpRequestProofTemplate(
+            buildDiscountCodesListProof(pubkey)
+          )
+        );
         const res = await fetch(
-          `${baseUrl}/api/db/discount-codes?pubkey=${pubkey}`
+          `${baseUrl}/api/db/discount-codes?pubkey=${pubkey}`,
+          {
+            headers: {
+              [SIGNED_EVENT_HEADER]: JSON.stringify(signedEvent),
+            },
+          }
         );
         const data = await res.json();
         return successResponse(
@@ -2687,7 +2729,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
       try {
         const { getDecodedToken } = await import("@cashu/cashu-ts");
-        const decoded = getDecodedToken(params.token);
+        const decoded = getDecodedToken(params.token, []);
         const mintUrl = decoded.mint;
         const proofs = decoded.proofs;
         const totalAmount = proofs.reduce(
@@ -2703,9 +2745,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         });
         const encryptedContent = signer.encrypt(pubkey, proofData);
 
-        const { getDefaultRelays, withBlastr } = await import(
-          "@/utils/nostr/nostr-helper-functions"
-        );
+        const { getDefaultRelays, withBlastr } =
+          await import("@/utils/nostr/nostr-helper-functions");
 
         const relays = withBlastr(getDefaultRelays());
         const tags: string[][] = [["mint", mintUrl]];
@@ -2766,9 +2807,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           JSON.stringify(mintTags)
         );
 
-        const { getDefaultRelays, withBlastr } = await import(
-          "@/utils/nostr/nostr-helper-functions"
-        );
+        const { getDefaultRelays, withBlastr } =
+          await import("@/utils/nostr/nostr-helper-functions");
 
         const relays = withBlastr(getDefaultRelays());
         const tags: string[][] = [["d", pubkey]];
@@ -2823,11 +2863,12 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
       if (!signer) return noSignerError();
 
       try {
-        const { CashuMint, CashuWallet } = await import("@cashu/cashu-ts");
+        const { Mint: CashuMint, Wallet: CashuWallet } =
+          await import("@cashu/cashu-ts");
         const mintUrl = params.mintUrl || "https://mint.minibits.cash/Bitcoin";
         const mint = new CashuMint(mintUrl);
-        const keys = await mint.getKeys();
-        const wallet = new CashuWallet(mint, { keys: keys.keysets[0] as any });
+        const wallet = new CashuWallet(mint);
+        await wallet.loadMint();
 
         const { fetchCachedEvents } = await import("@/utils/db/db-service");
         const pubkey = signer.getPubKey();
@@ -2857,8 +2898,17 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           );
         }
 
-        const meltQuote = await wallet.createMeltQuote(params.invoice);
-        const totalNeeded = meltQuote.amount + (meltQuote.fee_reserve || 0);
+        const { withMintRetry } =
+          await import("@/utils/cashu/mint-retry-service");
+        const { safeMeltProofs } =
+          await import("@/utils/cashu/melt-retry-service");
+        const meltQuote = await withMintRetry(
+          () => wallet.createMeltQuoteBolt11(params.invoice),
+          { maxAttempts: 4, perAttemptTimeoutMs: 15000, totalTimeoutMs: 60000 }
+        );
+        const totalNeeded =
+          meltQuote.amount.toNumber() +
+          (meltQuote.fee_reserve?.toNumber() || 0);
         const totalAvailable = availableProofs.reduce(
           (sum: number, p: any) => sum + (p.amount || 0),
           0
@@ -2872,20 +2922,35 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           );
         }
 
-        const meltResult = await wallet.meltProofs(meltQuote, availableProofs);
+        const meltOutcome = await safeMeltProofs(
+          wallet,
+          meltQuote,
+          availableProofs
+        );
+        if (meltOutcome.status !== "paid") {
+          return errorResponse(
+            meltOutcome.status === "pending"
+              ? "Mint payment pending"
+              : meltOutcome.status === "unknown"
+                ? "Cashu payment outcome unknown"
+                : "Cashu payment failed",
+            meltOutcome.errorMessage ??
+              `Mint reported melt status: ${meltOutcome.status}`,
+            startTime
+          );
+        }
 
         return successResponse(
           {
-            paid: (meltResult as any).quote?.paid || true,
+            paid: true,
             amount: meltQuote.amount,
             fee: meltQuote.fee_reserve || 0,
             mintUrl,
-            change: meltResult.change
-              ? meltResult.change.reduce(
-                  (sum: number, p: any) => sum + (p.amount || 0),
-                  0
-                )
-              : 0,
+            change: meltOutcome.changeProofs.reduce(
+              (sum: number, p: any) =>
+                sum + (p.amount?.toNumber?.() ?? p.amount ?? 0),
+              0
+            ),
           },
           startTime
         );

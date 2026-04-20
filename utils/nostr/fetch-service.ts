@@ -5,7 +5,11 @@ import {
   ShopProfile,
   Community,
 } from "@/utils/types/types";
-import { CashuMint, CashuWallet, Proof } from "@cashu/cashu-ts";
+import {
+  Mint as CashuMint,
+  Wallet as CashuWallet,
+  Proof,
+} from "@cashu/cashu-ts";
 import { ChatsMap } from "@/utils/context/context";
 import {
   getLocalStorageData,
@@ -18,10 +22,22 @@ import {
 } from "@/utils/parsers/product-parser-functions";
 import { parseCommunityEvent } from "../parsers/community-parser-functions";
 import { calculateWeightedScore } from "@/utils/parsers/review-parser-functions";
-import { hashToCurve } from "@cashu/crypto/modules/common";
+import { hashToCurve } from "@cashu/cashu-ts";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
 import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 import { cacheEventsToDatabase } from "@/utils/db/db-client";
+import {
+  buildMessagesListProof,
+  buildSignedHttpRequestProofTemplate,
+  SIGNED_EVENT_HEADER,
+} from "@/utils/nostr/request-auth";
+
+interface NipProfile {
+  pubkey: string;
+  created_at: number;
+  content: { nip05?: string; [key: string]: any };
+  nip05Verified: boolean;
+}
 
 function getUniqueProofs(proofs: Proof[]): Proof[] {
   const seenSecrets = new Set<string>();
@@ -48,18 +64,49 @@ export const fetchAllPosts = async (
 }> => {
   return new Promise(async function (resolve, reject) {
     try {
-      // First, load from database to immediately populate the UI
-      let productArrayFromDb: NostrEvent[] = [];
-      try {
-        const response = await fetch("/api/db/fetch-products");
-        if (response.ok) {
-          productArrayFromDb = await response.json();
-          if (productArrayFromDb.length > 0) {
-            editProductContext(productArrayFromDb, false);
-          }
+      const BATCH_SIZE = 500;
+      const profileSetFromProducts: Set<string> = new Set();
+      const dbProductsMap = new Map<string, NostrEvent>();
+
+      const getEventKey = (event: NostrEvent): string => {
+        if (event.kind === 30402) {
+          const dTag = event.tags?.find((tag: string[]) => tag[0] === "d")?.[1];
+          if (dTag) return `${event.pubkey}:${dTag}`;
         }
-      } catch (error) {
-        console.error("Failed to fetch products from database: ", error);
+        return event.id;
+      };
+
+      // Cascading DB fetch: load batches one at a time, displaying each as it arrives
+      let offset = 0;
+      let keepFetching = true;
+      while (keepFetching) {
+        try {
+          const response = await fetch(
+            `/api/db/fetch-products?limit=${BATCH_SIZE}&offset=${offset}`
+          );
+          if (!response.ok) break;
+          const batch: NostrEvent[] = await response.json();
+          if (!batch.length) break;
+
+          for (const event of batch) {
+            if (event && event.id) {
+              const key = getEventKey(event);
+              const existing = dbProductsMap.get(key);
+              if (!existing || event.created_at > existing.created_at) {
+                dbProductsMap.set(key, event);
+              }
+              if (event.pubkey) profileSetFromProducts.add(event.pubkey);
+            }
+          }
+
+          editProductContext(Array.from(dbProductsMap.values()), true);
+
+          if (batch.length < BATCH_SIZE) break;
+          offset += BATCH_SIZE;
+        } catch (error) {
+          console.error("Failed to fetch products batch from database:", error);
+          break;
+        }
       }
 
       const filter: Filter = {
@@ -70,12 +117,6 @@ export const fetchAllPosts = async (
         kinds: [1],
         "#t": ["shopstr-zapsnag", "zapsnag"],
       };
-
-      const profileSetFromProducts: Set<string> = new Set();
-
-      productArrayFromDb.forEach((event) => {
-        if (event.pubkey) profileSetFromProducts.add(event.pubkey);
-      });
 
       const fetchedEvents = await nostr.fetch(
         [filter, zapsnagFilter],
@@ -96,46 +137,20 @@ export const fetchAllPosts = async (
         );
       }
 
-      const getEventKey = (event: NostrEvent): string => {
-        if (event.kind === 30402) {
-          const dTag = event.tags?.find((tag: string[]) => tag[0] === "d")?.[1];
-          if (dTag) return `${event.pubkey}:${dTag}`;
-        }
-        return event.id;
-      };
-
-      const mergedProductsMap = new Map<string, NostrEvent>();
-
-      for (const event of productArrayFromDb) {
-        if (event && event.id) {
-          mergedProductsMap.set(getEventKey(event), event);
-        }
-      }
-
+      // Merge relay events on top of the accumulated DB products
       for (const event of fetchedEvents) {
         if (!event || !event.id) continue;
-
         const key = getEventKey(event);
-        const existing = mergedProductsMap.get(key);
+        const existing = dbProductsMap.get(key);
         if (!existing || event.created_at >= existing.created_at) {
-          mergedProductsMap.set(key, event);
+          dbProductsMap.set(key, event);
         }
         profileSetFromProducts.add(event.pubkey);
       }
 
-      const mergedProductArray = Array.from(mergedProductsMap.values());
+      const mergedProductArray = Array.from(dbProductsMap.values());
 
       editProductContext(mergedProductArray, false);
-
-      // Cache fetched products to database via API (only valid events with signatures)
-      const validProducts = fetchedEvents.filter(
-        (e) => e.id && e.sig && e.pubkey
-      );
-      if (validProducts.length > 0) {
-        cacheEventsToDatabase(validProducts).catch((error) =>
-          console.error("Failed to cache products to database:", error)
-        );
-      }
 
       resolve({
         productEvents: mergedProductArray,
@@ -361,54 +376,113 @@ export const fetchShopProfile = async (
   });
 };
 
+async function verifyProfilesNip05(
+  profileMap: Map<string, NipProfile | null>,
+  concurrency = 8
+): Promise<void> {
+  const profiles = Array.from(profileMap.values()).filter(
+    (profile): profile is NipProfile =>
+      profile !== null && !!profile?.content?.nip05
+  );
+
+  for (let i = 0; i < profiles.length; i += concurrency) {
+    await Promise.all(
+      profiles.slice(i, i + concurrency).map(async (profile) => {
+        const nip05 = profile.content.nip05!;
+        const pubkey: string = profile.pubkey;
+        const host = nip05.includes("@") ? nip05.split("@")[1] : undefined;
+        try {
+          profile.nip05Verified = await verifyNip05Identifier(nip05, pubkey);
+        } catch (error) {
+          profile.nip05Verified = false;
+          console.error("Failed to verify NIP-05 identifier", {
+            host,
+            pubkey,
+            nip05,
+            error,
+          });
+        }
+      })
+    );
+  }
+}
+
 export const fetchProfile = async (
   nostr: NostrManager,
   relays: string[],
   pubkeyProfilesToFetch: string[],
-  editProfileContext: (productEvents: Map<any, any>, isLoading: boolean) => void
+  editProfileContext: (
+    profileMap: Map<string, NipProfile | null>,
+    isLoading: boolean
+  ) => void,
+  existingProfileMap: Map<string, any> = new Map()
 ): Promise<{
-  profileMap: Map<string, any>;
+  profileMap: Map<string, NipProfile | null>;
 }> => {
   return new Promise(async function (resolve, reject) {
     try {
       if (!pubkeyProfilesToFetch.length) {
-        editProfileContext(new Map(), false);
-        resolve({ profileMap: new Map() });
+        const preservedProfileMap = new Map(existingProfileMap);
+        editProfileContext(preservedProfileMap, false);
+        resolve({ profileMap: preservedProfileMap });
         return;
       }
 
-      const dbProfileMap = new Map<string, any>();
+      const mergedProfileMap = new Map(existingProfileMap);
+      const updateProfileIfNewer = (profile: any) => {
+        if (!profile?.pubkey) return;
+
+        const existingProfile = mergedProfileMap.get(profile.pubkey);
+        if (
+          !existingProfile ||
+          (profile.created_at ?? 0) >= (existingProfile.created_at ?? 0)
+        ) {
+          mergedProfileMap.set(profile.pubkey, profile);
+        }
+      };
+
+      const dbProfileMap = new Map<string, NipProfile>();
       try {
         const response = await fetch("/api/db/fetch-profiles");
         if (response.ok) {
           const profilesFromDb = await response.json();
+          const latestDbEvents = new Map<string, NostrEvent>();
+
           for (const event of profilesFromDb) {
-            if (pubkeyProfilesToFetch.includes(event.pubkey)) {
-              try {
-                const content = JSON.parse(event.content);
-                const profile = {
-                  pubkey: event.pubkey,
-                  created_at: event.created_at,
-                  content: content,
-                  nip05Verified: false,
-                };
-                if (content.nip05) {
-                  profile.nip05Verified = await verifyNip05Identifier(
-                    content.nip05,
-                    event.pubkey
-                  );
-                }
-                dbProfileMap.set(event.pubkey, profile);
-              } catch (error) {
-                console.error(
-                  `Failed to parse profile from DB: ${event.pubkey}`,
-                  error
-                );
+            if (
+              event.kind === 0 &&
+              pubkeyProfilesToFetch.includes(event.pubkey)
+            ) {
+              const existing = latestDbEvents.get(event.pubkey);
+              if (!existing || event.created_at > existing.created_at) {
+                latestDbEvents.set(event.pubkey, event);
               }
             }
           }
+
+          for (const [pubkey, event] of latestDbEvents.entries()) {
+            try {
+              const content = JSON.parse(event.content);
+              const profile: NipProfile = {
+                pubkey: event.pubkey,
+                created_at: event.created_at,
+                content,
+                nip05Verified: false,
+              };
+              dbProfileMap.set(pubkey, profile);
+              updateProfileIfNewer(profile);
+            } catch (error) {
+              console.error(
+                `Failed to parse profile from DB: ${pubkey}`,
+                error
+              );
+            }
+          }
+
           if (dbProfileMap.size > 0) {
-            editProfileContext(dbProfileMap, false);
+            editProfileContext(new Map(mergedProfileMap), false);
+            await verifyProfilesNip05(dbProfileMap);
+            editProfileContext(new Map(mergedProfileMap), false);
           }
         }
       } catch (error) {
@@ -420,16 +494,18 @@ export const fetchProfile = async (
         authors: Array.from(pubkeyProfilesToFetch),
       };
 
-      const profileMap: Map<string, any> = new Map(
+      const profileMap: Map<string, NipProfile | null> = new Map(
         Array.from(pubkeyProfilesToFetch).map((pubkey) => [
           pubkey,
-          dbProfileMap.get(pubkey) || null,
+          mergedProfileMap.get(pubkey) || dbProfileMap.get(pubkey) || null,
         ])
       );
+      const updatedProfiles = new Map<string, NipProfile | null>();
 
       const fetchedEvents = await nostr.fetch([subParams], {}, relays);
 
       for (const event of fetchedEvents) {
+        if (event.kind !== 0) continue;
         const existing = profileMap.get(event.pubkey);
         if (
           existing === null ||
@@ -438,20 +514,15 @@ export const fetchProfile = async (
         ) {
           try {
             const content = JSON.parse(event.content);
-            const profile = {
+            const profile: NipProfile = {
               pubkey: event.pubkey,
               created_at: event.created_at,
-              content: content,
+              content,
               nip05Verified: false,
             };
-            if (content.nip05) {
-              profile.nip05Verified = await verifyNip05Identifier(
-                content.nip05,
-                event.pubkey
-              );
-            }
-
             profileMap.set(event.pubkey, profile);
+            updatedProfiles.set(event.pubkey, profile);
+            updateProfileIfNewer(profile);
           } catch (error) {
             console.error(
               `Failed parse profile for pubkey: ${event.pubkey}, ${event.content}`,
@@ -460,6 +531,8 @@ export const fetchProfile = async (
           }
         }
       }
+
+      await verifyProfilesNip05(updatedProfiles);
 
       // Cache profiles to database via API (reconstruct from fetched events)
       const validProfileEvents = fetchedEvents.filter(
@@ -471,7 +544,9 @@ export const fetchProfile = async (
         );
       }
 
-      resolve({ profileMap });
+      editProfileContext(new Map(mergedProfileMap), false);
+
+      resolve({ profileMap: mergedProfileMap });
     } catch (error) {
       reject(error);
     }
@@ -497,24 +572,48 @@ export const fetchGiftWrappedChatsAndMessages = async (
       // Load from database first
       const chatMessagesFromCache = new Map<string, NostrMessageEvent>();
 
-      try {
-        const response = await fetch(
-          `/api/db/fetch-messages?pubkey=${userPubkey}`
+      if (!signer) {
+        // The cached-messages endpoint requires a signed proof of pubkey
+        // ownership. Without a signer we cannot prove ownership, so skip the
+        // cache read entirely instead of issuing a request that is guaranteed
+        // to be rejected with 401.
+        console.warn(
+          "Skipping cached message fetch: no signer available to prove pubkey ownership."
         );
-        if (response.ok) {
-          const messagesFromDb = await response.json();
-          for (const event of messagesFromDb) {
-            if (!chatMessagesFromCache.has(event.id)) {
-              chatMessagesFromCache.set(event.id, {
-                ...event,
-                sig: event.sig || "",
-                read: event.is_read === true,
-              } as NostrMessageEvent);
+      } else {
+        try {
+          const signedEvent = await signer.sign(
+            buildSignedHttpRequestProofTemplate(
+              buildMessagesListProof(userPubkey)
+            )
+          );
+          const response = await fetch(
+            `/api/db/fetch-messages?pubkey=${userPubkey}`,
+            {
+              headers: {
+                [SIGNED_EVENT_HEADER]: JSON.stringify(signedEvent),
+              },
             }
+          );
+          if (response.ok) {
+            const messagesFromDb = await response.json();
+            for (const event of messagesFromDb) {
+              if (!chatMessagesFromCache.has(event.id)) {
+                chatMessagesFromCache.set(event.id, {
+                  ...event,
+                  sig: event.sig || "",
+                  read: event.is_read === true,
+                } as NostrMessageEvent);
+              }
+            }
+          } else {
+            console.error(
+              `Failed to fetch messages from database: ${response.status} ${response.statusText}`
+            );
           }
+        } catch (error) {
+          console.error("Failed to fetch messages from database: ", error);
         }
-      } catch (error) {
-        console.error("Failed to fetch messages from database: ", error);
       }
 
       try {
@@ -1502,6 +1601,7 @@ export const fetchCashuWallet = async (
       for (const mint of cashuMints) {
         try {
           const wallet = new CashuWallet(new CashuMint(mint));
+          await wallet.loadMint();
 
           // Filter proofs for this specific mint
           const mintProofs = cashuProofs.filter((proof) => {

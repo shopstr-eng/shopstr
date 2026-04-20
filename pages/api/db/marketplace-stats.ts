@@ -1,5 +1,10 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { fetchMarketplaceStats } from "@/utils/db/db-service";
+import { applyRateLimit } from "@/utils/rate-limit";
+
+// Heavier aggregate query. Response is already cached for 5 minutes via the
+// Cache-Control header below, so a tighter per-IP cap is fine.
+const RATE_LIMIT = { limit: 120, windowMs: 60 * 1000 };
 
 export default async function handler(
   req: NextApiRequest,
@@ -8,6 +13,8 @@ export default async function handler(
   if (req.method !== "GET") {
     return res.status(405).json({ error: "Method not allowed" });
   }
+
+  if (!applyRateLimit(req, res, "marketplace-stats", RATE_LIMIT)) return;
 
   try {
     const stats = await fetchMarketplaceStats();

@@ -7,7 +7,12 @@ import ReceiveButton from "@/components/wallet/receive-button";
 import SendButton from "@/components/wallet/send-button";
 import PayButton from "@/components/wallet/pay-button";
 import Transactions from "@/components/wallet/transactions";
-import { CashuMint, CashuWallet, MintKeyset, Proof } from "@cashu/cashu-ts";
+import {
+  Mint as CashuMint,
+  Wallet as CashuWallet,
+  Keyset as MintKeyset,
+  Proof,
+} from "@cashu/cashu-ts";
 import { useRouter } from "next/router";
 
 interface StorefrontWalletProps {
@@ -39,7 +44,7 @@ export default function StorefrontWallet({ colors }: StorefrontWalletProps) {
   useEffect(() => {
     const fetchLocalKeySet = async () => {
       if (wallet) {
-        const mintKeySetIdsArray = await wallet.getKeySets();
+        const mintKeySetIdsArray = await wallet.keyChain.getKeysets();
         if (mintKeySetIdsArray) {
           setMintKeySetIds(mintKeySetIdsArray);
         }
@@ -50,9 +55,8 @@ export default function StorefrontWallet({ colors }: StorefrontWalletProps) {
 
   const filteredProofs = useMemo(() => {
     if (mints && tokens && mintKeySetIds) {
-      return tokens.filter(
-        (p: Proof) =>
-          mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
+      return tokens.filter((p: Proof) =>
+        mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
       );
     }
     return [];
@@ -62,13 +66,19 @@ export default function StorefrontWallet({ colors }: StorefrontWalletProps) {
     if (tokens) {
       const tokensTotal =
         tokens.length >= 1
-          ? tokens.reduce((acc: number, token: Proof) => acc + token.amount, 0)
+          ? tokens.reduce(
+              (acc: number, token: Proof) => acc + token.amount.toNumber(),
+              0
+            )
           : 0;
       setTotalBalance(tokensTotal);
     }
     const walletTotal =
       filteredProofs.length >= 1
-        ? filteredProofs.reduce((acc: number, p: Proof) => acc + p.amount, 0)
+        ? filteredProofs.reduce(
+            (acc: number, p: Proof) => acc + p.amount.toNumber(),
+            0
+          )
         : 0;
     setWalletBalance(walletTotal);
   }, [tokens, filteredProofs]);
@@ -80,7 +90,7 @@ export default function StorefrontWallet({ colors }: StorefrontWalletProps) {
         const tokensTotal =
           newTokens.length >= 1
             ? newTokens.reduce(
-                (acc: number, token: Proof) => acc + token.amount,
+                (acc: number, token: Proof) => acc + token.amount.toNumber(),
                 0
               )
             : 0;
@@ -92,7 +102,7 @@ export default function StorefrontWallet({ colors }: StorefrontWalletProps) {
           const newWalletTotal =
             newFilteredProofs.length >= 1
               ? newFilteredProofs.reduce(
-                  (acc: number, p: Proof) => acc + p.amount,
+                  (acc: number, p: Proof) => acc + p.amount.toNumber(),
                   0
                 )
               : 0;

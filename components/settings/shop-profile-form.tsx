@@ -9,7 +9,7 @@ import {
   Select,
   SelectItem,
   Switch,
-} from "@nextui-org/react";
+} from "@heroui/react";
 
 import { ShopMapContext } from "@/utils/context/context";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
@@ -18,6 +18,12 @@ import {
   NostrContext,
 } from "@/components/utility-components/nostr-context-provider";
 import { createNostrShopEvent } from "@/utils/nostr/nostr-helper-functions";
+import {
+  buildSignedHttpRequestProofTemplate,
+  buildStorefrontSlugCreateProof,
+  buildStorefrontSlugDeleteProof,
+  SIGNED_EVENT_HEADER,
+} from "@/utils/nostr/request-auth";
 import { FileUploaderButton } from "@/components/utility-components/file-uploader";
 import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
 import currencySelection from "@/public/currencySelection.json";
@@ -34,6 +40,7 @@ import SectionEditor from "./storefront/section-editor";
 import FooterEditor from "./storefront/footer-editor";
 import PageEditor from "./storefront/page-editor";
 import StorefrontPreviewModal from "./storefront/storefront-preview-modal";
+import { sanitizeStorefrontConfigLinks } from "@/utils/storefront-links";
 
 interface ShopProfileFormProps {
   isOnboarding?: boolean;
@@ -293,7 +300,9 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
         if (contextLoadedRef.current) return; // relay beat us to it
         if (data?.shopConfig) applyShopConfig(data.shopConfig);
       })
-      .catch(() => {})
+      .catch((error) => {
+        console.error("Failed to fetch storefront lookup data:", error);
+      })
       .finally(() => {
         if (!contextLoadedRef.current) setIsFetchingShop(false);
       });
@@ -305,7 +314,9 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
       .then((data) => {
         if (data?.domain) setCustomDomain(data.domain);
       })
-      .catch(() => {});
+      .catch((error) => {
+        console.error("Failed to fetch storefront custom domain:", error);
+      });
   }, [userPubkey, applyShopConfig]);
 
   // ── Slow path: override with authoritative relay-context data when ready ───
@@ -342,7 +353,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
       transformedData.freeShippingCurrency = freeShippingCurrency;
     }
     if (shopSlug) {
-      const storefrontConfig: StorefrontConfig = {
+      const storefrontConfig = sanitizeStorefrontConfigLinks({
         colorScheme: colors,
         productLayout,
         landingPageStyle,
@@ -357,7 +368,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
         showCommunityPage: showCommunityPage || undefined,
         showWalletPage: showWalletPage || undefined,
         contactEmail: contactEmail || undefined,
-      };
+      });
       transformedData.storefront = storefrontConfig;
     }
     await createNostrShopEvent(
@@ -377,6 +388,12 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
   };
 
   const registerSlug = async () => {
+    if (!userPubkey || !signer) {
+      setSlugStatus("error");
+      setSlugMessage("You must be signed in to save your storefront");
+      return;
+    }
+
     const s = sanitizeSlug(slugInput);
     if (!s || s.length < 2) {
       setSlugStatus("error");
@@ -391,9 +408,20 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
     setSlugStatus("checking");
     setSlugMessage("Saving...");
     try {
+      const signedEvent = await signer.sign(
+        buildSignedHttpRequestProofTemplate(
+          buildStorefrontSlugCreateProof({
+            pubkey: userPubkey,
+            slug: s,
+          })
+        )
+      );
       const res = await fetch("/api/storefront/register-slug", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          [SIGNED_EVENT_HEADER]: JSON.stringify(signedEvent),
+        },
         body: JSON.stringify({ pubkey: userPubkey, slug: s }),
       });
       const data = await res.json();
@@ -416,15 +444,23 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
   };
 
   const handleRemoveStorefront = async () => {
-    if (!userPubkey) return;
+    if (!userPubkey || !signer) return;
     const confirmed = window.confirm(
       "Are you sure you want to remove your storefront? This will delete your shop URL, custom domain, and reset all storefront settings."
     );
     if (!confirmed) return;
     try {
+      const signedEvent = await signer.sign(
+        buildSignedHttpRequestProofTemplate(
+          buildStorefrontSlugDeleteProof(userPubkey)
+        )
+      );
       await fetch("/api/storefront/register-slug", {
         method: "DELETE",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          [SIGNED_EVENT_HEADER]: JSON.stringify(signedEvent),
+        },
         body: JSON.stringify({ pubkey: userPubkey }),
       });
       setShopSlug("");
@@ -465,22 +501,23 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
     }
   };
 
-  const buildStorefrontConfig = (): StorefrontConfig => ({
-    colorScheme: colors,
-    productLayout,
-    landingPageStyle,
-    shopSlug: shopSlug || undefined,
-    customDomain: customDomain || undefined,
-    fontHeading: fontHeading || undefined,
-    fontBody: fontBody || undefined,
-    sections: sections.length > 0 ? sections : undefined,
-    pages: pages.length > 0 ? pages : undefined,
-    footer,
-    navLinks: navLinks.length > 0 ? navLinks : undefined,
-    showCommunityPage: showCommunityPage || undefined,
-    showWalletPage: showWalletPage || undefined,
-    contactEmail: contactEmail || undefined,
-  });
+  const buildStorefrontConfig = (): StorefrontConfig =>
+    sanitizeStorefrontConfigLinks({
+      colorScheme: colors,
+      productLayout,
+      landingPageStyle,
+      shopSlug: shopSlug || undefined,
+      customDomain: customDomain || undefined,
+      fontHeading: fontHeading || undefined,
+      fontBody: fontBody || undefined,
+      sections: sections.length > 0 ? sections : undefined,
+      pages: pages.length > 0 ? pages : undefined,
+      footer,
+      navLinks: navLinks.length > 0 ? navLinks : undefined,
+      showCommunityPage: showCommunityPage || undefined,
+      showWalletPage: showWalletPage || undefined,
+      contactEmail: contactEmail || undefined,
+    });
 
   const saveStorefront = async () => {
     const newSf = buildStorefrontConfig();
@@ -537,8 +574,8 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
           type="button"
           className={`px-6 py-3 text-sm font-semibold transition-colors ${
             activeTab === "basic"
-              ? "border-b-4 border-shopstr-purple text-shopstr-purple dark:border-shopstr-yellow dark:text-shopstr-yellow"
-              : "text-gray-500 hover:text-light-text dark:hover:text-dark-text"
+              ? "border-shopstr-purple text-shopstr-purple dark:border-shopstr-yellow dark:text-shopstr-yellow border-b-4"
+              : "hover:text-light-text dark:hover:text-dark-text text-gray-500"
           }`}
           onClick={() => setActiveTab("basic")}
         >
@@ -548,8 +585,8 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
           type="button"
           className={`px-6 py-3 text-sm font-semibold transition-colors ${
             activeTab === "storefront"
-              ? "border-b-4 border-shopstr-purple text-shopstr-purple dark:border-shopstr-yellow dark:text-shopstr-yellow"
-              : "text-gray-500 hover:text-light-text dark:hover:text-dark-text"
+              ? "border-shopstr-purple text-shopstr-purple dark:border-shopstr-yellow dark:text-shopstr-yellow border-b-4"
+              : "hover:text-light-text dark:hover:text-dark-text text-gray-500"
           }`}
           onClick={() => setActiveTab("storefront")}
         >
@@ -559,8 +596,8 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
 
       {activeTab === "basic" && (
         <>
-          <div className="mb-20 h-40 rounded-lg bg-light-fg dark:bg-dark-fg">
-            <div className="relative flex h-40 items-center justify-center rounded-lg bg-shopstr-purple-light dark:bg-dark-fg">
+          <div className="bg-light-fg dark:bg-dark-fg mb-20 h-40 rounded-lg">
+            <div className="bg-shopstr-purple-light dark:bg-dark-fg relative flex h-40 items-center justify-center rounded-lg">
               {watchBanner && (
                 <Image
                   alt={"Shop banner image"}
@@ -569,7 +606,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                 />
               )}
               <FileUploaderButton
-                className={`absolute bottom-5 right-5 z-20 border-2 border-white bg-shopstr-purple shadow-md ${SHOPSTRBUTTONCLASSNAMES}`}
+                className={`bg-shopstr-purple absolute right-5 bottom-5 z-20 border-2 border-white shadow-md ${SHOPSTRBUTTONCLASSNAMES}`}
                 imgCallbackOnUpload={(imgUrl) => setValue("banner", imgUrl)}
               >
                 Upload Banner
@@ -580,7 +617,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                 <div className="">
                   <FileUploaderButton
                     isIconOnly={true}
-                    className={`absolute bottom-[-0.5rem] right-[-0.5rem] z-20 ${SHOPSTRBUTTONCLASSNAMES}`}
+                    className={`absolute right-[-0.5rem] bottom-[-0.5rem] z-20 ${SHOPSTRBUTTONCLASSNAMES}`}
                     imgCallbackOnUpload={(imgUrl) =>
                       setValue("picture", imgUrl)
                     }
@@ -618,7 +655,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                 fieldState: { error },
               }) => (
                 <Input
-                  className="pb-4 text-light-text dark:text-dark-text"
+                  className="text-light-text dark:text-dark-text pb-4"
                   classNames={{
                     label: "text-light-text dark:text-dark-text text-lg",
                   }}
@@ -650,7 +687,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                 fieldState: { error },
               }) => (
                 <Textarea
-                  className="pb-4 text-light-text dark:text-dark-text"
+                  className="text-light-text dark:text-dark-text pb-4"
                   classNames={{
                     label: "text-light-text dark:text-dark-text text-lg",
                   }}
@@ -669,7 +706,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
             />
 
             <div className="pb-4">
-              <label className="mb-2 block text-lg text-light-text dark:text-dark-text">
+              <label className="text-light-text dark:text-dark-text mb-2 block text-lg">
                 Free Shipping Threshold
               </label>
               <p className="mb-3 text-sm text-gray-500 dark:text-gray-400">
@@ -701,9 +738,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                     className="text-light-text dark:text-dark-text"
                   >
                     {CURRENCY_OPTIONS.map((currency) => (
-                      <SelectItem key={currency} value={currency}>
-                        {currency}
-                      </SelectItem>
+                      <SelectItem key={currency}>{currency}</SelectItem>
                     ))}
                   </Select>
                 </div>
@@ -731,9 +766,9 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
       )}
 
       {activeTab === "storefront" && isOnboarding && (
-        <div className="rounded-lg border-3 border-black bg-gray-50 p-4 dark:bg-dark-fg">
-          <p className="text-sm text-gray-600 dark:text-dark-text">
-            <span className="font-bold text-black dark:text-dark-text">
+        <div className="dark:bg-dark-fg rounded-lg border-3 border-black bg-gray-50 p-4">
+          <p className="dark:text-dark-text text-sm text-gray-600">
+            <span className="dark:text-dark-text font-bold text-black">
               Custom storefront & page settings
             </span>{" "}
             are available after onboarding in your shop settings.
@@ -745,14 +780,14 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
           <div className="space-y-6 py-2">
             {/* Shop URL */}
             <div className="pb-2">
-              <p className="pb-1 text-lg font-semibold text-light-text dark:text-dark-text">
+              <p className="text-light-text dark:text-dark-text pb-1 text-lg font-semibold">
                 Shop URL
               </p>
               <p className="pb-3 text-sm text-gray-500 dark:text-gray-400">
                 Choose a unique URL for your storefront.
               </p>
               <div className="flex gap-2">
-                <div className="flex items-center rounded-l-md border border-r-0 border-gray-300 bg-light-fg px-3 py-2 text-sm text-light-text dark:border-gray-600 dark:bg-dark-fg dark:text-dark-text">
+                <div className="bg-light-fg text-light-text dark:bg-dark-fg dark:text-dark-text flex items-center rounded-l-md border border-r-0 border-gray-300 px-3 py-2 text-sm dark:border-gray-600">
                   {siteHost}/shop/
                 </div>
                 <Input
@@ -793,7 +828,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                   href={`/shop/${shopSlug}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="mt-2 inline-block text-sm text-shopstr-purple underline dark:text-shopstr-yellow"
+                  className="text-shopstr-purple dark:text-shopstr-yellow mt-2 inline-block text-sm underline"
                 >
                   {siteHost}/shop/{shopSlug} →
                 </a>
@@ -804,7 +839,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
 
             {/* Landing Page Style */}
             <div className="pb-2">
-              <p className="pb-3 text-lg font-semibold text-light-text dark:text-dark-text">
+              <p className="text-light-text dark:text-dark-text pb-3 text-lg font-semibold">
                 Landing Page Style
               </p>
               <div className="flex flex-wrap gap-3">
@@ -831,7 +866,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                     className={`flex-1 rounded-md border-2 p-3 text-left text-sm transition-all ${
                       landingPageStyle === style.value
                         ? "border-shopstr-purple bg-shopstr-purple text-white"
-                        : "border-gray-200 text-light-text hover:border-shopstr-purple-light dark:border-gray-600 dark:text-dark-text dark:hover:border-shopstr-purple-light"
+                        : "text-light-text hover:border-shopstr-purple-light dark:text-dark-text dark:hover:border-shopstr-purple-light border-gray-200 dark:border-gray-600"
                     }`}
                     onClick={() => setLandingPageStyle(style.value)}
                   >
@@ -850,7 +885,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
 
             {/* Product Layout */}
             <div className="pb-2">
-              <p className="pb-3 text-lg font-semibold text-light-text dark:text-dark-text">
+              <p className="text-light-text dark:text-dark-text pb-3 text-lg font-semibold">
                 Product Layout
               </p>
               <div className="flex flex-wrap gap-3">
@@ -877,7 +912,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                     className={`flex-1 rounded-md border-2 p-3 text-left text-sm transition-all ${
                       productLayout === layout.value
                         ? "border-shopstr-purple bg-shopstr-purple text-white"
-                        : "border-gray-200 text-light-text hover:border-shopstr-purple-light dark:border-gray-600 dark:text-dark-text dark:hover:border-shopstr-purple-light"
+                        : "text-light-text hover:border-shopstr-purple-light dark:text-dark-text dark:hover:border-shopstr-purple-light border-gray-200 dark:border-gray-600"
                     }`}
                     onClick={() => setProductLayout(layout.value)}
                   >
@@ -896,7 +931,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
 
             {/* Color Scheme */}
             <div className="pb-2">
-              <p className="pb-3 text-lg font-semibold text-light-text dark:text-dark-text">
+              <p className="text-light-text dark:text-dark-text pb-3 text-lg font-semibold">
                 Color Scheme
               </p>
               <div className="mb-4 flex flex-wrap gap-2">
@@ -905,10 +940,10 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                     key={preset.name}
                     type="button"
                     onClick={() => setColors(preset.colors)}
-                    className={`flex items-center gap-2 rounded-lg border-2 px-3 py-1.5 text-sm font-medium text-light-text transition-all dark:text-dark-text ${
+                    className={`text-light-text dark:text-dark-text flex items-center gap-2 rounded-lg border-2 px-3 py-1.5 text-sm font-medium transition-all ${
                       JSON.stringify(colors) === JSON.stringify(preset.colors)
                         ? "border-shopstr-purple bg-shopstr-purple/10"
-                        : "border-gray-200 hover:border-shopstr-purple-light dark:border-gray-600 dark:hover:border-gray-400"
+                        : "hover:border-shopstr-purple-light border-gray-200 dark:border-gray-600 dark:hover:border-gray-400"
                     }`}
                   >
                     <div className="flex gap-1">
@@ -940,7 +975,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                   ] as const
                 ).map(([key, label]) => (
                   <div key={key}>
-                    <label className="mb-1 block text-sm font-medium text-light-text dark:text-dark-text">
+                    <label className="text-light-text dark:text-dark-text mb-1 block text-sm font-medium">
                       {label}
                     </label>
                     <div className="flex items-center gap-2">
@@ -975,7 +1010,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
               </div>
               <button
                 type="button"
-                className="mt-4 text-sm text-gray-500 underline hover:text-light-text dark:text-gray-400 dark:hover:text-dark-text"
+                className="hover:text-light-text dark:hover:text-dark-text mt-4 text-sm text-gray-500 underline dark:text-gray-400"
                 onClick={() => setColors(DEFAULT_COLORS)}
               >
                 Reset to defaults
@@ -986,7 +1021,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
 
             {/* Typography */}
             <div className="pb-2">
-              <p className="pb-3 text-lg font-semibold text-light-text dark:text-dark-text">
+              <p className="text-light-text dark:text-dark-text pb-3 text-lg font-semibold">
                 Typography
               </p>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -1001,9 +1036,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                   aria-label="Heading font"
                 >
                   {GOOGLE_FONTS.map((f) => (
-                    <SelectItem key={f.value} value={f.value}>
-                      {f.label}
-                    </SelectItem>
+                    <SelectItem key={f.value}>{f.label}</SelectItem>
                   ))}
                 </Select>
                 <Select
@@ -1017,9 +1050,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                   aria-label="Body font"
                 >
                   {GOOGLE_FONTS.map((f) => (
-                    <SelectItem key={f.value} value={f.value}>
-                      {f.label}
-                    </SelectItem>
+                    <SelectItem key={f.value}>{f.label}</SelectItem>
                   ))}
                 </Select>
               </div>
@@ -1029,7 +1060,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
 
             {/* Navigation Links */}
             <div className="pb-2">
-              <p className="pb-1 text-lg font-semibold text-light-text dark:text-dark-text">
+              <p className="text-light-text dark:text-dark-text pb-1 text-lg font-semibold">
                 Navigation Links
               </p>
               <p className="pb-3 text-sm text-gray-500 dark:text-gray-400">
@@ -1063,7 +1094,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                       placeholder="URL or page slug"
                       className="flex-1"
                     />
-                    <label className="flex items-center gap-1 whitespace-nowrap text-xs text-gray-500 dark:text-gray-400">
+                    <label className="flex items-center gap-1 text-xs whitespace-nowrap text-gray-500 dark:text-gray-400">
                       <input
                         type="checkbox"
                         checked={link.isPage || false}
@@ -1092,7 +1123,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                 onClick={() =>
                   setNavLinks([...navLinks, { label: "", href: "" }])
                 }
-                className="mt-2 text-sm text-shopstr-purple hover:underline dark:text-shopstr-yellow"
+                className="text-shopstr-purple dark:text-shopstr-yellow mt-2 text-sm hover:underline"
               >
                 + Add Nav Link
               </button>
@@ -1102,7 +1133,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
 
             {/* Homepage Sections */}
             <div className="pb-2">
-              <p className="pb-1 text-lg font-semibold text-light-text dark:text-dark-text">
+              <p className="text-light-text dark:text-dark-text pb-1 text-lg font-semibold">
                 Homepage Sections
               </p>
               <p className="pb-3 text-sm text-gray-500 dark:text-gray-400">
@@ -1199,7 +1230,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                         },
                       ])
                     }
-                    className="rounded border border-gray-300 px-2 py-1 text-xs font-medium text-gray-600 hover:border-shopstr-purple hover:text-shopstr-purple dark:border-gray-600 dark:text-gray-400 dark:hover:border-shopstr-yellow dark:hover:text-shopstr-yellow"
+                    className="hover:border-shopstr-purple hover:text-shopstr-purple dark:hover:border-shopstr-yellow dark:hover:text-shopstr-yellow rounded border border-gray-300 px-2 py-1 text-xs font-medium text-gray-600 dark:border-gray-600 dark:text-gray-400"
                   >
                     + {st.label}
                   </button>
@@ -1218,13 +1249,13 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
 
             {/* Built-in Pages */}
             <div className="pb-2">
-              <p className="pb-3 text-lg font-semibold text-light-text dark:text-dark-text">
+              <p className="text-light-text dark:text-dark-text pb-3 text-lg font-semibold">
                 Built-in Pages
               </p>
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="font-medium text-light-text dark:text-dark-text">
+                    <p className="text-light-text dark:text-dark-text font-medium">
                       Community Page
                     </p>
                     <p className="text-sm text-gray-500 dark:text-gray-400">
@@ -1238,7 +1269,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                 </div>
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="font-medium text-light-text dark:text-dark-text">
+                    <p className="text-light-text dark:text-dark-text font-medium">
                       Wallet Page
                     </p>
                     <p className="text-sm text-gray-500 dark:text-gray-400">
@@ -1257,7 +1288,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
 
             {/* Contact Us */}
             <div className="pb-2">
-              <p className="pb-1 text-lg font-semibold text-light-text dark:text-dark-text">
+              <p className="text-light-text dark:text-dark-text pb-1 text-lg font-semibold">
                 Contact Us
               </p>
               <p className="pb-3 text-sm text-gray-500 dark:text-gray-400">
@@ -1284,7 +1315,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
 
             {/* Footer */}
             <div className="pb-2">
-              <p className="pb-1 text-lg font-semibold text-light-text dark:text-dark-text">
+              <p className="text-light-text dark:text-dark-text pb-1 text-lg font-semibold">
                 Footer
               </p>
               <p className="pb-3 text-sm text-gray-500 dark:text-gray-400">
@@ -1301,12 +1332,12 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
 
             {/* Custom Domain */}
             <div className="pb-2">
-              <p className="pb-1 text-lg font-semibold text-light-text dark:text-dark-text">
+              <p className="text-light-text dark:text-dark-text pb-1 text-lg font-semibold">
                 Custom Domain
               </p>
               <p className="pb-3 text-sm text-gray-500 dark:text-gray-400">
                 Want to use your own domain (e.g.,{" "}
-                <code className="rounded bg-light-fg px-1 text-xs dark:bg-dark-fg">
+                <code className="bg-light-fg dark:bg-dark-fg rounded px-1 text-xs">
                   shop.yourdomain.com
                 </code>
                 ) for your storefront? We can help set that up for you.
@@ -1328,7 +1359,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                     "/orders?pk=npub15dc33fyg3cpd9r58vlqge2hh8dy6hkkrjxkhluv2xpyfreqkmsesesyv6e&isInquiry=true"
                   )
                 }
-                className="inline-block rounded-lg border-3 border-black bg-white px-4 py-2 text-sm font-bold text-black hover:bg-gray-100 dark:border-gray-500 dark:bg-dark-fg dark:text-dark-text dark:hover:bg-dark-bg"
+                className="dark:bg-dark-fg dark:text-dark-text dark:hover:bg-dark-bg inline-block rounded-lg border-3 border-black bg-white px-4 py-2 text-sm font-bold text-black hover:bg-gray-100 dark:border-gray-500"
               >
                 {customDomain ? "Contact Us to Change Domain" : "Contact Us"}
               </button>
@@ -1337,8 +1368,8 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
             <hr className="border-light-fg dark:border-dark-fg" />
 
             {/* Preview + Save */}
-            <div className="rounded-lg border-2 border-dashed border-light-fg p-4 dark:border-dark-fg">
-              <p className="mb-3 text-sm font-medium text-light-text dark:text-dark-text">
+            <div className="border-light-fg dark:border-dark-fg rounded-lg border-2 border-dashed p-4">
+              <p className="text-light-text dark:text-dark-text mb-3 text-sm font-medium">
                 Preview your storefront before saving to see how it will look to
                 visitors.
               </p>
@@ -1355,7 +1386,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                     href={`/shop/${shopSlug}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-sm text-shopstr-purple underline dark:text-shopstr-yellow"
+                    className="text-shopstr-purple dark:text-shopstr-yellow text-sm underline"
                   >
                     {siteHost}/shop/{shopSlug} →
                   </a>
