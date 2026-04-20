@@ -872,6 +872,75 @@ async function initializeTables(): Promise<void> {
       CREATE INDEX IF NOT EXISTS idx_affiliate_payouts_seller_pubkey ON affiliate_payouts(seller_pubkey);
     `);
 
+    // -----------------------------------------------------------------
+    // Idempotent affiliate-program migrations. This block mirrors the
+    // DO $aff_migrate$ block in db/schema.sql so that environments which
+    // bootstrap from this code path (rather than running schema.sql
+    // directly) stay in sync.  Safe to re-run.
+    // -----------------------------------------------------------------
+    await client.query(`
+      DO $aff_migrate_inline$
+      BEGIN
+        EXECUTE 'UPDATE affiliate_codes SET payout_schedule = ''monthly'' WHERE payout_schedule IN (''every_sale'', ''daily'')';
+        IF EXISTS (
+          SELECT 1 FROM pg_constraint WHERE conname = 'affiliate_codes_payout_schedule_check'
+        ) THEN
+          ALTER TABLE affiliate_codes DROP CONSTRAINT affiliate_codes_payout_schedule_check;
+        END IF;
+        ALTER TABLE affiliate_codes
+          ADD CONSTRAINT affiliate_codes_payout_schedule_check
+          CHECK (payout_schedule IN ('weekly', 'biweekly', 'monthly'));
+        ALTER TABLE affiliate_codes ALTER COLUMN payout_schedule SET DEFAULT 'monthly';
+
+        ALTER TABLE affiliate_referrals
+          ADD COLUMN IF NOT EXISTS refunded_smallest NUMERIC(20,0) NOT NULL DEFAULT 0;
+        ALTER TABLE affiliate_referrals
+          ADD COLUMN IF NOT EXISTS refund_event_ref TEXT;
+        IF EXISTS (
+          SELECT 1 FROM pg_constraint WHERE conname = 'affiliate_referrals_status_check'
+        ) THEN
+          ALTER TABLE affiliate_referrals DROP CONSTRAINT affiliate_referrals_status_check;
+        END IF;
+        ALTER TABLE affiliate_referrals
+          ADD CONSTRAINT affiliate_referrals_status_check
+          CHECK (status IN ('pending', 'payable', 'paid', 'cancelled', 'refunded'));
+
+        ALTER TABLE affiliates
+          ADD COLUMN IF NOT EXISTS payouts_enabled BOOLEAN NOT NULL DEFAULT TRUE;
+        ALTER TABLE affiliates
+          ADD COLUMN IF NOT EXISTS payout_failure_count INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE affiliates
+          ADD COLUMN IF NOT EXISTS last_payout_failure_at TIMESTAMP;
+        ALTER TABLE affiliates
+          ADD COLUMN IF NOT EXISTS last_payout_failure_reason TEXT;
+        ALTER TABLE affiliates
+          ADD COLUMN IF NOT EXISTS email_notifications_enabled BOOLEAN NOT NULL DEFAULT TRUE;
+        ALTER TABLE affiliates
+          ADD COLUMN IF NOT EXISTS stripe_charges_enabled BOOLEAN NOT NULL DEFAULT FALSE;
+        ALTER TABLE affiliates
+          ADD COLUMN IF NOT EXISTS stripe_payouts_enabled BOOLEAN NOT NULL DEFAULT FALSE;
+        ALTER TABLE affiliates
+          ADD COLUMN IF NOT EXISTS stripe_onboarding_complete BOOLEAN NOT NULL DEFAULT FALSE;
+
+        CREATE UNIQUE INDEX IF NOT EXISTS uniq_affiliate_codes_seller_upper_code
+          ON affiliate_codes (seller_pubkey, UPPER(code));
+
+        CREATE TABLE IF NOT EXISTS affiliate_clicks (
+            id BIGSERIAL PRIMARY KEY,
+            seller_pubkey TEXT NOT NULL,
+            code TEXT NOT NULL,
+            landing_path TEXT,
+            referer_host TEXT,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_affiliate_clicks_seller_code
+          ON affiliate_clicks(seller_pubkey, code);
+        CREATE INDEX IF NOT EXISTS idx_affiliate_clicks_created_at
+          ON affiliate_clicks(created_at);
+      END
+      $aff_migrate_inline$;
+    `);
+
     tablesInitialized = true;
     initializingTables = false;
   } catch (error) {

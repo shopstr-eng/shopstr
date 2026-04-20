@@ -20,9 +20,12 @@ import {
   buildAffiliateCodesListProof,
   buildAffiliateCreateProof,
   buildAffiliateDeleteProof,
+  buildAffiliateClickStatsProof,
   buildAffiliateMarkPaidProof,
   buildAffiliatePayoutsListProof,
+  buildAffiliateReverseReferralProof,
   buildAffiliatesListProof,
+  buildAffiliateUpdateProof,
   buildSignedHttpRequestProofTemplate,
   SIGNED_EVENT_HEADER,
 } from "@/utils/nostr/request-auth";
@@ -38,6 +41,10 @@ interface Affiliate {
   lightning_address: string | null;
   stripe_account_id: string | null;
   notes: string | null;
+  payouts_enabled: boolean;
+  payout_failure_count: number;
+  last_payout_failure_at: string | null;
+  last_payout_failure_reason: string | null;
 }
 
 interface AffiliateCode {
@@ -50,7 +57,7 @@ interface AffiliateCode {
   buyer_discount_type: "percent" | "fixed";
   buyer_discount_value: number;
   currency: string | null;
-  payout_schedule: "every_sale" | "daily" | "weekly" | "monthly";
+  payout_schedule: "weekly" | "biweekly" | "monthly";
   expiration: number | null;
   max_uses: number | null;
   times_used: number;
@@ -65,6 +72,23 @@ interface Balance {
   payable_smallest: string;
   paid_smallest: string;
   referral_count: number;
+}
+
+interface ClickStat {
+  affiliate_id: number | null;
+  affiliate_name: string | null;
+  code: string;
+  clicks: number;
+  conversions: number;
+  conversion_rate: number;
+}
+
+interface YtdRow {
+  affiliate_id: number;
+  affiliate_name: string;
+  currency: string;
+  paid_smallest: string;
+  payout_count: number;
 }
 
 interface Payout {
@@ -92,6 +116,9 @@ export default function Affiliates() {
   const [codes, setCodes] = useState<AffiliateCode[]>([]);
   const [balances, setBalances] = useState<Balance[]>([]);
   const [payouts, setPayouts] = useState<Payout[]>([]);
+  const [clickStats, setClickStats] = useState<ClickStat[]>([]);
+  const [ytdRows, setYtdRows] = useState<YtdRow[]>([]);
+  const [reverseOrderId, setReverseOrderId] = useState("");
   const [loading, setLoading] = useState(false);
 
   // New affiliate form
@@ -111,8 +138,8 @@ export default function Affiliates() {
   const [buyerDiscountValue, setBuyerDiscountValue] = useState("0");
   const [codeCurrency, setCodeCurrency] = useState("usd");
   const [payoutSchedule, setPayoutSchedule] = useState<
-    "every_sale" | "daily" | "weekly" | "monthly"
-  >("every_sale");
+    "weekly" | "biweekly" | "monthly"
+  >("monthly");
 
   useEffect(() => {
     if (pubkey && signer) refresh();
@@ -155,12 +182,102 @@ export default function Affiliates() {
         const data = await pRes.json();
         setBalances(data.balances || []);
         setPayouts(data.payouts || []);
+        // YTD totals are derived locally from the same payouts feed so we
+        // don't need a separate endpoint round-trip for the dashboard.
+        setYtdRows(deriveYtdRows(data.payouts || []));
+      }
+
+      // Click analytics — separate endpoint, OK to fail soft.
+      try {
+        const csSigned = await signer.sign(
+          buildSignedHttpRequestProofTemplate(
+            buildAffiliateClickStatsProof(pubkey)
+          )
+        );
+        const csRes = await fetch(
+          `/api/affiliates/click-stats?pubkey=${pubkey}&sinceDays=30`,
+          { headers: { [SIGNED_EVENT_HEADER]: JSON.stringify(csSigned) } }
+        );
+        if (csRes.ok) {
+          const data = await csRes.json();
+          setClickStats(data.stats || []);
+        }
+      } catch (e) {
+        console.warn("click-stats fetch failed:", e);
       }
     } catch (e) {
       console.error("Affiliate refresh failed:", e);
     } finally {
       setLoading(false);
     }
+  }
+
+  function deriveYtdRows(allPayouts: Payout[]): YtdRow[] {
+    const startOfYear = new Date(new Date().getFullYear(), 0, 1).getTime();
+    const acc = new Map<string, YtdRow>();
+    for (const p of allPayouts) {
+      if (p.status !== "paid") continue;
+      if (new Date(p.paid_at).getTime() < startOfYear) continue;
+      const key = `${p.affiliate_id}:${p.currency}`;
+      const prev = acc.get(key);
+      const amt = Number(p.amount_smallest);
+      if (prev) {
+        prev.paid_smallest = String(Number(prev.paid_smallest) + amt);
+        prev.payout_count += 1;
+      } else {
+        acc.set(key, {
+          affiliate_id: p.affiliate_id,
+          affiliate_name: p.affiliate_name,
+          currency: p.currency,
+          paid_smallest: String(amt),
+          payout_count: 1,
+        });
+      }
+    }
+    return Array.from(acc.values()).sort(
+      (a, b) => Number(b.paid_smallest) - Number(a.paid_smallest)
+    );
+  }
+
+  async function reverseReferralByOrder() {
+    if (!pubkey || !signer) return;
+    const orderId = reverseOrderId.trim();
+    if (!orderId) return;
+    if (
+      !window.confirm(
+        `Reverse all affiliate referrals for order "${orderId}"? Pending rebates will be cancelled and already-paid rebates flagged for clawback.`
+      )
+    ) {
+      return;
+    }
+    const signedEvent = await signer.sign(
+      buildSignedHttpRequestProofTemplate(
+        buildAffiliateReverseReferralProof({
+          pubkey,
+          orderId,
+          sellerPubkey: pubkey,
+        })
+      )
+    );
+    const res = await fetch("/api/affiliates/reverse-referral", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        [SIGNED_EVENT_HEADER]: JSON.stringify(signedEvent),
+      },
+      body: JSON.stringify({
+        pubkey,
+        orderId,
+        sellerPubkey: pubkey,
+      }),
+    });
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      alert(`Reverse failed: ${j.error || res.status}`);
+      return;
+    }
+    setReverseOrderId("");
+    await refresh();
   }
 
   async function createAffiliate() {
@@ -195,21 +312,89 @@ export default function Affiliates() {
     }
   }
 
-  async function deleteAffiliate(id: number) {
+  async function deleteAffiliate(id: number, force = false) {
     if (!pubkey || !signer) return;
     const signedEvent = await signer.sign(
       buildSignedHttpRequestProofTemplate(
         buildAffiliateDeleteProof({ pubkey, affiliateId: id })
       )
     );
-    await fetch("/api/affiliates/manage", {
+    const res = await fetch("/api/affiliates/manage", {
       method: "DELETE",
       headers: {
         "Content-Type": "application/json",
         [SIGNED_EVENT_HEADER]: JSON.stringify(signedEvent),
       },
-      body: JSON.stringify({ pubkey, affiliateId: id }),
+      body: JSON.stringify({ pubkey, affiliateId: id, force }),
     });
+    if (res.status === 409) {
+      const j = await res.json().catch(() => ({}));
+      const ok = window.confirm(
+        `${j.error || "Affiliate has unsettled balance."}\n\nForce delete and cancel pending referrals?`
+      );
+      if (ok) await deleteAffiliate(id, true);
+      return;
+    }
+    await refresh();
+  }
+
+  async function regenerateInviteToken(id: number) {
+    if (!pubkey || !signer) return;
+    if (
+      !window.confirm(
+        "Generate a new invite link? The old link will stop working immediately."
+      )
+    ) {
+      return;
+    }
+    const signedEvent = await signer.sign(
+      buildSignedHttpRequestProofTemplate(
+        buildAffiliateUpdateProof({ pubkey, affiliateId: id })
+      )
+    );
+    const res = await fetch("/api/affiliates/manage", {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        [SIGNED_EVENT_HEADER]: JSON.stringify(signedEvent),
+      },
+      body: JSON.stringify({
+        pubkey,
+        affiliateId: id,
+        action: "regenerate-invite-token",
+      }),
+    });
+    if (!res.ok) {
+      alert("Failed to regenerate invite link");
+      return;
+    }
+    await refresh();
+  }
+
+  async function setPayoutsEnabled(id: number, enabled: boolean) {
+    if (!pubkey || !signer) return;
+    const signedEvent = await signer.sign(
+      buildSignedHttpRequestProofTemplate(
+        buildAffiliateUpdateProof({ pubkey, affiliateId: id })
+      )
+    );
+    const res = await fetch("/api/affiliates/manage", {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        [SIGNED_EVENT_HEADER]: JSON.stringify(signedEvent),
+      },
+      body: JSON.stringify({
+        pubkey,
+        affiliateId: id,
+        action: "set-payouts-enabled",
+        enabled,
+      }),
+    });
+    if (!res.ok) {
+      alert("Failed to toggle payouts");
+      return;
+    }
     await refresh();
   }
 
@@ -381,7 +566,7 @@ export default function Affiliates() {
                     <CardBody>
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex-1 space-y-1">
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
                             <span className="text-lg font-semibold text-black">
                               {a.name}
                             </span>
@@ -394,7 +579,17 @@ export default function Affiliates() {
                                 Invite pending
                               </Chip>
                             )}
+                            {a.payouts_enabled === false && (
+                              <Chip color="danger" size="sm">
+                                Payouts disabled
+                              </Chip>
+                            )}
                           </div>
+                          {a.last_payout_failure_reason && (
+                            <p className="text-xs text-red-600">
+                              Last payout error: {a.last_payout_failure_reason}
+                            </p>
+                          )}
                           {a.email && (
                             <p className="text-xs text-gray-500">{a.email}</p>
                           )}
@@ -423,6 +618,34 @@ export default function Affiliates() {
                             >
                               <ClipboardDocumentIcon className="h-4 w-4" />
                             </Button>
+                          </div>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            <Button
+                              size="sm"
+                              variant="bordered"
+                              className="text-black"
+                              onClick={() => regenerateInviteToken(a.id)}
+                            >
+                              Regenerate invite link
+                            </Button>
+                            {a.payouts_enabled === false ? (
+                              <Button
+                                size="sm"
+                                color="primary"
+                                onClick={() => setPayoutsEnabled(a.id, true)}
+                              >
+                                Re-enable payouts
+                              </Button>
+                            ) : (
+                              <Button
+                                size="sm"
+                                variant="bordered"
+                                className="text-black"
+                                onClick={() => setPayoutsEnabled(a.id, false)}
+                              >
+                                Pause payouts
+                              </Button>
+                            )}
                           </div>
                         </div>
                         <ConfirmActionDropdown
@@ -525,18 +748,13 @@ export default function Affiliates() {
                     selectedKeys={[payoutSchedule]}
                     onChange={(e) =>
                       setPayoutSchedule(
-                        e.target.value as
-                          | "every_sale"
-                          | "daily"
-                          | "weekly"
-                          | "monthly"
+                        e.target.value as "weekly" | "biweekly" | "monthly"
                       )
                     }
                   >
-                    <SelectItem key="every_sale">Every sale</SelectItem>
-                    <SelectItem key="daily">Daily</SelectItem>
                     <SelectItem key="weekly">Weekly</SelectItem>
-                    <SelectItem key="monthly">Monthly</SelectItem>
+                    <SelectItem key="biweekly">Biweekly</SelectItem>
+                    <SelectItem key="monthly">Monthly (default)</SelectItem>
                   </Select>
                 </div>
                 <Button
@@ -686,6 +904,129 @@ export default function Affiliates() {
                 </Card>
               ))
             )}
+          </div>
+        </Tab>
+
+        <Tab key="analytics" title="Analytics">
+          <div className="space-y-4">
+            <Card className="bg-white">
+              <CardHeader className="font-semibold text-black">
+                Clicks &amp; conversions (last 30 days)
+              </CardHeader>
+              <CardBody>
+                {clickStats.length === 0 ? (
+                  <p className="text-sm text-gray-500">
+                    No tracked clicks yet. Once buyers visit a{" "}
+                    <code>?ref=CODE</code> link the data will appear here.
+                  </p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="text-left text-gray-500">
+                        <tr>
+                          <th className="py-1 pr-3">Code</th>
+                          <th className="py-1 pr-3">Affiliate</th>
+                          <th className="py-1 pr-3 text-right">Clicks</th>
+                          <th className="py-1 pr-3 text-right">Conversions</th>
+                          <th className="py-1 pr-3 text-right">Rate</th>
+                        </tr>
+                      </thead>
+                      <tbody className="text-black">
+                        {clickStats.map((s) => (
+                          <tr key={`${s.code}-${s.affiliate_id ?? "x"}`}>
+                            <td className="py-1 pr-3 font-mono">{s.code}</td>
+                            <td className="py-1 pr-3">
+                              {s.affiliate_name ?? (
+                                <span className="text-gray-400">
+                                  (no matching code)
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-1 pr-3 text-right">{s.clicks}</td>
+                            <td className="py-1 pr-3 text-right">
+                              {s.conversions}
+                            </td>
+                            <td className="py-1 pr-3 text-right">
+                              {(s.conversion_rate * 100).toFixed(1)}%
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardBody>
+            </Card>
+
+            <Card className="bg-white">
+              <CardHeader className="font-semibold text-black">
+                Year-to-date paid out
+              </CardHeader>
+              <CardBody>
+                {ytdRows.length === 0 ? (
+                  <p className="text-sm text-gray-500">
+                    No payouts so far this year.
+                  </p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="text-left text-gray-500">
+                        <tr>
+                          <th className="py-1 pr-3">Affiliate</th>
+                          <th className="py-1 pr-3">Currency</th>
+                          <th className="py-1 pr-3 text-right">Paid</th>
+                          <th className="py-1 pr-3 text-right">Payouts</th>
+                        </tr>
+                      </thead>
+                      <tbody className="text-black">
+                        {ytdRows.map((r) => (
+                          <tr key={`${r.affiliate_id}-${r.currency}`}>
+                            <td className="py-1 pr-3">{r.affiliate_name}</td>
+                            <td className="py-1 pr-3 uppercase">
+                              {r.currency}
+                            </td>
+                            <td className="py-1 pr-3 text-right">
+                              {formatAmount(r.paid_smallest, r.currency)}
+                            </td>
+                            <td className="py-1 pr-3 text-right">
+                              {r.payout_count}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardBody>
+            </Card>
+
+            <Card className="bg-white">
+              <CardHeader className="font-semibold text-black">
+                Reverse a referral (Lightning / Cashu refunds)
+              </CardHeader>
+              <CardBody className="space-y-2">
+                <p className="text-xs text-gray-500">
+                  Stripe refunds reverse referrals automatically. For Lightning
+                  or Cashu refunds, paste the order ID here to cancel pending
+                  rebates and flag any already-paid rebates for clawback.
+                </p>
+                <div className="flex gap-2">
+                  <Input
+                    aria-label="Order ID"
+                    placeholder="order_… or invoice ID"
+                    value={reverseOrderId}
+                    onValueChange={setReverseOrderId}
+                  />
+                  <Button
+                    className={BLUEBUTTONCLASSNAMES}
+                    isDisabled={!reverseOrderId.trim()}
+                    onClick={reverseReferralByOrder}
+                  >
+                    Reverse
+                  </Button>
+                </div>
+              </CardBody>
+            </Card>
           </div>
         </Tab>
       </Tabs>

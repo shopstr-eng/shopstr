@@ -183,9 +183,7 @@ export default function CartInvoiceCard({
             body: JSON.stringify({
               orderId,
               sellerPubkey,
-              affiliateId: aff.affiliateId,
-              affiliateCodeId: aff.codeId,
-              affiliateCode: aff.code,
+              code: aff.code,
               grossSmallest,
               currency: sellerCurrency,
               paymentRail,
@@ -2646,7 +2644,12 @@ export default function CartInvoiceCard({
         }
       });
     }
-    recordAffiliateReferrals(orderId, "stripe").catch(() => {});
+    // NOTE: Stripe referrals are recorded server-side from
+    // /api/stripe/process-transfers (and reversed by the webhook on refund)
+    // so we deliberately do NOT call recordAffiliateReferrals here. Calling
+    // it from the browser would race with the server insert and risk
+    // double-counting toward max_uses, and a buyer who closes the tab
+    // before this fires would lose attribution.
     if (setInvoiceIsPaid) {
       setInvoiceIsPaid(true);
     }

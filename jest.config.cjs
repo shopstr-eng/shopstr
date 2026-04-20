@@ -16,8 +16,13 @@ const customJestConfig = {
 
 module.exports = async () => {
   const jestConfig = await createJestConfig(customJestConfig)();
+  // Note: pnpm hoists modules under node_modules/.pnpm/<pkg>@<ver>/node_modules/<pkg>.
+  // The negative lookahead has to handle BOTH the classic `node_modules/@noble/...`
+  // layout and the pnpm `node_modules/.pnpm/.../node_modules/@noble/...` layout,
+  // otherwise ESM-only deps like @noble/hashes/sha2.js are passed through to
+  // Node untransformed and crash with "Cannot use import statement outside a module".
   jestConfig.transformIgnorePatterns = [
-    "/node_modules/(?!(dexie|nostr-tools|@noble|@scure|@getalby/lightning-tools|@cashu/cashu-ts|uuid)/)",
+    "/node_modules/(?:\\.pnpm/[^/]+/node_modules/)?(?!(dexie|nostr-tools|@noble|@scure|@getalby/lightning-tools|@cashu/cashu-ts|uuid)/)",
     "^.+\\.module\\.(css|sass|scss)$",
   ];
 

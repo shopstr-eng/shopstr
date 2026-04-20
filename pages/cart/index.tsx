@@ -36,6 +36,7 @@ import StorefrontThemeWrapper from "@/components/storefront/storefront-theme-wra
 import ProtectedRoute from "@/components/utility-components/protected-route";
 import { getLocalStorageJson } from "@/utils/safe-json";
 import { CartDiscountsMap, isCartDiscountsMap } from "@/utils/cart-discounts";
+import { getAffiliateRefCookie } from "@/components/utility-components/affiliate-ref-tracker";
 
 interface QuantitySelectorProps {
   value: number;
@@ -615,15 +616,16 @@ export default function Component() {
   useEffect(() => {
     if (typeof document === "undefined") return;
     if (uniqueSellerPubkeys.length === 0) return;
-    const m = document.cookie.match(/(?:^|; )mm_aff_ref=([^;]*)/);
-    if (!m) return;
-    const code = decodeURIComponent(m[1]!);
-    if (!code) return;
     let cancelled = false;
     (async () => {
       for (const pubkey of uniqueSellerPubkeys) {
         if (cancelled) return;
         if (discountCodes[pubkey] || affiliateMetaBySeller[pubkey]) continue;
+        // Prefer a code that was set on this seller's storefront over the
+        // wildcard slot, so a code captured on seller A doesn't leak onto
+        // seller B at multi-seller checkout.
+        const code = getAffiliateRefCookie(pubkey);
+        if (!code) continue;
         try {
           const res = await fetch(
             `/api/affiliates/validate?sellerPubkey=${pubkey}&code=${encodeURIComponent(
@@ -731,6 +733,19 @@ export default function Component() {
       return;
     }
 
+    // Mutual exclusivity: a regular discount and an affiliate code can't both
+    // apply to the same seller. If the user already has one active, ask them
+    // to remove it before trying another so they don't get a confusing
+    // silent failure later in the flow.
+    if (appliedDiscounts[pubkey] && affiliateMetaBySeller[pubkey]) {
+      setDiscountErrors({
+        ...discountErrors,
+        [pubkey]:
+          "An affiliate code is already applied. Remove it before adding another code.",
+      });
+      return;
+    }
+
     try {
       const response = await fetch(
         `/api/db/discount-codes?validate=true&code=${encodeURIComponent(
@@ -749,6 +764,12 @@ export default function Component() {
       const result = await response.json();
 
       if (result.valid && result.discount_percentage) {
+        // A regular discount won — clear any previous affiliate attribution
+        // so the order doesn't mistakenly send a rebate to an affiliate.
+        if (affiliateMetaBySeller[pubkey]) {
+          const { [pubkey]: _drop, ...rest } = affiliateMetaBySeller;
+          setAffiliateMetaBySeller(rest);
+        }
         setAppliedDiscounts({
           ...appliedDiscounts,
           [pubkey]: result.discount_percentage,
@@ -770,10 +791,15 @@ export default function Component() {
         };
         localStorage.setItem("cartDiscounts", JSON.stringify(discounts));
       } else {
+        // Pass the seller's order currency so the validate endpoint can
+        // reject fixed-amount codes whose currency doesn't match this cart
+        // (e.g. a USD code on a sats invoice).
+        const sellerCurrency =
+          products.find((p) => p.pubkey === pubkey)?.currency || "usd";
         const affRes = await fetch(
           `/api/affiliates/validate?sellerPubkey=${pubkey}&code=${encodeURIComponent(
             code
-          )}`
+          )}&currency=${encodeURIComponent(sellerCurrency)}`
         );
         const aff = affRes.ok ? await affRes.json() : null;
         if (aff?.valid) {

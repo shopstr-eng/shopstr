@@ -81,7 +81,7 @@ export default async function handler(
         buyerDiscountType: buyerDiscountType ?? "percent",
         buyerDiscountValue: Number(buyerDiscountValue ?? 0),
         currency: currency ?? null,
-        payoutSchedule: payoutSchedule ?? "every_sale",
+        payoutSchedule: payoutSchedule ?? "monthly",
         expiration: expiration ? Number(expiration) : null,
         maxUses: maxUses ? Number(maxUses) : null,
       });

@@ -2,8 +2,8 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import {
   computeBuyerDiscountSmallest,
   computeRebateSmallest,
-  incrementAffiliateCodeUsage,
   isAffiliateCodeValid,
+  isSelfReferral,
   lookupAffiliateCode,
   recordReferral,
 } from "@/utils/db/affiliates";
@@ -16,9 +16,13 @@ const RATE_LIMIT = { limit: 120, windowMs: 60 * 1000 };
  * sale to an affiliate code. We compute rebate + discount server-side so the
  * client cannot inflate either.
  *
- * `realtimeTransferRef` is set when the payment rail already paid the
- * affiliate inline (Stripe Connect transfer for an "every_sale" code). In
- * that case we record the referral as `paid` straight away.
+ * Real-time payouts were removed; all referrals start as 'pending' and are
+ * promoted to 'payable' by the scheduled cron once they age past the hold
+ * window for their code's payout schedule.
+ *
+ * This endpoint is a best-effort backstop for buyer-driven flows (e.g.
+ * Cashu). The Stripe path also records referrals server-side from
+ * process-transfers / webhook so the attribution survives a closed tab.
  */
 export default async function handler(
   req: NextApiRequest,
@@ -31,22 +35,25 @@ export default async function handler(
     return;
 
   try {
+    // Accept both `grossSmallest` (legacy cart payload) and
+    // `grossSubtotalSmallest` (server payload) as aliases.
     const {
       sellerPubkey,
       code,
       orderId,
       paymentRail,
       grossSubtotalSmallest,
+      grossSmallest,
       currency,
-      realtimeTransferRef,
     } = req.body ?? {};
+    const gross = Number(grossSubtotalSmallest ?? grossSmallest);
 
     if (
       !sellerPubkey ||
       !code ||
       !orderId ||
       !paymentRail ||
-      grossSubtotalSmallest == null ||
+      !Number.isFinite(gross) ||
       !currency
     ) {
       return res.status(400).json({ error: "Missing required fields" });
@@ -57,7 +64,28 @@ export default async function handler(
       return res.status(400).json({ error: "Invalid affiliate code" });
     }
 
-    const gross = Number(grossSubtotalSmallest);
+    // Currency guard for fixed-amount codes: a $10 fixed discount priced in
+    // USD cannot be silently applied to a sats invoice. Percent codes are
+    // currency-agnostic so they still pass here.
+    if (
+      found.currency &&
+      String(currency).toLowerCase() !== found.currency.toLowerCase() &&
+      (found.buyer_discount_type === "fixed" || found.rebate_type === "fixed")
+    ) {
+      return res
+        .status(400)
+        .json({ error: "Affiliate code currency does not match order" });
+    }
+
+    // Block obvious self-referral abuse — a seller claiming their own
+    // affiliate code as the buyer to siphon the platform's rebate share.
+    if (
+      found.affiliate &&
+      isSelfReferral(sellerPubkey, found.affiliate.affiliate_pubkey)
+    ) {
+      return res.status(400).json({ error: "Self-referral is not allowed" });
+    }
+
     const buyerDiscountSmallest = computeBuyerDiscountSmallest(
       gross,
       found.buyer_discount_type,
@@ -70,22 +98,27 @@ export default async function handler(
       Number(found.rebate_value)
     );
 
-    const initialStatus = realtimeTransferRef ? "paid" : "pending";
-
-    const referral = await recordReferral({
-      affiliateId: found.affiliate_id,
-      codeId: found.id,
-      sellerPubkey,
-      orderId: String(orderId),
-      paymentRail,
-      grossSubtotalSmallest: gross,
-      buyerDiscountSmallest,
-      rebateSmallest,
-      currency,
-      initialStatus,
-      realtimeTransferRef: realtimeTransferRef ?? null,
-    });
-    await incrementAffiliateCodeUsage(found.id);
+    // recordReferral handles atomic max_uses enforcement + idempotency. If
+    // the code is full or inactive it throws; we surface that as 409.
+    let referral;
+    try {
+      referral = await recordReferral({
+        affiliateId: found.affiliate_id,
+        codeId: found.id,
+        sellerPubkey,
+        orderId: String(orderId),
+        paymentRail,
+        grossSubtotalSmallest: gross,
+        buyerDiscountSmallest,
+        rebateSmallest,
+        currency,
+        initialStatus: "pending",
+        realtimeTransferRef: null,
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "record-referral failed";
+      return res.status(409).json({ error: msg });
+    }
 
     return res.status(200).json({
       success: true,

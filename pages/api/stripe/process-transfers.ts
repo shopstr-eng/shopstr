@@ -24,6 +24,7 @@ import {
   resolveDonationCut,
   computeDonationCutSmallest,
 } from "@/utils/stripe/donation";
+import { recordReferral } from "@/utils/db/affiliates";
 
 // Rate limit: per-IP cap to bound abuse of payment endpoints.
 const RATE_LIMIT = { limit: 30, windowMs: 60000 };
@@ -63,6 +64,11 @@ export default async function handler(
     }
 
     const transferCurrency = paymentIntent.currency;
+    // Order id used for affiliate idempotency. Fall back to the PI id so we
+    // still get a stable unique key even when no orderId metadata was set.
+    const orderId =
+      (paymentIntent.metadata && paymentIntent.metadata.orderId) ||
+      paymentIntentId;
 
     const results: {
       sellerPubkey: string;
@@ -190,42 +196,34 @@ export default async function handler(
           affiliateRebateSmallest: affiliateRebate,
         };
 
-        // Real-time affiliate transfer when a Stripe Connect destination is
-        // configured. If not, we leave it accruing — the cart's
-        // record-referral call will store the rebate against the affiliate
-        // balance for later settlement.
-        if (affiliateRebate > 0 && split.affiliateAccountId) {
+        // Real-time affiliate transfers were removed. Always accrue the
+        // rebate server-side via recordReferral so the scheduler can settle
+        // it on the configured cadence — this keeps refund clawbacks
+        // deterministic. We do this on the server (not the client) so the
+        // referral is recorded even if the buyer closes the tab.
+        if (affiliateRebate > 0 && split.affiliateId && split.affiliateCodeId) {
           try {
-            const affiliateTransfer = await withStripeRetry(() =>
-              stripe.transfers.create(
-                {
-                  amount: affiliateRebate,
-                  currency: transferCurrency,
-                  destination: split.affiliateAccountId!,
-                  transfer_group: transferGroup,
-                  metadata: {
-                    paymentIntentId,
-                    sellerPubkey: split.sellerPubkey,
-                    affiliateId: String(split.affiliateId ?? ""),
-                    affiliateCodeId: String(split.affiliateCodeId ?? ""),
-                    affiliateCode: split.affiliateCode ?? "",
-                    rebateSmallest: affiliateRebate.toString(),
-                  },
-                },
-                {
-                  idempotencyKey: `aff-${paymentIntentId}-${split.sellerPubkey}-${
-                    split.affiliateCodeId ?? "x"
-                  }`,
-                }
-              )
-            );
-            result.affiliateTransferId = affiliateTransfer.id;
+            await recordReferral({
+              affiliateId: split.affiliateId,
+              codeId: split.affiliateCodeId,
+              sellerPubkey: split.sellerPubkey,
+              orderId,
+              paymentRail: "stripe",
+              grossSubtotalSmallest: split.amountCents,
+              buyerDiscountSmallest: 0,
+              rebateSmallest: affiliateRebate,
+              currency: transferCurrency,
+              initialStatus: "pending",
+              realtimeTransferRef: null,
+            });
+            result.affiliateAccrued = true;
+            result.affiliateRebateSmallest = affiliateRebate;
           } catch (e) {
             result.affiliateError =
-              e instanceof Error ? e.message : "Affiliate transfer failed";
+              e instanceof Error
+                ? e.message
+                : "Affiliate referral record failed";
           }
-        } else if (affiliateRebate > 0) {
-          result.affiliateAccrued = true;
         }
 
         results.push(result);

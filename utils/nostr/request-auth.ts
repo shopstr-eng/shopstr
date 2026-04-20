@@ -494,6 +494,51 @@ export function buildAffiliateProcessPayoutsProof({
   };
 }
 
+export function buildAffiliateReverseReferralProof({
+  pubkey,
+  orderId,
+  sellerPubkey,
+}: {
+  pubkey: string;
+  orderId: string;
+  sellerPubkey: string;
+}): SignedHttpRequestProof {
+  return {
+    action: "reverse_affiliate_referral",
+    method: "POST",
+    path: "/api/affiliates/reverse-referral",
+    pubkey,
+    fields: { orderId, sellerPubkey },
+  };
+}
+
+export function buildAffiliateClickStatsProof(
+  pubkey: string
+): SignedHttpRequestProof {
+  return {
+    action: "list_affiliate_click_stats",
+    method: "GET",
+    path: "/api/affiliates/click-stats",
+    pubkey,
+  };
+}
+
+export function buildAffiliateClaimUpdateProof({
+  pubkey,
+  inviteToken,
+}: {
+  pubkey: string;
+  inviteToken: string;
+}): SignedHttpRequestProof {
+  return {
+    action: "update_affiliate_claim",
+    method: "POST",
+    path: "/api/affiliates/claim",
+    pubkey,
+    fields: { inviteToken },
+  };
+}
+
 export function buildClearFailedRelayPublishProof({
   pubkey,
   eventId,

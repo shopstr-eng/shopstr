@@ -3,6 +3,8 @@ import {
   createAffiliate,
   deleteAffiliate,
   listAffiliatesBySeller,
+  regenerateInviteToken,
+  setAffiliatePayoutsEnabled,
   updateAffiliate,
 } from "@/utils/db/affiliates";
 import {
@@ -92,7 +94,7 @@ export default async function handler(
     }
 
     if (req.method === "DELETE") {
-      const { pubkey, affiliateId } = req.body ?? {};
+      const { pubkey, affiliateId, force } = req.body ?? {};
       if (!pubkey || !affiliateId) {
         return res
           .status(400)
@@ -103,8 +105,53 @@ export default async function handler(
         buildAffiliateDeleteProof({ pubkey, affiliateId: Number(affiliateId) })
       );
       if (!v.ok) return res.status(v.status).json({ error: v.error });
-      await deleteAffiliate(Number(affiliateId), pubkey);
+      try {
+        await deleteAffiliate(Number(affiliateId), pubkey, {
+          force: Boolean(force),
+        });
+      } catch (e) {
+        // Surface the human-readable "unsettled balance" guard as a 409 so
+        // the UI can prompt the seller for confirmation + force.
+        const msg = e instanceof Error ? e.message : "Delete failed";
+        if (msg.includes("unsettled balance")) {
+          return res.status(409).json({ error: msg });
+        }
+        throw e;
+      }
       return res.status(200).json({ success: true });
+    }
+
+    // PUT: side-channel mutations that don't fit a CRUD verb cleanly. Reuses
+    // the affiliate-update proof since both rotate-token and toggle-payouts
+    // require the same authority (seller controls this affiliate).
+    if (req.method === "PUT") {
+      const { pubkey, affiliateId, action, enabled } = req.body ?? {};
+      if (!pubkey || !affiliateId || !action) {
+        return res
+          .status(400)
+          .json({ error: "pubkey, affiliateId and action required" });
+      }
+      const v = verifySignedHttpRequestProof(
+        extractSignedEventFromRequest(req),
+        buildAffiliateUpdateProof({ pubkey, affiliateId: Number(affiliateId) })
+      );
+      if (!v.ok) return res.status(v.status).json({ error: v.error });
+
+      if (action === "regenerate-invite-token") {
+        const token = await regenerateInviteToken(Number(affiliateId), pubkey);
+        if (!token) return res.status(404).json({ error: "Not found" });
+        return res.status(200).json({ invite_token: token });
+      }
+      if (action === "set-payouts-enabled") {
+        const updated = await setAffiliatePayoutsEnabled(
+          Number(affiliateId),
+          pubkey,
+          Boolean(enabled)
+        );
+        if (!updated) return res.status(404).json({ error: "Not found" });
+        return res.status(200).json(updated);
+      }
+      return res.status(400).json({ error: "Unknown action" });
     }
 
     return res.status(405).json({ error: "Method not allowed" });

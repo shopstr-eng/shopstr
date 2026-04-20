@@ -52,7 +52,7 @@ export default async function handler(
     // Promote everything pending -> payable so we can settle it as one batch.
     // This is a best-effort: we reuse the by-schedule helper across all cadences
     // because a manual mark-paid implicitly covers anything still pending.
-    for (const sched of ["every_sale", "daily", "weekly", "monthly"] as const) {
+    for (const sched of ["weekly", "biweekly", "monthly"] as const) {
       await markReferralsPayableBySchedule(sched);
     }
 

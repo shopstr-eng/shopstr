@@ -23,6 +23,7 @@ export const config = {
 import { applyRateLimit } from "@/utils/rate-limit";
 import { claimStripeEvent } from "@/utils/stripe/processed-events";
 import { markPendingPaymentByIntent } from "@/utils/stripe/pending-payments";
+import { reverseReferralsForOrder } from "@/utils/db/affiliates";
 
 async function getRawBody(req: NextApiRequest): Promise<Buffer> {
   return new Promise((resolve, reject) => {
@@ -131,6 +132,45 @@ export default async function handler(
         );
         break;
       }
+      case "charge.refunded": {
+        // Refund reversal for affiliate referrals: when a buyer is refunded
+        // we cancel any still-pending referral and mark already-paid ones as
+        // 'refunded' so the seller can reconcile out-of-band with the
+        // affiliate. We key off paymentIntent.metadata.{orderId,sellerPubkey}
+        // because that's what create-payment-intent + cart write through.
+        const charge = event.data.object as Stripe.Charge;
+        try {
+          const piId =
+            typeof charge.payment_intent === "string"
+              ? charge.payment_intent
+              : charge.payment_intent?.id;
+          if (piId) {
+            const pi = await stripe.paymentIntents.retrieve(piId);
+            const orderId = (pi.metadata && pi.metadata.orderId) || piId;
+            const sellerPubkey = pi.metadata?.sellerPubkey;
+            if (sellerPubkey) {
+              const sellers = sellerPubkey.includes(",")
+                ? sellerPubkey.split(",")
+                : [sellerPubkey];
+              for (const sp of sellers) {
+                await reverseReferralsForOrder({
+                  orderId,
+                  sellerPubkey: sp.trim(),
+                  // Pass both amounts so the helper can scale the rebate
+                  // proportionally on partial refunds instead of clawing
+                  // the whole thing back.
+                  originalGrossSmallest: charge.amount ?? 0,
+                  refundedSmallest: charge.amount_refunded ?? 0,
+                  refundEventRef: event.id,
+                });
+              }
+            }
+          }
+        } catch (e) {
+          console.warn("affiliate refund reversal failed:", e);
+        }
+        break;
+      }
       case "application_fee.refunded": {
         const fee = event.data.object as Stripe.ApplicationFee;
         console.log(
@@ -139,6 +179,35 @@ export default async function handler(
               typeof fee.account === "string" ? fee.account : fee.account?.id
             }`
         );
+        break;
+      }
+      case "account.updated": {
+        // Mirror Stripe Connect onboarding state into our `affiliates` row so
+        // process-payouts can short-circuit on accounts that aren't yet able
+        // to receive transfers (charges_enabled / payouts_enabled). We match
+        // on `stripe_account_id`; non-affiliate Connect accounts (e.g.
+        // marketplace seller accounts handled elsewhere) simply won't match
+        // and the no-op is fine.
+        const account = event.data.object as Stripe.Account;
+        try {
+          const { syncAffiliateStripeAccountState } =
+            await import("@/utils/db/affiliates");
+          const matched = await syncAffiliateStripeAccountState({
+            stripeAccountId: account.id,
+            chargesEnabled: !!account.charges_enabled,
+            payoutsEnabled: !!account.payouts_enabled,
+            detailsSubmitted: !!account.details_submitted,
+          });
+          if (matched) {
+            console.log(
+              `AFFILIATE_STRIPE_ACCOUNT_UPDATED affiliate=${matched} acct=${account.id} ` +
+                `charges=${account.charges_enabled} payouts=${account.payouts_enabled} ` +
+                `details=${account.details_submitted}`
+            );
+          }
+        } catch (err) {
+          console.error("account.updated affiliate sync failed:", err);
+        }
         break;
       }
       default:

@@ -7,7 +7,10 @@ import {
 } from "@/utils/db/affiliates";
 import { applyRateLimit } from "@/utils/rate-limit";
 
-const RATE_LIMIT = { limit: 240, windowMs: 60 * 1000 };
+// Lower than the seller-authenticated endpoints because this one is
+// unauthenticated and would otherwise be a convenient enumeration oracle for
+// guessing valid codes. 60/min is still ample for the cart UX.
+const RATE_LIMIT = { limit: 60, windowMs: 60 * 1000 };
 
 /**
  * Public buyer-side validation. Given a seller pubkey + code (and optionally
@@ -24,15 +27,27 @@ export default async function handler(
   if (!applyRateLimit(req, res, "affiliates-validate", RATE_LIMIT)) return;
 
   try {
-    const { sellerPubkey, code, grossSmallest } = req.query;
+    const { sellerPubkey, code, grossSmallest, currency } = req.query;
     if (!sellerPubkey || !code) {
-      return res
-        .status(400)
-        .json({ valid: false, error: "sellerPubkey and code required" });
+      // Uniform shape with the not-found case to avoid leaking which inputs
+      // the endpoint accepts vs. rejects.
+      return res.status(200).json({ valid: false });
     }
     const found = await lookupAffiliateCode(String(sellerPubkey), String(code));
     if (!found) return res.status(200).json({ valid: false });
     if (!(await isAffiliateCodeValid(found))) {
+      return res.status(200).json({ valid: false });
+    }
+    // Currency guard: a fixed-amount code stored in one currency cannot be
+    // safely applied to an order in a different currency (e.g. a $5 code
+    // applied to a sats invoice would shave off 5 sats). For percent codes
+    // this is currency-agnostic so we still allow it.
+    if (
+      typeof currency === "string" &&
+      found.currency &&
+      found.currency.toLowerCase() !== currency.toLowerCase() &&
+      (found.buyer_discount_type === "fixed" || found.rebate_type === "fixed")
+    ) {
       return res.status(200).json({ valid: false });
     }
 
