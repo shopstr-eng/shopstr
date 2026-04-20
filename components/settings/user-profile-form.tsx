@@ -10,7 +10,10 @@ import {
   Tooltip,
 } from "@heroui/react";
 import { ProfileMapContext } from "@/utils/context/context";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import {
+  AVATARBADGEBUTTONCLASSNAMES,
+  SHOPSTRBUTTONCLASSNAMES,
+} from "@/utils/STATIC-VARIABLES";
 import {
   SignerContext,
   NostrContext,
@@ -198,17 +201,18 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
   return (
     <>
       <div className="mb-8 flex items-center justify-center">
-        <div className="relative h-24 w-24">
+        <div className="relative h-24 w-24 overflow-visible">
           <FileUploaderButton
             isIconOnly
-            className={`absolute right-[-0.5rem] bottom-[-0.5rem] z-20 ${SHOPSTRBUTTONCLASSNAMES}`}
+            className={AVATARBADGEBUTTONCLASSNAMES}
+            containerClassName="absolute right-[-0.5rem] bottom-[-0.5rem] z-20"
             imgCallbackOnUpload={(imgUrl) => setValue("picture", imgUrl)}
           />
           <Image
             key={profileImageSrc}
             src={profileImageSrc}
             alt="user profile picture"
-            className="rounded-full"
+            className="h-24 w-24 rounded-full object-cover"
           />
         </div>
       </div>
