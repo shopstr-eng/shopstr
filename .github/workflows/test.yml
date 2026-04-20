@@ -1,8 +1,8 @@
 name: Test
 
 on:
-  push:
   pull_request:
+    branches: [main]
 
 jobs:
   test:
@@ -30,4 +30,4 @@ jobs:
         run: npm run lint
 
       - name: Run tests
-        run: npm test -- --runInBand
+        run: npm test -- --ci

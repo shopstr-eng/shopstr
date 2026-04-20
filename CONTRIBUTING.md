@@ -1,6 +1,6 @@
 # Contributing to Shopstr
 
-Welcome to Shopstr! 🛒⚡ We're excited to have you contribute to our global, permissionless Nostr marketplace for Bitcoin commerce.
+Welcome to Shopstr! We're excited to have you contribute to our global, permissionless Nostr marketplace for Bitcoin commerce.
 
 ## Table of Contents
 
@@ -216,25 +216,51 @@ npm test
 npm run test:watch
 ```
 
-### 2. Writing Tests
+### 2. Existing Test Files
+
+Here are real examples from the repository:
+
+- `components/settings/__tests__/settings-bread-crumbs.test.tsx`
+- `components/wallet/__tests__/send-button.test.tsx`
+- `components/messages/__tests__/chat-panel.test.tsx`
+- `utils/nostr/__tests__/fetch-service.test.ts`
+- `utils/nostr/__tests__/nostr-helper-functions.test.ts`
+- `pages/api/storefront/__tests__/register-slug.test.ts`
+
+### 3. Writing Tests
 
 - Write tests for new features and bug fixes
 - Place test files next to the components they test or in a `__tests__` directory
 - Use descriptive test names
 - Follow existing test patterns
 
-### Test Setup Overview
+### 4. Jest Setup
 
 This project uses **Jest** as the primary testing framework.
 
-- Tests run in a jsdom environment for UI components
+- Primary Jest configuration lives in `jest.config.cjs`
+- UI tests run in a `jsdom` environment
+- Shared test setup lives in `jest.setup.js`
 - A global `fetch` mock is configured in `jest.setup.js`
-- Mocks are reset after each test to avoid leakage between tests
+- Shared mocks are reset after each test to avoid leakage between tests
 
-### Running Tests
+### 5. Running Tests
 
 ```bash
 npm test
+```
+
+### 6. Running a single test file
+
+```bash
+npm test -- path/to/test-file.test.ts --runInBand
+```
+
+Examples:
+
+```bash
+npm test -- components/settings/__tests__/settings-bread-crumbs.test.tsx --runInBand
+npm test -- utils/nostr/__tests__/fetch-service.test.ts --runInBand
 ```
 
 To run coverage:
@@ -243,21 +269,20 @@ To run coverage:
 npm test -- --coverage --runInBand
 ```
 
-### Coverage
+### 7. Coverage
 
 - Coverage reports are generated in the `coverage/` folder
-- Important files like:
-  - utils/nostr/fetch-service.ts
-  - utils/nostr/nostr-helper-functions.ts
-    are properly tested
+- File-specific coverage from the current coverage report:
+  - `utils/nostr/fetch-service.ts`: lines `54.57%` (`454/832`), functions `53.53%` (`91/170`), branches `40.87%` (`179/438`)
+  - `utils/nostr/nostr-helper-functions.ts`: lines `47.99%` (`262/546`), functions `40.24%` (`33/82`), branches `42.15%` (`153/363`)
 
-### CI Testing Workflow
+### 8. CI Testing Workflow
 
-- Tests run automatically on every pull request
+- Tests run automatically on pull requests targeting `main`
 - CI runs:
-  - npm run type-check
-  - npm run lint
-  - npm test -- --runInBand
+  - `npm run type-check`
+  - `npm run lint`
+  - `npm test -- --ci`
 
 ## Creating a Pull Request
 
@@ -301,7 +326,7 @@ If you need to set up additional services, you can create a `docker-compose.yml`
 
 ---
 
-Thank you for contributing to Shopstr! 🚀 Your contributions help build the future of decentralized Bitcoin commerce.
+Thank you for contributing to Shopstr! Your contributions help build the future of decentralized Bitcoin commerce.
 
 ## Questions?
 
