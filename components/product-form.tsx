@@ -34,9 +34,9 @@ import {
 } from "@/utils/STATIC-VARIABLES";
 import {
   PostListing,
-  getLocalStorageData,
   finalizeAndSendNostrEvent,
 } from "@/utils/nostr/nostr-helper-functions";
+import { storage, STORAGE_KEYS } from "@/utils/storage";
 import LocationDropdown from "./utility-components/dropdowns/location-dropdown";
 import ConfirmActionDropdown from "./utility-components/dropdowns/confirm-action-dropdown";
 import { ProductContext, ProfileMapContext } from "../utils/context/context";
@@ -140,7 +140,7 @@ export default function ProductForm({
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const { relays } = getLocalStorageData();
+      const relays = storage.getJson<string[]>(STORAGE_KEYS.RELAYS, []);
       setPubkey(signerPubKey as string);
       setRelayHint(relays[0] as string);
     }

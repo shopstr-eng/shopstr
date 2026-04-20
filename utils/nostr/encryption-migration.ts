@@ -1,29 +1,27 @@
-import {
-  getLocalStorageData,
-  setLocalStorageDataOnSignIn,
-} from "./nostr-helper-functions";
+import { setLocalStorageDataOnSignIn } from "./nostr-helper-functions";
+import { storage, STORAGE_KEYS } from "@/utils/storage";
 import { NostrNSecSigner } from "./signers/nostr-nsec-signer";
 
 let migrationAttempted = false;
 
 function findEncryptedKey() {
-  const storedData = getLocalStorageData();
+  const encryptedPrivateKey = storage.getItem(
+    STORAGE_KEYS.ENCRYPTED_PRIVATE_KEY
+  );
+  const signer = storage.getJson<any | null>(STORAGE_KEYS.SIGNER, null);
 
-  if (storedData.encryptedPrivateKey) {
+  if (encryptedPrivateKey) {
     return {
-      key: storedData.encryptedPrivateKey,
+      key: encryptedPrivateKey,
       inSigner: false,
     };
   }
 
-  if (
-    storedData.signer?.type === "nsec" &&
-    storedData.signer.encryptedPrivKey
-  ) {
+  if (signer?.type === "nsec" && signer.encryptedPrivKey) {
     return {
-      key: storedData.signer.encryptedPrivKey,
+      key: signer.encryptedPrivKey,
       inSigner: true,
-      signer: storedData.signer,
+      signer: signer,
     };
   }
 
@@ -31,7 +29,7 @@ function findEncryptedKey() {
 }
 
 export function needsMigration(): boolean {
-  if (getLocalStorageData().migrationComplete === true) {
+  if (storage.getItem(STORAGE_KEYS.MIGRATION_COMPLETE) === "true") {
     return false;
   }
   const { key } = findEncryptedKey();

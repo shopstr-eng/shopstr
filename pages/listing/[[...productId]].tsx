@@ -220,7 +220,9 @@ const Listing = ({ initialProductEvent }: ListingPageProps) => {
   const productContext = useContext(ProductContext);
 
   useEffect(() => {
-    const pk = storage.getSessionItem(STORAGE_KEYS.SF_SELLER_PUBKEY) || storage.getItem(STORAGE_KEYS.SF_SELLER_PUBKEY);
+    const pk =
+      storage.getSessionItem(STORAGE_KEYS.SF_SELLER_PUBKEY) ||
+      storage.getItem(STORAGE_KEYS.SF_SELLER_PUBKEY);
     if (pk) setSfSellerPubkey(pk);
   }, []);
 

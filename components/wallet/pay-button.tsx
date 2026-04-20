@@ -17,9 +17,7 @@ import {
   ModalFooter,
   Spinner,
 } from "@heroui/react";
-import {
-  publishProofEvent,
-} from "@/utils/nostr/nostr-helper-functions";
+import { publishProofEvent } from "@/utils/nostr/nostr-helper-functions";
 import { storage, STORAGE_KEYS } from "@/utils/storage";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {

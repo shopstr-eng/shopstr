@@ -28,7 +28,6 @@ import {
   buildSignedHttpRequestProofTemplate,
 } from "@/utils/nostr/request-auth";
 import { newPromiseWithTimeout } from "@/utils/timeout";
-import { getLocalStorageJson } from "@/utils/safe-json";
 import { storage, STORAGE_KEYS } from "@/utils/storage";
 
 function containsRelay(relays: string[], relay: string): boolean {
@@ -167,7 +166,7 @@ export async function PostListing(
   isLoggedIn: boolean,
   nostr: NostrManager
 ) {
-  const { relays } = getLocalStorageData();
+  const relays = storage.getJson<string[]>(STORAGE_KEYS.RELAYS, []);
 
   if (!signer || !isLoggedIn) throw new Error("Login required");
   const userPubkey = await signer.getPubKey();
@@ -290,7 +289,7 @@ export async function constructGiftWrappedEvent(
     selectedBulkOption?: number;
   } = {}
 ): Promise<GiftWrappedMessageEvent> {
-  const { relays } = getLocalStorageData();
+  const relays = storage.getJson<string[]>(STORAGE_KEYS.RELAYS, []);
   const {
     kind,
     orderId,
@@ -450,7 +449,7 @@ export async function constructMessageGiftWrap(
   randomPrivkey: Uint8Array,
   recipientPubkey: string
 ): Promise<NostrEvent> {
-  const { relays } = getLocalStorageData();
+  const relays = storage.getJson<string[]>(STORAGE_KEYS.RELAYS, []);
   const stringifiedEvent = JSON.stringify(sealEvent);
   const conversationKey = nip44.getConversationKey(
     randomPrivkey,
@@ -473,7 +472,8 @@ export async function sendGiftWrappedMessageEvent(
   giftWrappedMessageEvent: NostrEvent,
   signer?: NostrSigner
 ) {
-  const { relays, writeRelays } = getLocalStorageData();
+  const relays = storage.getJson<string[]>(STORAGE_KEYS.RELAYS, []);
+  const writeRelays = storage.getJson<string[]>(STORAGE_KEYS.WRITE_RELAYS, []);
   const allWriteRelays = withBlastr([...writeRelays, ...relays]);
 
   // Cache the gift-wrapped event to database first and wait for confirmation
@@ -542,9 +542,12 @@ export async function createNostrRelayEvent(
   nostr: NostrManager,
   signer: NostrSigner
 ) {
-  const relayList = getLocalStorageData().relays;
-  const readRelayList = getLocalStorageData().readRelays;
-  const writeRelayList = getLocalStorageData().writeRelays;
+  const relayList = storage.getJson<string[]>(STORAGE_KEYS.RELAYS, []);
+  const readRelayList = storage.getJson<string[]>(STORAGE_KEYS.READ_RELAYS, []);
+  const writeRelayList = storage.getJson<string[]>(
+    STORAGE_KEYS.WRITE_RELAYS,
+    []
+  );
   const relayTags = [];
   for (const relay of relayList) {
     relayTags.push(["r", relay]);
@@ -602,7 +605,10 @@ export async function createBlossomServerEvent(
   nostr: NostrManager,
   signer: NostrSigner
 ) {
-  const blossomServers = getLocalStorageData().blossomServers;
+  const blossomServers = storage.getJson<string[]>(
+    STORAGE_KEYS.BLOSSOM_SERVERS,
+    []
+  );
   const serverTags = [];
   for (const server of blossomServers) {
     serverTags.push(["server", server]);
@@ -697,7 +703,7 @@ export async function publishWalletEvent(
   signer: NostrSigner
 ) {
   try {
-    const { mints } = getLocalStorageData();
+    const mints = storage.getJson<string[]>(STORAGE_KEYS.MINTS, []);
     const userPubkey = await signer.getPubKey();
 
     const mintTagsSet = new Set<string>();
@@ -789,7 +795,11 @@ export async function publishSpendingHistoryEvent(
   sentEventIds?: string[]
 ) {
   try {
-    const { relays, writeRelays } = getLocalStorageData();
+    const relays = storage.getJson<string[]>(STORAGE_KEYS.RELAYS, []);
+    const writeRelays = storage.getJson<string[]>(
+      STORAGE_KEYS.WRITE_RELAYS,
+      []
+    );
     const allWriteRelays = withBlastr([...relays, ...writeRelays]);
 
     const eventContent = [
@@ -1009,7 +1019,11 @@ export async function finalizeAndSendNostrEvent(
   eventTemplate: EventTemplate
 ) {
   try {
-    const { writeRelays, relays } = getLocalStorageData();
+    const writeRelays = storage.getJson<string[]>(
+      STORAGE_KEYS.WRITE_RELAYS,
+      []
+    );
+    const relays = storage.getJson<string[]>(STORAGE_KEYS.RELAYS, []);
     const signedEvent = await signer.sign(eventTemplate);
 
     // Cache to database first and wait for confirmation
@@ -1291,10 +1305,7 @@ export const setLocalStorageDataOnSignIn = ({
     writeRelays && writeRelays.length !== 0 ? writeRelays : []
   );
 
-  storage.setJson(
-    STORAGE_KEYS.MINTS,
-    mints ? mints : [getDefaultMint()]
-  );
+  storage.setJson(STORAGE_KEYS.MINTS, mints ? mints : [getDefaultMint()]);
 
   storage.setJson(
     STORAGE_KEYS.BLOSSOM_SERVERS,
@@ -1306,10 +1317,7 @@ export const setLocalStorageDataOnSignIn = ({
   if (clientPubkey && clientPrivkey && bunkerRemotePubkey && bunkerRelays) {
     storage.setItem(STORAGE_KEYS.CLIENT_PUBKEY, clientPubkey);
     storage.setItem(STORAGE_KEYS.CLIENT_PRIVKEY, clientPrivkey);
-    storage.setItem(
-      STORAGE_KEYS.BUNKER_REMOTE_PUBKEY,
-      bunkerRemotePubkey
-    );
+    storage.setItem(STORAGE_KEYS.BUNKER_REMOTE_PUBKEY, bunkerRemotePubkey);
     storage.setJson(
       STORAGE_KEYS.BUNKER_RELAYS,
       bunkerRelays && bunkerRelays.length !== 0 ? bunkerRelays : []
@@ -1324,199 +1332,13 @@ export const setLocalStorageDataOnSignIn = ({
   }
 
   if (migrationComplete) {
-    storage.setItem(STORAGE_KEYS.MIGRATION_COMPLETE, migrationComplete.toString());
+    storage.setItem(
+      STORAGE_KEYS.MIGRATION_COMPLETE,
+      migrationComplete.toString()
+    );
   }
 
   window.dispatchEvent(new Event("storage"));
-};
-
-export interface LocalStorageInterface {
-  /**
-   * @deprecated
-   */
-  signInMethod: string; // deprecated
-  relays: string[];
-  readRelays: string[];
-  writeRelays: string[];
-  mints: string[];
-  blossomServers: string[];
-  tokens: any[];
-  history: any[];
-  wot: number;
-  encryptedPrivateKey?: string;
-  clientPrivkey?: string;
-  bunkerRemotePubkey?: string;
-  bunkerRelays?: string[];
-  bunkerSecret?: string;
-  signer?:
-    | { type: "nip07" }
-    | { type: "nip46"; bunker: string; appPrivKey?: string }
-    | { type: "nsec"; encryptedPrivKey: string; pubkey?: string };
-  nwcString?: string | null;
-  nwcInfo?: string | null;
-  migrationComplete?: boolean;
-}
-
-function isStoredSignerData(
-  value: unknown
-): value is NonNullable<LocalStorageInterface["signer"]> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return false;
-  }
-
-  const candidate = value as {
-    type?: unknown;
-    bunker?: unknown;
-    appPrivKey?: unknown;
-    encryptedPrivKey?: unknown;
-    pubkey?: unknown;
-  };
-
-  if (candidate.type === "nip07") {
-    return true;
-  }
-
-  if (candidate.type === "nip46") {
-    return (
-      typeof candidate.bunker === "string" &&
-      (candidate.appPrivKey === undefined ||
-        typeof candidate.appPrivKey === "string")
-    );
-  }
-
-  if (candidate.type === "nsec") {
-    return (
-      typeof candidate.encryptedPrivKey === "string" &&
-      (candidate.pubkey === undefined || typeof candidate.pubkey === "string")
-    );
-  }
-
-  return false;
-}
-
-export const getLocalStorageData = (): LocalStorageInterface => {
-  const isStringArray = (value: unknown): value is string[] =>
-    Array.isArray(value) && value.every((entry) => typeof entry === "string");
-  const isArray = (value: unknown): value is unknown[] => Array.isArray(value);
-
-  let signInMethod;
-  let encryptedPrivateKey;
-  let relays;
-  let readRelays;
-  let writeRelays;
-  let mints;
-  let blossomServers;
-  let tokens;
-  let history;
-  let wot;
-  let clientPrivkey;
-  let bunkerRemotePubkey;
-  let bunkerRelays;
-  let bunkerSecret;
-  let signer: LocalStorageInterface["signer"] | undefined;
-  let migrationComplete;
-  let nwcString;
-  let nwcInfo;
-
-  encryptedPrivateKey = storage.getItem(STORAGE_KEYS.ENCRYPTED_PRIVATE_KEY);
-  signInMethod = storage.getItem(STORAGE_KEYS.SIGN_IN_METHOD);
-
-  if (signInMethod) {
-    // remove old data
-    storage.removeItem("npub");
-    storage.removeItem("signIn");
-    storage.removeItem("chats");
-    storage.removeItem("cashuWalletRelays");
-  }
-
-  relays = storage.getJson<string[]>(STORAGE_KEYS.RELAYS, []);
-  const defaultRelays = getDefaultRelays();
-
-  if (relays.length === 0) {
-    relays = defaultRelays;
-    storage.setJson(STORAGE_KEYS.RELAYS, relays);
-  } else {
-    relays = relays.filter((r) => r);
-  }
-
-  readRelays = storage.getJson<string[]>(STORAGE_KEYS.READ_RELAYS, []).filter((r) => r);
-  writeRelays = storage.getJson<string[]>(STORAGE_KEYS.WRITE_RELAYS, []).filter((r) => r);
-
-  mints = storage.getJson<string[]>(STORAGE_KEYS.MINTS, []);
-  if (mints.length === 0) {
-    mints = [getDefaultMint()];
-    storage.setJson(STORAGE_KEYS.MINTS, mints);
-  }
-
-  blossomServers = storage.getJson<string[]>(STORAGE_KEYS.BLOSSOM_SERVERS, []);
-  if (blossomServers.length === 0) {
-    blossomServers = [getDefaultBlossomServer()];
-    storage.setJson(STORAGE_KEYS.BLOSSOM_SERVERS, blossomServers);
-  }
-
-  tokens = storage.getJson<unknown[]>(STORAGE_KEYS.TOKENS, []);
-  history = storage.getJson<unknown[]>(STORAGE_KEYS.HISTORY, []);
-
-  const rawWot = storage.getItem(STORAGE_KEYS.WOT);
-  wot = rawWot ? Number(rawWot) : 3;
-
-  clientPrivkey = storage.getItem(STORAGE_KEYS.CLIENT_PRIVKEY) || undefined;
-  bunkerRemotePubkey = storage.getItem(STORAGE_KEYS.BUNKER_REMOTE_PUBKEY) || undefined;
-  bunkerRelays = storage.getJson<string[]>(STORAGE_KEYS.BUNKER_RELAYS, []).filter((r) => r);
-  bunkerSecret = storage.getItem(STORAGE_KEYS.BUNKER_SECRET) || undefined;
-
-  signer = storage.getJson<LocalStorageInterface["signer"] | undefined>(STORAGE_KEYS.SIGNER, undefined);
-
-  if (!signer) {
-    switch (signInMethod) {
-      case "extension":
-        signer = { type: "nip07" };
-        break;
-      case "bunker":
-        let bunker = "bunker://" + bunkerRemotePubkey + "?secret=" + bunkerSecret;
-        for (const relay of bunkerRelays) {
-          bunker += "&relay=" + relay;
-        }
-        signer = {
-          type: "nip46",
-          bunker: bunker,
-          appPrivKey: typeof clientPrivkey === "string" ? clientPrivkey : undefined,
-        };
-        break;
-      case "nsec":
-        if (typeof encryptedPrivateKey === "string") {
-          signer = {
-            type: "nsec",
-            encryptedPrivKey: encryptedPrivateKey,
-          };
-        }
-        break;
-    }
-  }
-
-  nwcString = storage.getItem(STORAGE_KEYS.NWC_STRING);
-  nwcInfo = storage.getItem(STORAGE_KEYS.NWC_INFO);
-  migrationComplete = storage.getItem(STORAGE_KEYS.MIGRATION_COMPLETE) === "true";
-  return {
-    signInMethod: signInMethod as string,
-    encryptedPrivateKey: encryptedPrivateKey as string,
-    relays: relays || [],
-    readRelays: readRelays || [],
-    writeRelays: writeRelays || [],
-    mints: mints || [],
-    blossomServers: blossomServers || [],
-    tokens: tokens || [],
-    history: history || [],
-    wot: wot || 3,
-    clientPrivkey: clientPrivkey?.toString(),
-    bunkerRemotePubkey: bunkerRemotePubkey?.toString(),
-    bunkerRelays: bunkerRelays || [],
-    bunkerSecret: bunkerSecret?.toString(),
-    signer,
-    nwcString: nwcString as string | null,
-    nwcInfo: nwcInfo as string | null,
-    migrationComplete: migrationComplete || false,
-  };
 };
 
 export const LogOut = () => {

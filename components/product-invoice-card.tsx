@@ -48,7 +48,6 @@ import {
   constructMessageSeal,
   constructMessageGiftWrap,
   sendGiftWrappedMessageEvent,
-  getLocalStorageData,
   publishProofEvent,
   generateKeys,
 } from "@/utils/nostr/nostr-helper-functions";
@@ -283,29 +282,26 @@ export default function ProductInvoiceCard({
   useEffect(() => {
     if (paymentConfirmed && pendingOrderRef.current) {
       try {
-        storage.setSessionJson(
-          STORAGE_KEYS.ORDER_SUMMARY,
-          {
-            productTitle: pendingOrderRef.current.productTitle,
-            productImage: productData.images[0] || "",
-            amount: pendingOrderRef.current.amount,
-            currency: pendingOrderRef.current.currency,
-            paymentMethod: pendingOrderRef.current.paymentMethod,
-            orderId: pendingOrderRef.current.orderId,
-            shippingCost: productData.shippingCost
-              ? String(productData.shippingCost)
-              : undefined,
-            selectedSize,
-            selectedVolume,
-            selectedWeight,
-            selectedBulkOption: selectedBulkOption
-              ? String(selectedBulkOption)
-              : undefined,
-            shippingAddress: pendingOrderRef.current.shippingAddress,
-            pickupLocation: selectedPickupLocation || undefined,
-            sellerPubkey: pendingOrderRef.current.sellerPubkey,
-          }
-        );
+        storage.setSessionJson(STORAGE_KEYS.ORDER_SUMMARY, {
+          productTitle: pendingOrderRef.current.productTitle,
+          productImage: productData.images[0] || "",
+          amount: pendingOrderRef.current.amount,
+          currency: pendingOrderRef.current.currency,
+          paymentMethod: pendingOrderRef.current.paymentMethod,
+          orderId: pendingOrderRef.current.orderId,
+          shippingCost: productData.shippingCost
+            ? String(productData.shippingCost)
+            : undefined,
+          selectedSize,
+          selectedVolume,
+          selectedWeight,
+          selectedBulkOption: selectedBulkOption
+            ? String(selectedBulkOption)
+            : undefined,
+          shippingAddress: pendingOrderRef.current.shippingAddress,
+          pickupLocation: selectedPickupLocation || undefined,
+          sellerPubkey: pendingOrderRef.current.sellerPubkey,
+        });
       } catch {}
     }
   }, [paymentConfirmed]);
@@ -352,7 +348,7 @@ export default function ProductInvoiceCard({
 
   useEffect(() => {
     const loadNwcInfo = () => {
-      const { nwcInfo: infoString } = getLocalStorageData();
+      const infoString = storage.getItem(STORAGE_KEYS.NWC_INFO);
       if (infoString) {
         try {
           const info = JSON.parse(infoString);
@@ -807,7 +803,7 @@ export default function ProductInvoiceCard({
       });
       invoicePollRef.current = { cancelled: false, activeQuoteId: hash };
 
-      const { nwcString } = getLocalStorageData();
+      const nwcString = storage.getItem(STORAGE_KEYS.NWC_STRING);
       if (!nwcString) throw new Error("NWC connection not found.");
 
       nwc = new NostrWebLNProvider({ nostrWalletConnectUrl: nwcString });

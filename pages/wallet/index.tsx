@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/router";
-import { getLocalStorageData } from "@/utils/nostr/nostr-helper-functions";
 import MintButton from "../../components/wallet/mint-button";
 import ReceiveButton from "../../components/wallet/receive-button";
 import SendButton from "../../components/wallet/send-button";
@@ -23,8 +22,14 @@ const Wallet = () => {
   const [mintKeySetIds, setMintKeySetIds] = useState<MintKeyset[]>([]);
   const router = useRouter();
 
-  const mints = useMemo(() => storage.getJson<string[]>(STORAGE_KEYS.MINTS, []), []);
-  const tokens = useMemo(() => storage.getJson<any[]>(STORAGE_KEYS.TOKENS, []), []);
+  const mints = useMemo(
+    () => storage.getJson<string[]>(STORAGE_KEYS.MINTS, []),
+    []
+  );
+  const tokens = useMemo(
+    () => storage.getJson<any[]>(STORAGE_KEYS.TOKENS, []),
+    []
+  );
 
   useEffect(() => {
     const currentMint = new CashuMint(mints[0]!);

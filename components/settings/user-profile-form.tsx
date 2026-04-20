@@ -75,7 +75,9 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
     if (!userPubkey) return;
     setIsFetchingProfile(true);
 
-    const rawLocalFallback = storage.getItem(getLocalUserProfileKey(userPubkey));
+    const rawLocalFallback = storage.getItem(
+      getLocalUserProfileKey(userPubkey)
+    );
     const localFallback = parseLocalProfileFallback(rawLocalFallback);
 
     const profileMap = profileContext.profileData;
@@ -97,17 +99,14 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
       }
 
       try {
-        storage.setJson(
-          getLocalUserProfileKey(userPubkey),
-          {
-            content: shouldUseLocalFallback
-              ? localFallback!.content
-              : profile.content,
-            updatedAt: shouldUseLocalFallback
-              ? localFallback!.updatedAt
-              : profileCreatedAt,
-          }
-        );
+        storage.setJson(getLocalUserProfileKey(userPubkey), {
+          content: shouldUseLocalFallback
+            ? localFallback!.content
+            : profile.content,
+          updatedAt: shouldUseLocalFallback
+            ? localFallback!.updatedAt
+            : profileCreatedAt,
+        });
       } catch (error) {
         console.error("Failed to persist profile fallback locally:", error);
       }
@@ -158,13 +157,10 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
       };
 
       try {
-        storage.setJson(
-          getLocalUserProfileKey(userPubkey),
-          {
-            content: updatedData,
-            updatedAt: Math.floor(Date.now() / 1000),
-          }
-        );
+        storage.setJson(getLocalUserProfileKey(userPubkey), {
+          content: updatedData,
+          updatedAt: Math.floor(Date.now() / 1000),
+        });
       } catch (error) {
         console.error("Failed to save local profile fallback:", error);
       }

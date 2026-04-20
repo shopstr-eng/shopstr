@@ -353,7 +353,6 @@ export default function StorefrontLayout({
 
   const homeHref = shopSlug ? `/shop/${shopSlug}` : "/marketplace";
 
-
   const themedCss = `
     body.sf-active [data-overlay-container] .border-black { border-color: var(--sf-secondary) !important; }
     body.sf-active [data-overlay-container] .bg-white { background-color: var(--sf-bg) !important; }

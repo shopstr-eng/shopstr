@@ -25,11 +25,7 @@ import {
   CommunityContext,
   CommunityContextInterface,
 } from "../utils/context/context";
-import {
-  getLocalStorageData,
-  getDefaultRelays,
-  LogOut,
-} from "@/utils/nostr/nostr-helper-functions";
+import { getDefaultRelays, LogOut } from "@/utils/nostr/nostr-helper-functions";
 import { createNip98AuthorizationHeader } from "@/utils/nostr/nip98-auth";
 import { HeroUIProvider } from "@heroui/react";
 import { ThemeProvider as NextThemesProvider } from "next-themes";
@@ -551,15 +547,14 @@ function Shopstr({ props }: { props: AppProps }) {
 
       try {
         // Check login status
-        if (getLocalStorageData().signInMethod === "amber") {
+        if (storage.getItem(STORAGE_KEYS.SIGN_IN_METHOD) === "amber") {
           LogOut();
           return;
         }
 
-        if (
-          getLocalStorageData().signInMethod === "extension" ||
-          getLocalStorageData().signer?.type === "nip07"
-        ) {
+        const signInMethod = storage.getItem(STORAGE_KEYS.SIGN_IN_METHOD);
+        const storedSigner = storage.getJson<any>(STORAGE_KEYS.SIGNER, null);
+        if (signInMethod === "extension" || storedSigner?.type === "nip07") {
           if (!window.nostr?.nip44) {
             LogOut();
             return;
@@ -567,8 +562,11 @@ function Shopstr({ props }: { props: AppProps }) {
         }
 
         // Initialize relays
-        const relays = getLocalStorageData().relays || [];
-        const readRelays = getLocalStorageData().readRelays || [];
+        const relays = storage.getJson<string[]>(STORAGE_KEYS.RELAYS, []);
+        const readRelays = storage.getJson<string[]>(
+          STORAGE_KEYS.READ_RELAYS,
+          []
+        );
         let allRelays = [...relays, ...readRelays];
 
         if (allRelays.length === 0) {
@@ -599,10 +597,7 @@ function Shopstr({ props }: { props: AppProps }) {
 
         if (relayResult && relayResult.relayList.length !== 0) {
           storage.setJson(STORAGE_KEYS.RELAYS, relayResult.relayList);
-          storage.setJson(
-            STORAGE_KEYS.READ_RELAYS,
-            relayResult.readRelayList
-          );
+          storage.setJson(STORAGE_KEYS.READ_RELAYS, relayResult.readRelayList);
           storage.setJson(
             STORAGE_KEYS.WRITE_RELAYS,
             relayResult.writeRelayList
@@ -765,14 +760,8 @@ function Shopstr({ props }: { props: AppProps }) {
         }
 
         if (walletResult?.cashuMints?.length && walletResult.cashuProofs) {
-          storage.setJson(
-            STORAGE_KEYS.MINTS,
-            walletResult.cashuMints
-          );
-          storage.setJson(
-            STORAGE_KEYS.TOKENS,
-            walletResult.cashuProofs
-          );
+          storage.setJson(STORAGE_KEYS.MINTS, walletResult.cashuMints);
+          storage.setJson(STORAGE_KEYS.TOKENS, walletResult.cashuProofs);
         }
 
         await runTask("retrying relay publishes", async () => {
@@ -780,7 +769,11 @@ function Shopstr({ props }: { props: AppProps }) {
             return;
           }
 
-          const { relays, writeRelays } = getLocalStorageData();
+          const relays = storage.getJson<string[]>(STORAGE_KEYS.RELAYS, []);
+          const writeRelays = storage.getJson<string[]>(
+            STORAGE_KEYS.WRITE_RELAYS,
+            []
+          );
           const retryNostr = new NostrManager([...relays, ...writeRelays]);
           await retryFailedRelayPublishes(retryNostr, signer);
         });

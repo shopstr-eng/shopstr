@@ -9,10 +9,7 @@ import {
   recoverPendingMintQuotes,
   getPendingMintQuotes,
 } from "@/utils/cashu/pending-mint-operations";
-import {
-  getLocalStorageData,
-  publishProofEvent,
-} from "@/utils/nostr/nostr-helper-functions";
+import { publishProofEvent } from "@/utils/nostr/nostr-helper-functions";
 import {
   NostrContext,
   SignerContext,
@@ -60,7 +57,8 @@ export function MintRecoveryBoot(): null {
           },
           onProofsClaimed: async (quote: PendingMintQuote, proofs: Proof[]) => {
             if (cancelled) return;
-            const { tokens, history } = getLocalStorageData();
+            const tokens = storage.getJson<any[]>(STORAGE_KEYS.TOKENS, []);
+            const history = storage.getJson<any[]>(STORAGE_KEYS.HISTORY, []);
             const proofArray = [...tokens, ...proofs];
             storage.setJson(STORAGE_KEYS.TOKENS, proofArray);
             storage.setJson(STORAGE_KEYS.HISTORY, [

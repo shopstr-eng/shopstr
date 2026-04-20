@@ -1,4 +1,4 @@
-import { parseJsonWithFallback } from "./safe-json";
+import { parseJsonWithFallback, StorageParseOptions } from "./safe-json";
 
 /**
  * Storage Schema definition for consistent key management and type safety.
@@ -11,19 +11,20 @@ export const STORAGE_KEYS = {
   ENCRYPTED_PRIVATE_KEY: "encryptedPrivateKey",
   CLIENT_PUBKEY: "clientPubkey",
   CLIENT_PRIVKEY: "clientPrivkey",
-  
+
   // Nostr & Relays
   RELAYS: "relays",
   READ_RELAYS: "readRelays",
   WRITE_RELAYS: "writeRelays",
   BLOSSOM_SERVERS: "blossomServers",
-  
+
   // Wallet & Cashu
   MINTS: "mints",
   TOKENS: "tokens",
   HISTORY: "history",
   WOT: "wot",
-  
+  PENDING_MINT_QUOTES: "shopstr.pendingMintQuotes",
+
   // NWC
   NWC_STRING: "nwcString",
   NWC_INFO: "nwcInfo",
@@ -32,7 +33,7 @@ export const STORAGE_KEYS = {
   BUNKER_REMOTE_PUBKEY: "bunkerRemotePubkey",
   BUNKER_RELAYS: "bunkerRelays",
   BUNKER_SECRET: "bunkerSecret",
-  
+
   // Storefront & Cart (These were mostly unmanaged string literals)
   CART: "cart",
   CART_DISCOUNTS: "cartDiscounts",
@@ -40,7 +41,7 @@ export const STORAGE_KEYS = {
   SF_SHOP_SLUG: "sf_shop_slug",
   SHIPPING_INFO: "shopstr_shipping_info",
   ORDER_SUMMARY: "orderSummary",
-  
+
   // System
   MIGRATION_COMPLETE: "migrationComplete",
   THEME: "theme",
@@ -48,7 +49,9 @@ export const STORAGE_KEYS = {
   USER_PUBKEY: "userPubkey",
 } as const;
 
-export type StorageKey = typeof STORAGE_KEYS[keyof typeof STORAGE_KEYS] | string;
+export type StorageKey =
+  | (typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS]
+  | string;
 
 class StorageManager {
   /**
@@ -85,11 +88,19 @@ class StorageManager {
   /**
    * Get and parse JSON data with a fallback and type-safety
    */
-  getJson<T>(key: StorageKey, fallback: T): T {
+  getJson<T>(
+    key: StorageKey,
+    fallback: T,
+    options?: StorageParseOptions<T>
+  ): T {
     if (!this.isBrowser) return fallback;
     const raw = localStorage.getItem(key);
     return parseJsonWithFallback(raw, fallback, {
-      onError: (err) => console.warn(`Storage parse error for key "${key}":`, err),
+      ...options,
+      onError: (err) => {
+        options?.onError?.(err);
+        console.warn(`Storage parse error for key "${key}":`, err);
+      },
     });
   }
 
@@ -124,7 +135,7 @@ class StorageManager {
   }
 
   // Session Storage Helpers (for non-persistent session data)
-  
+
   setSessionItem(key: string, value: string): void {
     if (!this.isBrowser) return;
     sessionStorage.setItem(key, value);
@@ -138,11 +149,19 @@ class StorageManager {
   /**
    * Get and parse JSON data from sessionStorage
    */
-  getSessionJson<T>(key: string, fallback: T): T {
+  getSessionJson<T>(
+    key: string,
+    fallback: T,
+    options?: StorageParseOptions<T>
+  ): T {
     if (!this.isBrowser) return fallback;
     const raw = sessionStorage.getItem(key);
     return parseJsonWithFallback(raw, fallback, {
-      onError: (err) => console.warn(`SessionStorage parse error for key "${key}":`, err),
+      ...options,
+      onError: (err) => {
+        options?.onError?.(err);
+        console.warn(`SessionStorage parse error for key "${key}":`, err);
+      },
     });
   }
 

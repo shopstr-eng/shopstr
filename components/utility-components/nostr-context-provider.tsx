@@ -12,7 +12,7 @@ import {
   NostrSigner,
 } from "@/utils/nostr/signers/nostr-signer";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
-import { getLocalStorageData } from "@/utils/nostr/nostr-helper-functions";
+import { isStoredSignerData } from "@/utils/nostr/nostr-helper-functions";
 import PassphraseChallengeModal from "@/components/utility-components/request-passphrase-modal";
 import AuthUrlChallengeModal from "@/components/utility-components/auth-challenge-modal";
 import { NostrNIP07Signer } from "@/utils/nostr/signers/nostr-nip07-signer";
@@ -126,23 +126,32 @@ export function SignerContextProvider({ children }: { children: ReactNode }) {
 
   const loadSigner = useCallback((retryCount = 0) => {
     let existingSigner;
-    const { signer, signInMethod } = getLocalStorageData();
+    const signer = storage.getJson<any | undefined>(
+      STORAGE_KEYS.SIGNER,
+      undefined,
+      { validate: isStoredSignerData }
+    );
+    const signInMethod = storage.getItem(STORAGE_KEYS.SIGN_IN_METHOD);
 
     if (signer) {
       existingSigner = signer;
     } else if (signInMethod) {
       switch (signInMethod) {
         case "bunker": {
-          let bunker =
-            "bunker://" +
-            getLocalStorageData().bunkerRemotePubkey +
-            "?secret=" +
-            getLocalStorageData().bunkerSecret;
-          const bunkerRelays = getLocalStorageData().bunkerRelays;
-          for (const relay of bunkerRelays!) {
+          const remotePubkey = storage.getItem(
+            STORAGE_KEYS.BUNKER_REMOTE_PUBKEY
+          );
+          const secret = storage.getItem(STORAGE_KEYS.BUNKER_SECRET);
+          const bunkerRelays = storage.getJson<string[]>(
+            STORAGE_KEYS.BUNKER_RELAYS,
+            []
+          );
+
+          let bunker = "bunker://" + remotePubkey + "?secret=" + secret;
+          for (const relay of bunkerRelays) {
             bunker += "&relay=" + relay;
           }
-          const appPrivKey = getLocalStorageData().clientPrivkey;
+          const appPrivKey = storage.getItem(STORAGE_KEYS.CLIENT_PRIVKEY);
           existingSigner = {
             type: "nip46",
             bunker,
@@ -157,7 +166,9 @@ export function SignerContextProvider({ children }: { children: ReactNode }) {
           break;
         }
         case "nsec": {
-          const encryptedPrivateKey = getLocalStorageData().encryptedPrivateKey;
+          const encryptedPrivateKey = storage.getItem(
+            STORAGE_KEYS.ENCRYPTED_PRIVATE_KEY
+          );
           existingSigner = {
             type: "nsec",
             encryptedPrivKey: encryptedPrivateKey!,
@@ -323,7 +334,12 @@ export function NostrContextProvider({ children }: { children: ReactNode }) {
   const [nostr] = useState<NostrManager>(new NostrManager());
 
   const reload = useCallback(() => {
-    const { readRelays, writeRelays, relays } = getLocalStorageData();
+    const readRelays = storage.getJson<string[]>(STORAGE_KEYS.READ_RELAYS, []);
+    const writeRelays = storage.getJson<string[]>(
+      STORAGE_KEYS.WRITE_RELAYS,
+      []
+    );
+    const relays = storage.getJson<string[]>(STORAGE_KEYS.RELAYS, []);
     nostr.addRelays([...writeRelays, ...relays, ...readRelays]);
   }, [nostr]);
 

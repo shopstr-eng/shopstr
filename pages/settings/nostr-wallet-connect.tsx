@@ -8,9 +8,7 @@ import {
   Spinner,
 } from "@heroui/react";
 import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs";
-import {
-  saveNWCString,
-} from "@/utils/nostr/nostr-helper-functions";
+import { saveNWCString } from "@/utils/nostr/nostr-helper-functions";
 import { storage, STORAGE_KEYS } from "@/utils/storage";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {

@@ -70,7 +70,10 @@ export default function StorefrontOrderConfirmation({
   const [orderData, setOrderData] = useState<OrderSummaryData | null>(null);
 
   useEffect(() => {
-    const stored = storage.getSessionJson<OrderSummaryData | null>(STORAGE_KEYS.ORDER_SUMMARY, null);
+    const stored = storage.getSessionJson<OrderSummaryData | null>(
+      STORAGE_KEYS.ORDER_SUMMARY,
+      null
+    );
     if (stored) {
       setOrderData(stored);
     } else {

@@ -45,8 +45,8 @@ import WeightSelector from "./weight-selector";
 import BulkSelector from "./bulk-selector";
 import ZapsnagButton from "@/components/ZapsnagButton";
 import { RawEventModal, EventIdModal } from "./modals/event-modals";
-import { storage, STORAGE_KEYS } from "@/utils/storage";
-import { CartDiscountsMap, isCartDiscountsMap } from "@/utils/cart-discounts";
+import { storage } from "@/utils/storage";
+import { CartDiscountsMap } from "@/utils/cart-discounts";
 
 const SUMMARY_CHARACTER_LIMIT = 100;
 
@@ -199,10 +199,10 @@ export default function CheckoutCard({
       productData.pubkey &&
       reviewsContext.merchantReviewsData.has(productData.pubkey) &&
       typeof reviewsContext.merchantReviewsData.get(productData.pubkey) !=
-      "undefined" &&
+        "undefined" &&
       reviewsContext.productReviewsData.has(productData.pubkey) &&
       typeof reviewsContext.productReviewsData.get(productData.pubkey) !=
-      "undefined"
+        "undefined"
     ) {
       const merchantScoresMap = reviewsContext.merchantReviewsData;
       const productReviewScore = reviewsContext.productReviewsData.get(
@@ -343,7 +343,10 @@ export default function CheckoutCard({
 
       // Store discount code if applied
       if (appliedDiscount > 0 && discountCode) {
-        const discounts = storage.getJson<CartDiscountsMap>("cartDiscounts", {});
+        const discounts = storage.getJson<CartDiscountsMap>(
+          "cartDiscounts",
+          {}
+        );
         discounts[productData.pubkey] = {
           code: discountCode,
         };
@@ -446,10 +449,11 @@ export default function CheckoutCard({
           (productData.sizeQuantities?.get(size) || 0) > 0 ? (
             <button
               key={size}
-              className={`rounded-md border p-2 text-sm ${selectedSize === size
+              className={`rounded-md border p-2 text-sm ${
+                selectedSize === size
                   ? "bg-shopstr-purple dark:bg-shopstr-yellow text-white dark:text-black"
                   : "bg-white text-black dark:bg-black dark:text-white"
-                }`}
+              }`}
               onClick={() => setSelectedSize(size)}
             >
               {size}
@@ -513,8 +517,9 @@ export default function CheckoutCard({
                         className="flex-1 overflow-hidden"
                       >
                         <div
-                          className={`flex flex-col space-y-2 ${showAllImages ? "overflow-y-auto" : ""
-                            }`}
+                          className={`flex flex-col space-y-2 ${
+                            showAllImages ? "overflow-y-auto" : ""
+                          }`}
                         >
                           {(showAllImages
                             ? productData.images
@@ -524,10 +529,11 @@ export default function CheckoutCard({
                               key={index}
                               src={image}
                               alt={`Product image ${index + 1}`}
-                              className={`w-full cursor-pointer rounded-xl object-cover ${image === selectedImage
+                              className={`w-full cursor-pointer rounded-xl object-cover ${
+                                image === selectedImage
                                   ? "border-shopstr-purple dark:border-shopstr-yellow border-2"
                                   : ""
-                                }`}
+                              }`}
                               style={{ aspectRatio: "1 / 1" }}
                               onClick={() => setSelectedImage(image)}
                             />
@@ -573,10 +579,11 @@ export default function CheckoutCard({
                           {merchantReview >= 0.5 ? (
                             <>
                               <FaceSmileIcon
-                                className={`h-10 w-10 p-1 ${merchantReview >= 0.75
+                                className={`h-10 w-10 p-1 ${
+                                  merchantReview >= 0.75
                                     ? "text-green-500"
                                     : "text-green-300"
-                                  }`}
+                                }`}
                               />
                               <span className="text-light-text dark:text-dark-text mr-2 text-sm whitespace-nowrap">
                                 {merchantQuality}
@@ -585,10 +592,11 @@ export default function CheckoutCard({
                           ) : (
                             <>
                               <FaceFrownIcon
-                                className={`h-10 w-10 p-1 ${merchantReview >= 0.25
+                                className={`h-10 w-10 p-1 ${
+                                  merchantReview >= 0.25
                                     ? "text-red-300"
                                     : "text-red-500"
-                                  }`}
+                                }`}
                               />
                               <span className="text-light-text dark:text-dark-text mr-2 text-sm whitespace-nowrap">
                                 {merchantQuality}
@@ -639,8 +647,9 @@ export default function CheckoutCard({
                   </div>
                   {productData.expiration && (
                     <p
-                      className={`mt-1 text-left text-sm ${isExpired ? "font-medium text-red-500" : "text-gray-500"
-                        }`}
+                      className={`mt-1 text-left text-sm ${
+                        isExpired ? "font-medium text-red-500" : "text-gray-500"
+                      }`}
                     >
                       {isExpired ? "Expired on: " : "Valid until: "}{" "}
                       {new Date(
@@ -778,12 +787,13 @@ export default function CheckoutCard({
                           {productData.status !== "sold" ? (
                             <>
                               <Button
-                                className={`text-dark-text dark:text-light-text min-w-fit bg-gradient-to-tr from-purple-700 via-purple-500 to-purple-700 shadow-lg dark:from-yellow-700 dark:via-yellow-500 dark:to-yellow-700 ${(hasSizes && !selectedSize) ||
-                                    (hasVolumes && !selectedVolume) ||
-                                    (hasWeights && !selectedWeight)
+                                className={`text-dark-text dark:text-light-text min-w-fit bg-gradient-to-tr from-purple-700 via-purple-500 to-purple-700 shadow-lg dark:from-yellow-700 dark:via-yellow-500 dark:to-yellow-700 ${
+                                  (hasSizes && !selectedSize) ||
+                                  (hasVolumes && !selectedVolume) ||
+                                  (hasWeights && !selectedWeight)
                                     ? "cursor-not-allowed opacity-50"
                                     : ""
-                                  }`}
+                                }`}
                                 onClick={toggleBuyNow}
                                 disabled={
                                   (hasSizes && !selectedSize) ||
@@ -795,13 +805,14 @@ export default function CheckoutCard({
                                 Buy Now
                               </Button>
                               <Button
-                                className={`${SHOPSTRBUTTONCLASSNAMES} ${isAdded ||
-                                    (hasSizes && !selectedSize) ||
-                                    (hasVolumes && !selectedVolume) ||
-                                    (hasWeights && !selectedWeight)
+                                className={`${SHOPSTRBUTTONCLASSNAMES} ${
+                                  isAdded ||
+                                  (hasSizes && !selectedSize) ||
+                                  (hasVolumes && !selectedVolume) ||
+                                  (hasWeights && !selectedWeight)
                                     ? "cursor-not-allowed opacity-50"
                                     : ""
-                                  }`}
+                                }`}
                                 onClick={handleAddToCart}
                                 disabled={
                                   isAdded ||
@@ -898,13 +909,15 @@ export default function CheckoutCard({
                                       return (
                                         <Chip
                                           key={index}
-                                          className={`text-light-text dark:text-dark-text ${value === "1"
+                                          className={`text-light-text dark:text-dark-text ${
+                                            value === "1"
                                               ? "bg-green-500"
                                               : "bg-red-500"
-                                            }`}
+                                          }`}
                                         >
-                                          {`overall: ${value === "1" ? "👍" : "👎"
-                                            }`}
+                                          {`overall: ${
+                                            value === "1" ? "👍" : "👎"
+                                          }`}
                                         </Chip>
                                       );
                                     } else {
@@ -912,13 +925,15 @@ export default function CheckoutCard({
                                       return (
                                         <Chip
                                           key={index}
-                                          className={`text-light-text dark:text-dark-text ${value === "1"
+                                          className={`text-light-text dark:text-dark-text ${
+                                            value === "1"
                                               ? "bg-green-500"
                                               : "bg-red-500"
-                                            }`}
+                                          }`}
                                         >
-                                          {`${category}: ${value === "1" ? "👍" : "👎"
-                                            }`}
+                                          {`${category}: ${
+                                            value === "1" ? "👍" : "👎"
+                                          }`}
                                         </Chip>
                                       );
                                     }

@@ -62,9 +62,13 @@ export default function OrderSummary() {
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const pk = storage.getSessionItem(STORAGE_KEYS.SF_SELLER_PUBKEY) || storage.getItem(STORAGE_KEYS.SF_SELLER_PUBKEY);
+      const pk =
+        storage.getSessionItem(STORAGE_KEYS.SF_SELLER_PUBKEY) ||
+        storage.getItem(STORAGE_KEYS.SF_SELLER_PUBKEY);
       if (pk) setSfSellerPubkey(pk);
-      const slug = storage.getSessionItem(STORAGE_KEYS.SF_SHOP_SLUG) || storage.getItem(STORAGE_KEYS.SF_SHOP_SLUG);
+      const slug =
+        storage.getSessionItem(STORAGE_KEYS.SF_SHOP_SLUG) ||
+        storage.getItem(STORAGE_KEYS.SF_SHOP_SLUG);
       if (slug) setSfShopSlug(slug);
     }
   }, []);
@@ -77,7 +81,9 @@ export default function OrderSummary() {
   const hasConsumedOrderRef = useRef(false);
   useEffect(() => {
     if (hasConsumedOrderRef.current) return;
-    const data = storage.getSessionJson<OrderSummaryData | null>(STORAGE_KEYS.ORDER_SUMMARY);
+    const data = storage.getSessionJson<OrderSummaryData | null>(
+      STORAGE_KEYS.ORDER_SUMMARY
+    );
     if (data) {
       hasConsumedOrderRef.current = true;
       try {

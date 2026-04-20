@@ -221,26 +221,23 @@ export default function CartInvoiceCard({
             }
           });
         }
-        storage.setSessionJson(
-          STORAGE_KEYS.ORDER_SUMMARY,
-          {
-            productTitle: pendingOrderRef.current.productTitle,
-            productImage: products[0]?.images?.[0] || "",
-            amount: String(totalCost),
-            subtotal: String(subtotalCost),
-            currency: pendingOrderRef.current.currency,
-            paymentMethod: pendingOrderRef.current.paymentMethod,
-            orderId: pendingOrderRef.current.orderId,
-            shippingAddress: pendingOrderRef.current.shippingAddress,
-            sellerPubkey: pendingOrderRef.current.sellerPubkey,
-            isCart: true,
-            cartItems,
-            freeShippingApplied: anyFreeShipping,
-            originalShippingCost: anyFreeShipping
-              ? String(originalShipping)
-              : undefined,
-          }
-        );
+        storage.setSessionJson(STORAGE_KEYS.ORDER_SUMMARY, {
+          productTitle: pendingOrderRef.current.productTitle,
+          productImage: products[0]?.images?.[0] || "",
+          amount: String(totalCost),
+          subtotal: String(subtotalCost),
+          currency: pendingOrderRef.current.currency,
+          paymentMethod: pendingOrderRef.current.paymentMethod,
+          orderId: pendingOrderRef.current.orderId,
+          shippingAddress: pendingOrderRef.current.shippingAddress,
+          sellerPubkey: pendingOrderRef.current.sellerPubkey,
+          isCart: true,
+          cartItems,
+          freeShippingApplied: anyFreeShipping,
+          originalShippingCost: anyFreeShipping
+            ? String(originalShipping)
+            : undefined,
+        });
       } catch {}
 
       pendingOrderRef.current = null;
@@ -1062,7 +1059,7 @@ export default function CartInvoiceCard({
       });
       invoicePollRef.current = { cancelled: false, activeQuoteId: hash };
 
-      const { nwcString } = getLocalStorageData();
+      const nwcString = storage.getItem(STORAGE_KEYS.NWC_STRING);
       if (!nwcString) throw new Error("NWC connection not found.");
 
       nwc = new NostrWebLNProvider({ nostrWalletConnectUrl: nwcString });

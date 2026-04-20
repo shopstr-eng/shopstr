@@ -22,9 +22,7 @@ import {
   Input,
 } from "@heroui/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
-import {
-  publishProofEvent,
-} from "@/utils/nostr/nostr-helper-functions";
+import { publishProofEvent } from "@/utils/nostr/nostr-helper-functions";
 import { storage, STORAGE_KEYS } from "@/utils/storage";
 import {
   Mint as CashuMint,

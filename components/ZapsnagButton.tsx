@@ -16,7 +16,6 @@ import {
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
 import {
-  getLocalStorageData,
   constructGiftWrappedEvent,
   constructMessageSeal,
   constructMessageGiftWrap,
@@ -116,7 +115,7 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
       }
 
       originalWebLN = (window as any).webln;
-      const { nwcString } = getLocalStorageData();
+      const nwcString = storage.getItem(STORAGE_KEYS.NWC_STRING);
       if (nwcString) {
         const nwcProvider = new NostrWebLNProvider({
           nostrWalletConnectUrl: nwcString,
@@ -174,7 +173,7 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
       const ln = new LightningAddress(lud16);
       await ln.fetch();
 
-      const { relays: userRelays } = getLocalStorageData();
+      const userRelays = storage.getJson<string[]>(STORAGE_KEYS.RELAYS, []);
       const targetRelays =
         userRelays.length > 0
           ? userRelays

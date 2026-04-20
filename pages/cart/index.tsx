@@ -195,9 +195,13 @@ export default function Component() {
   }, [invoiceIsPaid, cashuPaymentSent, router]);
 
   useEffect(() => {
-    const stored = storage.getSessionItem(STORAGE_KEYS.SF_SELLER_PUBKEY) || storage.getItem(STORAGE_KEYS.SF_SELLER_PUBKEY);
+    const stored =
+      storage.getSessionItem(STORAGE_KEYS.SF_SELLER_PUBKEY) ||
+      storage.getItem(STORAGE_KEYS.SF_SELLER_PUBKEY);
     if (stored) setSfSellerPubkey(stored);
-    const storedSlug = storage.getSessionItem(STORAGE_KEYS.SF_SHOP_SLUG) || storage.getItem(STORAGE_KEYS.SF_SHOP_SLUG);
+    const storedSlug =
+      storage.getSessionItem(STORAGE_KEYS.SF_SHOP_SLUG) ||
+      storage.getItem(STORAGE_KEYS.SF_SHOP_SLUG);
     if (storedSlug) setSfShopSlug(storedSlug);
   }, []);
 
@@ -206,7 +210,10 @@ export default function Component() {
     const loadCart = async () => {
       if (typeof window === "undefined") return;
 
-      const sfPk = storage.getSessionItem(STORAGE_KEYS.SF_SELLER_PUBKEY) || storage.getItem(STORAGE_KEYS.SF_SELLER_PUBKEY) || "";
+      const sfPk =
+        storage.getSessionItem(STORAGE_KEYS.SF_SELLER_PUBKEY) ||
+        storage.getItem(STORAGE_KEYS.SF_SELLER_PUBKEY) ||
+        "";
       const fullCart = storage.getJson<ProductData[]>(STORAGE_KEYS.CART, []);
 
       let cartList = fullCart;
@@ -232,7 +239,10 @@ export default function Component() {
 
       if (cartList.length === 0) return;
 
-      const discounts = storage.getJson<CartDiscountsMap>(STORAGE_KEYS.CART_DISCOUNTS, {});
+      const discounts = storage.getJson<CartDiscountsMap>(
+        STORAGE_KEYS.CART_DISCOUNTS,
+        {}
+      );
       if (!isCartDiscountsMap(discounts)) {
         storage.removeItem(STORAGE_KEYS.CART_DISCOUNTS);
         return;
@@ -462,7 +472,10 @@ export default function Component() {
         setDiscountErrors({ ...discountErrors, [pubkey]: "" });
 
         // Save to storage
-        const discounts = storage.getJson<CartDiscountsMap>(STORAGE_KEYS.CART_DISCOUNTS, {});
+        const discounts = storage.getJson<CartDiscountsMap>(
+          STORAGE_KEYS.CART_DISCOUNTS,
+          {}
+        );
         discounts[pubkey] = {
           code: code,
         };
@@ -490,7 +503,10 @@ export default function Component() {
     setDiscountErrors({ ...discountErrors, [pubkey]: "" });
 
     // Remove from storage
-    const discounts = storage.getJson<CartDiscountsMap>(STORAGE_KEYS.CART_DISCOUNTS, {});
+    const discounts = storage.getJson<CartDiscountsMap>(
+      STORAGE_KEYS.CART_DISCOUNTS,
+      {}
+    );
     if (Object.keys(discounts).length > 0) {
       delete discounts[pubkey];
       storage.setJson(STORAGE_KEYS.CART_DISCOUNTS, discounts);
