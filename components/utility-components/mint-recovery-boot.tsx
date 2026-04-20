@@ -17,6 +17,7 @@ import {
   NostrContext,
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
+import { storage, STORAGE_KEYS } from "@/utils/storage";
 
 /**
  * Mounted once near the root of the app. On first signer/nostr availability,
@@ -61,18 +62,15 @@ export function MintRecoveryBoot(): null {
             if (cancelled) return;
             const { tokens, history } = getLocalStorageData();
             const proofArray = [...tokens, ...proofs];
-            window.localStorage.setItem("tokens", JSON.stringify(proofArray));
-            window.localStorage.setItem(
-              "history",
-              JSON.stringify([
-                {
-                  type: 3,
-                  amount: quote.amount,
-                  date: Math.floor(Date.now() / 1000),
-                },
-                ...history,
-              ])
-            );
+            storage.setJson(STORAGE_KEYS.TOKENS, proofArray);
+            storage.setJson(STORAGE_KEYS.HISTORY, [
+              {
+                type: 3,
+                amount: quote.amount,
+                date: Math.floor(Date.now() / 1000),
+              },
+              ...history,
+            ]);
             await publishProofEvent(
               nostr,
               signer,

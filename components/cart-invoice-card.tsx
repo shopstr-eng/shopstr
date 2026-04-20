@@ -1240,7 +1240,7 @@ export default function CartInvoiceCard({
                   "seller payment hand-off"
                 );
                 markMintQuoteClaimed(hash);
-                localStorage.setItem("cart", JSON.stringify([]));
+                storage.setJson(STORAGE_KEYS.CART, []);
                 setPaymentConfirmed(true);
                 if (setInvoiceIsPaid) {
                   setInvoiceIsPaid(true);
@@ -1286,7 +1286,7 @@ export default function CartInvoiceCard({
                 lastErrorMessage:
                   "Mint reports quote ISSUED before local claim recorded proofs",
               });
-              localStorage.setItem("cart", JSON.stringify([]));
+              storage.setJson(STORAGE_KEYS.CART, []);
               setPaymentConfirmed(true);
               setQrCodeUrl(null);
               setFailureText(
@@ -1309,7 +1309,7 @@ export default function CartInvoiceCard({
             status: "failed_terminal",
             lastErrorMessage: "Quote ISSUED before local claim recorded proofs",
           });
-          localStorage.setItem("cart", JSON.stringify([]));
+          storage.setJson(STORAGE_KEYS.CART, []);
           setPaymentConfirmed(true);
           setQrCodeUrl(null);
           setFailureText(
@@ -2411,14 +2411,11 @@ export default function CartInvoiceCard({
       } else {
         proofArray = [...remainingProofs];
       }
-      localStorage.setItem("tokens", JSON.stringify(proofArray));
-      localStorage.setItem(
-        "history",
-        JSON.stringify([
-          { type: 5, amount: price, date: Math.floor(Date.now() / 1000) },
-          ...history,
-        ])
-      );
+      storage.setJson(STORAGE_KEYS.TOKENS, proofArray);
+      storage.setJson(STORAGE_KEYS.HISTORY, [
+        { type: 5, amount: price, date: Math.floor(Date.now() / 1000) },
+        ...history,
+      ]);
       await publishProofEvent(
         nostr!,
         signer!,
@@ -2428,7 +2425,7 @@ export default function CartInvoiceCard({
         price.toString(),
         deletedEventIds
       );
-      localStorage.setItem("cart", JSON.stringify([]));
+      storage.setJson(STORAGE_KEYS.CART, []);
       setOrderConfirmed(true);
       setPaymentConfirmed(true);
       if (setCashuPaymentSent) {

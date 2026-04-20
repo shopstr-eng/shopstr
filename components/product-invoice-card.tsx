@@ -52,6 +52,7 @@ import {
   publishProofEvent,
   generateKeys,
 } from "@/utils/nostr/nostr-helper-functions";
+import { storage, STORAGE_KEYS } from "@/utils/storage";
 import { LightningAddress } from "@getalby/lightning-tools";
 import QRCode from "qrcode";
 import { v4 as uuidv4 } from "uuid";
@@ -100,7 +101,9 @@ export default function ProductInvoiceCard({
   discountPercentage?: number;
   originalPrice?: number;
 }) {
-  const { mints, tokens, history } = getLocalStorageData();
+  const mints = storage.getJson<string[]>(STORAGE_KEYS.MINTS, []);
+  const tokens = storage.getJson<any[]>(STORAGE_KEYS.TOKENS, []);
+  const history = storage.getJson<any[]>(STORAGE_KEYS.HISTORY, []);
   const {
     pubkey: userPubkey,
     npub: userNPub,
@@ -280,9 +283,9 @@ export default function ProductInvoiceCard({
   useEffect(() => {
     if (paymentConfirmed && pendingOrderRef.current) {
       try {
-        sessionStorage.setItem(
-          "orderSummary",
-          JSON.stringify({
+        storage.setSessionJson(
+          STORAGE_KEYS.ORDER_SUMMARY,
+          {
             productTitle: pendingOrderRef.current.productTitle,
             productImage: productData.images[0] || "",
             amount: pendingOrderRef.current.amount,
@@ -301,7 +304,7 @@ export default function ProductInvoiceCard({
             shippingAddress: pendingOrderRef.current.shippingAddress,
             pickupLocation: selectedPickupLocation || undefined,
             sellerPubkey: pendingOrderRef.current.sellerPubkey,
-          })
+          }
         );
       } catch {}
     }
@@ -1941,14 +1944,11 @@ export default function ProductInvoiceCard({
       } else {
         proofArray = [...remainingProofs];
       }
-      localStorage.setItem("tokens", JSON.stringify(proofArray));
-      localStorage.setItem(
-        "history",
-        JSON.stringify([
-          { type: 5, amount: price, date: Math.floor(Date.now() / 1000) },
-          ...history,
-        ])
-      );
+      storage.setJson(STORAGE_KEYS.TOKENS, proofArray);
+      storage.setJson(STORAGE_KEYS.HISTORY, [
+        { type: 5, amount: price, date: Math.floor(Date.now() / 1000) },
+        ...history,
+      ]);
       await publishProofEvent(
         nostr!,
         signer!,

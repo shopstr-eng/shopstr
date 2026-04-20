@@ -171,7 +171,7 @@ const PayButton = () => {
             ) || !send.some((s) => s.secret === p.secret)
         ) as Proof[];
         const quarantineProofArray = [...remainingProofsAfterMelt, ...keep];
-        localStorage.setItem("tokens", JSON.stringify(quarantineProofArray));
+        storage.setJson(STORAGE_KEYS.TOKENS, quarantineProofArray);
         throw new Error(meltOutcome.errorMessage ?? "Melt outcome ambiguous");
       }
       const changeProofs = [...keep, ...meltOutcome.changeProofs];

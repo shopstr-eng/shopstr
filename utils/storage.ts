@@ -39,6 +39,7 @@ export const STORAGE_KEYS = {
   SF_SELLER_PUBKEY: "sf_seller_pubkey",
   SF_SHOP_SLUG: "sf_shop_slug",
   SHIPPING_INFO: "shopstr_shipping_info",
+  ORDER_SUMMARY: "orderSummary",
   
   // System
   MIGRATION_COMPLETE: "migrationComplete",
@@ -132,6 +133,38 @@ class StorageManager {
   getSessionItem(key: string): string | null {
     if (!this.isBrowser) return null;
     return sessionStorage.getItem(key);
+  }
+
+  /**
+   * Get and parse JSON data from sessionStorage
+   */
+  getSessionJson<T>(key: string, fallback: T): T {
+    if (!this.isBrowser) return fallback;
+    const raw = sessionStorage.getItem(key);
+    return parseJsonWithFallback(raw, fallback, {
+      onError: (err) => console.warn(`SessionStorage parse error for key "${key}":`, err),
+    });
+  }
+
+  /**
+   * Stringify and set JSON data in sessionStorage
+   */
+  setSessionJson<T>(key: string, value: T): void {
+    if (!this.isBrowser) return;
+    try {
+      const serialized = JSON.stringify(value);
+      sessionStorage.setItem(key, serialized);
+    } catch (err) {
+      console.error(`Failed to serialize session data for key "${key}":`, err);
+    }
+  }
+
+  /**
+   * Remove an item from sessionStorage
+   */
+  removeSessionItem(key: string): void {
+    if (!this.isBrowser) return;
+    sessionStorage.removeItem(key);
   }
 }
 
