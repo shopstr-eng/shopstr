@@ -282,3 +282,36 @@ API keys are created via the `/settings/api-keys` UI page, the `/api/mcp/api-key
 - **Turbopack**: Dev server uses Turbopack (Next.js default) instead of webpack for significantly faster compilation (~36s vs ~87s initial, sub-second subsequent).
 - **PWA disabled in dev**: Service worker and PWA caching are disabled via `next.config.mjs` in development.
 - **Flow scheduler disabled in dev**: Email flow scheduler skipped in development to reduce memory pressure.
+
+## Affiliate / Referral System
+
+Seller-managed affiliate links and codes that work for both Stripe and Bitcoin/Cashu payments.
+
+### Data model (`db/schema.sql`, `utils/db/affiliates.ts`)
+
+- `affiliates` — seller-owned affiliate record (name, email, optional pubkey, lightning address, Stripe Connect id, payout schedule, balance, invite token).
+- `affiliate_codes` — one or more codes per affiliate with rebate (percent/fixed) + buyer discount (percent/fixed), expiry, max uses.
+- `affiliate_referrals` — one row per referred order; tracks gross/net/rebate/buyer-discount in smallest units, payment rail, status (pending/payable/paid).
+- `affiliate_payouts` — settled payout batches (Stripe transfer id, lightning preimage, or manual mark-paid).
+
+### API endpoints (`pages/api/affiliates/`)
+
+- `manage` (CRUD seller affiliates), `codes` (CRUD codes), `validate` (public buyer validation), `claim` (affiliate self-service via invite token), `payouts` (seller view), `mark-paid` (manual settlement), `record-referral` (cart calls on order success), `process-payouts` (cron, `Authorization: Bearer $AFFILIATE_PAYOUT_CRON_SECRET`).
+
+### Payment integration
+
+- `pages/api/stripe/create-payment-intent.ts` accepts per-seller `affiliateRebateSmallest`, `affiliateAccountId`, `affiliateId`, `affiliateCodeId`, `affiliateCode`.
+- `pages/api/stripe/process-transfers.ts` caps the rebate (seller keeps ≥1 unit after donation+rebate), subtracts rebate from the seller transfer, and (multi-merchant only) issues a real-time Stripe transfer to the affiliate's connected account when present; otherwise the rebate accrues to the affiliate balance.
+- Cashu/Lightning orders accrue to balance and are paid out by the cron on the affiliate's chosen schedule (every-sale / daily / weekly / monthly).
+
+### UI
+
+- `components/my-listings/affiliates.tsx` — seller dashboard with 4 tabs (Affiliates, Codes, Balances, Payouts), wired into `my-listings.tsx`.
+- `pages/affiliate/[token].tsx` — affiliate self-service page (set lightning address / Stripe Connect id).
+- `components/utility-components/affiliate-ref-tracker.tsx` — mounted in `pages/_app.tsx`; on any `?ref=CODE` URL, drops a 30-day `mm_aff_ref` cookie (SameSite=Lax).
+- `pages/cart/index.tsx` — on cart load, validates the cookie code against each unique seller and pre-fills as a discount; the discount-code input also falls back to affiliate validation if the regular discount lookup fails.
+- `components/cart-invoice-card.tsx` — passes affiliate fields into the payment-intent body and per-seller splits, and POSTs `/api/affiliates/record-referral` after Stripe and Cashu success.
+
+### Env
+
+- `AFFILIATE_PAYOUT_CRON_SECRET` — bearer token guarding `/api/affiliates/process-payouts`.

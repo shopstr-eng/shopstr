@@ -163,6 +163,17 @@ export default function Component() {
   }>({});
   const [isValidatingDiscounts, setIsValidatingDiscounts] = useState(false);
 
+  type AffiliateMeta = {
+    code: string;
+    codeId: number;
+    affiliateId: number;
+    rebateType: "percent" | "fixed";
+    rebateValue: number;
+  };
+  const [affiliateMetaBySeller, setAffiliateMetaBySeller] = useState<{
+    [pubkey: string]: AffiliateMeta;
+  }>({});
+
   const [sellerStripeStatus, setSellerStripeStatus] = useState<
     Record<string, boolean>
   >({});
@@ -602,6 +613,60 @@ export default function Component() {
   }, [products, quantities, appliedDiscounts]);
 
   useEffect(() => {
+    if (typeof document === "undefined") return;
+    if (uniqueSellerPubkeys.length === 0) return;
+    const m = document.cookie.match(/(?:^|; )mm_aff_ref=([^;]*)/);
+    if (!m) return;
+    const code = decodeURIComponent(m[1]!);
+    if (!code) return;
+    let cancelled = false;
+    (async () => {
+      for (const pubkey of uniqueSellerPubkeys) {
+        if (cancelled) return;
+        if (discountCodes[pubkey] || affiliateMetaBySeller[pubkey]) continue;
+        try {
+          const res = await fetch(
+            `/api/affiliates/validate?sellerPubkey=${pubkey}&code=${encodeURIComponent(
+              code
+            )}`
+          );
+          if (!res.ok) continue;
+          const aff = await res.json();
+          if (!aff?.valid) continue;
+          let percent = 0;
+          if (aff.buyerDiscountType === "percent") {
+            percent = Number(aff.buyerDiscountValue) || 0;
+          } else if (aff.buyerDiscountType === "fixed") {
+            const sub = getSellerSubtotalInCurrency(pubkey);
+            if (sub > 0) {
+              percent = Math.min(
+                100,
+                (Number(aff.buyerDiscountValue) / sub) * 100
+              );
+            }
+          }
+          if (cancelled) return;
+          setDiscountCodes((p) => ({ ...p, [pubkey]: code }));
+          setAppliedDiscounts((p) => ({ ...p, [pubkey]: percent }));
+          setAffiliateMetaBySeller((p) => ({
+            ...p,
+            [pubkey]: {
+              code,
+              codeId: aff.codeId,
+              affiliateId: aff.affiliateId,
+              rebateType: aff.rebateType,
+              rebateValue: Number(aff.rebateValue) || 0,
+            },
+          }));
+        } catch {}
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [sellerPubkeyKey]);
+
+  useEffect(() => {
     const shippingTypeMap: { [key: string]: ShippingOptionsType } = {};
     products.forEach((product) => {
       if (product.shippingType !== undefined) {
@@ -705,6 +770,50 @@ export default function Component() {
         };
         localStorage.setItem("cartDiscounts", JSON.stringify(discounts));
       } else {
+        const affRes = await fetch(
+          `/api/affiliates/validate?sellerPubkey=${pubkey}&code=${encodeURIComponent(
+            code
+          )}`
+        );
+        const aff = affRes.ok ? await affRes.json() : null;
+        if (aff?.valid) {
+          let percent = 0;
+          if (aff.buyerDiscountType === "percent") {
+            percent = Number(aff.buyerDiscountValue) || 0;
+          } else if (aff.buyerDiscountType === "fixed") {
+            const sellerSubtotal = getSellerSubtotalInCurrency(pubkey);
+            if (sellerSubtotal > 0) {
+              percent = Math.min(
+                100,
+                (Number(aff.buyerDiscountValue) / sellerSubtotal) * 100
+              );
+            }
+          }
+          setAppliedDiscounts({ ...appliedDiscounts, [pubkey]: percent });
+          setAffiliateMetaBySeller({
+            ...affiliateMetaBySeller,
+            [pubkey]: {
+              code,
+              codeId: aff.codeId,
+              affiliateId: aff.affiliateId,
+              rebateType: aff.rebateType,
+              rebateValue: Number(aff.rebateValue) || 0,
+            },
+          });
+          setDiscountErrors({ ...discountErrors, [pubkey]: "" });
+          const discounts = getLocalStorageJson<CartDiscountsMap>(
+            "cartDiscounts",
+            {},
+            {
+              removeOnError: true,
+              removeOnValidationError: true,
+              validate: isCartDiscountsMap,
+            }
+          );
+          discounts[pubkey] = { code };
+          localStorage.setItem("cartDiscounts", JSON.stringify(discounts));
+          return;
+        }
         setDiscountErrors({
           ...discountErrors,
           [pubkey]: "Invalid or expired discount code",
@@ -725,6 +834,11 @@ export default function Component() {
     setDiscountCodes({ ...discountCodes, [pubkey]: "" });
     setAppliedDiscounts({ ...appliedDiscounts, [pubkey]: 0 });
     setDiscountErrors({ ...discountErrors, [pubkey]: "" });
+    setAffiliateMetaBySeller((prev) => {
+      const next = { ...prev };
+      delete next[pubkey];
+      return next;
+    });
 
     // Remove from localStorage
     const discounts = getLocalStorageJson<CartDiscountsMap>(
@@ -1302,6 +1416,7 @@ export default function Component() {
                 subtotalCost={subtotal}
                 appliedDiscounts={appliedDiscounts}
                 discountCodes={discountCodes}
+                affiliateMetaBySeller={affiliateMetaBySeller}
                 shopProfiles={shopContext.shopData}
                 onBackToCart={toggleCheckout}
                 setInvoiceIsPaid={setInvoiceIsPaid}

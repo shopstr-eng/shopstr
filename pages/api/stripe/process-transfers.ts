@@ -12,6 +12,11 @@ interface SellerSplit {
   accountId?: string;
   donationPercent?: number;
   donationCutSmallest?: number;
+  affiliateRebateSmallest?: number;
+  affiliateAccountId?: string | null;
+  affiliateId?: number | null;
+  affiliateCodeId?: number | null;
+  affiliateCode?: string | null;
 }
 import { applyRateLimit } from "@/utils/rate-limit";
 import { withStripeRetry } from "@/utils/stripe/retry-service";
@@ -66,6 +71,10 @@ export default async function handler(
       skipped?: boolean;
       donationCutSmallest?: number;
       transferredAmount?: number;
+      affiliateTransferId?: string;
+      affiliateRebateSmallest?: number;
+      affiliateAccrued?: boolean;
+      affiliateError?: string;
     }[] = [];
 
     for (const split of sellerSplits) {
@@ -128,7 +137,18 @@ export default async function handler(
         donationCut = resolved.cutSmallest;
       }
 
-      const transferAmount = Math.max(split.amountCents - donationCut, 0);
+      // Affiliate rebate: cap so the seller still keeps at least 1 unit after
+      // donation + rebate. The create-payment-intent endpoint already capped
+      // this; we re-cap defensively in case process-transfers is called with
+      // a stale or hand-rolled payload.
+      const requestedRebate = Math.max(split.affiliateRebateSmallest ?? 0, 0);
+      const maxAllowedRebate = Math.max(split.amountCents - donationCut - 1, 0);
+      const affiliateRebate = Math.min(requestedRebate, maxAllowedRebate);
+
+      const transferAmount = Math.max(
+        split.amountCents - donationCut - affiliateRebate,
+        0
+      );
       if (transferAmount <= 0) {
         results.push({
           sellerPubkey: split.sellerPubkey,
@@ -162,12 +182,53 @@ export default async function handler(
           )
         );
 
-        results.push({
+        const result: (typeof results)[number] = {
           sellerPubkey: split.sellerPubkey,
           transferId: transfer.id,
           donationCutSmallest: donationCut,
           transferredAmount: transferAmount,
-        });
+          affiliateRebateSmallest: affiliateRebate,
+        };
+
+        // Real-time affiliate transfer when a Stripe Connect destination is
+        // configured. If not, we leave it accruing — the cart's
+        // record-referral call will store the rebate against the affiliate
+        // balance for later settlement.
+        if (affiliateRebate > 0 && split.affiliateAccountId) {
+          try {
+            const affiliateTransfer = await withStripeRetry(() =>
+              stripe.transfers.create(
+                {
+                  amount: affiliateRebate,
+                  currency: transferCurrency,
+                  destination: split.affiliateAccountId!,
+                  transfer_group: transferGroup,
+                  metadata: {
+                    paymentIntentId,
+                    sellerPubkey: split.sellerPubkey,
+                    affiliateId: String(split.affiliateId ?? ""),
+                    affiliateCodeId: String(split.affiliateCodeId ?? ""),
+                    affiliateCode: split.affiliateCode ?? "",
+                    rebateSmallest: affiliateRebate.toString(),
+                  },
+                },
+                {
+                  idempotencyKey: `aff-${paymentIntentId}-${split.sellerPubkey}-${
+                    split.affiliateCodeId ?? "x"
+                  }`,
+                }
+              )
+            );
+            result.affiliateTransferId = affiliateTransfer.id;
+          } catch (e) {
+            result.affiliateError =
+              e instanceof Error ? e.message : "Affiliate transfer failed";
+          }
+        } else if (affiliateRebate > 0) {
+          result.affiliateAccrued = true;
+        }
+
+        results.push(result);
       } catch (transferError) {
         console.error(
           `Transfer failed for seller ${split.sellerPubkey}:`,

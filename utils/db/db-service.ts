@@ -789,6 +789,87 @@ async function initializeTables(): Promise<void> {
       );
       CREATE INDEX IF NOT EXISTS idx_inventory_log_product_id ON inventory_log(product_id);
       CREATE INDEX IF NOT EXISTS idx_inventory_log_order_id ON inventory_log(order_id);
+
+      -- Affiliate program tables (mirrors db/schema.sql).
+      CREATE TABLE IF NOT EXISTS affiliates (
+        id SERIAL PRIMARY KEY,
+        seller_pubkey TEXT NOT NULL,
+        name TEXT NOT NULL,
+        email TEXT,
+        affiliate_pubkey TEXT,
+        invite_token TEXT NOT NULL UNIQUE,
+        invite_claimed_at TIMESTAMP,
+        lightning_address TEXT,
+        stripe_account_id TEXT,
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_affiliates_seller_pubkey ON affiliates(seller_pubkey);
+      CREATE INDEX IF NOT EXISTS idx_affiliates_invite_token ON affiliates(invite_token);
+      CREATE INDEX IF NOT EXISTS idx_affiliates_affiliate_pubkey ON affiliates(affiliate_pubkey);
+
+      CREATE TABLE IF NOT EXISTS affiliate_codes (
+        id SERIAL PRIMARY KEY,
+        affiliate_id INTEGER NOT NULL REFERENCES affiliates(id) ON DELETE CASCADE,
+        seller_pubkey TEXT NOT NULL,
+        code TEXT NOT NULL,
+        rebate_type TEXT NOT NULL CHECK (rebate_type IN ('percent', 'fixed')),
+        rebate_value NUMERIC(12,2) NOT NULL CHECK (rebate_value >= 0),
+        buyer_discount_type TEXT NOT NULL DEFAULT 'percent' CHECK (buyer_discount_type IN ('percent', 'fixed')),
+        buyer_discount_value NUMERIC(12,2) NOT NULL DEFAULT 0 CHECK (buyer_discount_value >= 0),
+        currency TEXT,
+        payout_schedule TEXT NOT NULL DEFAULT 'every_sale' CHECK (payout_schedule IN ('every_sale', 'daily', 'weekly', 'monthly')),
+        expiration BIGINT,
+        max_uses INTEGER,
+        times_used INTEGER NOT NULL DEFAULT 0,
+        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(seller_pubkey, code)
+      );
+      CREATE INDEX IF NOT EXISTS idx_affiliate_codes_seller_pubkey ON affiliate_codes(seller_pubkey);
+      CREATE INDEX IF NOT EXISTS idx_affiliate_codes_affiliate_id ON affiliate_codes(affiliate_id);
+      CREATE INDEX IF NOT EXISTS idx_affiliate_codes_code ON affiliate_codes(code);
+
+      CREATE TABLE IF NOT EXISTS affiliate_referrals (
+        id SERIAL PRIMARY KEY,
+        affiliate_id INTEGER NOT NULL REFERENCES affiliates(id) ON DELETE CASCADE,
+        code_id INTEGER NOT NULL REFERENCES affiliate_codes(id) ON DELETE CASCADE,
+        seller_pubkey TEXT NOT NULL,
+        order_id TEXT NOT NULL,
+        payment_rail TEXT NOT NULL CHECK (payment_rail IN ('stripe', 'bitcoin')),
+        gross_subtotal_smallest NUMERIC(20,0) NOT NULL,
+        buyer_discount_smallest NUMERIC(20,0) NOT NULL DEFAULT 0,
+        rebate_smallest NUMERIC(20,0) NOT NULL DEFAULT 0,
+        currency TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'payable', 'paid', 'cancelled')),
+        payout_id INTEGER,
+        realtime_transfer_ref TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(order_id, code_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_affiliate_referrals_affiliate_id ON affiliate_referrals(affiliate_id);
+      CREATE INDEX IF NOT EXISTS idx_affiliate_referrals_seller_pubkey ON affiliate_referrals(seller_pubkey);
+      CREATE INDEX IF NOT EXISTS idx_affiliate_referrals_status ON affiliate_referrals(status);
+      CREATE INDEX IF NOT EXISTS idx_affiliate_referrals_order_id ON affiliate_referrals(order_id);
+
+      CREATE TABLE IF NOT EXISTS affiliate_payouts (
+        id SERIAL PRIMARY KEY,
+        affiliate_id INTEGER NOT NULL REFERENCES affiliates(id) ON DELETE CASCADE,
+        seller_pubkey TEXT NOT NULL,
+        method TEXT NOT NULL CHECK (method IN ('stripe', 'lightning', 'manual')),
+        amount_smallest NUMERIC(20,0) NOT NULL,
+        currency TEXT NOT NULL,
+        external_ref TEXT,
+        note TEXT,
+        status TEXT NOT NULL DEFAULT 'paid' CHECK (status IN ('paid', 'failed')),
+        paid_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_affiliate_payouts_affiliate_id ON affiliate_payouts(affiliate_id);
+      CREATE INDEX IF NOT EXISTS idx_affiliate_payouts_seller_pubkey ON affiliate_payouts(seller_pubkey);
     `);
 
     tablesInitialized = true;
