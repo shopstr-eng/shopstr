@@ -181,6 +181,33 @@ export default async function handler(
         );
         break;
       }
+      case "account.application.deauthorized": {
+        // The connected account revoked our OAuth grant. We can no longer
+        // initiate transfers, so flip every cached stripe_* flag off; the
+        // process-payouts loop already short-circuits on
+        // stripe_payouts_enabled=false. The connected-account id arrives on
+        // the top-level `event.account` field for Connect events (not on
+        // `event.data.object`, which is the Application).
+        const acctId = (event as Stripe.Event & { account?: string }).account;
+        if (acctId) {
+          try {
+            const { markAffiliateStripeDeauthorized } =
+              await import("@/utils/db/affiliates");
+            const matched = await markAffiliateStripeDeauthorized(acctId);
+            if (matched) {
+              console.log(
+                `AFFILIATE_STRIPE_DEAUTHORIZED affiliate=${matched} acct=${acctId}`
+              );
+            }
+          } catch (err) {
+            console.error(
+              "account.application.deauthorized affiliate sync failed:",
+              err
+            );
+          }
+        }
+        break;
+      }
       case "account.updated": {
         // Mirror Stripe Connect onboarding state into our `affiliates` row so
         // process-payouts can short-circuit on accounts that aren't yet able

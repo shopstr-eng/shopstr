@@ -1232,6 +1232,35 @@ export async function setAffiliateEmailNotifications(
 }
 
 /**
+ * Clear cached Stripe-Connect state after `account.application.deauthorized`.
+ * The connected account is no longer transferable, so we flip every stripe_*
+ * flag to false. The `stripe_account_id` is intentionally retained for audit;
+ * process-payouts already short-circuits when stripe_payouts_enabled=false.
+ * Returns the affiliate id we matched (or null when no row owns this account).
+ */
+export async function markAffiliateStripeDeauthorized(
+  stripeAccountId: string
+): Promise<number | null> {
+  const pool = getDbPool();
+  const client = await pool.connect();
+  try {
+    const r = await client.query(
+      `UPDATE affiliates
+          SET stripe_charges_enabled = FALSE,
+              stripe_payouts_enabled = FALSE,
+              stripe_onboarding_complete = FALSE,
+              updated_at = CURRENT_TIMESTAMP
+        WHERE stripe_account_id = $1
+        RETURNING id`,
+      [stripeAccountId]
+    );
+    return (r.rows[0]?.id as number | undefined) ?? null;
+  } finally {
+    client.release();
+  }
+}
+
+/**
  * Sync the cached Stripe-Connect onboarding flags after we receive
  * `account.updated`. Returns the affiliate id we matched (or null).
  */
