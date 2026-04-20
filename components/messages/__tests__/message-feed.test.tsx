@@ -13,6 +13,22 @@ jest.mock("../messages", () => {
   };
 });
 
+jest.mock("../orders-dashboard", () => {
+  return function MockOrdersDashboard({
+    sellerOnly,
+    buyerOnly,
+  }: {
+    sellerOnly?: boolean;
+    buyerOnly?: boolean;
+  }) {
+    return (
+      <div data-testid="orders-dashboard-props">
+        sellerOnly:{String(!!sellerOnly)} buyerOnly:{String(!!buyerOnly)}
+      </div>
+    );
+  };
+});
+
 jest.mock("@/components/framer", () => ({
   Framer: {
     Tabs: () => <div data-testid="framer-tabs">Mocked Tabs</div>,
@@ -62,6 +78,9 @@ describe("MessageFeed Component", () => {
     expect(mockUseTabs).toHaveBeenCalledWith(
       expect.objectContaining({ initialTabId: "orders" })
     );
+    expect(
+      mockUseTabs.mock.calls[0][0].tabs[0].children.props.buyerOnly
+    ).toBe(true);
     expect(screen.getByText("Orders Messages Content")).toBeInTheDocument();
     expect(
       screen.queryByText("Inquiries Messages Content")
@@ -95,6 +114,34 @@ describe("MessageFeed Component", () => {
     expect(
       screen.queryByText("Orders Messages Content")
     ).not.toBeInTheDocument();
+  });
+
+  test("wires the Orders tab to the buyer-only dashboard view", () => {
+    mockUseTabs.mockImplementation(({ tabs }) => ({
+      selectedTab: {
+        id: "orders",
+        children: tabs[0].children,
+      },
+      tabProps: {
+        setSelectedTab: mockSetSelectedTab,
+        selectedTabIndex: 0,
+      },
+    }));
+
+    render(<MessageFeed />);
+
+    act(() => {
+      jest.runAllTimers();
+    });
+
+    expect(
+      mockUseTabs.mock.calls[mockUseTabs.mock.calls.length - 1][0].tabs[0]
+        .children.props
+    ).toEqual(
+      expect.objectContaining({
+        buyerOnly: true,
+      })
+    );
   });
 
   test("subscribes to route changes on mount and cleans up on unmount", () => {
