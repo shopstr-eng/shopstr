@@ -829,6 +829,127 @@ export function transferFailureAlertEmail(params: {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Affiliate program emails
+// ---------------------------------------------------------------------------
+
+function formatPayoutAmount(amountSmallest: number, currency: string): string {
+  const c = currency.toLowerCase();
+  if (c === "sats") return `${amountSmallest.toLocaleString()} sats`;
+  // Treat everything else as a fiat ISO code with cents.
+  const major = (amountSmallest / 100).toFixed(2);
+  return `${major} ${currency.toUpperCase()}`;
+}
+
+function unsubscribeFooter(unsubscribeUrl?: string | null): string {
+  if (!unsubscribeUrl) return "";
+  return `
+    <p style="margin:16px 0 0;color:#9ca3af;font-size:12px;line-height:1.5;">
+      Don't want these emails?
+      <a href="${esc(unsubscribeUrl)}" style="color:#6b7280;text-decoration:underline;">Unsubscribe in one click</a>.
+    </p>`;
+}
+
+export function affiliatePaidEmail(params: {
+  affiliateName: string;
+  amountSmallest: number;
+  currency: string;
+  method: "stripe" | "lightning" | "manual";
+  externalRef?: string | null;
+  unsubscribeUrl?: string | null;
+}): { subject: string; html: string; headers?: Record<string, string> } {
+  const amount = formatPayoutAmount(params.amountSmallest, params.currency);
+  const methodLabel =
+    params.method === "stripe"
+      ? "Stripe Connect"
+      : params.method === "lightning"
+        ? "Lightning"
+        : "manual settlement";
+  const ref = params.externalRef
+    ? `<p style="margin:0 0 8px;color:#6b7280;font-size:13px;">Reference: <code>${esc(params.externalRef)}</code></p>`
+    : "";
+  const body = `
+    <h2 style="margin:0 0 16px;color:#111827;font-size:20px;font-weight:700;">You just got paid</h2>
+    <p style="margin:0 0 16px;color:#374151;font-size:15px;line-height:1.6;">
+      Hi ${esc(params.affiliateName)}, an affiliate payout of
+      <strong>${esc(amount)}</strong> was just sent to you via ${esc(methodLabel)}.
+    </p>
+    ${ref}
+    <p style="margin:0;color:#6b7280;font-size:13px;line-height:1.5;">
+      Funds typically appear in your account within 1–2 business days for
+      Stripe, or instantly for Lightning. Reach out to the seller if you
+      don't see them.
+    </p>
+    ${unsubscribeFooter(params.unsubscribeUrl)}`;
+  return {
+    subject: `${BRAND_NAME} — Affiliate payout sent (${amount})`,
+    html: baseTemplate("Affiliate payout sent", body),
+    headers: params.unsubscribeUrl
+      ? {
+          "List-Unsubscribe": `<${params.unsubscribeUrl}>`,
+          "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+        }
+      : undefined,
+  };
+}
+
+export function affiliatePausedToAffiliateEmail(params: {
+  affiliateName: string;
+  reason: string;
+  unsubscribeUrl?: string | null;
+}): { subject: string; html: string; headers?: Record<string, string> } {
+  const body = `
+    <h2 style="margin:0 0 16px;color:#111827;font-size:20px;font-weight:700;">Your payouts have been paused</h2>
+    <p style="margin:0 0 16px;color:#374151;font-size:15px;line-height:1.6;">
+      Hi ${esc(params.affiliateName)}, automated payouts on your affiliate
+      account have been paused after several consecutive failures.
+    </p>
+    <p style="margin:0 0 16px;color:#374151;font-size:15px;line-height:1.6;">
+      Last error reported: <em>${esc(params.reason)}</em>
+    </p>
+    <p style="margin:0;color:#6b7280;font-size:13px;line-height:1.5;">
+      Please open your affiliate self-service link and double-check your
+      Lightning address or Stripe Connect account, then reach out to the
+      seller to re-enable payouts.
+    </p>
+    ${unsubscribeFooter(params.unsubscribeUrl)}`;
+  return {
+    subject: `${BRAND_NAME} — Affiliate payouts paused`,
+    html: baseTemplate("Affiliate payouts paused", body),
+    headers: params.unsubscribeUrl
+      ? {
+          "List-Unsubscribe": `<${params.unsubscribeUrl}>`,
+          "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+        }
+      : undefined,
+  };
+}
+
+export function affiliatePausedToSellerEmail(params: {
+  affiliateName: string;
+  reason: string;
+  failureCount: number;
+}): { subject: string; html: string } {
+  const body = `
+    <h2 style="margin:0 0 16px;color:#111827;font-size:20px;font-weight:700;">Affiliate payouts paused</h2>
+    <p style="margin:0 0 16px;color:#374151;font-size:15px;line-height:1.6;">
+      Automated payouts to your affiliate <strong>${esc(params.affiliateName)}</strong>
+      have been paused after ${params.failureCount} consecutive failed
+      attempts.
+    </p>
+    <p style="margin:0 0 16px;color:#374151;font-size:15px;line-height:1.6;">
+      Last error: <em>${esc(params.reason)}</em>
+    </p>
+    <p style="margin:0;color:#6b7280;font-size:13px;line-height:1.5;">
+      Open the Affiliates tab in your dashboard to investigate and
+      re-enable payouts once the underlying issue is resolved.
+    </p>`;
+  return {
+    subject: `${BRAND_NAME} — Affiliate payouts paused (${esc(params.affiliateName)})`,
+    html: baseTemplate("Affiliate payouts paused", body),
+  };
+}
+
 export function accountRecoveryEmail(params: { recoveryLink: string }): {
   subject: string;
   html: string;

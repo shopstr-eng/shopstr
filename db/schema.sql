@@ -459,3 +459,207 @@ CREATE TABLE IF NOT EXISTS inventory_log (
 
 CREATE INDEX IF NOT EXISTS idx_inventory_log_product_id ON inventory_log(product_id);
 CREATE INDEX IF NOT EXISTS idx_inventory_log_order_id ON inventory_log(order_id);
+
+-- ============================================================================
+-- Affiliate program: seller-managed referral codes/links with configurable
+-- buyer discounts, affiliate rebates, payout schedules, and connected payout
+-- destinations (lightning address or Stripe Connect account). When no payout
+-- destination is set, balances accrue for out-of-band manual settlement.
+-- ============================================================================
+
+-- Affiliate identity. Created by the seller, optionally claimed by the
+-- affiliate via a unique invite token to set their own payout method.
+CREATE TABLE IF NOT EXISTS affiliates (
+    id SERIAL PRIMARY KEY,
+    seller_pubkey TEXT NOT NULL,
+    name TEXT NOT NULL,
+    email TEXT,
+    -- Affiliate's own platform pubkey (only set when they claim the invite
+    -- and sign in). Used to gate the self-service page after claim.
+    affiliate_pubkey TEXT,
+    -- Single-use-ish opaque token used in the affiliate self-service URL.
+    invite_token TEXT NOT NULL UNIQUE,
+    invite_claimed_at TIMESTAMP,
+    -- Payout destinations (either, both, or neither may be set).
+    lightning_address TEXT,
+    stripe_account_id TEXT,
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Defaults for the failure-tracking columns added below in the migration
+-- block. Listed inline as well so freshly-created databases get them on the
+-- first CREATE TABLE pass.
+ALTER TABLE affiliates ADD COLUMN IF NOT EXISTS payouts_enabled BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE affiliates ADD COLUMN IF NOT EXISTS payout_failure_count INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE affiliates ADD COLUMN IF NOT EXISTS last_payout_failure_at TIMESTAMP;
+ALTER TABLE affiliates ADD COLUMN IF NOT EXISTS last_payout_failure_reason TEXT;
+ALTER TABLE affiliates ADD COLUMN IF NOT EXISTS email_notifications_enabled BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE affiliates ADD COLUMN IF NOT EXISTS stripe_charges_enabled BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE affiliates ADD COLUMN IF NOT EXISTS stripe_payouts_enabled BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE affiliates ADD COLUMN IF NOT EXISTS stripe_onboarding_complete BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- Lightweight click-through tracking for affiliate links. One row per page
+-- impression where ?ref=CODE was present. Keeps just enough metadata to
+-- compute conversion rate; intentionally no IP, no user-agent fingerprint.
+CREATE TABLE IF NOT EXISTS affiliate_clicks (
+    id BIGSERIAL PRIMARY KEY,
+    seller_pubkey TEXT NOT NULL,
+    code TEXT NOT NULL,
+    landing_path TEXT,
+    referer_host TEXT,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_affiliate_clicks_seller_code
+  ON affiliate_clicks(seller_pubkey, code);
+CREATE INDEX IF NOT EXISTS idx_affiliate_clicks_created_at
+  ON affiliate_clicks(created_at);
+
+CREATE INDEX IF NOT EXISTS idx_affiliates_seller_pubkey ON affiliates(seller_pubkey);
+CREATE INDEX IF NOT EXISTS idx_affiliates_invite_token ON affiliates(invite_token);
+CREATE INDEX IF NOT EXISTS idx_affiliates_affiliate_pubkey ON affiliates(affiliate_pubkey);
+
+-- Referral codes/links bound to an affiliate. A single affiliate can own
+-- many codes (e.g. for different campaigns).
+CREATE TABLE IF NOT EXISTS affiliate_codes (
+    id SERIAL PRIMARY KEY,
+    affiliate_id INTEGER NOT NULL REFERENCES affiliates(id) ON DELETE CASCADE,
+    seller_pubkey TEXT NOT NULL,
+    code TEXT NOT NULL,
+    -- Affiliate rebate (commission) applied to the seller's net subtotal.
+    rebate_type TEXT NOT NULL CHECK (rebate_type IN ('percent', 'fixed')),
+    rebate_value NUMERIC(12,2) NOT NULL CHECK (rebate_value >= 0),
+    -- Buyer discount applied at checkout.
+    buyer_discount_type TEXT NOT NULL DEFAULT 'percent' CHECK (buyer_discount_type IN ('percent', 'fixed')),
+    buyer_discount_value NUMERIC(12,2) NOT NULL DEFAULT 0 CHECK (buyer_discount_value >= 0),
+    -- Currency hint for fixed-amount values (uses seller's primary currency
+    -- when null; sats are also supported for bitcoin orders).
+    currency TEXT,
+    -- Payout cadence for accrued affiliate rebates. Real-time payouts were
+    -- removed to make refund clawbacks deterministic — everything accrues and
+    -- is settled in batch by the cron at the configured cadence.
+    payout_schedule TEXT NOT NULL DEFAULT 'monthly' CHECK (payout_schedule IN ('weekly', 'biweekly', 'monthly')),
+    expiration BIGINT,
+    max_uses INTEGER,
+    times_used INTEGER NOT NULL DEFAULT 0,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(seller_pubkey, code)
+);
+
+CREATE INDEX IF NOT EXISTS idx_affiliate_codes_seller_pubkey ON affiliate_codes(seller_pubkey);
+CREATE INDEX IF NOT EXISTS idx_affiliate_codes_affiliate_id ON affiliate_codes(affiliate_id);
+CREATE INDEX IF NOT EXISTS idx_affiliate_codes_code ON affiliate_codes(code);
+
+-- One row per attributed sale. The rebate is captured at order time and
+-- moves through the lifecycle pending -> payable -> paid (or skipped on
+-- refund/cancel).
+CREATE TABLE IF NOT EXISTS affiliate_referrals (
+    id SERIAL PRIMARY KEY,
+    affiliate_id INTEGER NOT NULL REFERENCES affiliates(id) ON DELETE CASCADE,
+    code_id INTEGER NOT NULL REFERENCES affiliate_codes(id) ON DELETE CASCADE,
+    seller_pubkey TEXT NOT NULL,
+    order_id TEXT NOT NULL,
+    payment_rail TEXT NOT NULL CHECK (payment_rail IN ('stripe', 'bitcoin')),
+    -- Order subtotal in smallest units of `currency` (cents for fiat, sats
+    -- for sats). The rebate amount is precomputed using the code config.
+    gross_subtotal_smallest NUMERIC(20,0) NOT NULL,
+    buyer_discount_smallest NUMERIC(20,0) NOT NULL DEFAULT 0,
+    rebate_smallest NUMERIC(20,0) NOT NULL DEFAULT 0,
+    currency TEXT NOT NULL,
+    -- Payout state machine.
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'payable', 'paid', 'cancelled', 'refunded')),
+    -- Set when this referral has been paid out by the scheduled cron job.
+    payout_id INTEGER,
+    -- Reserved column kept for back-compat. Real-time payouts were removed.
+    realtime_transfer_ref TEXT,
+    -- Refund/clawback bookkeeping. When the order is refunded after the
+    -- referral has already been paid out, we mark the original 'paid'
+    -- referral as 'refunded' and record the refunded amount + Stripe ref.
+    refunded_smallest NUMERIC(20,0) NOT NULL DEFAULT 0,
+    refund_event_ref TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(order_id, code_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_affiliate_referrals_affiliate_id ON affiliate_referrals(affiliate_id);
+CREATE INDEX IF NOT EXISTS idx_affiliate_referrals_seller_pubkey ON affiliate_referrals(seller_pubkey);
+CREATE INDEX IF NOT EXISTS idx_affiliate_referrals_status ON affiliate_referrals(status);
+CREATE INDEX IF NOT EXISTS idx_affiliate_referrals_order_id ON affiliate_referrals(order_id);
+
+-- Aggregated payout records. A payout groups one or more referrals into
+-- a single settlement (real-time, scheduled, or marked-as-paid manually).
+CREATE TABLE IF NOT EXISTS affiliate_payouts (
+    id SERIAL PRIMARY KEY,
+    affiliate_id INTEGER NOT NULL REFERENCES affiliates(id) ON DELETE CASCADE,
+    seller_pubkey TEXT NOT NULL,
+    method TEXT NOT NULL CHECK (method IN ('stripe', 'lightning', 'manual')),
+    amount_smallest NUMERIC(20,0) NOT NULL,
+    currency TEXT NOT NULL,
+    -- External reference: stripe transfer id, LN payment hash, or free-form
+    -- note for manual payouts.
+    external_ref TEXT,
+    note TEXT,
+    status TEXT NOT NULL DEFAULT 'paid' CHECK (status IN ('paid', 'failed')),
+    paid_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_affiliate_payouts_affiliate_id ON affiliate_payouts(affiliate_id);
+CREATE INDEX IF NOT EXISTS idx_affiliate_payouts_seller_pubkey ON affiliate_payouts(seller_pubkey);
+
+-- ============================================================================
+-- Affiliate program migration: tighten payout schedule to weekly/biweekly/
+-- monthly (real-time rebates removed), add 'refunded' status + clawback
+-- columns. Idempotent so existing databases can be re-applied safely.
+-- ============================================================================
+DO $aff_migrate$
+BEGIN
+  -- Map deprecated schedules onto the new defaults.
+  EXECUTE 'UPDATE affiliate_codes SET payout_schedule = ''monthly'' WHERE payout_schedule IN (''every_sale'', ''daily'')';
+  -- Replace the old CHECK constraint.
+  IF EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'affiliate_codes_payout_schedule_check'
+  ) THEN
+    ALTER TABLE affiliate_codes DROP CONSTRAINT affiliate_codes_payout_schedule_check;
+  END IF;
+  ALTER TABLE affiliate_codes
+    ADD CONSTRAINT affiliate_codes_payout_schedule_check
+    CHECK (payout_schedule IN ('weekly', 'biweekly', 'monthly'));
+  ALTER TABLE affiliate_codes ALTER COLUMN payout_schedule SET DEFAULT 'monthly';
+
+  -- Refund/clawback columns on referrals.
+  ALTER TABLE affiliate_referrals
+    ADD COLUMN IF NOT EXISTS refunded_smallest NUMERIC(20,0) NOT NULL DEFAULT 0;
+  ALTER TABLE affiliate_referrals
+    ADD COLUMN IF NOT EXISTS refund_event_ref TEXT;
+  -- Allow 'refunded' status.
+  IF EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'affiliate_referrals_status_check'
+  ) THEN
+    ALTER TABLE affiliate_referrals DROP CONSTRAINT affiliate_referrals_status_check;
+  END IF;
+  ALTER TABLE affiliate_referrals
+    ADD CONSTRAINT affiliate_referrals_status_check
+    CHECK (status IN ('pending', 'payable', 'paid', 'cancelled', 'refunded'));
+
+  -- Payout enable/disable flag + failure tracking on affiliates.
+  ALTER TABLE affiliates
+    ADD COLUMN IF NOT EXISTS payouts_enabled BOOLEAN NOT NULL DEFAULT TRUE;
+  ALTER TABLE affiliates
+    ADD COLUMN IF NOT EXISTS payout_failure_count INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE affiliates
+    ADD COLUMN IF NOT EXISTS last_payout_failure_at TIMESTAMP;
+  ALTER TABLE affiliates
+    ADD COLUMN IF NOT EXISTS last_payout_failure_reason TEXT;
+
+  -- Case-insensitive uniqueness for affiliate codes scoped per seller. The
+  -- existing UNIQUE(seller_pubkey, code) is case-sensitive; this functional
+  -- index closes the gap so 'SAVE10' and 'save10' can't both exist.
+  CREATE UNIQUE INDEX IF NOT EXISTS uniq_affiliate_codes_seller_upper_code
+    ON affiliate_codes (seller_pubkey, UPPER(code));
+END
+$aff_migrate$;

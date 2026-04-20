@@ -12,6 +12,11 @@ interface SellerSplit {
   accountId?: string;
   donationPercent?: number;
   donationCutSmallest?: number;
+  affiliateRebateSmallest?: number;
+  affiliateAccountId?: string | null;
+  affiliateId?: number | null;
+  affiliateCodeId?: number | null;
+  affiliateCode?: string | null;
 }
 import { applyRateLimit } from "@/utils/rate-limit";
 import { withStripeRetry } from "@/utils/stripe/retry-service";
@@ -19,6 +24,7 @@ import {
   resolveDonationCut,
   computeDonationCutSmallest,
 } from "@/utils/stripe/donation";
+import { recordReferral } from "@/utils/db/affiliates";
 
 // Rate limit: per-IP cap to bound abuse of payment endpoints.
 const RATE_LIMIT = { limit: 30, windowMs: 60000 };
@@ -58,6 +64,11 @@ export default async function handler(
     }
 
     const transferCurrency = paymentIntent.currency;
+    // Order id used for affiliate idempotency. Fall back to the PI id so we
+    // still get a stable unique key even when no orderId metadata was set.
+    const orderId =
+      (paymentIntent.metadata && paymentIntent.metadata.orderId) ||
+      paymentIntentId;
 
     const results: {
       sellerPubkey: string;
@@ -66,6 +77,10 @@ export default async function handler(
       skipped?: boolean;
       donationCutSmallest?: number;
       transferredAmount?: number;
+      affiliateTransferId?: string;
+      affiliateRebateSmallest?: number;
+      affiliateAccrued?: boolean;
+      affiliateError?: string;
     }[] = [];
 
     for (const split of sellerSplits) {
@@ -128,7 +143,18 @@ export default async function handler(
         donationCut = resolved.cutSmallest;
       }
 
-      const transferAmount = Math.max(split.amountCents - donationCut, 0);
+      // Affiliate rebate: cap so the seller still keeps at least 1 unit after
+      // donation + rebate. The create-payment-intent endpoint already capped
+      // this; we re-cap defensively in case process-transfers is called with
+      // a stale or hand-rolled payload.
+      const requestedRebate = Math.max(split.affiliateRebateSmallest ?? 0, 0);
+      const maxAllowedRebate = Math.max(split.amountCents - donationCut - 1, 0);
+      const affiliateRebate = Math.min(requestedRebate, maxAllowedRebate);
+
+      const transferAmount = Math.max(
+        split.amountCents - donationCut - affiliateRebate,
+        0
+      );
       if (transferAmount <= 0) {
         results.push({
           sellerPubkey: split.sellerPubkey,
@@ -162,12 +188,45 @@ export default async function handler(
           )
         );
 
-        results.push({
+        const result: (typeof results)[number] = {
           sellerPubkey: split.sellerPubkey,
           transferId: transfer.id,
           donationCutSmallest: donationCut,
           transferredAmount: transferAmount,
-        });
+          affiliateRebateSmallest: affiliateRebate,
+        };
+
+        // Real-time affiliate transfers were removed. Always accrue the
+        // rebate server-side via recordReferral so the scheduler can settle
+        // it on the configured cadence — this keeps refund clawbacks
+        // deterministic. We do this on the server (not the client) so the
+        // referral is recorded even if the buyer closes the tab.
+        if (affiliateRebate > 0 && split.affiliateId && split.affiliateCodeId) {
+          try {
+            await recordReferral({
+              affiliateId: split.affiliateId,
+              codeId: split.affiliateCodeId,
+              sellerPubkey: split.sellerPubkey,
+              orderId,
+              paymentRail: "stripe",
+              grossSubtotalSmallest: split.amountCents,
+              buyerDiscountSmallest: 0,
+              rebateSmallest: affiliateRebate,
+              currency: transferCurrency,
+              initialStatus: "pending",
+              realtimeTransferRef: null,
+            });
+            result.affiliateAccrued = true;
+            result.affiliateRebateSmallest = affiliateRebate;
+          } catch (e) {
+            result.affiliateError =
+              e instanceof Error
+                ? e.message
+                : "Affiliate referral record failed";
+          }
+        }
+
+        results.push(result);
       } catch (transferError) {
         console.error(
           `Transfer failed for seller ${split.sellerPubkey}:`,

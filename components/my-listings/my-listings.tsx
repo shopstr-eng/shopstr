@@ -12,6 +12,7 @@ import { ShopMapContext } from "@/utils/context/context";
 import { ShopProfile } from "../../utils/types/types";
 import { sanitizeUrl } from "@braintree/sanitize-url";
 import DiscountCodes from "./discount-codes";
+import Affiliates from "./affiliates";
 import StripeConnectBanner from "@/components/stripe-connect/StripeConnectBanner";
 
 const MyListingsPage = () => {
@@ -102,6 +103,15 @@ const MyListingsPage = () => {
         <Button
           className="w-full bg-transparent px-4 py-2 text-left text-sm font-bold text-black hover:bg-gray-100"
           onClick={() => {
+            setSelectedSection("Affiliates");
+            setIsMobileMenuOpen(false);
+          }}
+        >
+          Affiliates
+        </Button>
+        <Button
+          className="w-full bg-transparent px-4 py-2 text-left text-sm font-bold text-black hover:bg-gray-100"
+          onClick={() => {
             handleViewOrders();
             setIsMobileMenuOpen(false);
           }}
@@ -175,6 +185,16 @@ const MyListingsPage = () => {
                 Discounts
               </Button>
               <Button
+                className={`bg-transparent px-0 text-lg font-bold ${
+                  selectedSection === "Affiliates"
+                    ? "border-b-4 border-black text-black"
+                    : "text-gray-500 hover:text-black"
+                }`}
+                onClick={() => setSelectedSection("Affiliates")}
+              >
+                Affiliates
+              </Button>
+              <Button
                 className="bg-transparent px-0 text-lg font-bold text-gray-500 hover:text-black"
                 onClick={() => handleViewOrders()}
               >
@@ -239,6 +259,7 @@ const MyListingsPage = () => {
             )}
           </div>
           {usersPubkey && selectedSection === "Discounts" && <DiscountCodes />}
+          {usersPubkey && selectedSection === "Affiliates" && <Affiliates />}
         </div>
       </div>
       <SignInModal isOpen={isOpen} onClose={onClose} />

@@ -19,6 +19,16 @@ interface SellerSplit {
   // Legacy raw-amount field, kept for back-compat with any older callers.
   amount?: number;
   currency: string;
+  // Optional affiliate attribution — when present, the seller's share will be
+  // reduced by `affiliateRebateSmallest` and that amount will be transferred
+  // to `affiliateAccountId` (Stripe Connect) by process-transfers. If no
+  // account is connected we still record the rebate in metadata so it can
+  // accrue to the affiliate's balance.
+  affiliateRebateSmallest?: number;
+  affiliateAccountId?: string | null;
+  affiliateId?: number;
+  affiliateCodeId?: number;
+  affiliateCode?: string;
 }
 import { applyRateLimit } from "@/utils/rate-limit";
 import {
@@ -79,6 +89,11 @@ export default async function handler(
       accountId: string;
       donationPercent: number;
       donationCutSmallest: number;
+      affiliateRebateSmallest: number;
+      affiliateAccountId: string | null;
+      affiliateId: number | null;
+      affiliateCodeId: number | null;
+      affiliateCode: string | null;
     }[] = [];
 
     if (isMultiMerchant) {
@@ -142,6 +157,20 @@ export default async function handler(
           accountId,
           donationPercent,
           donationCutSmallest,
+          affiliateRebateSmallest:
+            typeof split.affiliateRebateSmallest === "number"
+              ? Math.max(
+                  0,
+                  Math.min(
+                    split.affiliateRebateSmallest,
+                    Math.max(splitAmountSmallest - donationCutSmallest - 1, 0)
+                  )
+                )
+              : 0,
+          affiliateAccountId: split.affiliateAccountId ?? null,
+          affiliateId: split.affiliateId ?? null,
+          affiliateCodeId: split.affiliateCodeId ?? null,
+          affiliateCode: split.affiliateCode ?? null,
         });
       }
 
@@ -180,6 +209,11 @@ export default async function handler(
               accountId: s.accountId,
               donationPercent: s.donationPercent,
               donationCutSmallest: s.donationCutSmallest,
+              affiliateRebateSmallest: s.affiliateRebateSmallest,
+              affiliateAccountId: s.affiliateAccountId,
+              affiliateId: s.affiliateId,
+              affiliateCodeId: s.affiliateCodeId,
+              affiliateCode: s.affiliateCode,
             }))
           ),
         },
@@ -239,6 +273,11 @@ export default async function handler(
           accountId: s.accountId,
           donationPercent: s.donationPercent,
           donationCutSmallest: s.donationCutSmallest,
+          affiliateRebateSmallest: s.affiliateRebateSmallest,
+          affiliateAccountId: s.affiliateAccountId,
+          affiliateId: s.affiliateId,
+          affiliateCodeId: s.affiliateCodeId,
+          affiliateCode: s.affiliateCode,
         })),
       });
     }

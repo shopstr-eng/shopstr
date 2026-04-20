@@ -13,6 +13,9 @@ import {
   paymentFailedBuyerEmail,
   paymentFailedSellerEmail,
   transferFailureAlertEmail,
+  affiliatePaidEmail,
+  affiliatePausedToAffiliateEmail,
+  affiliatePausedToSellerEmail,
   OrderEmailParams,
   SubscriptionEmailParams,
 } from "./email-templates";
@@ -21,7 +24,8 @@ export async function sendEmail(
   to: string,
   subject: string,
   html: string,
-  replyTo?: string
+  replyTo?: string,
+  headers?: Record<string, string>
 ): Promise<boolean> {
   try {
     const { client, fromEmail } = await getUncachableSendGridClient();
@@ -33,6 +37,11 @@ export async function sendEmail(
     };
     if (replyTo) {
       msg.replyTo = replyTo;
+    }
+    if (headers && Object.keys(headers).length > 0) {
+      // SendGrid honors RFC headers passed via the `headers` field. Required
+      // for List-Unsubscribe / RFC 8058 one-click compliance on Gmail/Yahoo.
+      msg.headers = headers;
     }
     await client.send(msg);
     return true;
@@ -177,6 +186,45 @@ export async function sendPaymentFailedToSeller(
   }
 ): Promise<boolean> {
   const { subject, html } = paymentFailedSellerEmail(params);
+  return sendEmail(sellerEmail, subject, html);
+}
+
+export async function sendAffiliatePaidEmail(
+  affiliateEmail: string,
+  params: {
+    affiliateName: string;
+    amountSmallest: number;
+    currency: string;
+    method: "stripe" | "lightning" | "manual";
+    externalRef?: string | null;
+    unsubscribeUrl?: string | null;
+  }
+): Promise<boolean> {
+  const { subject, html, headers } = affiliatePaidEmail(params);
+  return sendEmail(affiliateEmail, subject, html, undefined, headers);
+}
+
+export async function sendAffiliatePausedToAffiliate(
+  affiliateEmail: string,
+  params: {
+    affiliateName: string;
+    reason: string;
+    unsubscribeUrl?: string | null;
+  }
+): Promise<boolean> {
+  const { subject, html, headers } = affiliatePausedToAffiliateEmail(params);
+  return sendEmail(affiliateEmail, subject, html, undefined, headers);
+}
+
+export async function sendAffiliatePausedToSeller(
+  sellerEmail: string,
+  params: {
+    affiliateName: string;
+    reason: string;
+    failureCount: number;
+  }
+): Promise<boolean> {
+  const { subject, html } = affiliatePausedToSellerEmail(params);
   return sendEmail(sellerEmail, subject, html);
 }
 

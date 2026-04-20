@@ -8,7 +8,7 @@ export const SIGNED_HTTP_REQUEST_KIND = 27235;
 export const SIGNED_HTTP_REQUEST_MAX_AGE_SECONDS = 300;
 
 type ProofValue = string | number | null | undefined;
-type ProofMethod = "GET" | "POST" | "DELETE";
+type ProofMethod = "GET" | "POST" | "PATCH" | "DELETE";
 
 export type SignedHttpRequestProof = {
   action: string;
@@ -320,6 +320,222 @@ export function buildListFailedRelayPublishesProof(
     method: "GET",
     path: "/api/db/get-failed-publishes",
     pubkey,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Affiliate program proofs (seller-side CRUD + payout management)
+// ---------------------------------------------------------------------------
+
+export function buildAffiliatesListProof(
+  pubkey: string
+): SignedHttpRequestProof {
+  return {
+    action: "list_affiliates",
+    method: "GET",
+    path: "/api/affiliates/manage",
+    pubkey,
+  };
+}
+
+export function buildAffiliateCreateProof({
+  pubkey,
+  name,
+}: {
+  pubkey: string;
+  name: string;
+}): SignedHttpRequestProof {
+  return {
+    action: "create_affiliate",
+    method: "POST",
+    path: "/api/affiliates/manage",
+    pubkey,
+    fields: { name },
+  };
+}
+
+export function buildAffiliateUpdateProof({
+  pubkey,
+  affiliateId,
+}: {
+  pubkey: string;
+  affiliateId: number;
+}): SignedHttpRequestProof {
+  return {
+    action: "update_affiliate",
+    method: "PATCH",
+    path: "/api/affiliates/manage",
+    pubkey,
+    fields: { affiliateId },
+  };
+}
+
+export function buildAffiliateDeleteProof({
+  pubkey,
+  affiliateId,
+}: {
+  pubkey: string;
+  affiliateId: number;
+}): SignedHttpRequestProof {
+  return {
+    action: "delete_affiliate",
+    method: "DELETE",
+    path: "/api/affiliates/manage",
+    pubkey,
+    fields: { affiliateId },
+  };
+}
+
+export function buildAffiliateCodeCreateProof({
+  pubkey,
+  affiliateId,
+  code,
+}: {
+  pubkey: string;
+  affiliateId: number;
+  code: string;
+}): SignedHttpRequestProof {
+  return {
+    action: "create_affiliate_code",
+    method: "POST",
+    path: "/api/affiliates/codes",
+    pubkey,
+    fields: { affiliateId, code },
+  };
+}
+
+export function buildAffiliateCodeUpdateProof({
+  pubkey,
+  codeId,
+}: {
+  pubkey: string;
+  codeId: number;
+}): SignedHttpRequestProof {
+  return {
+    action: "update_affiliate_code",
+    method: "PATCH",
+    path: "/api/affiliates/codes",
+    pubkey,
+    fields: { codeId },
+  };
+}
+
+export function buildAffiliateCodeDeleteProof({
+  pubkey,
+  codeId,
+}: {
+  pubkey: string;
+  codeId: number;
+}): SignedHttpRequestProof {
+  return {
+    action: "delete_affiliate_code",
+    method: "DELETE",
+    path: "/api/affiliates/codes",
+    pubkey,
+    fields: { codeId },
+  };
+}
+
+export function buildAffiliateCodesListProof(
+  pubkey: string
+): SignedHttpRequestProof {
+  return {
+    action: "list_affiliate_codes",
+    method: "GET",
+    path: "/api/affiliates/codes",
+    pubkey,
+  };
+}
+
+export function buildAffiliatePayoutsListProof(
+  pubkey: string
+): SignedHttpRequestProof {
+  return {
+    action: "list_affiliate_payouts",
+    method: "GET",
+    path: "/api/affiliates/payouts",
+    pubkey,
+  };
+}
+
+export function buildAffiliateMarkPaidProof({
+  pubkey,
+  affiliateId,
+  amountSmallest,
+  currency,
+}: {
+  pubkey: string;
+  affiliateId: number;
+  amountSmallest: number;
+  currency: string;
+}): SignedHttpRequestProof {
+  return {
+    action: "mark_affiliate_paid",
+    method: "POST",
+    path: "/api/affiliates/mark-paid",
+    pubkey,
+    fields: { affiliateId, amountSmallest, currency },
+  };
+}
+
+export function buildAffiliateProcessPayoutsProof({
+  pubkey,
+  schedule,
+}: {
+  pubkey: string;
+  schedule: string;
+}): SignedHttpRequestProof {
+  return {
+    action: "process_affiliate_payouts",
+    method: "POST",
+    path: "/api/affiliates/process-payouts",
+    pubkey,
+    fields: { schedule },
+  };
+}
+
+export function buildAffiliateReverseReferralProof({
+  pubkey,
+  orderId,
+  sellerPubkey,
+}: {
+  pubkey: string;
+  orderId: string;
+  sellerPubkey: string;
+}): SignedHttpRequestProof {
+  return {
+    action: "reverse_affiliate_referral",
+    method: "POST",
+    path: "/api/affiliates/reverse-referral",
+    pubkey,
+    fields: { orderId, sellerPubkey },
+  };
+}
+
+export function buildAffiliateClickStatsProof(
+  pubkey: string
+): SignedHttpRequestProof {
+  return {
+    action: "list_affiliate_click_stats",
+    method: "GET",
+    path: "/api/affiliates/click-stats",
+    pubkey,
+  };
+}
+
+export function buildAffiliateClaimUpdateProof({
+  pubkey,
+  inviteToken,
+}: {
+  pubkey: string;
+  inviteToken: string;
+}): SignedHttpRequestProof {
+  return {
+    action: "update_affiliate_claim",
+    method: "POST",
+    path: "/api/affiliates/claim",
+    pubkey,
+    fields: { inviteToken },
   };
 }
 

@@ -282,3 +282,94 @@ API keys are created via the `/settings/api-keys` UI page, the `/api/mcp/api-key
 - **Turbopack**: Dev server uses Turbopack (Next.js default) instead of webpack for significantly faster compilation (~36s vs ~87s initial, sub-second subsequent).
 - **PWA disabled in dev**: Service worker and PWA caching are disabled via `next.config.mjs` in development.
 - **Flow scheduler disabled in dev**: Email flow scheduler skipped in development to reduce memory pressure.
+
+## Affiliate / Referral System
+
+Seller-managed affiliate links and codes that work for both Stripe and Bitcoin/Cashu payments.
+
+### Data model (`db/schema.sql`, `utils/db/affiliates.ts`)
+
+- `affiliates` — seller-owned affiliate record (name, email, optional pubkey, lightning address, Stripe Connect id, balance, invite token, `payouts_enabled`).
+- `affiliate_codes` — one or more codes per affiliate with rebate (percent/fixed) + buyer discount (percent/fixed), expiry, max uses, and a `payout_schedule` ∈ {`weekly`, `biweekly`, `monthly`} (default `monthly`).
+- `affiliate_referrals` — one row per (order, code); tracks gross/net/rebate/buyer-discount in smallest units, payment rail, status (`pending` → `payable` → `paid`, plus `cancelled`/`refunded`), `refunded_smallest`, `refund_event_ref`. Unique on `(order_id, code_id)` so re-posts are idempotent.
+- `affiliate_payouts` — settled payout batches (Stripe transfer id, lightning preimage, or manual mark-paid).
+
+### API endpoints (`pages/api/affiliates/`)
+
+- `manage` (CRUD seller affiliates), `codes` (CRUD codes), `validate` (public buyer validation), `claim` (affiliate self-service via invite token; signed-pubkey proof required for any update after the first claim), `payouts` (seller view), `mark-paid` (manual settlement), `record-referral` (server-first attribution; atomic max_uses + idempotent), `process-payouts` (cron, `Authorization: Bearer $AFFILIATE_PAYOUT_CRON_SECRET`, advisory-locked per schedule, supports `?dryRun=1`), `self-stats` (token-gated affiliate dashboard data — balances + recent payouts), `stripe-onboarding` (creates a Stripe Express account on the affiliate's behalf and returns an Account Link URL), `ytd-payouts` (seller-scoped year-to-date paid totals with US 1099-NEC threshold flagging at $600).
+
+### Payment integration
+
+- `pages/api/stripe/create-payment-intent.ts` accepts per-seller `affiliateRebateSmallest`, `affiliateAccountId`, `affiliateId`, `affiliateCodeId`, `affiliateCode`.
+- `pages/api/stripe/process-transfers.ts` caps the rebate (seller keeps ≥1 unit after donation+rebate), subtracts rebate from the seller transfer, and calls `recordReferral` server-side (initial status `pending`). Real-time affiliate Stripe transfers were removed so refunds remain reversible during the hold window.
+- `pages/api/stripe/webhook.ts` handles `charge.refunded` and calls `reverseReferralsForOrder`, which cancels still-pending referrals and marks already-paid ones as `refunded` for out-of-band reconciliation.
+- Cashu/Lightning orders accrue to balance via the cart's record-referral call and are paid out by the cron once they age past `PAYOUT_HOLD_DAYS` for their code's schedule.
+
+### Anti-abuse
+
+- Self-referral blocked at both invite-claim time (`updateAffiliatePayoutMethod`) and referral-record time (`record-referral`).
+- `recordReferral` runs in a transaction with `SELECT ... FOR UPDATE` on the code row, enforcing `max_uses` atomically and incrementing `times_used` only on first insert. `ON CONFLICT (order_id, code_id) DO NOTHING` plus a SELECT fallback prevents the browser from overwriting the server-written row.
+- `process-payouts` takes a per-schedule Postgres advisory lock (weekly=91001, biweekly=91002, monthly=91003), enforces a min payout floor (100 sats / 50¢), and skips affiliates with `payouts_enabled = false`.
+
+### UI
+
+- `components/my-listings/affiliates.tsx` — seller dashboard with 4 tabs (Affiliates, Codes, Balances, Payouts), wired into `my-listings.tsx`. Schedule picker is weekly/biweekly/monthly (default monthly).
+- `pages/affiliate/[token].tsx` — affiliate self-service page. Shows per-currency pending/ready/paid balances, a recent-payouts table, and a paused-state warning banner pulled from `/api/affiliates/self-stats`. Includes a "Set up Stripe Connect for me" button that calls `/api/affiliates/stripe-onboarding` to create the Express account and redirect to the Account Link.
+- `components/utility-components/affiliate-ref-tracker.tsx` — mounted in `pages/_app.tsx`; on any `?ref=CODE` URL stores the code in a 30-day `mm_aff_ref` cookie. The cookie is now a JSON map keyed by seller pubkey (with a `*` wildcard fallback) so a code captured on seller A's storefront is preferred for seller A's checkout and won't bleed onto seller B. `?ref_seller=PUBKEY` lets links bind explicitly.
+- `pages/cart/index.tsx` — on cart load, calls `getAffiliateRefCookie(sellerPubkey)` per seller and validates against `/api/affiliates/validate`.
+- `components/cart-invoice-card.tsx` — passes affiliate fields into the payment-intent body and per-seller splits. Cashu success still POSTs `/api/affiliates/record-referral` (server-side enforcement); Stripe success no longer does, since process-transfers + webhook are authoritative.
+
+### Hardening (per-affiliate locks, failure tracking, partial refunds)
+
+- `affiliates` table has `payouts_enabled`, `payout_failure_count`, `last_payout_failure_at`, `last_payout_failure_reason`. After `MAX_PAYOUT_FAILURES` (5) consecutive failures the cron auto-pauses the affiliate.
+- Functional unique index on `(seller_pubkey, UPPER(code))` prevents case-variant code collisions.
+- `process-payouts` now also takes a per-affiliate advisory lock (key `92_000_000 + id`) so two schedules can't double-pay the same affiliate. Each run emits structured `AFFILIATE_PAYOUT_RUN` / `AFFILIATE_PAYOUT_FAILURE` log lines and returns a per-affiliate summary.
+- `manage` endpoint adds a `PUT` action set: `regenerate-token`, `set-payouts-enabled`, and a 409-guarded `force-delete` (refuses while there are unsettled balances unless `force=true`).
+- `claim` GET masks the affiliate's email/lightning/Stripe id once the affiliate has claimed the link, so a leaked invite URL can't reveal contact info.
+- `validate` endpoint enforces a `currency` query param for fixed-amount codes (USD code rejected on a sats invoice and vice versa) and returns a uniform `{ valid: false }` shape on all failures. Cart now passes `currency` per seller.
+- Refund handling is partial-refund aware: `reverseReferralsForOrder` consumes `originalGrossSmallest` from the Stripe webhook, computes a refund ratio, and scales pending rebates proportionally; already-paid rebates are recorded as clawbacks for out-of-band reconciliation.
+- Pure helpers (`computeRefundRatio`, `computeClawbackSmallest`, `computeBuyerDiscountSmallest`, `computeRebateSmallest`, `isSelfReferral`) are covered by `__tests__/utils/db/affiliates.test.ts`.
+- `scripts/reconcile-affiliate-balances.ts` is a standalone CLI (`pnpm tsx scripts/reconcile-affiliate-balances.ts [--apply]`) that recomputes per-affiliate per-currency balances and flags orphan paid rows, refund overshoots, and stale payable rows.
+- Stripe payout idempotency is a stable SHA-256 of `(affiliateId, currency, amount, sorted referralIds)` (key format `aff-payout-{id}-{hash32}`), so a cron crash followed by a retry returns the original transfer instead of double-paying. The same hash is also stored as `bundleDigest` in Stripe transfer metadata for forensic lookup.
+- `process-payouts` sends `affiliatePaidEmail` on every successful Stripe payout, plus one-time `affiliatePausedToAffiliateEmail` and `affiliatePausedToSellerEmail` notifications the moment `MAX_PAYOUT_FAILURES` flips an affiliate's `payouts_enabled` to `false`. Seller emails are looked up via `getSellerEmailForPubkey` (a thin wrapper around `getSellerNotificationEmail`).
+- **Partial-refund caveat**: when a single Stripe charge spans multiple sellers, the webhook does not break the refund down per seller. `reverseReferralsForOrder` applies a global refund ratio (`refunded / original_gross`) to every pending rebate on the order. In the rare case where a buyer refunds only one seller's portion of a multi-seller cart, the resulting clawback is best-effort and must be reconciled manually using the Stripe dashboard. Documented at `docs/affiliate-payout-cron.md`.
+
+### Scheduled deployment setup
+
+`.replit` is read-only in this environment, so the affiliate payout crons are documented at `docs/affiliate-payout-cron.md` instead of being declared inline. Configure three Replit Scheduled Deployments — weekly (`0 14 * * 1`), biweekly (`0 14 1,15 * *`), and monthly (`0 14 1 * *`) — each running:
+
+```sh
+curl -fsSL -X POST \
+  -H "Authorization: Bearer $AFFILIATE_PAYOUT_CRON_SECRET" \
+  "$NEXT_PUBLIC_BASE_URL/api/affiliates/process-payouts?schedule=<weekly|biweekly|monthly>"
+```
+
+### Tests
+
+- `__tests__/utils/db/affiliates.test.ts` covers the pure helpers.
+- `__tests__/api/affiliates/validate.test.ts` covers the public validation endpoint, including the fixed-amount currency guard and the uniform `{ valid: false }` failure shape.
+- `__tests__/api/affiliates/record-referral.test.ts` covers self-referral blocking, currency-mismatch rejection, the happy path (returns computed amounts and writes with `initialStatus: 'pending'`), and the 409 surface for `max_uses` contention.
+
+### Click tracking, unsubscribe, and reverse-referral
+
+- `affiliate_clicks` table records `(code_id, seller_pubkey, occurred_at)` only — no IPs, no user-agents. The public `record-click` endpoint always returns 200 (silently swallows errors so client-side noise can never leak rate-limit info), and `affiliate-ref-tracker.tsx` POSTs at most once per session via `sessionStorage`.
+- `click-stats` (signed seller request) returns a 30-day click × conversion table per code via FULL OUTER JOIN, so codes with clicks-but-no-conversions and conversions-but-no-clicks both surface. The dashboard Analytics tab also derives YTD paid-out locally from the payouts feed.
+- `reverse-referral` is the seller-only manual clawback. It enforces `pubkey === sellerPubkey` (signed-event auth), takes an `orderId` + optional `reason`, and reuses `reverseReferralsForOrder` so partial-refund math stays consistent.
+- `unsubscribe` is RFC 8058 one-click. Affiliate emails (`affiliatePaidEmail`, `affiliatePausedToAffiliateEmail`) emit `List-Unsubscribe` + `List-Unsubscribe-Post: List-Unsubscribe=One-Click` headers and a footer link, both built from `mintAffiliateUnsubscribeToken` (HMAC, requires `AFFILIATE_UNSUBSCRIBE_SECRET`). Hitting the URL flips `affiliates.email_notifications_enabled = false`; the cron then skips that affiliate's notifications without affecting payouts.
+- The Stripe webhook handles `account.updated` and mirrors `charges_enabled` / `payouts_enabled` / `details_submitted` into `affiliates` via `syncAffiliateStripeAccountState`, so a Connect account that loses payouts capability automatically stops getting Stripe transfers on the next cron run. Unknown accounts (Connect accounts not linked to any affiliate) no-op silently — the `UPDATE` simply touches zero rows.
+
+### Privacy & retention
+
+- `affiliate_clicks` is **PII-free by design**: only `(code_id, seller_pubkey, occurred_at, optional landing_path, optional referer_host)` are stored. No IPs, no user-agents, no cookies, no fingerprints. Future contributors must not add identifying columns without a privacy review and an updated public privacy notice.
+- Unsubscribe tokens carry an issued-at timestamp and expire after 1 year (`UNSUBSCRIBE_TOKEN_TTL_MS` in `utils/email/unsubscribe-tokens.ts`). Rotating `AFFILIATE_UNSUBSCRIBE_SECRET` invalidates every outstanding link at once.
+
+### Operator runbook
+
+- **Reverse a referral / clawback a rebate**: open the seller dashboard → Affiliates → Analytics tab → "Reverse referral" form. Enter the order id and (optionally) a reason. This calls `/api/affiliates/reverse-referral` with the seller's signed Nostr event; the route applies `reverseReferralsForOrder` so pending rebates are scaled and already-paid rebates are recorded as clawbacks for out-of-band reconciliation.
+- **Unsubscribe an affiliate from emails**: every affiliate email contains a one-click unsubscribe link. Operators can also POST to `/api/affiliates/unsubscribe` with a token minted by `mintAffiliateUnsubscribeToken(id)`. Re-subscribing requires updating `affiliates.email_notifications_enabled = true` directly in the DB (intentional — there is no public re-subscribe surface).
+- **Stripe Connect goes cold**: nothing to do — `account.updated` webhooks flip the affiliate's flags automatically, and the next cron pass logs `payouts disabled` for the affected affiliate.
+
+### Env
+
+- `AFFILIATE_PAYOUT_CRON_SECRET` — bearer token guarding `/api/affiliates/process-payouts`.
+- `AFFILIATE_UNSUBSCRIBE_SECRET` — HMAC key (≥16 chars) used to mint and verify one-click unsubscribe tokens. Required for the `unsubscribe` route and for any affiliate email that includes `List-Unsubscribe` headers.

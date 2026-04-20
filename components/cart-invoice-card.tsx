@@ -93,6 +93,7 @@ export default function CartInvoiceCard({
   subtotalCost,
   appliedDiscounts = {},
   discountCodes = {},
+  affiliateMetaBySeller = {},
   shopProfiles,
   onBackToCart,
   setInvoiceIsPaid,
@@ -108,6 +109,15 @@ export default function CartInvoiceCard({
   subtotalCost: number;
   appliedDiscounts?: { [key: string]: number };
   discountCodes?: { [key: string]: string };
+  affiliateMetaBySeller?: {
+    [pubkey: string]: {
+      code: string;
+      codeId: number;
+      affiliateId: number;
+      rebateType: "percent" | "fixed";
+      rebateValue: number;
+    };
+  };
   shopProfiles?: Map<string, ShopProfile>;
   onBackToCart?: () => void;
   setInvoiceIsPaid?: (invoiceIsPaid: boolean) => void;
@@ -133,6 +143,58 @@ export default function CartInvoiceCard({
 
   const { nostr } = useContext(NostrContext);
   const shopContext = useContext(ShopMapContext);
+
+  const recordAffiliateReferrals = async (
+    orderId: string,
+    paymentRail: "stripe" | "lightning" | "cashu"
+  ) => {
+    const entries = Object.entries(affiliateMetaBySeller || {});
+    if (entries.length === 0) return;
+    await Promise.all(
+      entries.map(async ([sellerPubkey, aff]) => {
+        try {
+          const sellerProducts = products.filter(
+            (p) => p.pubkey === sellerPubkey
+          );
+          if (sellerProducts.length === 0) return;
+          const sellerCurrency = (
+            sellerProducts[0]?.currency || "usd"
+          ).toLowerCase();
+          const isZero =
+            isSatsCurrency(sellerCurrency) ||
+            ZERO_DECIMAL_CURRENCIES.has(sellerCurrency);
+          let grossSmallest = 0;
+          for (const p of sellerProducts) {
+            const price =
+              p.bulkPrice !== undefined
+                ? p.bulkPrice
+                : p.weightPrice !== undefined
+                  ? p.weightPrice
+                  : p.volumePrice !== undefined
+                    ? p.volumePrice
+                    : p.price;
+            const qty = quantities[p.id] || 1;
+            const line = price * qty;
+            grossSmallest += isZero ? Math.ceil(line) : Math.ceil(line * 100);
+          }
+          await fetch("/api/affiliates/record-referral", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              orderId,
+              sellerPubkey,
+              code: aff.code,
+              grossSmallest,
+              currency: sellerCurrency,
+              paymentRail,
+            }),
+          });
+        } catch (e) {
+          console.error("record-referral failed:", e);
+        }
+      })
+    );
+  };
 
   const clearPurchasedFromCart = () => {
     const sfPubkey =
@@ -2160,13 +2222,39 @@ export default function CartInvoiceCard({
                   ? Math.ceil(highestShippingCost)
                   : Math.ceil(highestShippingCost * 100);
               }
+              const aff = affiliateMetaBySeller[pubkey];
+              let affiliateRebateSmallest: number | undefined;
+              if (aff) {
+                if (aff.rebateType === "percent") {
+                  affiliateRebateSmallest = Math.floor(
+                    (sellerSmallest * aff.rebateValue) / 100
+                  );
+                } else {
+                  affiliateRebateSmallest = sellerIsZeroDecimal
+                    ? Math.floor(aff.rebateValue)
+                    : Math.floor(aff.rebateValue * 100);
+                }
+              }
               return {
                 sellerPubkey: pubkey,
                 amountSmallest: sellerSmallest,
                 currency: sellerCurrency,
+                ...(aff
+                  ? {
+                      affiliateId: aff.affiliateId,
+                      affiliateCodeId: aff.codeId,
+                      affiliateCode: aff.code,
+                      affiliateRebateSmallest,
+                    }
+                  : {}),
               };
             })
           : undefined;
+
+        const singleSellerAffiliate =
+          !isMultiMerchant && singleSellerPubkey
+            ? affiliateMetaBySeller[singleSellerPubkey]
+            : undefined;
 
         const response = await fetch("/api/stripe/create-payment-intent", {
           method: "POST",
@@ -2189,6 +2277,20 @@ export default function CartInvoiceCard({
               isCart: "true",
             },
             sellerSplits: sellerSplitsPayload,
+            ...(singleSellerAffiliate
+              ? {
+                  affiliateId: singleSellerAffiliate.affiliateId,
+                  affiliateCodeId: singleSellerAffiliate.codeId,
+                  affiliateCode: singleSellerAffiliate.code,
+                  affiliateRebateSmallest:
+                    singleSellerAffiliate.rebateType === "percent"
+                      ? Math.floor(
+                          (stripeAmount * singleSellerAffiliate.rebateValue) /
+                            100
+                        )
+                      : Math.floor(singleSellerAffiliate.rebateValue * 100),
+                }
+              : {}),
           }),
         });
 
@@ -2542,6 +2644,12 @@ export default function CartInvoiceCard({
         }
       });
     }
+    // NOTE: Stripe referrals are recorded server-side from
+    // /api/stripe/process-transfers (and reversed by the webhook on refund)
+    // so we deliberately do NOT call recordAffiliateReferrals here. Calling
+    // it from the browser would race with the server insert and risk
+    // double-counting toward max_uses, and a buyer who closes the tab
+    // before this fires would lose attribution.
     if (setInvoiceIsPaid) {
       setInvoiceIsPaid(true);
     }
@@ -4556,6 +4664,7 @@ export default function CartInvoiceCard({
       clearPurchasedFromCart();
       setOrderConfirmed(true);
       setPaymentConfirmed(true);
+      recordAffiliateReferrals(uuidv4(), "cashu").catch(() => {});
       if (setCashuPaymentSent) {
         setCashuPaymentSent(true);
       }
