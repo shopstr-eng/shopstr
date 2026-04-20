@@ -27,6 +27,7 @@ import {
 } from "@/utils/types/types";
 import { POLICY_SLUGS, getDefaultPolicies } from "@/utils/storefront-policies";
 import { getNavTextColor } from "@/utils/storefront-colors";
+import { getStorefrontCartQuantity } from "@/utils/storefront-cart";
 import { nip19 } from "nostr-tools";
 import { sanitizeUrl } from "@braintree/sanitize-url";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
@@ -171,22 +172,12 @@ export default function StorefrontLayout({
 
   useEffect(() => {
     const sync = () => {
-      const cart = localStorage.getItem("cart");
-      if (!cart) {
-        setCartQuantity(0);
-        return;
-      }
-      const items = JSON.parse(cart) as { pubkey?: string }[];
-      setCartQuantity(
-        shopPubkey
-          ? items.filter((p) => p.pubkey === shopPubkey).length
-          : items.length
-      );
+      setCartQuantity(getStorefrontCartQuantity(shopPubkey));
     };
     sync();
     const interval = setInterval(sync, 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [shopPubkey]);
 
   const sellerProducts = useMemo(() => {
     if (!shopPubkey || !productContext.productEvents.length) return [];
