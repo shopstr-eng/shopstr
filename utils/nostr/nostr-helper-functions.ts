@@ -23,6 +23,10 @@ import {
   cacheEventToDatabase,
   deleteEventsFromDatabase,
 } from "@/utils/db/db-client";
+import {
+  buildDeleteCachedEventsProof,
+  buildSignedHttpRequestProofTemplate,
+} from "@/utils/nostr/request-auth";
 import { newPromiseWithTimeout } from "@/utils/timeout";
 import { getLocalStorageJson } from "@/utils/safe-json";
 import { storage, STORAGE_KEYS } from "@/utils/storage";
@@ -64,8 +68,18 @@ export async function deleteEvent(
   await finalizeAndSendNostrEvent(signer, nostr, deletionEvent);
 
   // Delete from database via API
-  deleteEventsFromDatabase(event_ids_to_delete).catch((error) =>
-    console.error("Failed to delete events from database:", error)
+  const pubkey = await signer.getPubKey();
+  const signedRequestProof = await signer.sign(
+    buildSignedHttpRequestProofTemplate(
+      buildDeleteCachedEventsProof({
+        pubkey,
+        eventIds: event_ids_to_delete,
+      })
+    )
+  );
+
+  deleteEventsFromDatabase(event_ids_to_delete, signedRequestProof).catch(
+    (error) => console.error("Failed to delete events from database:", error)
   );
 }
 
@@ -456,7 +470,8 @@ export async function constructMessageGiftWrap(
 
 export async function sendGiftWrappedMessageEvent(
   nostr: NostrManager,
-  giftWrappedMessageEvent: NostrEvent
+  giftWrappedMessageEvent: NostrEvent,
+  signer?: NostrSigner
 ) {
   const { relays, writeRelays } = getLocalStorageData();
   const allWriteRelays = withBlastr([...writeRelays, ...relays]);
@@ -487,7 +502,8 @@ export async function sendGiftWrappedMessageEvent(
     await trackFailedRelayPublish(
       giftWrappedMessageEvent.id,
       giftWrappedMessageEvent,
-      allWriteRelays
+      allWriteRelays,
+      signer
     ).catch(console.error);
   }
 }
@@ -1023,7 +1039,8 @@ export async function finalizeAndSendNostrEvent(
       await trackFailedRelayPublish(
         signedEvent.id,
         signedEvent,
-        allWriteRelays
+        allWriteRelays,
+        signer
       ).catch(console.error);
     }
 

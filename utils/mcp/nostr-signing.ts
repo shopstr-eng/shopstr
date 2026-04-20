@@ -5,7 +5,7 @@ import {
   nip19,
   nip44,
 } from "nostr-tools";
-import { hexToBytes } from "@noble/hashes/utils";
+import { hexToBytes } from "@noble/hashes/utils.js";
 import { SimplePool } from "nostr-tools";
 import {
   createCipheriv,
@@ -154,7 +154,8 @@ export async function signAndPublishEvent(
       await trackFailedRelayPublish(
         signedEvent.id,
         signedEvent,
-        manager.getRelayUrls()
+        manager.getRelayUrls(),
+        signer
       );
     } catch (trackError) {
       console.error("Failed to track failed relay publish:", trackError);

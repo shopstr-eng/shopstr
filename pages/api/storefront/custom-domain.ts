@@ -1,24 +1,59 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getDbPool } from "@/utils/db/db-service";
+import {
+  buildCustomDomainCreateProof,
+  buildCustomDomainDeleteProof,
+  extractSignedEventFromRequest,
+  verifySignedHttpRequestProof,
+} from "@/utils/nostr/request-auth";
+import { checkRateLimit, getRequestIp } from "@/utils/rate-limit";
 
 const pool = getDbPool();
+
+const RATE_LIMIT = { limit: 20, windowMs: 60 * 1000 };
 
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
-  if (req.method === "POST") {
-    const { pubkey, domain } = req.body;
+  if (req.method === "POST" || req.method === "DELETE") {
+    const rate = checkRateLimit("custom-domain", getRequestIp(req), RATE_LIMIT);
+    if (!rate.ok) {
+      res.setHeader(
+        "Retry-After",
+        Math.max(1, Math.ceil((rate.resetAt - Date.now()) / 1000))
+      );
+      return res.status(429).json({ error: "Too many requests" });
+    }
+  }
 
-    if (!pubkey || !domain) {
-      return res.status(400).json({ error: "pubkey and domain are required" });
+  if (req.method === "POST") {
+    const { domain } = req.body ?? {};
+
+    if (!domain) {
+      return res.status(400).json({ error: "domain is required" });
     }
 
     const cleanDomain = domain.toLowerCase().trim();
+    const signedEvent = extractSignedEventFromRequest(req);
+    const ownerPubkey = signedEvent?.pubkey ?? "";
+    const verification = verifySignedHttpRequestProof(
+      signedEvent,
+      buildCustomDomainCreateProof({
+        pubkey: ownerPubkey,
+        domain: cleanDomain,
+      })
+    );
+
+    if (!verification.ok) {
+      return res
+        .status(verification.status)
+        .json({ error: verification.error });
+    }
 
     const slugResult = await pool.query(
       "SELECT slug FROM shop_slugs WHERE pubkey = $1",
-      [pubkey]
+      [ownerPubkey]
     );
     if (slugResult.rows.length === 0) {
       return res
@@ -31,7 +66,7 @@ export default async function handler(
         `INSERT INTO custom_domains (pubkey, domain, shop_slug, verified) 
          VALUES ($1, $2, $3, false) 
          ON CONFLICT (pubkey) DO UPDATE SET domain = $2, shop_slug = $3, verified = false, updated_at = NOW()`,
-        [pubkey, cleanDomain, slugResult.rows[0].slug]
+        [ownerPubkey, cleanDomain, slugResult.rows[0].slug]
       );
 
       return res.status(200).json({
@@ -77,14 +112,22 @@ export default async function handler(
   }
 
   if (req.method === "DELETE") {
-    const { pubkey } = req.body;
-    if (!pubkey) {
-      return res.status(400).json({ error: "pubkey is required" });
+    const signedEvent = extractSignedEventFromRequest(req);
+    const ownerPubkey = signedEvent?.pubkey ?? "";
+    const verification = verifySignedHttpRequestProof(
+      signedEvent,
+      buildCustomDomainDeleteProof(ownerPubkey)
+    );
+
+    if (!verification.ok) {
+      return res
+        .status(verification.status)
+        .json({ error: verification.error });
     }
 
     try {
       await pool.query("DELETE FROM custom_domains WHERE pubkey = $1", [
-        pubkey,
+        ownerPubkey,
       ]);
       return res.status(200).json({ success: true });
     } catch (error) {

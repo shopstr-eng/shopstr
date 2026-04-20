@@ -263,7 +263,11 @@ const OrdersDashboard = () => {
           const sats = await getSatoshiValue({ amount: 1, currency });
           return { currency: currency.toLowerCase(), rate: sats };
         } catch (err) {
-          console.error(`Failed to fetch rate for ${currency}:`, err);
+          // The third-party rate API 404s for some less-common currencies.
+          // Use console.warn (not console.error) so the Next.js dev
+          // overlay doesn't treat this benign, already-handled fallback
+          // as a Runtime Error popup.
+          console.warn(`Failed to fetch rate for ${currency}:`, err);
           return { currency: currency.toLowerCase(), rate: 0 };
         }
       });
@@ -931,7 +935,7 @@ const OrdersDashboard = () => {
         selectedOrder.buyerPubkey
       );
 
-      await sendGiftWrappedMessageEvent(nostr, giftWrappedEvent);
+      await sendGiftWrappedMessageEvent(nostr, giftWrappedEvent, signer);
 
       // Update local state to shipped status (removes Send Shipping Update button)
       setOrders((prevOrders) =>
@@ -1222,7 +1226,7 @@ const OrdersDashboard = () => {
         sellerPubkey
       );
 
-      await sendGiftWrappedMessageEvent(nostr, giftWrappedEvent);
+      await sendGiftWrappedMessageEvent(nostr, giftWrappedEvent, signer);
 
       setOrders((prevOrders) =>
         prevOrders.map((order) =>
@@ -1308,7 +1312,7 @@ const OrdersDashboard = () => {
         sellerPubkey
       );
 
-      await sendGiftWrappedMessageEvent(nostr, giftWrappedEvent);
+      await sendGiftWrappedMessageEvent(nostr, giftWrappedEvent, signer);
 
       setOrders((prevOrders) =>
         prevOrders.map((order) =>

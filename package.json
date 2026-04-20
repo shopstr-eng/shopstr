@@ -4,13 +4,16 @@
   "type": "module",
   "private": true,
   "engines": {
-    "node": ">=18.17.0",
+    "node": ">=22.4.0",
     "npm": ">=9.6.7"
   },
   "scripts": {
     "dev": "next dev -p 5000",
     "build": "next build",
-    "start": "next start -H 0.0.0.0 -p ${PORT:-3000}",
+    "build:deploy": "npm ci --prefer-offline --no-audit --no-fund && next build && cp -r .next/static .next/standalone/.next/static && cp -r public .next/standalone/public && rm -rf node_modules .next/cache .next/standalone/.next/cache /tmp/* 2>/dev/null; true",
+    "start:deploy": "HOSTNAME=0.0.0.0 PORT=${PORT:-3000} node .next/standalone/server.js",
+    "start": "HOSTNAME=0.0.0.0 PORT=${PORT:-3000} node .next/standalone/server.js",
+    "start:dev-server": "next start -H 0.0.0.0 -p ${PORT:-3000}",
     "lint": "eslint . --ext .ts,.tsx",
     "format:check": "prettier --check .",
     "type-check": "tsc --noEmit",
@@ -21,7 +24,7 @@
   },
   "dependencies": {
     "@braintree/sanitize-url": "7.1.2",
-    "@cashu/cashu-ts": "2.1.0",
+    "@cashu/cashu-ts": "4.1.0",
     "@ducanh2912/next-pwa": "10.2.9",
     "@getalby/lightning-tools": "8.1.0",
     "@getalby/sdk": "7.0.0",

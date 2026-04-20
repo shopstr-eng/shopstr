@@ -64,6 +64,7 @@ import {
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
 import { retryFailedRelayPublishes } from "@/utils/nostr/retry-service";
+import { MintRecoveryBoot } from "@/components/utility-components/mint-recovery-boot";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
 import { storage, STORAGE_KEYS } from "@/utils/storage";
 
@@ -775,9 +776,13 @@ function Shopstr({ props }: { props: AppProps }) {
         }
 
         await runTask("retrying relay publishes", async () => {
+          if (!signer) {
+            return;
+          }
+
           const { relays, writeRelays } = getLocalStorageData();
           const retryNostr = new NostrManager([...relays, ...writeRelays]);
-          await retryFailedRelayPublishes(retryNostr);
+          await retryFailedRelayPublishes(retryNostr, signer);
         });
       } catch (error) {
         console.error("Critical error during app initialization:", error);
@@ -889,6 +894,7 @@ function App(props: AppProps) {
         <NextThemesProvider attribute="class">
           <NostrContextProvider>
             <SignerContextProvider>
+              <MintRecoveryBoot />
               <Shopstr props={props} />
             </SignerContextProvider>
           </NostrContextProvider>

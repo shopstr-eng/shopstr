@@ -5,7 +5,11 @@ import {
   ShopProfile,
   Community,
 } from "@/utils/types/types";
-import { CashuMint, CashuWallet, Proof } from "@cashu/cashu-ts";
+import {
+  Mint as CashuMint,
+  Wallet as CashuWallet,
+  Proof,
+} from "@cashu/cashu-ts";
 import { ChatsMap } from "@/utils/context/context";
 import {
   getLocalStorageData,
@@ -18,10 +22,15 @@ import {
 } from "@/utils/parsers/product-parser-functions";
 import { parseCommunityEvent } from "../parsers/community-parser-functions";
 import { calculateWeightedScore } from "@/utils/parsers/review-parser-functions";
-import { hashToCurve } from "@cashu/crypto/modules/common";
+import { hashToCurve } from "@cashu/cashu-ts";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
 import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 import { cacheEventsToDatabase } from "@/utils/db/db-client";
+import {
+  buildMessagesListProof,
+  buildSignedHttpRequestProofTemplate,
+  SIGNED_EVENT_HEADER,
+} from "@/utils/nostr/request-auth";
 
 interface NipProfile {
   pubkey: string;
@@ -563,24 +572,48 @@ export const fetchGiftWrappedChatsAndMessages = async (
       // Load from database first
       const chatMessagesFromCache = new Map<string, NostrMessageEvent>();
 
-      try {
-        const response = await fetch(
-          `/api/db/fetch-messages?pubkey=${userPubkey}`
+      if (!signer) {
+        // The cached-messages endpoint requires a signed proof of pubkey
+        // ownership. Without a signer we cannot prove ownership, so skip the
+        // cache read entirely instead of issuing a request that is guaranteed
+        // to be rejected with 401.
+        console.warn(
+          "Skipping cached message fetch: no signer available to prove pubkey ownership."
         );
-        if (response.ok) {
-          const messagesFromDb = await response.json();
-          for (const event of messagesFromDb) {
-            if (!chatMessagesFromCache.has(event.id)) {
-              chatMessagesFromCache.set(event.id, {
-                ...event,
-                sig: event.sig || "",
-                read: event.is_read === true,
-              } as NostrMessageEvent);
+      } else {
+        try {
+          const signedEvent = await signer.sign(
+            buildSignedHttpRequestProofTemplate(
+              buildMessagesListProof(userPubkey)
+            )
+          );
+          const response = await fetch(
+            `/api/db/fetch-messages?pubkey=${userPubkey}`,
+            {
+              headers: {
+                [SIGNED_EVENT_HEADER]: JSON.stringify(signedEvent),
+              },
             }
+          );
+          if (response.ok) {
+            const messagesFromDb = await response.json();
+            for (const event of messagesFromDb) {
+              if (!chatMessagesFromCache.has(event.id)) {
+                chatMessagesFromCache.set(event.id, {
+                  ...event,
+                  sig: event.sig || "",
+                  read: event.is_read === true,
+                } as NostrMessageEvent);
+              }
+            }
+          } else {
+            console.error(
+              `Failed to fetch messages from database: ${response.status} ${response.statusText}`
+            );
           }
+        } catch (error) {
+          console.error("Failed to fetch messages from database: ", error);
         }
-      } catch (error) {
-        console.error("Failed to fetch messages from database: ", error);
       }
 
       try {
@@ -1568,6 +1601,7 @@ export const fetchCashuWallet = async (
       for (const mint of cashuMints) {
         try {
           const wallet = new CashuWallet(new CashuMint(mint));
+          await wallet.loadMint();
 
           // Filter proofs for this specific mint
           const mintProofs = cashuProofs.filter((proof) => {

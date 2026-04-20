@@ -4,6 +4,11 @@ import { request as httpsRequest } from "node:https";
 import type { IncomingMessage } from "node:http";
 import { isIP } from "node:net";
 import type { LookupFunction } from "node:net";
+import { applyRateLimit } from "@/utils/rate-limit";
+
+// Each call performs an outbound HTTPS request; bound per-IP to keep one
+// caller from amplifying our egress.
+const RATE_LIMIT = { limit: 120, windowMs: 60 * 1000 };
 
 const REQUEST_TIMEOUT_MS = 10000;
 const MAX_NIP05_RESPONSE_BYTES = 64 * 1024;
@@ -293,6 +298,8 @@ export default async function handler(
     res.setHeader("Allow", "GET");
     return res.status(405).json({ error: "Method not allowed" });
   }
+
+  if (!applyRateLimit(req, res, "verify-nip05", RATE_LIMIT)) return;
 
   const nip05 =
     typeof req.query.nip05 === "string" ? req.query.nip05.trim() : "";

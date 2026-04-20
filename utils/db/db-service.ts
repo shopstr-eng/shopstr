@@ -15,6 +15,7 @@ export async function ensureFailedRelayPublishesTable(
   await client.query(`
     CREATE TABLE IF NOT EXISTS failed_relay_publishes (
       event_id TEXT PRIMARY KEY,
+      owner_pubkey TEXT,
       event_data TEXT NOT NULL,
       relays TEXT NOT NULL,
       created_at BIGINT NOT NULL,
@@ -26,6 +27,150 @@ export async function ensureFailedRelayPublishesTable(
     ALTER TABLE failed_relay_publishes
     ADD COLUMN IF NOT EXISTS event_data TEXT
   `);
+
+  await client.query(`
+    ALTER TABLE failed_relay_publishes
+    ADD COLUMN IF NOT EXISTS owner_pubkey TEXT
+  `);
+
+  // Legacy rows pre-dating the owner_pubkey column have NULL ownership and
+  // can no longer be listed, retried, cleared, or claimed by anyone, so they
+  // would otherwise sit in the table forever. Drop them once on schema setup.
+  await client.query(`
+    DELETE FROM failed_relay_publishes
+    WHERE owner_pubkey IS NULL
+  `);
+}
+
+export async function trackFailedRelayPublishRecord({
+  eventId,
+  ownerPubkey,
+  event,
+  relays,
+}: {
+  eventId: string;
+  ownerPubkey: string;
+  event: NostrEvent;
+  relays: string[];
+}): Promise<boolean> {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    await ensureFailedRelayPublishesTable(client);
+
+    const result = await client.query(
+      `INSERT INTO failed_relay_publishes (
+         event_id,
+         owner_pubkey,
+         event_data,
+         relays,
+         created_at,
+         retry_count
+       )
+       VALUES ($1, $2, $3, $4, $5, 0)
+       ON CONFLICT (event_id) DO UPDATE SET
+         owner_pubkey = EXCLUDED.owner_pubkey,
+         event_data = EXCLUDED.event_data,
+         relays = EXCLUDED.relays,
+         created_at = EXCLUDED.created_at
+       WHERE failed_relay_publishes.owner_pubkey = EXCLUDED.owner_pubkey
+       RETURNING event_id`,
+      [
+        eventId,
+        ownerPubkey,
+        JSON.stringify(event),
+        JSON.stringify(relays),
+        Math.floor(Date.now() / 1000),
+      ]
+    );
+
+    return (result.rowCount ?? 0) > 0;
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function getFailedRelayPublishesForOwner(ownerPubkey: string) {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    await ensureFailedRelayPublishesTable(client);
+
+    const result = await client.query(
+      `SELECT event_id, event_data, relays, retry_count
+       FROM failed_relay_publishes
+       WHERE owner_pubkey = $1
+         AND retry_count < 5
+         AND event_data IS NOT NULL
+       ORDER BY created_at ASC
+       LIMIT 50`,
+      [ownerPubkey]
+    );
+
+    return result.rows
+      .filter((row: any) => row.event_data)
+      .map((row: any) => {
+        try {
+          return {
+            eventId: row.event_id,
+            relays: JSON.parse(row.relays),
+            event: JSON.parse(row.event_data),
+            retryCount: row.retry_count,
+          };
+        } catch (error) {
+          console.error("Failed to parse row:", row.event_id, error);
+          return null;
+        }
+      })
+      .filter(Boolean);
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function clearFailedRelayPublishForOwner(
+  eventId: string,
+  ownerPubkey: string
+): Promise<void> {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    await ensureFailedRelayPublishesTable(client);
+    await client.query(
+      `DELETE FROM failed_relay_publishes
+       WHERE event_id = $1 AND owner_pubkey = $2`,
+      [eventId, ownerPubkey]
+    );
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function incrementFailedRelayPublishRetryForOwner(
+  eventId: string,
+  ownerPubkey: string
+): Promise<void> {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    await ensureFailedRelayPublishesTable(client);
+    await client.query(
+      `UPDATE failed_relay_publishes
+       SET retry_count = retry_count + 1
+       WHERE event_id = $1 AND owner_pubkey = $2`,
+      [eventId, ownerPubkey]
+    );
+  } finally {
+    if (client) client.release();
+  }
 }
 
 // Initialize the database connection pool
@@ -849,6 +994,61 @@ export async function deleteCachedEventsByIds(
       }
     }
     console.error("Failed to delete cached events:", error);
+  } finally {
+    if (client) {
+      client.release();
+    }
+  }
+}
+
+export async function cachedEventsBelongToPubkey(
+  eventIds: string[],
+  pubkey: string
+): Promise<boolean> {
+  if (eventIds.length === 0) return true;
+
+  const uniqueEventIds = Array.from(new Set(eventIds));
+
+  const dbPool = getDbPool();
+  let client;
+
+  const eventTables = [
+    "product_events",
+    "review_events",
+    "message_events",
+    "profile_events",
+    "wallet_events",
+    "community_events",
+    "config_events",
+  ];
+
+  try {
+    client = await dbPool.connect();
+    const unionQuery = eventTables
+      .map((table) => `SELECT id, pubkey FROM ${table} WHERE id = ANY($1)`)
+      .join(" UNION ALL ");
+
+    const result = await client.query<{ id: string; pubkey: string }>(
+      unionQuery,
+      [uniqueEventIds]
+    );
+
+    // Fail closed: every requested ID must exist somewhere in the cache AND
+    // every row found for those IDs must belong to the caller. An unknown ID
+    // (no row in any table) is treated as not-owned so the route refuses the
+    // whole batch instead of silently succeeding.
+    const ownedIds = new Set<string>();
+    for (const row of result.rows) {
+      if (row.pubkey !== pubkey) {
+        return false;
+      }
+      ownedIds.add(row.id);
+    }
+
+    return uniqueEventIds.every((id) => ownedIds.has(id));
+  } catch (error) {
+    console.error("Failed to verify cached event ownership:", error);
+    throw error;
   } finally {
     if (client) {
       client.release();

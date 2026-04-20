@@ -27,12 +27,13 @@ import {
 } from "@/utils/nostr/nostr-helper-functions";
 import { storage, STORAGE_KEYS } from "@/utils/storage";
 import {
-  CashuMint,
-  CashuWallet,
+  Mint as CashuMint,
+  Wallet as CashuWallet,
   getEncodedToken,
-  MintKeyset,
+  Keyset as MintKeyset,
   Proof,
 } from "@cashu/cashu-ts";
+import { safeSwap } from "@/utils/cashu/swap-retry-service";
 import { CashuWalletContext } from "../../utils/context/context";
 import {
   NostrContext,
@@ -86,14 +87,22 @@ const SendButton = () => {
     try {
       const mint = new CashuMint(mints[0]!);
       const wallet = new CashuWallet(mint);
-      const mintKeySetIds = await wallet.getKeySets();
+      await wallet.loadMint();
+      const mintKeySetIds = await wallet.keyChain.getKeysets();
       const filteredProofs = tokens.filter((p: Proof) =>
         mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
       ) as Proof[];
       const sendTotal = numSats;
-      const { keep, send } = await wallet.send(sendTotal, filteredProofs, {
-        includeFees: true,
+      const swapOutcome = await safeSwap(wallet, sendTotal, filteredProofs, {
+        sendConfig: { includeFees: true },
       });
+      if (swapOutcome.status !== "swapped") {
+        throw new Error(
+          swapOutcome.errorMessage ??
+            `Token swap did not complete (${swapOutcome.status})`
+        );
+      }
+      const { keep, send } = swapOutcome;
 
       const deletedEventIds = [
         ...new Set([

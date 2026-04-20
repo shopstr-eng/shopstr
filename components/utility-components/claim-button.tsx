@@ -30,12 +30,14 @@ import { storage, STORAGE_KEYS } from "@/utils/storage";
 import { LightningAddress } from "@getalby/lightning-tools";
 import { nip19 } from "nostr-tools";
 import {
-  CashuMint,
-  CashuWallet,
+  Mint as CashuMint,
+  Wallet as CashuWallet,
   Proof,
   getDecodedToken,
   getEncodedToken,
 } from "@cashu/cashu-ts";
+import { safeMeltProofs } from "@/utils/cashu/melt-retry-service";
+import { safeSwap } from "@/utils/cashu/swap-retry-service";
 import { formatWithCommas } from "./display-monetary-info";
 import {
   NostrContext,
@@ -93,7 +95,7 @@ export default function ClaimButton({ token }: { token: string }) {
 
   useEffect(() => {
     try {
-      const decodedToken = getDecodedToken(token);
+      const decodedToken = getDecodedToken(token, []);
       const mint = decodedToken.mint;
       setTokenMint(mint);
       const proofs = decodedToken.proofs;
@@ -102,7 +104,10 @@ export default function ClaimButton({ token }: { token: string }) {
       setWallet(newWallet);
       const totalAmount =
         Array.isArray(proofs) && proofs.length > 0
-          ? proofs.reduce((acc, current: Proof) => acc + current.amount, 0)
+          ? proofs.reduce(
+              (acc, current: Proof) => acc + current.amount.toNumber(),
+              0
+            )
           : 0;
 
       setTokenAmount(totalAmount);
@@ -243,18 +248,34 @@ export default function ClaimButton({ token }: { token: string }) {
         await ln.fetch();
         const invoice = await ln.requestInvoice({ satoshi: newAmount });
         const invoicePaymentRequest = invoice.paymentRequest;
-        const meltQuote = await wallet.createMeltQuote(invoicePaymentRequest);
+        const meltQuote = await wallet.createMeltQuoteBolt11(
+          invoicePaymentRequest
+        );
         if (meltQuote) {
-          const meltQuoteTotal = meltQuote.amount + meltQuote.fee_reserve;
-          const { keep, send } = await wallet.send(meltQuoteTotal, proofs, {
-            includeFees: true,
+          const meltQuoteTotal =
+            meltQuote.amount.toNumber() + meltQuote.fee_reserve.toNumber();
+          const swapOutcome = await safeSwap(wallet, meltQuoteTotal, proofs, {
+            sendConfig: { includeFees: true },
           });
-          const meltResponse = await wallet.meltProofs(meltQuote, send);
-          const changeProofs = [...keep, ...meltResponse.change];
+          if (swapOutcome.status !== "swapped") {
+            throw new Error(
+              swapOutcome.errorMessage ??
+                `Pre-melt swap did not complete (${swapOutcome.status})`
+            );
+          }
+          const { keep, send } = swapOutcome;
+          const meltOutcome = await safeMeltProofs(wallet, meltQuote, send);
+          if (meltOutcome.status !== "paid") {
+            throw new Error(
+              meltOutcome.errorMessage ??
+                `Melt did not complete (${meltOutcome.status})`
+            );
+          }
+          const changeProofs = [...keep, ...meltOutcome.changeProofs];
           const changeAmount =
             Array.isArray(changeProofs) && changeProofs.length > 0
               ? changeProofs.reduce(
-                  (acc, current: Proof) => acc + current.amount,
+                  (acc, current: Proof) => acc + current.amount.toNumber(),
                   0
                 )
               : 0;
@@ -293,7 +314,7 @@ export default function ClaimButton({ token }: { token: string }) {
               decodedRandomPrivkeyForReceiver.data as Uint8Array,
               userPubkey!
             );
-            await sendGiftWrappedMessageEvent(nostr!, giftWrappedEvent);
+            await sendGiftWrappedMessageEvent(nostr!, giftWrappedEvent, signer);
             chatsContext.addNewlyCreatedMessageEvent(
               {
                 ...giftWrappedMessageEvent,

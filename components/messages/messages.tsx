@@ -48,6 +48,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
 
   const [showFailureModal, setShowFailureModal] = useState(false);
   const [failureText, setFailureText] = useState("");
+  const [initialMessage, setInitialMessage] = useState("");
 
   const [randomNpubForSender, setRandomNpubForSender] = useState<string>("");
   const [randomNsecForSender, setRandomNsecForSender] = useState<string>("");
@@ -93,6 +94,14 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
             });
           }
           enterChat(pubkey);
+          const productTitle = router.query.productTitle as string | undefined;
+          const productUrl = router.query.productUrl as string | undefined;
+          if (productTitle) {
+            const draftText = productUrl
+              ? `Re: "${productTitle}" — ${productUrl}\n\n`
+              : `Re: "${productTitle}"\n\n`;
+            setInitialMessage(draftText);
+          }
         }
         setChatsMap(decryptedChats);
         if (currentChatPubkey) {
@@ -298,8 +307,12 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
         decodedRandomPrivkeyForReceiver.data as Uint8Array,
         currentChatPubkey
       );
-      await sendGiftWrappedMessageEvent(nostr!, senderGiftWrappedEvent);
-      await sendGiftWrappedMessageEvent(nostr!, receiverGiftWrappedEvent);
+      await sendGiftWrappedMessageEvent(nostr!, senderGiftWrappedEvent, signer);
+      await sendGiftWrappedMessageEvent(
+        nostr!,
+        receiverGiftWrappedEvent,
+        signer
+      );
       chatsContext.addNewlyCreatedMessageEvent(
         {
           ...giftWrappedMessageEvent,
@@ -397,6 +410,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
               isSendingDMLoading={isSendingDMLoading}
               handleSendMessage={handleSendGiftWrappedMessage}
               isPayment={isPayment}
+              initialMessage={initialMessage}
             />
           </div>
         )}

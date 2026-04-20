@@ -378,9 +378,21 @@ export default function CheckoutCard({
 
   const handleSendMessage = (pubkeyToOpenChatWith: string) => {
     if (isLoggedIn) {
+      const allParsed = productEventContext.productEvents
+        .filter((e: Event) => e.kind !== 1)
+        .map((e: Event) => parseTags(e))
+        .filter((p: ProductData | undefined): p is ProductData => !!p);
+      const slug = getListingSlug(productData, allParsed);
+      const listingPath = slug || productData.id;
+      const productUrl = `${window.location.origin}/listing/${listingPath}`;
       router.push({
         pathname: "/orders",
-        query: { pk: nip19.npubEncode(pubkeyToOpenChatWith), isInquiry: true },
+        query: {
+          pk: nip19.npubEncode(pubkeyToOpenChatWith),
+          isInquiry: true,
+          productTitle: productData.title,
+          productUrl,
+        },
       });
     } else {
       onOpen();

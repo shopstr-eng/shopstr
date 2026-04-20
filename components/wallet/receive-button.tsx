@@ -22,8 +22,8 @@ import {
 } from "@/utils/nostr/nostr-helper-functions";
 import { storage, STORAGE_KEYS } from "@/utils/storage";
 import {
-  CashuMint,
-  CashuWallet,
+  Mint as CashuMint,
+  Wallet as CashuWallet,
   getDecodedToken,
   Proof,
 } from "@cashu/cashu-ts";
@@ -72,10 +72,11 @@ const ReceiveButton = () => {
     setIsSpent(false);
     setIsInvalidToken(false);
     try {
-      const token = getDecodedToken(tokenString);
+      const token = getDecodedToken(tokenString, []);
       const tokenMint = token.mint;
       const tokenProofs = token.proofs;
       const wallet = new CashuWallet(new CashuMint(tokenMint));
+      await wallet.loadMint();
       const proofsStates = await wallet.checkProofsStates(tokenProofs);
       const spentYs = new Set(
         proofsStates
@@ -100,7 +101,7 @@ const ReceiveButton = () => {
         setIsClaimed(true);
         handleToggleReceiveModal();
         const transactionAmount = tokenProofs.reduce(
-          (acc, token: Proof) => acc + token.amount,
+          (acc, token: Proof) => acc + token.amount.toNumber(),
           0
         );
         storage.setJson(STORAGE_KEYS.HISTORY, [

@@ -1,4 +1,4 @@
-import { useEffect, useState, useContext } from "react";
+import { useEffect, useRef, useState, useContext } from "react";
 import { useRouter } from "next/router";
 import { Button } from "@heroui/react";
 import StorefrontThemeWrapper from "@/components/storefront/storefront-theme-wrapper";
@@ -69,9 +69,17 @@ export default function OrderSummary() {
     }
   }, []);
 
+  // Guard against React 18 strict-mode double-invocation. The effect both
+  // consumes (removes) the sessionStorage entry and drives a fallback
+  // redirect — without this guard, the second invocation sees the entry
+  // gone and bounces the user to /marketplace immediately after we just
+  // arrived from a successful checkout.
+  const hasConsumedOrderRef = useRef(false);
   useEffect(() => {
+    if (hasConsumedOrderRef.current) return;
     const data = storage.getSessionJson<OrderSummaryData | null>(STORAGE_KEYS.ORDER_SUMMARY);
     if (data) {
+      hasConsumedOrderRef.current = true;
       try {
         setOrderData(data);
         storage.removeSessionItem(STORAGE_KEYS.ORDER_SUMMARY);

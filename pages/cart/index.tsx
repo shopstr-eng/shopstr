@@ -15,7 +15,6 @@ import {
   PlusIcon,
   MinusIcon,
   ShoppingBagIcon,
-  CheckCircleIcon,
   XCircleIcon,
   TruckIcon,
 } from "@heroicons/react/24/outline";
@@ -181,6 +180,19 @@ export default function Component() {
   };
 
   const router = useRouter();
+
+  // Once payment lands, let the inline "Payment confirmed!" GIF play through
+  // once and then push straight to the order summary page. Avoids the prior
+  // friction of a "click X to dismiss" success modal.
+  useEffect(() => {
+    if (!invoiceIsPaid && !cashuPaymentSent) return;
+    const timer = setTimeout(() => {
+      setInvoiceIsPaid(false);
+      setCashuPaymentSent(false);
+      router.push("/order-summary");
+    }, 2500);
+    return () => clearTimeout(timer);
+  }, [invoiceIsPaid, cashuPaymentSent, router]);
 
   useEffect(() => {
     const stored = storage.getSessionItem(STORAGE_KEYS.SF_SELLER_PUBKEY) || storage.getItem(STORAGE_KEYS.SF_SELLER_PUBKEY);
@@ -352,7 +364,11 @@ export default function Component() {
             totals[product.pubkey] = productSubtotal;
           }
         } catch (error) {
-          console.error(
+          // Outer guard for any unexpected failure during cart pricing.
+          // console.warn (not console.error) keeps the Next.js dev overlay
+          // from popping for a benign per-row failure — the row simply
+          // renders as un-priced and is excluded from checkout.
+          console.warn(
             `Error converting price for product ${product.id}:`,
             error
           );
@@ -513,7 +529,11 @@ export default function Component() {
         const numSats = await getSatoshiValue(currencyData);
         price = Math.round(numSats);
       } catch (err) {
-        console.error("ERROR", err);
+        // Use console.warn (not console.error) so the Next.js dev overlay
+        // doesn't escalate this expected, already-handled fallback into a
+        // Runtime Error popup. The product simply renders without a sats
+        // price and is excluded from checkout downstream.
+        console.warn("Failed to convert price to sats:", err);
       }
     } else if (product.currency.toLowerCase() === "btc") {
       price = basePrice * 100000000;
@@ -547,7 +567,11 @@ export default function Component() {
         const numSats = await getSatoshiValue(currencyData);
         cost = Math.round(numSats);
       } catch (err) {
-        console.error("ERROR", err);
+        // Use console.warn (not console.error) so the Next.js dev overlay
+        // doesn't escalate this expected, already-handled fallback into a
+        // Runtime Error popup. Shipping falls back to 0 sats and the
+        // outer try/catch on the caller side prevents an inconsistent row.
+        console.warn("Failed to convert shipping cost to sats:", err);
       }
     } else if (product.currency.toLowerCase() === "btc") {
       cost = shippingCost * 100000000;
@@ -886,44 +910,6 @@ export default function Component() {
             </div>
           </div>
         )}
-
-        {/* Success Modal */}
-        {invoiceIsPaid || cashuPaymentSent ? (
-          <>
-            <Modal
-              backdrop="blur"
-              isOpen={invoiceIsPaid || cashuPaymentSent}
-              onClose={() => {
-                setInvoiceIsPaid(false);
-                setCashuPaymentSent(false);
-                router.push("/order-summary");
-              }}
-              classNames={{
-                body: "py-6 ",
-                backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-                header: "border-b-[1px] border-[#292f46]",
-                footer: "border-t-[1px] border-[#292f46]",
-                closeButton: "hover:bg-black/5 active:bg-white/10",
-              }}
-              isDismissable={true}
-              scrollBehavior={"normal"}
-              placement={"center"}
-              size="2xl"
-            >
-              <ModalContent>
-                <ModalHeader className="text-light-text dark:text-dark-text flex items-center justify-center">
-                  <CheckCircleIcon className="h-6 w-6 text-green-500" />
-                  <div className="ml-2">Order successful!</div>
-                </ModalHeader>
-                <ModalBody className="text-light-text dark:text-dark-text flex flex-col overflow-hidden">
-                  <div className="flex items-center justify-center">
-                    The seller will receive a message with your order details.
-                  </div>
-                </ModalBody>
-              </ModalContent>
-            </Modal>
-          </>
-        ) : null}
 
         {/* Invoice Generation Failed Modal */}
         {invoiceGenerationFailed ? (
