@@ -1137,7 +1137,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
   registerTool(
     server,
     "update_product_listing",
-    "Update an existing product listing by publishing a new event with the same d-tag. All fields are optional — only provided fields will be included.",
+    "Update an existing product listing by publishing a new event with the same d-tag. Fetches the current event first and merges in only the fields you provide, so unspecified fields keep their existing values. Multi-value fields (images, categories, sizes, volumes, bulk, weights, pickupLocations) are fully replaced when supplied.",
     {
       dTag: z.string().describe("The d-tag of the listing to update"),
       title: z.string().optional().describe("Updated product title"),
@@ -1212,7 +1212,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
       pageConfig: productPageConfigSchema
         .optional()
         .describe(
-          "Updated per-product page customization. Provide a full StorefrontProductPageConfig object to overwrite. Provide an empty object ({}) to clear and revert to shop-wide defaults. Omit to leave the existing page_config tag in place is NOT supported — this tool republishes the event so the tag must be supplied to be retained."
+          "Updated per-product page customization. Provide a full StorefrontProductPageConfig object to overwrite. Provide an empty object ({}) to clear the existing page_config and revert to shop-wide defaults. Omit to keep the existing page_config tag unchanged."
         ),
     },
     async (params) => {
@@ -1222,118 +1222,183 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
       if (!signer) return noSignerError();
 
       try {
-        const tags: string[][] = [["d", params.dTag]];
+        const pubkey = signer.getPubKey();
+
+        let existingEvent: { tags: string[][]; content: string } | null = null;
+        try {
+          const existingEvents = await fetchCachedEvents(30402, { pubkey });
+          const match = existingEvents.find((e) =>
+            e.tags.some((t) => t[0] === "d" && t[1] === params.dTag)
+          );
+          if (match) {
+            existingEvent = { tags: match.tags, content: match.content };
+          }
+        } catch (fetchErr) {
+          console.warn(
+            "update_product_listing: failed to fetch existing event for merge",
+            fetchErr
+          );
+        }
+
+        const baseTags: string[][] = existingEvent
+          ? existingEvent.tags.map((t) => [...t])
+          : [["d", params.dTag]];
+
+        const stripKeys = (keys: string[]) => {
+          const set = new Set(keys);
+          for (let i = baseTags.length - 1; i >= 0; i--) {
+            if (set.has(baseTags[i][0])) baseTags.splice(i, 1);
+          }
+        };
+
+        stripKeys(["published_at"]);
 
         if (params.title) {
-          tags.push(["alt", `Product listing: ${params.title}`]);
-          tags.push(["title", params.title]);
+          stripKeys(["alt", "title"]);
+          baseTags.push(["alt", `Product listing: ${params.title}`]);
+          baseTags.push(["title", params.title]);
         }
         if (params.description) {
-          tags.push(["summary", params.description]);
+          stripKeys(["summary"]);
+          baseTags.push(["summary", params.description]);
         }
         if (params.price && params.currency) {
-          tags.push(["price", params.price, params.currency]);
+          stripKeys(["price"]);
+          baseTags.push(["price", params.price, params.currency]);
         }
-        if (params.location) {
-          tags.push(["location", params.location]);
+        if (params.location !== undefined) {
+          stripKeys(["location"]);
+          baseTags.push(["location", params.location]);
         }
         if (params.shippingOption) {
-          tags.push([
+          const existingShipping = baseTags.find((t) => t[0] === "shipping");
+          const fallbackCurrency =
+            params.currency ||
+            existingShipping?.[3] ||
+            baseTags.find((t) => t[0] === "price")?.[2] ||
+            "";
+          stripKeys(["shipping"]);
+          baseTags.push([
             "shipping",
             params.shippingOption,
-            params.shippingCost || "0",
-            params.currency || "",
+            params.shippingCost || existingShipping?.[2] || "0",
+            fallbackCurrency,
           ]);
         }
         if (params.images) {
-          for (const img of params.images) {
-            tags.push(["image", img]);
-          }
+          stripKeys(["image"]);
+          for (const img of params.images) baseTags.push(["image", img]);
         }
         if (params.categories) {
-          for (const cat of params.categories) {
-            tags.push(["t", cat]);
-          }
-          tags.push(["t", "MilkMarket"]);
+          stripKeys(["t"]);
+          for (const cat of params.categories) baseTags.push(["t", cat]);
+          baseTags.push(["t", "MilkMarket"]);
         }
-        if (params.quantity) {
-          tags.push(["quantity", params.quantity]);
+        if (params.quantity !== undefined) {
+          stripKeys(["quantity"]);
+          baseTags.push(["quantity", params.quantity]);
         }
         if (params.condition) {
-          tags.push(["condition", params.condition]);
+          stripKeys(["condition"]);
+          baseTags.push(["condition", params.condition]);
         }
         if (params.status) {
-          tags.push(["status", params.status]);
+          stripKeys(["status"]);
+          baseTags.push(["status", params.status]);
         }
         if (params.sizes) {
-          for (const s of params.sizes) {
-            tags.push(["size", s.size, s.quantity]);
-          }
+          stripKeys(["size"]);
+          for (const s of params.sizes)
+            baseTags.push(["size", s.size, s.quantity]);
         }
         if (params.volumes) {
-          for (const v of params.volumes) {
-            tags.push(["volume", v.volume, v.price]);
-          }
+          stripKeys(["volume"]);
+          for (const v of params.volumes)
+            baseTags.push(["volume", v.volume, v.price]);
         }
         if (params.bulk) {
+          stripKeys(["bulk"]);
           for (const b of params.bulk) {
-            if (b.variant) {
-              tags.push(["bulk", b.units, b.price, b.variant]);
-            } else {
-              tags.push(["bulk", b.units, b.price]);
-            }
+            if (b.variant) baseTags.push(["bulk", b.units, b.price, b.variant]);
+            else baseTags.push(["bulk", b.units, b.price]);
           }
         }
         if (params.weights) {
-          for (const w of params.weights) {
-            tags.push(["weight", w.weight, w.price]);
+          stripKeys(["weight"]);
+          for (const w of params.weights)
+            baseTags.push(["weight", w.weight, w.price]);
+        }
+        if (params.herdshareAgreement !== undefined) {
+          stripKeys(["herdshare_agreement"]);
+          if (params.herdshareAgreement) {
+            baseTags.push(["herdshare_agreement", params.herdshareAgreement]);
           }
         }
-        if (params.herdshareAgreement) {
-          tags.push(["herdshare_agreement", params.herdshareAgreement]);
-        }
-        if (params.requiredCustomerInfo) {
-          tags.push(["required_customer_info", params.requiredCustomerInfo]);
+        if (params.requiredCustomerInfo !== undefined) {
+          stripKeys(["required_customer_info"]);
+          if (params.requiredCustomerInfo) {
+            baseTags.push([
+              "required_customer_info",
+              params.requiredCustomerInfo,
+            ]);
+          }
         }
         if (params.pickupLocations) {
-          for (const loc of params.pickupLocations) {
-            tags.push(["pickup_location", loc.trim()]);
-          }
+          stripKeys(["pickup_location"]);
+          for (const loc of params.pickupLocations)
+            baseTags.push(["pickup_location", loc.trim()]);
         }
         if (params.expiration) {
           const unixTime = Math.floor(
             new Date(params.expiration).getTime() / 1000
           );
-          tags.push(["valid_until", unixTime.toString()]);
+          stripKeys(["valid_until"]);
+          baseTags.push(["valid_until", unixTime.toString()]);
         }
 
-        if (params.subscriptionEnabled) {
-          tags.push(["subscription", "true"]);
-          if (params.subscriptionDiscount) {
-            tags.push(["subscription_discount", params.subscriptionDiscount]);
+        if (params.subscriptionEnabled !== undefined) {
+          stripKeys([
+            "subscription",
+            "subscription_discount",
+            "subscription_frequency",
+          ]);
+          if (params.subscriptionEnabled) {
+            baseTags.push(["subscription", "true"]);
+            if (params.subscriptionDiscount) {
+              baseTags.push([
+                "subscription_discount",
+                params.subscriptionDiscount,
+              ]);
+            }
+            if (
+              params.subscriptionFrequencies &&
+              params.subscriptionFrequencies.length > 0
+            ) {
+              baseTags.push([
+                "subscription_frequency",
+                ...params.subscriptionFrequencies,
+              ]);
+            }
           }
-          if (
-            params.subscriptionFrequencies &&
-            params.subscriptionFrequencies.length > 0
-          ) {
-            tags.push([
-              "subscription_frequency",
-              ...params.subscriptionFrequencies,
-            ]);
-          }
+        }
+
+        if (params.pageConfig !== undefined) {
+          stripKeys(["page_config"]);
+          const pageConfigTag = pageConfigToTag(params.pageConfig);
+          if (pageConfigTag) baseTags.push(pageConfigTag);
         }
 
         const created_at = Math.floor(Date.now() / 1000);
-        tags.push(["published_at", String(created_at)]);
-
-        const pageConfigTag = pageConfigToTag(params.pageConfig);
-        if (pageConfigTag) tags.push(pageConfigTag);
+        baseTags.push(["published_at", String(created_at)]);
 
         const eventTemplate: EventTemplate = {
           created_at,
           kind: 30402,
-          tags,
-          content: params.description || "",
+          tags: baseTags,
+          content:
+            params.description !== undefined
+              ? params.description
+              : existingEvent?.content || "",
         };
 
         const signedEvent = await signAndPublishEvent(signer, eventTemplate);
