@@ -1,5 +1,6 @@
 import { useState, useEffect, useContext, useMemo } from "react";
 import { useRouter } from "next/router";
+import Head from "next/head";
 import {
   Modal,
   ModalContent,
@@ -19,7 +20,7 @@ import parseTags, {
 import { parseZapsnagNote } from "@/utils/parsers/zapsnag-parser";
 import CheckoutCard from "../../components/utility-components/checkout-card";
 import ZapsnagButton from "../../components/ZapsnagButton";
-import { ProductContext } from "../../utils/context/context";
+import { ProductContext, ShopMapContext } from "../../utils/context/context";
 import { nip19 } from "nostr-tools";
 import {
   RawEventModal,
@@ -27,6 +28,7 @@ import {
 } from "../../components/utility-components/modals/event-modals";
 import { findProductBySlug, getListingSlug } from "@/utils/url-slugs";
 import StorefrontThemeWrapper from "@/components/storefront/storefront-theme-wrapper";
+import ProductPageRenderer from "@/components/storefront/product-page-renderer";
 import { GetServerSideProps } from "next";
 import { OgMetaProps, DEFAULT_OG } from "@/components/og-head";
 import {
@@ -89,11 +91,21 @@ function resolveListingStateFromEvent(
 function eventToOgMeta(event: NostrEvent, urlPath: string): OgMetaProps {
   const productData = parseTags(event);
   if (productData) {
+    const cfg = productData.pageConfig;
+    const galleryImage = cfg?.sections?.find(
+      (s) => s.type === "product_gallery" && s.galleryImages?.length
+    )?.galleryImages?.[0];
     return {
-      title: productData.title || "Milk Market Listing",
+      title: cfg?.metaTitle || productData.title || "Milk Market Listing",
       description:
-        productData.summary || "Check out this product on Milk Market!",
-      image: productData.images?.[0] || "/milk-market.png",
+        cfg?.metaDescription ||
+        productData.summary ||
+        "Check out this product on Milk Market!",
+      image:
+        cfg?.ogImage ||
+        productData.images?.[0] ||
+        galleryImage ||
+        "/milk-market.png",
       url: urlPath,
     };
   }
@@ -103,6 +115,48 @@ function eventToOgMeta(event: NostrEvent, urlPath: string): OgMetaProps {
     description: "Check out this listing on Milk Market!",
     url: urlPath,
   };
+}
+
+function buildProductJsonLd(
+  product: ProductData,
+  shopName?: string
+): Record<string, unknown> | null {
+  if (!product?.title) return null;
+  const cfg = product.pageConfig;
+  const galleryImages =
+    cfg?.sections?.find(
+      (s) => s.type === "product_gallery" && s.galleryImages?.length
+    )?.galleryImages || [];
+  const images = [...(product.images || []), ...galleryImages].filter(Boolean);
+  const description = cfg?.metaDescription || product.summary || product.title;
+  const availability =
+    product.status && product.status !== "active"
+      ? "https://schema.org/OutOfStock"
+      : "https://schema.org/InStock";
+  const price =
+    product.totalCost && product.totalCost > 0
+      ? product.totalCost
+      : product.price;
+  const ld: Record<string, unknown> = {
+    "@context": "https://schema.org/",
+    "@type": "Product",
+    name: cfg?.metaTitle || product.title,
+    description,
+  };
+  if (images.length > 0) ld.image = images;
+  if (product.d) ld.sku = product.d;
+  if (shopName) {
+    ld.brand = { "@type": "Brand", name: shopName };
+  }
+  if (price && product.currency) {
+    ld.offers = {
+      "@type": "Offer",
+      priceCurrency: product.currency,
+      price: String(price),
+      availability,
+    };
+  }
+  return ld;
 }
 
 const LISTING_FALLBACK: OgMetaProps = {
@@ -235,6 +289,7 @@ const Listing = ({ initialProductEvent }: ListingPageProps) => {
   }, [fiatOrderIsPlaced, invoiceIsPaid, cashuPaymentSent, router]);
 
   const productContext = useContext(ProductContext);
+  const shopMapContext = useContext(ShopMapContext);
 
   useEffect(() => {
     if (router.isReady) {
@@ -393,8 +448,24 @@ const Listing = ({ initialProductEvent }: ListingPageProps) => {
 
   const sellerPubkey = productData?.pubkey || "";
 
+  const productJsonLd = useMemo(() => {
+    if (!productData || isZapsnag) return null;
+    const shopName = shopMapContext?.shopData?.get(sellerPubkey)?.content?.name;
+    return buildProductJsonLd(productData, shopName);
+  }, [productData, isZapsnag, shopMapContext?.shopData, sellerPubkey]);
+
   const listingContent = (
     <>
+      {productJsonLd && (
+        <Head>
+          <script
+            type="application/ld+json"
+            dangerouslySetInnerHTML={{
+              __html: JSON.stringify(productJsonLd),
+            }}
+          />
+        </Head>
+      )}
       <div className="flex h-full min-h-screen flex-col bg-white pt-20">
         {productData ? (
           isZapsnag ? (
@@ -455,17 +526,23 @@ const Listing = ({ initialProductEvent }: ListingPageProps) => {
               />
             </div>
           ) : (
-            <CheckoutCard
-              key={productData.id}
-              productData={productData}
-              setFiatOrderIsPlaced={setFiatOrderIsPlaced}
-              setFiatOrderFailed={setFiatOrderFailed}
-              setInvoiceIsPaid={setInvoiceIsPaid}
-              setInvoiceGenerationFailed={setInvoiceGenerationFailed}
-              setCashuPaymentSent={setCashuPaymentSent}
-              setCashuPaymentFailed={setCashuPaymentFailed}
-              rawEvent={rawEvent}
-            />
+            <>
+              <CheckoutCard
+                key={productData.id}
+                productData={productData}
+                setFiatOrderIsPlaced={setFiatOrderIsPlaced}
+                setFiatOrderFailed={setFiatOrderFailed}
+                setInvoiceIsPaid={setInvoiceIsPaid}
+                setInvoiceGenerationFailed={setInvoiceGenerationFailed}
+                setCashuPaymentSent={setCashuPaymentSent}
+                setCashuPaymentFailed={setCashuPaymentFailed}
+                rawEvent={rawEvent}
+              />
+              <ProductPageRenderer
+                product={productData}
+                sellerPubkey={sellerPubkey}
+              />
+            </>
           )
         ) : isListingNotFound ? (
           <div className="flex min-h-[60vh] flex-col items-center justify-center px-4">

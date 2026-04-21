@@ -12,6 +12,12 @@ import SectionText from "./sections/section-text";
 import SectionImage from "./sections/section-image";
 import SectionContact from "./sections/section-contact";
 import SectionReviews from "./sections/section-reviews";
+import SectionProductDescription from "./sections/section-product-description";
+import SectionProductSpecifications from "./sections/section-product-specifications";
+import SectionProductShippingReturns from "./sections/section-product-shipping-returns";
+import SectionProductGallery from "./sections/section-product-gallery";
+import SectionProductReviews from "./sections/section-product-reviews";
+import SectionRelatedProducts from "./sections/section-related-products";
 
 interface SectionRendererProps {
   section: StorefrontSection;
@@ -21,6 +27,7 @@ interface SectionRendererProps {
   shopPubkey: string;
   products: ProductData[];
   isPreview?: boolean;
+  currentProduct?: ProductData;
 }
 
 export default function SectionRenderer({
@@ -31,6 +38,7 @@ export default function SectionRenderer({
   shopPubkey,
   products,
   isPreview,
+  currentProduct,
 }: SectionRendererProps) {
   if (section.enabled === false) return null;
 
@@ -72,10 +80,67 @@ export default function SectionRenderer({
     case "contact":
       return <SectionContact section={section} colors={colors} />;
     case "reviews":
+      if (currentProduct?.d) {
+        return (
+          <SectionProductReviews
+            section={section}
+            colors={colors}
+            shopPubkey={shopPubkey}
+            productDTag={currentProduct.d}
+          />
+        );
+      }
       return (
         <SectionReviews
           section={section}
           colors={colors}
+          shopPubkey={shopPubkey}
+        />
+      );
+    case "product_description":
+      if (!currentProduct) return null;
+      return (
+        <SectionProductDescription
+          section={section}
+          colors={colors}
+          product={currentProduct}
+        />
+      );
+    case "product_specifications":
+      if (!currentProduct) return null;
+      return (
+        <SectionProductSpecifications
+          section={section}
+          colors={colors}
+          product={currentProduct}
+        />
+      );
+    case "product_shipping_returns":
+      if (!currentProduct) return null;
+      return (
+        <SectionProductShippingReturns
+          section={section}
+          colors={colors}
+          product={currentProduct}
+        />
+      );
+    case "product_gallery":
+      if (!currentProduct) return null;
+      return (
+        <SectionProductGallery
+          section={section}
+          colors={colors}
+          product={currentProduct}
+        />
+      );
+    case "related_products":
+      if (!currentProduct) return null;
+      return (
+        <SectionRelatedProducts
+          section={section}
+          colors={colors}
+          products={products}
+          currentProduct={currentProduct}
           shopPubkey={shopPubkey}
         />
       );

@@ -8,10 +8,12 @@ import {
   StorefrontIngredientItem,
   StorefrontComparisonColumn,
   StorefrontTimelineItem,
+  StorefrontSpecificationItem,
 } from "@/utils/types/types";
 import { FileUploaderButton } from "@/components/utility-components/file-uploader";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
 import { ReviewsContext } from "@/utils/context/context";
+import { useDragReorder } from "@/utils/hooks/useDragReorder";
 
 interface SectionEditorProps {
   section: StorefrontSection;
@@ -25,6 +27,9 @@ interface SectionEditorProps {
   shopPubkey?: string;
   isNew?: boolean;
   onFlashDone?: () => void;
+  dragHandleProps?: React.HTMLAttributes<HTMLButtonElement> & {
+    draggable?: boolean;
+  };
 }
 
 const SECTION_LABELS: Record<StorefrontSectionType, string> = {
@@ -40,6 +45,11 @@ const SECTION_LABELS: Record<StorefrontSectionType, string> = {
   image: "Image",
   contact: "Contact",
   reviews: "Customer Reviews",
+  product_description: "Product Description",
+  product_specifications: "Product Specifications",
+  product_shipping_returns: "Shipping & Returns",
+  product_gallery: "Product Gallery",
+  related_products: "Related Products",
 };
 
 const inputWrapperClass =
@@ -66,6 +76,7 @@ export default function SectionEditor({
   shopPubkey,
   isNew,
   onFlashDone,
+  dragHandleProps,
 }: SectionEditorProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isFlashing, setIsFlashing] = useState(false);
@@ -103,12 +114,22 @@ export default function SectionEditor({
     >
       <div className="flex items-center justify-between px-4 py-3">
         <div className="flex items-center gap-3">
+          {dragHandleProps && (
+            <button
+              type="button"
+              {...dragHandleProps}
+              className="text-base leading-none text-gray-400 select-none hover:text-black"
+            >
+              ⋮⋮
+            </button>
+          )}
           <div className="flex flex-col gap-1">
             <button
               type="button"
               onClick={onMoveUp}
               disabled={isFirst}
               className="text-xs text-gray-400 hover:text-black disabled:opacity-30"
+              aria-label="Move section up"
             >
               ▲
             </button>
@@ -117,6 +138,7 @@ export default function SectionEditor({
               onClick={onMoveDown}
               disabled={isLast}
               className="text-xs text-gray-400 hover:text-black disabled:opacity-30"
+              aria-label="Move section down"
             >
               ▼
             </button>
@@ -186,9 +208,14 @@ export default function SectionEditor({
             />
           )}
 
-          {["about", "story", "text", "ingredients", "contact"].includes(
-            section.type
-          ) && (
+          {[
+            "about",
+            "story",
+            "text",
+            "ingredients",
+            "contact",
+            "product_description",
+          ].includes(section.type) && (
             <Textarea
               label="Body Text"
               classNames={{ inputWrapper: inputWrapperClass }}
@@ -457,6 +484,118 @@ export default function SectionEditor({
               items={section.timelineItems || []}
               onChange={(timelineItems) => update({ timelineItems })}
             />
+          )}
+
+          {section.type === "product_specifications" && (
+            <>
+              <SpecificationEditor
+                items={section.specifications || []}
+                onChange={(specifications) => update({ specifications })}
+              />
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={section.mergeAutoSpecs === true}
+                  onChange={(e) => update({ mergeAutoSpecs: e.target.checked })}
+                />
+                Also include auto-detected specs from product fields (category,
+                size, condition, etc.)
+              </label>
+            </>
+          )}
+
+          {section.type === "product_shipping_returns" && (
+            <>
+              <Textarea
+                label="Shipping Information"
+                classNames={{ inputWrapper: inputWrapperClass }}
+                variant="bordered"
+                minRows={3}
+                value={section.shippingInfo || ""}
+                onChange={(e) => update({ shippingInfo: e.target.value })}
+                placeholder="Leave blank to use product's shipping settings"
+              />
+              <Textarea
+                label="Returns & Exchanges Policy"
+                classNames={{ inputWrapper: inputWrapperClass }}
+                variant="bordered"
+                minRows={3}
+                value={section.returnsInfo || ""}
+                onChange={(e) => update({ returnsInfo: e.target.value })}
+              />
+            </>
+          )}
+
+          {section.type === "product_gallery" && (
+            <>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={section.useProductImages !== false}
+                  onChange={(e) =>
+                    update({ useProductImages: e.target.checked })
+                  }
+                />
+                Include product images
+              </label>
+              <GalleryImageEditor
+                images={section.galleryImages || []}
+                onChange={(galleryImages) => update({ galleryImages })}
+              />
+            </>
+          )}
+
+          {section.type === "related_products" && (
+            <>
+              <Input
+                label="Limit"
+                classNames={{ inputWrapper: inputWrapperClass }}
+                variant="bordered"
+                type="number"
+                min="1"
+                value={
+                  section.productLimit ? String(section.productLimit) : "6"
+                }
+                onChange={(e) =>
+                  update({
+                    productLimit: e.target.value
+                      ? parseInt(e.target.value)
+                      : undefined,
+                  })
+                }
+              />
+              <Select
+                label="Layout"
+                classNames={selectClassNames}
+                variant="bordered"
+                selectedKeys={[section.productLayout || "grid"]}
+                onChange={(e) =>
+                  update({
+                    productLayout: e.target.value as
+                      | "grid"
+                      | "list"
+                      | "featured",
+                  })
+                }
+              >
+                <SelectItem key="grid" className="text-black">
+                  Grid
+                </SelectItem>
+                <SelectItem key="list" className="text-black">
+                  List
+                </SelectItem>
+              </Select>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={section.excludeCurrentProduct !== false}
+                  onChange={(e) =>
+                    update({ excludeCurrentProduct: e.target.checked })
+                  }
+                />
+                Exclude the current product
+              </label>
+            </>
           )}
 
           {section.type === "comparison" && (
@@ -1259,6 +1398,143 @@ function ReviewOrderList({
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+function SpecificationEditor({
+  items,
+  onChange,
+}: {
+  items: StorefrontSpecificationItem[];
+  onChange: (items: StorefrontSpecificationItem[]) => void;
+}) {
+  const add = () => onChange([...items, { label: "", value: "" }]);
+  const remove = (idx: number) => onChange(items.filter((_, i) => i !== idx));
+  const edit = (idx: number, fields: Partial<StorefrontSpecificationItem>) => {
+    const updated = [...items];
+    updated[idx] = { ...updated[idx]!, ...fields };
+    onChange(updated);
+  };
+
+  return (
+    <div className="space-y-3">
+      <label className="block text-sm font-bold text-gray-700">
+        Specifications
+      </label>
+      <p className="text-xs text-gray-500">
+        Leave empty to auto-generate from product fields (condition, location,
+        categories, sizes, etc.).
+      </p>
+      {items.map((item, idx) => (
+        <div key={idx} className="flex items-start gap-2">
+          <Input
+            label="Label"
+            size="sm"
+            classNames={{ inputWrapper: inputWrapperClass }}
+            variant="bordered"
+            value={item.label}
+            onChange={(e) => edit(idx, { label: e.target.value })}
+            className="flex-1"
+          />
+          <Input
+            label="Value"
+            size="sm"
+            classNames={{ inputWrapper: inputWrapperClass }}
+            variant="bordered"
+            value={item.value}
+            onChange={(e) => edit(idx, { value: e.target.value })}
+            className="flex-1"
+          />
+          <button
+            type="button"
+            onClick={() => remove(idx)}
+            className="mt-2 text-xs text-red-500"
+          >
+            ✕
+          </button>
+        </div>
+      ))}
+      <button
+        type="button"
+        onClick={add}
+        className="text-sm font-bold text-blue-600 hover:underline"
+      >
+        + Add Specification
+      </button>
+    </div>
+  );
+}
+
+function GalleryImageEditor({
+  images,
+  onChange,
+}: {
+  images: string[];
+  onChange: (images: string[]) => void;
+}) {
+  const add = (url: string) => onChange([...images, url]);
+  const remove = (idx: number) => onChange(images.filter((_, i) => i !== idx));
+  const dnd = useDragReorder(images, onChange);
+
+  return (
+    <div className="space-y-3">
+      <label className="block text-sm font-bold text-gray-700">
+        Additional Gallery Images
+      </label>
+      {images.map((url, idx) => {
+        const drag = dnd.getItemProps(idx);
+        return (
+          <div
+            key={idx}
+            {...drag.rootProps}
+            className={`flex items-center gap-2 rounded transition-all ${
+              drag.isDragging ? "opacity-40" : ""
+            } ${drag.isDragOver ? "ring-2 ring-blue-400 ring-offset-1" : ""}`}
+          >
+            <button
+              type="button"
+              {...drag.handleProps}
+              className="text-base leading-none text-gray-400 select-none hover:text-black"
+            >
+              ⋮⋮
+            </button>
+            {url && /^https?:\/\/|^data:image\//i.test(url) && (
+              <img
+                src={url}
+                alt=""
+                className="h-10 w-10 flex-shrink-0 rounded object-cover"
+              />
+            )}
+            <Input
+              size="sm"
+              classNames={{ inputWrapper: inputWrapperClass }}
+              variant="bordered"
+              value={url}
+              onChange={(e) => {
+                const updated = [...images];
+                updated[idx] = e.target.value;
+                onChange(updated);
+              }}
+              className="flex-1"
+            />
+            <button
+              type="button"
+              onClick={() => remove(idx)}
+              className="text-xs text-red-500"
+              aria-label="Remove image"
+            >
+              ✕
+            </button>
+          </div>
+        );
+      })}
+      <FileUploaderButton
+        className="rounded-lg border-2 border-black bg-white px-3 py-2 text-sm font-bold text-black"
+        imgCallbackOnUpload={(url) => add(url)}
+      >
+        Upload Image
+      </FileUploaderButton>
     </div>
   );
 }

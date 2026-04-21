@@ -221,6 +221,34 @@ export async function PostListing(
   return signedEvent;
 }
 
+export async function republishProductWithPageConfig(
+  rawEvent: NostrEvent,
+  pageConfig: unknown,
+  signer: NostrSigner,
+  nostr: NostrManager
+) {
+  if (!signer) throw new Error("Signer required");
+  if (!nostr) throw new Error("Nostr writer required");
+
+  const tags = rawEvent.tags.filter(
+    (t) => t[0] !== "page_config" && t[0] !== "published_at"
+  );
+  if (pageConfig) {
+    tags.push(["page_config", JSON.stringify(pageConfig)]);
+  }
+  const created_at = Math.floor(Date.now() / 1000);
+  tags.push(["published_at", String(created_at)]);
+
+  const event: EventTemplate = {
+    created_at,
+    kind: 30402,
+    tags,
+    content: rawEvent.content || "",
+  };
+
+  return await finalizeAndSendNostrEvent(signer, nostr, event);
+}
+
 export async function createNostrShopEvent(
   nostr: NostrManager,
   signer: NostrSigner,

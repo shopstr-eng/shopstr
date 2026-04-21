@@ -70,8 +70,10 @@ import {
   PopupFlowStep,
 } from "@/utils/types/types";
 import SectionEditor from "./storefront/section-editor";
+import { useDragReorder } from "@/utils/hooks/useDragReorder";
 import FooterEditor from "./storefront/footer-editor";
 import PageEditor from "./storefront/page-editor";
+import ProductPageEditor from "./storefront/product-page-editor";
 import StorefrontPreviewModal from "./storefront/storefront-preview-modal";
 import StorefrontPreviewPanel from "./storefront/storefront-preview-panel";
 import { sanitizeStorefrontConfigLinks } from "@/utils/storefront-links";
@@ -273,8 +275,12 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
   const [fontUploadingHeading, setFontUploadingHeading] = useState(false);
   const [fontUploadingBody, setFontUploadingBody] = useState(false);
   const [sections, setSections] = useState<StorefrontSection[]>([]);
+  const sectionsDnd = useDragReorder(sections, setSections);
   const [newSectionId, setNewSectionId] = useState<string | null>(null);
   const [pages, setPages] = useState<StorefrontPage[]>([]);
+  const [productPageDefaults, setProductPageDefaults] = useState<
+    StorefrontSection[]
+  >([]);
   const [footer, setFooter] = useState<StorefrontFooter>({
     showPoweredBy: true,
   });
@@ -373,6 +379,8 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
         if (sf.customFontBodyName) setCustomFontBodyName(sf.customFontBodyName);
         if (sf.sections) setSections(sf.sections);
         if (sf.pages) setPages(sf.pages);
+        if (sf.productPageDefaults)
+          setProductPageDefaults(sf.productPageDefaults);
         if (sf.footer) setFooter(sf.footer);
         if (sf.navLinks) setNavLinks(sf.navLinks);
         if (sf.navColors) setNavColors(sf.navColors);
@@ -468,6 +476,8 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
       if (sf.customFontBodyName) setCustomFontBodyName(sf.customFontBodyName);
       if (sf.sections) setSections(sf.sections);
       if (sf.pages) setPages(sf.pages);
+      if (sf.productPageDefaults)
+        setProductPageDefaults(sf.productPageDefaults);
       if (sf.footer) setFooter(sf.footer);
       if (sf.navLinks) setNavLinks(sf.navLinks);
       if (sf.navColors) setNavColors(sf.navColors);
@@ -773,6 +783,8 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
         customFontBodyName: customFontBodyName || undefined,
         sections: sections.length > 0 ? sections : undefined,
         pages: pages.length > 0 ? pages : undefined,
+        productPageDefaults:
+          productPageDefaults.length > 0 ? productPageDefaults : undefined,
         footer,
         navLinks: navLinks.length > 0 ? navLinks : undefined,
         navColors:
@@ -1864,6 +1876,34 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                       </div>
 
                       <div className="mb-6">
+                        <label className="mb-2 block text-base font-bold text-black">
+                          Product Page Template
+                        </label>
+                        <p className="mb-3 text-sm text-gray-500">
+                          Default sections to show on every product&apos;s
+                          detail page. Individual products can override these
+                          from the Customize Page button on each listing.
+                        </p>
+                        <ProductPageEditor
+                          sections={productPageDefaults}
+                          onChange={setProductPageDefaults}
+                          sellerProducts={sellerProducts}
+                          shopPubkey={userPubkey}
+                          showSizeReadout
+                          preview={{
+                            colors: colorScheme,
+                            shopName: watch("name") || "Shop",
+                            fontHeading,
+                            fontBody,
+                            customFontHeadingUrl,
+                            customFontHeadingName,
+                            customFontBodyUrl,
+                            customFontBodyName,
+                          }}
+                        />
+                      </div>
+
+                      <div className="mb-6">
                         <label className="mb-2 flex items-center gap-3 text-base font-bold text-black">
                           <input
                             type="checkbox"
@@ -2706,45 +2746,60 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                           landing page style above is used instead.
                         </p>
                         <div className="space-y-2">
-                          {sections.map((section, idx) => (
-                            <SectionEditor
-                              key={section.id}
-                              section={section}
-                              onChange={(updated) => {
-                                const newSections = [...sections];
-                                newSections[idx] = updated;
-                                setSections(newSections);
-                              }}
-                              onRemove={() =>
-                                setSections(
-                                  sections.filter((_, i) => i !== idx)
-                                )
-                              }
-                              onMoveUp={() => {
-                                if (idx === 0) return;
-                                const newSections = [...sections];
-                                [newSections[idx - 1], newSections[idx]] = [
-                                  newSections[idx]!,
-                                  newSections[idx - 1]!,
-                                ];
-                                setSections(newSections);
-                              }}
-                              onMoveDown={() => {
-                                if (idx === sections.length - 1) return;
-                                const newSections = [...sections];
-                                [newSections[idx], newSections[idx + 1]] = [
-                                  newSections[idx + 1]!,
-                                  newSections[idx]!,
-                                ];
-                                setSections(newSections);
-                              }}
-                              isFirst={idx === 0}
-                              isLast={idx === sections.length - 1}
-                              sellerProducts={sellerProducts}
-                              isNew={newSectionId === section.id}
-                              onFlashDone={() => setNewSectionId(null)}
-                            />
-                          ))}
+                          {sections.map((section, idx) => {
+                            const drag = sectionsDnd.getItemProps(idx);
+                            return (
+                              <div
+                                key={section.id}
+                                {...drag.rootProps}
+                                className={`transition-all ${
+                                  drag.isDragging ? "opacity-40" : ""
+                                } ${
+                                  drag.isDragOver
+                                    ? "rounded-lg ring-2 ring-blue-400 ring-offset-1"
+                                    : ""
+                                }`}
+                              >
+                                <SectionEditor
+                                  section={section}
+                                  onChange={(updated) => {
+                                    const newSections = [...sections];
+                                    newSections[idx] = updated;
+                                    setSections(newSections);
+                                  }}
+                                  onRemove={() =>
+                                    setSections(
+                                      sections.filter((_, i) => i !== idx)
+                                    )
+                                  }
+                                  onMoveUp={() => {
+                                    if (idx === 0) return;
+                                    const newSections = [...sections];
+                                    [newSections[idx - 1], newSections[idx]] = [
+                                      newSections[idx]!,
+                                      newSections[idx - 1]!,
+                                    ];
+                                    setSections(newSections);
+                                  }}
+                                  onMoveDown={() => {
+                                    if (idx === sections.length - 1) return;
+                                    const newSections = [...sections];
+                                    [newSections[idx], newSections[idx + 1]] = [
+                                      newSections[idx + 1]!,
+                                      newSections[idx]!,
+                                    ];
+                                    setSections(newSections);
+                                  }}
+                                  isFirst={idx === 0}
+                                  isLast={idx === sections.length - 1}
+                                  sellerProducts={sellerProducts}
+                                  isNew={newSectionId === section.id}
+                                  onFlashDone={() => setNewSectionId(null)}
+                                  dragHandleProps={drag.handleProps}
+                                />
+                              </div>
+                            );
+                          })}
                         </div>
                         <div className="mt-3">
                           <p className="mb-2 text-xs font-semibold tracking-wider text-gray-400 uppercase">

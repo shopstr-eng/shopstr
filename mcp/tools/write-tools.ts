@@ -123,6 +123,145 @@ async function getSigner(apiKey: ApiKeyRecord): Promise<McpNostrSigner | null> {
   return result.signer as McpNostrSigner;
 }
 
+const PAGE_CONFIG_SECTION_TYPES = [
+  "hero",
+  "about",
+  "story",
+  "products",
+  "testimonials",
+  "faq",
+  "ingredients",
+  "comparison",
+  "text",
+  "image",
+  "contact",
+  "reviews",
+  "product_description",
+  "product_specifications",
+  "product_shipping_returns",
+  "product_gallery",
+  "related_products",
+] as const;
+
+const pageConfigSectionSchema = z
+  .object({
+    id: z.string().describe("Unique section ID"),
+    type: z.enum(PAGE_CONFIG_SECTION_TYPES).describe("Section type"),
+    enabled: z.boolean().optional(),
+    heading: z.string().optional(),
+    subheading: z.string().optional(),
+    body: z.string().optional(),
+    image: z.string().optional(),
+    imagePosition: z.enum(["left", "right"]).optional(),
+    fullWidth: z.boolean().optional(),
+    ctaText: z.string().optional(),
+    ctaLink: z.string().optional(),
+    overlayOpacity: z.number().optional(),
+    productLayout: z.enum(["grid", "list", "featured"]).optional(),
+    productLimit: z.number().optional(),
+    productIds: z.array(z.string()).optional(),
+    heroProductId: z.string().optional(),
+    email: z.string().optional(),
+    phone: z.string().optional(),
+    address: z.string().optional(),
+    caption: z.string().optional(),
+    reviewOrder: z.array(z.string()).optional(),
+    specifications: z
+      .array(z.object({ label: z.string(), value: z.string() }))
+      .optional()
+      .describe("Specification rows for product_specifications sections"),
+    shippingInfo: z
+      .string()
+      .optional()
+      .describe("Shipping body for product_shipping_returns sections"),
+    returnsInfo: z
+      .string()
+      .optional()
+      .describe("Returns body for product_shipping_returns sections"),
+    galleryImages: z
+      .array(z.string())
+      .optional()
+      .describe("Additional image URLs for product_gallery sections"),
+    useProductImages: z
+      .boolean()
+      .optional()
+      .describe("Include the product's main images in product_gallery"),
+    excludeCurrentProduct: z
+      .boolean()
+      .optional()
+      .describe("Exclude the current product from related_products"),
+    mergeAutoSpecs: z
+      .boolean()
+      .optional()
+      .describe(
+        "Auto-merge specs derived from the product (categories, condition, etc.) with custom specifications"
+      ),
+    items: z
+      .array(z.object({ question: z.string(), answer: z.string() }))
+      .optional(),
+    testimonials: z
+      .array(
+        z.object({
+          quote: z.string(),
+          author: z.string(),
+          image: z.string().optional(),
+          rating: z.number().optional(),
+        })
+      )
+      .optional(),
+  })
+  .passthrough();
+
+const productPageConfigSchema = z
+  .object({
+    sections: z
+      .array(pageConfigSectionSchema)
+      .optional()
+      .describe(
+        "Ordered sections for the product detail page. Include product-scoped types like 'product_description', 'product_specifications', 'product_shipping_returns', 'product_gallery', 'related_products', plus reusable types like 'reviews', 'text', 'image', 'faq'."
+      ),
+    themeOverrides: z
+      .object({
+        primary: z.string().optional(),
+        secondary: z.string().optional(),
+        accent: z.string().optional(),
+        background: z.string().optional(),
+        text: z.string().optional(),
+      })
+      .partial()
+      .optional()
+      .describe("Hex color overrides applied only to this product page"),
+    metaTitle: z
+      .string()
+      .optional()
+      .describe("SEO meta/OG title override (recommended ≤ 60 chars)"),
+    metaDescription: z
+      .string()
+      .optional()
+      .describe("SEO meta/OG description override (recommended ≤ 160 chars)"),
+    ogImage: z
+      .string()
+      .optional()
+      .describe("OG image URL override for social sharing"),
+  })
+  .describe(
+    "Per-product page customization. Persists as a 'page_config' tag on the kind 30402 event. Omit to inherit shop-wide product page defaults."
+  );
+
+function pageConfigToTag(
+  cfg: z.infer<typeof productPageConfigSchema> | undefined
+): string[] | null {
+  if (!cfg) return null;
+  const hasContent =
+    (cfg.sections && cfg.sections.length > 0) ||
+    (cfg.themeOverrides && Object.keys(cfg.themeOverrides).length > 0) ||
+    !!cfg.metaTitle ||
+    !!cfg.metaDescription ||
+    !!cfg.ogImage;
+  if (!hasContent) return null;
+  return ["page_config", JSON.stringify(cfg)];
+}
+
 export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
   const baseUrl = `http://localhost:${process.env.PORT || 5000}`;
 
@@ -468,6 +607,11 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         .describe(
           "Enable a Bitcoin wallet page on the storefront for Cashu ecash payments. When true, a 'Wallet' link is auto-added to the nav and /shop/{slug}/wallet shows the wallet UI."
         ),
+      productPageDefaults: productPageConfigSchema
+        .optional()
+        .describe(
+          "Shop-wide defaults for every product detail page. Individual products can override these by setting their own page_config tag. Stored as storefront.productPageDefaults on the kind 30019 event."
+        ),
     },
     async (params) => {
       const startTime = Date.now();
@@ -533,6 +677,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           storefront.showCommunityPage = params.showCommunityPage;
         if (params.showWalletPage !== undefined)
           storefront.showWalletPage = params.showWalletPage;
+        if (params.productPageDefaults)
+          storefront.productPageDefaults = params.productPageDefaults;
         if (Object.keys(storefront).length > 0) content.storefront = storefront;
 
         const eventTemplate: EventTemplate = {
@@ -793,6 +939,11 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         .describe(
           "Available subscription frequencies (e.g. ['weekly', 'monthly', 'quarterly'])"
         ),
+      pageConfig: productPageConfigSchema
+        .optional()
+        .describe(
+          "Per-product page customization (sections, theme overrides, SEO meta). Persists as a 'page_config' tag. Omit to inherit shop-wide product page defaults."
+        ),
     },
     async (params) => {
       const startTime = Date.now();
@@ -917,6 +1068,9 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
         const created_at = Math.floor(Date.now() / 1000);
         tags.push(["published_at", String(created_at)]);
+
+        const pageConfigTag = pageConfigToTag(params.pageConfig);
+        if (pageConfigTag) tags.push(pageConfigTag);
 
         const eventTemplate: EventTemplate = {
           created_at,
@@ -1055,6 +1209,11 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         .describe(
           "Available subscription frequencies (e.g. ['weekly', 'monthly', 'quarterly'])"
         ),
+      pageConfig: productPageConfigSchema
+        .optional()
+        .describe(
+          "Updated per-product page customization. Provide a full StorefrontProductPageConfig object to overwrite. Provide an empty object ({}) to clear and revert to shop-wide defaults. Omit to leave the existing page_config tag in place is NOT supported — this tool republishes the event so the tag must be supplied to be retained."
+        ),
     },
     async (params) => {
       const startTime = Date.now();
@@ -1166,6 +1325,9 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
         const created_at = Math.floor(Date.now() / 1000);
         tags.push(["published_at", String(created_at)]);
+
+        const pageConfigTag = pageConfigToTag(params.pageConfig);
+        if (pageConfigTag) tags.push(pageConfigTag);
 
         const eventTemplate: EventTemplate = {
           created_at,

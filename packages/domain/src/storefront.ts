@@ -102,7 +102,17 @@ export type StorefrontSectionType =
   | "text"
   | "image"
   | "contact"
-  | "reviews";
+  | "reviews"
+  | "product_description"
+  | "product_specifications"
+  | "product_shipping_returns"
+  | "product_gallery"
+  | "related_products";
+
+export interface StorefrontSpecificationItem {
+  label: string;
+  value: string;
+}
 
 export interface StorefrontSection {
   id: string;
@@ -132,6 +142,21 @@ export interface StorefrontSection {
   address?: string;
   caption?: string;
   reviewOrder?: string[];
+  specifications?: StorefrontSpecificationItem[];
+  shippingInfo?: string;
+  returnsInfo?: string;
+  galleryImages?: string[];
+  useProductImages?: boolean;
+  excludeCurrentProduct?: boolean;
+  mergeAutoSpecs?: boolean;
+}
+
+export interface StorefrontProductPageConfig {
+  sections?: StorefrontSection[];
+  themeOverrides?: Partial<StorefrontColorScheme>;
+  ogImage?: string;
+  metaTitle?: string;
+  metaDescription?: string;
 }
 
 export interface StorefrontPage {
@@ -210,4 +235,5 @@ export interface StorefrontConfig {
   navColors?: StorefrontNavColors;
   footerColors?: StorefrontFooterColors;
   seoMeta?: StorefrontSeoMeta;
+  productPageDefaults?: StorefrontSection[];
 }

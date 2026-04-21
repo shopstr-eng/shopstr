@@ -99,23 +99,29 @@ export default function StorefrontProductGrid({
         </div>
       )}
 
-      <div
-        className={
-          layout === "list"
-            ? "flex flex-col gap-4"
-            : "grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3"
-        }
-      >
-        {remainingProducts.map((product) => {
-          const slug = getListingSlug(product, products);
-          const href = `/listing/${slug}`;
-          return (
-            <div key={product.id || product.d}>
-              <ProductCard productData={product} href={href} />
-            </div>
-          );
-        })}
-      </div>
+      {remainingProducts.length > 0 && (
+        <div
+          className={
+            layout === "list"
+              ? "mx-auto flex max-w-3xl flex-col gap-4"
+              : remainingProducts.length === 1
+                ? "mx-auto grid max-w-xs grid-cols-1 gap-6"
+                : remainingProducts.length === 2
+                  ? "mx-auto grid max-w-2xl grid-cols-1 gap-6 sm:grid-cols-2"
+                  : "grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3"
+          }
+        >
+          {remainingProducts.map((product) => {
+            const slug = getListingSlug(product, products);
+            const href = `/listing/${slug}`;
+            return (
+              <div key={product.id || product.d}>
+                <ProductCard productData={product} href={href} />
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {totalPages > 1 && (
         <div className="mt-8 flex justify-center">

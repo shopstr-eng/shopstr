@@ -444,6 +444,10 @@ export default function ProductForm({
         });
     }
 
+    if (oldValues?.pageConfig) {
+      tags.push(["page_config", JSON.stringify(oldValues.pageConfig)]);
+    }
+
     const newListing = await PostListing(tags, signer!, isLoggedIn!, nostr!);
 
     //Handle Flash Sale (Zapsnag) Publication

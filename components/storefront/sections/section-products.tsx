@@ -146,88 +146,94 @@ function PreviewProductGridInline({
           </div>
         </div>
       )}
-      <div
-        className={
-          layout === "list"
-            ? "space-y-4"
-            : "grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3"
-        }
-      >
-        {remaining.map((product) =>
-          layout === "list" ? (
-            <div
-              key={product.id}
-              className="flex gap-4 overflow-hidden rounded-xl border-2 p-4"
-              style={{ borderColor: colors.primary + "22" }}
-            >
-              {product.images?.[0] && (
-                <img
-                  src={product.images[0]}
-                  alt={product.title}
-                  className="h-24 w-24 flex-shrink-0 rounded-lg object-cover"
-                />
-              )}
-              <div className="flex flex-1 flex-col justify-center">
-                <h3 className="font-heading text-base font-bold">
-                  {product.title}
-                </h3>
-                <p className="font-body mt-1 line-clamp-2 text-sm opacity-60">
-                  {product.summary}
-                </p>
-                <span
-                  className="mt-2 text-base font-bold"
-                  style={{ color: colors.accent }}
-                >
-                  ${product.price}
-                </span>
-              </div>
-            </div>
-          ) : (
-            <div
-              key={product.id}
-              className="overflow-hidden rounded-xl border-2 transition-shadow hover:shadow-lg"
-              style={{ borderColor: colors.primary + "22" }}
-            >
-              {product.images?.[0] && (
-                <div className="aspect-square overflow-hidden">
+      {remaining.length > 0 && (
+        <div
+          className={
+            layout === "list"
+              ? "mx-auto max-w-3xl space-y-4"
+              : remaining.length === 1
+                ? "mx-auto grid max-w-xs grid-cols-1 gap-6"
+                : remaining.length === 2
+                  ? "mx-auto grid max-w-2xl grid-cols-1 gap-6 sm:grid-cols-2"
+                  : "grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3"
+          }
+        >
+          {remaining.map((product) =>
+            layout === "list" ? (
+              <div
+                key={product.id}
+                className="flex gap-4 overflow-hidden rounded-xl border-2 p-4"
+                style={{ borderColor: colors.primary + "22" }}
+              >
+                {product.images?.[0] && (
                   <img
                     src={product.images[0]}
                     alt={product.title}
-                    className="h-full w-full object-cover transition-transform hover:scale-105"
+                    className="h-24 w-24 flex-shrink-0 rounded-lg object-cover"
                   />
-                </div>
-              )}
-              <div className="p-4">
-                <h3 className="font-heading line-clamp-1 text-base font-bold">
-                  {product.title}
-                </h3>
-                <p className="font-body mt-1 line-clamp-2 text-sm opacity-60">
-                  {product.summary}
-                </p>
-                <div className="mt-3 flex items-center justify-between">
+                )}
+                <div className="flex flex-1 flex-col justify-center">
+                  <h3 className="font-heading text-base font-bold">
+                    {product.title}
+                  </h3>
+                  <p className="font-body mt-1 line-clamp-2 text-sm opacity-60">
+                    {product.summary}
+                  </p>
                   <span
-                    className="text-lg font-bold"
+                    className="mt-2 text-base font-bold"
                     style={{ color: colors.accent }}
                   >
                     ${product.price}
                   </span>
-                  {product.categories?.[0] && (
-                    <span
-                      className="rounded-full px-3 py-1 text-xs font-bold"
-                      style={{
-                        backgroundColor: colors.primary + "22",
-                        color: colors.primary,
-                      }}
-                    >
-                      {product.categories[0]}
-                    </span>
-                  )}
                 </div>
               </div>
-            </div>
-          )
-        )}
-      </div>
+            ) : (
+              <div
+                key={product.id}
+                className="overflow-hidden rounded-xl border-2 transition-shadow hover:shadow-lg"
+                style={{ borderColor: colors.primary + "22" }}
+              >
+                {product.images?.[0] && (
+                  <div className="aspect-square overflow-hidden">
+                    <img
+                      src={product.images[0]}
+                      alt={product.title}
+                      className="h-full w-full object-cover transition-transform hover:scale-105"
+                    />
+                  </div>
+                )}
+                <div className="p-4">
+                  <h3 className="font-heading line-clamp-1 text-base font-bold">
+                    {product.title}
+                  </h3>
+                  <p className="font-body mt-1 line-clamp-2 text-sm opacity-60">
+                    {product.summary}
+                  </p>
+                  <div className="mt-3 flex items-center justify-between">
+                    <span
+                      className="text-lg font-bold"
+                      style={{ color: colors.accent }}
+                    >
+                      ${product.price}
+                    </span>
+                    {product.categories?.[0] && (
+                      <span
+                        className="rounded-full px-3 py-1 text-xs font-bold"
+                        style={{
+                          backgroundColor: colors.primary + "22",
+                          color: colors.primary,
+                        }}
+                      >
+                        {product.categories[0]}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )
+          )}
+        </div>
+      )}
     </div>
   );
 }
