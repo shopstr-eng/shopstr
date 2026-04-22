@@ -5,7 +5,6 @@ import {
   UserIcon,
   UserGroupIcon,
   ArrowRightStartOnRectangleIcon,
-  BanknotesIcon,
   KeyIcon,
   EnvelopeIcon,
 } from "@heroicons/react/24/outline";
@@ -41,20 +40,13 @@ const SettingsPage = () => {
       route: "/settings/community",
     },
     {
-      id: "preferences",
-      title: "Preferences",
-      description: "Change your mints, relays, media servers, and more",
+      id: "account",
+      title: "Account Settings & Preferences",
+      description:
+        "Back up your account, manage your payment settings, and configure your data storage",
       icon: Cog6ToothIcon,
       iconBg: "bg-slate-600",
-      route: "/settings/preferences",
-    },
-    {
-      id: "nostr-wallet-connect",
-      title: "Nostr Wallet Connect",
-      description: "Connect your NIP-47 Nostr Wallet",
-      icon: BanknotesIcon,
-      iconBg: "bg-slate-600",
-      route: "/settings/nwc",
+      route: "/settings/account",
     },
     {
       id: "email-flows",

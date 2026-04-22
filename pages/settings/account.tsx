@@ -27,16 +27,20 @@ import {
   publishWalletEvent,
 } from "@/utils/nostr/nostr-helper-functions";
 import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs";
-import MilkMarketSlider from "../../components/utility-components/mm-slider";
-import FailureModal from "../../components/utility-components/failure-modal";
+import MilkMarketSlider from "@/components/utility-components/mm-slider";
+import FailureModal from "@/components/utility-components/failure-modal";
 import {
   NostrContext,
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
 import ProtectedRoute from "@/components/utility-components/protected-route";
+import NostrKeysSection from "@/components/settings/nostr-keys-section";
+import NWCSection from "@/components/settings/nwc-section";
 
-const PreferencesPage = () => {
+const AccountSettingsPage = () => {
   const { nostr } = useContext(NostrContext);
+  const { signer } = useContext(SignerContext);
+
   const [relays, setRelays] = useState(Array<string>(0));
   const [readRelays, setReadRelays] = useState(Array<string>(0));
   const [writeRelays, setWriteRelays] = useState(Array<string>(0));
@@ -55,7 +59,6 @@ const PreferencesPage = () => {
   const [showMintModal, setShowMintModal] = useState(false);
 
   const [isLoaded, setIsLoaded] = useState(false);
-  const { signer } = useContext(SignerContext);
 
   const [showFailureModal, setShowFailureModal] = useState(false);
   const [failureText, setFailureText] = useState("");
@@ -263,6 +266,19 @@ const PreferencesPage = () => {
         <div className="mx-auto w-full px-4 lg:w-1/2 xl:w-2/5">
           <SettingsBreadCrumbs />
 
+          <div className="mb-6">
+            <h1 className="text-3xl font-bold text-black">
+              Account Settings &amp; Preferences
+            </h1>
+            <p className="mt-2 text-sm text-gray-600">
+              Back up your account, manage your payment settings, and configure
+              your data storage.
+            </p>
+          </div>
+
+          {/* Nostr Keys + Recovery */}
+          <NostrKeysSection />
+
           {/* Mint Section */}
           <div className="mb-8">
             <h2 className="mb-4 text-2xl font-bold">Mint</h2>
@@ -297,25 +313,23 @@ const PreferencesPage = () => {
               </div>
             )}
 
-            {mints.length > 0 && (
-              <div className="mb-4 flex items-start gap-2 text-sm text-gray-600">
-                <InformationCircleIcon className="mt-0.5 h-5 w-5 flex-shrink-0" />
-                <p>
-                  This mint is used to handle{" "}
-                  <Link href="https://cashu.space" passHref legacyBehavior>
-                    <a
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="underline"
-                    >
-                      Cashu
-                    </a>
-                  </Link>{" "}
-                  tokens within your wallet and to send to the seller upon
-                  purchase.
-                </p>
-              </div>
-            )}
+            <div className="mb-4 flex items-start gap-2 text-sm text-gray-600">
+              <InformationCircleIcon className="mt-0.5 h-5 w-5 flex-shrink-0" />
+              <p>
+                This mint is used to handle{" "}
+                <Link href="https://cashu.space" passHref legacyBehavior>
+                  <a
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline"
+                  >
+                    Cashu
+                  </a>
+                </Link>{" "}
+                tokens within your wallet and to send to the seller upon
+                purchase.
+              </p>
+            </div>
 
             <Button
               className={BLUEBUTTONCLASSNAMES}
@@ -324,6 +338,9 @@ const PreferencesPage = () => {
               Change Active Mint
             </Button>
           </div>
+
+          {/* Nostr Wallet Connect */}
+          <NWCSection />
 
           {/* Read/Write Relays Section */}
           <div className="mb-8">
@@ -802,4 +819,4 @@ const PreferencesPage = () => {
   );
 };
 
-export default PreferencesPage;
+export default AccountSettingsPage;

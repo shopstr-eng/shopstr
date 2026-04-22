@@ -11,7 +11,7 @@ const MilkMarketSwitch = ({
   const router = useRouter();
 
   const handleTrustClick = () => {
-    router.push("/settings/preferences");
+    router.push("/settings/account");
   };
 
   return (

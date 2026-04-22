@@ -117,7 +117,7 @@ export default function StorefrontWallet({ colors }: StorefrontWalletProps) {
   }, [mintKeySetIds]);
 
   const handleMintClick = () => {
-    router.push("/settings/preferences");
+    router.push("/settings/account");
   };
 
   if (!isLoggedIn) {

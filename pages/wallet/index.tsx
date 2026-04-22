@@ -105,7 +105,7 @@ const Wallet = () => {
   }, [mintKeySetIds]);
 
   const handleMintClick = () => {
-    router.push("/settings/preferences");
+    router.push("/settings/account");
   };
 
   return (

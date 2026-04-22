@@ -55,7 +55,7 @@ describe("MilkMarketSwitch", () => {
 
     fireEvent.click(trustLabel);
 
-    expect(mockRouterPush).toHaveBeenCalledWith("/settings/preferences");
+    expect(mockRouterPush).toHaveBeenCalledWith("/settings/account");
   });
 
   it('should have the "secondary" color in light mode', () => {
