@@ -21,12 +21,13 @@ export const SettingsBreadCrumbs = () => {
         key="foreground"
         color="success"
         classNames={{
-          base: "pb-2",
+          base: "pb-2 w-full min-w-0",
+          list: "flex-wrap",
         }}
       >
         {path.map((p, i) => {
           const itemClassName =
-            "ml-2 text-light-text text-2xl font-bold" +
+            "ml-2 text-light-text text-2xl font-bold whitespace-normal break-words" +
             (i !== path.length - 1 ? " opacity-50 hover:opacity-100" : "");
           return (
             <BreadcrumbItem
@@ -35,6 +36,7 @@ export const SettingsBreadCrumbs = () => {
                 router.push(`/${p}`);
               }}
               classNames={{
+                base: "min-w-0",
                 item: itemClassName,
                 separator: "text-dark-bg text-2xl",
               }}
