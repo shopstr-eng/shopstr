@@ -263,7 +263,7 @@ const AccountSettingsPage = () => {
   return (
     <ProtectedRoute>
       <div className="flex min-h-screen flex-col bg-white pt-24 pb-20">
-        <div className="mx-auto w-full px-6 lg:w-1/2 xl:w-2/5">
+        <div className="mx-auto w-full max-w-full px-6 sm:px-8 lg:w-1/2 lg:px-8 xl:w-2/5">
           <SettingsBreadCrumbs />
 
           <div className="mb-6">
