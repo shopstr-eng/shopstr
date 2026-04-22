@@ -152,6 +152,38 @@ export function verifySignedHttpRequestProof(
   return { ok: true, status: 200 };
 }
 
+export function buildCancelSubscriptionProof({
+  pubkey,
+  subscriptionId,
+}: {
+  pubkey: string;
+  subscriptionId: string;
+}): SignedHttpRequestProof {
+  return {
+    action: "cancel_subscription",
+    method: "POST",
+    path: "/api/stripe/cancel-subscription",
+    pubkey,
+    fields: { subscriptionId },
+  };
+}
+
+export function buildUpdateSubscriptionProof({
+  pubkey,
+  subscriptionId,
+}: {
+  pubkey: string;
+  subscriptionId: string;
+}): SignedHttpRequestProof {
+  return {
+    action: "update_subscription",
+    method: "POST",
+    path: "/api/stripe/update-subscription",
+    pubkey,
+    fields: { subscriptionId },
+  };
+}
+
 export function buildDiscountCodesListProof(
   pubkey: string
 ): SignedHttpRequestProof {

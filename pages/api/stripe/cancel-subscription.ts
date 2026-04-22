@@ -9,6 +9,11 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
   apiVersion: "2025-09-30.clover",
 });
 import { applyRateLimit } from "@/utils/rate-limit";
+import {
+  buildCancelSubscriptionProof,
+  extractSignedEventFromRequest,
+  verifySignedHttpRequestProof,
+} from "@/utils/nostr/request-auth";
 
 // Rate limit: per-IP cap to bound abuse of payment endpoints.
 const RATE_LIMIT = { limit: 30, windowMs: 60000 };
@@ -34,6 +39,30 @@ export default async function handler(
     const dbSubscription = await getSubscriptionByStripeId(subscriptionId);
     if (!dbSubscription) {
       return res.status(404).json({ error: "Subscription not found" });
+    }
+
+    const signedEvent = extractSignedEventFromRequest(req);
+    const verification = verifySignedHttpRequestProof(
+      signedEvent,
+      buildCancelSubscriptionProof({
+        pubkey: signedEvent?.pubkey || "",
+        subscriptionId,
+      })
+    );
+    if (!verification.ok) {
+      return res
+        .status(verification.status)
+        .json({ error: verification.error });
+    }
+    const sub = dbSubscription as any;
+    const callerPubkey = signedEvent!.pubkey;
+    if (
+      callerPubkey !== sub.seller_pubkey &&
+      callerPubkey !== sub.buyer_pubkey
+    ) {
+      return res
+        .status(403)
+        .json({ error: "You do not own this subscription" });
     }
 
     const stripeOptions = connectedAccountId

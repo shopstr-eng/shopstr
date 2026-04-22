@@ -12,7 +12,6 @@ import {
   fetchAllProfilesFromDb,
   fetchCachedEvents,
   fetchCommentsByReviewIds,
-  getSubscriptionsBySellerPubkey,
   createEmailFlow,
   getEmailFlows,
   getEmailFlow,
@@ -23,6 +22,7 @@ import {
   updateFlowStep,
   deleteFlowStep,
   getFlowEnrollments,
+  getSubscriptionsBySellerPubkey,
   getDbPool,
 } from "@/utils/db/db-service";
 import dns from "dns";
@@ -33,12 +33,35 @@ import {
   canActorUpdateMcpOrderStatus,
 } from "./order-status-auth";
 import {
+  buildAffiliateClickStatsProof,
+  buildAffiliateCodeCreateProof,
+  buildAffiliateCodeDeleteProof,
+  buildAffiliateCodeUpdateProof,
+  buildAffiliateCodesListProof,
+  buildAffiliateCreateProof,
+  buildAffiliateDeleteProof,
+  buildAffiliateMarkPaidProof,
+  buildAffiliatePayoutsListProof,
+  buildAffiliateReverseReferralProof,
+  buildAffiliateUpdateProof,
+  buildAffiliatesListProof,
+  buildCancelSubscriptionProof,
+  buildClearFailedRelayPublishProof,
   buildDiscountCodeCreateProof,
   buildDiscountCodeDeleteProof,
   buildDiscountCodesListProof,
+  buildListFailedRelayPublishesProof,
   buildSignedHttpRequestProofTemplate,
+  buildUpdateSubscriptionProof,
   SIGNED_EVENT_HEADER,
 } from "@/utils/nostr/request-auth";
+import {
+  buildMcpRequestProofTemplate,
+  buildStripeAccountStatusProof,
+  buildStripeCreateAccountLinkProof,
+  buildStripeCreateAccountProof,
+  MCP_SIGNED_EVENT_HEADER,
+} from "@/utils/mcp/request-proof";
 
 const resolveCname = promisify(dns.resolveCname);
 const resolve4 = promisify(dns.resolve4);
@@ -4519,6 +4542,1426 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
       } catch (error) {
         return errorResponse(
           "Failed to list email captures",
+          error instanceof Error ? error.message : "Unknown error",
+          startTime
+        );
+      }
+    }
+  );
+
+  registerTool(
+    server,
+    "list_affiliates",
+    "List all affiliates (referral partners) registered to your shop.",
+    {},
+    async () => {
+      const startTime = Date.now();
+      if (apiKey.permissions !== "full_access") return permissionError();
+      const signer = await getSigner(apiKey);
+      if (!signer) return noSignerError();
+
+      try {
+        const pubkey = signer.getPubKey();
+        const signedEvent = signer.sign(
+          buildSignedHttpRequestProofTemplate(buildAffiliatesListProof(pubkey))
+        );
+        const res = await fetch(
+          `${baseUrl}/api/affiliates/manage?pubkey=${pubkey}`,
+          {
+            headers: { [SIGNED_EVENT_HEADER]: JSON.stringify(signedEvent) },
+          }
+        );
+        const data = await res.json();
+        if (!res.ok) {
+          return errorResponse(
+            "Failed to list affiliates",
+            data.error || "Unknown error",
+            startTime
+          );
+        }
+        return successResponse(
+          { count: Array.isArray(data) ? data.length : 0, affiliates: data },
+          startTime
+        );
+      } catch (error) {
+        return errorResponse(
+          "Failed to list affiliates",
+          error instanceof Error ? error.message : "Unknown error",
+          startTime
+        );
+      }
+    }
+  );
+
+  registerTool(
+    server,
+    "create_affiliate",
+    "Register a new affiliate (referral partner) for your shop. Returns the created record including a unique invite_token the affiliate uses to claim their account.",
+    {
+      name: z.string().describe("Affiliate display name"),
+      email: z.string().optional().describe("Contact email (optional)"),
+      lightningAddress: z
+        .string()
+        .optional()
+        .describe("Lightning address for payouts (optional)"),
+      stripeAccountId: z
+        .string()
+        .optional()
+        .describe("Stripe Connect account id for payouts (optional)"),
+      notes: z.string().optional().describe("Internal notes (optional)"),
+    },
+    async (params) => {
+      const startTime = Date.now();
+      if (apiKey.permissions !== "full_access") return permissionError();
+      const signer = await getSigner(apiKey);
+      if (!signer) return noSignerError();
+
+      try {
+        const pubkey = signer.getPubKey();
+        const signedEvent = signer.sign(
+          buildSignedHttpRequestProofTemplate(
+            buildAffiliateCreateProof({ pubkey, name: params.name })
+          )
+        );
+        const res = await fetch(`${baseUrl}/api/affiliates/manage`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            [SIGNED_EVENT_HEADER]: JSON.stringify(signedEvent),
+          },
+          body: JSON.stringify({ pubkey, ...params }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          return errorResponse(
+            "Failed to create affiliate",
+            data.error || "Unknown error",
+            startTime
+          );
+        }
+        return successResponse({ affiliate: data }, startTime);
+      } catch (error) {
+        return errorResponse(
+          "Failed to create affiliate",
+          error instanceof Error ? error.message : "Unknown error",
+          startTime
+        );
+      }
+    }
+  );
+
+  registerTool(
+    server,
+    "update_affiliate",
+    "Update an existing affiliate's metadata (name, email, payout details, notes).",
+    {
+      affiliateId: z.number().describe("Affiliate id to update"),
+      name: z.string().optional(),
+      email: z.string().optional(),
+      lightningAddress: z.string().optional(),
+      stripeAccountId: z.string().optional(),
+      notes: z.string().optional(),
+    },
+    async (params) => {
+      const startTime = Date.now();
+      if (apiKey.permissions !== "full_access") return permissionError();
+      const signer = await getSigner(apiKey);
+      if (!signer) return noSignerError();
+
+      try {
+        const pubkey = signer.getPubKey();
+        const signedEvent = signer.sign(
+          buildSignedHttpRequestProofTemplate(
+            buildAffiliateUpdateProof({
+              pubkey,
+              affiliateId: params.affiliateId,
+            })
+          )
+        );
+        const res = await fetch(`${baseUrl}/api/affiliates/manage`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            [SIGNED_EVENT_HEADER]: JSON.stringify(signedEvent),
+          },
+          body: JSON.stringify({ pubkey, ...params }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          return errorResponse(
+            "Failed to update affiliate",
+            data.error || "Unknown error",
+            startTime
+          );
+        }
+        return successResponse({ affiliate: data }, startTime);
+      } catch (error) {
+        return errorResponse(
+          "Failed to update affiliate",
+          error instanceof Error ? error.message : "Unknown error",
+          startTime
+        );
+      }
+    }
+  );
+
+  registerTool(
+    server,
+    "delete_affiliate",
+    "Delete an affiliate. Fails with a 409 if the affiliate has an unsettled balance unless `force` is true.",
+    {
+      affiliateId: z.number().describe("Affiliate id to delete"),
+      force: z
+        .boolean()
+        .optional()
+        .describe("Force delete even if there is an unsettled balance"),
+    },
+    async (params) => {
+      const startTime = Date.now();
+      if (apiKey.permissions !== "full_access") return permissionError();
+      const signer = await getSigner(apiKey);
+      if (!signer) return noSignerError();
+
+      try {
+        const pubkey = signer.getPubKey();
+        const signedEvent = signer.sign(
+          buildSignedHttpRequestProofTemplate(
+            buildAffiliateDeleteProof({
+              pubkey,
+              affiliateId: params.affiliateId,
+            })
+          )
+        );
+        const res = await fetch(`${baseUrl}/api/affiliates/manage`, {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+            [SIGNED_EVENT_HEADER]: JSON.stringify(signedEvent),
+          },
+          body: JSON.stringify({
+            pubkey,
+            affiliateId: params.affiliateId,
+            force: params.force ?? false,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          return errorResponse(
+            "Failed to delete affiliate",
+            data.error || "Unknown error",
+            startTime
+          );
+        }
+        return successResponse(
+          { affiliateId: params.affiliateId, deleted: true },
+          startTime
+        );
+      } catch (error) {
+        return errorResponse(
+          "Failed to delete affiliate",
+          error instanceof Error ? error.message : "Unknown error",
+          startTime
+        );
+      }
+    }
+  );
+
+  registerTool(
+    server,
+    "regenerate_affiliate_invite_token",
+    "Rotate the invite token for an affiliate. Useful if the previous link was leaked or needs to be reissued.",
+    {
+      affiliateId: z.number().describe("Affiliate id"),
+    },
+    async (params) => {
+      const startTime = Date.now();
+      if (apiKey.permissions !== "full_access") return permissionError();
+      const signer = await getSigner(apiKey);
+      if (!signer) return noSignerError();
+
+      try {
+        const pubkey = signer.getPubKey();
+        const signedEvent = signer.sign(
+          buildSignedHttpRequestProofTemplate(
+            buildAffiliateUpdateProof({
+              pubkey,
+              affiliateId: params.affiliateId,
+            })
+          )
+        );
+        const res = await fetch(`${baseUrl}/api/affiliates/manage`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            [SIGNED_EVENT_HEADER]: JSON.stringify(signedEvent),
+          },
+          body: JSON.stringify({
+            pubkey,
+            affiliateId: params.affiliateId,
+            action: "regenerate-invite-token",
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          return errorResponse(
+            "Failed to regenerate invite token",
+            data.error || "Unknown error",
+            startTime
+          );
+        }
+        return successResponse(
+          { affiliateId: params.affiliateId, inviteToken: data.invite_token },
+          startTime
+        );
+      } catch (error) {
+        return errorResponse(
+          "Failed to regenerate invite token",
+          error instanceof Error ? error.message : "Unknown error",
+          startTime
+        );
+      }
+    }
+  );
+
+  registerTool(
+    server,
+    "set_affiliate_payouts_enabled",
+    "Enable or disable automated payouts for a specific affiliate.",
+    {
+      affiliateId: z.number().describe("Affiliate id"),
+      enabled: z.boolean().describe("Whether automated payouts are enabled"),
+    },
+    async (params) => {
+      const startTime = Date.now();
+      if (apiKey.permissions !== "full_access") return permissionError();
+      const signer = await getSigner(apiKey);
+      if (!signer) return noSignerError();
+
+      try {
+        const pubkey = signer.getPubKey();
+        const signedEvent = signer.sign(
+          buildSignedHttpRequestProofTemplate(
+            buildAffiliateUpdateProof({
+              pubkey,
+              affiliateId: params.affiliateId,
+            })
+          )
+        );
+        const res = await fetch(`${baseUrl}/api/affiliates/manage`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            [SIGNED_EVENT_HEADER]: JSON.stringify(signedEvent),
+          },
+          body: JSON.stringify({
+            pubkey,
+            affiliateId: params.affiliateId,
+            action: "set-payouts-enabled",
+            enabled: params.enabled,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          return errorResponse(
+            "Failed to update payouts setting",
+            data.error || "Unknown error",
+            startTime
+          );
+        }
+        return successResponse({ affiliate: data }, startTime);
+      } catch (error) {
+        return errorResponse(
+          "Failed to update payouts setting",
+          error instanceof Error ? error.message : "Unknown error",
+          startTime
+        );
+      }
+    }
+  );
+
+  registerTool(
+    server,
+    "list_affiliate_codes",
+    "List all affiliate codes registered across your affiliates.",
+    {},
+    async () => {
+      const startTime = Date.now();
+      if (apiKey.permissions !== "full_access") return permissionError();
+      const signer = await getSigner(apiKey);
+      if (!signer) return noSignerError();
+
+      try {
+        const pubkey = signer.getPubKey();
+        const signedEvent = signer.sign(
+          buildSignedHttpRequestProofTemplate(
+            buildAffiliateCodesListProof(pubkey)
+          )
+        );
+        const res = await fetch(
+          `${baseUrl}/api/affiliates/codes?pubkey=${pubkey}`,
+          {
+            headers: { [SIGNED_EVENT_HEADER]: JSON.stringify(signedEvent) },
+          }
+        );
+        const data = await res.json();
+        if (!res.ok) {
+          return errorResponse(
+            "Failed to list affiliate codes",
+            data.error || "Unknown error",
+            startTime
+          );
+        }
+        return successResponse(
+          { count: Array.isArray(data) ? data.length : 0, codes: data },
+          startTime
+        );
+      } catch (error) {
+        return errorResponse(
+          "Failed to list affiliate codes",
+          error instanceof Error ? error.message : "Unknown error",
+          startTime
+        );
+      }
+    }
+  );
+
+  registerTool(
+    server,
+    "create_affiliate_code",
+    "Create an affiliate (referral) code linked to one of your affiliates. The code is normalized to uppercase server-side.",
+    {
+      affiliateId: z.number().describe("Affiliate id this code belongs to"),
+      code: z.string().describe("Code string (e.g. 'ALICE10')"),
+      rebateType: z
+        .enum(["percent", "fixed"])
+        .describe("How the affiliate's rebate is computed"),
+      rebateValue: z
+        .number()
+        .describe(
+          "Rebate value: percent (0-100) for 'percent', smallest currency unit for 'fixed'"
+        ),
+      buyerDiscountType: z
+        .enum(["percent", "fixed"])
+        .optional()
+        .describe("Buyer-facing discount type (default 'percent')"),
+      buyerDiscountValue: z
+        .number()
+        .optional()
+        .describe("Buyer-facing discount value (default 0)"),
+      currency: z
+        .string()
+        .optional()
+        .describe("Currency code for fixed amounts (e.g. 'USD', 'SAT')"),
+      payoutSchedule: z
+        .enum(["weekly", "biweekly", "monthly"])
+        .optional()
+        .describe("Cadence for automated payouts (default 'monthly')"),
+      expiration: z
+        .number()
+        .optional()
+        .describe("Expiration as Unix timestamp (optional)"),
+      maxUses: z
+        .number()
+        .optional()
+        .describe("Maximum number of uses before deactivation (optional)"),
+    },
+    async (params) => {
+      const startTime = Date.now();
+      if (apiKey.permissions !== "full_access") return permissionError();
+      const signer = await getSigner(apiKey);
+      if (!signer) return noSignerError();
+
+      try {
+        const pubkey = signer.getPubKey();
+        const normalizedCode = params.code.trim().toUpperCase();
+        const signedEvent = signer.sign(
+          buildSignedHttpRequestProofTemplate(
+            buildAffiliateCodeCreateProof({
+              pubkey,
+              affiliateId: params.affiliateId,
+              code: normalizedCode,
+            })
+          )
+        );
+        const res = await fetch(`${baseUrl}/api/affiliates/codes`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            [SIGNED_EVENT_HEADER]: JSON.stringify(signedEvent),
+          },
+          body: JSON.stringify({ pubkey, ...params, code: normalizedCode }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          return errorResponse(
+            "Failed to create affiliate code",
+            data.error || "Unknown error",
+            startTime
+          );
+        }
+        return successResponse({ code: data }, startTime);
+      } catch (error) {
+        return errorResponse(
+          "Failed to create affiliate code",
+          error instanceof Error ? error.message : "Unknown error",
+          startTime
+        );
+      }
+    }
+  );
+
+  registerTool(
+    server,
+    "update_affiliate_code",
+    "Update an affiliate code's settings (active state, limits, expiration, etc).",
+    {
+      codeId: z.number().describe("Affiliate code id"),
+      isActive: z.boolean().optional(),
+      maxUses: z.number().optional(),
+      expiration: z.number().optional(),
+      rebateType: z.enum(["percent", "fixed"]).optional(),
+      rebateValue: z.number().optional(),
+      buyerDiscountType: z.enum(["percent", "fixed"]).optional(),
+      buyerDiscountValue: z.number().optional(),
+      payoutSchedule: z.enum(["weekly", "biweekly", "monthly"]).optional(),
+    },
+    async (params) => {
+      const startTime = Date.now();
+      if (apiKey.permissions !== "full_access") return permissionError();
+      const signer = await getSigner(apiKey);
+      if (!signer) return noSignerError();
+
+      try {
+        const pubkey = signer.getPubKey();
+        const signedEvent = signer.sign(
+          buildSignedHttpRequestProofTemplate(
+            buildAffiliateCodeUpdateProof({ pubkey, codeId: params.codeId })
+          )
+        );
+        const res = await fetch(`${baseUrl}/api/affiliates/codes`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            [SIGNED_EVENT_HEADER]: JSON.stringify(signedEvent),
+          },
+          body: JSON.stringify({ pubkey, ...params }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          return errorResponse(
+            "Failed to update affiliate code",
+            data.error || "Unknown error",
+            startTime
+          );
+        }
+        return successResponse({ code: data }, startTime);
+      } catch (error) {
+        return errorResponse(
+          "Failed to update affiliate code",
+          error instanceof Error ? error.message : "Unknown error",
+          startTime
+        );
+      }
+    }
+  );
+
+  registerTool(
+    server,
+    "delete_affiliate_code",
+    "Delete an affiliate code.",
+    {
+      codeId: z.number().describe("Affiliate code id to delete"),
+    },
+    async (params) => {
+      const startTime = Date.now();
+      if (apiKey.permissions !== "full_access") return permissionError();
+      const signer = await getSigner(apiKey);
+      if (!signer) return noSignerError();
+
+      try {
+        const pubkey = signer.getPubKey();
+        const signedEvent = signer.sign(
+          buildSignedHttpRequestProofTemplate(
+            buildAffiliateCodeDeleteProof({ pubkey, codeId: params.codeId })
+          )
+        );
+        const res = await fetch(`${baseUrl}/api/affiliates/codes`, {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+            [SIGNED_EVENT_HEADER]: JSON.stringify(signedEvent),
+          },
+          body: JSON.stringify({ pubkey, codeId: params.codeId }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          return errorResponse(
+            "Failed to delete affiliate code",
+            data.error || "Unknown error",
+            startTime
+          );
+        }
+        return successResponse(
+          { codeId: params.codeId, deleted: true },
+          startTime
+        );
+      } catch (error) {
+        return errorResponse(
+          "Failed to delete affiliate code",
+          error instanceof Error ? error.message : "Unknown error",
+          startTime
+        );
+      }
+    }
+  );
+
+  registerTool(
+    server,
+    "list_affiliate_payouts",
+    "Fetch payout balances, historical payouts, and referral records for your affiliates.",
+    {},
+    async () => {
+      const startTime = Date.now();
+      if (apiKey.permissions !== "full_access") return permissionError();
+      const signer = await getSigner(apiKey);
+      if (!signer) return noSignerError();
+
+      try {
+        const pubkey = signer.getPubKey();
+        const signedEvent = signer.sign(
+          buildSignedHttpRequestProofTemplate(
+            buildAffiliatePayoutsListProof(pubkey)
+          )
+        );
+        const res = await fetch(
+          `${baseUrl}/api/affiliates/payouts?pubkey=${pubkey}`,
+          {
+            headers: { [SIGNED_EVENT_HEADER]: JSON.stringify(signedEvent) },
+          }
+        );
+        const data = await res.json();
+        if (!res.ok) {
+          return errorResponse(
+            "Failed to list affiliate payouts",
+            data.error || "Unknown error",
+            startTime
+          );
+        }
+        return successResponse(data, startTime);
+      } catch (error) {
+        return errorResponse(
+          "Failed to list affiliate payouts",
+          error instanceof Error ? error.message : "Unknown error",
+          startTime
+        );
+      }
+    }
+  );
+
+  registerTool(
+    server,
+    "mark_affiliate_paid",
+    "Manually mark an affiliate's pending balance as settled out-of-band (cash, off-platform transfer, etc). Settles the entire bundle for the given currency.",
+    {
+      affiliateId: z.number().describe("Affiliate id"),
+      amountSmallest: z
+        .number()
+        .describe("Amount in smallest currency unit (cents, sats, etc)"),
+      currency: z.string().describe("Currency code (e.g. 'USD', 'SAT')"),
+      note: z.string().optional().describe("Internal note for the payout"),
+    },
+    async (params) => {
+      const startTime = Date.now();
+      if (apiKey.permissions !== "full_access") return permissionError();
+      const signer = await getSigner(apiKey);
+      if (!signer) return noSignerError();
+
+      try {
+        const pubkey = signer.getPubKey();
+        const signedEvent = signer.sign(
+          buildSignedHttpRequestProofTemplate(
+            buildAffiliateMarkPaidProof({
+              pubkey,
+              affiliateId: params.affiliateId,
+              amountSmallest: params.amountSmallest,
+              currency: params.currency,
+            })
+          )
+        );
+        const res = await fetch(`${baseUrl}/api/affiliates/mark-paid`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            [SIGNED_EVENT_HEADER]: JSON.stringify(signedEvent),
+          },
+          body: JSON.stringify({ pubkey, ...params }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          return errorResponse(
+            "Failed to mark affiliate paid",
+            data.error || "Unknown error",
+            startTime
+          );
+        }
+        return successResponse(data, startTime);
+      } catch (error) {
+        return errorResponse(
+          "Failed to mark affiliate paid",
+          error instanceof Error ? error.message : "Unknown error",
+          startTime
+        );
+      }
+    }
+  );
+
+  registerTool(
+    server,
+    "reverse_affiliate_referral",
+    "Manually reverse affiliate referrals tied to an order (used when refunding Lightning/Cashu orders that have no Stripe webhook).",
+    {
+      orderId: z
+        .string()
+        .describe("Order id whose referrals should be reversed"),
+      originalGrossSmallest: z
+        .number()
+        .optional()
+        .describe(
+          "Original gross order amount in smallest unit (for partial-refund scaling)"
+        ),
+      refundedSmallest: z
+        .number()
+        .optional()
+        .describe(
+          "Refunded amount in smallest unit (for partial-refund scaling)"
+        ),
+      note: z
+        .string()
+        .max(256)
+        .optional()
+        .describe("Short note recorded with the reversal (max 256 chars)"),
+    },
+    async (params) => {
+      const startTime = Date.now();
+      if (apiKey.permissions !== "full_access") return permissionError();
+      const signer = await getSigner(apiKey);
+      if (!signer) return noSignerError();
+
+      try {
+        const pubkey = signer.getPubKey();
+        const signedEvent = signer.sign(
+          buildSignedHttpRequestProofTemplate(
+            buildAffiliateReverseReferralProof({
+              pubkey,
+              orderId: params.orderId,
+              sellerPubkey: pubkey,
+            })
+          )
+        );
+        const res = await fetch(`${baseUrl}/api/affiliates/reverse-referral`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            [SIGNED_EVENT_HEADER]: JSON.stringify(signedEvent),
+          },
+          body: JSON.stringify({
+            pubkey,
+            sellerPubkey: pubkey,
+            ...params,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          return errorResponse(
+            "Failed to reverse affiliate referral",
+            data.error || "Unknown error",
+            startTime
+          );
+        }
+        return successResponse(data, startTime);
+      } catch (error) {
+        return errorResponse(
+          "Failed to reverse affiliate referral",
+          error instanceof Error ? error.message : "Unknown error",
+          startTime
+        );
+      }
+    }
+  );
+
+  registerTool(
+    server,
+    "list_affiliate_click_stats",
+    "Fetch per-code click and conversion aggregates for your affiliate codes.",
+    {
+      sinceDays: z
+        .number()
+        .min(1)
+        .max(365)
+        .optional()
+        .describe("Lookback window in days (1-365, default 30)"),
+    },
+    async (params) => {
+      const startTime = Date.now();
+      if (apiKey.permissions !== "full_access") return permissionError();
+      const signer = await getSigner(apiKey);
+      if (!signer) return noSignerError();
+
+      try {
+        const pubkey = signer.getPubKey();
+        const signedEvent = signer.sign(
+          buildSignedHttpRequestProofTemplate(
+            buildAffiliateClickStatsProof(pubkey)
+          )
+        );
+        const qs = new URLSearchParams({ pubkey });
+        if (params.sinceDays != null)
+          qs.set("sinceDays", String(params.sinceDays));
+        const res = await fetch(
+          `${baseUrl}/api/affiliates/click-stats?${qs.toString()}`,
+          {
+            headers: { [SIGNED_EVENT_HEADER]: JSON.stringify(signedEvent) },
+          }
+        );
+        const data = await res.json();
+        if (!res.ok) {
+          return errorResponse(
+            "Failed to fetch affiliate click stats",
+            data.error || "Unknown error",
+            startTime
+          );
+        }
+        return successResponse(data, startTime);
+      } catch (error) {
+        return errorResponse(
+          "Failed to fetch affiliate click stats",
+          error instanceof Error ? error.message : "Unknown error",
+          startTime
+        );
+      }
+    }
+  );
+
+  registerTool(
+    server,
+    "get_stock",
+    "Look up current inventory levels for one of your products. Returns the per-variant breakdown if no variantKey is provided.",
+    {
+      productId: z.string().describe("Product id (Nostr d-tag)"),
+      variantKey: z
+        .string()
+        .optional()
+        .describe(
+          "Variant key (e.g. '_default' or 'size:XL'). Omit to list all variants."
+        ),
+    },
+    async (params) => {
+      const startTime = Date.now();
+      if (apiKey.permissions !== "full_access") return permissionError();
+      const signer = await getSigner(apiKey);
+      if (!signer) return noSignerError();
+
+      try {
+        const qs = new URLSearchParams({ productId: params.productId });
+        if (params.variantKey) qs.set("variantKey", params.variantKey);
+        const res = await fetch(`${baseUrl}/api/inventory?${qs.toString()}`);
+        const data = await res.json();
+        if (!res.ok) {
+          return errorResponse(
+            "Failed to fetch stock",
+            data.error || "Unknown error",
+            startTime
+          );
+        }
+        return successResponse(data, startTime);
+      } catch (error) {
+        return errorResponse(
+          "Failed to fetch stock",
+          error instanceof Error ? error.message : "Unknown error",
+          startTime
+        );
+      }
+    }
+  );
+
+  registerTool(
+    server,
+    "set_stock",
+    "Set inventory quantity for one of your products (or a specific variant). Always uses your signing pubkey as the seller.",
+    {
+      productId: z.string().describe("Product id (Nostr d-tag)"),
+      quantity: z.number().int().min(0).describe("New quantity"),
+      variantKey: z
+        .string()
+        .optional()
+        .describe("Variant key (default '_default' for non-variant products)"),
+      source: z
+        .string()
+        .optional()
+        .describe("Free-form source label, defaults to 'seller_override'"),
+    },
+    async (params) => {
+      const startTime = Date.now();
+      if (apiKey.permissions !== "full_access") return permissionError();
+      const signer = await getSigner(apiKey);
+      if (!signer) return noSignerError();
+
+      try {
+        const sellerPubkey = signer.getPubKey();
+        const res = await fetch(`${baseUrl}/api/inventory`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "set",
+            productId: params.productId,
+            sellerPubkey,
+            quantity: params.quantity,
+            variantKey: params.variantKey,
+            source: params.source ?? "seller_override",
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          return errorResponse(
+            "Failed to set stock",
+            data.error || "Unknown error",
+            startTime
+          );
+        }
+        return successResponse(data, startTime);
+      } catch (error) {
+        return errorResponse(
+          "Failed to set stock",
+          error instanceof Error ? error.message : "Unknown error",
+          startTime
+        );
+      }
+    }
+  );
+
+  registerTool(
+    server,
+    "list_failed_relay_publishes",
+    "List your Nostr events that failed to publish to one or more relays. Use clear_failed_relay_publish or retry_failed_relay_publish to resolve them.",
+    {},
+    async () => {
+      const startTime = Date.now();
+      if (apiKey.permissions !== "full_access") return permissionError();
+      const signer = await getSigner(apiKey);
+      if (!signer) return noSignerError();
+
+      try {
+        const pubkey = signer.getPubKey();
+        const signedEvent = signer.sign(
+          buildSignedHttpRequestProofTemplate(
+            buildListFailedRelayPublishesProof(pubkey)
+          )
+        );
+        const res = await fetch(`${baseUrl}/api/db/get-failed-publishes`, {
+          headers: { [SIGNED_EVENT_HEADER]: JSON.stringify(signedEvent) },
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          return errorResponse(
+            "Failed to list failed relay publishes",
+            data.error || "Unknown error",
+            startTime
+          );
+        }
+        return successResponse(
+          { count: Array.isArray(data) ? data.length : 0, failures: data },
+          startTime
+        );
+      } catch (error) {
+        return errorResponse(
+          "Failed to list failed relay publishes",
+          error instanceof Error ? error.message : "Unknown error",
+          startTime
+        );
+      }
+    }
+  );
+
+  registerTool(
+    server,
+    "clear_failed_relay_publish",
+    "Mark a failed relay publish entry as resolved (it will be removed from the retry queue).",
+    {
+      eventId: z.string().describe("Nostr event id of the failed publish"),
+    },
+    async (params) => {
+      const startTime = Date.now();
+      if (apiKey.permissions !== "full_access") return permissionError();
+      const signer = await getSigner(apiKey);
+      if (!signer) return noSignerError();
+
+      try {
+        const pubkey = signer.getPubKey();
+        const signedEvent = signer.sign(
+          buildSignedHttpRequestProofTemplate(
+            buildClearFailedRelayPublishProof({
+              pubkey,
+              eventId: params.eventId,
+              incrementRetry: false,
+            })
+          )
+        );
+        const res = await fetch(`${baseUrl}/api/db/clear-failed-publish`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            [SIGNED_EVENT_HEADER]: JSON.stringify(signedEvent),
+          },
+          body: JSON.stringify({
+            eventId: params.eventId,
+            incrementRetry: false,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          return errorResponse(
+            "Failed to clear failed relay publish",
+            data.error || "Unknown error",
+            startTime
+          );
+        }
+        return successResponse(
+          { eventId: params.eventId, cleared: true },
+          startTime
+        );
+      } catch (error) {
+        return errorResponse(
+          "Failed to clear failed relay publish",
+          error instanceof Error ? error.message : "Unknown error",
+          startTime
+        );
+      }
+    }
+  );
+
+  registerTool(
+    server,
+    "retry_failed_relay_publish",
+    "Increment the retry counter on a failed relay publish entry. Used by background workers (or you, manually) to record another retry attempt without removing the entry.",
+    {
+      eventId: z.string().describe("Nostr event id of the failed publish"),
+    },
+    async (params) => {
+      const startTime = Date.now();
+      if (apiKey.permissions !== "full_access") return permissionError();
+      const signer = await getSigner(apiKey);
+      if (!signer) return noSignerError();
+
+      try {
+        const pubkey = signer.getPubKey();
+        const signedEvent = signer.sign(
+          buildSignedHttpRequestProofTemplate(
+            buildClearFailedRelayPublishProof({
+              pubkey,
+              eventId: params.eventId,
+              incrementRetry: true,
+            })
+          )
+        );
+        const res = await fetch(`${baseUrl}/api/db/clear-failed-publish`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            [SIGNED_EVENT_HEADER]: JSON.stringify(signedEvent),
+          },
+          body: JSON.stringify({
+            eventId: params.eventId,
+            incrementRetry: true,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          return errorResponse(
+            "Failed to record retry attempt",
+            data.error || "Unknown error",
+            startTime
+          );
+        }
+        return successResponse(
+          { eventId: params.eventId, retryRecorded: true },
+          startTime
+        );
+      } catch (error) {
+        return errorResponse(
+          "Failed to record retry attempt",
+          error instanceof Error ? error.message : "Unknown error",
+          startTime
+        );
+      }
+    }
+  );
+
+  registerTool(
+    server,
+    "get_stripe_connect_status",
+    "Check your Stripe Connect onboarding status: whether the account exists, onboarding is complete, and charges/payouts are enabled.",
+    {},
+    async () => {
+      const startTime = Date.now();
+      if (apiKey.permissions !== "full_access") return permissionError();
+      const signer = await getSigner(apiKey);
+      if (!signer) return noSignerError();
+
+      try {
+        const pubkey = signer.getPubKey();
+        const signedEvent = signer.sign(
+          buildMcpRequestProofTemplate(buildStripeAccountStatusProof(pubkey))
+        );
+        const res = await fetch(
+          `${baseUrl}/api/stripe/connect/account-status`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              [MCP_SIGNED_EVENT_HEADER]: JSON.stringify(signedEvent),
+            },
+            body: JSON.stringify({ pubkey }),
+          }
+        );
+        const data = await res.json();
+        if (!res.ok) {
+          return errorResponse(
+            "Failed to fetch Stripe Connect status",
+            data.error || "Unknown error",
+            startTime
+          );
+        }
+        return successResponse(data, startTime);
+      } catch (error) {
+        return errorResponse(
+          "Failed to fetch Stripe Connect status",
+          error instanceof Error ? error.message : "Unknown error",
+          startTime
+        );
+      }
+    }
+  );
+
+  registerTool(
+    server,
+    "create_stripe_connect_account",
+    "Create a Stripe Connect Express account for your shop. Returns the new (or existing) Stripe account id. Follow up with create_stripe_onboarding_link to get the onboarding URL.",
+    {},
+    async () => {
+      const startTime = Date.now();
+      if (apiKey.permissions !== "full_access") return permissionError();
+      const signer = await getSigner(apiKey);
+      if (!signer) return noSignerError();
+
+      try {
+        const pubkey = signer.getPubKey();
+        const signedEvent = signer.sign(
+          buildMcpRequestProofTemplate(buildStripeCreateAccountProof(pubkey))
+        );
+        const res = await fetch(
+          `${baseUrl}/api/stripe/connect/create-account`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              [MCP_SIGNED_EVENT_HEADER]: JSON.stringify(signedEvent),
+            },
+            body: JSON.stringify({ pubkey }),
+          }
+        );
+        const data = await res.json();
+        if (!res.ok) {
+          return errorResponse(
+            "Failed to create Stripe Connect account",
+            data.error || "Unknown error",
+            startTime
+          );
+        }
+        return successResponse(data, startTime);
+      } catch (error) {
+        return errorResponse(
+          "Failed to create Stripe Connect account",
+          error instanceof Error ? error.message : "Unknown error",
+          startTime
+        );
+      }
+    }
+  );
+
+  registerTool(
+    server,
+    "create_stripe_onboarding_link",
+    "Generate a Stripe Connect onboarding URL the seller can open to complete (or refresh) their account setup.",
+    {
+      accountId: z
+        .string()
+        .describe(
+          "Stripe Connect account id (from create_stripe_connect_account or get_stripe_connect_status)"
+        ),
+      returnUrl: z
+        .string()
+        .optional()
+        .describe(
+          "Absolute https:// or milkmarket:// URL to return to after onboarding completes"
+        ),
+      refreshUrl: z
+        .string()
+        .optional()
+        .describe(
+          "Absolute https:// or milkmarket:// URL Stripe sends the user to if the link expires"
+        ),
+    },
+    async (params) => {
+      const startTime = Date.now();
+      if (apiKey.permissions !== "full_access") return permissionError();
+      const signer = await getSigner(apiKey);
+      if (!signer) return noSignerError();
+
+      try {
+        const pubkey = signer.getPubKey();
+        const signedEvent = signer.sign(
+          buildMcpRequestProofTemplate(
+            buildStripeCreateAccountLinkProof({
+              pubkey,
+              accountId: params.accountId,
+            })
+          )
+        );
+        const res = await fetch(
+          `${baseUrl}/api/stripe/connect/create-account-link`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              [MCP_SIGNED_EVENT_HEADER]: JSON.stringify(signedEvent),
+            },
+            body: JSON.stringify({
+              pubkey,
+              accountId: params.accountId,
+              returnUrl: params.returnUrl,
+              refreshUrl: params.refreshUrl,
+            }),
+          }
+        );
+        const data = await res.json();
+        if (!res.ok) {
+          return errorResponse(
+            "Failed to create Stripe onboarding link",
+            data.error || "Unknown error",
+            startTime
+          );
+        }
+        return successResponse(data, startTime);
+      } catch (error) {
+        return errorResponse(
+          "Failed to create Stripe onboarding link",
+          error instanceof Error ? error.message : "Unknown error",
+          startTime
+        );
+      }
+    }
+  );
+
+  registerTool(
+    server,
+    "cancel_subscription",
+    "Cancel one of your shop's recurring Stripe subscriptions at the end of the current period. Verifies that the subscription belongs to you.",
+    {
+      subscriptionId: z.string().describe("Stripe subscription id"),
+    },
+    async (params) => {
+      const startTime = Date.now();
+      if (apiKey.permissions !== "full_access") return permissionError();
+      const signer = await getSigner(apiKey);
+      if (!signer) return noSignerError();
+
+      try {
+        const pubkey = signer.getPubKey();
+        const subs = await getSubscriptionsBySellerPubkey(pubkey);
+        const owned = subs.find(
+          (s: any) => s.stripe_subscription_id === params.subscriptionId
+        );
+        if (!owned) {
+          return errorResponse(
+            "Subscription not found",
+            "This subscription doesn't belong to your shop",
+            startTime
+          );
+        }
+        const signedEvent = signer.sign(
+          buildSignedHttpRequestProofTemplate(
+            buildCancelSubscriptionProof({
+              pubkey,
+              subscriptionId: params.subscriptionId,
+            })
+          )
+        );
+        const res = await fetch(`${baseUrl}/api/stripe/cancel-subscription`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            [SIGNED_EVENT_HEADER]: JSON.stringify(signedEvent),
+          },
+          body: JSON.stringify({
+            subscriptionId: params.subscriptionId,
+            connectedAccountId: owned.connected_account_id,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          return errorResponse(
+            "Failed to cancel subscription",
+            data.error || "Unknown error",
+            startTime
+          );
+        }
+        return successResponse(data, startTime);
+      } catch (error) {
+        return errorResponse(
+          "Failed to cancel subscription",
+          error instanceof Error ? error.message : "Unknown error",
+          startTime
+        );
+      }
+    }
+  );
+
+  registerTool(
+    server,
+    "update_subscription",
+    "Update one of your shop's recurring Stripe subscriptions: change the shipping address and/or push the next billing date. Verifies that the subscription belongs to you.",
+    {
+      subscriptionId: z.string().describe("Stripe subscription id"),
+      shippingAddress: z
+        .object({
+          name: z.string().optional(),
+          line1: z.string().optional(),
+          line2: z.string().optional(),
+          city: z.string().optional(),
+          state: z.string().optional(),
+          postal_code: z.string().optional(),
+          country: z.string().optional(),
+        })
+        .partial()
+        .optional()
+        .describe("New shipping address (any subset of fields)"),
+      nextBillingDate: z
+        .string()
+        .optional()
+        .describe(
+          "ISO 8601 date/time for the next billing cycle (uses Stripe trial_end to push the date)"
+        ),
+    },
+    async (params) => {
+      const startTime = Date.now();
+      if (apiKey.permissions !== "full_access") return permissionError();
+      const signer = await getSigner(apiKey);
+      if (!signer) return noSignerError();
+
+      try {
+        const pubkey = signer.getPubKey();
+        const subs = await getSubscriptionsBySellerPubkey(pubkey);
+        const owned = subs.find(
+          (s: any) => s.stripe_subscription_id === params.subscriptionId
+        );
+        if (!owned) {
+          return errorResponse(
+            "Subscription not found",
+            "This subscription doesn't belong to your shop",
+            startTime
+          );
+        }
+        const signedEvent = signer.sign(
+          buildSignedHttpRequestProofTemplate(
+            buildUpdateSubscriptionProof({
+              pubkey,
+              subscriptionId: params.subscriptionId,
+            })
+          )
+        );
+        const res = await fetch(`${baseUrl}/api/stripe/update-subscription`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            [SIGNED_EVENT_HEADER]: JSON.stringify(signedEvent),
+          },
+          body: JSON.stringify({
+            subscriptionId: params.subscriptionId,
+            connectedAccountId: owned.connected_account_id,
+            shippingAddress: params.shippingAddress,
+            nextBillingDate: params.nextBillingDate,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          return errorResponse(
+            "Failed to update subscription",
+            data.error || "Unknown error",
+            startTime
+          );
+        }
+        return successResponse(data, startTime);
+      } catch (error) {
+        return errorResponse(
+          "Failed to update subscription",
+          error instanceof Error ? error.message : "Unknown error",
+          startTime
+        );
+      }
+    }
+  );
+
+  registerTool(
+    server,
+    "enroll_in_email_flow",
+    "Manually enroll a recipient into one of your active email flows (welcome_series, abandoned_cart, post_purchase, or winback). Schedules step executions immediately.",
+    {
+      flowType: z
+        .enum(["welcome_series", "abandoned_cart", "post_purchase", "winback"])
+        .describe("Type of flow to enroll into (must already be active)"),
+      recipientEmail: z.string().email().describe("Recipient's email address"),
+      recipientPubkey: z
+        .string()
+        .optional()
+        .describe("Recipient's Nostr pubkey if known (optional)"),
+      enrollmentData: z
+        .record(z.any())
+        .optional()
+        .describe(
+          "Per-enrollment template variables merged into every step (e.g. { first_name: 'Alice' })"
+        ),
+    },
+    async (params) => {
+      const startTime = Date.now();
+      if (apiKey.permissions !== "full_access") return permissionError();
+      const signer = await getSigner(apiKey);
+      if (!signer) return noSignerError();
+
+      try {
+        const pubkey = signer.getPubKey();
+        const res = await fetch(`${baseUrl}/api/email/flows/enroll`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            flow_type: params.flowType,
+            seller_pubkey: pubkey,
+            recipient_email: params.recipientEmail,
+            recipient_pubkey: params.recipientPubkey ?? null,
+            enrollment_data: params.enrollmentData ?? {},
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          return errorResponse(
+            "Failed to enroll in email flow",
+            data.error || "Unknown error",
+            startTime
+          );
+        }
+        return successResponse(data, startTime);
+      } catch (error) {
+        return errorResponse(
+          "Failed to enroll in email flow",
           error instanceof Error ? error.message : "Unknown error",
           startTime
         );

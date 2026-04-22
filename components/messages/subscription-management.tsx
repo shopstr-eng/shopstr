@@ -30,6 +30,12 @@ import {
   sendGiftWrappedMessageEvent,
   generateKeys,
 } from "@/utils/nostr/nostr-helper-functions";
+import {
+  buildCancelSubscriptionProof,
+  buildSignedHttpRequestProofTemplate,
+  buildUpdateSubscriptionProof,
+  SIGNED_EVENT_HEADER,
+} from "@/utils/nostr/request-auth";
 
 interface SubscriptionData {
   id: number;
@@ -180,11 +186,26 @@ const SubscriptionManagement = () => {
     if (!cancelSubscription) return;
     setIsCanceling(true);
     try {
+      if (!signer || !userPubkey) {
+        throw new Error("Sign in with Nostr to manage this subscription");
+      }
+      const subscriptionId = cancelSubscription.stripe_subscription_id;
+      const signedEvent = await signer.sign(
+        buildSignedHttpRequestProofTemplate(
+          buildCancelSubscriptionProof({
+            pubkey: userPubkey,
+            subscriptionId,
+          })
+        )
+      );
       const response = await fetch("/api/stripe/cancel-subscription", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          [SIGNED_EVENT_HEADER]: JSON.stringify(signedEvent),
+        },
         body: JSON.stringify({
-          subscriptionId: cancelSubscription.stripe_subscription_id,
+          subscriptionId,
         }),
       });
       if (response.ok) {
@@ -228,11 +249,26 @@ const SubscriptionManagement = () => {
     if (!dateSubscription || !data.newDate) return;
     setIsUpdatingDate(true);
     try {
+      if (!signer || !userPubkey) {
+        throw new Error("Sign in with Nostr to manage this subscription");
+      }
+      const subscriptionId = dateSubscription.stripe_subscription_id;
+      const signedEvent = await signer.sign(
+        buildSignedHttpRequestProofTemplate(
+          buildUpdateSubscriptionProof({
+            pubkey: userPubkey,
+            subscriptionId,
+          })
+        )
+      );
       const response = await fetch("/api/stripe/update-subscription", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          [SIGNED_EVENT_HEADER]: JSON.stringify(signedEvent),
+        },
         body: JSON.stringify({
-          subscriptionId: dateSubscription.stripe_subscription_id,
+          subscriptionId,
           nextBillingDate: data.newDate,
         }),
       });
@@ -267,11 +303,26 @@ const SubscriptionManagement = () => {
     if (!addressSubscription || !newAddress) return;
     setIsUpdatingAddress(true);
     try {
+      if (!signer || !userPubkey) {
+        throw new Error("Sign in with Nostr to manage this subscription");
+      }
+      const subscriptionId = addressSubscription.stripe_subscription_id;
+      const signedEvent = await signer.sign(
+        buildSignedHttpRequestProofTemplate(
+          buildUpdateSubscriptionProof({
+            pubkey: userPubkey,
+            subscriptionId,
+          })
+        )
+      );
       const response = await fetch("/api/stripe/update-subscription", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          [SIGNED_EVENT_HEADER]: JSON.stringify(signedEvent),
+        },
         body: JSON.stringify({
-          subscriptionId: addressSubscription.stripe_subscription_id,
+          subscriptionId,
           shippingAddress: { address: newAddress },
         }),
       });

@@ -59,6 +59,11 @@ import {
 import { BLUEBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { calculateWeightedScore } from "@/utils/parsers/review-parser-functions";
 import { createNip98AuthorizationHeader } from "@/utils/nostr/nip98-auth";
+import {
+  buildSignedHttpRequestProofTemplate,
+  buildUpdateSubscriptionProof,
+  SIGNED_EVENT_HEADER,
+} from "@/utils/nostr/request-auth";
 import { getSatoshiValue } from "@getalby/lightning-tools";
 import currencySelection from "@/public/currencySelection.json";
 import {
@@ -1693,17 +1698,33 @@ const OrdersDashboard = ({
 
       await sendGiftWrappedMessageEvent(nostr, giftWrappedEvent, signer);
 
-      if (addressChangeOrder.subscriptionId) {
-        fetch("/api/stripe/update-subscription", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            subscriptionId: addressChangeOrder.subscriptionId,
-            shippingAddress: { address: newAddress },
-          }),
-        }).catch((err) =>
-          console.error("Failed to update subscription address in DB:", err)
-        );
+      if (addressChangeOrder.subscriptionId && signer && userPubkey) {
+        const subscriptionId = addressChangeOrder.subscriptionId;
+        signer
+          .sign(
+            buildSignedHttpRequestProofTemplate(
+              buildUpdateSubscriptionProof({
+                pubkey: userPubkey,
+                subscriptionId,
+              })
+            )
+          )
+          .then((signedEvent) =>
+            fetch("/api/stripe/update-subscription", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                [SIGNED_EVENT_HEADER]: JSON.stringify(signedEvent),
+              },
+              body: JSON.stringify({
+                subscriptionId,
+                shippingAddress: { address: newAddress },
+              }),
+            })
+          )
+          .catch((err) =>
+            console.error("Failed to update subscription address in DB:", err)
+          );
       }
 
       fetch("/api/email/send-subscription-email", {
