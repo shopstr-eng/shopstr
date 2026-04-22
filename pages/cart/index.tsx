@@ -959,7 +959,7 @@ export default function Component() {
   const cartContent = (
     <ProtectedRoute>
       {!isBeingPaid ? (
-        <div className="flex min-h-screen flex-col bg-white p-4 text-black">
+        <div className="flex min-h-screen w-full flex-col overflow-x-hidden bg-white p-4 text-black">
           <div className="mx-auto w-full max-w-4xl pt-20">
             <div className="mb-8">
               <h1 className="text-4xl font-bold">Shopping Cart</h1>
@@ -1431,7 +1431,7 @@ export default function Component() {
           </div>
         </div>
       ) : (
-        <div className="flex min-h-screen w-full bg-white text-black sm:items-center sm:justify-center">
+        <div className="flex min-h-screen w-full overflow-x-hidden bg-white text-black sm:items-center sm:justify-center">
           <div className="mx-auto flex w-full flex-col pt-20">
             <div className="flex flex-col items-center">
               <CartInvoiceCard

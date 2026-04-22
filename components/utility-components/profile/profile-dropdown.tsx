@@ -24,6 +24,7 @@ import {
 import { useRouter } from "next/router";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import SignInModal from "../../sign-in/SignInModal";
+import { copyToClipboard } from "@/utils/clipboard";
 import { ProfileData } from "@/utils/types/types";
 
 import { GlobeAltIcon } from "@heroicons/react/24/outline";
@@ -306,10 +307,10 @@ export const ProfileWithDropdown = ({
         handleDropdownAction(async () => {
           try {
             const npub = nip19.npubEncode(pubkey);
-            if (!navigator.clipboard?.writeText) {
+            const ok = await copyToClipboard(npub);
+            if (!ok) {
               throw new Error("Clipboard API is not available");
             }
-            await navigator.clipboard.writeText(npub);
             setIsNPubCopied(true);
             setTimeout(() => {
               setIsNPubCopied(false);

@@ -34,6 +34,7 @@ import {
 } from "@/utils/context/context";
 import FreeShippingNotification from "../free-shipping-notification";
 import FailureModal from "../utility-components/failure-modal";
+import { copyToClipboard } from "@/utils/clipboard";
 import SuccessModal from "../utility-components/success-modal";
 import SignInModal from "../sign-in/SignInModal";
 import currencySelection from "../../public/currencySelection.json";
@@ -412,9 +413,7 @@ export default function CheckoutCard({
     if (navigator.share) {
       await navigator.share(shareData);
     } else {
-      navigator.clipboard.writeText(
-        `${window.location.origin}/listing/${listingPath}`
-      );
+      await copyToClipboard(`${window.location.origin}/listing/${listingPath}`);
       setShowSuccessModal(true);
     }
   };

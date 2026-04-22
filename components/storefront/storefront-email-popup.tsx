@@ -6,6 +6,7 @@ import {
 } from "@/utils/types/types";
 import { XMarkIcon } from "@heroicons/react/24/outline";
 import { motion, AnimatePresence } from "framer-motion";
+import { copyToClipboard } from "@/utils/clipboard";
 
 interface StorefrontEmailPopupProps {
   config: StorefrontEmailPopup;
@@ -255,7 +256,7 @@ export default function StorefrontEmailPopupComponent({
                       </div>
                       <button
                         onClick={() => {
-                          navigator.clipboard.writeText(discountCode);
+                          void copyToClipboard(discountCode);
                         }}
                         className="mb-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors"
                         style={{

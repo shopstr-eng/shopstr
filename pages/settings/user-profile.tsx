@@ -6,7 +6,7 @@ import ProtectedRoute from "@/components/utility-components/protected-route";
 const UserProfilePage = () => {
   return (
     <ProtectedRoute>
-      <div className="flex min-h-screen flex-col bg-white pt-24 md:pb-20">
+      <div className="flex min-h-screen w-full flex-col overflow-x-hidden bg-white pt-24 pb-24 md:pb-32">
         <div className="mx-auto h-full w-full px-4 lg:w-1/2 xl:w-2/5">
           <StripeConnectBanner
             returnPath="/settings/user-profile?stripe=success"

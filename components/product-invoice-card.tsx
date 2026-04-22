@@ -5,6 +5,7 @@ import {
   ProfileMapContext,
   ShopMapContext,
 } from "../utils/context/context";
+import { copyToClipboard } from "@/utils/clipboard";
 import { useForm } from "react-hook-form";
 import {
   Button,
@@ -2693,8 +2694,8 @@ export default function ProductInvoiceCard({
     }
   };
 
-  const handleCopyInvoice = () => {
-    navigator.clipboard.writeText(invoice);
+  const handleCopyInvoice = async () => {
+    await copyToClipboard(invoice);
     setCopiedToClipboard(true);
     setTimeout(() => {
       setCopiedToClipboard(false);

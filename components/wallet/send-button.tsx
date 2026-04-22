@@ -37,6 +37,7 @@ import {
   Proof,
 } from "@cashu/cashu-ts";
 import { safeSwap } from "@/utils/cashu/swap-retry-service";
+import { copyToClipboard } from "@/utils/clipboard";
 import { CashuWalletContext } from "../../utils/context/context";
 import {
   NostrContext,
@@ -172,8 +173,8 @@ const SendButton = () => {
     }
   };
 
-  const handleCopyTokenString = () => {
-    navigator.clipboard.writeText(newToken);
+  const handleCopyTokenString = async () => {
+    await copyToClipboard(newToken);
     setCopiedToClipboard(true);
     setTimeout(() => {
       setCopiedToClipboard(false);

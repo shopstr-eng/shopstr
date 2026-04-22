@@ -135,7 +135,7 @@ export default function OrderSummary() {
   if (!orderData) {
     return (
       <ProtectedRoute>
-        <div className="flex min-h-screen items-center justify-center bg-white">
+        <div className="flex min-h-screen w-full items-center justify-center overflow-x-hidden bg-white">
           <div className="text-center">
             <p className="text-lg text-gray-600">Loading order details...</p>
           </div>
@@ -146,7 +146,7 @@ export default function OrderSummary() {
 
   return (
     <ProtectedRoute>
-      <div className="min-h-screen bg-white">
+      <div className="min-h-screen w-full overflow-x-hidden bg-white">
         <div className="mx-auto max-w-4xl px-4 pt-24 pb-8 sm:px-6 lg:px-8">
           <div className="shadow-neo mb-8 rounded-lg border-4 border-black bg-white p-6 sm:p-8">
             <div className="mb-6 flex flex-col items-center border-b-2 border-gray-200 pb-6">

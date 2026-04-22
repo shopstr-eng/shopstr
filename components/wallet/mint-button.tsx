@@ -30,6 +30,7 @@ import {
 } from "@/utils/nostr/nostr-helper-functions";
 import { Mint as CashuMint, Wallet as CashuWallet } from "@cashu/cashu-ts";
 import QRCode from "qrcode";
+import { copyToClipboard } from "@/utils/clipboard";
 import FailureModal from "@/components/utility-components/failure-modal";
 import {
   NostrContext,
@@ -297,8 +298,8 @@ const MintButton = () => {
     }
   }
 
-  const handleCopyInvoice = () => {
-    navigator.clipboard.writeText(invoice);
+  const handleCopyInvoice = async () => {
+    await copyToClipboard(invoice);
     setCopiedToClipboard(true);
     setTimeout(() => {
       setCopiedToClipboard(false);

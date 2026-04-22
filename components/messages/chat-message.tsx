@@ -19,6 +19,7 @@ import PDFAnnotator from "../utility-components/pdf-annotator";
 import LinkPreview from "./link-preview";
 import { NostrMessageEvent } from "../../utils/types/types";
 import { timeSinceMessageDisplayText } from "../../utils/messages/utils";
+import { copyToClipboard } from "@/utils/clipboard";
 import { getDecodedToken } from "@cashu/cashu-ts";
 import {
   NostrContext,
@@ -146,8 +147,8 @@ const ChatMessage = ({
     }
   } catch {}
 
-  const handleCopyToken = (token: string) => {
-    navigator.clipboard.writeText(token);
+  const handleCopyToken = async (token: string) => {
+    await copyToClipboard(token);
     setCopiedToClipboard(true);
     setTimeout(() => {
       setCopiedToClipboard(false);

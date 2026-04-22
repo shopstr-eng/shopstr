@@ -26,6 +26,7 @@ import {
   NostrContext,
 } from "@/components/utility-components/nostr-context-provider";
 import { NostrNSecSigner } from "@/utils/nostr/signers/nostr-nsec-signer";
+import { copyToClipboard } from "@/utils/clipboard";
 import {
   createNostrProfileEvent,
   getLocalUserProfileKey,
@@ -218,6 +219,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
     } finally {
       setIsUploadingProfile(false);
       setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 2000);
     }
   };
 
@@ -262,7 +264,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
       {/* NPub Display */}
       {!isOnboarding && (
         <div className="mb-4 flex items-center justify-between gap-2 overflow-hidden rounded-md border-3 border-black bg-white p-3">
-          <p className="font-mono text-sm font-medium break-all text-black">
+          <p className="min-w-0 flex-1 font-mono text-sm font-medium break-all text-black">
             {userNPub!}
           </p>
           <Tooltip
@@ -276,8 +278,8 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
               isIconOnly
               variant="light"
               className="h-6 w-6 min-w-0 flex-shrink-0 p-0 text-black"
-              onClick={() => {
-                navigator.clipboard.writeText(userNPub!);
+              onClick={async () => {
+                await copyToClipboard(userNPub!);
                 setIsNPubCopied(true);
                 setTimeout(() => setIsNPubCopied(false), 2000);
               }}
@@ -291,7 +293,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
       {/* NSec Display */}
       {!isOnboarding && (userNSec || signer instanceof NostrNSecSigner) ? (
         <div className="mb-4 flex items-center justify-between gap-2 overflow-hidden rounded-md border-3 border-black bg-white p-3">
-          <p className="font-mono text-sm font-medium break-all text-black">
+          <p className="min-w-0 flex-1 font-mono text-sm font-medium break-all text-black">
             {isNSecVisible
               ? userNSec
               : "•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••"}
@@ -334,8 +336,8 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
                 isIconOnly
                 variant="light"
                 className="h-6 w-6 min-w-0 p-0 text-black"
-                onClick={() => {
-                  navigator.clipboard.writeText(userNSec);
+                onClick={async () => {
+                  await copyToClipboard(userNSec);
                   setIsNSecCopied(true);
                   setTimeout(() => setIsNSecCopied(false), 2000);
                 }}
@@ -397,8 +399,8 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
                 isIconOnly
                 variant="light"
                 className="h-6 w-6 min-w-0 p-0 text-black"
-                onClick={() => {
-                  navigator.clipboard.writeText(userNcryptsec);
+                onClick={async () => {
+                  await copyToClipboard(userNcryptsec);
                   setIsNcryptsecCopied(true);
                   setTimeout(() => setIsNcryptsecCopied(false), 2000);
                 }}
