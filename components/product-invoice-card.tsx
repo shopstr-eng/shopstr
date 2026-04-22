@@ -3845,10 +3845,10 @@ export default function ProductInvoiceCard({
 
   if (showInvoiceCard) {
     return (
-      <div className="flex min-h-screen w-full bg-white text-black">
-        <div className="mx-auto flex w-full max-w-7xl flex-col lg:flex-row">
+      <div className="flex min-h-screen w-full overflow-x-hidden bg-white text-black">
+        <div className="mx-auto flex w-full max-w-7xl min-w-0 flex-col lg:flex-row">
           {/* Left Side - Product Summary - maintain same width */}
-          <div className="w-full bg-gray-50 p-6 lg:w-1/2">
+          <div className="w-full min-w-0 bg-gray-50 p-6 lg:w-1/2">
             <div className="sticky top-6">
               <h2 className="mb-6 text-2xl font-bold">Order Summary</h2>
 
@@ -4034,7 +4034,7 @@ export default function ProductInvoiceCard({
           <div className="h-px w-full bg-gray-300 lg:h-full lg:w-px"></div>
 
           {/* Right Side - Payment */}
-          <div className="w-full p-6 lg:w-1/2">
+          <div className="w-full min-w-0 p-6 lg:w-1/2">
             <div className="w-full">
               <div className="mb-6">
                 <h2 className="text-2xl font-bold">
@@ -4133,10 +4133,10 @@ export default function ProductInvoiceCard({
   }
 
   return (
-    <div className="flex min-h-screen w-full bg-white text-black">
-      <div className="mx-auto flex w-full max-w-7xl flex-col lg:flex-row">
+    <div className="flex min-h-screen w-full overflow-x-hidden bg-white text-black">
+      <div className="mx-auto flex w-full max-w-7xl min-w-0 flex-col lg:flex-row">
         {/* Left Side - Product Summary */}
-        <div className="w-full bg-gray-50 p-6 lg:w-1/2">
+        <div className="w-full min-w-0 bg-gray-50 p-6 lg:w-1/2">
           <div className="sticky top-6">
             <h2 className="mb-6 text-2xl font-bold">Order Summary</h2>
 
@@ -4252,7 +4252,7 @@ export default function ProductInvoiceCard({
         <div className="h-px w-full bg-gray-300 lg:h-full lg:w-px"></div>
 
         {/* Right Side - Order Type Selection, Forms, and Payment */}
-        <div className="w-full p-6 lg:w-1/2">
+        <div className="w-full min-w-0 p-6 lg:w-1/2">
           {/* Order Type Selection */}
           {showOrderTypeSelection && (
             <>

@@ -7,7 +7,7 @@ const ShopProfilePage = () => {
   return (
     <ProtectedRoute>
       <div className="flex min-h-screen w-full flex-col overflow-x-hidden bg-white pt-24 pb-24 md:pb-32">
-        <div className="mx-auto h-full w-full px-4 lg:w-1/2 xl:w-[90%] xl:max-w-[1600px]">
+        <div className="mx-auto h-full w-full min-w-0 px-4 lg:w-1/2 xl:w-[90%] xl:max-w-[1600px]">
           <StripeConnectBanner
             returnPath="/settings/shop-profile?stripe=success"
             refreshPath="/settings/shop-profile?stripe=refresh"

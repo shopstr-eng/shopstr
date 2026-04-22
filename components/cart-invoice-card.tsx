@@ -5019,10 +5019,10 @@ export default function CartInvoiceCard({
 
   if (showInvoiceCard) {
     return (
-      <div className="flex min-h-screen w-full bg-white text-black">
-        <div className="mx-auto flex w-full flex-col lg:flex-row">
+      <div className="flex min-h-screen w-full overflow-x-hidden bg-white text-black">
+        <div className="mx-auto flex w-full min-w-0 flex-col lg:flex-row">
           {/* Order Summary - Full width on mobile, half on desktop */}
-          <div className="w-full bg-white p-6 lg:w-1/2">
+          <div className="w-full min-w-0 bg-white p-6 lg:w-1/2">
             <div className="sticky top-6">
               <h2 className="mb-6 text-2xl font-bold">Order Summary</h2>
 
@@ -5484,10 +5484,10 @@ export default function CartInvoiceCard({
   }
 
   return (
-    <div className="flex min-h-screen w-full bg-white text-black">
-      <div className="mx-auto flex w-full flex-col lg:flex-row">
+    <div className="flex min-h-screen w-full overflow-x-hidden bg-white text-black">
+      <div className="mx-auto flex w-full min-w-0 flex-col lg:flex-row">
         {/* Order Summary - Full width on mobile, half on desktop */}
-        <div className="w-full bg-white p-6 lg:w-1/2">
+        <div className="w-full min-w-0 bg-white p-6 lg:w-1/2">
           <div className="sticky top-6">
             <h2 className="mb-6 text-2xl font-bold">Order Summary</h2>
 
@@ -5860,7 +5860,7 @@ export default function CartInvoiceCard({
         <div className="h-px w-full bg-gray-300 lg:h-full lg:w-px"></div>
 
         {/* Right Side - Order Type Selection, Forms, and Payment */}
-        <div className="w-full p-6 lg:w-1/2">
+        <div className="w-full min-w-0 p-6 lg:w-1/2">
           {/* Order Type Selection */}
           {showOrderTypeSelection && (
             <>
