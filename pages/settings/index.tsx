@@ -16,6 +16,14 @@ const SettingsPage = () => {
 
   const settingsItems = [
     {
+      id: "user-profile",
+      title: "User Profile",
+      description: "Edit your user profile",
+      icon: UserIcon,
+      iconBg: "bg-slate-600",
+      route: "/settings/user-profile",
+    },
+    {
       id: "shop-profile",
       title: "Shop Profile",
       description: "Edit your shop profile",
@@ -24,12 +32,12 @@ const SettingsPage = () => {
       route: "/settings/shop-profile",
     },
     {
-      id: "user-profile",
-      title: "User Profile",
-      description: "Edit your user profile",
-      icon: UserIcon,
+      id: "email-flows",
+      title: "Email Flows",
+      description: "Create automated email sequences for your customers",
+      icon: EnvelopeIcon,
       iconBg: "bg-slate-600",
-      route: "/settings/user-profile",
+      route: "/settings/email-flows",
     },
     {
       id: "community",
@@ -47,14 +55,6 @@ const SettingsPage = () => {
       icon: Cog6ToothIcon,
       iconBg: "bg-slate-600",
       route: "/settings/account",
-    },
-    {
-      id: "email-flows",
-      title: "Email Flows",
-      description: "Create automated email sequences for your customers",
-      icon: EnvelopeIcon,
-      iconBg: "bg-slate-600",
-      route: "/settings/email-flows",
     },
     {
       id: "api-keys",
