@@ -113,6 +113,15 @@ describe("SendButton", () => {
     }));
 
     setItemSpy = jest.spyOn(Storage.prototype, "setItem");
+    localStorage.setItem(
+      "mints",
+      JSON.stringify(["https://legend.lnbits.com/cashu/api/v1/4_sadf7asdf78"])
+    );
+    localStorage.setItem(
+      "tokens",
+      JSON.stringify([{ id: "keyset_id_1", amount: 1000, C: "C1" }])
+    );
+
     mockPublishProofEvent.mockResolvedValue(undefined);
     mockGetLocalStorageData.mockReturnValue({
       mints: ["https://legend.lnbits.com/cashu/api/v1/4_sadf7asdf78"],
@@ -272,6 +281,14 @@ describe("SendButton", () => {
   });
 
   test("handles tokens with different keyset IDs", async () => {
+    localStorage.setItem(
+      "tokens",
+      JSON.stringify([
+        { id: "keyset_id_1", amount: 500, C: "C1" },
+        { id: "keyset_id_2", amount: 300, C: "C2" },
+        { id: "keyset_id_3", amount: 200, C: "C3" },
+      ])
+    );
     mockGetLocalStorageData.mockReturnValue({
       mints: ["https://legend.lnbits.com/cashu/api/v1/4_sadf7asdf78"],
       tokens: [

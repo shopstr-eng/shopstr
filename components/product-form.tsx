@@ -33,8 +33,8 @@ import {
   SHIPPING_OPTIONS,
 } from "@/utils/STATIC-VARIABLES";
 import {
+  getStoredRelays,
   PostListing,
-  getLocalStorageData,
   finalizeAndSendNostrEvent,
 } from "@/utils/nostr/nostr-helper-functions";
 import LocationDropdown from "./utility-components/dropdowns/location-dropdown";
@@ -140,7 +140,7 @@ export default function ProductForm({
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const { relays } = getLocalStorageData();
+      const relays = getStoredRelays();
       setPubkey(signerPubKey as string);
       setRelayHint(relays[0] as string);
     }

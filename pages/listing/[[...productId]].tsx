@@ -35,6 +35,7 @@ import {
 } from "@/utils/db/db-service";
 import { NostrEvent } from "@/utils/types/types";
 import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
+import { storage, STORAGE_KEYS } from "@/utils/storage";
 
 type ListingPageProps = {
   ogMeta: OgMetaProps;
@@ -219,12 +220,10 @@ const Listing = ({ initialProductEvent }: ListingPageProps) => {
   const productContext = useContext(ProductContext);
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const pk =
-        sessionStorage.getItem("sf_seller_pubkey") ||
-        localStorage.getItem("sf_seller_pubkey");
-      if (pk) setSfSellerPubkey(pk);
-    }
+    const pk =
+      storage.getSessionItem(STORAGE_KEYS.SF_SELLER_PUBKEY) ||
+      storage.getItem(STORAGE_KEYS.SF_SELLER_PUBKEY);
+    if (pk) setSfSellerPubkey(pk);
   }, []);
 
   useEffect(() => {
@@ -301,10 +300,10 @@ const Listing = ({ initialProductEvent }: ListingPageProps) => {
       if (matchingEvent) {
         if (sfSellerPubkey && matchingEvent.pubkey !== sfSellerPubkey) {
           setSfSellerPubkey("");
-          sessionStorage.removeItem("sf_seller_pubkey");
-          sessionStorage.removeItem("sf_shop_slug");
-          localStorage.removeItem("sf_seller_pubkey");
-          localStorage.removeItem("sf_shop_slug");
+          storage.removeItem(STORAGE_KEYS.SF_SELLER_PUBKEY);
+          storage.removeItem(STORAGE_KEYS.SF_SHOP_SLUG);
+          storage.removeSessionItem(STORAGE_KEYS.SF_SELLER_PUBKEY);
+          storage.removeSessionItem(STORAGE_KEYS.SF_SHOP_SLUG);
         }
         const resolvedListing = resolveListingStateFromEvent(matchingEvent);
         if (resolvedListing) {

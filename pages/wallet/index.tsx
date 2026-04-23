@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/router";
-import { getLocalStorageData } from "@/utils/nostr/nostr-helper-functions";
 import MintButton from "../../components/wallet/mint-button";
 import ReceiveButton from "../../components/wallet/receive-button";
 import SendButton from "../../components/wallet/send-button";
@@ -13,6 +12,8 @@ import {
   Proof,
 } from "@cashu/cashu-ts";
 import ProtectedRoute from "@/components/utility-components/protected-route";
+import { storage, STORAGE_KEYS } from "@/utils/storage";
+import { getStoredMints } from "@/utils/nostr/nostr-helper-functions";
 
 const Wallet = () => {
   const [totalBalance, setTotalBalance] = useState(0);
@@ -22,8 +23,14 @@ const Wallet = () => {
   const [mintKeySetIds, setMintKeySetIds] = useState<MintKeyset[]>([]);
   const router = useRouter();
 
-  const localStorageData = useMemo(() => getLocalStorageData(), []);
-  const { mints, tokens } = localStorageData;
+  const mints = useMemo(
+    () => getStoredMints(),
+    []
+  );
+  const tokens = useMemo(
+    () => storage.getJson<any[]>(STORAGE_KEYS.TOKENS, []),
+    []
+  );
 
   useEffect(() => {
     const currentMint = new CashuMint(mints[0]!);
@@ -74,7 +81,7 @@ const Wallet = () => {
 
   useEffect(() => {
     const interval = setInterval(() => {
-      const { tokens: newTokens } = getLocalStorageData();
+      const newTokens = storage.getJson<any[]>(STORAGE_KEYS.TOKENS, []);
       if (newTokens) {
         const tokensTotal =
           newTokens.length >= 1

@@ -17,10 +17,11 @@ import {
 } from "@heroui/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
-  getLocalStorageData,
+  getStoredMints,
   publishProofEvent,
   publishWalletEvent,
 } from "@/utils/nostr/nostr-helper-functions";
+import { storage, STORAGE_KEYS } from "@/utils/storage";
 import {
   Mint as CashuMint,
   Wallet as CashuWallet,
@@ -42,7 +43,9 @@ const ReceiveButton = () => {
 
   const { signer } = useContext(SignerContext);
   const { nostr } = useContext(NostrContext);
-  const { mints, tokens, history } = getLocalStorageData();
+  const mints = getStoredMints();
+  const tokens = storage.getJson<any[]>(STORAGE_KEYS.TOKENS, []);
+  const history = storage.getJson<any[]>(STORAGE_KEYS.HISTORY, []);
 
   const {
     handleSubmit: handleReceiveSubmit,
@@ -90,10 +93,10 @@ const ReceiveButton = () => {
           return;
         }
         const tokenArray = [...tokens, ...uniqueProofs];
-        localStorage.setItem("tokens", JSON.stringify(tokenArray));
+        storage.setJson(STORAGE_KEYS.TOKENS, tokenArray);
         if (!mints.includes(tokenMint)) {
           const updatedMints = [...mints, tokenMint];
-          localStorage.setItem("mints", JSON.stringify(updatedMints));
+          storage.setJson(STORAGE_KEYS.MINTS, updatedMints);
           await publishWalletEvent(nostr!, signer!);
         }
         setIsClaimed(true);
@@ -102,17 +105,14 @@ const ReceiveButton = () => {
           (acc, token: Proof) => acc + token.amount.toNumber(),
           0
         );
-        localStorage.setItem(
-          "history",
-          JSON.stringify([
-            {
-              type: 1,
-              amount: transactionAmount,
-              date: Math.floor(Date.now() / 1000),
-            },
-            ...history,
-          ])
-        );
+        storage.setJson(STORAGE_KEYS.HISTORY, [
+          {
+            type: 1,
+            amount: transactionAmount,
+            date: Math.floor(Date.now() / 1000),
+          },
+          ...history,
+        ]);
         await publishProofEvent(
           nostr!,
           signer!,

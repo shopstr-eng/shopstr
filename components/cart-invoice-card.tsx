@@ -59,9 +59,10 @@ import {
   constructMessageGiftWrap,
   sendGiftWrappedMessageEvent,
   generateKeys,
-  getLocalStorageData,
+  getStoredMints,
   publishProofEvent,
 } from "@/utils/nostr/nostr-helper-functions";
+import { storage, STORAGE_KEYS } from "@/utils/storage";
 import { LightningAddress } from "@getalby/lightning-tools";
 import QRCode from "qrcode";
 import { v4 as uuidv4 } from "uuid";
@@ -114,7 +115,8 @@ export default function CartInvoiceCard({
   setCashuPaymentSent?: (cashuPaymentSent: boolean) => void;
   setCashuPaymentFailed?: (cashuPaymentFailed: boolean) => void;
 }) {
-  const { mints, tokens, history } = getLocalStorageData();
+  const mints = getStoredMints();
+  const tokens = storage.getJson<any[]>(STORAGE_KEYS.TOKENS, []);
   const {
     isLoggedIn,
     pubkey: userPubkey,
@@ -220,26 +222,23 @@ export default function CartInvoiceCard({
             }
           });
         }
-        sessionStorage.setItem(
-          "orderSummary",
-          JSON.stringify({
-            productTitle: pendingOrderRef.current.productTitle,
-            productImage: products[0]?.images?.[0] || "",
-            amount: String(totalCost),
-            subtotal: String(subtotalCost),
-            currency: pendingOrderRef.current.currency,
-            paymentMethod: pendingOrderRef.current.paymentMethod,
-            orderId: pendingOrderRef.current.orderId,
-            shippingAddress: pendingOrderRef.current.shippingAddress,
-            sellerPubkey: pendingOrderRef.current.sellerPubkey,
-            isCart: true,
-            cartItems,
-            freeShippingApplied: anyFreeShipping,
-            originalShippingCost: anyFreeShipping
-              ? String(originalShipping)
-              : undefined,
-          })
-        );
+        storage.setSessionJson(STORAGE_KEYS.ORDER_SUMMARY, {
+          productTitle: pendingOrderRef.current.productTitle,
+          productImage: products[0]?.images?.[0] || "",
+          amount: String(totalCost),
+          subtotal: String(subtotalCost),
+          currency: pendingOrderRef.current.currency,
+          paymentMethod: pendingOrderRef.current.paymentMethod,
+          orderId: pendingOrderRef.current.orderId,
+          shippingAddress: pendingOrderRef.current.shippingAddress,
+          sellerPubkey: pendingOrderRef.current.sellerPubkey,
+          isCart: true,
+          cartItems,
+          freeShippingApplied: anyFreeShipping,
+          originalShippingCost: anyFreeShipping
+            ? String(originalShipping)
+            : undefined,
+        });
       } catch {}
 
       pendingOrderRef.current = null;
@@ -482,7 +481,7 @@ export default function CartInvoiceCard({
   // Load NWC info and check cart for NWC compatibility
   useEffect(() => {
     const loadNwcInfo = () => {
-      const { nwcInfo: infoString } = getLocalStorageData();
+      const infoString = storage.getItem(STORAGE_KEYS.NWC_INFO);
       if (infoString) {
         try {
           const info = JSON.parse(infoString);
@@ -1061,7 +1060,7 @@ export default function CartInvoiceCard({
       });
       invoicePollRef.current = { cancelled: false, activeQuoteId: hash };
 
-      const { nwcString } = getLocalStorageData();
+      const nwcString = storage.getItem(STORAGE_KEYS.NWC_STRING);
       if (!nwcString) throw new Error("NWC connection not found.");
 
       nwc = new NostrWebLNProvider({ nostrWalletConnectUrl: nwcString });
@@ -1239,7 +1238,7 @@ export default function CartInvoiceCard({
                   "seller payment hand-off"
                 );
                 markMintQuoteClaimed(hash);
-                localStorage.setItem("cart", JSON.stringify([]));
+                storage.setJson(STORAGE_KEYS.CART, []);
                 setPaymentConfirmed(true);
                 if (setInvoiceIsPaid) {
                   setInvoiceIsPaid(true);
@@ -1285,7 +1284,7 @@ export default function CartInvoiceCard({
                 lastErrorMessage:
                   "Mint reports quote ISSUED before local claim recorded proofs",
               });
-              localStorage.setItem("cart", JSON.stringify([]));
+              storage.setJson(STORAGE_KEYS.CART, []);
               setPaymentConfirmed(true);
               setQrCodeUrl(null);
               setFailureText(
@@ -1308,7 +1307,7 @@ export default function CartInvoiceCard({
             status: "failed_terminal",
             lastErrorMessage: "Quote ISSUED before local claim recorded proofs",
           });
-          localStorage.setItem("cart", JSON.stringify([]));
+          storage.setJson(STORAGE_KEYS.CART, []);
           setPaymentConfirmed(true);
           setQrCodeUrl(null);
           setFailureText(
@@ -2410,14 +2409,11 @@ export default function CartInvoiceCard({
       } else {
         proofArray = [...remainingProofs];
       }
-      localStorage.setItem("tokens", JSON.stringify(proofArray));
-      localStorage.setItem(
-        "history",
-        JSON.stringify([
-          { type: 5, amount: price, date: Math.floor(Date.now() / 1000) },
-          ...history,
-        ])
-      );
+      storage.setJson(STORAGE_KEYS.TOKENS, proofArray);
+      storage.setJson(STORAGE_KEYS.HISTORY, [
+        { type: 5, amount: price, date: Math.floor(Date.now() / 1000) },
+        ...history,
+      ]);
       await publishProofEvent(
         nostr!,
         signer!,
@@ -2427,7 +2423,7 @@ export default function CartInvoiceCard({
         price.toString(),
         deletedEventIds
       );
-      localStorage.setItem("cart", JSON.stringify([]));
+      storage.setJson(STORAGE_KEYS.CART, []);
       setOrderConfirmed(true);
       setPaymentConfirmed(true);
       if (setCashuPaymentSent) {

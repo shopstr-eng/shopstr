@@ -16,6 +16,7 @@ import parseTags, {
 import ProductCard from "@/components/utility-components/product-card";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import ProtectedRoute from "@/components/utility-components/protected-route";
+import { storage, STORAGE_KEYS } from "@/utils/storage";
 
 interface OrderSummaryData {
   productTitle: string;
@@ -62,12 +63,12 @@ export default function OrderSummary() {
   useEffect(() => {
     if (typeof window !== "undefined") {
       const pk =
-        sessionStorage.getItem("sf_seller_pubkey") ||
-        localStorage.getItem("sf_seller_pubkey");
+        storage.getSessionItem(STORAGE_KEYS.SF_SELLER_PUBKEY) ||
+        storage.getItem(STORAGE_KEYS.SF_SELLER_PUBKEY);
       if (pk) setSfSellerPubkey(pk);
       const slug =
-        sessionStorage.getItem("sf_shop_slug") ||
-        localStorage.getItem("sf_shop_slug");
+        storage.getSessionItem(STORAGE_KEYS.SF_SHOP_SLUG) ||
+        storage.getItem(STORAGE_KEYS.SF_SHOP_SLUG);
       if (slug) setSfShopSlug(slug);
     }
   }, []);
@@ -80,13 +81,14 @@ export default function OrderSummary() {
   const hasConsumedOrderRef = useRef(false);
   useEffect(() => {
     if (hasConsumedOrderRef.current) return;
-    const stored = sessionStorage.getItem("orderSummary");
-    if (stored) {
+    const data = storage.getSessionJson<OrderSummaryData | null>(
+      STORAGE_KEYS.ORDER_SUMMARY
+    );
+    if (data) {
       hasConsumedOrderRef.current = true;
       try {
-        const data = JSON.parse(stored);
         setOrderData(data);
-        sessionStorage.removeItem("orderSummary");
+        storage.removeSessionItem(STORAGE_KEYS.ORDER_SUMMARY);
         if (data.sellerPubkey && !sfSellerPubkey) {
           setSfSellerPubkey(data.sellerPubkey);
         }
