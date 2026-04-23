@@ -666,7 +666,11 @@ function MarketplacePage({
 
       {/* Floating Add Button */}
       {router.pathname.includes("marketplace") &&
-        !router.asPath.includes("npub1") && (
+        !router.asPath.includes("npub1") &&
+        loggedIn &&
+        userPubkey &&
+        shopMapContext.shopData.has(userPubkey) &&
+        typeof shopMapContext.shopData.get(userPubkey) !== "undefined" && (
           <Button
             radius="full"
             className={`${BLUEBUTTONCLASSNAMES} fixed right-8 bottom-8 z-50 h-16 w-16`}
