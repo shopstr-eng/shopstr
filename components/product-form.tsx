@@ -963,7 +963,7 @@ export default function ProductForm({
                   %. You can modify this in your{" "}
                   <span
                     className="cursor-pointer underline hover:text-blue-600"
-                    onClick={() => router.push("/settings/user-profile")}
+                    onClick={() => router.push("/settings/profile")}
                   >
                     settings
                   </span>
@@ -2542,7 +2542,7 @@ export default function ProductForm({
                   . You can modify this in your{" "}
                   <span
                     className="cursor-pointer underline hover:text-blue-600"
-                    onClick={() => router.push("/settings/user-profile")}
+                    onClick={() => router.push("/settings/profile")}
                   >
                     profile settings
                   </span>
@@ -2595,8 +2595,8 @@ export default function ProductForm({
           isOpen={showStripeConnectModal}
           onClose={() => setShowStripeConnectModal(false)}
           pubkey={pubkey}
-          returnPath="/my-listings?stripe=success"
-          refreshPath="/my-listings?stripe=refresh"
+          returnPath="/settings/market?tab=products&stripe=success"
+          refreshPath="/settings/market?tab=products&stripe=refresh"
         />
       )}
     </>

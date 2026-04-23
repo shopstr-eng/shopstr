@@ -24,7 +24,6 @@ const TopNav = ({
     isCommunitiesActive,
     isMessagesActive,
     isWalletActive,
-    isMyListingsActive,
     isCartActive,
   } = useNavigation();
   const router = useRouter();
@@ -42,6 +41,15 @@ const TopNav = ({
   const [shopName, setShopName] = useState("");
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  const hasShopProfile = Boolean(
+    userPubkey &&
+    shopMapContext.shopData.has(userPubkey) &&
+    typeof shopMapContext.shopData.get(userPubkey) !== "undefined"
+  );
+
+  const isMyListingsActive =
+    router.pathname === "/settings/market" && router.query.tab === "products";
 
   useEffect(() => {
     const fetchAndUpdateCartQuantity = async () => {
@@ -91,7 +99,7 @@ const TopNav = ({
         setShopName(shopProfile.content.name);
       }
     } else if (
-      router.pathname.includes("my-listings") &&
+      router.pathname.includes("/settings/market") &&
       userPubkey &&
       shopMapContext.shopData.has(userPubkey) &&
       typeof shopMapContext.shopData.get(userPubkey) != "undefined"
@@ -145,6 +153,16 @@ const TopNav = ({
       >
         Communities
       </Button>
+      {hasShopProfile && (
+        <Button
+          className={`w-full bg-transparent ${
+            isMyListingsActive ? "text-primary-yellow" : "text-white"
+          } hover:text-primary-yellow`}
+          onClick={() => handleRoute("/settings/market?tab=products")}
+        >
+          My Listings
+        </Button>
+      )}
       <Button
         className={`w-full bg-transparent ${
           isMessagesActive ? "text-primary-yellow" : "text-white"
@@ -165,14 +183,6 @@ const TopNav = ({
         onClick={() => handleRoute("/wallet")}
       >
         Wallet
-      </Button>
-      <Button
-        className={`w-full bg-transparent ${
-          isMyListingsActive ? "text-primary-yellow" : "text-white"
-        } hover:text-primary-yellow`}
-        onClick={() => handleRoute("/my-listings")}
-      >
-        My Listings
       </Button>
       <Button
         className={`w-full bg-transparent ${
@@ -264,6 +274,18 @@ const TopNav = ({
           >
             Communities
           </Button>
+          {hasShopProfile && (
+            <Button
+              className={`bg-transparent ${
+                isMyListingsActive
+                  ? "text-primary-yellow font-bold"
+                  : "text-white"
+              } hover:text-primary-yellow`}
+              onClick={() => handleRoute("/settings/market?tab=products")}
+            >
+              My Listings
+            </Button>
+          )}
           <Button
             className={`bg-transparent ${
               isMessagesActive ? "text-primary-yellow font-bold" : "text-white"
@@ -284,16 +306,6 @@ const TopNav = ({
             onClick={() => handleRoute("/wallet")}
           >
             Wallet
-          </Button>
-          <Button
-            className={`bg-transparent ${
-              isMyListingsActive
-                ? "text-primary-yellow font-bold"
-                : "text-white"
-            } hover:text-primary-yellow`}
-            onClick={() => handleRoute("/my-listings")}
-          >
-            My Listings
           </Button>
           <Button
             className={`bg-transparent ${

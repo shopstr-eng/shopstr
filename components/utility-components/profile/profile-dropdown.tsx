@@ -221,10 +221,10 @@ export const ProfileWithDropdown = ({
       ),
       onPress: () => {
         handleDropdownAction(() => {
-          router.push("/settings/shop-profile");
+          router.push("/settings/market");
         });
       },
-      label: "Shop Profile",
+      label: "Manage Market",
     },
     inquiry: {
       key: "inquiry",
@@ -256,10 +256,10 @@ export const ProfileWithDropdown = ({
       startContent: <UserIcon className={"h-5 w-5 !text-black"} />,
       onPress: () => {
         handleDropdownAction(() => {
-          router.push("/settings/user-profile");
+          router.push("/settings/profile");
         });
       },
-      label: "Profile",
+      label: "Edit Profile",
     },
     settings: {
       key: "settings",
@@ -272,7 +272,7 @@ export const ProfileWithDropdown = ({
           router.push("/settings");
         });
       },
-      label: "Settings",
+      label: "View Settings",
     },
     logout: {
       key: "logout",

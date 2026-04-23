@@ -183,7 +183,7 @@ const SideShopNav = ({
             </Button>
             <Button
               className={`${BLACKBUTTONCLASSNAMES} mt-2 w-full`}
-              onClick={() => router.push("/settings/shop-profile")}
+              onClick={() => router.push("/settings/market?tab=storefront")}
             >
               Edit Shop
             </Button>

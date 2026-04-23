@@ -40,13 +40,6 @@
       "icons": [{ "src": "/milk-market.png", "sizes": "144x144" }]
     },
     {
-      "name": "My Listings",
-      "short_name": "Listings",
-      "description": "Manage your shop listings",
-      "url": "/my-listings",
-      "icons": [{ "src": "/milk-market.png", "sizes": "144x144" }]
-    },
-    {
       "name": "Settings",
       "short_name": "Settings",
       "description": "Manage your site settings",
@@ -54,17 +47,17 @@
       "icons": [{ "src": "/milk-market.png", "sizes": "144x144" }]
     },
     {
-      "name": "User Profile",
+      "name": "Profile",
       "short_name": "Profile",
       "description": "Manage your profile settings",
-      "url": "/settings/user-profile",
+      "url": "/settings/profile",
       "icons": [{ "src": "/milk-market.png", "sizes": "144x144" }]
     },
     {
-      "name": "Shop Profile",
-      "short_name": "Shop",
-      "description": "Manage your shop profile",
-      "url": "/settings/shop-profile",
+      "name": "Market Management",
+      "short_name": "Market",
+      "description": "Manage your storefront, products, and discounts",
+      "url": "/settings/market",
       "icons": [{ "src": "/milk-market.png", "sizes": "144x144" }]
     },
     {

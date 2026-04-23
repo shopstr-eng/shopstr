@@ -13,7 +13,6 @@ describe("useNavigation Hook", () => {
     { path: "/marketplace", activeFlag: "isHomeActive" },
     { path: "/orders", activeFlag: "isMessagesActive" },
     { path: "/wallet", activeFlag: "isWalletActive" },
-    { path: "/my-listings", activeFlag: "isMyListingsActive" },
     { path: "/settings", activeFlag: "isProfileActive" },
     { path: "/unknown-path", activeFlag: null }, // A case where no flag should be active
   ];

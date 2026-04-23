@@ -14,6 +14,7 @@ import { sanitizeUrl } from "@braintree/sanitize-url";
 import DiscountCodes from "./discount-codes";
 import Affiliates from "./affiliates";
 import StripeConnectBanner from "@/components/stripe-connect/StripeConnectBanner";
+import ProductPageTemplateForm from "@/components/settings/product-page-template-form";
 
 const MyListingsPage = () => {
   const { pubkey: usersPubkey } = useContext(SignerContext);
@@ -57,7 +58,7 @@ const MyListingsPage = () => {
 
   const handleEditShop = () => {
     if (usersPubkey) {
-      router.push("/settings/shop-profile");
+      router.push("/settings/market?tab=storefront");
     } else {
       onOpen();
     }
@@ -112,6 +113,15 @@ const MyListingsPage = () => {
         <Button
           className="w-full bg-transparent px-4 py-2 text-left text-sm font-bold text-black hover:bg-gray-100"
           onClick={() => {
+            setSelectedSection("Templates");
+            setIsMobileMenuOpen(false);
+          }}
+        >
+          Templates
+        </Button>
+        <Button
+          className="w-full bg-transparent px-4 py-2 text-left text-sm font-bold text-black hover:bg-gray-100"
+          onClick={() => {
             handleViewOrders();
             setIsMobileMenuOpen(false);
           }}
@@ -135,8 +145,8 @@ const MyListingsPage = () => {
     <div className="mx-auto h-full w-full bg-white">
       <div className="flex max-w-[100%] flex-col px-3 pb-2">
         <StripeConnectBanner
-          returnPath="/my-listings?stripe=success"
-          refreshPath="/my-listings?stripe=refresh"
+          returnPath="/settings/market?tab=products&stripe=success"
+          refreshPath="/settings/market?tab=products&stripe=refresh"
         />
         {shopBanner != "" ? (
           <>
@@ -193,6 +203,16 @@ const MyListingsPage = () => {
                 onClick={() => setSelectedSection("Affiliates")}
               >
                 Affiliates
+              </Button>
+              <Button
+                className={`bg-transparent px-0 text-lg font-bold ${
+                  selectedSection === "Templates"
+                    ? "border-b-4 border-black text-black"
+                    : "text-gray-500 hover:text-black"
+                }`}
+                onClick={() => setSelectedSection("Templates")}
+              >
+                Templates
               </Button>
               <Button
                 className="bg-transparent px-0 text-lg font-bold text-gray-500 hover:text-black"
@@ -260,6 +280,11 @@ const MyListingsPage = () => {
           </div>
           {usersPubkey && selectedSection === "Discounts" && <DiscountCodes />}
           {usersPubkey && selectedSection === "Affiliates" && <Affiliates />}
+          {usersPubkey && selectedSection === "Templates" && (
+            <div className="flex-1">
+              <ProductPageTemplateForm />
+            </div>
+          )}
         </div>
       </div>
       <SignInModal isOpen={isOpen} onClose={onClose} />

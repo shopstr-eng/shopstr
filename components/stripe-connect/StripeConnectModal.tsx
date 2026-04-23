@@ -83,8 +83,10 @@ const StripeConnectModal: React.FC<StripeConnectModalProps> = ({
           accountId,
           pubkey,
           signedEvent: linkSignedEvent,
-          returnPath: returnPath || "/settings/shop-profile?stripe=success",
-          refreshPath: refreshPath || "/settings/shop-profile?stripe=refresh",
+          returnPath:
+            returnPath || "/settings/market?tab=storefront&stripe=success",
+          refreshPath:
+            refreshPath || "/settings/market?tab=storefront&stripe=refresh",
         }),
       });
 

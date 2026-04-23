@@ -16,20 +16,20 @@ const SettingsPage = () => {
 
   const settingsItems = [
     {
-      id: "user-profile",
-      title: "User Profile",
-      description: "Edit your user profile",
+      id: "profile",
+      title: "Profile",
+      description: "Edit your profile",
       icon: UserIcon,
       iconBg: "bg-slate-600",
-      route: "/settings/user-profile",
+      route: "/settings/profile",
     },
     {
-      id: "shop-profile",
-      title: "Shop Profile",
-      description: "Edit your shop profile",
+      id: "market",
+      title: "Market Management",
+      description: "Manage your storefront, products, and discounts",
       icon: BuildingStorefrontIcon,
       iconBg: "bg-slate-600",
-      route: "/settings/shop-profile",
+      route: "/settings/market",
     },
     {
       id: "email-flows",

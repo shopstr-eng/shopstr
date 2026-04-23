@@ -226,8 +226,8 @@ describe("ProfileWithDropdown", () => {
 
     openDropdownMenu();
 
-    fireEvent.click(screen.getByText("Shop Profile"));
-    expect(mockRouterPush).toHaveBeenCalledWith("/settings/shop-profile");
+    fireEvent.click(screen.getByText("Manage Market"));
+    expect(mockRouterPush).toHaveBeenCalledWith("/settings/market");
   });
 
   it('handles "Send Inquiry" click when logged in', () => {
@@ -267,8 +267,8 @@ describe("ProfileWithDropdown", () => {
 
     openDropdownMenu();
 
-    fireEvent.click(screen.getByText("Profile"));
-    expect(mockRouterPush).toHaveBeenCalledWith("/settings/user-profile");
+    fireEvent.click(screen.getByText("Edit Profile"));
+    expect(mockRouterPush).toHaveBeenCalledWith("/settings/profile");
   });
 
   it('handles "Settings" click', () => {
@@ -279,7 +279,7 @@ describe("ProfileWithDropdown", () => {
 
     openDropdownMenu();
 
-    fireEvent.click(screen.getByText("Settings"));
+    fireEvent.click(screen.getByText("View Settings"));
     expect(mockRouterPush).toHaveBeenCalledWith("/settings");
   });
 

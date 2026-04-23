@@ -280,7 +280,9 @@ describe("MyListingsPage", () => {
       expect(mockRouterPush).toHaveBeenCalledWith("?addNewListing");
 
       fireEvent.click(screen.getAllByText("Edit Shop")[0]!);
-      expect(mockRouterPush).toHaveBeenCalledWith("/settings/shop-profile");
+      expect(mockRouterPush).toHaveBeenCalledWith(
+        "/settings/market?tab=storefront"
+      );
 
       fireEvent.click(screen.getAllByRole("button", { name: "Orders" })[0]!);
       expect(mockRouterPush).toHaveBeenCalledWith("/orders");

@@ -256,7 +256,7 @@ function MarketplacePage({
 
   const handleAddNewListing = () => {
     if (loggedIn) {
-      router.push("/my-listings?addNewListing");
+      router.push("/settings/market?tab=products&addNewListing");
     } else {
       onOpen();
     }

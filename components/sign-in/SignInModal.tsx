@@ -452,11 +452,6 @@ export default function SignInModal({
                   </h1>
                 </div>
 
-                {/* Signup image */}
-                <div className="w-full max-w-md">
-                  <Image src="signup.png" alt="sign up" className="w-full" />
-                </div>
-
                 {/* Action buttons */}
                 <div className="flex w-full max-w-md flex-col space-y-4">
                   <div className="text-center">

@@ -73,7 +73,6 @@ import SectionEditor from "./storefront/section-editor";
 import { useDragReorder } from "@/utils/hooks/useDragReorder";
 import FooterEditor from "./storefront/footer-editor";
 import PageEditor from "./storefront/page-editor";
-import ProductPageEditor from "./storefront/product-page-editor";
 import StorefrontPreviewModal from "./storefront/storefront-preview-modal";
 import StorefrontPreviewPanel from "./storefront/storefront-preview-panel";
 import { sanitizeStorefrontConfigLinks } from "@/utils/storefront-links";
@@ -278,9 +277,6 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
   const sectionsDnd = useDragReorder(sections, setSections);
   const [newSectionId, setNewSectionId] = useState<string | null>(null);
   const [pages, setPages] = useState<StorefrontPage[]>([]);
-  const [productPageDefaults, setProductPageDefaults] = useState<
-    StorefrontSection[]
-  >([]);
   const [footer, setFooter] = useState<StorefrontFooter>({
     showPoweredBy: true,
   });
@@ -379,8 +375,6 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
         if (sf.customFontBodyName) setCustomFontBodyName(sf.customFontBodyName);
         if (sf.sections) setSections(sf.sections);
         if (sf.pages) setPages(sf.pages);
-        if (sf.productPageDefaults)
-          setProductPageDefaults(sf.productPageDefaults);
         if (sf.footer) setFooter(sf.footer);
         if (sf.navLinks) setNavLinks(sf.navLinks);
         if (sf.navColors) setNavColors(sf.navColors);
@@ -476,8 +470,6 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
       if (sf.customFontBodyName) setCustomFontBodyName(sf.customFontBodyName);
       if (sf.sections) setSections(sf.sections);
       if (sf.pages) setPages(sf.pages);
-      if (sf.productPageDefaults)
-        setProductPageDefaults(sf.productPageDefaults);
       if (sf.footer) setFooter(sf.footer);
       if (sf.navLinks) setNavLinks(sf.navLinks);
       if (sf.navColors) setNavColors(sf.navColors);
@@ -783,8 +775,13 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
         customFontBodyName: customFontBodyName || undefined,
         sections: sections.length > 0 ? sections : undefined,
         pages: pages.length > 0 ? pages : undefined,
-        productPageDefaults:
-          productPageDefaults.length > 0 ? productPageDefaults : undefined,
+        // Preserve productPageDefaults exactly as it currently exists on the
+        // shop event. This field is owned by the Templates tab in Market
+        // Management; reading it from the latest relay-context content here
+        // ensures concurrent edits from that form are never overwritten by a
+        // storefront save.
+        productPageDefaults: (existingContent as any)?.storefront
+          ?.productPageDefaults,
         footer,
         navLinks: navLinks.length > 0 ? navLinks : undefined,
         navColors:
@@ -1872,34 +1869,6 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                           onNavLinksChange={setNavLinks}
                           sellerProducts={sellerProducts}
                           shopPubkey={userPubkey}
-                        />
-                      </div>
-
-                      <div className="mb-6">
-                        <label className="mb-2 block text-base font-bold text-black">
-                          Product Page Template
-                        </label>
-                        <p className="mb-3 text-sm text-gray-500">
-                          Default sections to show on every product&apos;s
-                          detail page. Individual products can override these
-                          from the Customize Page button on each listing.
-                        </p>
-                        <ProductPageEditor
-                          sections={productPageDefaults}
-                          onChange={setProductPageDefaults}
-                          sellerProducts={sellerProducts}
-                          shopPubkey={userPubkey}
-                          showSizeReadout
-                          preview={{
-                            colors: colorScheme,
-                            shopName: watch("name") || "Shop",
-                            fontHeading,
-                            fontBody,
-                            customFontHeadingUrl,
-                            customFontHeadingName,
-                            customFontBodyUrl,
-                            customFontBodyName,
-                          }}
                         />
                       </div>
 

@@ -247,9 +247,9 @@ export default function ProductCard({
               </div>
             </div>
 
-            {/* Status badges - Active only shown on /my-listings */}
+            {/* Status badges - Active only shown on Market Management */}
             {(isExpired ||
-              router.pathname === "/my-listings" ||
+              router.pathname === "/settings/market" ||
               productData.status === "sold" ||
               productData.status === "soon") && (
               <div className="flex items-center gap-2">
@@ -258,7 +258,7 @@ export default function ProductCard({
                     Outdated
                   </Chip>
                 )}
-                {router.pathname === "/my-listings" &&
+                {router.pathname === "/settings/market" &&
                   productData.status === "active" && (
                     <Chip className="flex-shrink-0 border-2 border-black bg-green-500 text-xs font-bold text-white">
                       Active
