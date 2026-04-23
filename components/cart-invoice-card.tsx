@@ -59,6 +59,7 @@ import {
   constructMessageGiftWrap,
   sendGiftWrappedMessageEvent,
   generateKeys,
+  getStoredMints,
   publishProofEvent,
 } from "@/utils/nostr/nostr-helper-functions";
 import { storage, STORAGE_KEYS } from "@/utils/storage";
@@ -114,7 +115,7 @@ export default function CartInvoiceCard({
   setCashuPaymentSent?: (cashuPaymentSent: boolean) => void;
   setCashuPaymentFailed?: (cashuPaymentFailed: boolean) => void;
 }) {
-  const mints = storage.getJson<string[]>(STORAGE_KEYS.MINTS, []);
+  const mints = getStoredMints();
   const tokens = storage.getJson<any[]>(STORAGE_KEYS.TOKENS, []);
   const {
     isLoggedIn,

@@ -19,6 +19,7 @@ import {
   constructGiftWrappedEvent,
   constructMessageSeal,
   constructMessageGiftWrap,
+  getStoredRelays,
   sendGiftWrappedMessageEvent,
 } from "@/utils/nostr/nostr-helper-functions";
 import { generateSecretKey, getPublicKey } from "nostr-tools";
@@ -173,7 +174,7 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
       const ln = new LightningAddress(lud16);
       await ln.fetch();
 
-      const userRelays = storage.getJson<string[]>(STORAGE_KEYS.RELAYS, []);
+      const userRelays = getStoredRelays();
       const targetRelays =
         userRelays.length > 0
           ? userRelays

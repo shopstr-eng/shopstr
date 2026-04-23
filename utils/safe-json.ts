@@ -12,7 +12,7 @@ interface JsonErrorContext {
   error?: unknown;
 }
 
-interface StorageParseOptions<T> {
+export interface StorageParseOptions<T> {
   removeOnError?: boolean;
   removeOnValidationError?: boolean;
   onError?: (context: JsonErrorContext) => void;

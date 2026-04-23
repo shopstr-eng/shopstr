@@ -17,7 +17,10 @@ import {
   ModalFooter,
   Spinner,
 } from "@heroui/react";
-import { publishProofEvent } from "@/utils/nostr/nostr-helper-functions";
+import {
+  getStoredMints,
+  publishProofEvent,
+} from "@/utils/nostr/nostr-helper-functions";
 import { storage, STORAGE_KEYS } from "@/utils/storage";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
@@ -48,7 +51,7 @@ const PayButton = () => {
   const { signer } = useContext(SignerContext);
   const { nostr } = useContext(NostrContext);
 
-  const mints = storage.getJson<string[]>(STORAGE_KEYS.MINTS, []);
+  const mints = getStoredMints();
   const tokens = storage.getJson<any[]>(STORAGE_KEYS.TOKENS, []);
   const history = storage.getJson<any[]>(STORAGE_KEYS.HISTORY, []);
 

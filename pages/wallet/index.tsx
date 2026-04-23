@@ -13,6 +13,7 @@ import {
 } from "@cashu/cashu-ts";
 import ProtectedRoute from "@/components/utility-components/protected-route";
 import { storage, STORAGE_KEYS } from "@/utils/storage";
+import { getStoredMints } from "@/utils/nostr/nostr-helper-functions";
 
 const Wallet = () => {
   const [totalBalance, setTotalBalance] = useState(0);
@@ -23,7 +24,7 @@ const Wallet = () => {
   const router = useRouter();
 
   const mints = useMemo(
-    () => storage.getJson<string[]>(STORAGE_KEYS.MINTS, []),
+    () => getStoredMints(),
     []
   );
   const tokens = useMemo(

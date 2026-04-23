@@ -13,7 +13,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { RawEventModal, EventIdModal } from "./modals/event-modals";
 import { nip19 } from "nostr-tools";
-import { storage, STORAGE_KEYS } from "@/utils/storage";
+import { getStoredRelays } from "@/utils/nostr/nostr-helper-functions";
 import { locationAvatar } from "./dropdowns/location-dropdown";
 import ImageCarousel from "./image-carousel";
 import CompactPriceDisplay from "./display-monetary-info";
@@ -152,7 +152,7 @@ export default function ProductCard({
     e.preventDefault();
     e.stopPropagation();
     try {
-      const relays = storage.getJson<string[]>(STORAGE_KEYS.RELAYS, []);
+      const relays = getStoredRelays();
       const targetRelays =
         relays.length > 0
           ? relays.slice(0, 3)

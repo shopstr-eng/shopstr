@@ -12,7 +12,12 @@ import {
   NostrSigner,
 } from "@/utils/nostr/signers/nostr-signer";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
-import { isStoredSignerData } from "@/utils/nostr/nostr-helper-functions";
+import {
+  getStoredReadRelays,
+  getStoredRelays,
+  getStoredWriteRelays,
+  isStoredSignerData,
+} from "@/utils/nostr/nostr-helper-functions";
 import PassphraseChallengeModal from "@/components/utility-components/request-passphrase-modal";
 import AuthUrlChallengeModal from "@/components/utility-components/auth-challenge-modal";
 import { NostrNIP07Signer } from "@/utils/nostr/signers/nostr-nip07-signer";
@@ -334,12 +339,9 @@ export function NostrContextProvider({ children }: { children: ReactNode }) {
   const [nostr] = useState<NostrManager>(new NostrManager());
 
   const reload = useCallback(() => {
-    const readRelays = storage.getJson<string[]>(STORAGE_KEYS.READ_RELAYS, []);
-    const writeRelays = storage.getJson<string[]>(
-      STORAGE_KEYS.WRITE_RELAYS,
-      []
-    );
-    const relays = storage.getJson<string[]>(STORAGE_KEYS.RELAYS, []);
+    const readRelays = getStoredReadRelays();
+    const writeRelays = getStoredWriteRelays();
+    const relays = getStoredRelays();
     nostr.addRelays([...writeRelays, ...relays, ...readRelays]);
   }, [nostr]);
 

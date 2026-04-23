@@ -1,4 +1,5 @@
-import { parseJsonWithFallback, StorageParseOptions } from "./safe-json";
+import { parseJsonWithFallback } from "./safe-json";
+import type { StorageParseOptions } from "./safe-json";
 
 /**
  * Storage Schema definition for consistent key management and type safety.

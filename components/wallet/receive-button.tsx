@@ -17,6 +17,7 @@ import {
 } from "@heroui/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
+  getStoredMints,
   publishProofEvent,
   publishWalletEvent,
 } from "@/utils/nostr/nostr-helper-functions";
@@ -42,7 +43,7 @@ const ReceiveButton = () => {
 
   const { signer } = useContext(SignerContext);
   const { nostr } = useContext(NostrContext);
-  const mints = storage.getJson<string[]>(STORAGE_KEYS.MINTS, []);
+  const mints = getStoredMints();
   const tokens = storage.getJson<any[]>(STORAGE_KEYS.TOKENS, []);
   const history = storage.getJson<any[]>(STORAGE_KEYS.HISTORY, []);
 

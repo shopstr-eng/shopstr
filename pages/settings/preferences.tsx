@@ -21,6 +21,11 @@ import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
   createBlossomServerEvent,
   createNostrRelayEvent,
+  getStoredBlossomServers,
+  getStoredMints,
+  getStoredReadRelays,
+  getStoredRelays,
+  getStoredWriteRelays,
   publishWalletEvent,
 } from "@/utils/nostr/nostr-helper-functions";
 import { storage, STORAGE_KEYS } from "@/utils/storage";
@@ -61,11 +66,11 @@ const PreferencesPage = () => {
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      setMints(storage.getJson(STORAGE_KEYS.MINTS, []));
-      setRelays(storage.getJson(STORAGE_KEYS.RELAYS, []));
-      setReadRelays(storage.getJson(STORAGE_KEYS.READ_RELAYS, []));
-      setWriteRelays(storage.getJson(STORAGE_KEYS.WRITE_RELAYS, []));
-      setBlossomServers(storage.getJson(STORAGE_KEYS.BLOSSOM_SERVERS, []));
+      setMints(getStoredMints());
+      setRelays(getStoredRelays());
+      setReadRelays(getStoredReadRelays());
+      setWriteRelays(getStoredWriteRelays());
+      setBlossomServers(getStoredBlossomServers());
     }
     setIsLoaded(true);
   }, [signer]);

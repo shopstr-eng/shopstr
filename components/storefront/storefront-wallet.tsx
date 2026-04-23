@@ -2,6 +2,7 @@ import { useContext, useEffect, useMemo, useState } from "react";
 import { StorefrontColorScheme } from "@/utils/types/types";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import { storage, STORAGE_KEYS } from "@/utils/storage";
+import { getStoredMints } from "@/utils/nostr/nostr-helper-functions";
 import MintButton from "@/components/wallet/mint-button";
 import ReceiveButton from "@/components/wallet/receive-button";
 import SendButton from "@/components/wallet/send-button";
@@ -29,7 +30,7 @@ export default function StorefrontWallet({ colors }: StorefrontWalletProps) {
   const [wallet, setWallet] = useState<CashuWallet>();
   const [mintKeySetIds, setMintKeySetIds] = useState<MintKeyset[]>([]);
 
-  const mints = storage.getJson<string[]>(STORAGE_KEYS.MINTS, []);
+  const mints = getStoredMints();
   const tokens = storage.getJson<any[]>(STORAGE_KEYS.TOKENS, []);
 
   useEffect(() => {

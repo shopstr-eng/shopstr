@@ -17,6 +17,7 @@ import { useTheme } from "next-themes";
 import { ProfileMapContext, ChatsContext } from "../../utils/context/context";
 import {
   generateKeys,
+  getStoredMints,
   publishProofEvent,
   publishWalletEvent,
   constructGiftWrappedEvent,
@@ -67,7 +68,7 @@ export default function ClaimButton({ token }: { token: string }) {
   const [isInvalidToken, setIsInvalidToken] = useState(false);
   const [isDuplicateToken, setIsDuplicateToken] = useState(false);
 
-  const mints = storage.getJson<string[]>(STORAGE_KEYS.MINTS, []);
+  const mints = getStoredMints();
   const tokens = storage.getJson<any[]>(STORAGE_KEYS.TOKENS, []);
   const history = storage.getJson<any[]>(STORAGE_KEYS.HISTORY, []);
 
