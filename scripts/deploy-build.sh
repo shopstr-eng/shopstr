@@ -105,7 +105,28 @@ node -e "
   }
 "
 
+echo "==> Bundling portable Node 22 binary for runtime"
+# Autoscale's runtime container ships an older `node` on PATH (observed
+# v18.12.1). Next.js 16 needs Node 22+ for AsyncLocalStorage.snapshot(), so
+# we ship a portable Node 22 binary alongside the bundle. We download the
+# official portable build (linux-x64) instead of copying from the Nix store
+# because Nix binaries depend on a custom dynamic linker
+# (/nix/store/...-glibc/lib/ld-linux-x86-64.so.2) that does not exist in the
+# autoscale runtime container.
+NODE_VERSION="v22.22.0"
+NODE_DIST="node-${NODE_VERSION}-linux-x64"
+mkdir -p .runtime
+if [ ! -x ".runtime/bin/node" ]; then
+  curl -fsSL "https://nodejs.org/dist/${NODE_VERSION}/${NODE_DIST}.tar.xz" -o /tmp/node.tar.xz
+  tar -xJf /tmp/node.tar.xz -C /tmp
+  mkdir -p .runtime/bin
+  cp "/tmp/${NODE_DIST}/bin/node" .runtime/bin/node
+  chmod +x .runtime/bin/node
+  rm -rf "/tmp/${NODE_DIST}" /tmp/node.tar.xz
+fi
+echo "    bundled $(./.runtime/bin/node --version) (portable, glibc-compatible)"
+
 echo "==> Final size:"
-du -sh . .next .next/standalone 2>/dev/null || true
+du -sh . .next .next/standalone .runtime 2>/dev/null || true
 echo "==> Top-level files preserved:"
 ls -la | head -30
