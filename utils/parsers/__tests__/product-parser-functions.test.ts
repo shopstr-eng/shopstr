@@ -54,6 +54,17 @@ describe("parseTags", () => {
     expect(result.summary).toBe("Fallback summary");
   });
 
+  it("should fallback to summary tag when content is only whitespace", () => {
+    const event = {
+      ...baseEvent,
+      content: "   ",
+      tags: [["summary", "Whitespace fallback summary"]],
+    };
+    const result = parseTags(event)!;
+
+    expect(result.summary).toBe("Whitespace fallback summary");
+  });
+
   it("should parse multiple image and category tags into arrays", () => {
     const event = {
       ...baseEvent,

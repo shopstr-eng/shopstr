@@ -69,7 +69,7 @@ export const parseTags = (productEvent: NostrEvent) => {
         break;
       case "summary":
         // NIP-99 uses event content as primary description.
-        // Keep summary tag as backward-compatible fallback when content is empty.
+        // Keep summary tag as backward-compatible fallback when content is empty or whitespace.
         if (!parsedData.summary.trim()) {
           parsedData.summary = values[0]!;
         }
