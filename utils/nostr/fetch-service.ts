@@ -474,12 +474,6 @@ export const fetchProfile = async (
             };
             dbProfileMap.set(pubkey, profile);
             updateProfileIfNewer(profile);
-            if (content.nip05) {
-              profile.nip05Verified = await verifyNip05Identifier(
-                content.nip05,
-                event.pubkey
-              );
-            }
           }
 
           if (dbProfileMap.size > 0) {
@@ -529,13 +523,6 @@ export const fetchProfile = async (
             content,
             nip05Verified: false,
           };
-          if (content.nip05) {
-            profile.nip05Verified = await verifyNip05Identifier(
-              content.nip05,
-              event.pubkey
-            );
-          }
-
           profileMap.set(event.pubkey, profile);
           updatedProfiles.set(event.pubkey, profile);
           updateProfileIfNewer(profile);
