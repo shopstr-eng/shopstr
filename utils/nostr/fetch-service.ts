@@ -54,6 +54,23 @@ function isHexString(value: string): boolean {
   return /^[0-9a-fA-F]{64}$/.test(value);
 }
 
+function parseJsonSafely<T>(input: unknown): T | null {
+  if (typeof input !== "string") {
+    return null;
+  }
+
+  const trimmed = input.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(trimmed) as T;
+  } catch {
+    return null;
+  }
+}
+
 export const fetchAllPosts = async (
   nostr: NostrManager,
   relays: string[],
@@ -461,22 +478,20 @@ export const fetchProfile = async (
           }
 
           for (const [pubkey, event] of latestDbEvents.entries()) {
-            try {
-              const content = JSON.parse(event.content);
-              const profile: NipProfile = {
-                pubkey: event.pubkey,
-                created_at: event.created_at,
-                content,
-                nip05Verified: false,
-              };
-              dbProfileMap.set(pubkey, profile);
-              updateProfileIfNewer(profile);
-            } catch (error) {
-              console.error(
-                `Failed to parse profile from DB: ${pubkey}`,
-                error
-              );
+            const content = parseJsonSafely<Record<string, any>>(event.content);
+            if (!content) {
+              console.warn(`Skipping invalid profile JSON from DB: ${pubkey}`);
+              continue;
             }
+
+            const profile: NipProfile = {
+              pubkey: event.pubkey,
+              created_at: event.created_at,
+              content,
+              nip05Verified: false,
+            };
+            dbProfileMap.set(pubkey, profile);
+            updateProfileIfNewer(profile);
           }
 
           if (dbProfileMap.size > 0) {
@@ -512,23 +527,23 @@ export const fetchProfile = async (
           !existing ||
           event.created_at > existing.created_at
         ) {
-          try {
-            const content = JSON.parse(event.content);
-            const profile: NipProfile = {
-              pubkey: event.pubkey,
-              created_at: event.created_at,
-              content,
-              nip05Verified: false,
-            };
-            profileMap.set(event.pubkey, profile);
-            updatedProfiles.set(event.pubkey, profile);
-            updateProfileIfNewer(profile);
-          } catch (error) {
-            console.error(
-              `Failed parse profile for pubkey: ${event.pubkey}, ${event.content}`,
-              error
+          const content = parseJsonSafely<Record<string, any>>(event.content);
+          if (!content) {
+            console.warn(
+              `Skipping invalid profile JSON for pubkey: ${event.pubkey}`
             );
+            continue;
           }
+
+          const profile: NipProfile = {
+            pubkey: event.pubkey,
+            created_at: event.created_at,
+            content,
+            nip05Verified: false,
+          };
+          profileMap.set(event.pubkey, profile);
+          updatedProfiles.set(event.pubkey, profile);
+          updateProfileIfNewer(profile);
         }
       }
 
