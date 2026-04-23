@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 # Deployment build script for Replit Autoscale.
-# Goal: produce the smallest possible runtime image while keeping
-# all environment/config files the Nix runtime needs (so `node` stays on PATH).
+#
+# Produces a Next.js standalone bundle. Autoscale provides its own Node.js
+# runtime via the `nodejs-22` Nix module declared in .replit, so we do NOT
+# bundle a custom Node binary. We also preserve all top-level config files
+# (.replit, replit.nix, package.json, pnpm-lock.yaml) that Autoscale needs
+# to boot the app.
 
 set -e
 
@@ -38,9 +42,10 @@ cp -r .next/static .next/standalone/.next/static
 cp -r public .next/standalone/public
 
 echo "==> Post-build cleanup (drop only large, runtime-irrelevant items)"
-# Keep all top-level config files (.replit, replit.nix, package.json,
-# .nvmrc, .node-version, etc.) so the runtime container can boot.
-# Only delete known-large directories and source we no longer need.
+# IMPORTANT: do NOT remove .replit, replit.nix, package.json, pnpm-lock.yaml,
+# .nvmrc, or .node-version. Autoscale needs them to boot the app.
+# The standalone bundle ships its own node_modules under
+# .next/standalone/node_modules, so the top-level node_modules can go.
 rm -rf \
   node_modules \
   packages/*/node_modules \
@@ -70,8 +75,6 @@ rm -rf \
   .pnpm-store \
   attached_assets \
   docs \
-  pnpm-lock.yaml \
-  package-lock.json \
   tsconfig.tsbuildinfo \
   jest.config.cjs \
   jest.setup.js \
@@ -102,26 +105,7 @@ node -e "
   }
 "
 
-echo "==> Bundling portable Node 22 binary for runtime"
-# We download the official portable Node 22 build (linux-x64) instead of
-# copying the Nix-store binary, because Nix binaries use a custom dynamic
-# linker path (/nix/store/...-glibc/lib/ld-linux-x86-64.so.2) that doesn't
-# exist in the autoscale runtime container. The official tarball is a
-# standard Linux binary that works on any glibc-based system.
-NODE_VERSION="v22.22.0"
-NODE_DIST="node-${NODE_VERSION}-linux-x64"
-mkdir -p .runtime
-if [ ! -x ".runtime/bin/node" ]; then
-  curl -fsSL "https://nodejs.org/dist/${NODE_VERSION}/${NODE_DIST}.tar.xz" -o /tmp/node.tar.xz
-  tar -xJf /tmp/node.tar.xz -C /tmp
-  mkdir -p .runtime/bin
-  cp "/tmp/${NODE_DIST}/bin/node" .runtime/bin/node
-  chmod +x .runtime/bin/node
-  rm -rf "/tmp/${NODE_DIST}" /tmp/node.tar.xz
-fi
-echo "    bundled $(./.runtime/bin/node --version) (portable, glibc-compatible)"
-
 echo "==> Final size:"
-du -sh . .next .next/standalone .runtime 2>/dev/null || true
+du -sh . .next .next/standalone 2>/dev/null || true
 echo "==> Top-level files preserved:"
 ls -la | head -30
