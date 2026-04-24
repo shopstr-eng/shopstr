@@ -206,22 +206,26 @@ npm run lint-all
 
 ## Testing
 
-### 1. Run Tests
+Jest runs on every PR. The suite covers cart logic, Nostr helpers, Cashu operations, and the parser—places where things break silently.
+
+To find and run tests near what you changed:
 
 ```bash
-# Run all tests
+# Run everything
 npm test
 
-# Run tests in watch mode during development
+# Watch mode while developing
 npm run test:watch
+
+# Run one file to stay focused
+npx jest utils/nostr/__tests__/fetch-service.test.ts --runInBand
+npx jest utils/parsers/__tests__/product-parser-functions.test.ts --runInBand
+
+# See what's not covered
+npm test -- --coverage
 ```
 
-### 2. Writing Tests
-
-- Write tests for new features and bug fixes
-- Place test files next to the components they test or in a `__tests__` directory
-- Use descriptive test names
-- Follow existing test patterns
+**Writing tests:** Use the existing test files as a template. Mock external calls (fetch, localStorage, Nostr events). Test the unhappy paths—missing tags, malformed events, race conditions. If you're touching order logic or wallet code, add a test.
 
 ## Creating a Pull Request
 
