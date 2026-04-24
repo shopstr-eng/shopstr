@@ -212,6 +212,12 @@ npm run lint-all
 # Run all tests
 npm test
 
+# Run the CI test command locally
+npm run test:ci
+
+# Run tests with coverage thresholds
+npm run test:coverage
+
 # Run tests in watch mode during development
 npm run test:watch
 ```
@@ -222,6 +228,8 @@ npm run test:watch
 - Place test files next to the components they test or in a `__tests__` directory
 - Use descriptive test names
 - Follow existing test patterns
+- See `TESTING.md` for CI coverage expectations and the high-risk modules that
+  currently define the enforced threshold.
 
 ## Creating a Pull Request
 
@@ -235,7 +243,7 @@ npm run build
 npm run lint-all
 
 # Run tests
-npm test
+npm run test:coverage
 
 # Format code
 npx prettier --write .
