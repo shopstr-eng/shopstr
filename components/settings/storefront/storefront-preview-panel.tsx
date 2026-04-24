@@ -33,6 +33,8 @@ const PLACEHOLDER_STORY_IMAGE =
 const PLACEHOLDER_SECTION_IMAGE =
   "https://images.unsplash.com/photo-1471193945509-9ad0617afabf?w=1200&h=500&fit=crop";
 
+const STALL_SENTINEL = "stall";
+
 const SECTION_PLACEHOLDERS: Record<string, Partial<StorefrontSection>> = {
   hero: {
     heading: "Welcome to Our Farm",
@@ -553,13 +555,13 @@ export default function StorefrontPreviewPanel({
     const links: StorefrontNavLink[] =
       navLinks.length > 0 ? [...navLinks] : [{ label: "Home", href: "" }];
     const alreadyHasShop = links.some(
-      (l) => l.href === "shop" || l.href === "/stall"
+      (l) => l.href === STALL_SENTINEL || l.href === "/stall"
     );
     if (!alreadyHasShop) {
       const homeIdx = links.findIndex((l) => l.href === "" || l.href === "/");
       links.splice(homeIdx + 1, 0, {
         label: "Stall",
-        href: "shop",
+        href: STALL_SENTINEL,
         isPage: true,
       });
     }
@@ -651,7 +653,7 @@ export default function StorefrontPreviewPanel({
           >
             {previewPage
               ? `Page: ${
-                  previewPage === "shop"
+                  previewPage === STALL_SENTINEL
                     ? "Stall"
                     : pages.find((p) => p.slug === previewPage)?.title ||
                       previewPage
@@ -699,9 +701,9 @@ export default function StorefrontPreviewPanel({
             </button>
             <button
               type="button"
-              onClick={() => setPreviewPage("shop")}
+              onClick={() => setPreviewPage(STALL_SENTINEL)}
               className={`rounded px-2 py-1 text-xs font-medium ${
-                previewPage === "shop"
+                previewPage === STALL_SENTINEL
                   ? "bg-blue-600 text-white"
                   : "text-gray-400 hover:text-white"
               }`}
@@ -753,7 +755,7 @@ export default function StorefrontPreviewPanel({
               onNavClick={handleNavClick}
             />
 
-            {previewPage === "shop" && (
+            {previewPage === STALL_SENTINEL && (
               <div className="mx-auto max-w-6xl px-4 pt-20 pb-8 md:px-6">
                 <h2
                   className="font-heading mb-4 text-xl font-bold"
@@ -864,7 +866,7 @@ export default function StorefrontPreviewPanel({
               </div>
             )}
 
-            {previewPage === "shop" ? null : hasSections &&
+            {previewPage === STALL_SENTINEL ? null : hasSections &&
               activeSections.length > 0 ? (
               <div
                 className={
@@ -891,7 +893,7 @@ export default function StorefrontPreviewPanel({
                   />
                 ))}
               </div>
-            ) : previewPage !== "shop" ? (
+            ) : previewPage !== STALL_SENTINEL ? (
               <div
                 className={`mx-auto max-w-6xl px-4 py-8 md:px-6 ${
                   landingPageStyle === "hero" ? "pt-14" : ""
