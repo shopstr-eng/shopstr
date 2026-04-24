@@ -19,6 +19,8 @@
     "type-check": "tsc --noEmit",
     "lint-all": "npm run type-check && npm run lint",
     "test": "jest",
+    "test:ci": "jest --ci --runInBand",
+    "test:coverage": "jest --coverage --ci --runInBand",
     "test:watch": "jest --watch",
     "prepare": "husky"
   },
