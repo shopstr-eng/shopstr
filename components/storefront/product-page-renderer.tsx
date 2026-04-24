@@ -71,7 +71,7 @@ export default function ProductPageRenderer({
 
   const profile = profileMapContext?.profileData?.get(sellerPubkey);
   const shop = shopMapContext.shopData.get(sellerPubkey);
-  const shopName = shop?.content?.name || profile?.content?.name || "Shop";
+  const shopName = shop?.content?.name || profile?.content?.name || "Stall";
   const shopPicture =
     shop?.content?.ui?.picture || profile?.content?.picture || "";
 

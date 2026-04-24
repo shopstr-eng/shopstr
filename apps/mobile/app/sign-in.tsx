@@ -27,11 +27,11 @@ export default function SignInScreen() {
       <ScreenTitle
         eyebrow="Phase 2 seller foundation"
         title="Sign in to your seller workspace"
-        description="Phase 2 supports email access and nsec-based seller keys. Buyer flows, OAuth, and bunker login remain out of scope for now."
+        description="Phase 2 supports email access and nsec-based seller keys. Shopper flows, OAuth, and bunker login remain out of scope for now."
       />
 
       <SellerCard
-        title="Seller access options"
+        title="Vendor access options"
         description="Use the same seller identity model as the web app, but store it securely on-device."
       >
         <ActionButton

@@ -19,7 +19,7 @@ export function useSellerProfile(pubkey?: string) {
     enabled: Boolean(pubkey),
     queryFn: async () => {
       if (!pubkey) {
-        throw new Error("Seller pubkey is required.");
+        throw new Error("Vendor pubkey is required.");
       }
       const profiles = await mobileApiClient.fetchProfiles();
       return selectSellerShopProfile(profiles, pubkey);
@@ -33,7 +33,7 @@ export function useSellerNotificationEmail(session: SellerSession | null) {
     enabled: Boolean(session),
     queryFn: async () => {
       if (!session) {
-        throw new Error("Seller session is required.");
+        throw new Error("Vendor session is required.");
       }
 
       const signedEvent = createSignedSellerActionAuthEvent(
@@ -54,7 +54,7 @@ export function useSellerListings(pubkey?: string) {
     enabled: Boolean(pubkey),
     queryFn: async () => {
       if (!pubkey) {
-        throw new Error("Seller pubkey is required.");
+        throw new Error("Vendor pubkey is required.");
       }
       const products = await mobileApiClient.fetchProducts();
       return selectSellerListingSummaries(products, pubkey);
@@ -68,7 +68,7 @@ export function useStripeConnectStatus(session: SellerSession | null) {
     enabled: Boolean(session),
     queryFn: async () => {
       if (!session) {
-        throw new Error("Seller session is required.");
+        throw new Error("Vendor session is required.");
       }
 
       const signedEvent = createSignedStripeConnectAuthEvent(session);

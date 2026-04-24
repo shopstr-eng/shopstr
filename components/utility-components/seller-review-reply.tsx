@@ -113,7 +113,7 @@ export default function SellerReviewReply({
                         : { backgroundColor: "#dbeafe", color: "#1d4ed8" }
                     }
                   >
-                    Seller
+                    Vendor
                   </span>
                 </div>
                 <p

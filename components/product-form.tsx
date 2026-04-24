@@ -963,7 +963,7 @@ export default function ProductForm({
                   %. You can modify this in your{" "}
                   <span
                     className="cursor-pointer underline hover:text-blue-600"
-                    onClick={() => router.push("/settings/profile")}
+                    onClick={() => router.push("/settings/market-profile")}
                   >
                     settings
                   </span>
@@ -2519,7 +2519,7 @@ export default function ProductForm({
                         <p className="text-tiny mt-1 text-gray-500">
                           Listing will remain visible but marked as
                           &quot;Outdated&quot; after this date. Leave empty if
-                          product has no expiration. Buyers won&apos;t be able
+                          product has no expiration. Shoppers won&apos;t be able
                           to purchase after expiration.
                         </p>
                       </div>
@@ -2542,7 +2542,7 @@ export default function ProductForm({
                   . You can modify this in your{" "}
                   <span
                     className="cursor-pointer underline hover:text-blue-600"
-                    onClick={() => router.push("/settings/profile")}
+                    onClick={() => router.push("/settings/market-profile")}
                   >
                     profile settings
                   </span>
@@ -2595,8 +2595,8 @@ export default function ProductForm({
           isOpen={showStripeConnectModal}
           onClose={() => setShowStripeConnectModal(false)}
           pubkey={pubkey}
-          returnPath="/settings/market?tab=products&stripe=success"
-          refreshPath="/settings/market?tab=products&stripe=refresh"
+          returnPath="/settings/stall?tab=products&stripe=success"
+          refreshPath="/settings/stall?tab=products&stripe=refresh"
         />
       )}
     </>

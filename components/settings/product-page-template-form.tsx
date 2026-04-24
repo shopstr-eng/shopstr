@@ -115,7 +115,7 @@ const ProductPageTemplateForm = () => {
     };
     return {
       colors,
-      shopName: shop?.content?.name || "Shop",
+      shopName: shop?.content?.name || "Stall",
       fontHeading: sf?.fontHeading,
       fontBody: sf?.fontBody,
       customFontHeadingUrl: sf?.customFontHeadingUrl,

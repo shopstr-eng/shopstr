@@ -23,9 +23,9 @@ const UserTypeSelection = () => {
 
   const handleNext = () => {
     if (selectedType === "seller") {
-      router.push("/onboarding/user-profile?type=seller");
+      router.push("/onboarding/market-profile?type=seller");
     } else if (selectedType === "buyer") {
-      router.push("/onboarding/user-profile?type=buyer");
+      router.push("/onboarding/market-profile?type=buyer");
     }
   };
 
@@ -65,7 +65,7 @@ const UserTypeSelection = () => {
                 }`}
               >
                 <UserIcon className="mb-4 h-16 w-16 stroke-[2.5] text-black" />
-                <h3 className="mb-3 text-xl font-bold text-black">Buyer</h3>
+                <h3 className="mb-3 text-xl font-bold text-black">Shopper</h3>
                 <p className="text-center text-sm font-medium text-black">
                   Browse and purchase products from local sellers
                 </p>
@@ -80,7 +80,7 @@ const UserTypeSelection = () => {
                 }`}
               >
                 <ShoppingBagIcon className="mb-4 h-16 w-16 stroke-[2.5] text-black" />
-                <h3 className="mb-3 text-xl font-bold text-black">Seller</h3>
+                <h3 className="mb-3 text-xl font-bold text-black">Vendor</h3>
                 <p className="text-center text-sm font-medium text-black">
                   List and sell your products to buyers
                 </p>

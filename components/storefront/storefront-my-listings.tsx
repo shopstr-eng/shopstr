@@ -1,7 +1,7 @@
 import { useContext } from "react";
 import { StorefrontColorScheme } from "@/utils/types/types";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
-import MyListingsFeed from "@/components/my-listings/my-listings-feed";
+import StallFeed from "@/components/stall/stall-feed";
 
 interface StorefrontMyListingsProps {
   shopPubkey: string;
@@ -32,7 +32,7 @@ export default function StorefrontMyListings({
 
   return (
     <div className="min-h-screen px-4 pt-4 pb-8" style={{ color: colors.text }}>
-      <MyListingsFeed />
+      <StallFeed />
     </div>
   );
 }

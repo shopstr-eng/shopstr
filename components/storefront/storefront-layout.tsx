@@ -177,7 +177,7 @@ export default function StorefrontLayout({
   }, [shopPubkey, productContext.productEvents]);
 
   const profile = profileContext.profileData.get(shopPubkey);
-  const shopName = shop?.content?.name || profile?.content?.name || "Shop";
+  const shopName = shop?.content?.name || profile?.content?.name || "Stall";
   const shopAbout = shop?.content?.about || profile?.content?.about || "";
   const bannerUrl = shop?.content?.ui?.banner || "";
   const pictureUrl =
@@ -258,7 +258,7 @@ export default function StorefrontLayout({
     if (!alreadyHasShop) {
       const homeIdx = links.findIndex((l) => l.href === "" || l.href === "/");
       links.splice(homeIdx + 1, 0, {
-        label: "Shop",
+        label: "Stall",
         href: "shop",
         isPage: true,
       });
@@ -315,7 +315,7 @@ export default function StorefrontLayout({
     ? storefront.footer!
     : { showPoweredBy: true };
 
-  const homeHref = shopSlug ? `/shop/${shopSlug}` : "/marketplace";
+  const homeHref = shopSlug ? `/stall/${shopSlug}` : "/marketplace";
 
   const themedCss = `
     .sf-layout .bg-primary-yellow { background-color: var(--sf-primary) !important; }

@@ -49,7 +49,7 @@ const TopNav = ({
   );
 
   const isMyListingsActive =
-    router.pathname === "/settings/market" && router.query.tab === "products";
+    router.pathname === "/settings/stall" && router.query.tab === "products";
 
   useEffect(() => {
     const fetchAndUpdateCartQuantity = async () => {
@@ -99,7 +99,7 @@ const TopNav = ({
         setShopName(shopProfile.content.name);
       }
     } else if (
-      router.pathname.includes("/settings/market") &&
+      router.pathname.includes("/settings/stall") &&
       userPubkey &&
       shopMapContext.shopData.has(userPubkey) &&
       typeof shopMapContext.shopData.get(userPubkey) != "undefined"
@@ -158,7 +158,7 @@ const TopNav = ({
           className={`w-full bg-transparent ${
             isMyListingsActive ? "text-primary-yellow" : "text-white"
           } hover:text-primary-yellow`}
-          onClick={() => handleRoute("/settings/market?tab=products")}
+          onClick={() => handleRoute("/settings/stall?tab=products")}
         >
           My Listings
         </Button>
@@ -281,7 +281,7 @@ const TopNav = ({
                   ? "text-primary-yellow font-bold"
                   : "text-white"
               } hover:text-primary-yellow`}
-              onClick={() => handleRoute("/settings/market?tab=products")}
+              onClick={() => handleRoute("/settings/stall?tab=products")}
             >
               My Listings
             </Button>

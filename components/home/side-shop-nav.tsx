@@ -183,9 +183,9 @@ const SideShopNav = ({
             </Button>
             <Button
               className={`${BLACKBUTTONCLASSNAMES} mt-2 w-full`}
-              onClick={() => router.push("/settings/market?tab=storefront")}
+              onClick={() => router.push("/settings/stall?tab=storefront")}
             >
-              Edit Shop
+              Edit Stall
             </Button>
             {shopAbout && (
               <div className="flex w-full flex-col justify-start bg-transparent py-8 text-black">

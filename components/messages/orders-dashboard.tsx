@@ -1852,7 +1852,7 @@ const OrdersDashboard = ({
                     Type
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-bold tracking-wider text-black uppercase">
-                    Buyer/Seller
+                    Shopper/Vendor
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-bold tracking-wider text-black uppercase">
                     Amount
@@ -2604,7 +2604,7 @@ const OrdersDashboard = ({
               </div>
               <div>
                 <label className="mb-2 block text-sm font-semibold text-black">
-                  Message to Seller
+                  Message to Vendor
                 </label>
                 <textarea
                   value={returnRequestMessage}

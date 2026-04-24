@@ -320,7 +320,7 @@ export default function Component() {
       setInvoiceIsPaid(false);
       setCashuPaymentSent(false);
       if (sfSellerPubkey && sfShopSlug) {
-        router.push(`/shop/${sfShopSlug}/order-confirmation`);
+        router.push(`/stall/${sfShopSlug}/order-confirmation`);
       } else {
         router.push("/order-summary");
       }
@@ -1419,7 +1419,7 @@ export default function Component() {
                   onClick={() =>
                     router.push(
                       sfSellerPubkey && sfShopSlug
-                        ? `/shop/${sfShopSlug}`
+                        ? `/stall/${sfShopSlug}`
                         : "/marketplace"
                     )
                   }

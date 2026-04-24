@@ -185,7 +185,7 @@ describe("ProfileWithDropdown", () => {
 
     openDropdownMenu();
 
-    expect(screen.getByText("Visit Seller")).toBeInTheDocument();
+    expect(screen.getByText("Visit Vendor")).toBeInTheDocument();
     expect(screen.getByText("Log Out")).toBeInTheDocument();
     expect(screen.queryByText("Send Inquiry")).not.toBeInTheDocument();
   });
@@ -205,7 +205,7 @@ describe("ProfileWithDropdown", () => {
     expect(screen.getByText("testuser")).toBeInTheDocument();
   });
 
-  it('handles "Visit Seller" click', () => {
+  it('handles "Visit Vendor" click', () => {
     renderWithProviders(
       <ProfileWithDropdown pubkey={pubkey} dropDownKeys={["shop"]} />,
       {}
@@ -213,7 +213,7 @@ describe("ProfileWithDropdown", () => {
 
     openDropdownMenu();
 
-    fireEvent.click(screen.getByText("Visit Seller"));
+    fireEvent.click(screen.getByText("Visit Vendor"));
     expect(mockRouterPush).toHaveBeenCalledWith(`/marketplace/${npub}`);
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
   });
@@ -226,8 +226,8 @@ describe("ProfileWithDropdown", () => {
 
     openDropdownMenu();
 
-    fireEvent.click(screen.getByText("Manage Market"));
-    expect(mockRouterPush).toHaveBeenCalledWith("/settings/market");
+    fireEvent.click(screen.getByText("Manage Stall"));
+    expect(mockRouterPush).toHaveBeenCalledWith("/settings/stall");
   });
 
   it('handles "Send Inquiry" click when logged in', () => {
@@ -268,7 +268,7 @@ describe("ProfileWithDropdown", () => {
     openDropdownMenu();
 
     fireEvent.click(screen.getByText("Edit Profile"));
-    expect(mockRouterPush).toHaveBeenCalledWith("/settings/profile");
+    expect(mockRouterPush).toHaveBeenCalledWith("/settings/market-profile");
   });
 
   it('handles "Settings" click', () => {

@@ -103,7 +103,7 @@ export default async function handler(
         if (!connectAccount || !connectAccount.charges_enabled) {
           results.push({
             sellerPubkey: split.sellerPubkey,
-            error: "Seller does not have Stripe enabled",
+            error: "Vendor does not have Stripe enabled",
           });
           continue;
         }

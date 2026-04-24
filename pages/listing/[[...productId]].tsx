@@ -280,7 +280,7 @@ const Listing = ({ initialProductEvent }: ListingPageProps) => {
           ? sessionStorage.getItem("sf_seller_pubkey")
           : null;
       if (sfPk && sfSlug) {
-        router.push(`/shop/${sfSlug}/order-confirmation`);
+        router.push(`/stall/${sfSlug}/order-confirmation`);
       } else {
         router.push("/order-summary");
       }

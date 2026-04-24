@@ -77,10 +77,10 @@ export default function StorefrontOrderConfirmation({
       try {
         setOrderData(JSON.parse(stored));
       } catch {
-        router.push(`/shop/${shopSlug}`);
+        router.push(`/stall/${shopSlug}`);
       }
     } else {
-      router.push(`/shop/${shopSlug}`);
+      router.push(`/stall/${shopSlug}`);
     }
   }, [router, shopSlug]);
 
@@ -135,8 +135,8 @@ export default function StorefrontOrderConfirmation({
     }
   };
 
-  const homeHref = `/shop/${shopSlug}`;
-  const ordersHref = `/shop/${shopSlug}/orders`;
+  const homeHref = `/stall/${shopSlug}`;
+  const ordersHref = `/stall/${shopSlug}/orders`;
 
   if (!orderData) {
     return (

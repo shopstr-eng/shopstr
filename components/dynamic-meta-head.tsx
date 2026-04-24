@@ -121,7 +121,7 @@ const getMetaTags = (
     if (shopInfo) {
       const profileSlug = getProfileSlug(shopInfo.pubkey, profileData);
       return {
-        title: `${shopInfo.content.name} Shop` || "Milk Market Shop",
+        title: `${shopInfo.content.name} Stall` || "Milk Market Stall",
         description:
           shopInfo.content.about || "Check out this shop on Milk Market!",
         image: ensureAbsoluteUrl(
@@ -133,7 +133,7 @@ const getMetaTags = (
     }
     return {
       ...defaultTags,
-      title: "Milk Market Shop",
+      title: "Milk Market Stall",
       description: "Check out this shop on Milk Market!",
     };
   }

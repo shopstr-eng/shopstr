@@ -260,7 +260,7 @@ export default function ProductPageEditor({
                     key={s.id}
                     section={s}
                     colors={preview!.colors}
-                    shopName={preview?.shopName || "Shop"}
+                    shopName={preview?.shopName || "Stall"}
                     shopPicture={preview?.shopPicture || ""}
                     shopPubkey={shopPubkey || ""}
                     products={sellerProducts}

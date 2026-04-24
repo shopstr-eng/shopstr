@@ -22,7 +22,7 @@ function shopEventToOgMeta(
   try {
     const content = JSON.parse(shopEvent.content);
     return {
-      title: content.name ? `${content.name} Shop` : "Milk Market Shop",
+      title: content.name ? `${content.name} Stall` : "Milk Market Stall",
       description: content.about || "Check out this shop on Milk Market!",
       image: content.ui?.picture || "/milk-market.png",
       url: urlPath,
@@ -30,7 +30,7 @@ function shopEventToOgMeta(
   } catch {
     return {
       ...DEFAULT_OG,
-      title: "Milk Market Shop",
+      title: "Milk Market Stall",
       description: "Check out this shop on Milk Market!",
       url: urlPath,
     };
@@ -75,7 +75,7 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
     props: {
       ogMeta: {
         ...DEFAULT_OG,
-        title: "Milk Market Shop",
+        title: "Milk Market Stall",
         description: "Check out this shop on Milk Market!",
         url: urlPath,
       },

@@ -24,7 +24,7 @@ describe("storefront link sanitization", () => {
         { label: "Orders", href: "orders", isPage: true },
         "securityshop"
       )
-    ).toBe("/shop/securityshop/orders");
+    ).toBe("/stall/securityshop/orders");
   });
 
   it("falls back when custom nav links use blocked schemes", () => {
@@ -33,13 +33,13 @@ describe("storefront link sanitization", () => {
         { label: "Malicious", href: "javascript:alert(1)" },
         "securityshop"
       )
-    ).toBe("/shop/securityshop");
+    ).toBe("/stall/securityshop");
   });
 
   it("preserves safe external href detection", () => {
     expect(isExternalStorefrontHref("https://shopstr.market")).toBe(true);
     expect(isExternalStorefrontHref("mailto:test@shopstr.market")).toBe(true);
-    expect(isExternalStorefrontHref("/shop/securityshop")).toBe(false);
+    expect(isExternalStorefrontHref("/stall/securityshop")).toBe(false);
   });
 
   describe("scheme bypass attempts", () => {
@@ -75,7 +75,7 @@ describe("storefront link sanitization", () => {
     ])("rejects %s in nav hrefs", (input) => {
       expect(
         sanitizeStorefrontNavHref({ label: "x", href: input }, "securityshop")
-      ).toBe("/shop/securityshop");
+      ).toBe("/stall/securityshop");
     });
   });
 
@@ -95,8 +95,8 @@ describe("storefront link sanitization", () => {
     });
 
     it("allows site-relative paths", () => {
-      expect(sanitizeStorefrontSectionLink("/shop/securityshop/about")).toBe(
-        "/shop/securityshop/about"
+      expect(sanitizeStorefrontSectionLink("/stall/securityshop/about")).toBe(
+        "/stall/securityshop/about"
       );
     });
 
@@ -113,7 +113,7 @@ describe("storefront link sanitization", () => {
           { label: "Bad", href: "../../evil", isPage: true },
           "securityshop"
         )
-      ).toBe("/shop/securityshop/evil");
+      ).toBe("/stall/securityshop/evil");
     });
 
     it("strips current-segment dots", () => {
@@ -122,7 +122,7 @@ describe("storefront link sanitization", () => {
           { label: "Bad", href: "./evil", isPage: true },
           "securityshop"
         )
-      ).toBe("/shop/securityshop/evil");
+      ).toBe("/stall/securityshop/evil");
     });
 
     it("URL-encodes unsafe characters in page slugs", () => {
@@ -131,7 +131,7 @@ describe("storefront link sanitization", () => {
           { label: "Bad", href: "evil page", isPage: true },
           "securityshop"
         )
-      ).toBe("/shop/securityshop/evil%20page");
+      ).toBe("/stall/securityshop/evil%20page");
     });
 
     it("does not let bare-relative custom links escape via traversal", () => {
@@ -140,7 +140,7 @@ describe("storefront link sanitization", () => {
           { label: "Bad", href: "../../etc/passwd" },
           "securityshop"
         )
-      ).toBe("/shop/securityshop/etc/passwd");
+      ).toBe("/stall/securityshop/etc/passwd");
     });
   });
 
@@ -208,8 +208,8 @@ describe("storefront link sanitization", () => {
 
     expect(sanitized.sections?.[0]?.ctaLink).toBe("#products");
     expect(sanitized.pages?.[0]?.sections[0]?.ctaLink).toBe("#products");
-    expect(sanitized.navLinks?.[0]?.href).toBe("/shop/securityshop");
+    expect(sanitized.navLinks?.[0]?.href).toBe("/stall/securityshop");
     expect(sanitized.footer?.socialLinks?.[0]?.url).toBe("#");
-    expect(sanitized.footer?.navLinks?.[0]?.href).toBe("/shop/securityshop");
+    expect(sanitized.footer?.navLinks?.[0]?.href).toBe("/stall/securityshop");
   });
 });

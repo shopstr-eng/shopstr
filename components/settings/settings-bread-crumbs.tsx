@@ -3,11 +3,11 @@ import { useRouter } from "next/router";
 
 const pathMap: { [key: string]: string } = {
   settings: "Settings",
-  "user-profile": "User Profile",
+  "market-profile": "Market Profile",
   profile: "Profile",
   account: "Account Settings & Preferences",
-  "shop-profile": "Shop Profile",
-  market: "Market Management",
+  "shop-profile": "Stall Profile",
+  stall: "Market Stall",
   community: "Community Management",
   "api-keys": "API Keys",
   "email-flows": "Email Flows",

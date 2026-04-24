@@ -102,10 +102,7 @@ export default function StorefrontScreen() {
   const storefrontLoadError =
     profileQuery.error ?? notificationEmailQuery.error ?? null;
   const storefrontLoadErrorMessage = storefrontLoadError
-    ? getErrorMessage(
-        storefrontLoadError,
-        "Storefront basics could not be loaded."
-      )
+    ? getErrorMessage(storefrontLoadError, "Stall basics could not be loaded.")
     : "";
 
   if (
@@ -119,8 +116,8 @@ export default function StorefrontScreen() {
     return (
       <ScreenScrollView>
         <ScreenTitle
-          eyebrow="Storefront basics"
-          title="Storefront data unavailable"
+          eyebrow="Stall basics"
+          title="Stall data unavailable"
           description="The seller storefront could not be loaded yet, so the form is paused until we can fetch the current values."
         />
         <SellerCard title="Could not load storefront basics">
@@ -229,9 +226,9 @@ export default function StorefrontScreen() {
       } catch (caughtError) {
         const message = getErrorMessage(
           caughtError,
-          "Shop slug could not be updated."
+          "Stall slug could not be updated."
         );
-        setSaveError(`Shop slug step failed. ${message}`);
+        setSaveError(`Stall slug step failed. ${message}`);
         setSlugState({
           value: savedSlug,
           status: "error",
@@ -258,10 +255,10 @@ export default function StorefrontScreen() {
       } catch (caughtError) {
         const message = getErrorMessage(
           caughtError,
-          "Storefront profile publish failed."
+          "Stall profile publish failed."
         );
         setSaveError(
-          `Shop slug was updated, but the storefront profile publish failed. ${message}`
+          `Stall slug was updated, but the storefront profile publish failed. ${message}`
         );
         return;
       }
@@ -293,7 +290,7 @@ export default function StorefrontScreen() {
           setIsDirty(false);
           setLastHydratedSignature(JSON.stringify(partiallySavedDraft));
           setSaveError(
-            `Storefront profile was saved, but the notification email step failed. ${message}`
+            `Stall profile was saved, but the notification email step failed. ${message}`
           );
 
           await Promise.all([
@@ -316,7 +313,7 @@ export default function StorefrontScreen() {
       setDraft(savedDraft);
       setIsDirty(false);
       setLastHydratedSignature(JSON.stringify(savedDraft));
-      setSaveMessage("Storefront basics saved.");
+      setSaveMessage("Stall basics saved.");
 
       await Promise.all([
         queryClient.invalidateQueries({
@@ -349,7 +346,7 @@ export default function StorefrontScreen() {
   return (
     <ScreenScrollView>
       <ScreenTitle
-        eyebrow="Storefront basics"
+        eyebrow="Stall basics"
         title="Edit the seller storefront core"
         description="Phase 2 only supports the fields we can confidently save across mobile and web today: shop name, about text, notification email, and public slug."
       />
@@ -365,7 +362,7 @@ export default function StorefrontScreen() {
           tone={shopProfile?.content.name ? "success" : "warning"}
           label={
             shopProfile?.content.name
-              ? "Storefront basics saved"
+              ? "Stall basics saved"
               : "Needs seller details"
           }
         />
@@ -374,9 +371,9 @@ export default function StorefrontScreen() {
         </Text>
       </SellerCard>
 
-      <SellerCard title="Seller storefront form">
+      <SellerCard title="Vendor storefront form">
         <SellerField
-          label="Shop name"
+          label="Stall name"
           value={draft.shopName}
           onChangeText={(value) => handleFieldChange("shopName", value)}
           placeholder="Milk Market Farm"
@@ -402,7 +399,7 @@ export default function StorefrontScreen() {
           error={errors.notificationEmail}
         />
         <SellerField
-          label="Shop slug"
+          label="Stall slug"
           value={draft.shopSlug}
           onChangeText={(value) => handleFieldChange("shopSlug", value)}
           placeholder="milk-market-farm"
@@ -418,7 +415,7 @@ export default function StorefrontScreen() {
           <Text style={styles.successText}>{saveMessage}</Text>
         ) : null}
         <ActionButton
-          label="Save storefront basics"
+          label="Save stall basics"
           onPress={handleSave}
           loading={saving}
           disabled={

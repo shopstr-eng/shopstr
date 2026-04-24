@@ -134,7 +134,7 @@ export default function StorefrontThemeWrapper({
 
   const profile = profileContext?.profileData?.get(sellerPubkey);
   const shop = shopMapContext.shopData.get(sellerPubkey);
-  const shopName = shop?.content?.name || profile?.content?.name || "Shop";
+  const shopName = shop?.content?.name || profile?.content?.name || "Stall";
   const pictureUrl =
     shop?.content?.ui?.picture || profile?.content?.picture || "";
   const shopSlug = storefront?.shopSlug || "";
@@ -205,7 +205,7 @@ export default function StorefrontThemeWrapper({
     return <>{children}</>;
   }
 
-  const homeHref = shopSlug ? `/shop/${shopSlug}` : "/marketplace";
+  const homeHref = shopSlug ? `/stall/${shopSlug}` : "/marketplace";
 
   const cssVars = {
     "--sf-primary": colors.primary,
@@ -419,10 +419,10 @@ export default function StorefrontThemeWrapper({
                     style={{ color: navText + "CC" }}
                     onClick={() => setMobileMenuOpen(false)}
                   >
-                    Back to Shop
+                    Back to Stall
                   </a>
                   <a
-                    href={`/shop/${shopSlug}/orders`}
+                    href={`/stall/${shopSlug}/orders`}
                     className="block px-6 py-3 text-sm font-medium"
                     style={{ color: navText + "CC" }}
                     onClick={() => setMobileMenuOpen(false)}

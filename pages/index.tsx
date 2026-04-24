@@ -540,7 +540,7 @@ export default function StandaloneLanding() {
         <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
           <div className="mb-12 text-center">
             <h2 className="mb-4 text-3xl font-black md:text-4xl">
-              Why Farmers and Buyers Choose Us
+              Why Farmers and Shoppers Choose Us
             </h2>
             <p className="mx-auto max-w-2xl text-zinc-600">
               Direct food sales from farms reached{" "}

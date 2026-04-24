@@ -43,7 +43,7 @@ export default async function handler(
       if (result.rows.length > 0) {
         return res.status(200).json({ pubkey: result.rows[0].pubkey });
       }
-      return res.status(404).json({ error: "Shop not found" });
+      return res.status(404).json({ error: "Stall not found" });
     }
 
     return res.status(400).json({ error: "slug or domain parameter required" });

@@ -406,7 +406,7 @@ export default function ContactPage() {
               <div>
                 <h3 className="font-bold">Interested in custom domains?</h3>
                 <p className="text-sm text-zinc-600">
-                  Sellers can request custom domains for their storefronts.
+                  Vendors can request custom domains for their storefronts.
                   Email us for details.
                 </p>
               </div>

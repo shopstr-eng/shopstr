@@ -153,7 +153,7 @@ describe("ShopProfileForm", () => {
     const { mockUpdateShopData } = renderWithProviders(<ShopProfileForm />);
 
     const shopNameInput = await screen.findByLabelText("Shop Name");
-    const saveButton = screen.getByRole("button", { name: /Save Shop/i });
+    const saveButton = screen.getByRole("button", { name: /Save Stall/i });
 
     await user.type(shopNameInput, "New Shop Name");
     await user.click(saveButton);
@@ -178,7 +178,7 @@ describe("ShopProfileForm", () => {
       await screen.findByLabelText("Shop Name"),
       "Onboarding Shop"
     );
-    await user.click(screen.getByRole("button", { name: /Save Shop/i }));
+    await user.click(screen.getByRole("button", { name: /Save Stall/i }));
 
     await waitFor(() => {
       expect(mockRouterPush).toHaveBeenCalledWith("/marketplace");
@@ -194,7 +194,7 @@ describe("ShopProfileForm", () => {
       shopNameInput,
       "This is a very long shop name that is definitely over fifty characters long for sure."
     );
-    await user.click(screen.getByRole("button", { name: /Save Shop/i }));
+    await user.click(screen.getByRole("button", { name: /Save Stall/i }));
 
     expect(
       await screen.findByText("This input exceed maxLength of 50.")
@@ -207,7 +207,7 @@ describe("ShopProfileForm", () => {
     renderWithProviders(<ShopProfileForm />);
 
     await user.type(await screen.findByLabelText("Shop Name"), "My Shop");
-    const saveButton = screen.getByRole("button", { name: /Save Shop/i });
+    const saveButton = screen.getByRole("button", { name: /Save Stall/i });
 
     saveButton.focus();
     await user.keyboard("{Enter}");

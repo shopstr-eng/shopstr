@@ -108,7 +108,7 @@ export default function handler(_req: NextApiRequest, res: NextApiResponse) {
             sellerPubkey: {
               type: "string",
               optional: true,
-              description: "Seller public key to get all reviews for",
+              description: "Vendor public key to get all reviews for",
             },
           },
           permissions: "read",
@@ -148,7 +148,7 @@ export default function handler(_req: NextApiRequest, res: NextApiResponse) {
             buyerEmail: {
               type: "string",
               optional: true,
-              description: "Buyer's email for order confirmation",
+              description: "Shopper's email for order confirmation",
             },
             discountCode: {
               type: "string",
@@ -289,21 +289,21 @@ export default function handler(_req: NextApiRequest, res: NextApiResponse) {
           description:
             "Create or update your shop profile (kind 30019). Sets shop name, description, branding, and settings.",
           parameters: {
-            name: { type: "string", optional: true, description: "Shop name" },
+            name: { type: "string", optional: true, description: "Stall name" },
             about: {
               type: "string",
               optional: true,
-              description: "Shop description",
+              description: "Stall description",
             },
             picture: {
               type: "string",
               optional: true,
-              description: "Shop logo URL",
+              description: "Stall logo URL",
             },
             banner: {
               type: "string",
               optional: true,
-              description: "Shop banner URL",
+              description: "Stall banner URL",
             },
             theme: {
               type: "string",
@@ -454,7 +454,7 @@ export default function handler(_req: NextApiRequest, res: NextApiResponse) {
             sellerPubkey: {
               type: "string",
               optional: true,
-              description: "Seller pubkey",
+              description: "Vendor pubkey",
             },
             ratings: {
               type: "array",

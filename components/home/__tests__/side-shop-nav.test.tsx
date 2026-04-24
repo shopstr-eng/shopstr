@@ -174,7 +174,7 @@ describe("SideShopNav Component", () => {
       await userEvent.click(screen.getByText("Edit Shop"));
 
       expect(mockRouterPush).toHaveBeenCalledWith(
-        "/settings/market?tab=storefront"
+        "/settings/stall?tab=storefront"
       );
     });
   });

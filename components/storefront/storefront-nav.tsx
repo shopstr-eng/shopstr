@@ -33,10 +33,10 @@ export default function StorefrontNav({
   const accent = navColors?.accent || colors.primary;
 
   const resolveHref = (link: StorefrontNavLink) => {
-    if (link.isPage) return `/shop/${shopSlug}/${link.href}`;
+    if (link.isPage) return `/stall/${shopSlug}/${link.href}`;
     if (link.href.startsWith("/") || link.href.startsWith("http"))
       return link.href;
-    return `/shop/${shopSlug}/${link.href}`;
+    return `/stall/${shopSlug}/${link.href}`;
   };
 
   return (
@@ -48,7 +48,7 @@ export default function StorefrontNav({
       }}
     >
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 md:px-6">
-        <Link href={`/shop/${shopSlug}`} className="flex items-center gap-3">
+        <Link href={`/stall/${shopSlug}`} className="flex items-center gap-3">
           {pictureUrl && (
             <img
               src={sanitizeUrl(pictureUrl)}

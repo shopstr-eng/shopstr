@@ -554,7 +554,7 @@ const SubscriptionManagement = () => {
 
                         <div className="mb-2">
                           <span className="text-sm font-medium text-gray-600">
-                            Seller:
+                            Vendor:
                           </span>
                           <div className="mt-1">
                             {sub.seller_pubkey ? (
@@ -677,7 +677,7 @@ const SubscriptionManagement = () => {
                             Subscription ID
                           </th>
                           <th className="px-4 py-3 text-left text-xs font-bold tracking-wider text-black uppercase">
-                            Seller
+                            Vendor
                           </th>
                           <th className="px-4 py-3 text-left text-xs font-bold tracking-wider text-black uppercase">
                             Frequency

@@ -61,7 +61,7 @@ export default function EmailAuthScreen() {
   return (
     <ScreenScrollView>
       <ScreenTitle
-        eyebrow="Seller access"
+        eyebrow="Vendor access"
         title={mode === "sign-in" ? "Email sign in" : "Create seller account"}
         description="These flows reuse the existing web auth endpoints and restore the seller session securely on-device."
       />

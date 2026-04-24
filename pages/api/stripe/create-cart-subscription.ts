@@ -118,7 +118,7 @@ export default async function handler(
     const isMultiMerchant = sellerPubkeys.size > 1;
 
     if (!isMultiMerchant && !sellerPubkey && sellerPubkeys.size === 0) {
-      return res.status(400).json({ error: "Seller pubkey is required" });
+      return res.status(400).json({ error: "Vendor pubkey is required" });
     }
 
     const effectiveSellerPubkey = sellerPubkey || [...sellerPubkeys][0]!;
@@ -402,7 +402,7 @@ async function handleMultiMerchantSubscription(
       const connectAccount = await getStripeConnectAccount(pubkey);
       if (!connectAccount || !connectAccount.charges_enabled) {
         return res.status(400).json({
-          error: `Seller ${pubkey.substring(
+          error: `Vendor ${pubkey.substring(
             0,
             8
           )}... does not have Stripe enabled`,

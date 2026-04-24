@@ -19,7 +19,7 @@ export default function Tos() {
     {
       title: "3. User Responsibilities",
       content:
-        "Users must maintain the security of their private keys and wallets, understand that transactions are irreversible, verify seller details before purchasing, and comply with local regulations regarding commerce, imports, and taxation. Sellers are responsible for the accuracy of their listings and legal compliance of their products.",
+        "Users must maintain the security of their private keys and wallets, understand that transactions are irreversible, verify seller details before purchasing, and comply with local regulations regarding commerce, imports, and taxation. Vendors are responsible for the accuracy of their listings and legal compliance of their products.",
     },
     {
       title: "4. Prohibited Items",
@@ -34,7 +34,7 @@ export default function Tos() {
     {
       title: "6. Listing Guidelines",
       content:
-        "Listings should contain accurate descriptions, clear images, precise pricing information, and transparent shipping details. Sellers are encouraged to respond promptly to inquiries and maintain professional communication standards.",
+        "Listings should contain accurate descriptions, clear images, precise pricing information, and transparent shipping details. Vendors are encouraged to respond promptly to inquiries and maintain professional communication standards.",
     },
     {
       title: "7. Technical Requirements",

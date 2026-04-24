@@ -855,7 +855,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
         <div className="bg-primary-blue relative flex h-48 items-center justify-center overflow-hidden rounded-xl border-3 border-black">
           {watchBanner ? (
             <img
-              alt={"Shop Banner Image"}
+              alt={"Stall Banner Image"}
               src={watchBanner}
               className="absolute inset-0 h-full w-full object-cover"
             />
@@ -878,7 +878,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
               {watchPicture ? (
                 <Image
                   src={watchPicture}
-                  alt="Shop Logo"
+                  alt="Stall Logo"
                   className="h-full w-full rounded-full object-cover"
                   classNames={{
                     wrapper: "!max-w-full w-full h-full",
@@ -887,7 +887,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
               ) : (
                 <Image
                   src={defaultImage}
-                  alt="Shop Logo"
+                  alt="Stall Logo"
                   className="h-full w-full rounded-full object-cover"
                   classNames={{
                     wrapper: "!max-w-full w-full h-full",
@@ -924,7 +924,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
               return (
                 <div>
                   <label className="mb-2 block text-base font-bold text-black">
-                    Shop Name
+                    Stall Name
                   </label>
                   <Input
                     classNames={{
@@ -1021,7 +1021,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
             </div>
             {freeShippingThreshold && parseFloat(freeShippingThreshold) > 0 && (
               <p className="mt-2 text-sm text-green-600">
-                Buyers will get free shipping on orders of{" "}
+                Shoppers will get free shipping on orders of{" "}
                 {parseFloat(freeShippingThreshold).toFixed(2)}{" "}
                 {freeShippingCurrency} or more from your shop.
               </p>
@@ -1064,8 +1064,8 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                 </label>
                 <p className="mb-3 text-sm text-gray-500">
                   Offer flat percentage discounts for specific payment methods.
-                  Buyers will see the discounted price on each payment button at
-                  checkout.
+                  Shoppers will see the discounted price on each payment button
+                  at checkout.
                 </p>
                 <div className="space-y-3">
                   {availableMethods.map((method) => (
@@ -1131,10 +1131,10 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
               <div className="flex items-start gap-6 xl:gap-0">
                 <div className="w-full xl:h-[calc(100vh-6rem)] xl:w-[45%] xl:overflow-y-auto xl:pr-6">
                   <h2 className="mb-4 text-xl font-bold text-black">
-                    Storefront Settings
+                    Stall Settings
                   </h2>
                   <p className="mb-6 text-sm text-gray-500">
-                    Customize your standalone shop page. Buyers can visit your
+                    Customize your standalone shop page. Shoppers can visit your
                     storefront directly for a branded shopping experience.
                   </p>
 
@@ -1175,7 +1175,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                     <>
                       <div className="mb-6">
                         <label className="mb-2 block text-base font-bold text-black">
-                          Shop URL Slug
+                          Stall URL Slug
                         </label>
                         <div className="flex gap-3">
                           <div className="flex-1">
@@ -1203,7 +1203,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                               }}
                               startContent={
                                 <span className="text-sm text-gray-400">
-                                  milk.market/shop/
+                                  milk.market/stall/
                                 </span>
                               }
                             />
@@ -1211,7 +1211,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                         </div>
                         {slugStatus === "saved" && (
                           <p className="mt-1 text-sm text-green-600">
-                            Shop URL saved!
+                            Stall URL saved!
                           </p>
                         )}
                         {slugStatus === "error" && (
@@ -1386,7 +1386,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                             {
                               key: "text" as const,
                               label: "Text",
-                              hint: "Shop name, links, and icons",
+                              hint: "Stall name, links, and icons",
                             },
                             {
                               key: "accent" as const,
@@ -2925,12 +2925,12 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                         <div className="flex items-center gap-3">
                           {shopSlug && (
                             <a
-                              href={`/shop/${shopSlug}`}
+                              href={`/stall/${shopSlug}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-primary-blue text-sm font-bold underline"
                             >
-                              Open live storefront (/shop/{shopSlug})
+                              Open live storefront (/stall/{shopSlug})
                             </a>
                           )}
                           <button
@@ -3015,7 +3015,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                     d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"
                   />
                 </svg>
-                Preview Shop
+                Preview Stall
               </button>
             )}
 
@@ -3036,7 +3036,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
               >
                 <div className="flex items-center justify-between border-b-2 border-black bg-white px-4 py-3">
                   <h3 className="text-base font-bold text-black">
-                    Storefront Preview
+                    Stall Preview
                   </h3>
                   <button
                     type="button"
@@ -3109,7 +3109,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
             isDisabled={isUploadingShopProfile}
             isLoading={isUploadingShopProfile}
           >
-            {isSaved ? "✅ Saved!" : "Save Shop"}
+            {isSaved ? "✅ Saved!" : "Save Stall"}
           </Button>
 
           {shopSlug && (
@@ -3126,7 +3126,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                     className="border-3 border-red-500 bg-white font-bold text-red-500 hover:bg-red-50"
                     type="button"
                   >
-                    Remove Storefront
+                    Remove Stall
                   </Button>
                 </DropdownTrigger>
                 <DropdownMenu
@@ -3145,7 +3145,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                       color="danger"
                       onClick={handleRemoveStorefront}
                     >
-                      Yes, Remove Storefront
+                      Yes, Remove Stall
                     </DropdownItem>
                   </DropdownSection>
                 </DropdownMenu>

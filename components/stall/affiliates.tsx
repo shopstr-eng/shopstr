@@ -506,7 +506,7 @@ export default function Affiliates() {
         <h2 className="mb-2 text-2xl font-bold text-black">Affiliates</h2>
         <p className="text-sm text-gray-600">
           Invite affiliates, give them codes, and track rebates. Codes work for
-          both Stripe and Bitcoin orders. Buyers can apply a code via the
+          both Stripe and Bitcoin orders. Shoppers can apply a code via the
           checkout field or the link <code>?ref=CODE</code>.
         </p>
       </div>
@@ -715,7 +715,7 @@ export default function Affiliates() {
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <Select
-                    label="Buyer discount type"
+                    label="Shopper discount type"
                     selectedKeys={[buyerDiscountType]}
                     onChange={(e) =>
                       setBuyerDiscountType(
@@ -727,7 +727,7 @@ export default function Affiliates() {
                     <SelectItem key="fixed">Fixed</SelectItem>
                   </Select>
                   <Input
-                    label={`Buyer discount (${
+                    label={`Shopper discount (${
                       buyerDiscountType === "percent" ? "%" : "amount"
                     })`}
                     type="number"
@@ -790,7 +790,7 @@ export default function Affiliates() {
                         {c.rebate_type === "percent"
                           ? `${c.rebate_value}%`
                           : `${c.rebate_value} ${(c.currency || "").toUpperCase()}`}{" "}
-                        · Buyer discount:{" "}
+                        · Shopper discount:{" "}
                         {c.buyer_discount_type === "percent"
                           ? `${c.buyer_discount_value}%`
                           : `${c.buyer_discount_value} ${(

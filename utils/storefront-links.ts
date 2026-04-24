@@ -44,7 +44,7 @@ function normalizeRelativeShopPath(value: string, shopSlug: string): string {
     .map(safeSegment)
     .filter(Boolean);
   const safePath = segments.join("/");
-  const base = shopSlug ? `/shop/${shopSlug}` : "";
+  const base = shopSlug ? `/stall/${shopSlug}` : "";
   if (!safePath) return base || "/";
   return `${base}/${safePath}${suffix}`;
 }
@@ -93,7 +93,7 @@ export function sanitizeStorefrontNavHref(
   shopSlug: string,
   fallback?: string
 ): string {
-  const safeFallback = fallback || (shopSlug ? `/shop/${shopSlug}` : "/");
+  const safeFallback = fallback || (shopSlug ? `/stall/${shopSlug}` : "/");
   const trimmed = link.href?.trim();
 
   if (!trimmed) return safeFallback;

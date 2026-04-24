@@ -48,7 +48,7 @@ const HomeFeed = ({
         <div className="flex h-auto w-full items-center justify-center bg-white bg-cover bg-center">
           <img
             src={sanitizeUrl(shopBannerURL)}
-            alt="Shop Banner"
+            alt="Stall Banner"
             className="max-h-[210px] w-full items-center justify-center object-cover"
             fetchPriority="high"
           />

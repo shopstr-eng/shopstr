@@ -89,7 +89,7 @@ describe("SignInModal", () => {
   });
 
   describe("Extension Sign-in", () => {
-    it("succeeds and navigates to user-profile", async () => {
+    it("succeeds and navigates to market-profile", async () => {
       const signer = { getPubKey: jest.fn().mockResolvedValue("pk") };
       mockNewSigner.mockReturnValue(signer);
 
@@ -133,7 +133,7 @@ describe("SignInModal", () => {
       expect(helpers.parseBunkerToken).toHaveBeenCalledWith("xyz");
     });
 
-    it("succeeds and navigates to user-profile", async () => {
+    it("succeeds and navigates to market-profile", async () => {
       helpers.parseBunkerToken.mockReturnValue(mockParsedBunkerToken);
       const signer = {
         connect: jest.fn().mockResolvedValue(undefined),
@@ -187,7 +187,7 @@ describe("SignInModal", () => {
       expect(helpers.validateNSecKey).toHaveBeenCalledWith("abc");
     });
 
-    it("succeeds and navigates to user-profile", async () => {
+    it("succeeds and navigates to market-profile", async () => {
       helpers.validateNSecKey.mockReturnValue(true);
       const signer = { getPubKey: jest.fn().mockResolvedValue("pk") };
       mockNewSigner.mockReturnValue(signer);

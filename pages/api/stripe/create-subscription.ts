@@ -81,7 +81,7 @@ export default async function handler(
     if (!sellerPubkey || !productEventId) {
       return res
         .status(400)
-        .json({ error: "Seller pubkey and product event ID are required" });
+        .json({ error: "Vendor pubkey and product event ID are required" });
     }
 
     const { amountSmallest, stripeCurrency } = await convertToSmallestUnit(

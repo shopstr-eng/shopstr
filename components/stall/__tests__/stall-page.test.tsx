@@ -53,7 +53,7 @@ jest.mock("@heroicons/react/24/outline", () => ({
   Bars3Icon: () => <div data-testid="bars3-icon-mock">Open Menu</div>,
 }));
 
-import MyListingsPage from "../my-listings";
+import StallPage from "../stall-page";
 
 const loggedInUser = { pubkey: "user-pubkey-123" };
 const loggedOutUser = { pubkey: undefined };
@@ -95,13 +95,13 @@ const renderComponent = (
   return render(
     <SignerContext.Provider value={signerContextValue}>
       <ShopMapContext.Provider value={shopContextValue}>
-        <MyListingsPage />
+        <StallPage />
       </ShopMapContext.Provider>
     </SignerContext.Provider>
   );
 };
 
-describe("MyListingsPage", () => {
+describe("StallPage", () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
@@ -224,7 +224,7 @@ describe("MyListingsPage", () => {
         rerender(
           <SignerContext.Provider value={loggedInUser}>
             <ShopMapContext.Provider value={updatedShopContext}>
-              <MyListingsPage />
+              <StallPage />
             </ShopMapContext.Provider>
           </SignerContext.Provider>
         );
@@ -264,7 +264,7 @@ describe("MyListingsPage", () => {
         rerender(
           <SignerContext.Provider value={loggedInUser}>
             <ShopMapContext.Provider value={mockShopDataContextEmpty}>
-              <MyListingsPage />
+              <StallPage />
             </ShopMapContext.Provider>
           </SignerContext.Provider>
         );
@@ -281,7 +281,7 @@ describe("MyListingsPage", () => {
 
       fireEvent.click(screen.getAllByText("Edit Shop")[0]!);
       expect(mockRouterPush).toHaveBeenCalledWith(
-        "/settings/market?tab=storefront"
+        "/settings/stall?tab=storefront"
       );
 
       fireEvent.click(screen.getAllByRole("button", { name: "Orders" })[0]!);

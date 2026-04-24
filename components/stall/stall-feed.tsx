@@ -2,7 +2,7 @@
 
 import { useContext, useEffect, useState } from "react";
 import type React from "react";
-import MyListingsPage from "./my-listings";
+import StallPage from "./stall-page";
 import ProductForm from "../product-form";
 import { useRouter } from "next/router";
 import { useSearchParams } from "next/navigation";
@@ -18,7 +18,7 @@ import {
 } from "@heroui/react";
 import { BLUEBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 
-const MyListingsFeed = () => {
+const StallFeed = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -127,7 +127,7 @@ const MyListingsFeed = () => {
   return (
     <div className="flex flex-1 flex-col">
       <div className="flex h-screen flex-1">
-        <MyListingsPage />
+        <StallPage />
       </div>
 
       <ProductForm
@@ -202,4 +202,4 @@ const MyListingsFeed = () => {
   );
 };
 
-export default MyListingsFeed;
+export default StallFeed;

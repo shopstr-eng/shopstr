@@ -161,6 +161,8 @@ export const ProfileWithDropdown = ({
 
   const profile = profileContext.profileData.get(pubkey);
   const profileContent = profile?.content ?? fetchedProfileContent;
+  const stallSlug =
+    shopMapContext.shopData.get(pubkey)?.content?.storefront?.shopSlug ?? null;
   const displayName = (() => {
     let name =
       profile?.content?.nip05 && profile.nip05Verified
@@ -185,11 +187,15 @@ export const ProfileWithDropdown = ({
       ),
       onPress: () => {
         handleDropdownAction(() => {
-          const slug = getProfileSlug(pubkey, profileContext.profileData);
-          router.push(`/marketplace/${slug}`);
+          if (stallSlug) {
+            router.push(`/stall/${stallSlug}`);
+          } else {
+            const slug = getProfileSlug(pubkey, profileContext.profileData);
+            router.push(`/marketplace/${slug}`);
+          }
         });
       },
-      label: "Visit Seller",
+      label: stallSlug ? "Visit Stall" : "Visit Vendor",
     },
     storefront: {
       key: "storefront",
@@ -202,14 +208,14 @@ export const ProfileWithDropdown = ({
           const shopData = shopMapContext.shopData.get(pubkey);
           const shopSlug = shopData?.content?.storefront?.shopSlug;
           if (shopSlug) {
-            router.push(`/shop/${shopSlug}`);
+            router.push(`/stall/${shopSlug}`);
           } else {
             const slug = getProfileSlug(pubkey, profileContext.profileData);
             router.push(`/marketplace/${slug}`);
           }
         });
       },
-      label: "Visit Storefront",
+      label: "Visit Stall",
     },
     shop_profile: {
       key: "shop_profile",
@@ -221,10 +227,10 @@ export const ProfileWithDropdown = ({
       ),
       onPress: () => {
         handleDropdownAction(() => {
-          router.push("/settings/market");
+          router.push("/settings/stall");
         });
       },
-      label: "Manage Market",
+      label: "Manage Stall",
     },
     inquiry: {
       key: "inquiry",
@@ -256,7 +262,7 @@ export const ProfileWithDropdown = ({
       startContent: <UserIcon className={"h-5 w-5 !text-black"} />,
       onPress: () => {
         handleDropdownAction(() => {
-          router.push("/settings/profile");
+          router.push("/settings/market-profile");
         });
       },
       label: "Edit Profile",

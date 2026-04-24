@@ -431,7 +431,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         .string()
         .optional()
         .describe(
-          "URL slug for the storefront (e.g. 'fresh-farm' for milk.market/shop/fresh-farm). Must be lowercase alphanumeric with hyphens."
+          "URL slug for the storefront (e.g. 'fresh-farm' for milk.market/stall/fresh-farm). Must be lowercase alphanumeric with hyphens."
         ),
       storefrontFontHeading: z
         .string()
@@ -622,13 +622,13 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         .boolean()
         .optional()
         .describe(
-          "Enable a community page on the storefront. When true, a 'Community' link is auto-added to the nav and /shop/{slug}/community shows the seller's community feed."
+          "Enable a community page on the storefront. When true, a 'Community' link is auto-added to the nav and /stall/{slug}/community shows the seller's community feed."
         ),
       showWalletPage: z
         .boolean()
         .optional()
         .describe(
-          "Enable a Bitcoin wallet page on the storefront for Cashu ecash payments. When true, a 'Wallet' link is auto-added to the nav and /shop/{slug}/wallet shows the wallet UI."
+          "Enable a Bitcoin wallet page on the storefront for Cashu ecash payments. When true, a 'Wallet' link is auto-added to the nav and /stall/{slug}/wallet shows the wallet UI."
         ),
       productPageDefaults: productPageConfigSchema
         .optional()
@@ -735,7 +735,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
   registerTool(
     server,
     "register_shop_slug",
-    "Register, update, or delete your shop's URL slug for the storefront. The slug becomes part of your shop URL (e.g. milk.market/shop/your-slug). Slug must be lowercase alphanumeric with hyphens, 3-50 characters. Reserved words (shop, admin, api, etc.) are not allowed. To delete, set action to 'delete'.",
+    "Register, update, or delete your shop's URL slug for the storefront. The slug becomes part of your shop URL (e.g. milk.market/stall/your-slug). Slug must be lowercase alphanumeric with hyphens, 3-50 characters. Reserved words (stall, admin, api, etc.) are not allowed. To delete, set action to 'delete'.",
     {
       slug: z
         .string()
@@ -790,7 +790,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         }
 
         const reserved = [
-          "shop",
+          "stall",
           "admin",
           "api",
           "www",
@@ -848,7 +848,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         return successResponse(
           {
             slug,
-            storefrontUrl: `/shop/${slug}`,
+            storefrontUrl: `/stall/${slug}`,
             pubkey,
           },
           startTime

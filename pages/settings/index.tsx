@@ -21,15 +21,15 @@ const SettingsPage = () => {
       description: "Edit your profile",
       icon: UserIcon,
       iconBg: "bg-slate-600",
-      route: "/settings/profile",
+      route: "/settings/market-profile",
     },
     {
       id: "market",
-      title: "Market Management",
+      title: "Market Stall",
       description: "Manage your storefront, products, and discounts",
       icon: BuildingStorefrontIcon,
       iconBg: "bg-slate-600",
-      route: "/settings/market",
+      route: "/settings/stall",
     },
     {
       id: "email-flows",

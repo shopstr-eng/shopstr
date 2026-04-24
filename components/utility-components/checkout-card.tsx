@@ -970,7 +970,7 @@ export default function CheckoutCard({
                   </>
                 )}
 
-                {/* Contact Seller */}
+                {/* Contact Vendor */}
                 {productData.pubkey !== userPubkey && (
                   <p className="text-sm text-black">
                     or{" "}

@@ -439,7 +439,7 @@ export default function CustomizeProductPageModal({
           .filter((p): p is ProductData => !!p);
 
   const shopName =
-    shopMapContext.shopData.get(productData.pubkey)?.content?.name || "Shop";
+    shopMapContext.shopData.get(productData.pubkey)?.content?.name || "Stall";
   const shopPicture =
     shopMapContext.shopData.get(productData.pubkey)?.content?.ui?.picture || "";
 

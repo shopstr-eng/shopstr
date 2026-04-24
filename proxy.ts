@@ -55,7 +55,7 @@ export function proxy(request: NextRequest) {
 
     return NextResponse.rewrite(
       new URL(
-        `/shop/_custom-domain?domain=${encodeURIComponent(
+        `/stall/_custom-domain?domain=${encodeURIComponent(
           hostname
         )}&path=${encodeURIComponent(pathname)}`,
         request.url

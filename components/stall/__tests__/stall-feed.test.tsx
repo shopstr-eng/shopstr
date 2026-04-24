@@ -1,12 +1,12 @@
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import "@testing-library/jest-dom";
-import MyListingsFeed from "../my-listings-feed";
+import StallFeed from "../stall-feed";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 
-jest.mock("../my-listings", () => {
-  const MockMyListingsPage = () => <div data-testid="my-listings-page-mock" />;
-  MockMyListingsPage.displayName = "MyListingsPage";
-  return MockMyListingsPage;
+jest.mock("../stall-page", () => {
+  const MockStallPage = () => <div data-testid="stall-page-mock" />;
+  MockStallPage.displayName = "StallPage";
+  return MockStallPage;
 });
 
 jest.mock("../../product-form", () => {
@@ -49,12 +49,12 @@ const renderComponent = (isLoggedIn: boolean, hasQueryParam: boolean) => {
         pubkey: isLoggedIn ? "test-pubkey" : undefined,
       }}
     >
-      <MyListingsFeed />
+      <StallFeed />
     </SignerContext.Provider>
   );
 };
 
-describe("MyListingsFeed", () => {
+describe("StallFeed", () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
@@ -62,7 +62,7 @@ describe("MyListingsFeed", () => {
   test("renders child components and modal is initially closed", () => {
     renderComponent(false, false);
 
-    expect(screen.getByTestId("my-listings-page-mock")).toBeInTheDocument();
+    expect(screen.getByTestId("stall-page-mock")).toBeInTheDocument();
     expect(screen.getByTestId("product-form-mock")).toBeInTheDocument();
 
     expect(screen.queryByTestId("modal-content")).not.toBeInTheDocument();

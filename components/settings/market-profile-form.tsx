@@ -30,11 +30,11 @@ import {
 import { FileUploaderButton } from "@/components/utility-components/file-uploader";
 import MilkMarketSpinner from "@/components/utility-components/mm-spinner";
 
-interface UserProfileFormProps {
+interface MarketProfileFormProps {
   isOnboarding?: boolean;
 }
 
-const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
+const MarketProfileForm = ({ isOnboarding }: MarketProfileFormProps) => {
   const router = useRouter();
   const { nostr } = useContext(NostrContext);
   const [isUploadingProfile, setIsUploadingProfile] = useState(false);
@@ -541,4 +541,4 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
   );
 };
 
-export default UserProfileForm;
+export default MarketProfileForm;

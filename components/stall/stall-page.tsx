@@ -16,7 +16,7 @@ import Affiliates from "./affiliates";
 import StripeConnectBanner from "@/components/stripe-connect/StripeConnectBanner";
 import ProductPageTemplateForm from "@/components/settings/product-page-template-form";
 
-const MyListingsPage = () => {
+const StallPage = () => {
   const { pubkey: usersPubkey } = useContext(SignerContext);
   const { isOpen, onOpen, onClose } = useDisclosure();
 
@@ -58,7 +58,7 @@ const MyListingsPage = () => {
 
   const handleEditShop = () => {
     if (usersPubkey) {
-      router.push("/settings/market?tab=storefront");
+      router.push("/settings/stall?tab=storefront");
     } else {
       onOpen();
     }
@@ -81,8 +81,8 @@ const MyListingsPage = () => {
   };
 
   const MobileMenu = () => (
-    <div className="shadow-neo absolute top-full left-0 z-10 mt-2 w-48 rounded-md border-2 border-black bg-white">
-      <div className="py-1">
+    <div className="shadow-neo absolute top-full left-0 z-20 mt-2 w-48 overflow-hidden rounded-md border-2 border-black !bg-white">
+      <div className="bg-white py-1">
         <Button
           className="w-full bg-transparent px-4 py-2 text-left text-sm font-bold text-black hover:bg-gray-100"
           onClick={() => {
@@ -145,15 +145,15 @@ const MyListingsPage = () => {
     <div className="mx-auto h-full w-full bg-white">
       <div className="flex max-w-[100%] flex-col px-3 pb-2">
         <StripeConnectBanner
-          returnPath="/settings/market?tab=products&stripe=success"
-          refreshPath="/settings/market?tab=products&stripe=refresh"
+          returnPath="/settings/stall?tab=products&stripe=success"
+          refreshPath="/settings/stall?tab=products&stripe=refresh"
         />
         {shopBanner != "" ? (
           <>
             <div className="shadow-neo mb-6 flex h-auto w-full items-center justify-center overflow-hidden rounded-lg border-4 border-black">
               <img
                 src={sanitizeUrl(shopBanner)}
-                alt="Shop Banner"
+                alt="Stall Banner"
                 className="max-h-[210px] w-full object-cover"
                 fetchPriority="high"
               />
@@ -242,7 +242,7 @@ const MyListingsPage = () => {
             className={`${BLUEBUTTONCLASSNAMES} flex-1`}
             onClick={() => handleEditShop()}
           >
-            Edit Shop
+            Edit Stall
           </Button>
         </div>
 
@@ -260,13 +260,13 @@ const MyListingsPage = () => {
                 className={`${BLUEBUTTONCLASSNAMES} w-full`}
                 onClick={() => handleEditShop()}
               >
-                Edit Shop
+                Edit Stall
               </Button>
             </div>
           </div>
 
           {/* Main Content Area */}
-          <div className="flex-1">
+          <div className="min-w-0 flex-1">
             {usersPubkey && selectedSection === "Listings" && (
               <DisplayProducts
                 focusedPubkey={usersPubkey}
@@ -277,14 +277,14 @@ const MyListingsPage = () => {
                 setCategories={setCategories}
               />
             )}
-          </div>
-          {usersPubkey && selectedSection === "Discounts" && <DiscountCodes />}
-          {usersPubkey && selectedSection === "Affiliates" && <Affiliates />}
-          {usersPubkey && selectedSection === "Templates" && (
-            <div className="flex-1">
+            {usersPubkey && selectedSection === "Discounts" && (
+              <DiscountCodes />
+            )}
+            {usersPubkey && selectedSection === "Affiliates" && <Affiliates />}
+            {usersPubkey && selectedSection === "Templates" && (
               <ProductPageTemplateForm />
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
       <SignInModal isOpen={isOpen} onClose={onClose} />
@@ -292,4 +292,4 @@ const MyListingsPage = () => {
   );
 };
 
-export default MyListingsPage;
+export default StallPage;

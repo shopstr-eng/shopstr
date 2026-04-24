@@ -3,7 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import "@testing-library/jest-dom";
 
-import UserProfileForm from "../user-profile-form";
+import MarketProfileForm from "../market-profile-form";
 import { ProfileMapContext } from "@/utils/context/context";
 import {
   SignerContext,
@@ -78,19 +78,19 @@ const renderWithProviders = (
   return { mockUpdateProfileData };
 };
 
-describe("UserProfileForm", () => {
+describe("MarketProfileForm", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     localStorage.clear();
   });
 
   test("displays the form after initial data load", async () => {
-    renderWithProviders(<UserProfileForm />);
+    renderWithProviders(<MarketProfileForm />);
     expect(await screen.findByLabelText("Display name")).toBeInTheDocument();
   });
 
   test("populates the form with existing profile data, including images", async () => {
-    renderWithProviders(<UserProfileForm />, mockProfileData);
+    renderWithProviders(<MarketProfileForm />, mockProfileData);
     expect(await screen.findByDisplayValue("Test User")).toBeInTheDocument();
     expect(screen.getByDisplayValue("testuser")).toBeInTheDocument();
 
@@ -99,12 +99,12 @@ describe("UserProfileForm", () => {
   });
 
   test("does not fetch profile if userPubkey is missing", async () => {
-    renderWithProviders(<UserProfileForm />, new Map(), undefined);
+    renderWithProviders(<MarketProfileForm />, new Map(), undefined);
     expect(await screen.findByLabelText("Display name")).toBeInTheDocument();
   });
 
   test("displays default image when no picture is available", async () => {
-    renderWithProviders(<UserProfileForm />, new Map());
+    renderWithProviders(<MarketProfileForm />, new Map());
     const profileImage = await screen.findByAltText("user profile picture");
     expect(profileImage).toHaveAttribute(
       "src",
@@ -115,7 +115,9 @@ describe("UserProfileForm", () => {
   test("submits form data and calls update functions", async () => {
     mockCreateNostrProfileEvent.mockResolvedValue({});
     const user = userEvent.setup();
-    const { mockUpdateProfileData } = renderWithProviders(<UserProfileForm />);
+    const { mockUpdateProfileData } = renderWithProviders(
+      <MarketProfileForm />
+    );
 
     await user.type(await screen.findByLabelText("Display name"), "New Name");
     await user.click(screen.getByRole("button", { name: /Save Profile/i }));
@@ -129,7 +131,7 @@ describe("UserProfileForm", () => {
   test("redirects after submission if isOnboarding is true", async () => {
     mockCreateNostrProfileEvent.mockResolvedValue({});
     const user = userEvent.setup();
-    renderWithProviders(<UserProfileForm isOnboarding={true} />);
+    renderWithProviders(<MarketProfileForm isOnboarding={true} />);
 
     await user.type(
       await screen.findByLabelText("Display name"),
@@ -147,7 +149,7 @@ describe("UserProfileForm", () => {
   test("disables the save button during submission", async () => {
     mockCreateNostrProfileEvent.mockReturnValue(new Promise(() => {}));
     const user = userEvent.setup();
-    renderWithProviders(<UserProfileForm />);
+    renderWithProviders(<MarketProfileForm />);
 
     const saveButton = screen.getByRole("button", { name: /Save Profile/i });
     await user.click(saveButton);
@@ -159,7 +161,7 @@ describe("UserProfileForm", () => {
 
   test("updates the profile picture via uploader", async () => {
     const user = userEvent.setup();
-    renderWithProviders(<UserProfileForm />);
+    renderWithProviders(<MarketProfileForm />);
     await screen.findByLabelText("Display name");
 
     const uploadPictureBtn = screen.getByTestId("upload-picture-btn");
@@ -170,7 +172,7 @@ describe("UserProfileForm", () => {
 
   test("handles fiat payment option changes correctly", async () => {
     const user = userEvent.setup();
-    renderWithProviders(<UserProfileForm />);
+    renderWithProviders(<MarketProfileForm />);
     await screen.findByLabelText("Display name");
 
     const venmoCheckbox = screen.getByLabelText("Venmo");
@@ -195,7 +197,7 @@ describe("UserProfileForm", () => {
   test("updates payment preference and milk market donation", async () => {
     mockCreateNostrProfileEvent.mockResolvedValue({});
     const user = userEvent.setup();
-    renderWithProviders(<UserProfileForm />);
+    renderWithProviders(<MarketProfileForm />);
     await screen.findByLabelText("Display name");
 
     const paymentSelect = screen.getByRole("button", {

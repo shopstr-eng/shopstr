@@ -54,13 +54,13 @@ export default function DashboardScreen() {
   const storefrontLoadErrorMessage = storefrontLoadError
     ? getErrorMessage(
         storefrontLoadError,
-        "Seller storefront data could not be loaded."
+        "Vendor storefront data could not be loaded."
       )
     : "";
   const listingsErrorMessage = listingsQuery.error
     ? getErrorMessage(
         listingsQuery.error,
-        "Seller listings could not be loaded right now."
+        "Vendor listings could not be loaded right now."
       )
     : "";
   const stripeStatusErrorMessage = stripeStatusQuery.error
@@ -70,9 +70,9 @@ export default function DashboardScreen() {
       )
     : "";
   const setupItems = [
-    { label: "Seller session ready", complete: true },
+    { label: "Vendor session ready", complete: true },
     {
-      label: "Storefront basics saved",
+      label: "Stall basics saved",
       complete: Boolean(shopProfile?.content.name.trim()),
     },
     {
@@ -240,13 +240,13 @@ export default function DashboardScreen() {
   return (
     <ScreenScrollView>
       <ScreenTitle
-        eyebrow="Seller foundation"
-        title="Seller dashboard"
+        eyebrow="Vendor foundation"
+        title="Vendor dashboard"
         description="Phase 2 focuses on secure session restore, storefront basics, Stripe status, and read-only listing visibility."
       />
 
       <SellerCard
-        title="Seller session"
+        title="Vendor session"
         description="Your mobile seller workspace uses the same Milk Market identity model as the web app."
       >
         <View style={styles.rowBetween}>
@@ -290,11 +290,11 @@ export default function DashboardScreen() {
       </SellerCard>
 
       <SellerCard
-        title="Storefront summary"
+        title="Stall summary"
         description="Phase 2 storefront editing is intentionally limited to the fields we can safely support on mobile now."
       >
         <View style={styles.metaBlock}>
-          <Text style={styles.metaLabel}>Shop name</Text>
+          <Text style={styles.metaLabel}>Stall name</Text>
           <Text style={styles.metaValue}>
             {storefrontLoadErrorMessage
               ? "Unavailable right now"
@@ -302,7 +302,7 @@ export default function DashboardScreen() {
           </Text>
         </View>
         <View style={styles.metaBlock}>
-          <Text style={styles.metaLabel}>Shop slug</Text>
+          <Text style={styles.metaLabel}>Stall slug</Text>
           <Text style={styles.metaValue}>
             {storefrontLoadErrorMessage
               ? "Unavailable right now"
@@ -311,7 +311,7 @@ export default function DashboardScreen() {
           </Text>
         </View>
         <View style={styles.metaBlock}>
-          <Text style={styles.metaLabel}>Seller listings</Text>
+          <Text style={styles.metaLabel}>Vendor listings</Text>
           <Text style={styles.metaValue}>
             {listingsQuery.isLoading
               ? "Loading..."

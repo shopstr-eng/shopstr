@@ -50,14 +50,14 @@
       "name": "Profile",
       "short_name": "Profile",
       "description": "Manage your profile settings",
-      "url": "/settings/profile",
+      "url": "/settings/market-profile",
       "icons": [{ "src": "/milk-market.png", "sizes": "144x144" }]
     },
     {
-      "name": "Market Management",
+      "name": "Market Stall",
       "short_name": "Market",
       "description": "Manage your storefront, products, and discounts",
-      "url": "/settings/market",
+      "url": "/settings/stall",
       "icons": [{ "src": "/milk-market.png", "sizes": "144x144" }]
     },
     {

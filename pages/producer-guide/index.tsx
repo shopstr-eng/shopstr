@@ -58,7 +58,7 @@ const ProducerGuidePage = () => {
         { id: "step-1-1", label: "1.1 Sign In Modal" },
         { id: "step-1-2", label: "1.2 Keys Page" },
         { id: "step-1-3", label: "1.3 Profile Page" },
-        { id: "step-1-4", label: "1.4 Shop Page" },
+        { id: "step-1-4", label: "1.4 Stall Page" },
       ],
     },
     {

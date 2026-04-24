@@ -15,7 +15,7 @@ export default function RootLayout() {
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen
           name="sign-in"
-          options={{ title: "Seller Sign In", headerBackTitle: "Back" }}
+          options={{ title: "Vendor Sign In", headerBackTitle: "Back" }}
         />
         <Stack.Screen
           name="email-auth"

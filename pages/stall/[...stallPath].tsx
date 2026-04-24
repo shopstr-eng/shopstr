@@ -10,31 +10,37 @@ import {
   fetchShopProfileByPubkeyFromDb,
 } from "@/utils/db/db-service";
 
-type ShopPageProps = {
+type ShopSubPageProps = {
   ogMeta: OgMetaProps;
 };
 
-export const getServerSideProps: GetServerSideProps<ShopPageProps> = async (
+export const getServerSideProps: GetServerSideProps<ShopSubPageProps> = async (
   context
 ) => {
-  const { slug } = context.query;
-  const shopSlug = typeof slug === "string" ? slug : "";
+  const { stallPath } = context.query;
+  const pathParts = Array.isArray(stallPath) ? stallPath : [];
+  const slug = pathParts[0] || "";
 
-  if (!shopSlug) {
+  if (!slug) {
     return { props: { ogMeta: DEFAULT_OG } };
   }
 
+  const subPage = pathParts[1] || "";
+
   try {
-    const pubkey = await fetchShopPubkeyBySlug(shopSlug);
+    const pubkey = await fetchShopPubkeyBySlug(slug);
     if (pubkey) {
       const shopEvent = await fetchShopProfileByPubkeyFromDb(pubkey);
       if (shopEvent) {
         const content = JSON.parse(shopEvent.content);
         const seo = content.storefront?.seoMeta;
-        const shopName = content.name || "Shop";
+        const shopName = content.name || "Stall";
         const shopAbout = content.about || "";
 
-        const autoTitle = `${shopName} — Farm-Fresh Products | Milk Market`;
+        const pageSuffix = subPage
+          ? ` — ${subPage.charAt(0).toUpperCase() + subPage.slice(1)}`
+          : "";
+        const autoTitle = `${shopName}${pageSuffix} | Milk Market`;
         const autoDescription = shopAbout
           ? shopAbout.length > 160
             ? shopAbout.slice(0, 157) + "..."
@@ -44,17 +50,19 @@ export const getServerSideProps: GetServerSideProps<ShopPageProps> = async (
         return {
           props: {
             ogMeta: {
-              title: seo?.metaTitle || autoTitle,
+              title: seo?.metaTitle
+                ? `${seo.metaTitle}${pageSuffix}`
+                : autoTitle,
               description: seo?.metaDescription || autoDescription,
               image:
                 seo?.ogImage ||
                 content.ui?.banner ||
                 content.ui?.picture ||
                 "/milk-market.png",
-              url: `/shop/${shopSlug}`,
+              url: `/stall/${pathParts.join("/")}`,
               keywords:
                 seo?.keywords ||
-                `${shopName}, farm fresh, raw milk, dairy, local farm, ${shopSlug}`,
+                `${shopName}, farm fresh, raw milk, dairy, local farm, ${slug}`,
               locale: seo?.locale || "en_US",
               ...(seo?.locationRegion
                 ? { locationRegion: seo.locationRegion }
@@ -68,24 +76,24 @@ export const getServerSideProps: GetServerSideProps<ShopPageProps> = async (
       }
     }
   } catch (error) {
-    console.error("SSR OG fetch error for shop:", error);
+    console.error("SSR OG fetch error for shop sub-page:", error);
   }
 
   return {
     props: {
       ogMeta: {
         ...DEFAULT_OG,
-        title: "Milk Market Shop",
+        title: "Milk Market Stall",
         description: "Check out this shop on Milk Market!",
-        url: `/shop/${shopSlug}`,
+        url: `/stall/${pathParts.join("/")}`,
       },
     },
   };
 };
 
-export default function ShopPage() {
+export default function ShopSubPage() {
   const router = useRouter();
-  const { slug } = router.query;
+  const { stallPath } = router.query;
   const shopMapContext = useContext(ShopMapContext);
   const [shopPubkey, setShopPubkey] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
@@ -93,8 +101,12 @@ export default function ShopPage() {
   const apiLookupDone = useRef(false);
   const lastSlug = useRef<string>("");
 
+  const pathParts = Array.isArray(stallPath) ? stallPath : [];
+  const slug = pathParts[0] || "";
+  const subPage = pathParts[1] || "";
+
   useEffect(() => {
-    if (!slug || typeof slug !== "string") return;
+    if (!slug) return;
 
     if (slug !== lastSlug.current) {
       lastSlug.current = slug;
@@ -132,7 +144,7 @@ export default function ShopPage() {
   }, [slug]);
 
   useEffect(() => {
-    if (!slug || typeof slug !== "string") return;
+    if (!slug) return;
     if (shopPubkey) return;
     if (shopMapContext.isLoading) return;
 
@@ -188,19 +200,17 @@ export default function ShopPage() {
   if (notFound || !shopPubkey) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center pt-20">
-        <h1 className="text-3xl font-bold">Shop Not Found</h1>
-        <p className="mt-4 text-gray-500">
-          This shop doesn&apos;t exist or hasn&apos;t been set up yet.
-        </p>
+        <h1 className="text-3xl font-bold">Page Not Found</h1>
+        <p className="mt-4 text-gray-500">This page doesn&apos;t exist.</p>
         <a
-          href="/marketplace"
+          href={`/stall/${slug}`}
           className="bg-primary-blue mt-6 rounded-lg px-6 py-3 font-bold text-white transition-transform hover:-translate-y-0.5"
         >
-          Browse Marketplace
+          Back to Stall
         </a>
       </div>
     );
   }
 
-  return <StorefrontLayout shopPubkey={shopPubkey} />;
+  return <StorefrontLayout shopPubkey={shopPubkey} currentPage={subPage} />;
 }

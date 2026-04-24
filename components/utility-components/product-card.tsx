@@ -247,9 +247,9 @@ export default function ProductCard({
               </div>
             </div>
 
-            {/* Status badges - Active only shown on Market Management */}
+            {/* Status badges - Active only shown on Market Stall */}
             {(isExpired ||
-              router.pathname === "/settings/market" ||
+              router.pathname === "/settings/stall" ||
               productData.status === "sold" ||
               productData.status === "soon") && (
               <div className="flex items-center gap-2">
@@ -258,7 +258,7 @@ export default function ProductCard({
                     Outdated
                   </Chip>
                 )}
-                {router.pathname === "/settings/market" &&
+                {router.pathname === "/settings/stall" &&
                   productData.status === "active" && (
                     <Chip className="flex-shrink-0 border-2 border-black bg-green-500 text-xs font-bold text-white">
                       Active
@@ -290,7 +290,7 @@ export default function ProductCard({
           </>
         )}
 
-        {/* Seller – supporting text */}
+        {/* Vendor – supporting text */}
         <div
           className="mb-2"
           data-profile-dropdown
@@ -303,7 +303,7 @@ export default function ProductCard({
             dropDownKeys={
               productData.pubkey === userPubkey
                 ? ["shop_profile"]
-                : ["shop", "storefront", "inquiry", "copy_npub"]
+                : ["shop", "inquiry", "copy_npub"]
             }
             bg="light"
           />

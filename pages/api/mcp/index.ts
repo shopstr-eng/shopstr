@@ -390,7 +390,7 @@ function registerPurchaseTools(
               {
                 type: "text" as const,
                 text: JSON.stringify({
-                  error: "Seller not found",
+                  error: "Vendor not found",
                   _meta: {
                     responseTimeMs: Date.now() - startTime,
                     dataSource: "cached_db",

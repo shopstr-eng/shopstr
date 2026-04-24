@@ -135,7 +135,7 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
       }
 
       if (!lud16) {
-        throw new Error("Seller has not set up a Lightning Address (LUD16).");
+        throw new Error("Vendor has not set up a Lightning Address (LUD16).");
       }
 
       originalWebLN = (window as any).webln;

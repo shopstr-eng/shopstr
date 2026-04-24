@@ -491,7 +491,7 @@ export default function StorefrontPreviewPanel({
   >("desktop");
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const displayName = shopName || "Your Shop";
+  const displayName = shopName || "Your Stall";
   const displayAbout =
     shopAbout ||
     "Welcome to our farm-fresh marketplace. Sustainably raised, locally grown produce delivered directly from our family to yours.";
@@ -553,12 +553,12 @@ export default function StorefrontPreviewPanel({
     const links: StorefrontNavLink[] =
       navLinks.length > 0 ? [...navLinks] : [{ label: "Home", href: "" }];
     const alreadyHasShop = links.some(
-      (l) => l.href === "shop" || l.href === "/shop"
+      (l) => l.href === "shop" || l.href === "/stall"
     );
     if (!alreadyHasShop) {
       const homeIdx = links.findIndex((l) => l.href === "" || l.href === "/");
       links.splice(homeIdx + 1, 0, {
-        label: "Shop",
+        label: "Stall",
         href: "shop",
         isPage: true,
       });
@@ -652,7 +652,7 @@ export default function StorefrontPreviewPanel({
             {previewPage
               ? `Page: ${
                   previewPage === "shop"
-                    ? "Shop"
+                    ? "Stall"
                     : pages.find((p) => p.slug === previewPage)?.title ||
                       previewPage
                 }`
@@ -706,7 +706,7 @@ export default function StorefrontPreviewPanel({
                   : "text-gray-400 hover:text-white"
               }`}
             >
-              Shop
+              Stall
             </button>
             {pages.map((page) => (
               <button
@@ -759,7 +759,7 @@ export default function StorefrontPreviewPanel({
                   className="font-heading mb-4 text-xl font-bold"
                   style={{ color: colors.text }}
                 >
-                  Shop
+                  Stall
                 </h2>
                 <div
                   className="mb-4 rounded-lg border-2 px-4 py-2"

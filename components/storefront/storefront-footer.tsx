@@ -174,7 +174,7 @@ export default function StorefrontFooterComponent({
             {enabledPolicies.map((key) => (
               <Link
                 key={key}
-                href={`/shop/${shopSlug}/${POLICY_SLUGS[key]}`}
+                href={`/stall/${shopSlug}/${POLICY_SLUGS[key]}`}
                 className="font-body text-xs opacity-40 transition-opacity hover:opacity-80"
                 style={{ color: text }}
               >

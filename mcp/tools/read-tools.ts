@@ -173,7 +173,7 @@ function parseProfileEvent(event: NostrEvent) {
     if (content.storefront) {
       base.storefront = content.storefront;
       if (content.storefront.shopSlug)
-        base.storefrontUrl = `/shop/${content.storefront.shopSlug}`;
+        base.storefrontUrl = `/stall/${content.storefront.shopSlug}`;
     }
   }
 
@@ -605,7 +605,7 @@ export function registerReadTools(server: McpServer) {
         .string()
         .optional()
         .describe(
-          "Shop URL slug (e.g. 'fresh-farm' for milk.market/shop/fresh-farm)"
+          "Shop URL slug (e.g. 'fresh-farm' for milk.market/stall/fresh-farm)"
         ),
       pubkey: z
         .string()
@@ -751,7 +751,7 @@ export function registerReadTools(server: McpServer) {
                   storefront: {
                     ...storefront,
                     storefrontUrl: storefront.shopSlug
-                      ? `/shop/${storefront.shopSlug}`
+                      ? `/stall/${storefront.shopSlug}`
                       : null,
                     customDomain,
                   },

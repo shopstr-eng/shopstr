@@ -117,7 +117,7 @@ describe("DynamicHead", () => {
           profileData={new Map()}
         />
       );
-      await waitFor(() => expect(document.title).toBe("Milk Market Shop"));
+      await waitFor(() => expect(document.title).toBe("Milk Market Stall"));
     });
 
     test("should render fallback tags if npub is missing from query", async () => {
@@ -132,7 +132,7 @@ describe("DynamicHead", () => {
           profileData={new Map()}
         />
       );
-      await waitFor(() => expect(document.title).toBe("Milk Market Shop"));
+      await waitFor(() => expect(document.title).toBe("Milk Market Stall"));
       expect(getMetaContent("og:url")).toBe(
         `${mockOrigin}/marketplace/undefined`
       );

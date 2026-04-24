@@ -24,7 +24,7 @@ export default function SectionRelatedProducts({
   const shopSlug = targetPubkey
     ? shopMapContext.shopData.get(targetPubkey)?.content?.storefront?.shopSlug
     : undefined;
-  const browseHref = shopSlug ? `/shop/${shopSlug}` : "/marketplace";
+  const browseHref = shopSlug ? `/stall/${shopSlug}` : "/marketplace";
   const limit = section.productLimit ?? 6;
   const layout = section.productLayout || "grid";
 

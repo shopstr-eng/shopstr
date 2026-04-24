@@ -506,12 +506,12 @@ function MilkMarket({ props }: { props: AppProps }) {
   const router = useRouter();
   const initializationRunRef = useRef(0);
 
-  const isStorefrontRoute = router.pathname.startsWith("/shop/");
+  const isStorefrontRoute = router.pathname.startsWith("/stall/");
 
   const currentStorefrontSlug = isStorefrontRoute
     ? decodeURIComponent(
         (
-          (router.asPath ?? "").replace(/^\/shop\//, "").split("/")[0] ?? ""
+          (router.asPath ?? "").replace(/^\/stall\//, "").split("/")[0] ?? ""
         ).split("?")[0] ?? ""
       )
     : null;
@@ -560,9 +560,10 @@ function MilkMarket({ props }: { props: AppProps }) {
   };
 
   const resolveStorefrontPubkey = async (): Promise<string | null> => {
-    const shopPath = router.asPath.replace(/^\/shop\//, "").split("/")[0] ?? "";
-    if (!shopPath) return null;
-    const slug = decodeURIComponent(shopPath.split("?")[0] ?? "");
+    const stallPath =
+      router.asPath.replace(/^\/stall\//, "").split("/")[0] ?? "";
+    if (!stallPath) return null;
+    const slug = decodeURIComponent(stallPath.split("?")[0] ?? "");
     if (!slug) return null;
 
     try {
@@ -1319,7 +1320,7 @@ function MilkMarket({ props }: { props: AppProps }) {
                             router.pathname !== "/privacy" &&
                             router.pathname !== "/about" &&
                             router.pathname !== "/contact" &&
-                            !router.pathname.startsWith("/shop/") && (
+                            !router.pathname.startsWith("/stall/") && (
                               <TopNav
                                 setFocusedPubkey={setFocusedPubkey}
                                 setSelectedSection={setSelectedSection}

@@ -5,10 +5,10 @@ import {
   ArrowLeftEndOnRectangleIcon,
 } from "@heroicons/react/24/outline";
 import { BLUEBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
-import UserProfileForm from "@/components/settings/user-profile-form";
+import MarketProfileForm from "@/components/settings/market-profile-form";
 import BuyerProfileForm from "@/components/settings/buyer-profile-form";
 
-const OnboardingUserProfile = () => {
+const OnboardingMarketProfile = () => {
   const router = useRouter();
   const { type } = router.query;
   const isBuyer = type === "buyer";
@@ -57,7 +57,7 @@ const OnboardingUserProfile = () => {
             {isBuyer ? (
               <BuyerProfileForm isOnboarding={true} />
             ) : (
-              <UserProfileForm isOnboarding={true} />
+              <MarketProfileForm isOnboarding={true} />
             )}
 
             <div className="mt-6 flex justify-center">
@@ -82,4 +82,4 @@ const OnboardingUserProfile = () => {
   );
 };
 
-export default OnboardingUserProfile;
+export default OnboardingMarketProfile;

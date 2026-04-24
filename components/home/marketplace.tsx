@@ -256,7 +256,7 @@ function MarketplacePage({
 
   const handleAddNewListing = () => {
     if (loggedIn) {
-      router.push("/settings/market?tab=products&addNewListing");
+      router.push("/settings/stall?tab=products&addNewListing");
     } else {
       onOpen();
     }
@@ -450,7 +450,7 @@ function MarketplacePage({
                   setSelectedSection("shop");
                 }}
               >
-                Shop
+                Stall
               </Button>
               <Button
                 className="hover:text-primary-yellow bg-transparent text-lg font-bold text-black sm:text-xl"
@@ -472,9 +472,9 @@ function MarketplacePage({
                 return shopSlug ? (
                   <Button
                     className="text-primary-blue hover:text-primary-yellow bg-transparent text-lg font-bold sm:text-xl"
-                    onClick={() => router.push(`/shop/${shopSlug}`)}
+                    onClick={() => router.push(`/stall/${shopSlug}`)}
                   >
-                    Storefront ↗
+                    Stall ↗
                   </Button>
                 ) : null;
               })()}

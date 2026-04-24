@@ -38,7 +38,7 @@ export default function ListingsScreen() {
     return (
       <ScreenScrollView>
         <ScreenTitle
-          eyebrow="Seller listings"
+          eyebrow="Vendor listings"
           title="Listings unavailable"
           description="The read-only seller listing overview could not be loaded yet."
         />
@@ -46,7 +46,7 @@ export default function ListingsScreen() {
           <Text style={styles.errorText}>
             {getErrorMessage(
               listingsQuery.error,
-              "Seller listings could not be loaded right now."
+              "Vendor listings could not be loaded right now."
             )}
           </Text>
           <ActionButton
@@ -65,7 +65,7 @@ export default function ListingsScreen() {
   return (
     <ScreenScrollView>
       <ScreenTitle
-        eyebrow="Seller listings"
+        eyebrow="Vendor listings"
         title="Read-only listing overview"
         description="Phase 2 intentionally stops at visibility. Listing CRUD, password gates, and publish controls land in the next phase."
       />
@@ -81,7 +81,7 @@ export default function ListingsScreen() {
           <Text style={styles.errorText}>
             {getErrorMessage(
               listingsQuery.error,
-              "Seller listings may be stale because the refresh failed."
+              "Vendor listings may be stale because the refresh failed."
             )}
           </Text>
         ) : null}

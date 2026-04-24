@@ -68,7 +68,7 @@ export default function NsecCreateScreen() {
   return (
     <ScreenScrollView>
       <ScreenTitle
-        eyebrow="Seller access"
+        eyebrow="Vendor access"
         title="Create a new seller key"
         description="Phase 2 generates a new seller nsec locally. Save it now if you want to reuse the same seller identity on web later."
       />

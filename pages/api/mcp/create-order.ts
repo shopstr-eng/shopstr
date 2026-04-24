@@ -772,7 +772,7 @@ async function handleFiatPayment(
     );
     if (!methodExists) {
       return res.status(400).json({
-        error: `Seller does not accept "${fiatMethod}". Available fiat options: ${fiatOptions.join(
+        error: `Vendor does not accept "${fiatMethod}". Available fiat options: ${fiatOptions.join(
           ", "
         )}`,
       });

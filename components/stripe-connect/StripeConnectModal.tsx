@@ -84,9 +84,9 @@ const StripeConnectModal: React.FC<StripeConnectModalProps> = ({
           pubkey,
           signedEvent: linkSignedEvent,
           returnPath:
-            returnPath || "/settings/market?tab=storefront&stripe=success",
+            returnPath || "/settings/stall?tab=storefront&stripe=success",
           refreshPath:
-            refreshPath || "/settings/market?tab=storefront&stripe=refresh",
+            refreshPath || "/settings/stall?tab=storefront&stripe=refresh",
         }),
       });
 
