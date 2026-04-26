@@ -173,7 +173,7 @@ describe("SideShopNav Component", () => {
 
       await userEvent.click(screen.getByText("Edit Shop"));
 
-      expect(mockRouterPush).toHaveBeenCalledWith("settings/shop-profile");
+      expect(mockRouterPush).toHaveBeenCalledWith("/settings/shop-profile");
     });
   });
 });

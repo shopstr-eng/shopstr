@@ -39,7 +39,7 @@ const ChatMessage = ({
   const { pubkey: userPubkey } = useContext(SignerContext);
 
   useEffect(() => {
-    if (messageEvent?.content && messageEvent.content.includes("npub")) {
+    if (messageEvent?.content && messageEvent.content.includes("npub1")) {
       // Find word containing npub using regex
       const npubMatch = messageEvent.content.match(/npub[a-zA-Z0-9]+/);
       if (npubMatch && setBuyerPubkey) {

@@ -25,6 +25,7 @@ import { NostrNSecSigner } from "@/utils/nostr/signers/nostr-nsec-signer";
 import { createNostrProfileEvent } from "@/utils/nostr/nostr-helper-functions";
 import { FileUploaderButton } from "@/components/utility-components/file-uploader";
 import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
+import ProtectedRoute from "@/components/utility-components/protected-route";
 
 const UserProfilePage = () => {
   const { nostr } = useContext(NostrContext);
@@ -91,7 +92,7 @@ const UserProfilePage = () => {
   };
 
   return (
-    <>
+    <ProtectedRoute>
       <div className="flex min-h-screen flex-col bg-light-bg pt-24 dark:bg-dark-bg md:pb-20">
         <div className="mx-auto h-full w-full px-4 lg:w-1/2">
           <SettingsBreadCrumbs />
@@ -510,7 +511,7 @@ const UserProfilePage = () => {
           )}
         </div>
       </div>
-    </>
+    </ProtectedRoute>
   );
 };
 

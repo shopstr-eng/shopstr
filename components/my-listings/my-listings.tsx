@@ -75,7 +75,7 @@ const MyListingsPage = () => {
 
   const handleEditShop = () => {
     if (usersPubkey) {
-      router.push("settings/shop-profile");
+      router.push("/settings/shop-profile");
     } else {
       onOpen();
     }
@@ -205,7 +205,7 @@ const MyListingsPage = () => {
                   </Button>
                 </div>
               </div>
-              <div className="flex gap-2 md:hidden">
+              <div className="flex gap-2 sm:hidden">
                 <Button
                   className={`${SHOPSTRBUTTONCLASSNAMES}`}
                   onClick={() => handleCreateNewListing()}
@@ -267,7 +267,7 @@ const MyListingsPage = () => {
                   </Button>
                 </div>
               </div>
-              <div className="flex gap-2 md:hidden">
+              <div className="flex gap-2 sm:hidden">
                 <Button
                   className={`${SHOPSTRBUTTONCLASSNAMES}`}
                   onClick={() => handleCreateNewListing()}

@@ -52,6 +52,27 @@ import {
 } from "@/utils/url-slugs";
 import { useDebounce } from "@/utils/hooks/useDebounce";
 
+export function normalizeNpub(
+  npub: string | string[] | undefined
+): string | null {
+  if (typeof npub === "string") {
+    const normalized = npub.trim();
+    return normalized.length > 0 ? normalized : null;
+  }
+
+  if (Array.isArray(npub)) {
+    const firstValue = npub[0];
+    if (typeof firstValue !== "string") {
+      return null;
+    }
+
+    const normalized = firstValue.trim();
+    return normalized.length > 0 ? normalized : null;
+  }
+
+  return null;
+}
+
 function MarketplacePage({
   focusedPubkey,
   setFocusedPubkey,
@@ -105,50 +126,53 @@ function MarketplacePage({
   const searchBarRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const npub = router.query.npub;
-    if (npub && typeof npub[0] === "string") {
-      const slug = npub[0];
-      let pubkey: string | undefined;
+    const slug = normalizeNpub(router.query.npub);
 
-      if (isNpub(slug)) {
-        try {
-          const { data } = nip19.decode(slug);
-          pubkey = data as string;
-        } catch {
+    if (!slug) return;
+
+    let pubkey: string | undefined;
+
+    if (isNpub(slug)) {
+      try {
+        const decoded = nip19.decode(slug);
+        if (decoded.type === "npub" && typeof decoded.data === "string") {
+          pubkey = decoded.data;
+        } else {
           return;
         }
-      } else {
-        pubkey = findPubkeyByProfileSlug(slug, profileMapContext.profileData);
+      } catch {
+        return;
       }
+    } else {
+      pubkey = findPubkeyByProfileSlug(slug, profileMapContext.profileData);
+    }
 
-      if (pubkey) {
-        setFocusedPubkey(pubkey);
-        setSelectedSection("shop");
-      }
+    if (pubkey) {
+      setFocusedPubkey(pubkey);
+      setSelectedSection("shop");
     }
   }, [router.query.npub, profileMapContext.profileData]);
 
   useEffect(() => {
-    if (
-      focusedPubkey &&
-      !profileMapContext.isLoading &&
-      router.query.npub?.[0]
-    ) {
-      const currentSlug = router.query.npub[0] as string;
-      const canonicalSlug = getProfileSlug(
-        focusedPubkey,
-        profileMapContext.profileData
-      );
-      if (canonicalSlug && currentSlug !== canonicalSlug) {
-        router.replace(`/marketplace/${canonicalSlug}`, undefined, {
-          shallow: true,
-        });
-      }
+    const currentSlug = normalizeNpub(router.query.npub);
+
+    if (!focusedPubkey || profileMapContext.isLoading || !currentSlug) return;
+
+    const canonicalSlug = getProfileSlug(
+      focusedPubkey,
+      profileMapContext.profileData
+    );
+
+    if (canonicalSlug && currentSlug !== canonicalSlug) {
+      router.replace(`/marketplace/${canonicalSlug}`, undefined, {
+        shallow: true,
+      });
     }
   }, [
     focusedPubkey,
     profileMapContext.isLoading,
     profileMapContext.profileData,
+    router.query.npub,
   ]);
 
   useEffect(() => {
@@ -240,10 +264,9 @@ function MarketplacePage({
     }
   };
 
-  const handleTitleClick = (product: ProductData) => {
+  const getProductHref = (product: ProductData) => {
     if (product.d === "zapsnag" || product.categories?.includes("zapsnag")) {
-      router.push(`/listing/${product.id}`);
-      return;
+      return `/listing/${product.id}`;
     }
 
     const allParsed = productEventContext.productEvents
@@ -253,10 +276,14 @@ function MarketplacePage({
 
     const slug = getListingSlug(product, allParsed);
     if (slug) {
-      router.push(`/listing/${slug}`);
-    } else {
-      router.push(`/listing/${product.id}`);
+      return `/listing/${slug}`;
     }
+
+    return `/listing/${product.id}`;
+  };
+
+  const handleTitleClick = (product: ProductData) => {
+    router.push(getProductHref(product));
   };
 
   const renderProductScores = () => {
@@ -379,7 +406,7 @@ function MarketplacePage({
               <Input
                 className="text-light-text dark:text-dark-text"
                 isClearable
-                placeholder="Listing title, naddr1..., npub..."
+                placeholder="Title, summary, price, naddr1..., npub1..."
                 value={selectedSearch}
                 startContent={<MagnifyingGlassIcon height={"1em"} />}
                 onChange={(event) => {
@@ -459,7 +486,7 @@ function MarketplacePage({
               <Input
                 className="mt-2 text-light-text dark:text-dark-text"
                 isClearable
-                placeholder="Listing title, naddr1..., npub..."
+                placeholder="Title, summary, price, naddr1..., npub1..."
                 value={selectedSearch}
                 startContent={<MagnifyingGlassIcon height={"1em"} />}
                 onChange={(event) => {
@@ -595,7 +622,7 @@ function MarketplacePage({
         )}
       </div>
       {router.pathname.includes("marketplace") &&
-        !router.asPath.includes("npub") && (
+        !router.asPath.includes("npub1") && (
           <Button
             radius="full"
             className={`${SHOPSTRBUTTONCLASSNAMES} fixed bottom-24 right-8 z-50 h-16 w-16`}

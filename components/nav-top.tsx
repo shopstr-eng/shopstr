@@ -78,7 +78,7 @@ const TopNav = ({
   useEffect(() => {
     const npub = router.pathname
       .split("/")
-      .find((segment) => segment.includes("npub"));
+      .find((segment) => segment.includes("npub1"));
     if (
       npub &&
       shopMapContext.shopData.has(npub) &&
@@ -134,7 +134,10 @@ const TopNav = ({
       </Button>
       <Button
         className="w-full bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
-        onClick={() => router.push("/communities")}
+        onClick={() => {
+          router.push("/communities");
+          setIsMobileMenuOpen(false);
+        }}
       >
         Communities
       </Button>
