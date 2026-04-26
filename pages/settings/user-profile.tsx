@@ -35,7 +35,6 @@ import ProtectedRoute from "@/components/utility-components/protected-route";
 const UserProfilePage = () => {
   const { nostr } = useContext(NostrContext);
   const [isUploadingProfile, setIsUploadingProfile] = useState(false);
-  const [isFetchingProfile, setIsFetchingProfile] = useState(false);
   const {
     signer,
     pubkey: userPubkey,
@@ -64,14 +63,18 @@ const UserProfilePage = () => {
 
   const watchBanner = watch("banner");
   const watchPicture = watch("picture");
+  const hasCurrentUserProfile =
+    !!userPubkey && profileContext.profileData.has(userPubkey);
+  const isFetchingProfile =
+    !userPubkey || (profileContext.isLoading && !hasCurrentUserProfile);
   const defaultImage = useMemo(() => {
     return "https://robohash.org/" + userPubkey;
   }, [userPubkey]);
+
   const profileImageSrc = watchPicture || defaultImage;
 
   useEffect(() => {
-    if (!userPubkey) return;
-    setIsFetchingProfile(true);
+    if (!userPubkey || profileContext.isLoading) return;
 
     const localFallback = parseLocalProfileFallback(
       localStorage.getItem(getLocalUserProfileKey(userPubkey))
@@ -119,8 +122,12 @@ const UserProfilePage = () => {
         console.error("Failed to read local profile fallback:", error);
       }
     }
-    setIsFetchingProfile(false);
-  }, [profileContext, userPubkey, reset]);
+  }, [
+    userPubkey,
+    profileContext.isLoading,
+    profileContext.profileData,
+    reset,
+  ]);
 
   const onSubmit = async (data: { [x: string]: string }) => {
     if (!userPubkey) {
