@@ -29,8 +29,8 @@ jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
 }));
 
 const mockOnOpen = jest.fn();
-jest.mock("@nextui-org/react", () => {
-  const originalModule = jest.requireActual("@nextui-org/react");
+jest.mock("@heroui/react", () => {
+  const originalModule = jest.requireActual("@heroui/react");
   const React = jest.requireActual("react");
   const DropdownContext = React.createContext({
     isOpen: false,

@@ -1,14 +1,8 @@
 import { useContext, useEffect, useState } from "react";
-import {
-  Button,
-  Input,
-  Card,
-  CardBody,
-  CardHeader,
-  Chip,
-} from "@nextui-org/react";
+import { Button, Input, Card, CardBody, CardHeader, Chip } from "@heroui/react";
 import { TrashIcon } from "@heroicons/react/24/outline";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import { formatCurrentDateTimeLocalValue } from "@/utils/datetime-local";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import {
   buildDiscountCodeCreateProof,
@@ -157,7 +151,7 @@ export default function DiscountCodes() {
   return (
     <div className="w-full space-y-6 p-4">
       <div className="mb-6">
-        <h2 className="mb-2 text-2xl font-bold text-light-text dark:text-dark-text">
+        <h2 className="text-light-text dark:text-dark-text mb-2 text-2xl font-bold">
           Discount Codes
         </h2>
         <p className="text-sm text-gray-600 dark:text-gray-400">
@@ -168,7 +162,7 @@ export default function DiscountCodes() {
 
       <Card className="bg-light-fg dark:bg-dark-fg">
         <CardHeader>
-          <h3 className="text-lg font-semibold text-light-text dark:text-dark-text">
+          <h3 className="text-light-text dark:text-dark-text text-lg font-semibold">
             Add New Discount Code
           </h3>
         </CardHeader>
@@ -198,7 +192,7 @@ export default function DiscountCodes() {
             placeholder="Select expiration date"
             value={newExpiration}
             onChange={(e) => setNewExpiration(e.target.value)}
-            min={new Date().toISOString().slice(0, 16)}
+            min={formatCurrentDateTimeLocalValue()}
             className="text-light-text dark:text-dark-text"
           />
           <Button
@@ -213,7 +207,7 @@ export default function DiscountCodes() {
       </Card>
 
       <div className="space-y-3">
-        <h3 className="text-lg font-semibold text-light-text dark:text-dark-text">
+        <h3 className="text-light-text dark:text-dark-text text-lg font-semibold">
           Active Codes
         </h3>
         {isLoading ? (
@@ -233,7 +227,7 @@ export default function DiscountCodes() {
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
-                      <span className="font-mono text-lg font-bold text-light-text dark:text-dark-text">
+                      <span className="text-light-text dark:text-dark-text font-mono text-lg font-bold">
                         {code.code}
                       </span>
                       {isExpired(code.expiration) && (
@@ -242,7 +236,7 @@ export default function DiscountCodes() {
                         </Chip>
                       )}
                     </div>
-                    <p className="text-sm text-light-text dark:text-dark-text">
+                    <p className="text-light-text dark:text-dark-text text-sm">
                       {code.discount_percentage}% off
                     </p>
                     {code.expiration && (

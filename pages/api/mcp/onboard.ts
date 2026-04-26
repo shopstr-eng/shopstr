@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { generateSecretKey, getPublicKey, nip19 } from "nostr-tools";
-import { bytesToHex, hexToBytes } from "@noble/hashes/utils";
+import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
 import {
   createApiKey,
   initializeApiKeysTable,
@@ -18,12 +18,232 @@ import {
 } from "@/utils/mcp/request-proof-server";
 
 let tablesReady = false;
+const MCP_STREAMABLE_HTTP_ACCEPT = "application/json, text/event-stream";
+const SAFE_HTTP_PROTOCOLS = new Set(["http", "https"]);
 
 async function ensureTables() {
   if (!tablesReady) {
     await initializeApiKeysTable();
     tablesReady = true;
   }
+}
+
+function getFirstHeaderValue(
+  value: string | string[] | undefined
+): string | undefined {
+  if (Array.isArray(value)) {
+    return value[0]?.trim() || undefined;
+  }
+
+  return value?.split(",")[0]?.trim() || undefined;
+}
+
+function normalizeBaseUrl(baseUrl: string): string {
+  return baseUrl.replace(/\/+$/, "");
+}
+
+function normalizeHostValue(host: string): string {
+  const trimmedHost = host.trim().toLowerCase();
+  if (
+    trimmedHost.length === 0 ||
+    /[\s/@?#\\]/.test(trimmedHost) ||
+    trimmedHost.includes("/")
+  ) {
+    throw new Error(`Invalid host: ${host}`);
+  }
+
+  return new URL(`http://${trimmedHost}`).host.toLowerCase();
+}
+
+function parseConfiguredBaseUrl(): string | undefined {
+  const configuredBaseUrl = process.env.NEXT_PUBLIC_BASE_URL?.trim();
+  if (!configuredBaseUrl) return undefined;
+
+  const parsedBaseUrl = new URL(configuredBaseUrl);
+  const protocol = parsedBaseUrl.protocol.replace(":", "");
+  if (!SAFE_HTTP_PROTOCOLS.has(protocol)) {
+    throw new Error("NEXT_PUBLIC_BASE_URL must use http or https");
+  }
+
+  return normalizeBaseUrl(parsedBaseUrl.toString());
+}
+
+function parseAllowedHosts(): Set<string> {
+  const allowedHosts = new Set<string>();
+  const rawAllowedHosts = process.env.MCP_ALLOWED_HOSTS?.split(",") || [];
+
+  for (const host of rawAllowedHosts) {
+    const trimmedHost = host.trim();
+    if (trimmedHost.length === 0) continue;
+    allowedHosts.add(normalizeHostValue(trimmedHost));
+  }
+
+  return allowedHosts;
+}
+
+function isAllowlistedHost(host: string, allowedHosts: Set<string>): boolean {
+  const candidateUrl = new URL(`http://${host}`);
+
+  return Array.from(allowedHosts).some((allowedHost) => {
+    const allowedUrl = new URL(`http://${allowedHost}`);
+
+    if (allowedUrl.port) {
+      return allowedUrl.host === candidateUrl.host;
+    }
+
+    return (
+      allowedUrl.hostname.toLowerCase() === candidateUrl.hostname.toLowerCase()
+    );
+  });
+}
+
+function isPrivateIpv4Address(hostname: string): boolean {
+  const octets = hostname.split(".").map((part) => Number(part));
+  if (
+    octets.length !== 4 ||
+    octets.some((part) => !Number.isInteger(part) || part < 0 || part > 255)
+  ) {
+    return false;
+  }
+
+  const [firstOctet = -1, secondOctet = -1] = octets;
+
+  return (
+    firstOctet === 0 ||
+    firstOctet === 10 ||
+    firstOctet === 127 ||
+    (firstOctet === 192 && secondOctet === 168) ||
+    (firstOctet === 172 && secondOctet >= 16 && secondOctet <= 31)
+  );
+}
+
+function isDevelopmentHost(host: string): boolean {
+  const hostname = new URL(`http://${host}`).hostname.toLowerCase();
+
+  return (
+    hostname === "localhost" ||
+    hostname === "::1" ||
+    hostname === "[::1]" ||
+    isPrivateIpv4Address(hostname)
+  );
+}
+
+function resolveRequestProtocol(
+  req: Pick<NextApiRequest, "headers" | "socket">
+): "http" | "https" {
+  const forwardedProto = getFirstHeaderValue(
+    req.headers["x-forwarded-proto"]
+  )?.toLowerCase();
+  if (forwardedProto && SAFE_HTTP_PROTOCOLS.has(forwardedProto)) {
+    return forwardedProto as "http" | "https";
+  }
+
+  return (req.socket as typeof req.socket & { encrypted?: boolean }).encrypted
+    ? "https"
+    : "http";
+}
+
+function escapeForSingleQuotedShell(value: string): string {
+  return value.replace(/'/g, `'\"'\"'`);
+}
+
+function stringifyCurlPayload(payload: Record<string, unknown>): string {
+  return escapeForSingleQuotedShell(JSON.stringify(payload));
+}
+
+function resolveBaseUrl(
+  req: Pick<NextApiRequest, "headers" | "socket">
+): string {
+  const configuredBaseUrl = parseConfiguredBaseUrl();
+  if (configuredBaseUrl) {
+    return configuredBaseUrl;
+  }
+
+  const requestHostHeader = getFirstHeaderValue(req.headers.host);
+  const requestHost = requestHostHeader
+    ? normalizeHostValue(requestHostHeader)
+    : undefined;
+  const forwardedHostHeader = getFirstHeaderValue(
+    req.headers["x-forwarded-host"]
+  );
+  const forwardedHost = forwardedHostHeader
+    ? normalizeHostValue(forwardedHostHeader)
+    : undefined;
+  const allowedHosts = parseAllowedHosts();
+  const isProduction = process.env.NODE_ENV === "production";
+  const candidateHosts = [forwardedHost, requestHost].filter(
+    (host, index, allHosts): host is string =>
+      typeof host === "string" && allHosts.indexOf(host) === index
+  );
+  const selectedHost = candidateHosts.find((host) => {
+    if (isAllowlistedHost(host, allowedHosts)) {
+      return true;
+    }
+
+    return !isProduction && (host === requestHost || isDevelopmentHost(host));
+  });
+
+  if (!selectedHost) {
+    throw new Error(
+      "Unable to resolve a safe public MCP base URL. Set NEXT_PUBLIC_BASE_URL or allowlist hosts with MCP_ALLOWED_HOSTS."
+    );
+  }
+
+  return `${resolveRequestProtocol(req)}://${selectedHost}`;
+}
+
+function buildQuickStartExamples(
+  baseUrl: string,
+  apiKey: string,
+  agentName: string
+) {
+  const initializePayload = stringifyCurlPayload({
+    jsonrpc: "2.0",
+    method: "initialize",
+    params: {
+      protocolVersion: "2025-03-26",
+      capabilities: {},
+      clientInfo: {
+        name: agentName,
+        version: "1.0.0",
+      },
+    },
+    id: 1,
+  });
+  const listToolsPayload = stringifyCurlPayload({
+    jsonrpc: "2.0",
+    method: "tools/list",
+    id: 2,
+  });
+  const searchProductsPayload = stringifyCurlPayload({
+    jsonrpc: "2.0",
+    method: "tools/call",
+    params: {
+      name: "search_products",
+      arguments: {},
+    },
+    id: 3,
+  });
+
+  return {
+    curl_initialize: `curl -i -X POST ${baseUrl}/api/mcp \\
+  -H "Authorization: Bearer ${apiKey}" \\
+  -H "Accept: ${MCP_STREAMABLE_HTTP_ACCEPT}" \\
+  -H "Content-Type: application/json" \\
+  -d '${initializePayload}'`,
+    curl_list_tools: `curl -X POST ${baseUrl}/api/mcp \\
+  -H "Authorization: Bearer ${apiKey}" \\
+  -H "Accept: ${MCP_STREAMABLE_HTTP_ACCEPT}" \\
+  -H "Content-Type: application/json" \\
+  -H "Mcp-Session-Id: <session-id-from-initialize>" \\
+  -d '${listToolsPayload}'`,
+    curl_search: `curl -X POST ${baseUrl}/api/mcp \\
+  -H "Authorization: Bearer ${apiKey}" \\
+  -H "Accept: ${MCP_STREAMABLE_HTTP_ACCEPT}" \\
+  -H "Content-Type: application/json" \\
+  -H "Mcp-Session-Id: <session-id-from-initialize>" \\
+  -d '${searchProductsPayload}'`,
+  };
 }
 
 export default async function handler(
@@ -197,8 +417,7 @@ export default async function handler(
       encryptedNsecValue
     );
 
-    const baseUrl =
-      process.env.NEXT_PUBLIC_BASE_URL || `https://${req.headers.host}`;
+    const baseUrl = resolveBaseUrl(req);
 
     const npub = nip19.npubEncode(pubkey);
 
@@ -212,24 +431,10 @@ export default async function handler(
       quickStart: {
         description:
           "Use the API key as a Bearer token to authenticate MCP requests.",
-        examples: {
-          curl_initialize: `curl -X POST ${baseUrl}/api/mcp \\
-  -H "Authorization: Bearer ${result.key}" \\
-  -H "Content-Type: application/json" \\
-  -d '{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"${trimmedName}","version":"1.0.0"}},"id":1}'`,
-          curl_list_tools: `curl -X POST ${baseUrl}/api/mcp \\
-  -H "Authorization: Bearer ${result.key}" \\
-  -H "Content-Type: application/json" \\
-  -H "Mcp-Session-Id: <session-id-from-initialize>" \\
-  -d '{"jsonrpc":"2.0","method":"tools/list","id":2}'`,
-          curl_search: `curl -X POST ${baseUrl}/api/mcp \\
-  -H "Authorization: Bearer ${result.key}" \\
-  -H "Content-Type: application/json" \\
-  -H "Mcp-Session-Id: <session-id-from-initialize>" \\
-  -d '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"search_products","arguments":{}},"id":3}'`,
-        },
+        examples: buildQuickStartExamples(baseUrl, result.key, trimmedName),
         notes: [
           "Store your API key securely — it will not be shown again.",
+          "Run the initialize command with -i so curl prints the Mcp-Session-Id response header for follow-up requests.",
           `Your permissions are set to "${perm}".${
             perm === "read"
               ? ' Upgrade to "read_write" to place orders, or "full_access" for full marketplace participation.'

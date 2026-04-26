@@ -1,7 +1,7 @@
 import { useEffect, useState, useContext, useMemo } from "react";
 import { useRouter } from "next/router";
 import { useForm, Controller } from "react-hook-form";
-import { Button, Input, Image } from "@nextui-org/react";
+import { Button, Input, Image } from "@heroui/react";
 import { ProfileMapContext } from "@/utils/context/context";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
@@ -97,7 +97,7 @@ const BuyerProfileForm = ({ isOnboarding }: BuyerProfileFormProps) => {
         <div className="relative h-24 w-24">
           <FileUploaderButton
             isIconOnly
-            className={`absolute bottom-[-0.5rem] right-[-0.5rem] z-20 ${SHOPSTRBUTTONCLASSNAMES}`}
+            className={`absolute right-[-0.5rem] bottom-[-0.5rem] z-20 ${SHOPSTRBUTTONCLASSNAMES}`}
             imgCallbackOnUpload={(imgUrl) => setValue("picture", imgUrl)}
           />
           {watchPicture ? (
@@ -128,7 +128,7 @@ const BuyerProfileForm = ({ isOnboarding }: BuyerProfileFormProps) => {
             const errorMessage: string = error?.message ? error.message : "";
             return (
               <Input
-                className="pb-4 text-light-text dark:text-dark-text"
+                className="text-light-text dark:text-dark-text pb-4"
                 classNames={{
                   label: "text-light-text dark:text-dark-text text-lg",
                 }}
@@ -158,7 +158,7 @@ const BuyerProfileForm = ({ isOnboarding }: BuyerProfileFormProps) => {
             const errorMessage: string = error?.message ? error.message : "";
             return (
               <Input
-                className="pb-4 text-light-text dark:text-dark-text"
+                className="text-light-text dark:text-dark-text pb-4"
                 classNames={{
                   label: "text-light-text dark:text-dark-text text-lg",
                 }}

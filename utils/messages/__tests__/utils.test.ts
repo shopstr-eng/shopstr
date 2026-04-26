@@ -1,14 +1,13 @@
 import { timeSinceMessageDisplayText } from "../utils";
 
 describe("timeSinceMessageDisplayText", () => {
-  jest.useFakeTimers();
-
   const MOCK_CURRENT_DATE = "2025-07-23T14:24:09Z";
   const MOCK_CURRENT_TIMESTAMP_SECONDS =
     new Date(MOCK_CURRENT_DATE).getTime() / 1000;
 
   beforeAll(() => {
-    jest.setSystemTime(new Date(MOCK_CURRENT_DATE));
+    jest.useFakeTimers();
+    jest.setSystemTime(Date.parse(MOCK_CURRENT_DATE));
   });
 
   afterAll(() => {

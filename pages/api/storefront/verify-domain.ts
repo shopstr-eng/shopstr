@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { getDbPool } from "@/utils/db/db-service";
 import dns from "dns";
 import { promisify } from "util";
+import { applyRateLimit } from "@/utils/rate-limit";
 
 const resolveCname = promisify(dns.resolveCname);
 const resolve4 = promisify(dns.resolve4);
@@ -10,6 +11,9 @@ const pool = getDbPool();
 
 const VALID_TARGETS = ["shopstr.market", "shopstr.store"];
 
+// Each call performs DNS lookups + DB writes; tight per-IP cap.
+const RATE_LIMIT = { limit: 30, windowMs: 60 * 1000 };
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
@@ -17,6 +21,8 @@ export default async function handler(
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
+
+  if (!applyRateLimit(req, res, "verify-domain", RATE_LIMIT)) return;
 
   const { pubkey } = req.body;
   if (!pubkey) {

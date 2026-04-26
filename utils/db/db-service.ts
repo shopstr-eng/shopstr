@@ -15,6 +15,7 @@ export async function ensureFailedRelayPublishesTable(
   await client.query(`
     CREATE TABLE IF NOT EXISTS failed_relay_publishes (
       event_id TEXT PRIMARY KEY,
+      owner_pubkey TEXT,
       event_data TEXT NOT NULL,
       relays TEXT NOT NULL,
       created_at BIGINT NOT NULL,
@@ -26,6 +27,150 @@ export async function ensureFailedRelayPublishesTable(
     ALTER TABLE failed_relay_publishes
     ADD COLUMN IF NOT EXISTS event_data TEXT
   `);
+
+  await client.query(`
+    ALTER TABLE failed_relay_publishes
+    ADD COLUMN IF NOT EXISTS owner_pubkey TEXT
+  `);
+
+  // Legacy rows pre-dating the owner_pubkey column have NULL ownership and
+  // can no longer be listed, retried, cleared, or claimed by anyone, so they
+  // would otherwise sit in the table forever. Drop them once on schema setup.
+  await client.query(`
+    DELETE FROM failed_relay_publishes
+    WHERE owner_pubkey IS NULL
+  `);
+}
+
+export async function trackFailedRelayPublishRecord({
+  eventId,
+  ownerPubkey,
+  event,
+  relays,
+}: {
+  eventId: string;
+  ownerPubkey: string;
+  event: NostrEvent;
+  relays: string[];
+}): Promise<boolean> {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    await ensureFailedRelayPublishesTable(client);
+
+    const result = await client.query(
+      `INSERT INTO failed_relay_publishes (
+         event_id,
+         owner_pubkey,
+         event_data,
+         relays,
+         created_at,
+         retry_count
+       )
+       VALUES ($1, $2, $3, $4, $5, 0)
+       ON CONFLICT (event_id) DO UPDATE SET
+         owner_pubkey = EXCLUDED.owner_pubkey,
+         event_data = EXCLUDED.event_data,
+         relays = EXCLUDED.relays,
+         created_at = EXCLUDED.created_at
+       WHERE failed_relay_publishes.owner_pubkey = EXCLUDED.owner_pubkey
+       RETURNING event_id`,
+      [
+        eventId,
+        ownerPubkey,
+        JSON.stringify(event),
+        JSON.stringify(relays),
+        Math.floor(Date.now() / 1000),
+      ]
+    );
+
+    return (result.rowCount ?? 0) > 0;
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function getFailedRelayPublishesForOwner(ownerPubkey: string) {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    await ensureFailedRelayPublishesTable(client);
+
+    const result = await client.query(
+      `SELECT event_id, event_data, relays, retry_count
+       FROM failed_relay_publishes
+       WHERE owner_pubkey = $1
+         AND retry_count < 5
+         AND event_data IS NOT NULL
+       ORDER BY created_at ASC
+       LIMIT 50`,
+      [ownerPubkey]
+    );
+
+    return result.rows
+      .filter((row: any) => row.event_data)
+      .map((row: any) => {
+        try {
+          return {
+            eventId: row.event_id,
+            relays: JSON.parse(row.relays),
+            event: JSON.parse(row.event_data),
+            retryCount: row.retry_count,
+          };
+        } catch (error) {
+          console.error("Failed to parse row:", row.event_id, error);
+          return null;
+        }
+      })
+      .filter(Boolean);
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function clearFailedRelayPublishForOwner(
+  eventId: string,
+  ownerPubkey: string
+): Promise<void> {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    await ensureFailedRelayPublishesTable(client);
+    await client.query(
+      `DELETE FROM failed_relay_publishes
+       WHERE event_id = $1 AND owner_pubkey = $2`,
+      [eventId, ownerPubkey]
+    );
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function incrementFailedRelayPublishRetryForOwner(
+  eventId: string,
+  ownerPubkey: string
+): Promise<void> {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    await ensureFailedRelayPublishesTable(client);
+    await client.query(
+      `UPDATE failed_relay_publishes
+       SET retry_count = retry_count + 1
+       WHERE event_id = $1 AND owner_pubkey = $2`,
+      [eventId, ownerPubkey]
+    );
+  } finally {
+    if (client) client.release();
+  }
 }
 
 // Initialize the database connection pool
@@ -104,6 +249,7 @@ async function initializeTables(): Promise<void> {
       );
 
       CREATE INDEX IF NOT EXISTS idx_review_events_pubkey ON review_events(pubkey);
+      CREATE INDEX IF NOT EXISTS idx_review_events_tags ON review_events USING gin (tags jsonb_path_ops);
 
       -- Messages table (kind 1059 - gift wrapped DM)
       CREATE TABLE IF NOT EXISTS message_events (
@@ -350,6 +496,10 @@ function isReviewEvent(kind: number): boolean {
   return kind === 31555;
 }
 
+export function buildReviewDTagFilter(dTag: string): string {
+  return JSON.stringify([["d", dTag]]);
+}
+
 // Cache a single event to the database
 export async function cacheEvent(event: NostrEvent): Promise<void> {
   const table = getTableForKind(event.kind);
@@ -401,8 +551,12 @@ export async function cacheEvent(event: NostrEvent): Promise<void> {
       if (dTag) {
         // Delete older reviews from the same pubkey for the same product
         const deleteQuery = {
-          text: `DELETE FROM ${table} WHERE pubkey = $1 AND kind = $2 AND tags::text LIKE $3`,
-          values: [event.pubkey, event.kind, `%"d","${dTag}"%`] as any[],
+          text: `DELETE FROM ${table} WHERE pubkey = $1 AND kind = $2 AND tags @> $3::jsonb`,
+          values: [
+            event.pubkey,
+            event.kind,
+            buildReviewDTagFilter(dTag),
+          ] as any[],
         };
         await client.query(deleteQuery);
       }
@@ -595,8 +749,13 @@ async function cacheEventsTransaction(events: NostrEvent[]): Promise<void> {
         if (dTag) {
           // First, lock and delete old rows
           await client.query(
-            `DELETE FROM ${table} WHERE pubkey = $1 AND kind = $2 AND tags::text LIKE $3 AND id != $4`,
-            [event.pubkey, event.kind, `%"d","${dTag}"%`, event.id] as any[]
+            `DELETE FROM ${table} WHERE pubkey = $1 AND kind = $2 AND tags @> $3::jsonb AND id != $4`,
+            [
+              event.pubkey,
+              event.kind,
+              buildReviewDTagFilter(dTag),
+              event.id,
+            ] as any[]
           );
 
           // Then insert/update with ON CONFLICT
@@ -676,6 +835,7 @@ export async function fetchCachedEvents(
   filters?: {
     pubkey?: string;
     limit?: number;
+    offset?: number;
     since?: number;
     until?: number;
   }
@@ -688,9 +848,9 @@ export async function fetchCachedEvents(
 
   try {
     client = await dbPool.connect();
-    let query = `SELECT id, pubkey, created_at, kind, tags, content, sig FROM ${table} WHERE 1=1`;
-    const params: any[] = [];
-    let paramIndex = 1;
+    let query = `SELECT id, pubkey, created_at, kind, tags, content, sig FROM ${table} WHERE kind = $1`;
+    const params: any[] = [kind];
+    let paramIndex = 2;
 
     if (filters?.pubkey) {
       query += ` AND pubkey = $${paramIndex++}`;
@@ -712,6 +872,11 @@ export async function fetchCachedEvents(
     if (filters?.limit) {
       query += ` LIMIT $${paramIndex++}`;
       params.push(filters.limit);
+    }
+
+    if (filters?.offset) {
+      query += ` OFFSET $${paramIndex++}`;
+      params.push(filters.offset);
     }
 
     const result = await client.query(query, params);
@@ -768,8 +933,7 @@ export async function deleteCachedEventsByIds(
   let client;
 
   // All tables that can store events
-  const tables = [
-    "product_events",
+  const otherTables = [
     "review_events",
     "message_events",
     "profile_events",
@@ -782,7 +946,41 @@ export async function deleteCachedEventsByIds(
     client = await dbPool.connect();
     await client.query("BEGIN");
 
-    for (const table of tables) {
+    // For product_events: delete by ID, and also remove any versions that are
+    // strictly OLDER than the deleted event (same pubkey + d-tag, smaller
+    // created_at). This cleans up stale versions without touching a newer
+    // version that may already exist (e.g. an edit published before the old
+    // one was explicitly removed).
+    await client.query(
+      `DELETE FROM product_events
+       WHERE id = ANY($1)
+          OR (
+            kind = 30402
+            AND EXISTS (
+              SELECT 1
+              FROM product_events ref,
+              LATERAL (
+                SELECT elem->>'1' AS d_tag
+                FROM jsonb_array_elements(ref.tags) elem
+                WHERE elem->>'0' = 'd'
+                LIMIT 1
+              ) ref_d
+              WHERE ref.id = ANY($1)
+                AND ref.pubkey = product_events.pubkey
+                AND product_events.created_at < ref.created_at
+                AND EXISTS (
+                  SELECT 1
+                  FROM jsonb_array_elements(product_events.tags) elem
+                  WHERE elem->>'0' = 'd'
+                    AND elem->>'1' = ref_d.d_tag
+                )
+            )
+          )`,
+      [eventIds]
+    );
+
+    // For all other tables, delete by ID only
+    for (const table of otherTables) {
       await client.query(`DELETE FROM ${table} WHERE id = ANY($1)`, [eventIds]);
     }
 
@@ -803,9 +1001,119 @@ export async function deleteCachedEventsByIds(
   }
 }
 
-// Fetch all products from database
-export async function fetchAllProductsFromDb(): Promise<NostrEvent[]> {
-  return fetchCachedEvents(30402);
+export async function cachedEventsBelongToPubkey(
+  eventIds: string[],
+  pubkey: string
+): Promise<boolean> {
+  if (eventIds.length === 0) return true;
+
+  const uniqueEventIds = Array.from(new Set(eventIds));
+
+  const dbPool = getDbPool();
+  let client;
+
+  const eventTables = [
+    "product_events",
+    "review_events",
+    "message_events",
+    "profile_events",
+    "wallet_events",
+    "community_events",
+    "config_events",
+  ];
+
+  try {
+    client = await dbPool.connect();
+    const unionQuery = eventTables
+      .map((table) => `SELECT id, pubkey FROM ${table} WHERE id = ANY($1)`)
+      .join(" UNION ALL ");
+
+    const result = await client.query<{ id: string; pubkey: string }>(
+      unionQuery,
+      [uniqueEventIds]
+    );
+
+    // Fail closed: every requested ID must exist somewhere in the cache AND
+    // every row found for those IDs must belong to the caller. An unknown ID
+    // (no row in any table) is treated as not-owned so the route refuses the
+    // whole batch instead of silently succeeding.
+    const ownedIds = new Set<string>();
+    for (const row of result.rows) {
+      if (row.pubkey !== pubkey) {
+        return false;
+      }
+      ownedIds.add(row.id);
+    }
+
+    return uniqueEventIds.every((id) => ownedIds.has(id));
+  } catch (error) {
+    console.error("Failed to verify cached event ownership:", error);
+    throw error;
+  } finally {
+    if (client) {
+      client.release();
+    }
+  }
+}
+
+// Fetch all products from database, returning only the latest version per
+// (pubkey, d-tag) so that updated or deleted-then-re-listed products never
+// show stale duplicates.
+export async function fetchAllProductsFromDb(
+  limit = 500,
+  offset = 0
+): Promise<NostrEvent[]> {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+
+    // Inner query: DISTINCT ON (pubkey, d_tag) with ORDER BY created_at DESC
+    // selects the single newest event per listing address.
+    // Outer query re-sorts by created_at DESC so callers get recent products
+    // first, then applies LIMIT/OFFSET for batched pagination.
+    const result = await client.query(
+      `SELECT pe.id, pe.pubkey, pe.created_at, pe.kind,
+              pe.tags, pe.content, pe.sig
+       FROM (
+         SELECT DISTINCT ON (p.pubkey, d.d_tag)
+           p.id, p.pubkey, p.created_at, p.kind, p.tags, p.content, p.sig
+         FROM product_events p,
+         LATERAL (
+           SELECT COALESCE(
+             (SELECT elem->>'1'
+              FROM jsonb_array_elements(p.tags) elem
+              WHERE elem->>'0' = 'd'
+              LIMIT 1),
+             p.id
+           ) AS d_tag
+         ) d
+         WHERE p.kind = 30402
+         ORDER BY p.pubkey, d.d_tag, p.created_at DESC
+       ) pe
+       ORDER BY pe.created_at DESC
+       LIMIT $1 OFFSET $2`,
+      [limit, offset]
+    );
+
+    return result.rows.map((row) => ({
+      id: row.id,
+      pubkey: row.pubkey,
+      created_at: row.created_at,
+      kind: row.kind,
+      tags: row.tags,
+      content: row.content,
+      sig: row.sig,
+    }));
+  } catch (error) {
+    console.error("Failed to fetch products from database:", error);
+    return [];
+  } finally {
+    if (client) {
+      client.release();
+    }
+  }
 }
 
 // Fetch all reviews from database
@@ -857,7 +1165,10 @@ export async function fetchAllMessagesFromDb(
 }
 
 // Mark messages as read in database
-export async function markMessagesAsRead(messageIds: string[]): Promise<void> {
+export async function markMessagesAsRead(
+  messageIds: string[],
+  pubkey: string
+): Promise<void> {
   if (messageIds.length === 0) return;
 
   const dbPool = getDbPool();
@@ -866,8 +1177,18 @@ export async function markMessagesAsRead(messageIds: string[]): Promise<void> {
   try {
     client = await dbPool.connect();
     await client.query(
-      `UPDATE message_events SET is_read = TRUE WHERE id = ANY($1)`,
-      [messageIds]
+      `UPDATE message_events
+       SET is_read = TRUE
+       WHERE id = ANY($1)
+       AND (
+         pubkey = $2
+         OR EXISTS (
+           SELECT 1
+           FROM jsonb_array_elements(tags) elem
+           WHERE elem->>0 = 'p' AND elem->>1 = $2
+         )
+       )`,
+      [messageIds, pubkey] as any[]
     );
   } catch (error) {
     console.error("Failed to mark messages as read:", error);
@@ -900,10 +1221,67 @@ export async function getUnreadMessageCount(pubkey: string): Promise<number> {
   }
 }
 
+export async function getOrderParticipants(orderId: string): Promise<{
+  buyerPubkey: string | null;
+  sellerPubkey: string | null;
+}> {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    const result = await client.query<{ tags: string[][] }>(
+      `SELECT tags
+       FROM message_events
+       WHERE order_id = $1
+       ORDER BY created_at DESC`,
+      [orderId] as any[]
+    );
+
+    let buyerPubkey: string | null = null;
+    let sellerPubkey: string | null = null;
+
+    for (const row of result.rows) {
+      const tags = Array.isArray(row.tags) ? (row.tags as string[][]) : [];
+
+      if (!buyerPubkey) {
+        const buyerTag = tags.find((tag) => tag[0] === "b");
+        if (buyerTag?.[1]) {
+          buyerPubkey = buyerTag[1];
+        }
+      }
+
+      if (!sellerPubkey) {
+        const itemTag = tags.find((tag) => tag[0] === "item");
+        const productAddress =
+          tags.find((tag) => tag[0] === "a")?.[1] || itemTag?.[1];
+        const addressParts = productAddress?.split(":");
+        if (addressParts && addressParts.length >= 2 && addressParts[1]) {
+          sellerPubkey = addressParts[1];
+        }
+      }
+
+      if (buyerPubkey && sellerPubkey) {
+        break;
+      }
+    }
+
+    return { buyerPubkey, sellerPubkey };
+  } catch (error) {
+    console.error("Failed to get order participants:", error);
+    throw error;
+  } finally {
+    if (client) {
+      client.release();
+    }
+  }
+}
+
 // Update order status in database
 export async function updateOrderStatus(
   orderId: string,
   status: string,
+  pubkey: string,
   messageId?: string
 ): Promise<void> {
   const dbPool = getDbPool();
@@ -914,14 +1292,35 @@ export async function updateOrderStatus(
 
     if (messageId) {
       await client.query(
-        `UPDATE message_events SET order_status = $1, order_id = $2 WHERE id = $3`,
-        [status, orderId, messageId]
+        `UPDATE message_events
+         SET order_status = $1
+         WHERE id = $2
+         AND order_id = $3
+         AND (
+           pubkey = $4
+           OR EXISTS (
+             SELECT 1
+             FROM jsonb_array_elements(tags) elem
+             WHERE elem->>0 = 'p' AND elem->>1 = $4
+           )
+         )`,
+        [status, messageId, orderId, pubkey]
       );
     }
 
     await client.query(
-      `UPDATE message_events SET order_status = $1 WHERE order_id = $2`,
-      [status, orderId]
+      `UPDATE message_events
+       SET order_status = $1
+       WHERE order_id = $2
+       AND (
+         pubkey = $3
+         OR EXISTS (
+           SELECT 1
+           FROM jsonb_array_elements(tags) elem
+           WHERE elem->>0 = 'p' AND elem->>1 = $3
+         )
+       )`,
+      [status, orderId, pubkey]
     );
   } catch (error) {
     console.error("Failed to update order status:", error);

@@ -152,7 +152,7 @@ export default function StorefrontOrderConfirmation({
       className="min-h-screen"
       style={{ backgroundColor: colors.background }}
     >
-      <div className="mx-auto max-w-4xl px-4 pb-8 pt-10 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-4xl px-4 pt-10 pb-8 sm:px-6 lg:px-8">
         <div
           className="mb-8 rounded-lg border-2 p-6 sm:p-8"
           style={{

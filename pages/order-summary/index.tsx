@@ -1,6 +1,6 @@
-import { useEffect, useState, useContext } from "react";
+import { useEffect, useRef, useState, useContext } from "react";
 import { useRouter } from "next/router";
-import { Button } from "@nextui-org/react";
+import { Button } from "@heroui/react";
 import StorefrontThemeWrapper from "@/components/storefront/storefront-theme-wrapper";
 import {
   CheckCircleIcon,
@@ -72,9 +72,17 @@ export default function OrderSummary() {
     }
   }, []);
 
+  // Guard against React 18 strict-mode double-invocation. The effect both
+  // consumes (removes) the sessionStorage entry and drives a fallback
+  // redirect — without this guard, the second invocation sees the entry
+  // gone and bounces the user to /marketplace immediately after we just
+  // arrived from a successful checkout.
+  const hasConsumedOrderRef = useRef(false);
   useEffect(() => {
+    if (hasConsumedOrderRef.current) return;
     const stored = sessionStorage.getItem("orderSummary");
     if (stored) {
+      hasConsumedOrderRef.current = true;
       try {
         const data = JSON.parse(stored);
         setOrderData(data);
@@ -141,7 +149,7 @@ export default function OrderSummary() {
     return (
       <ProtectedRoute>
         <StorefrontThemeWrapper sellerPubkey={sfSellerPubkey}>
-          <div className="flex min-h-screen items-center justify-center bg-light-bg dark:bg-dark-bg">
+          <div className="bg-light-bg dark:bg-dark-bg flex min-h-screen items-center justify-center">
             <div className="text-center">
               <p className="text-lg text-gray-600 dark:text-gray-400">
                 Loading order details...
@@ -156,14 +164,14 @@ export default function OrderSummary() {
   return (
     <ProtectedRoute>
       <StorefrontThemeWrapper sellerPubkey={sfSellerPubkey}>
-        <div className="min-h-screen bg-light-bg dark:bg-dark-bg">
-          <div className="mx-auto max-w-4xl px-4 pb-8 pt-24 sm:px-6 lg:px-8">
-            <div className="mb-8 rounded-lg border border-gray-200 bg-light-fg p-6 shadow-md dark:border-gray-700 dark:bg-dark-fg sm:p-8">
+        <div className="bg-light-bg dark:bg-dark-bg min-h-screen">
+          <div className="mx-auto max-w-4xl px-4 pt-24 pb-8 sm:px-6 lg:px-8">
+            <div className="bg-light-fg dark:bg-dark-fg mb-8 rounded-lg border border-gray-200 p-6 shadow-md sm:p-8 dark:border-gray-700">
               <div className="mb-6 flex flex-col items-center border-b border-gray-200 pb-6 dark:border-gray-700">
                 <div className="mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
                   <CheckCircleIcon className="h-10 w-10 text-green-600 dark:text-green-400" />
                 </div>
-                <h1 className="text-2xl font-bold text-light-text dark:text-dark-text sm:text-3xl">
+                <h1 className="text-light-text dark:text-dark-text text-2xl font-bold sm:text-3xl">
                   Order Confirmed!
                 </h1>
                 <p className="mt-2 text-center text-gray-600 dark:text-gray-400">
@@ -179,7 +187,7 @@ export default function OrderSummary() {
 
               {orderData.isCart && orderData.cartItems ? (
                 <div className="mb-6">
-                  <h2 className="mb-4 text-lg font-bold text-light-text dark:text-dark-text">
+                  <h2 className="text-light-text dark:text-dark-text mb-4 text-lg font-bold">
                     Items Ordered
                   </h2>
                   <div className="space-y-4">
@@ -194,7 +202,7 @@ export default function OrderSummary() {
                           className="h-16 w-16 rounded-md object-cover"
                         />
                         <div className="flex-1">
-                          <h3 className="font-semibold text-light-text dark:text-dark-text">
+                          <h3 className="text-light-text dark:text-dark-text font-semibold">
                             {item.title}
                           </h3>
                           <div className="flex flex-wrap gap-x-3 text-sm text-gray-500 dark:text-gray-400">
@@ -222,7 +230,7 @@ export default function OrderSummary() {
                             )}
                           </div>
                         </div>
-                        <p className="font-bold text-light-text dark:text-dark-text">
+                        <p className="text-light-text dark:text-dark-text font-bold">
                           {item.amount} {item.currency}
                         </p>
                       </div>
@@ -231,7 +239,7 @@ export default function OrderSummary() {
                 </div>
               ) : (
                 <div className="mb-6">
-                  <h2 className="mb-4 text-lg font-bold text-light-text dark:text-dark-text">
+                  <h2 className="text-light-text dark:text-dark-text mb-4 text-lg font-bold">
                     Product Details
                   </h2>
                   <div className="flex items-start gap-4 rounded-md border border-gray-200 p-4 dark:border-gray-700">
@@ -243,7 +251,7 @@ export default function OrderSummary() {
                       />
                     )}
                     <div className="flex-1">
-                      <h3 className="text-lg font-semibold text-light-text dark:text-dark-text">
+                      <h3 className="text-light-text dark:text-dark-text text-lg font-semibold">
                         {orderData.productTitle}
                       </h3>
                       {orderData.selectedSize && (
@@ -272,7 +280,7 @@ export default function OrderSummary() {
               )}
 
               <div className="mb-6">
-                <h2 className="mb-4 text-lg font-bold text-light-text dark:text-dark-text">
+                <h2 className="text-light-text dark:text-dark-text mb-4 text-lg font-bold">
                   Order Details
                 </h2>
                 <div className="rounded-md border border-gray-200 p-4 dark:border-gray-700">
@@ -281,7 +289,7 @@ export default function OrderSummary() {
                       <span className="text-gray-600 dark:text-gray-400">
                         Payment Method
                       </span>
-                      <span className="font-semibold text-light-text dark:text-dark-text">
+                      <span className="text-light-text dark:text-dark-text font-semibold">
                         {formatPaymentMethod(orderData.paymentMethod)}
                       </span>
                     </div>
@@ -392,10 +400,10 @@ export default function OrderSummary() {
                     ) : null}
 
                     <div className="flex items-center justify-between pt-1">
-                      <span className="text-lg font-bold text-light-text dark:text-dark-text">
+                      <span className="text-light-text dark:text-dark-text text-lg font-bold">
                         Total
                       </span>
-                      <span className="text-lg font-bold text-light-text dark:text-dark-text">
+                      <span className="text-light-text dark:text-dark-text text-lg font-bold">
                         {Number(orderData.amount).toLocaleString()}{" "}
                         {orderData.currency}
                       </span>
@@ -409,7 +417,7 @@ export default function OrderSummary() {
                 (orderData.isCart &&
                   orderData.cartItems?.some((i) => i.pickupLocation))) && (
                 <div className="mb-6">
-                  <h2 className="mb-4 text-lg font-bold text-light-text dark:text-dark-text">
+                  <h2 className="text-light-text dark:text-dark-text mb-4 text-lg font-bold">
                     Delivery Information
                   </h2>
                   <div className="space-y-3 rounded-md border border-gray-200 p-4 dark:border-gray-700">
@@ -472,7 +480,7 @@ export default function OrderSummary() {
                   Continue Shopping
                 </Button>
                 <Button
-                  className="flex-1 bg-gray-200 text-light-text dark:bg-gray-700 dark:text-dark-text"
+                  className="text-light-text dark:text-dark-text flex-1 bg-gray-200 dark:bg-gray-700"
                   onClick={() => router.push("/orders")}
                   size="lg"
                   startContent={
@@ -482,7 +490,7 @@ export default function OrderSummary() {
                   Check Order Status
                 </Button>
                 <Button
-                  className="flex-1 bg-gray-200 text-light-text dark:bg-gray-700 dark:text-dark-text"
+                  className="text-light-text dark:text-dark-text flex-1 bg-gray-200 dark:bg-gray-700"
                   onClick={() => {
                     const npub = orderData?.sellerPubkey
                       ? nip19.npubEncode(orderData.sellerPubkey)
@@ -503,7 +511,7 @@ export default function OrderSummary() {
 
             {latestProducts.length > 0 && (
               <div className="mt-10">
-                <h2 className="mb-6 text-center text-2xl font-bold text-light-text dark:text-dark-text">
+                <h2 className="text-light-text dark:text-dark-text mb-6 text-center text-2xl font-bold">
                   More From the Marketplace
                 </h2>
                 <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">

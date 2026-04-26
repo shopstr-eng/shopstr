@@ -23,6 +23,10 @@ import {
   cacheEventToDatabase,
   deleteEventsFromDatabase,
 } from "@/utils/db/db-client";
+import {
+  buildDeleteCachedEventsProof,
+  buildSignedHttpRequestProofTemplate,
+} from "@/utils/nostr/request-auth";
 import { newPromiseWithTimeout } from "@/utils/timeout";
 import { getLocalStorageJson } from "@/utils/safe-json";
 
@@ -63,8 +67,18 @@ export async function deleteEvent(
   await finalizeAndSendNostrEvent(signer, nostr, deletionEvent);
 
   // Delete from database via API
-  deleteEventsFromDatabase(event_ids_to_delete).catch((error) =>
-    console.error("Failed to delete events from database:", error)
+  const pubkey = await signer.getPubKey();
+  const signedRequestProof = await signer.sign(
+    buildSignedHttpRequestProofTemplate(
+      buildDeleteCachedEventsProof({
+        pubkey,
+        eventIds: event_ids_to_delete,
+      })
+    )
+  );
+
+  deleteEventsFromDatabase(event_ids_to_delete, signedRequestProof).catch(
+    (error) => console.error("Failed to delete events from database:", error)
   );
 }
 
@@ -455,7 +469,8 @@ export async function constructMessageGiftWrap(
 
 export async function sendGiftWrappedMessageEvent(
   nostr: NostrManager,
-  giftWrappedMessageEvent: NostrEvent
+  giftWrappedMessageEvent: NostrEvent,
+  signer?: NostrSigner
 ) {
   const { relays, writeRelays } = getLocalStorageData();
   const allWriteRelays = withBlastr([...writeRelays, ...relays]);
@@ -486,7 +501,8 @@ export async function sendGiftWrappedMessageEvent(
     await trackFailedRelayPublish(
       giftWrappedMessageEvent.id,
       giftWrappedMessageEvent,
-      allWriteRelays
+      allWriteRelays,
+      signer
     ).catch(console.error);
   }
 }
@@ -1022,7 +1038,8 @@ export async function finalizeAndSendNostrEvent(
       await trackFailedRelayPublish(
         signedEvent.id,
         signedEvent,
-        allWriteRelays
+        allWriteRelays,
+        signer
       ).catch(console.error);
     }
 
@@ -1129,18 +1146,61 @@ export async function blossomUploadImages(
       }
 
       const response = await res.json();
+      // Normalize Blossom responses across top-level and NIP-94 tag formats so uploads always yield a usable URL and metadata.
+      let currentResponseUrl = response.url;
+      let responseType = response.type;
+      let responseSha256 = response.sha256;
+      let responseSize = response.size;
 
-      responseUrl = response.url;
+      if (response.nip94_event && response.nip94_event.tags) {
+        const findTag = (tagName: string) => {
+          const tag = response.nip94_event.tags.find(
+            (t: string[]) => t[0] === tagName
+          );
+          return tag ? tag[1] : undefined;
+        };
+        currentResponseUrl = currentResponseUrl || findTag("url");
+        responseSha256 = responseSha256 || findTag("ox") || findTag("x");
+        responseSize = responseSize || findTag("size");
+        responseType = responseType || findTag("m");
+      }
 
-      tags = [
-        ["url", responseUrl],
-        ["x", response.sha256],
-        ["ox", response.sha256],
-        ["size", response.size.toString()],
-      ];
+      if (!currentResponseUrl && responseSha256) {
+        currentResponseUrl = new URL(`/${responseSha256}`, server).toString();
+      }
 
-      if (response.type) {
-        tags.push(["m", response.type]);
+      responseUrl = currentResponseUrl || "";
+
+      if (!responseUrl) {
+        console.error("Blossom upload response missing media URL", {
+          server,
+          responseType,
+          responseSha256,
+          responseSize,
+          hasNip94Tags: Boolean(response.nip94_event?.tags),
+          response,
+        });
+        throw new Error(
+          "Server successfully responded but didn't provide a media URL. Check your configured server URL."
+        );
+      }
+
+      tags = [["url", responseUrl]];
+
+      if (responseSha256) {
+        tags.push(["x", responseSha256], ["ox", responseSha256]);
+      }
+
+      if (
+        responseSize !== undefined &&
+        responseSize !== null &&
+        responseSize !== ""
+      ) {
+        tags.push(["size", responseSize.toString()]);
+      }
+
+      if (responseType) {
+        tags.push(["m", responseType]);
       }
     } else {
       const url = new URL("/mirror", server);
@@ -1640,53 +1700,37 @@ export function getDefaultBlossomServer(): string {
 
 export async function verifyNip05Identifier(
   nip05: string,
-  pubkey: string
+  pubkey: string,
+  options?: { baseUrl?: string }
 ): Promise<boolean> {
+  if (!nip05 || !pubkey) return false;
+
   try {
-    if (!nip05 || !pubkey) return false;
+    const params = new URLSearchParams({ nip05, pubkey });
+    const path = `/api/nostr/verify-nip05?${params.toString()}`;
 
-    const parts = nip05.split("@");
-    if (parts.length !== 2) return false;
+    const baseUrl =
+      options?.baseUrl ??
+      (typeof window !== "undefined" ? window.location.origin : null);
 
-    const [username, domain] = parts;
-    if (!username || !domain) return false;
-
-    let url;
-    try {
-      url = `https://${domain}/.well-known/nostr.json?name=${username}`;
-    } catch {
-      return false;
+    if (!baseUrl && typeof window === "undefined") {
+      throw new Error("verifyNip05Identifier requires baseUrl in SSR");
     }
 
-    try {
-      // Use a timeout to prevent hanging requests
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+    const requestUrl = baseUrl ? new URL(path, baseUrl).toString() : path;
+    const response = await fetch(requestUrl);
 
-      const response = await fetch(url, { signal: controller.signal });
-      clearTimeout(timeoutId);
+    if (!response.ok) return false;
 
-      if (!response.ok) return false;
+    const data: unknown = await response.json();
 
-      let data;
-      try {
-        data = await response.json();
-      } catch {
-        return false;
-      }
-
-      if (!data || typeof data !== "object") return false;
-
-      const names = data.names || {};
-      return (
-        names[username] === pubkey || names[username.toLowerCase()] === pubkey
-      );
-    } catch {
-      // This will catch fetch errors, timeout errors, etc.
-      return false;
-    }
+    return (
+      typeof data === "object" &&
+      data !== null &&
+      "verified" in data &&
+      (data as { verified?: boolean }).verified === true
+    );
   } catch {
-    // Catch any unexpected errors
     return false;
   }
 }
@@ -1699,4 +1743,57 @@ export const saveNWCString = (nwcString: string) => {
     localStorage.removeItem(LOCALSTORAGECONSTANTS.nwcInfo);
   }
   window.dispatchEvent(new Event("storage"));
+};
+
+export const getLocalUserProfileKey = (pubkey: string) =>
+  `shopstr:user-profile:${pubkey}`;
+
+export interface LocalProfileFallback {
+  content: Record<string, unknown>;
+  updatedAt: number;
+}
+
+export const isProfileContentPopulated = (content: Record<string, unknown>) =>
+  Object.values(content).some(
+    (value) => value !== "" && value !== null && value !== undefined
+  );
+
+export const parseLocalProfileFallback = (
+  raw: string | null
+): LocalProfileFallback | null => {
+  if (!raw) return null;
+
+  try {
+    const parsed = JSON.parse(raw);
+
+    // Backward compatibility: previously we stored content directly.
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      !Array.isArray(parsed) &&
+      !("content" in parsed)
+    ) {
+      return {
+        content: parsed as Record<string, unknown>,
+        updatedAt: 0,
+      };
+    }
+
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      !Array.isArray(parsed) &&
+      "content" in parsed
+    ) {
+      const fallback = parsed as LocalProfileFallback;
+      return {
+        content: fallback.content || {},
+        updatedAt: fallback.updatedAt || 0,
+      };
+    }
+  } catch (error) {
+    console.error("Failed to parse local profile fallback:", error);
+  }
+
+  return null;
 };
