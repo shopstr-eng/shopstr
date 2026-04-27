@@ -16,9 +16,9 @@ const SettingsPage = () => {
 
   const settingsItems = [
     {
-      id: "profile",
-      title: "Profile",
-      description: "Edit your profile",
+      id: "market-profile",
+      title: "Market Profile",
+      description: "Edit your market profile",
       icon: UserIcon,
       iconBg: "bg-slate-600",
       route: "/settings/market-profile",

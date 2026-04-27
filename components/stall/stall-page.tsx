@@ -13,7 +13,6 @@ import { ShopProfile } from "../../utils/types/types";
 import { sanitizeUrl } from "@braintree/sanitize-url";
 import DiscountCodes from "./discount-codes";
 import Affiliates from "./affiliates";
-import StripeConnectBanner from "@/components/stripe-connect/StripeConnectBanner";
 import ProductPageTemplateForm from "@/components/settings/product-page-template-form";
 
 const StallPage = () => {
@@ -144,10 +143,6 @@ const StallPage = () => {
   return (
     <div className="mx-auto h-full w-full bg-white">
       <div className="flex max-w-[100%] flex-col px-3 pb-2">
-        <StripeConnectBanner
-          returnPath="/settings/stall?tab=products&stripe=success"
-          refreshPath="/settings/stall?tab=products&stripe=refresh"
-        />
         {shopBanner != "" ? (
           <>
             <div className="shadow-neo mb-6 flex h-auto w-full items-center justify-center overflow-hidden rounded-lg border-4 border-black">
