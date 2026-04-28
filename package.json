@@ -54,7 +54,7 @@
     "react-hook-form": "7.72.1",
     "react-responsive-carousel": "3.2.23",
     "tailwindcss": "4.2.2",
-    "uuid": "13.0.0"
+    "uuid": "14.0.0"
   },
   "devDependencies": {
     "@testing-library/dom": "10.4.1",
