@@ -59,6 +59,7 @@ import { v4 as uuidv4 } from "uuid";
 import { nip19 } from "nostr-tools";
 import { NostrWebLNProvider } from "@getalby/sdk";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
+import type { ListingPricingResult } from "@/utils/payments/listing-pricing";
 import { formatWithCommas } from "./utility-components/display-monetary-info";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import SignInModal from "./sign-in/SignInModal";
@@ -77,6 +78,7 @@ type ListingMintQuoteResponse = {
   quote: string;
   amount: number;
   mintUrl: string;
+  pricing: ListingPricingResult;
 };
 
 export default function ProductInvoiceCard({
@@ -654,13 +656,61 @@ export default function ProductInvoiceCard({
       );
     }
 
-    return payload as ListingMintQuoteResponse;
+    const quote = payload as ListingMintQuoteResponse;
+    validateQuoteMatchesSelectedListingOptions(quote);
+    return quote;
   };
 
   const updatePendingOrderAmount = (amount: number) => {
     if (pendingOrderRef.current) {
       pendingOrderRef.current.amount = String(amount);
       pendingOrderRef.current.currency = "sats";
+    }
+  };
+
+  const normalizeOptionalSelection = (value?: string) => {
+    const trimmed = value?.trim();
+    return trimmed ? trimmed : undefined;
+  };
+
+  const normalizeBulkSelection = (value?: number) => {
+    return value && value !== 1 ? value : undefined;
+  };
+
+  const validateQuoteMatchesSelectedListingOptions = (
+    quote: ListingMintQuoteResponse
+  ) => {
+    if (!quote.pricing) {
+      throw new Error(
+        "Listing quote did not include validated pricing details"
+      );
+    }
+
+    const expected = {
+      selectedSize: normalizeOptionalSelection(selectedSize),
+      selectedVolume: normalizeOptionalSelection(selectedVolume),
+      selectedWeight: normalizeOptionalSelection(selectedWeight),
+      selectedBulkOption: normalizeBulkSelection(selectedBulkOption),
+    };
+    const received = {
+      selectedSize: normalizeOptionalSelection(quote.pricing.selectedSize),
+      selectedVolume: normalizeOptionalSelection(quote.pricing.selectedVolume),
+      selectedWeight: normalizeOptionalSelection(quote.pricing.selectedWeight),
+      selectedBulkOption: normalizeBulkSelection(
+        quote.pricing.selectedBulkOption
+      ),
+    };
+
+    const matches =
+      expected.selectedSize === received.selectedSize &&
+      expected.selectedVolume === received.selectedVolume &&
+      expected.selectedWeight === received.selectedWeight &&
+      expected.selectedBulkOption === received.selectedBulkOption;
+
+    if (!matches) {
+      throw new Error(
+        "Listing quote did not match the selected listing options. Please try again."
+      );
     }
   };
 

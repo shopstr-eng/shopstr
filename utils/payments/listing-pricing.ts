@@ -17,6 +17,10 @@ export type ListingPricingResult = {
   shippingCost: number;
   total: number;
   currency: string;
+  selectedSize?: string;
+  selectedVolume?: string;
+  selectedWeight?: string;
+  selectedBulkOption?: number;
 };
 
 function requireFiniteAmount(amount: number, label: string) {
@@ -40,13 +44,59 @@ function getAllowedFormTypes(product: ProductData): ListingOrderFormType[] {
   return ["contact"];
 }
 
+function hasPurchasableSizes(product: ProductData): boolean {
+  return Boolean(
+    product.sizes?.some((size) => (product.sizeQuantities?.get(size) ?? 0) > 0)
+  );
+}
+
+function requireAvailableListing(product: ProductData) {
+  if (product.status?.toLowerCase() === "sold") {
+    throw new Error("Listing is sold out");
+  }
+
+  if (product.expiration && Date.now() / 1000 > product.expiration) {
+    throw new Error("Listing has expired");
+  }
+
+  if (product.quantity !== undefined && product.quantity < 1) {
+    throw new Error("Listing is sold out");
+  }
+
+  if (
+    product.sizes &&
+    product.sizes.length > 0 &&
+    !hasPurchasableSizes(product)
+  ) {
+    throw new Error("Listing is sold out");
+  }
+}
+
 export function computeListingPricing(
   product: ProductData,
   input: ListingPricingInput = {}
 ): ListingPricingResult {
+  requireAvailableListing(product);
+
   const allowedFormTypes = getAllowedFormTypes(product);
   if (!input.formType || !allowedFormTypes.includes(input.formType)) {
     throw new Error("Invalid order type for listing");
+  }
+
+  const requiresSize = hasPurchasableSizes(product);
+  const requiresVolume = Boolean(product.volumes?.length);
+  const requiresWeight = Boolean(product.weights?.length);
+
+  if (requiresSize && !input.selectedSize) {
+    throw new Error("Size selection is required");
+  }
+
+  if (requiresVolume && !input.selectedVolume) {
+    throw new Error("Volume selection is required");
+  }
+
+  if (requiresWeight && !input.selectedWeight) {
+    throw new Error("Weight selection is required");
   }
 
   if (input.selectedSize) {
@@ -119,5 +169,12 @@ export function computeListingPricing(
     shippingCost,
     total,
     currency: product.currency || "sats",
+    selectedSize: input.selectedSize || undefined,
+    selectedVolume: input.selectedVolume || undefined,
+    selectedWeight: input.selectedWeight || undefined,
+    selectedBulkOption:
+      input.selectedBulkOption && input.selectedBulkOption !== 1
+        ? input.selectedBulkOption
+        : undefined,
   };
 }

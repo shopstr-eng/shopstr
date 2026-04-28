@@ -30,6 +30,7 @@ jest.mock("@cashu/cashu-ts", () => ({
 }));
 
 import handler from "@/pages/api/listing/mint-quote";
+import { __resetRateLimitBuckets } from "@/utils/rate-limit";
 
 function createResponse() {
   return {
@@ -54,6 +55,8 @@ function createResponse() {
 function createRequest(body: unknown): NextApiRequest {
   return {
     method: "POST",
+    headers: {},
+    socket: { remoteAddress: "8.8.8.8" },
     body,
   } as NextApiRequest;
 }
@@ -82,6 +85,7 @@ describe("/api/listing/mint-quote", () => {
     createMintQuoteBolt11Mock.mockReset();
     loadMintMock.mockReset();
     getSatoshiValueMock.mockReset();
+    __resetRateLimitBuckets();
 
     fetchProductByIdFromDbMock.mockResolvedValue(productEvent);
     fetchProductByDTagAndPubkeyMock.mockResolvedValue(productEvent);
@@ -102,7 +106,7 @@ describe("/api/listing/mint-quote", () => {
     await handler(
       createRequest({
         productId: "product-1",
-        mintUrl: "https://mint.example",
+        mintUrl: "https://1.1.1.1",
         formType: "shipping",
         discountCode: "SAVE10",
       }),
@@ -133,7 +137,8 @@ describe("/api/listing/mint-quote", () => {
     await handler(
       createRequest({
         productId: "product-1",
-        mintUrl: "https://mint.example",
+        mintUrl: "https://1.1.1.1",
+        formType: "shipping",
         selectedBulkOption: 2,
       }),
       res as unknown as NextApiResponse
@@ -157,7 +162,7 @@ describe("/api/listing/mint-quote", () => {
     await handler(
       createRequest({
         productId: "product-1",
-        mintUrl: "https://mint.example",
+        mintUrl: "https://1.1.1.1",
         formType: "shipping",
       }),
       res as unknown as NextApiResponse
@@ -165,5 +170,48 @@ describe("/api/listing/mint-quote", () => {
 
     expect(res.statusCode).toBe(200);
     expect(createMintQuoteBolt11Mock).toHaveBeenCalledWith(210);
+  });
+
+  it("requires listing variant selections that affect the order", async () => {
+    const productWithVolume = {
+      ...productEvent,
+      tags: [...productEvent.tags, ["volume", "1L", "150"]],
+    };
+    fetchProductByIdFromDbMock.mockResolvedValue(productWithVolume);
+    fetchProductByDTagAndPubkeyMock.mockResolvedValue(productWithVolume);
+    const res = createResponse();
+
+    await handler(
+      createRequest({
+        productId: "product-1",
+        mintUrl: "https://1.1.1.1",
+        formType: "shipping",
+      }),
+      res as unknown as NextApiResponse
+    );
+
+    expect(res.statusCode).toBe(400);
+    expect(res.jsonBody).toMatchObject({
+      error: "Volume selection is required",
+    });
+    expect(createMintQuoteBolt11Mock).not.toHaveBeenCalled();
+  });
+
+  it("rejects private mint URLs before contacting the mint", async () => {
+    const res = createResponse();
+
+    await handler(
+      createRequest({
+        productId: "product-1",
+        mintUrl: "http://127.0.0.1:3338",
+        formType: "shipping",
+      }),
+      res as unknown as NextApiResponse
+    );
+
+    expect(res.statusCode).toBe(400);
+    expect(res.jsonBody).toMatchObject({ error: "Invalid mint URL" });
+    expect(loadMintMock).not.toHaveBeenCalled();
+    expect(createMintQuoteBolt11Mock).not.toHaveBeenCalled();
   });
 });

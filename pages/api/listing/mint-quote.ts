@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { isIP } from "net";
+import { lookup } from "dns/promises";
 import { getSatoshiValue } from "@getalby/lightning-tools";
 import { Mint as CashuMint, Wallet as CashuWallet } from "@cashu/cashu-ts";
 import {
@@ -28,7 +29,7 @@ type MintQuoteRequest = {
   discountCode?: string;
 };
 
-function parseMintUrl(mintUrl?: string): string {
+async function parseMintUrl(mintUrl?: string): Promise<string> {
   const mint = mintUrl?.trim() || DEFAULT_MINT_URL;
   const parsed = new URL(mint);
   const allowInsecureLocalDev =
@@ -38,45 +39,108 @@ function parseMintUrl(mintUrl?: string): string {
     throw new Error("Invalid mint URL");
   }
 
-  if (isPrivateHostname(parsed.hostname)) {
-    throw new Error("Invalid mint URL");
-  }
+  await assertPublicMintHostname(parsed.hostname);
 
   return parsed.toString().replace(/\/$/, "");
 }
 
-function isPrivateHostname(hostname: string): boolean {
+async function assertPublicMintHostname(hostname: string): Promise<void> {
   const normalized = hostname.toLowerCase().replace(/^\[|\]$/g, "");
 
+  if (isBlockedIpAddress(normalized)) {
+    throw new Error("Invalid mint URL");
+  }
+
+  if (isIP(normalized)) {
+    return;
+  }
+
+  if (isBlockedHostname(normalized)) {
+    throw new Error("Invalid mint URL");
+  }
+
+  let addresses: Array<{ address: string; family: number }>;
+  try {
+    addresses = (await lookup(normalized, {
+      all: true,
+      verbatim: true,
+    })) as Array<{ address: string; family: number }>;
+  } catch {
+    throw new Error("Invalid mint URL");
+  }
+
   if (
-    normalized === "localhost" ||
-    normalized.endsWith(".localhost") ||
-    normalized.endsWith(".local")
+    addresses.length === 0 ||
+    addresses.some(({ address }) => isBlockedIpAddress(address))
+  ) {
+    throw new Error("Invalid mint URL");
+  }
+}
+
+function isBlockedHostname(hostname: string): boolean {
+  if (
+    hostname === "localhost" ||
+    hostname.endsWith(".localhost") ||
+    hostname.endsWith(".local") ||
+    !hostname.includes(".")
   ) {
     return true;
   }
 
+  return false;
+}
+
+function isBlockedIpAddress(address: string): boolean {
+  const normalized = address.toLowerCase().replace(/^\[|\]$/g, "");
+
+  if (normalized.startsWith("::ffff:")) {
+    return true;
+  }
+
   if (isIP(normalized) === 4) {
-    const [first = 0, second = 0] = normalized.split(".").map(Number);
-    return (
-      first === 10 ||
-      first === 127 ||
-      (first === 172 && second >= 16 && second <= 31) ||
-      (first === 192 && second === 168) ||
-      (first === 169 && second === 254)
-    );
+    return isBlockedIpv4Address(normalized);
   }
 
   if (isIP(normalized) === 6) {
-    return (
-      normalized === "::1" ||
-      normalized.startsWith("fc") ||
-      normalized.startsWith("fd") ||
-      normalized.startsWith("fe80:")
-    );
+    return isBlockedIpv6Address(normalized);
   }
 
   return false;
+}
+
+function isBlockedIpv4Address(address: string): boolean {
+  const [first = 0, second = 0, third = 0] = address.split(".").map(Number);
+
+  return (
+    first === 0 ||
+    first === 10 ||
+    first === 127 ||
+    (first === 100 && second >= 64 && second <= 127) ||
+    (first === 169 && second === 254) ||
+    (first === 172 && second >= 16 && second <= 31) ||
+    (first === 192 && second === 0 && third === 0) ||
+    (first === 192 && second === 0 && third === 2) ||
+    (first === 192 && second === 168) ||
+    (first === 198 && (second === 18 || second === 19)) ||
+    (first === 198 && second === 51 && third === 100) ||
+    (first === 203 && second === 0 && third === 113) ||
+    first >= 224
+  );
+}
+
+function isBlockedIpv6Address(address: string): boolean {
+  const normalized = address.toLowerCase();
+  const firstSegment = normalized.split(":")[0] ?? "";
+  const firstHextet = Number.parseInt(firstSegment, 16);
+
+  return (
+    normalized === "::" ||
+    normalized === "::1" ||
+    normalized.startsWith("fc") ||
+    normalized.startsWith("fd") ||
+    (Number.isFinite(firstHextet) && (firstHextet & 0xffc0) === 0xfe80) ||
+    normalized.startsWith("ff")
+  );
 }
 
 function parseSelectedBulkOption(value: number | string | undefined) {
@@ -186,7 +250,7 @@ export default async function handler(
       pricing.total,
       pricing.currency
     );
-    const mint = parseMintUrl(mintUrl);
+    const mint = await parseMintUrl(mintUrl);
 
     const wallet = new CashuWallet(new CashuMint(mint));
     await wallet.loadMint();

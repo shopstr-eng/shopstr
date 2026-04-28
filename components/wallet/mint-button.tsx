@@ -129,7 +129,7 @@ const MintButton = () => {
         console.error(e);
       }
     }
-    await invoiceHasBeenPaid(wallet, numSats, hash);
+    await invoiceHasBeenPaid(wallet, invoiceAmount, hash);
   };
 
   /**
@@ -139,7 +139,7 @@ const MintButton = () => {
    */
   async function invoiceHasBeenPaid(
     wallet: CashuWallet,
-    numSats: number,
+    invoiceAmount: number,
     hash: string
   ) {
     const pollMaxRounds = 30; // ~1 minute of UNPAID polling
@@ -205,7 +205,7 @@ const MintButton = () => {
 
       try {
         const proofs = await withMintRetry(
-          () => wallet.mintProofsBolt11(numSats, hash),
+          () => wallet.mintProofsBolt11(invoiceAmount, hash),
           { maxAttempts: 5, perAttemptTimeoutMs: 15000, totalTimeoutMs: 60000 }
         );
         if (proofs && proofs.length > 0) {
@@ -216,7 +216,7 @@ const MintButton = () => {
             JSON.stringify([
               {
                 type: 3,
-                amount: numSats,
+                amount: invoiceAmount,
                 date: Math.floor(Date.now() / 1000),
               },
               ...history,
@@ -228,7 +228,7 @@ const MintButton = () => {
             mints[0]!,
             proofs,
             "in",
-            numSats.toString()
+            invoiceAmount.toString()
           );
           markMintQuoteClaimed(hash);
           setPaymentConfirmed(true);
