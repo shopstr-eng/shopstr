@@ -2,11 +2,19 @@
 
 import router from "next/router";
 import { useContext, useState, useEffect, useRef } from "react";
+import { useSearchParams } from "next/navigation";
 import DisplayProducts from "../display-products";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
-import { Button, useDisclosure } from "@heroui/react";
-import { Bars3Icon } from "@heroicons/react/24/outline";
-import { BLUEBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import { Button, Tooltip, useDisclosure } from "@heroui/react";
+import {
+  ArrowUpTrayIcon,
+  Bars3Icon,
+  XMarkIcon,
+} from "@heroicons/react/24/outline";
+import {
+  BLUEBUTTONCLASSNAMES,
+  WHITEBUTTONCLASSNAMES,
+} from "@/utils/STATIC-VARIABLES";
 import SignInModal from "../sign-in/SignInModal";
 import { ShopMapContext } from "@/utils/context/context";
 import { ShopProfile } from "../../utils/types/types";
@@ -14,10 +22,12 @@ import { sanitizeUrl } from "@braintree/sanitize-url";
 import DiscountCodes from "./discount-codes";
 import Affiliates from "./affiliates";
 import ProductPageTemplateForm from "@/components/settings/product-page-template-form";
+import ShopifyMigrationModal from "./shopify-migration-modal";
 
 const StallPage = () => {
   const { pubkey: usersPubkey } = useContext(SignerContext);
   const { isOpen, onOpen, onClose } = useDisclosure();
+  const searchParams = useSearchParams();
 
   const [selectedSection, setSelectedSection] = useState("Listings");
 
@@ -25,6 +35,8 @@ const StallPage = () => {
   const [_categories, setCategories] = useState([""]);
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [showMigrationModal, setShowMigrationModal] = useState(false);
+  const [showMigrationTooltip, setShowMigrationTooltip] = useState(false);
 
   const shopMapContext = useContext(ShopMapContext);
   const shopProfile: ShopProfile | undefined = usersPubkey
@@ -46,6 +58,28 @@ const StallPage = () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);
+
+  // Auto-open migration modal / tooltip when query param is present
+  useEffect(() => {
+    if (!searchParams || !usersPubkey) return;
+    const migrate = searchParams.get("migrate");
+    if (migrate === "shopify") {
+      setSelectedSection("Listings");
+      setShowMigrationModal(true);
+    } else if (migrate === "tooltip") {
+      setSelectedSection("Listings");
+      setShowMigrationTooltip(true);
+    }
+  }, [searchParams, usersPubkey]);
+
+  const handleOpenMigration = () => {
+    if (usersPubkey) {
+      setShowMigrationTooltip(false);
+      setShowMigrationModal(true);
+    } else {
+      onOpen();
+    }
+  };
 
   const handleCreateNewListing = () => {
     if (usersPubkey) {
@@ -135,6 +169,15 @@ const StallPage = () => {
           }}
         >
           Community
+        </Button>
+        <Button
+          className="w-full bg-transparent px-4 py-2 text-left text-sm font-bold text-black hover:bg-gray-100"
+          onClick={() => {
+            handleOpenMigration();
+            setIsMobileMenuOpen(false);
+          }}
+        >
+          Import from Shopify
         </Button>
       </div>
     </div>
@@ -240,6 +283,15 @@ const StallPage = () => {
             Edit Stall
           </Button>
         </div>
+        <div className="mb-4 sm:hidden">
+          <Button
+            className={`${WHITEBUTTONCLASSNAMES} w-full`}
+            startContent={<ArrowUpTrayIcon className="h-4 w-4" />}
+            onClick={handleOpenMigration}
+          >
+            Import from Shopify
+          </Button>
+        </div>
 
         <div className="flex gap-6">
           {/* Sidebar */}
@@ -257,6 +309,44 @@ const StallPage = () => {
               >
                 Edit Stall
               </Button>
+              <Tooltip
+                isOpen={showMigrationTooltip}
+                placement="right"
+                showArrow
+                content={
+                  <div className="max-w-xs space-y-2 p-2 text-sm">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="font-bold text-black">
+                        Migrate from Shopify
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowMigrationTooltip(false)}
+                        className="text-black hover:text-gray-700"
+                        aria-label="Dismiss"
+                      >
+                        <XMarkIcon className="h-4 w-4" />
+                      </button>
+                    </div>
+                    <p className="text-black">
+                      Click here to upload your Shopify product export and
+                      publish your catalog as Nostr listings in a few clicks.
+                    </p>
+                  </div>
+                }
+                classNames={{
+                  base: "border-2 border-black bg-white shadow-neo",
+                  content: "bg-white",
+                }}
+              >
+                <Button
+                  className={`${WHITEBUTTONCLASSNAMES} w-full`}
+                  startContent={<ArrowUpTrayIcon className="h-4 w-4" />}
+                  onClick={handleOpenMigration}
+                >
+                  Import from Shopify
+                </Button>
+              </Tooltip>
             </div>
           </div>
 
@@ -283,6 +373,10 @@ const StallPage = () => {
         </div>
       </div>
       <SignInModal isOpen={isOpen} onClose={onClose} />
+      <ShopifyMigrationModal
+        isOpen={showMigrationModal}
+        onClose={() => setShowMigrationModal(false)}
+      />
     </div>
   );
 };

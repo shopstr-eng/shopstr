@@ -70,7 +70,13 @@ const Keys = () => {
       });
       await signer.getPubKey();
       saveSigner(signer);
-      router.push("/onboarding/user-type");
+      const migrate = router.query.migrate as string | undefined;
+      if (migrate === "shopify") {
+        // Sellers migrating from Shopify skip the role-selection step.
+        router.push("/onboarding/market-profile?type=seller&migrate=shopify");
+      } else {
+        router.push("/onboarding/user-type");
+      }
     }
   };
 

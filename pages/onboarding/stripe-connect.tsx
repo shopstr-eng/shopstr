@@ -124,12 +124,18 @@ const OnboardingStripeConnect = () => {
     }
   };
 
+  const migrate = router.query.migrate as string | undefined;
+  const finishDestination =
+    migrate === "shopify"
+      ? "/settings/stall?tab=products&migrate=shopify"
+      : "/marketplace";
+
   const handleSkip = () => {
-    router.push("/marketplace");
+    router.push(finishDestination);
   };
 
   const handleFinish = () => {
-    router.push("/marketplace");
+    router.push(finishDestination);
   };
 
   return (

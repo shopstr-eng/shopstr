@@ -15,17 +15,29 @@ const UserTypeSelection = () => {
     preselect === "seller" ? "seller" : null
   );
 
+  const migrate = router.query.migrate as string | undefined;
+  const migrateSuffix = migrate
+    ? `&migrate=${encodeURIComponent(migrate)}`
+    : "";
+
   useEffect(() => {
+    if (!router.isReady) return;
+    // Sellers coming through the Shopify migration funnel already have an
+    // implicit role — skip this step entirely.
+    if (migrate === "shopify") {
+      router.replace("/onboarding/market-profile?type=seller&migrate=shopify");
+      return;
+    }
     if (preselect === "seller") {
       setSelectedType("seller");
     }
-  }, [preselect]);
+  }, [preselect, migrate, router]);
 
   const handleNext = () => {
     if (selectedType === "seller") {
-      router.push("/onboarding/market-profile?type=seller");
+      router.push(`/onboarding/market-profile?type=seller${migrateSuffix}`);
     } else if (selectedType === "buyer") {
-      router.push("/onboarding/market-profile?type=buyer");
+      router.push(`/onboarding/market-profile?type=buyer${migrateSuffix}`);
     }
   };
 

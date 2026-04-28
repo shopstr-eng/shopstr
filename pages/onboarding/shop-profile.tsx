@@ -7,8 +7,11 @@ import ShopProfileForm from "@/components/settings/shop-profile-form";
 const OnboardingShopProfile = () => {
   const router = useRouter();
 
+  const migrate = router.query.migrate as string | undefined;
+  const migrateQuery = migrate ? `?migrate=${encodeURIComponent(migrate)}` : "";
+
   const handleFinish = () => {
-    router.push("/onboarding/stripe-connect");
+    router.push(`/onboarding/stripe-connect${migrateQuery}`);
   };
 
   return (
