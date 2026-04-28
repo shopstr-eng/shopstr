@@ -6,6 +6,7 @@ const validateDiscountCodeMock = jest.fn();
 const createMintQuoteBolt11Mock = jest.fn();
 const loadMintMock = jest.fn();
 const getSatoshiValueMock = jest.fn();
+var mockCashuMint: jest.Mock;
 
 jest.mock("@/utils/db/db-service", () => ({
   fetchProductByDTagAndPubkey: (...args: unknown[]) =>
@@ -20,14 +21,17 @@ jest.mock("@getalby/lightning-tools", () => ({
   getSatoshiValue: (...args: unknown[]) => getSatoshiValueMock(...args),
 }));
 
-jest.mock("@cashu/cashu-ts", () => ({
-  Mint: jest.fn().mockImplementation((url: string) => ({ url })),
-  Wallet: jest.fn().mockImplementation(() => ({
-    loadMint: (...args: unknown[]) => loadMintMock(...args),
-    createMintQuoteBolt11: (...args: unknown[]) =>
-      createMintQuoteBolt11Mock(...args),
-  })),
-}));
+jest.mock("@cashu/cashu-ts", () => {
+  mockCashuMint = jest.fn().mockImplementation((url: string) => ({ url }));
+  return {
+    Mint: mockCashuMint,
+    Wallet: jest.fn().mockImplementation(() => ({
+      loadMint: (...args: unknown[]) => loadMintMock(...args),
+      createMintQuoteBolt11: (...args: unknown[]) =>
+        createMintQuoteBolt11Mock(...args),
+    })),
+  };
+});
 
 import handler from "@/pages/api/listing/mint-quote";
 import { __resetRateLimitBuckets } from "@/utils/rate-limit";
@@ -85,6 +89,7 @@ describe("/api/listing/mint-quote", () => {
     createMintQuoteBolt11Mock.mockReset();
     loadMintMock.mockReset();
     getSatoshiValueMock.mockReset();
+    mockCashuMint.mockClear();
     __resetRateLimitBuckets();
 
     fetchProductByIdFromDbMock.mockResolvedValue(productEvent);
@@ -106,7 +111,6 @@ describe("/api/listing/mint-quote", () => {
     await handler(
       createRequest({
         productId: "product-1",
-        mintUrl: "https://1.1.1.1",
         formType: "shipping",
         discountCode: "SAVE10",
       }),
@@ -124,10 +128,14 @@ describe("/api/listing/mint-quote", () => {
       "seller-pubkey"
     );
     expect(createMintQuoteBolt11Mock).toHaveBeenCalledWith(100);
+    expect(mockCashuMint).toHaveBeenCalledWith(
+      "https://mint.minibits.cash/Bitcoin"
+    );
     expect(res.jsonBody).toMatchObject({
       request: "lnbc110",
       quote: "quote-110",
       amount: 100,
+      mintUrl: "https://mint.minibits.cash/Bitcoin",
     });
   });
 
@@ -137,7 +145,6 @@ describe("/api/listing/mint-quote", () => {
     await handler(
       createRequest({
         productId: "product-1",
-        mintUrl: "https://1.1.1.1",
         formType: "shipping",
         selectedBulkOption: 2,
       }),
@@ -162,7 +169,6 @@ describe("/api/listing/mint-quote", () => {
     await handler(
       createRequest({
         productId: "product-1",
-        mintUrl: "https://1.1.1.1",
         formType: "shipping",
       }),
       res as unknown as NextApiResponse
@@ -184,7 +190,6 @@ describe("/api/listing/mint-quote", () => {
     await handler(
       createRequest({
         productId: "product-1",
-        mintUrl: "https://1.1.1.1",
         formType: "shipping",
       }),
       res as unknown as NextApiResponse
@@ -197,21 +202,24 @@ describe("/api/listing/mint-quote", () => {
     expect(createMintQuoteBolt11Mock).not.toHaveBeenCalled();
   });
 
-  it("rejects private mint URLs before contacting the mint", async () => {
+  it("ignores buyer-supplied mint URLs and uses the trusted server mint", async () => {
     const res = createResponse();
 
     await handler(
       createRequest({
         productId: "product-1",
-        mintUrl: "http://127.0.0.1:3338",
+        mintUrl: "https://buyer-controlled.example",
         formType: "shipping",
       }),
       res as unknown as NextApiResponse
     );
 
-    expect(res.statusCode).toBe(400);
-    expect(res.jsonBody).toMatchObject({ error: "Invalid mint URL" });
-    expect(loadMintMock).not.toHaveBeenCalled();
-    expect(createMintQuoteBolt11Mock).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(200);
+    expect(mockCashuMint).toHaveBeenCalledWith(
+      "https://mint.minibits.cash/Bitcoin"
+    );
+    expect(res.jsonBody).toMatchObject({
+      mintUrl: "https://mint.minibits.cash/Bitcoin",
+    });
   });
 });

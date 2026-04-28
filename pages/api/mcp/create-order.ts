@@ -19,6 +19,7 @@ import {
 } from "@/mcp/tools/purchase-tools";
 import { parseTags } from "@/utils/parsers/product-parser-functions";
 import { applyRateLimit } from "@/utils/rate-limit";
+import { getTrustedMintUrl } from "@/utils/cashu/trusted-mints";
 
 // MCP create-order is on the payment critical path; the per-IP cap is
 // generous so a buyer cannot accidentally lock themselves out across
@@ -26,8 +27,6 @@ import { applyRateLimit } from "@/utils/rate-limit";
 // mint quote pipeline.
 const RATE_LIMIT = { limit: 60, windowMs: 60 * 1000 };
 const PER_KEY_LIMIT = { limit: 30, windowMs: 60 * 1000 };
-
-const DEFAULT_MINT_URL = "https://mint.minibits.cash/Bitcoin";
 
 const pendingLightningPayments = new Map<
   string,
@@ -133,7 +132,6 @@ async function handleCreateOrder(
     selectedBulkUnits,
     discountCode,
     paymentMethod = "lightning",
-    mintUrl,
     cashuToken,
   } = req.body as CreateOrderInput & {
     selectedSize?: string;
@@ -142,7 +140,6 @@ async function handleCreateOrder(
     selectedBulkUnits?: number;
     discountCode?: string;
     paymentMethod?: PaymentMethod;
-    mintUrl?: string;
     cashuToken?: string;
   };
 
@@ -349,8 +346,7 @@ async function handleCreateOrder(
       totalAmount,
       currency,
       shippingAddress || null,
-      pricingBlock,
-      mintUrl
+      pricingBlock
     );
   } catch (error) {
     console.error("Failed to create MCP order:", error);
@@ -372,10 +368,9 @@ async function handleLightningPayment(
   totalAmount: number,
   currency: string,
   shippingAddress: Record<string, string> | null,
-  pricingBlock: any,
-  mintUrl?: string
+  pricingBlock: any
 ) {
-  const mint = mintUrl || DEFAULT_MINT_URL;
+  const mint = getTrustedMintUrl();
 
   let amountInSats: number;
   if (currency.toLowerCase() === "sats" || currency.toLowerCase() === "sat") {

@@ -629,37 +629,35 @@ export default function ProductInvoiceCard({
     }
   };
 
-  const createListingMintQuote = async (
-    mintUrl: string
-  ): Promise<ListingMintQuoteResponse> => {
-    const response = await fetch("/api/listing/mint-quote", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        productId: productData.id,
-        mintUrl,
-        formType,
-        selectedSize,
-        selectedVolume,
-        selectedWeight,
-        selectedBulkOption,
-        discountCode,
-      }),
-    });
+  const createListingMintQuote =
+    async (): Promise<ListingMintQuoteResponse> => {
+      const response = await fetch("/api/listing/mint-quote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          productId: productData.id,
+          formType,
+          selectedSize,
+          selectedVolume,
+          selectedWeight,
+          selectedBulkOption,
+          discountCode,
+        }),
+      });
 
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      throw new Error(
-        typeof payload.error === "string"
-          ? payload.error
-          : "Failed to create listing invoice"
-      );
-    }
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(
+          typeof payload.error === "string"
+            ? payload.error
+            : "Failed to create listing invoice"
+        );
+      }
 
-    const quote = payload as ListingMintQuoteResponse;
-    validateQuoteMatchesSelectedListingOptions(quote);
-    return quote;
-  };
+      const quote = payload as ListingMintQuoteResponse;
+      validateQuoteMatchesSelectedListingOptions(quote);
+      return quote;
+    };
 
   const updatePendingOrderAmount = (amount: number) => {
     if (pendingOrderRef.current) {
@@ -887,7 +885,7 @@ export default function ProductInvoiceCard({
         quote: hash,
         amount,
         mintUrl,
-      } = await createListingMintQuote(mints[0]!);
+      } = await createListingMintQuote();
       const serverInvoiceAmount = toCashuMintAmountSats(amount);
       updatePendingOrderAmount(serverInvoiceAmount);
       const wallet = new CashuWallet(new CashuMint(mintUrl));
@@ -912,6 +910,7 @@ export default function ProductInvoiceCard({
         wallet,
         serverInvoiceAmount,
         hash,
+        mintUrl,
         data.shippingName ? data.shippingName : undefined,
         data.shippingAddress ? data.shippingAddress : undefined,
         data.shippingUnitNo ? data.shippingUnitNo : undefined,
@@ -967,7 +966,7 @@ export default function ProductInvoiceCard({
         quote: hash,
         amount,
         mintUrl,
-      } = await createListingMintQuote(mints[0]!);
+      } = await createListingMintQuote();
       const serverInvoiceAmount = toCashuMintAmountSats(amount);
       updatePendingOrderAmount(serverInvoiceAmount);
       const wallet = new CashuWallet(new CashuMint(mintUrl));
@@ -1013,6 +1012,7 @@ export default function ProductInvoiceCard({
         wallet,
         serverInvoiceAmount,
         hash,
+        mintUrl,
         data.shippingName ? data.shippingName : undefined,
         data.shippingAddress ? data.shippingAddress : undefined,
         data.shippingUnitNo ? data.shippingUnitNo : undefined,
@@ -1035,6 +1035,7 @@ export default function ProductInvoiceCard({
     wallet: CashuWallet,
     newPrice: number,
     hash: string,
+    mintUrl: string,
     shippingName?: string,
     shippingAddress?: string,
     shippingUnitNo?: string,
@@ -1074,7 +1075,7 @@ export default function ProductInvoiceCard({
           );
           recordPendingMintQuote({
             quoteId: hash,
-            mintUrl: mints[0]!,
+            mintUrl,
             amount: newPrice,
             invoice: existing?.invoice ?? "",
             status: "paid_unclaimed",
