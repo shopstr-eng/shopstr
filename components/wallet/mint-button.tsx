@@ -37,6 +37,7 @@ import {
   MintOperationError,
   withMintRetry,
 } from "@/utils/cashu/mint-retry-service";
+import { toCashuMintAmountSats } from "@/utils/cashu/payment-amount";
 import {
   markMintQuoteClaimed,
   markMintQuotePaid,
@@ -81,11 +82,12 @@ const MintButton = () => {
   };
 
   const handleMint = async (numSats: number) => {
+    const invoiceAmount = toCashuMintAmountSats(numSats);
     const wallet = new CashuWallet(new CashuMint(mints[0]!));
     await wallet.loadMint();
 
     const { request: pr, quote: hash } = await withMintRetry(
-      () => wallet.createMintQuoteBolt11(numSats),
+      () => wallet.createMintQuoteBolt11(invoiceAmount),
       { maxAttempts: 4, perAttemptTimeoutMs: 15000, totalTimeoutMs: 60000 }
     );
 
@@ -94,7 +96,7 @@ const MintButton = () => {
     recordPendingMintQuote({
       quoteId: hash,
       mintUrl: mints[0]!,
-      amount: numSats,
+      amount: invoiceAmount,
       invoice: pr,
     });
 

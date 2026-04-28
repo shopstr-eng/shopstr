@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { randomBytes } from "crypto";
 import { Mint as CashuMint, Wallet as CashuWallet } from "@cashu/cashu-ts";
 import { withMintRetry } from "@/utils/cashu/mint-retry-service";
+import { toCashuMintAmountSats } from "@/utils/cashu/payment-amount";
 import { authenticateRequest, initializeApiKeysTable } from "@/utils/mcp/auth";
 import {
   fetchAllProductsFromDb,
@@ -383,7 +384,7 @@ async function handleLightningPayment(
     amountInSats = Math.round(totalAmount);
   }
 
-  if (amountInSats < 1) amountInSats = 1;
+  amountInSats = toCashuMintAmountSats(amountInSats);
 
   try {
     const cashuMint = new CashuMint(mint);
