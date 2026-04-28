@@ -173,9 +173,19 @@ const MarketProfileForm = ({ isOnboarding }: MarketProfileFormProps) => {
     } finally {
       setIsUploadingProfile(false);
       setIsSaved(true);
-      setTimeout(() => setIsSaved(false), 2000);
     }
   };
+
+  // Once saved, keep the green "Saved" confirmation visible until the seller
+  // edits another field. `type === "change"` filters out form-state updates
+  // from `reset()` / async hydration so loading the latest profile doesn't
+  // wipe the confirmation.
+  useEffect(() => {
+    const subscription = watch((_value, { type }) => {
+      if (type === "change") setIsSaved(false);
+    });
+    return () => subscription.unsubscribe();
+  }, [watch]);
 
   if (isFetchingProfile) {
     return <MilkMarketSpinner />;

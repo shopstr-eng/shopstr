@@ -45,6 +45,7 @@ import {
   buildListingsFromShopifyProducts,
   type BuiltShopifyListing,
 } from "@/utils/migrations/shopify-to-nip99";
+import { rehostListingImages } from "@/utils/migrations/rehost-images";
 import currencySelection from "../../public/currencySelection.json";
 
 interface ShopifyMigrationModalProps {
@@ -59,6 +60,7 @@ interface PublishResult {
   title: string;
   status: "success" | "error";
   message?: string;
+  warnings?: string[];
 }
 
 const ACCEPTED_TYPES = [".csv", "text/csv", "application/vnd.ms-excel"];
@@ -117,6 +119,10 @@ export default function ShopifyMigrationModal({
   const [publishTotal, setPublishTotal] = useState(0);
   const [publishResults, setPublishResults] = useState<PublishResult[]>([]);
   const [isPublishing, setIsPublishing] = useState(false);
+  const [publishStatus, setPublishStatus] = useState<string>("");
+  const [failedListings, setFailedListings] = useState<BuiltShopifyListing[]>(
+    []
+  );
   const cancelRef = useRef(false);
 
   const currencyOptions = useMemo(
@@ -140,6 +146,8 @@ export default function ShopifyMigrationModal({
       setPublishTotal(0);
       setPublishResults([]);
       setIsPublishing(false);
+      setPublishStatus("");
+      setFailedListings([]);
       cancelRef.current = false;
     }
   }, [isOpen]);
@@ -244,14 +252,14 @@ export default function ShopifyMigrationModal({
     }
   };
 
-  const startPublish = async () => {
+  const runPublish = async (items: BuiltShopifyListing[]) => {
     if (!signer || !isLoggedIn || !nostr) {
       setParseError(
         "You must be signed in to publish listings. Please sign in and try again."
       );
       return;
     }
-    if (productsToReview.length === 0) {
+    if (items.length === 0) {
       return;
     }
 
@@ -259,15 +267,47 @@ export default function ShopifyMigrationModal({
     setIsPublishing(true);
     cancelRef.current = false;
     setPublishProgress(0);
-    setPublishTotal(productsToReview.length);
+    setPublishTotal(items.length);
+    setPublishResults([]);
+    setPublishStatus("");
     const results: PublishResult[] = [];
+    const failures: BuiltShopifyListing[] = [];
 
-    for (let i = 0; i < productsToReview.length; i++) {
+    for (let i = 0; i < items.length; i++) {
       if (cancelRef.current) break;
-      const item = productsToReview[i]!;
+      const item = items[i]!;
+      const title = item.product.title || item.product.handle;
+      const rehostWarnings: string[] = [];
+      let valuesToPublish = item.values;
+
+      // Step A: rehost any remote image URLs to the user's Blossom server so
+      // the listings keep working even if the seller decommissions Shopify.
       try {
-        const signed = await PostListing(
+        setPublishStatus(`Re-uploading images for "${title}"…`);
+        const rehosted = await rehostListingImages(
           item.values,
+          signer,
+          title,
+          (p) => {
+            setPublishStatus(
+              `Re-uploading image ${Math.min(p.done + 1, p.total)} / ${p.total} for "${title}"…`
+            );
+          }
+        );
+        valuesToPublish = rehosted.values;
+        rehostWarnings.push(...rehosted.warnings);
+      } catch (err) {
+        console.error("Image rehosting failed for", item.product.handle, err);
+        rehostWarnings.push(
+          `"${title}": image re-upload failed (${err instanceof Error ? err.message : "unknown error"}). Listing was published with the original Shopify image links.`
+        );
+      }
+
+      // Step B: publish the (possibly updated) listing to Nostr.
+      try {
+        setPublishStatus(`Publishing "${title}" to Nostr…`);
+        const signed = await PostListing(
+          valuesToPublish,
           signer,
           isLoggedIn,
           nostr
@@ -277,8 +317,9 @@ export default function ShopifyMigrationModal({
         }
         results.push({
           handle: item.product.handle,
-          title: item.product.title || item.product.handle,
+          title,
           status: "success",
+          warnings: rehostWarnings.length ? rehostWarnings : undefined,
         });
       } catch (err) {
         console.error(
@@ -288,18 +329,25 @@ export default function ShopifyMigrationModal({
         );
         results.push({
           handle: item.product.handle,
-          title: item.product.title || item.product.handle,
+          title,
           status: "error",
           message: err instanceof Error ? err.message : "Unknown error",
+          warnings: rehostWarnings.length ? rehostWarnings : undefined,
         });
+        failures.push(item);
       }
       setPublishProgress(i + 1);
       setPublishResults([...results]);
     }
 
+    setFailedListings(failures);
+    setPublishStatus("");
     setIsPublishing(false);
     setStep("done");
   };
+
+  const startPublish = () => runPublish(productsToReview);
+  const retryFailed = () => runPublish(failedListings);
 
   const cancelPublish = () => {
     cancelRef.current = true;
@@ -386,6 +434,7 @@ export default function ShopifyMigrationModal({
               progress={publishProgress}
               total={publishTotal}
               results={publishResults}
+              status={publishStatus}
             />
           )}
 
@@ -443,9 +492,19 @@ export default function ShopifyMigrationModal({
           )}
 
           {step === "done" && (
-            <Button className={BLUEBUTTONCLASSNAMES} onClick={onClose}>
-              Done
-            </Button>
+            <>
+              {failedListings.length > 0 && (
+                <Button
+                  className={WHITEBUTTONCLASSNAMES}
+                  onClick={() => void retryFailed()}
+                >
+                  Retry {failedListings.length} failed
+                </Button>
+              )}
+              <Button className={BLUEBUTTONCLASSNAMES} onClick={onClose}>
+                Done
+              </Button>
+            </>
           )}
         </ModalFooter>
       </ModalContent>
@@ -847,10 +906,12 @@ function PublishStep({
   progress,
   total,
   results,
+  status,
 }: {
   progress: number;
   total: number;
   results: PublishResult[];
+  status: string;
 }) {
   const value = total === 0 ? 0 : Math.round((progress / total) * 100);
   return (
@@ -864,6 +925,7 @@ function PublishStep({
         value={value}
         classNames={{ indicator: "bg-black" }}
       />
+      {status && <div className="text-xs text-gray-700 italic">{status}</div>}
       <ResultsList results={results} compact />
     </div>
   );
@@ -910,20 +972,28 @@ function ResultsList({
     >
       <ul className="divide-y-2 divide-black">
         {results.map((r, idx) => (
-          <li
-            key={`${r.handle}-${idx}`}
-            className="flex items-center gap-2 px-3 py-2 text-sm"
-          >
-            {r.status === "success" ? (
-              <CheckCircleIcon className="h-4 w-4 flex-shrink-0 text-green-700" />
-            ) : (
-              <XCircleIcon className="h-4 w-4 flex-shrink-0 text-red-700" />
-            )}
-            <span className="flex-1 truncate font-bold text-black">
-              {r.title}
-            </span>
-            {r.message && (
-              <span className="truncate text-xs text-red-700">{r.message}</span>
+          <li key={`${r.handle}-${idx}`} className="px-3 py-2 text-sm">
+            <div className="flex items-center gap-2">
+              {r.status === "success" ? (
+                <CheckCircleIcon className="h-4 w-4 flex-shrink-0 text-green-700" />
+              ) : (
+                <XCircleIcon className="h-4 w-4 flex-shrink-0 text-red-700" />
+              )}
+              <span className="flex-1 truncate font-bold text-black">
+                {r.title}
+              </span>
+              {r.message && (
+                <span className="truncate text-xs text-red-700">
+                  {r.message}
+                </span>
+              )}
+            </div>
+            {!compact && r.warnings && r.warnings.length > 0 && (
+              <ul className="mt-1 list-disc space-y-0.5 pl-7 text-xs text-yellow-800">
+                {r.warnings.map((w, widx) => (
+                  <li key={widx}>{w}</li>
+                ))}
+              </ul>
             )}
           </li>
         ))}

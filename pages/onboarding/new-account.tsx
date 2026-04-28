@@ -24,8 +24,23 @@ const Keys = () => {
   const [passphrase, setPassphrase] = useState<string>("");
   const [showFailureModal, setShowFailureModal] = useState(false);
 
-  const { newSigner } = useContext(SignerContext);
+  const { newSigner, isLoggedIn } = useContext(SignerContext);
   const relaysContext = useContext(RelaysContext);
+
+  // If the user is already signed in (e.g. a returning seller clicks the
+  // "Migrate from Shopify" footer link), skip account creation entirely so we
+  // don't overwrite their existing Nostr key. Send them straight to the stall
+  // page with the import wizard auto-opened.
+  useEffect(() => {
+    if (!router.isReady) return;
+    if (!isLoggedIn) return;
+    const migrate = router.query.migrate as string | undefined;
+    if (migrate === "shopify") {
+      router.replace("/settings/stall?tab=products&migrate=shopify");
+    } else {
+      router.replace("/marketplace");
+    }
+  }, [router, isLoggedIn]);
 
   const saveSigner = (signer: NostrSigner) => {
     if (

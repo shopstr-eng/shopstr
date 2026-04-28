@@ -334,6 +334,11 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
   const watchPicture = watch("picture");
   const defaultImage = "/milk-market.png";
 
+  // Track every settings value driving the form so we can detect when any of
+  // them change after a successful save. The "Saved" confirmation should stay
+  // pinned on the button until the seller actually edits something else.
+  const watchedFormValues = watch();
+
   // Tracks whether relay-context data has been applied so DB pre-load doesn't
   // override more authoritative data that arrived later.
   const contextLoadedRef = useRef(false);
@@ -714,6 +719,88 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
     };
   };
 
+  // Snapshot-based reset for the "Saved" pill: once we successfully save we
+  // capture the current settings on the next render. Any subsequent change to
+  // a tracked field (RHF input, picker, image, checkbox, color, font, page
+  // builder section, etc.) makes the snapshot diverge and flips the button
+  // back to its default "Save" label. We compare via JSON so equal value sets
+  // — including data being re-hydrated from the relay context after our own
+  // save publishes — don't trigger a false negative.
+  const savedSettingsSnapshotRef = useRef<string | null>(null);
+  const settingsSnapshot = useMemo(
+    () =>
+      JSON.stringify({
+        form: watchedFormValues,
+        notificationEmail,
+        freeShippingThreshold,
+        freeShippingCurrency,
+        paymentMethodDiscounts,
+        shopSlug,
+        colorScheme,
+        isCustomColorScheme,
+        productLayout,
+        landingPageStyle,
+        fontHeading,
+        fontBody,
+        customFontHeadingUrl,
+        customFontHeadingName,
+        customFontBodyUrl,
+        customFontBodyName,
+        sections,
+        pages,
+        footer,
+        navLinks,
+        navColors,
+        footerColors,
+        showCommunityPage,
+        showWalletPage,
+        emailPopup,
+        seoMeta,
+      }),
+    [
+      watchedFormValues,
+      notificationEmail,
+      freeShippingThreshold,
+      freeShippingCurrency,
+      paymentMethodDiscounts,
+      shopSlug,
+      colorScheme,
+      isCustomColorScheme,
+      productLayout,
+      landingPageStyle,
+      fontHeading,
+      fontBody,
+      customFontHeadingUrl,
+      customFontHeadingName,
+      customFontBodyUrl,
+      customFontBodyName,
+      sections,
+      pages,
+      footer,
+      navLinks,
+      navColors,
+      footerColors,
+      showCommunityPage,
+      showWalletPage,
+      emailPopup,
+      seoMeta,
+    ]
+  );
+  useEffect(() => {
+    if (!isSaved) {
+      savedSettingsSnapshotRef.current = null;
+      return;
+    }
+    if (savedSettingsSnapshotRef.current === null) {
+      savedSettingsSnapshotRef.current = settingsSnapshot;
+      return;
+    }
+    if (savedSettingsSnapshotRef.current !== settingsSnapshot) {
+      setIsSaved(false);
+      savedSettingsSnapshotRef.current = null;
+    }
+  }, [isSaved, settingsSnapshot]);
+
   const onSubmit = async (data: { [x: string]: string }) => {
     if (!shopSlug || shopSlug.trim() === "") {
       setShopSlugRequired(true);
@@ -838,7 +925,6 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
 
     setIsUploadingShopProfile(false);
     setIsSaved(true);
-    setTimeout(() => setIsSaved(false), 3000);
 
     if (isOnboarding) {
       router.push("/onboarding/stripe-connect");

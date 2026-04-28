@@ -148,7 +148,12 @@ const NWCSection = () => {
         label="Nostr Wallet Connect String"
         placeholder="nostr+walletconnect://..."
         value={nwcString}
-        onValueChange={setNwcString}
+        onValueChange={(v) => {
+          setNwcString(v);
+          // Editing the connection string after saving should revert the
+          // button back to "Save Connection" until the user saves again.
+          if (isSaved) setIsSaved(false);
+        }}
         className="mb-4"
         classNames={{
           label: "text-black",

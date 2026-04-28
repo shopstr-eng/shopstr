@@ -102,6 +102,22 @@ export function buildListingFromShopifyProduct(
     );
   }
 
+  // Warn if the variants span a non-trivial price range — Milk Market
+  // listings carry a single price, so the seller should be aware which one
+  // we picked.
+  const variantPrices = product.variants
+    .map((v) => parseFloat(v.price || ""))
+    .filter((n) => Number.isFinite(n) && n > 0);
+  if (variantPrices.length > 1) {
+    const min = Math.min(...variantPrices);
+    const max = Math.max(...variantPrices);
+    if (max - min > 0.01) {
+      warnings.push(
+        `"${title}": variant prices range from ${min.toFixed(2)} to ${max.toFixed(2)} ${defaultCurrency}; the listing will use ${price.toFixed(2)} ${defaultCurrency}. Edit the listing if you'd prefer a different price.`
+      );
+    }
+  }
+
   const currency = defaultCurrency;
 
   // Map Shopify status to MM status
@@ -181,7 +197,9 @@ export function buildListingFromShopifyProduct(
   // Optional: import original Shopify tags as t-tags too (keep listings searchable)
   extraTags.forEach((t) => tags.push(["t", t]));
 
-  // Quantity / size handling
+  // Quantity / size handling. We only emit a "quantity" tag when there is
+  // real inventory data — Shopify exports for untracked items show as 0,
+  // and emitting "quantity 0" would publish the listing as out of stock.
   if (useSizes) {
     const seenLabels = new Set<string>();
     product.variants.forEach((v) => {
@@ -191,8 +209,9 @@ export function buildListingFromShopifyProduct(
       seenLabels.add(label);
       tags.push(["size", label, String(v.inventoryQuantity || 0)]);
     });
-    // Also publish the aggregate quantity
-    tags.push(["quantity", String(totalInventory)]);
+    if (totalInventory > 0) {
+      tags.push(["quantity", String(totalInventory)]);
+    }
   } else if (totalInventory > 0) {
     tags.push(["quantity", String(totalInventory)]);
   }
