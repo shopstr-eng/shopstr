@@ -90,12 +90,21 @@ const BuyerProfileForm = ({ isOnboarding }: BuyerProfileFormProps) => {
     });
     setIsUploadingProfile(false);
     setIsSaved(true);
-    setTimeout(() => setIsSaved(false), 3000);
 
     if (isOnboarding) {
       router.push("/marketplace");
     }
   };
+
+  // Once the seller has saved, keep the green "Saved" confirmation visible
+  // until they actually edit something else. `type === "change"` filters out
+  // form-state changes from `reset()` and other programmatic updates.
+  useEffect(() => {
+    const subscription = watch((_value, { type }) => {
+      if (type === "change") setIsSaved(false);
+    });
+    return () => subscription.unsubscribe();
+  }, [watch]);
 
   if (isFetchingProfile) {
     return <MilkMarketSpinner />;

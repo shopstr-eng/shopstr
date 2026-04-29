@@ -14,9 +14,12 @@ const OnboardingMarketProfile = () => {
   const isBuyer = type === "buyer";
   const isSeller = type === "seller";
 
+  const migrate = router.query.migrate as string | undefined;
+  const migrateQuery = migrate ? `?migrate=${encodeURIComponent(migrate)}` : "";
+
   const handleNext = () => {
     if (isSeller) {
-      router.push("/onboarding/shop-profile");
+      router.push(`/onboarding/shop-profile${migrateQuery}`);
     } else {
       router.push("/marketplace");
     }

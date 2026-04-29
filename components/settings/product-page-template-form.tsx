@@ -173,7 +173,6 @@ const ProductPageTemplateForm = () => {
       loadedCreatedAtRef.current = Math.floor(Date.now() / 1000);
 
       setIsSaved(true);
-      setTimeout(() => setIsSaved(false), 3000);
     } catch (e: any) {
       setError(e?.message || "Failed to save product page template.");
     } finally {
@@ -198,7 +197,12 @@ const ProductPageTemplateForm = () => {
 
       <ProductPageEditor
         sections={productPageDefaults}
-        onChange={setProductPageDefaults}
+        onChange={(next) => {
+          // Treat any editor-driven change as user input so the saved
+          // confirmation reverts back to the action label.
+          setProductPageDefaults(next);
+          setIsSaved(false);
+        }}
         sellerProducts={sellerProducts}
         shopPubkey={userPubkey || undefined}
         showSizeReadout

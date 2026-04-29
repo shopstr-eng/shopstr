@@ -1,6 +1,5 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import "@testing-library/jest-dom";
-import { motion } from "framer-motion";
 import { Framer } from "../framer";
 import type { Tab } from "@/components/hooks/use-tabs";
 
@@ -10,27 +9,16 @@ jest.mock("framer-motion", () => {
     ...original,
     motion: {
       ...original.motion,
-      div: jest.fn(
-        ({ _initial, _animate, _transition, _variants, children, ...rest }) => (
-          <div {...rest}>{children}</div>
-        )
+      button: jest.fn(
+        ({
+          whileTap: _whileTap,
+          transition: _transition,
+          children,
+          ...rest
+        }) => <button {...rest}>{children}</button>
       ),
     },
   };
-});
-
-beforeAll(() => {
-  Element.prototype.getBoundingClientRect = jest.fn(() => ({
-    width: 100,
-    height: 40,
-    top: 0,
-    left: 0,
-    bottom: 0,
-    right: 0,
-    x: 0,
-    y: 0,
-    toJSON: () => ({}),
-  }));
 });
 
 describe("Framer.Tabs", () => {
@@ -44,7 +32,6 @@ describe("Framer.Tabs", () => {
 
   beforeEach(() => {
     mockSetSelectedTab.mockClear();
-    (motion.div as unknown as jest.Mock).mockClear();
     jest.clearAllMocks();
   });
 
@@ -62,7 +49,7 @@ describe("Framer.Tabs", () => {
     expect(screen.getByText("Tab 3")).toBeInTheDocument();
   });
 
-  it("should apply active styles to the selected tab and inactive styles to others", () => {
+  it("should render every tab with the bold pill-button styling", () => {
     render(
       <Framer.Tabs
         tabs={mockTabs}
@@ -71,11 +58,41 @@ describe("Framer.Tabs", () => {
       />
     );
 
-    const activeTab = screen.getByText("Tab 2");
-    const inactiveTab = screen.getByText("Tab 1");
+    mockTabs.forEach((t) => {
+      const tab = screen.getByText(t.label);
+      // Every tab is a clickable pill button
+      expect(tab).toHaveClass("font-bold");
+      expect(tab).toHaveClass("border-2");
+      expect(tab).toHaveClass("rounded-md");
+    });
+  });
 
-    expect(activeTab).toHaveClass("font-bold");
-    expect(inactiveTab).not.toHaveClass("font-bold");
+  it("should mark only the selected tab with the active highlight color", () => {
+    render(
+      <Framer.Tabs
+        tabs={mockTabs}
+        selectedTabIndex={1}
+        setSelectedTab={mockSetSelectedTab}
+      />
+    );
+
+    expect(screen.getByText("Tab 2")).toHaveClass("bg-primary-yellow");
+    expect(screen.getByText("Tab 1")).toHaveClass("bg-white");
+    expect(screen.getByText("Tab 3")).toHaveClass("bg-white");
+  });
+
+  it("should expose aria-selected so the active tab is announced to assistive tech", () => {
+    render(
+      <Framer.Tabs
+        tabs={mockTabs}
+        selectedTabIndex={2}
+        setSelectedTab={mockSetSelectedTab}
+      />
+    );
+
+    expect(screen.getByText("Tab 3")).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByText("Tab 1")).toHaveAttribute("aria-selected", "false");
+    expect(screen.getByText("Tab 2")).toHaveAttribute("aria-selected", "false");
   });
 
   it("should call setSelectedTab with the correct index and direction when a tab is clicked", () => {
@@ -104,41 +121,5 @@ describe("Framer.Tabs", () => {
     fireEvent.click(screen.getByText("Tab 1"));
     expect(mockSetSelectedTab).toHaveBeenCalledTimes(1);
     expect(mockSetSelectedTab).toHaveBeenCalledWith([0, -1]);
-  });
-
-  it("should render the animated indicator div after positions are calculated", async () => {
-    render(
-      <Framer.Tabs
-        tabs={mockTabs}
-        selectedTabIndex={0}
-        setSelectedTab={mockSetSelectedTab}
-      />
-    );
-
-    await waitFor(() => {
-      const motionDiv = motion.div as unknown as jest.Mock;
-      expect(motionDiv).toHaveBeenCalled();
-    });
-  });
-
-  it("should clean up the resize event listener on unmount", () => {
-    const removeEventListenerSpy = jest.spyOn(window, "removeEventListener");
-
-    const { unmount } = render(
-      <Framer.Tabs
-        tabs={mockTabs}
-        selectedTabIndex={0}
-        setSelectedTab={mockSetSelectedTab}
-      />
-    );
-
-    unmount();
-
-    expect(removeEventListenerSpy).toHaveBeenCalledWith(
-      "resize",
-      expect.any(Function)
-    );
-
-    removeEventListenerSpy.mockRestore();
   });
 });
