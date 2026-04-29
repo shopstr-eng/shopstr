@@ -1,9 +1,13 @@
 const verifyEventMock = jest.fn();
+let relayConnectMock: jest.Mock;
+let relayCloseMock: jest.Mock;
 const fakePoolInstance = {
-  ensureRelay: jest.fn().mockResolvedValue({
-    connect: jest.fn().mockResolvedValue(undefined),
-    close: jest.fn().mockResolvedValue(undefined),
-  }),
+  ensureRelay: jest.fn(() =>
+    Promise.resolve({
+      connect: relayConnectMock,
+      close: relayCloseMock,
+    })
+  ),
   subscribeMap: jest.fn().mockReturnValue({ close: jest.fn() }),
   publish: jest.fn().mockReturnValue([Promise.resolve("ok")]),
 };
@@ -19,6 +23,8 @@ describe("NostrManager", () => {
   beforeEach(async () => {
     jest.resetModules();
     jest.clearAllMocks();
+    relayConnectMock = jest.fn().mockResolvedValue(undefined);
+    relayCloseMock = jest.fn().mockResolvedValue(undefined);
 
     jest.doMock("nostr-tools", () => ({
       SimplePool: FakePool,
@@ -130,6 +136,25 @@ describe("NostrManager", () => {
       await sub.close();
       expect(mgr.relays[0].activeSubs).not.toContain(sub);
     });
+
+    it("awaits reconnect before subscribing on sleeping relays", async () => {
+      let resolveConnect!: () => void;
+      relayConnectMock.mockReturnValueOnce(
+        new Promise<void>((resolve) => {
+          resolveConnect = resolve;
+        })
+      );
+
+      const subscribePromise = mgr.subscribe([], {}, ["u1"]);
+      await Promise.resolve();
+
+      expect(fakePoolInstance.subscribeMap).not.toHaveBeenCalled();
+
+      resolveConnect();
+      await subscribePromise;
+
+      expect(fakePoolInstance.subscribeMap).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe("publish()", () => {
@@ -146,6 +171,25 @@ describe("NostrManager", () => {
 
     it("publishes and resolves", async () => {
       await expect(mgr.publish(evt, ["p1"])).resolves.toBeUndefined();
+
+      expect(fakePoolInstance.publish).toHaveBeenCalledWith(["p1"], evt);
+    });
+
+    it("awaits reconnect before publishing on sleeping relays", async () => {
+      let resolveConnect!: () => void;
+      relayConnectMock.mockReturnValueOnce(
+        new Promise<void>((resolve) => {
+          resolveConnect = resolve;
+        })
+      );
+
+      const publishPromise = mgr.publish(evt, ["p1"]);
+      await Promise.resolve();
+
+      expect(fakePoolInstance.publish).not.toHaveBeenCalled();
+
+      resolveConnect();
+      await publishPromise;
 
       expect(fakePoolInstance.publish).toHaveBeenCalledWith(["p1"], evt);
     });

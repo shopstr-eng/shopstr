@@ -16,9 +16,67 @@ jest.mock("next/router", () => ({
   useRouter: jest.fn(() => ({ push: mockRouterPush })),
 }));
 
-jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
-  createNostrProfileEvent: jest.fn(),
-}));
+jest.mock("@heroui/react", () => ({
+  Button: ({ children, isDisabled, isLoading, onClick, onKeyDown, type }: any) => (
+    <button
+      type={type || "button"}
+      disabled={isDisabled || isLoading}
+      onClick={onClick}
+      onKeyDown={onKeyDown}
+    >
+      {children}
+    </button>
+  ),
+  Input: ({ label, value, onChange, onBlur, type = "text" }: any) => (
+    <label>
+      {label}
+      <input
+        aria-label={label}
+        value={value}
+        onChange={onChange}
+        onBlur={onBlur}
+        type={type}
+      />
+    </label>
+  ),
+  Image: ({ src, alt }: any) => <img src={src} alt={alt} />,
+  Select: ({ label, selectedKeys, onChange, onBlur, children }: any) => (
+    <label>
+      {label}
+      <select
+        aria-label={label}
+        value={selectedKeys?.[0] ?? ""}
+        onChange={onChange}
+        onBlur={onBlur}
+      >
+        {children}
+      </select>
+    </label>
+  ),
+  SelectItem: ({ children, value, ...props }: any) => {
+    const optionLabel = Array.isArray(children) ? children.join("") : children;
+    const optionValue =
+      value ??
+      (typeof optionLabel === "string" && optionLabel.includes("Lightning")
+        ? "lightning"
+        : "ecash");
+
+    return (
+      <option value={optionValue} {...props}>
+        {children}
+      </option>
+    );
+  },
+  Tooltip: ({ children }: any) => <>{children}</>,
+}), { virtual: true });
+
+jest.mock("@/utils/nostr/nostr-helper-functions", () => {
+  const actual = jest.requireActual("@/utils/nostr/nostr-helper-functions");
+  return {
+    ...actual,
+    createNostrProfileEvent: jest.fn(),
+  };
+});
 const mockCreateNostrProfileEvent = createNostrProfileEvent as jest.Mock;
 
 jest.mock("@/components/utility-components/file-uploader", () => ({
@@ -37,6 +95,15 @@ jest.mock("@/components/utility-components/file-uploader", () => ({
 jest.mock("@/components/utility-components/shopstr-spinner", () => () => null);
 
 const mockUserPubkey = "test_pubkey_123";
+const mockSavedProfileEvent = {
+  id: "profile-event-1",
+  pubkey: mockUserPubkey,
+  created_at: 12345,
+  kind: 0,
+  tags: [],
+  content: "{}",
+  sig: "sig",
+};
 const mockProfileData = new Map([
   [
     mockUserPubkey,
@@ -113,7 +180,7 @@ describe("UserProfileForm", () => {
   });
 
   test("submits form data and calls update functions", async () => {
-    mockCreateNostrProfileEvent.mockResolvedValue({});
+    mockCreateNostrProfileEvent.mockResolvedValue(mockSavedProfileEvent);
     const user = userEvent.setup();
     const { mockUpdateProfileData } = renderWithProviders(<UserProfileForm />);
 
@@ -122,12 +189,17 @@ describe("UserProfileForm", () => {
 
     await waitFor(() => {
       expect(mockCreateNostrProfileEvent).toHaveBeenCalledTimes(1);
-      expect(mockUpdateProfileData).toHaveBeenCalledTimes(1);
+      expect(mockUpdateProfileData).toHaveBeenCalledWith(
+        expect.objectContaining({
+          pubkey: mockUserPubkey,
+          created_at: mockSavedProfileEvent.created_at,
+        })
+      );
     });
   });
 
   test("redirects after submission if isOnboarding is true", async () => {
-    mockCreateNostrProfileEvent.mockResolvedValue({});
+    mockCreateNostrProfileEvent.mockResolvedValue(mockSavedProfileEvent);
     const user = userEvent.setup();
     renderWithProviders(<UserProfileForm isOnboarding={true} />);
 
@@ -169,23 +241,15 @@ describe("UserProfileForm", () => {
   });
 
   test("updates payment preference and shopstr donation", async () => {
-    mockCreateNostrProfileEvent.mockResolvedValue({});
+    mockCreateNostrProfileEvent.mockResolvedValue(mockSavedProfileEvent);
     const user = userEvent.setup();
     renderWithProviders(<UserProfileForm />);
     await screen.findByLabelText("Display name");
 
-    const paymentSelect = screen.getByRole("button", {
-      name: /Payment preference \(for sellers\)/i,
-    });
-    await user.click(paymentSelect);
-    const lightningOption = await screen.findByRole("option", {
-      name: "Lightning (Bitcoin)",
-    });
-    await user.click(lightningOption);
-
-    await waitFor(() => {
-      expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
-    });
+    const paymentSelect = screen.getByLabelText(
+      /Payment preference \(for sellers\)/i
+    );
+    await user.selectOptions(paymentSelect, "lightning");
 
     const donationInput = screen.getByLabelText(/Shopstr donation %/);
     await user.clear(donationInput);
