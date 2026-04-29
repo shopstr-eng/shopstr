@@ -193,14 +193,28 @@ export class NostrManager {
       const onEose = params.oneose;
       const fetchedEvents: Array<NostrEvent> = [];
       let sub: NostrSub | undefined;
-      const cleanup = () => {
-        signal?.removeEventListener("abort", onAbort);
+
+      // Ensure abort handler closes subscription and resolves only after close completes
+      const onAbort = async () => {
+        try {
+          if (sub) {
+            await sub.close().catch((e) => {
+              console.error("Error closing sub on abort:", e);
+            });
+          }
+        } catch (e) {
+          console.error("Unexpected error during onAbort close:", e);
+        }
+        cleanup();
+        resolve(fetchedEvents);
       };
 
-      const onAbort = () => {
-        cleanup();
-        sub?.close();
-        resolve(fetchedEvents);
+      const cleanup = () => {
+        try {
+          signal?.removeEventListener("abort", onAbort as EventListener);
+        } catch (e) {
+          // ignore
+        }
       };
 
       signal?.addEventListener("abort", onAbort, { once: true });
@@ -210,18 +224,37 @@ export class NostrManager {
         return onEvent!(event);
       };
 
-      params.oneose = () => {
+      params.oneose = async () => {
+        try {
+          if (sub) {
+            await sub.close().catch((e) => {
+              console.error("Error closing sub on eose:", e);
+            });
+          }
+        } catch (e) {
+          console.error("Unexpected error during oneose close:", e);
+        }
         cleanup();
-        sub!.close();
         resolve(fetchedEvents);
         return onEose!();
       };
 
-      sub = await this.subscribe(filters, params, relayUrls);
+      try {
+        sub = await this.subscribe(filters, params, relayUrls);
+      } catch (err) {
+        // If subscribe fails, ensure we remove abort listener and resolve deterministically
+        cleanup();
+        resolve(fetchedEvents);
+        return;
+      }
 
       if (signal?.aborted) {
         cleanup();
-        await sub.close();
+        try {
+          if (sub) await sub.close().catch((e) => console.error(e));
+        } catch (e) {
+          console.error(e);
+        }
         resolve(fetchedEvents);
       }
     });

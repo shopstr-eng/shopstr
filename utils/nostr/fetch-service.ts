@@ -55,7 +55,16 @@ function isHexString(value: string): boolean {
 }
 
 function isAbortError(error: unknown): boolean {
-  return error instanceof Error && error.name === "AbortError";
+  try {
+    return (
+      typeof error === "object" &&
+      error !== null &&
+      // Some runtimes throw DOMException-like objects
+      ("name" in (error as any) && (error as any).name === "AbortError")
+    );
+  } catch {
+    return false;
+  }
 }
 
 export const fetchAllPosts = async (
@@ -73,13 +82,16 @@ export const fetchAllPosts = async (
       const profileSetFromProducts: Set<string> = new Set();
       const dbProductsMap = new Map<string, NostrEvent>();
 
-      if (signal?.aborted) {
+      const resolveIfAborted = (): boolean => {
+        if (!signal?.aborted) return false;
         resolve({
-          productEvents: [],
+          productEvents: Array.from(dbProductsMap.values()),
           profileSetFromProducts,
         });
-        return;
-      }
+        return true;
+      };
+
+      if (resolveIfAborted()) return;
 
       const getEventKey = (event: NostrEvent): string => {
         if (event.kind === 30402) {
@@ -118,25 +130,20 @@ export const fetchAllPosts = async (
           if (batch.length < BATCH_SIZE) break;
           offset += BATCH_SIZE;
         } catch (error) {
-          if (isAbortError(error) || signal?.aborted) {
+          if (isAbortError(error)) {
             resolve({
               productEvents: Array.from(dbProductsMap.values()),
               profileSetFromProducts,
             });
             return;
           }
+          if (resolveIfAborted()) return;
           console.error("Failed to fetch products batch from database:", error);
           break;
         }
       }
 
-      if (signal?.aborted) {
-        resolve({
-          productEvents: Array.from(dbProductsMap.values()),
-          profileSetFromProducts,
-        });
-        return;
-      }
+      if (resolveIfAborted()) return;
 
       const filter: Filter = {
         kinds: [30402],
@@ -147,27 +154,13 @@ export const fetchAllPosts = async (
         "#t": ["shopstr-zapsnag", "zapsnag"],
       };
 
-      if (signal?.aborted) {
-        resolve({
-          productEvents: Array.from(dbProductsMap.values()),
-          profileSetFromProducts,
-        });
-        return;
-      }
-
       const fetchedEvents = await nostr.fetch(
         [filter, zapsnagFilter],
         {},
         relays,
         signal
       );
-      if (signal?.aborted) {
-        resolve({
-          productEvents: Array.from(dbProductsMap.values()),
-          profileSetFromProducts,
-        });
-        return;
-      }
+      if (resolveIfAborted()) return;
       if (!fetchedEvents.length) {
         console.error("No products found with filter: ", filter);
       }
@@ -184,13 +177,7 @@ export const fetchAllPosts = async (
 
       // Merge relay events on top of the accumulated DB products
       for (const event of fetchedEvents) {
-        if (signal?.aborted) {
-          resolve({
-            productEvents: Array.from(dbProductsMap.values()),
-            profileSetFromProducts,
-          });
-          return;
-        }
+        if (resolveIfAborted()) return;
         if (!event || !event.id) continue;
         const key = getEventKey(event);
         const existing = dbProductsMap.get(key);
