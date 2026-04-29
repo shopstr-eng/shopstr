@@ -8,6 +8,10 @@ import parseTags, {
 } from "@/utils/parsers/product-parser-functions";
 import { nip19 } from "nostr-tools";
 import {
+  eventMatchesListingIdentifier,
+  getListingRouteIdentifier,
+} from "@/utils/listing-identifiers";
+import {
   findProductBySlug,
   getListingSlug,
   isNpub,
@@ -47,7 +51,7 @@ const getMetaTags = (
   };
 
   if (pathname.startsWith("/listing/")) {
-    const productId = query.productId?.[0];
+    const productId = getListingRouteIdentifier(query.productId);
     if (!productId) return defaultTags;
 
     const allParsed = productEvents
@@ -60,26 +64,9 @@ const getMetaTags = (
     productData = findProductBySlug(productId, allParsed);
 
     if (!productData) {
-      const product = productEvents.find((event) => {
-        const naddrMatch = (() => {
-          try {
-            return (
-              nip19.naddrEncode({
-                identifier:
-                  event.tags.find((tag: string[]) => tag[0] === "d")?.[1] || "",
-                pubkey: event.pubkey,
-                kind: event.kind,
-              }) === productId
-            );
-          } catch {
-            return false;
-          }
-        })();
-        const dTagMatch =
-          event.tags.find((tag: string[]) => tag[0] === "d")?.[1] === productId;
-        const idMatch = event.id === productId;
-        return naddrMatch || dTagMatch || idMatch;
-      });
+      const product = productEvents.find((event) =>
+        eventMatchesListingIdentifier(event, productId)
+      );
       if (product) {
         productData = parseTags(product);
       }
