@@ -12,6 +12,7 @@ import {
 import { recordRequest } from "@/utils/mcp/metrics";
 import { registerWriteTools } from "@/mcp/tools/write-tools";
 import { applyRateLimit } from "@/utils/rate-limit";
+import { wrapWithAudit } from "@/mcp/audit-log";
 
 // MCP protocol entry — high per-IP cap for legitimate session traffic, with
 // a tighter per-key cap so a single compromised credential cannot exhaust
@@ -45,6 +46,14 @@ function registerPurchaseTools(
   token: string
 ) {
   const baseUrl = `http://localhost:${process.env.PORT || 5000}`;
+  const auditContext = { apiKeyId: apiKey.id, pubkey: apiKey.pubkey };
+  const reg = (name: string, description: string, schema: any, cb: any) =>
+    server.tool(
+      name,
+      description,
+      schema,
+      wrapWithAudit(name, cb, auditContext) as any
+    );
 
   function permissionError() {
     return {
@@ -61,7 +70,7 @@ function registerPurchaseTools(
     };
   }
 
-  server.tool(
+  reg(
     "create_order",
     "Place an order for a product. Supports Bitcoin payment methods: lightning (Bitcoin Lightning invoice) or cashu (ecash tokens). Supports selecting product specifications (size, volume, weight, bulk bundle) and providing a shipping address. Requires read_write API key permission.",
     {
@@ -195,7 +204,7 @@ function registerPurchaseTools(
     }
   );
 
-  server.tool(
+  reg(
     "get_order_status",
     "Check the status of an existing order. Requires read_write API key permission.",
     {
@@ -248,7 +257,7 @@ function registerPurchaseTools(
     }
   );
 
-  server.tool(
+  reg(
     "list_orders",
     "List your orders. Requires read_write API key permission.",
     {
@@ -310,7 +319,7 @@ function registerPurchaseTools(
     }
   );
 
-  server.tool(
+  reg(
     "verify_payment",
     "Verify the payment status of a Lightning invoice for an order. Use after paying a Lightning invoice to confirm the order. Requires read_write API key permission.",
     {
@@ -366,7 +375,7 @@ function registerPurchaseTools(
     }
   );
 
-  server.tool(
+  reg(
     "get_payment_methods",
     "Get available payment methods for a specific seller. Shows which Bitcoin payment options (lightning, cashu) the seller accepts, along with any payment method discounts.",
     {
@@ -470,7 +479,7 @@ function registerPurchaseTools(
       }
     }
   );
-  server.tool(
+  reg(
     "get_notifications",
     "Check for new activity: unread message count, recent orders as buyer, and recent orders as seller. Use this to detect new inquiries, order updates, and address changes that need attention.",
     {
@@ -567,7 +576,7 @@ function registerPurchaseTools(
     }
   );
 
-  server.tool(
+  reg(
     "list_seller_orders",
     "List orders where you are the seller. Shows incoming purchases from buyers with payment status, order status, quantities, and shipping addresses.",
     {
@@ -728,7 +737,10 @@ export default async function handler(
         },
       });
 
-      const server = createMcpServer();
+      const server = createMcpServer({
+        apiKeyId: apiKey.id,
+        pubkey: apiKey.pubkey,
+      });
       registerPurchaseTools(server, apiKey, token);
       if (apiKey.permissions === "full_access") {
         registerWriteTools(server, apiKey);

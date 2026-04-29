@@ -1,11 +1,13 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { ToolContext, wrapWithAudit } from "../audit-log";
 
 export function registerTool(
   server: McpServer,
   name: string,
   description: string,
   inputSchema: any,
-  cb: (args: any, extra: any) => any
+  cb: (args: any, extra: any) => any,
+  context?: ToolContext
 ) {
   return server.registerTool(
     name,
@@ -13,6 +15,6 @@ export function registerTool(
       description,
       inputSchema: inputSchema as any,
     },
-    cb as any
+    wrapWithAudit(name, cb, context) as any
   );
 }
