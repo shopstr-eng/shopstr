@@ -1,5 +1,6 @@
 import { useState, useEffect, useContext } from "react";
 import { deleteEvent } from "@/utils/nostr/nostr-helper-functions";
+import { productSatisfiesAllFilters } from "@/utils/search/listing-filters";
 import { NostrEvent } from "../utils/types/types";
 import { ProductContext, FollowsContext } from "../utils/context/context";
 import ProductCard from "./utility-components/product-card";
@@ -17,7 +18,6 @@ import {
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
 import { getListingSlug } from "@/utils/url-slugs";
-import { productSatisfiesAllFilters } from "@/utils/parsers/product-filter-helpers";
 
 const DisplayProducts = ({
   focusedPubkey,
@@ -148,8 +148,9 @@ const DisplayProducts = ({
           selectedLocation,
           selectedSearch,
         })
-      )
+      ) {
         return false;
+      }
       if (!product.currency) return false;
       if (product.images.length === 0) return false;
       if (product.contentWarning) return false;
