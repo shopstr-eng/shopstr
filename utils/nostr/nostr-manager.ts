@@ -168,11 +168,17 @@ export class NostrManager {
   public async fetch(
     filters: NostrFilter[],
     params?: SubscribeManyParams,
-    relayUrls?: string[]
+    relayUrls?: string[],
+    signal?: AbortSignal
   ): Promise<NostrEvent[]> {
     return await newPromiseWithTimeout(async (resolve, _reject) => {
       if (!params) {
         params = {};
+      }
+
+      if (signal?.aborted) {
+        resolve([]);
+        return;
       }
 
       if (!params.onevent) {
@@ -186,6 +192,18 @@ export class NostrManager {
       const onEvent = params.onevent;
       const onEose = params.oneose;
       const fetchedEvents: Array<NostrEvent> = [];
+      let sub: NostrSub | undefined;
+      const cleanup = () => {
+        signal?.removeEventListener("abort", onAbort);
+      };
+
+      const onAbort = () => {
+        cleanup();
+        sub?.close();
+        resolve(fetchedEvents);
+      };
+
+      signal?.addEventListener("abort", onAbort, { once: true });
 
       params.onevent = (event: NostrEvent) => {
         fetchedEvents.push(event);
@@ -193,12 +211,19 @@ export class NostrManager {
       };
 
       params.oneose = () => {
+        cleanup();
         sub!.close();
         resolve(fetchedEvents);
         return onEose!();
       };
 
-      const sub = await this.subscribe(filters, params, relayUrls);
+      sub = await this.subscribe(filters, params, relayUrls);
+
+      if (signal?.aborted) {
+        cleanup();
+        await sub.close();
+        resolve(fetchedEvents);
+      }
     });
   }
 

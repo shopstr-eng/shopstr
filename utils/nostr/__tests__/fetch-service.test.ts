@@ -90,3 +90,121 @@ describe("fetchProfile", () => {
     expect(cacheEventsToDatabase).not.toHaveBeenCalled();
   });
 });
+
+describe("fetchAllPosts", () => {
+  beforeEach(() => {
+    jest.resetModules();
+    jest.clearAllMocks();
+  });
+
+  it("stops loading products when aborted before the first DB batch resolves", async () => {
+    const cacheEventsToDatabase = jest.fn();
+
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase,
+    }));
+
+    const { fetchAllPosts } = await import("../fetch-service");
+
+    const editProductContext = jest.fn();
+    const nostr = {
+      fetch: jest.fn(),
+    } as any;
+
+    global.fetch = jest.fn((_, init) => {
+      return new Promise((_, reject) => {
+        const abortError = Object.assign(new Error("Aborted"), {
+          name: "AbortError",
+        });
+
+        if (init && typeof (init as RequestInit).signal?.addEventListener === "function") {
+          const signal = (init as RequestInit).signal as AbortSignal;
+          if (signal.aborted) {
+            reject(abortError);
+            return;
+          }
+          signal.addEventListener(
+            "abort",
+            () => {
+              reject(abortError);
+            },
+            { once: true }
+          );
+        }
+      });
+    }) as typeof global.fetch;
+
+    const abortController = new AbortController();
+    const promise = fetchAllPosts(
+      nostr,
+      ["wss://relay.example"],
+      editProductContext,
+      abortController.signal
+    );
+
+    abortController.abort();
+
+    await expect(promise).resolves.toEqual({
+      productEvents: [],
+      profileSetFromProducts: expect.any(Set),
+    });
+
+    expect(editProductContext).not.toHaveBeenCalled();
+    expect(nostr.fetch).not.toHaveBeenCalled();
+    expect(cacheEventsToDatabase).not.toHaveBeenCalled();
+  });
+
+  it("passes the abort signal through to the relay fetch stage", async () => {
+    const cacheEventsToDatabase = jest.fn();
+
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase,
+    }));
+
+    const { fetchAllPosts } = await import("../fetch-service");
+
+    const editProductContext = jest.fn();
+    let observedSignal: AbortSignal | undefined;
+    const nostr = {
+      fetch: jest.fn((_filters, _params, _relays, signal) => {
+        observedSignal = signal;
+        return new Promise((resolve) => {
+          signal?.addEventListener(
+            "abort",
+            () => {
+              resolve([]);
+            },
+            { once: true }
+          );
+        });
+      }),
+    } as any;
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [],
+    }) as typeof global.fetch;
+
+    const abortController = new AbortController();
+    const promise = fetchAllPosts(
+      nostr,
+      ["wss://relay.example"],
+      editProductContext,
+      abortController.signal
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(nostr.fetch).toHaveBeenCalledTimes(1);
+    expect(observedSignal).toBe(abortController.signal);
+
+    abortController.abort();
+
+    await expect(promise).resolves.toEqual({
+      productEvents: [],
+      profileSetFromProducts: expect.any(Set),
+    });
+
+    expect(editProductContext).not.toHaveBeenCalled();
+    expect(cacheEventsToDatabase).not.toHaveBeenCalled();
+  });
+});

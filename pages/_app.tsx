@@ -485,6 +485,8 @@ function Shopstr({ props }: { props: AppProps }) {
 
   /** FETCH initial FOLLOWS, RELAYS, PRODUCTS, and PROFILES **/
   useEffect(() => {
+    const abortController = new AbortController();
+
     async function fetchData() {
       const runId = ++initializationRunRef.current;
       const isCurrentRun = () => runId === initializationRunRef.current;
@@ -657,7 +659,13 @@ function Shopstr({ props }: { props: AppProps }) {
 
         const productsPromise = runTask(
           "fetching products",
-          () => fetchAllPosts(nostr!, allRelays, guardedEditProductContext),
+          () =>
+            fetchAllPosts(
+              nostr!,
+              allRelays,
+              guardedEditProductContext,
+              abortController.signal
+            ),
           () => guardedEditProductContext(null, false)
         );
 
@@ -800,6 +808,10 @@ function Shopstr({ props }: { props: AppProps }) {
     }
 
     fetchData();
+
+    return () => {
+      abortController.abort();
+    };
   }, [nostr, signer, isLoggedIn]);
 
   useEffect(() => {
