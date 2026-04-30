@@ -54,10 +54,24 @@ function isHexString(value: string): boolean {
   return /^[0-9a-fA-F]{64}$/.test(value);
 }
 
+function isAbortError(error: unknown): boolean {
+  try {
+    return (
+      typeof error === "object" &&
+      error !== null &&
+      // Some runtimes throw DOMException-like objects
+      ("name" in (error as any) && (error as any).name === "AbortError")
+    );
+  } catch {
+    return false;
+  }
+}
+
 export const fetchAllPosts = async (
   nostr: NostrManager,
   relays: string[],
-  editProductContext: (productEvents: NostrEvent[], isLoading: boolean) => void
+  editProductContext: (productEvents: NostrEvent[], isLoading: boolean) => void,
+  signal?: AbortSignal
 ): Promise<{
   productEvents: NostrEvent[];
   profileSetFromProducts: Set<string>;
@@ -67,6 +81,17 @@ export const fetchAllPosts = async (
       const BATCH_SIZE = 500;
       const profileSetFromProducts: Set<string> = new Set();
       const dbProductsMap = new Map<string, NostrEvent>();
+
+      const resolveIfAborted = (): boolean => {
+        if (!signal?.aborted) return false;
+        resolve({
+          productEvents: Array.from(dbProductsMap.values()),
+          profileSetFromProducts,
+        });
+        return true;
+      };
+
+      if (resolveIfAborted()) return;
 
       const getEventKey = (event: NostrEvent): string => {
         if (event.kind === 30402) {
@@ -82,7 +107,8 @@ export const fetchAllPosts = async (
       while (keepFetching) {
         try {
           const response = await fetch(
-            `/api/db/fetch-products?limit=${BATCH_SIZE}&offset=${offset}`
+            `/api/db/fetch-products?limit=${BATCH_SIZE}&offset=${offset}`,
+            signal ? { signal } : undefined
           );
           if (!response.ok) break;
           const batch: NostrEvent[] = await response.json();
@@ -104,10 +130,20 @@ export const fetchAllPosts = async (
           if (batch.length < BATCH_SIZE) break;
           offset += BATCH_SIZE;
         } catch (error) {
+          if (isAbortError(error)) {
+            resolve({
+              productEvents: Array.from(dbProductsMap.values()),
+              profileSetFromProducts,
+            });
+            return;
+          }
+          if (resolveIfAborted()) return;
           console.error("Failed to fetch products batch from database:", error);
           break;
         }
       }
+
+      if (resolveIfAborted()) return;
 
       const filter: Filter = {
         kinds: [30402],
@@ -121,8 +157,10 @@ export const fetchAllPosts = async (
       const fetchedEvents = await nostr.fetch(
         [filter, zapsnagFilter],
         {},
-        relays
+        relays,
+        signal
       );
+      if (resolveIfAborted()) return;
       if (!fetchedEvents.length) {
         console.error("No products found with filter: ", filter);
       }
@@ -139,6 +177,7 @@ export const fetchAllPosts = async (
 
       // Merge relay events on top of the accumulated DB products
       for (const event of fetchedEvents) {
+        if (resolveIfAborted()) return;
         if (!event || !event.id) continue;
         const key = getEventKey(event);
         const existing = dbProductsMap.get(key);
