@@ -9,11 +9,27 @@ export interface AuditEntry {
   pubkey?: string;
   params: Record<string, unknown>;
   durationMs: number;
-  isError: boolean;
+  status: "success" | "error";
+  error?: string | null;
+  resultCount?: number;
   timestamp: string;
 }
 
+type MaybePromise<T> = T | Promise<T>;
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type ToolCb = (
+  args: any,
+  extra: any
+) => MaybePromise<{
+  content: unknown[];
+  isError?: boolean;
+  resultCount?: number;
+}>;
+
 const REDACTED = "[REDACTED]";
+const MAX_STRING_LENGTH = 200;
+
 const SENSITIVE_KEYS = new Set([
   "nsec",
   "password",
@@ -23,34 +39,63 @@ const SENSITIVE_KEYS = new Set([
   "apiKey",
 ]);
 
+function truncateString(s: string): string {
+  return s.length > MAX_STRING_LENGTH
+    ? `${s.slice(0, MAX_STRING_LENGTH)}...[truncated]`
+    : s;
+}
+
 export function sanitizeParams(
-  params: Record<string, unknown>
+  params: Record<string, unknown>,
+  depth = 0
 ): Record<string, unknown> {
+  if (depth >= 4) return { _depth_limit: true };
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(params)) {
-    out[k] = SENSITIVE_KEYS.has(k) ? REDACTED : v;
+    if (SENSITIVE_KEYS.has(k)) {
+      out[k] = REDACTED;
+    } else if (v !== null && typeof v === "object" && !Array.isArray(v)) {
+      out[k] = sanitizeParams(v as Record<string, unknown>, depth + 1);
+    } else if (Array.isArray(v)) {
+      out[k] = v.map((item) =>
+        item !== null && typeof item === "object" && !Array.isArray(item)
+          ? sanitizeParams(item as Record<string, unknown>, depth + 1)
+          : typeof item === "string"
+            ? truncateString(item)
+            : item
+      );
+    } else if (typeof v === "string") {
+      out[k] = truncateString(v);
+    } else {
+      out[k] = v;
+    }
   }
   return out;
 }
 
 export function logToolCall(entry: AuditEntry): void {
-  console.log(JSON.stringify({ level: "audit", ...entry }));
+  console.error(JSON.stringify({ level: "audit", ...entry }));
 }
 
 export function wrapWithAudit(
   toolName: string,
-  cb: (args: any, extra: any) => any,
+  cb: ToolCb,
   context?: ToolContext
-): (args: any, extra: any) => any {
+): ToolCb {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return async (args: any, extra: any) => {
     const start = Date.now();
-    let isError = false;
+    let status: "success" | "error" = "success";
+    let errorMessage: string | null = null;
+    let resultCount: number | undefined;
     try {
       const result = await cb(args, extra);
-      isError = result?.isError === true;
+      if (result?.isError === true) status = "error";
+      if (result?.resultCount !== undefined) resultCount = result.resultCount;
       return result;
     } catch (err) {
-      isError = true;
+      status = "error";
+      errorMessage = err instanceof Error ? err.message : String(err);
       throw err;
     } finally {
       logToolCall({
@@ -59,7 +104,9 @@ export function wrapWithAudit(
         ...(context?.pubkey !== undefined && { pubkey: context.pubkey }),
         params: sanitizeParams(args ?? {}),
         durationMs: Date.now() - start,
-        isError,
+        status,
+        ...(errorMessage !== null && { error: errorMessage }),
+        ...(resultCount !== undefined && { resultCount }),
         timestamp: new Date().toISOString(),
       });
     }
