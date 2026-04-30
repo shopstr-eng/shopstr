@@ -67,7 +67,7 @@ const MyListingsPage = () => {
 
   const handleViewOrders = () => {
     if (usersPubkey) {
-      router.push("/orders");
+      router.push("/my-listings/orders");
     } else {
       onOpen();
     }

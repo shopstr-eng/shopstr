@@ -115,7 +115,13 @@ interface OrderData {
   returnRequestType?: string;
 }
 
-const OrdersDashboard = () => {
+const OrdersDashboard = ({
+  sellerOnly = false,
+  buyerOnly = false,
+}: {
+  sellerOnly?: boolean;
+  buyerOnly?: boolean;
+}) => {
   const chatsContext = useContext(ChatsContext);
   const productContext = useContext(ProductContext);
   const [orders, setOrders] = useState<OrderData[]>([]);
@@ -663,8 +669,14 @@ const OrdersDashboard = () => {
         }
       }
 
-      setOrders(consolidatedOrders);
-      setTotalOrders(consolidatedOrders.length);
+      const finalOrders = sellerOnly
+        ? consolidatedOrders.filter((o) => o.isSale)
+        : buyerOnly
+          ? consolidatedOrders.filter((o) => !o.isSale)
+          : consolidatedOrders;
+
+      setOrders(finalOrders);
+      setTotalOrders(finalOrders.length);
       setIsLoading(false);
 
       const statusPriorityForPersist: Record<string, number> = {
@@ -1343,7 +1355,11 @@ const OrdersDashboard = () => {
       <div className="mx-auto w-full max-w-full min-w-0">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
           <h1 className="text-light-text dark:text-dark-text text-3xl font-bold">
-            Orders Dashboard
+            {sellerOnly
+              ? "Seller Orders Dashboard"
+              : buyerOnly
+                ? "My Purchases"
+                : "Orders Dashboard"}
           </h1>
           <div className="flex items-center gap-3">
             <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
@@ -1374,10 +1390,12 @@ const OrdersDashboard = () => {
           </div>
         </div>
 
-        <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-3">
+        <div
+          className={`mb-8 grid grid-cols-1 gap-6 ${sellerOnly ? "md:grid-cols-4" : "md:grid-cols-3"}`}
+        >
           <div className="rounded-lg bg-white p-6 shadow-md dark:bg-gray-800">
             <h3 className="mb-2 text-sm font-medium text-gray-600 dark:text-gray-400">
-              Total Orders
+              {sellerOnly ? "Total Sales" : "Total Orders"}
             </h3>
             <p className="text-light-text dark:text-dark-text text-3xl font-bold">
               {totalOrders}
@@ -1386,7 +1404,7 @@ const OrdersDashboard = () => {
 
           <div className="rounded-lg bg-white p-6 shadow-md dark:bg-gray-800">
             <h3 className="mb-2 text-sm font-medium text-gray-600 dark:text-gray-400">
-              Total GMV
+              {sellerOnly ? "Total Revenue" : "Total GMV"}
             </h3>
             <p className="text-light-text dark:text-dark-text text-3xl font-bold">
               {displayCurrency === "sats"
@@ -1411,6 +1429,27 @@ const OrdersDashboard = () => {
                   })}`}
             </p>
           </div>
+
+          {sellerOnly && (
+            <div className="rounded-lg bg-white p-6 shadow-md dark:bg-gray-800">
+              <h3 className="mb-2 text-sm font-medium text-gray-600 dark:text-gray-400">
+                Top Product
+              </h3>
+              <p className="text-light-text dark:text-dark-text truncate text-xl font-bold">
+                {(() => {
+                  const counts: Record<string, number> = {};
+                  orders.forEach((o) => {
+                    const title = o.productTitle || "Unknown";
+                    counts[title] = (counts[title] || 0) + 1;
+                  });
+                  const top = Object.entries(counts).sort(
+                    (a, b) => b[1] - a[1]
+                  )[0];
+                  return top ? `${top[0]} (×${top[1]})` : "—";
+                })()}
+              </p>
+            </div>
+          )}
         </div>
 
         {orders.length > 0 && (
@@ -1429,11 +1468,13 @@ const OrdersDashboard = () => {
                   <th className="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-600 uppercase dark:text-gray-400">
                     Order ID
                   </th>
+                  {!sellerOnly && (
+                    <th className="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-600 uppercase dark:text-gray-400">
+                      Type
+                    </th>
+                  )}
                   <th className="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-600 uppercase dark:text-gray-400">
-                    Type
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-600 uppercase dark:text-gray-400">
-                    Buyer/Seller
+                    {sellerOnly ? "Customer" : "Buyer/Seller"}
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-600 uppercase dark:text-gray-400">
                     Amount
@@ -1519,17 +1560,19 @@ const OrdersDashboard = () => {
                             ) : null}
                           </div>
                         </td>
-                        <td className="px-4 py-4 text-sm whitespace-nowrap">
-                          <span
-                            className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
-                              order.isSale
-                                ? "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200"
-                                : "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200"
-                            }`}
-                          >
-                            {order.isSale ? "Sale" : "Purchase"}
-                          </span>
-                        </td>
+                        {!sellerOnly && (
+                          <td className="px-4 py-4 text-sm whitespace-nowrap">
+                            <span
+                              className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
+                                order.isSale
+                                  ? "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200"
+                                  : "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200"
+                              }`}
+                            >
+                              {order.isSale ? "Sale" : "Purchase"}
+                            </span>
+                          </td>
+                        )}
                         <td className="px-4 py-4 text-sm">
                           {(() => {
                             const displayPubkey = order.isSale

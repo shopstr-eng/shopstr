@@ -15,7 +15,7 @@ const MessageFeed = ({ isInquiry = false }) => {
     tabs: [
       {
         label: "Orders",
-        children: <OrdersDashboard />,
+        children: <OrdersDashboard buyerOnly />,
         id: "orders",
       },
       {
