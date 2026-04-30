@@ -2,6 +2,7 @@ import { ShippingOptionsType } from "@/utils/STATIC-VARIABLES";
 import { calculateTotalCost } from "@/components/utility-components/display-monetary-info";
 import { parseShippingTag } from "@/utils/parsers/product-tag-helpers";
 import { NostrEvent } from "@/utils/types/types";
+import { normalizeProductImageUrls } from "@/utils/images";
 
 export type ProductData = {
   id: string;
@@ -186,6 +187,7 @@ export const parseTags = (productEvent: NostrEvent) => {
         return;
     }
   });
+  parsedData.images = normalizeProductImageUrls(parsedData.images);
   parsedData.totalCost = calculateTotalCost(parsedData);
   return parsedData;
 };
