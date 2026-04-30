@@ -212,8 +212,8 @@ export class NostrManager {
       const cleanup = () => {
         try {
           signal?.removeEventListener("abort", onAbort as EventListener);
-        } catch (e) {
-          // ignore
+        } catch {
+          // ignore cleanup failures
         }
       };
 
@@ -241,10 +241,13 @@ export class NostrManager {
 
       try {
         sub = await this.subscribe(filters, params, relayUrls);
-      } catch (err) {
-        // If subscribe fails, ensure we remove abort listener and resolve deterministically
+      } catch (error) {
         cleanup();
-        resolve(fetchedEvents);
+        if (signal?.aborted) {
+          resolve(fetchedEvents);
+          return;
+        }
+        reject(error);
         return;
       }
 
