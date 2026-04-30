@@ -114,15 +114,21 @@ export const ChatsContext = createContext({
 } as ChatsContextInterface);
 
 export interface FollowsContextInterface {
+  directFollowList: string[];
   followList: string[];
   firstDegreeFollowsLength: number;
   isLoading: boolean;
+  addFollow: (pubkey: string) => Promise<boolean>;
+  removeFollow: (pubkey: string) => Promise<boolean>;
 }
 
 export const FollowsContext = createContext({
+  directFollowList: [],
   followList: [],
   firstDegreeFollowsLength: 0,
   isLoading: true,
+  addFollow: async (_pubkey: string) => false,
+  removeFollow: async (_pubkey: string) => false,
 } as FollowsContextInterface);
 
 export interface RelaysContextInterface {
