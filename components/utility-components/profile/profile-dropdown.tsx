@@ -1,6 +1,5 @@
 import { LogOut } from "@/utils/nostr/nostr-helper-functions";
 import {
-  FollowsContext,
   ProfileMapContext,
   ShopMapContext,
 } from "@/utils/context/context";
@@ -13,7 +12,6 @@ import {
   User,
   Spinner,
   useDisclosure,
-  addToast,
 } from "@heroui/react";
 import { nip19 } from "nostr-tools";
 import { useContext, useEffect, useState } from "react";
@@ -34,6 +32,7 @@ import { useRouter } from "next/router";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import SignInModal from "../../sign-in/SignInModal";
 import { ProfileData } from "@/utils/types/types";
+import { useFollowToggle } from "@/components/hooks/use-follow-toggle";
 
 type DropDownKeys =
   | "shop"
@@ -104,11 +103,8 @@ export const ProfileWithDropdown = ({
   >(null);
   const [isNPubCopied, setIsNPubCopied] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const [isFollowLoading, setIsFollowLoading] = useState(false);
   const profileContext = useContext(ProfileMapContext);
   const shopMapContext = useContext(ShopMapContext);
-  const followsContext = useContext(FollowsContext);
-  const isFollowing = followsContext.directFollowList.includes(pubkey);
   const npub = pubkey ? nip19.npubEncode(pubkey) : "";
   const router = useRouter();
   const { isLoggedIn } = useContext(SignerContext);
@@ -120,35 +116,17 @@ export const ProfileWithDropdown = ({
 
   const handleDropdownAction = (action: () => void | Promise<void>) => {
     closeDropdown();
-    action();
+    void action();
   };
 
-  const handleFollowPress = async () => {
-    if (!isLoggedIn) {
-      closeDropdown();
-      onOpen();
-      return;
-    }
-
-    setIsFollowLoading(true);
-    try {
-      const success = isFollowing
-        ? await followsContext.removeFollow(pubkey)
-        : await followsContext.addFollow(pubkey);
-
-      if (success) {
-        addToast({
-          title: isFollowing ? "Unfollowed merchant" : "Following",
-          color: isFollowing ? "default" : "success",
-        });
-      }
-    } catch (error) {
-      console.error("Follow action failed:", error);
-    } finally {
-      setIsFollowLoading(false);
-      closeDropdown();
-    }
-  };
+  const { isFollowing, isLoading: isFollowLoading, toggle: toggleFollow } =
+    useFollowToggle(pubkey, {
+      onRequireSignIn: () => {
+        closeDropdown();
+        onOpen();
+      },
+      onSuccess: closeDropdown,
+    });
 
   useEffect(() => {
     let isCancelled = false;
@@ -373,7 +351,7 @@ export const ProfileWithDropdown = ({
         <UserPlusIcon className="h-5 w-5" />
       ),
       onPress: () => {
-        void handleFollowPress();
+        void toggleFollow();
       },
       label: isFollowLoading
         ? "Please sign..."

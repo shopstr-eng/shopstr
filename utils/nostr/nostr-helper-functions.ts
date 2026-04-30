@@ -1057,7 +1057,7 @@ export async function signNostrEvent(
   return (await signer.sign(eventTemplate)) as NostrEvent;
 }
 
-export function cacheAndPublishSignedEventInBackground(
+async function persistSignedEvent(
   nostr: NostrManager,
   signedEvent: NostrEvent,
   signer?: NostrSigner
@@ -1065,35 +1065,41 @@ export function cacheAndPublishSignedEventInBackground(
   const { writeRelays, relays } = getLocalStorageData();
   const allWriteRelays = withBlastr([...writeRelays, ...relays]);
 
-  void (async () => {
-    await cacheEventToDatabase(signedEvent);
+  await cacheEventToDatabase(signedEvent);
 
-    try {
-      await newPromiseWithTimeout(
-        async (resolve, reject) => {
-          try {
-            await nostr.publish(signedEvent, allWriteRelays);
-            resolve(undefined);
-          } catch (err) {
-            reject(err as Error);
-          }
-        },
-        { timeout: 21000 }
-      );
-    } catch (error) {
-      console.warn(
-        "Relay publish timed out or failed, but event is saved to database:",
-        error
-      );
-      const { trackFailedRelayPublish } = await import("@/utils/db/db-client");
-      await trackFailedRelayPublish(
-        signedEvent.id,
-        signedEvent,
-        allWriteRelays,
-        signer
-      ).catch(console.error);
-    }
-  })();
+  try {
+    await newPromiseWithTimeout(
+      async (resolve, reject) => {
+        try {
+          await nostr.publish(signedEvent, allWriteRelays);
+          resolve(undefined);
+        } catch (err) {
+          reject(err as Error);
+        }
+      },
+      { timeout: 21000 }
+    );
+  } catch (error) {
+    console.warn(
+      "Relay publish timed out or failed, but event is saved to database:",
+      error
+    );
+    const { trackFailedRelayPublish } = await import("@/utils/db/db-client");
+    await trackFailedRelayPublish(
+      signedEvent.id,
+      signedEvent,
+      allWriteRelays,
+      signer
+    ).catch(console.error);
+  }
+}
+
+export function cacheAndPublishSignedEventInBackground(
+  nostr: NostrManager,
+  signedEvent: NostrEvent,
+  signer?: NostrSigner
+) {
+  void persistSignedEvent(nostr, signedEvent, signer);
 }
 
 /**
@@ -1185,40 +1191,11 @@ export async function finalizeAndSendNostrEvent(
   eventTemplate: EventTemplate
 ) {
   try {
-    const { writeRelays, relays } = getLocalStorageData();
     const signedEvent = await signer.sign(eventTemplate);
 
-    // Cache to database first and wait for confirmation
-    await cacheEventToDatabase(signedEvent);
-    
-    // After DB confirmation, attempt to publish to relays with timeout
-    const allWriteRelays = withBlastr([...writeRelays, ...relays]);
-    try {
-      await newPromiseWithTimeout(
-        async (resolve, reject) => {
-          try {
-            await nostr.publish(signedEvent, allWriteRelays);
-            resolve(undefined);
-          } catch (err) {
-            reject(err as Error);
-          }
-        },
-        { timeout: 21000 } // 21 second timeout
-      );
-    } catch (error) {
-      // Timeout or relay publish error - track for retry
-      console.warn(
-        "Relay publish timed out or failed, but event is saved to database:",
-        error
-      );
-      const { trackFailedRelayPublish } = await import("@/utils/db/db-client");
-      await trackFailedRelayPublish(
-        signedEvent.id,
-        signedEvent,
-        allWriteRelays,
-        signer
-      ).catch(console.error);
-    }
+    // Cache to database first and wait for confirmation, then publish with retry tracking.
+    await persistSignedEvent(nostr, signedEvent, signer);
+
     // return the signed event to caller so we know generated IDs
     return signedEvent;
   } catch (error) {

@@ -4,9 +4,10 @@ import { useContext, useEffect, useState } from "react";
 import { nip19 } from "nostr-tools";
 
 import useNavigation from "@/components/hooks/use-navigation";
+import { useFollowToggle } from "@/components/hooks/use-follow-toggle";
 
-import { FollowsContext, ShopMapContext } from "@/utils/context/context";
-import { Button, useDisclosure, addToast } from "@heroui/react";
+import { ShopMapContext } from "@/utils/context/context";
+import { Button, useDisclosure } from "@heroui/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { useRouter } from "next/router";
 import SignInModal from "../sign-in/SignInModal";
@@ -40,10 +41,11 @@ const SideShopNav = ({
   const [usersPubkey, setUsersPubkey] = useState<string | null>(null);
 
   const { pubkey: userPubkey, isLoggedIn } = useContext(SignerContext);
-  const followsContext = useContext(FollowsContext);
-  const [isFollowActionLoading, setIsFollowActionLoading] = useState(false);
-  const isFollowingFocusedPubkey =
-    followsContext.directFollowList.includes(focusedPubkey);
+  const {
+    isFollowing: isFollowingFocusedPubkey,
+    isLoading: isFollowActionLoading,
+    toggle: handleFollowToggle,
+  } = useFollowToggle(focusedPubkey, { onRequireSignIn: onOpen });
 
   useEffect(() => {
     if (
@@ -77,33 +79,6 @@ const SideShopNav = ({
       });
     } else {
       onOpen();
-    }
-  };
-
-  const handleFollowToggle = async () => {
-    if (!focusedPubkey) return;
-
-    if (!isLoggedIn) {
-      onOpen();
-      return;
-    }
-
-    setIsFollowActionLoading(true);
-    try {
-      const success = isFollowingFocusedPubkey
-        ? await followsContext.removeFollow(focusedPubkey)
-        : await followsContext.addFollow(focusedPubkey);
-
-      if (success) {
-        addToast({
-          title: isFollowingFocusedPubkey ? "Unfollowed merchant" : "Following",
-          color: isFollowingFocusedPubkey ? "default" : "success",
-        });
-      }
-    } catch (error) {
-      console.error("Follow action failed:", error);
-    } finally {
-      setIsFollowActionLoading(false);
     }
   };
 
