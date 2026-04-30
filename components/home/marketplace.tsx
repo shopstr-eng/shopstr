@@ -15,7 +15,6 @@ import {
   DropdownTrigger,
   DropdownMenu,
   DropdownItem,
-  addToast,
 } from "@heroui/react";
 import {
   FaceFrownIcon,
@@ -56,6 +55,7 @@ import {
   isNpub,
 } from "@/utils/url-slugs";
 import { useDebounce } from "@/utils/hooks/useDebounce";
+import { useFollowToggle } from "@/components/hooks/use-follow-toggle";
 
 export function normalizeNpub(
   npub: string | string[] | undefined
@@ -116,7 +116,6 @@ function MarketplacePage({
   const [showEventIdModal, setShowEventIdModal] = useState(false);
 
   const [isFetchingFollows, setIsFetchingFollows] = useState(false);
-  const [isFollowActionLoading, setIsFollowActionLoading] = useState(false);
 
   const [categories, setCategories] = useState([""]);
 
@@ -130,35 +129,11 @@ function MarketplacePage({
     useContext(SignerContext);
 
   const searchBarRef = useRef<HTMLDivElement>(null);
-  const isFollowingFocusedPubkey =
-    followsContext.directFollowList.includes(focusedPubkey);
-
-  const handleFollowToggle = async () => {
-    if (!focusedPubkey) return;
-
-    if (!loggedIn) {
-      onOpen();
-      return;
-    }
-
-    setIsFollowActionLoading(true);
-    try {
-      const success = isFollowingFocusedPubkey
-        ? await followsContext.removeFollow(focusedPubkey)
-        : await followsContext.addFollow(focusedPubkey);
-
-      if (success) {
-        addToast({
-          title: isFollowingFocusedPubkey ? "Unfollowed merchant" : "Following",
-          color: isFollowingFocusedPubkey ? "default" : "success",
-        });
-      }
-    } catch (error) {
-      console.error("Follow action failed:", error);
-    } finally {
-      setIsFollowActionLoading(false);
-    }
-  };
+  const {
+    isFollowing: isFollowingFocusedPubkey,
+    isLoading: isFollowActionLoading,
+    toggle: handleFollowToggle,
+  } = useFollowToggle(focusedPubkey, { onRequireSignIn: onOpen });
 
   useEffect(() => {
     const slug = normalizeNpub(router.query.npub);
