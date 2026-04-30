@@ -959,17 +959,21 @@ export const fetchAllFollows = async (
   followList: string[];
 }> => {
   const wot = getLocalStorageData().wot;
-  const defaultAuthor =
-    "d36e8083fa7b36daee646cb8b3f99feaa3d89e5a396508741f003e21ac0b6bec";
+
+  if (!userPubkey) {
+    editFollowsContext([], 0, false);
+    return {
+      followList: [],
+    };
+  }
 
   const fetchFollows = async (userPubkey: string) => {
     let secondDegreeFollowsArrayFromRelay: string[] = [];
     let firstDegreeFollowsLength = 0;
-    let followsArrayFromRelay: string[] = [];
     const followsSet: Set<string> = new Set();
 
     // fetch first-degree follows
-    let fetchedEvents = await nostr.fetch(
+    const fetchedEvents = await nostr.fetch(
       [
         {
           kinds: [3],
@@ -979,19 +983,41 @@ export const fetchAllFollows = async (
       {},
       relays
     );
+
+    const latestContactListEvent = fetchedEvents.reduce<NostrEvent | null>(
+      (latestEvent, event) => {
+        if (!latestEvent || event.created_at > latestEvent.created_at) {
+          return event;
+        }
+        return latestEvent;
+      },
+      null
+    );
+
+    if (!latestContactListEvent) {
+      return {
+        followsArrayFromRelay: [],
+        firstDegreeFollowsLength: 0,
+      };
+    }
+
     const authors: string[] = [];
-    for (const event of fetchedEvents) {
-      const validTags = event.tags
-        .map((tag) => tag[1])
-        .filter((pubkey) => isHexString(pubkey!) && !followsSet.has(pubkey!));
-      validTags.forEach((pubkey) => followsSet.add(pubkey!));
-      followsArrayFromRelay.push(...(validTags as string[]));
-      firstDegreeFollowsLength = followsArrayFromRelay.length;
-      authors.push(...followsArrayFromRelay);
+    const directFollowsArrayFromRelay = latestContactListEvent.tags
+      .map((tag) => tag[1])
+      .filter((pubkey) => isHexString(pubkey!) && !followsSet.has(pubkey!));
+    directFollowsArrayFromRelay.forEach((pubkey) => followsSet.add(pubkey!));
+    firstDegreeFollowsLength = directFollowsArrayFromRelay.length;
+    authors.push(...(directFollowsArrayFromRelay as string[]));
+
+    if (!authors.length) {
+      return {
+        followsArrayFromRelay: [],
+        firstDegreeFollowsLength,
+      };
     }
 
     // Fetch second-degree follows
-    fetchedEvents = await nostr.fetch(
+    const fetchedSecondDegreeEvents = await nostr.fetch(
       [
         {
           kinds: [3],
@@ -1002,7 +1028,15 @@ export const fetchAllFollows = async (
       relays
     );
 
-    for (const followEvent of fetchedEvents) {
+    const latestSecondDegreeEvents = new Map<string, NostrEvent>();
+    for (const followEvent of fetchedSecondDegreeEvents) {
+      const latestEvent = latestSecondDegreeEvents.get(followEvent.pubkey);
+      if (!latestEvent || followEvent.created_at > latestEvent.created_at) {
+        latestSecondDegreeEvents.set(followEvent.pubkey, followEvent);
+      }
+    }
+
+    for (const followEvent of latestSecondDegreeEvents.values()) {
       const validFollowTags = followEvent.tags
         .map((tag) => tag[1])
         .filter((pubkey) => isHexString(pubkey!) && !followsSet.has(pubkey!));
@@ -1018,8 +1052,12 @@ export const fetchAllFollows = async (
         (pubkey) => (pubkeyCount.get(pubkey) || 0) >= wot
       );
     // Concatenate arrays ensuring uniqueness
-    followsArrayFromRelay = Array.from(
-      new Set(followsArrayFromRelay.concat(secondDegreeFollowsArrayFromRelay))
+    const followsArrayFromRelay = Array.from(
+      new Set(
+        (directFollowsArrayFromRelay as string[]).concat(
+          secondDegreeFollowsArrayFromRelay
+        )
+      )
     );
     return {
       followsArrayFromRelay,
@@ -1027,15 +1065,8 @@ export const fetchAllFollows = async (
     };
   };
 
-  let { followsArrayFromRelay, firstDegreeFollowsLength } = await fetchFollows(
-    userPubkey || defaultAuthor
-  );
-
-  if (!followsArrayFromRelay?.length) {
-    // If followsArrayFromRelay is still empty, add the default value
-    ({ followsArrayFromRelay, firstDegreeFollowsLength } =
-      await fetchFollows(defaultAuthor));
-  }
+  const { followsArrayFromRelay, firstDegreeFollowsLength } =
+    await fetchFollows(userPubkey);
   editFollowsContext(followsArrayFromRelay, firstDegreeFollowsLength, false);
   return {
     followList: followsArrayFromRelay,
