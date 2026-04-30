@@ -32,6 +32,7 @@ import {
 } from "@cashu/cashu-ts";
 import { safeMeltProofs } from "@/utils/cashu/melt-retry-service";
 import { safeSwap } from "@/utils/cashu/swap-retry-service";
+import { proofAmountToNumber } from "@/utils/cashu/proof-amount";
 import { formatWithCommas } from "../utility-components/display-monetary-info";
 import { CashuWalletContext } from "../../utils/context/context";
 import {
@@ -192,7 +193,7 @@ const PayButton = () => {
       }
       localStorage.setItem("tokens", JSON.stringify(proofArray));
       const filteredTokenAmount = filteredProofs.reduce(
-        (acc, token: Proof) => acc + token.amount.toNumber(),
+        (acc, token: Proof) => acc + proofAmountToNumber(token),
         0
       );
       const transactionAmount = filteredTokenAmount - changeAmount;

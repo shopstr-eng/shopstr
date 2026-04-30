@@ -14,6 +14,7 @@ import {
   Proof,
 } from "@cashu/cashu-ts";
 import { useRouter } from "next/router";
+import { proofAmountToNumber } from "@/utils/cashu/proof-amount";
 
 interface StorefrontWalletProps {
   colors: StorefrontColorScheme;
@@ -70,7 +71,7 @@ export default function StorefrontWallet({ colors }: StorefrontWalletProps) {
       const tokensTotal =
         tokens.length >= 1
           ? tokens.reduce(
-              (acc: number, token: Proof) => acc + token.amount.toNumber(),
+              (acc: number, token: Proof) => acc + proofAmountToNumber(token),
               0
             )
           : 0;
@@ -79,7 +80,7 @@ export default function StorefrontWallet({ colors }: StorefrontWalletProps) {
     const walletTotal =
       filteredProofs.length >= 1
         ? filteredProofs.reduce(
-            (acc: number, p: Proof) => acc + p.amount.toNumber(),
+            (acc: number, p: Proof) => acc + proofAmountToNumber(p),
             0
           )
         : 0;
@@ -93,7 +94,7 @@ export default function StorefrontWallet({ colors }: StorefrontWalletProps) {
         const tokensTotal =
           newTokens.length >= 1
             ? newTokens.reduce(
-                (acc: number, token: Proof) => acc + token.amount.toNumber(),
+                (acc: number, token: Proof) => acc + proofAmountToNumber(token),
                 0
               )
             : 0;
@@ -105,7 +106,7 @@ export default function StorefrontWallet({ colors }: StorefrontWalletProps) {
           const newWalletTotal =
             newFilteredProofs.length >= 1
               ? newFilteredProofs.reduce(
-                  (acc: number, p: Proof) => acc + p.amount.toNumber(),
+                  (acc: number, p: Proof) => acc + proofAmountToNumber(p),
                   0
                 )
               : 0;

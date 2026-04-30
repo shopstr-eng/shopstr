@@ -13,6 +13,7 @@ import {
   Proof,
 } from "@cashu/cashu-ts";
 import ProtectedRoute from "@/components/utility-components/protected-route";
+import { proofAmountToNumber } from "@/utils/cashu/proof-amount";
 
 const Wallet = () => {
   const [totalBalance, setTotalBalance] = useState(0);
@@ -58,7 +59,7 @@ const Wallet = () => {
       const tokensTotal =
         tokens.length >= 1
           ? tokens.reduce(
-              (acc, token: Proof) => acc + token.amount.toNumber(),
+              (acc, token: Proof) => acc + proofAmountToNumber(token),
               0
             )
           : 0;
@@ -67,7 +68,10 @@ const Wallet = () => {
 
     const walletTotal =
       filteredProofs.length >= 1
-        ? filteredProofs.reduce((acc, p: Proof) => acc + p.amount.toNumber(), 0)
+        ? filteredProofs.reduce(
+            (acc, p: Proof) => acc + proofAmountToNumber(p),
+            0
+          )
         : 0;
     setWalletBalance(walletTotal);
   }, [tokens, filteredProofs]);
@@ -79,7 +83,7 @@ const Wallet = () => {
         const tokensTotal =
           newTokens.length >= 1
             ? newTokens.reduce(
-                (acc: number, token: Proof) => acc + token.amount.toNumber(),
+                (acc: number, token: Proof) => acc + proofAmountToNumber(token),
                 0
               )
             : 0;
@@ -92,7 +96,7 @@ const Wallet = () => {
           const newWalletTotal =
             newFilteredProofs.length >= 1
               ? newFilteredProofs.reduce(
-                  (acc: number, p: Proof) => acc + p.amount.toNumber(),
+                  (acc: number, p: Proof) => acc + proofAmountToNumber(p),
                   0
                 )
               : 0;
