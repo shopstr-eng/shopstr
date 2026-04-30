@@ -1,8 +1,26 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { fetchCachedEvents } from "@/utils/db/db-service";
 import { applyRateLimit } from "@/utils/rate-limit";
+import { isHexPubkey } from "@/utils/nostr/pubkey";
 
 const RATE_LIMIT = { limit: 600, windowMs: 60 * 1000 };
+
+const normalizeTags = (tags: unknown): string[][] => {
+  if (Array.isArray(tags)) {
+    return tags as string[][];
+  }
+
+  if (typeof tags !== "string") {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(tags);
+    return Array.isArray(parsed) ? (parsed as string[][]) : [];
+  } catch {
+    return [];
+  }
+};
 
 /**
  * GET /api/db/fetch-contacts?pubkey=<hex>
@@ -19,6 +37,9 @@ export default async function handler(
   if (!pubkey || typeof pubkey !== "string") {
     return res.status(400).json({ error: "pubkey required" });
   }
+  if (!isHexPubkey(pubkey)) {
+    return res.status(400).json({ error: "invalid pubkey" });
+  }
 
   try {
     const events = await fetchCachedEvents(3, { pubkey, limit: 1 });
@@ -31,7 +52,7 @@ export default async function handler(
         pubkey: event.pubkey,
         created_at: event.created_at,
         kind: event.kind,
-        tags: typeof event.tags === "string" ? JSON.parse(event.tags) : event.tags,
+        tags: normalizeTags(event.tags),
         content: event.content,
         sig: event.sig,
       },

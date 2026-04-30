@@ -29,6 +29,7 @@ import {
 } from "@/utils/nostr/request-auth";
 import { newPromiseWithTimeout } from "@/utils/timeout";
 import { getLocalStorageJson } from "@/utils/safe-json";
+import { isHexPubkey } from "@/utils/nostr/pubkey";
 
 function containsRelay(relays: string[], relay: string): boolean {
   return relays.some((r) => r.includes(relay));
@@ -1002,8 +1003,6 @@ export async function retractApproval(
   return await finalizeAndSendNostrEvent(signer, nostr, eventTemplate);
 }
 
-const isHexPubkey = (value: string) => /^[0-9a-fA-F]{64}$/.test(value);
-
 function getContactListRelays(): string[] {
   const { readRelays, writeRelays, relays } = getLocalStorageData();
   return [...new Set([...readRelays, ...writeRelays, ...relays])];
@@ -1065,7 +1064,14 @@ async function persistSignedEvent(
   const { writeRelays, relays } = getLocalStorageData();
   const allWriteRelays = withBlastr([...writeRelays, ...relays]);
 
-  await cacheEventToDatabase(signedEvent);
+  try {
+    await cacheEventToDatabase(signedEvent);
+  } catch (error) {
+    console.error(
+      "Failed to cache signed event to database before relay publish:",
+      error
+    );
+  }
 
   try {
     await newPromiseWithTimeout(
@@ -1099,7 +1105,9 @@ export function cacheAndPublishSignedEventInBackground(
   signedEvent: NostrEvent,
   signer?: NostrSigner
 ) {
-  void persistSignedEvent(nostr, signedEvent, signer);
+  void persistSignedEvent(nostr, signedEvent, signer).catch((error) => {
+    console.error("Unexpected error while persisting signed event:", error);
+  });
 }
 
 /**

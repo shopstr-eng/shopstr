@@ -1,3 +1,5 @@
+const originalFetch = global.fetch;
+
 describe("fetchProfile", () => {
   const pubkey =
     "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
@@ -5,6 +7,10 @@ describe("fetchProfile", () => {
   beforeEach(() => {
     jest.resetModules();
     jest.clearAllMocks();
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
   });
 
   it("keeps the latest kind 0 profile from the DB and ignores shop profile rows", async () => {
@@ -284,10 +290,16 @@ describe("fetchAllFollows", () => {
     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
   const secondDegreeFromRelay =
     "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+  const ignoredHexTag =
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
 
   beforeEach(() => {
     jest.resetModules();
     jest.clearAllMocks();
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
   });
 
   it("hydrates direct follows from DB first, then merges the latest event with relay WoT data", async () => {
@@ -313,7 +325,10 @@ describe("fetchAllFollows", () => {
           pubkey: userPubkey,
           created_at: 200,
           kind: 3,
-          tags: [["p", directFromDb]],
+          tags: [
+            ["relay", ignoredHexTag],
+            ["p", directFromDb],
+          ],
           content: "",
           sig: "db-sig",
         },
@@ -342,7 +357,10 @@ describe("fetchAllFollows", () => {
             pubkey: directFromDb,
             created_at: 250,
             kind: 3,
-            tags: [["p", secondDegreeFromRelay]],
+            tags: [
+              ["e", ignoredHexTag],
+              ["p", secondDegreeFromRelay],
+            ],
             content: "",
             sig: "second-degree-sig",
           },

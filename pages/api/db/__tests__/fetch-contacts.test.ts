@@ -73,6 +73,16 @@ describe("/api/db/fetch-contacts", () => {
     expect(fetchCachedEventsMock).not.toHaveBeenCalled();
   });
 
+  it("returns 400 when pubkey is not a 64-char hex string", async () => {
+    const res = createResponse();
+
+    await handler(makeRequest({ pubkey: "not-a-pubkey" }), res);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toEqual({ error: "invalid pubkey" });
+    expect(fetchCachedEventsMock).not.toHaveBeenCalled();
+  });
+
   it("returns null when no cached contact list exists", async () => {
     fetchCachedEventsMock.mockResolvedValue([]);
     const res = createResponse();
@@ -111,6 +121,36 @@ describe("/api/db/fetch-contacts", () => {
         created_at: 123,
         kind: 3,
         tags: [["p", "b".repeat(64)]],
+        content: "",
+        sig: "sig",
+      },
+    });
+  });
+
+  it("falls back to empty tags when stored tags are malformed JSON", async () => {
+    fetchCachedEventsMock.mockResolvedValue([
+      {
+        id: "contact-list-id",
+        pubkey: "a".repeat(64),
+        created_at: 123,
+        kind: 3,
+        tags: "{bad json",
+        content: "",
+        sig: "sig",
+      },
+    ]);
+    const res = createResponse();
+
+    await handler(makeRequest({ pubkey: "a".repeat(64) }), res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({
+      contactList: {
+        id: "contact-list-id",
+        pubkey: "a".repeat(64),
+        created_at: 123,
+        kind: 3,
+        tags: [],
         content: "",
         sig: "sig",
       },

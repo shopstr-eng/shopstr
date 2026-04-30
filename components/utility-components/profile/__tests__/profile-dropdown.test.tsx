@@ -14,6 +14,7 @@ import { nip19 } from "nostr-tools";
 import React from "react";
 
 const mockFetch = jest.fn();
+const originalFetch = global.fetch;
 global.fetch = mockFetch as unknown as typeof fetch;
 
 const mockRouterPush = jest.fn();
@@ -135,12 +136,16 @@ const renderWithProviders = (
     profileData?: Map<string, any>;
     isLoggedIn?: boolean;
     directFollowList?: string[];
+    addFollow?: jest.Mock;
+    removeFollow?: jest.Mock;
   } = {}
 ) => {
   const {
     profileData = new Map(),
     isLoggedIn = false,
     directFollowList = [],
+    addFollow = jest.fn(),
+    removeFollow = jest.fn(),
   } = options;
   return render(
     <FollowsContext.Provider
@@ -149,8 +154,8 @@ const renderWithProviders = (
         followList: directFollowList,
         firstDegreeFollowsLength: directFollowList.length,
         isLoading: false,
-        addFollow: jest.fn(),
-        removeFollow: jest.fn(),
+        addFollow,
+        removeFollow,
       }}
     >
       <ProfileMapContext.Provider
@@ -184,6 +189,7 @@ describe("ProfileWithDropdown", () => {
 
   afterAll(() => {
     consoleWarnSpy.mockRestore();
+    global.fetch = originalFetch;
   });
 
   beforeEach(() => {
@@ -233,6 +239,35 @@ describe("ProfileWithDropdown", () => {
     );
 
     expect(screen.getByText("Following")).toBeInTheDocument();
+  });
+
+  it('opens sign-in when "Follow" is pressed while logged out', () => {
+    renderWithProviders(
+      <ProfileWithDropdown pubkey={pubkey} dropDownKeys={["follow"]} />,
+      { isLoggedIn: false }
+    );
+
+    openDropdownMenu();
+    fireEvent.click(screen.getByText("+ Follow"));
+
+    expect(mockOnOpen).toHaveBeenCalled();
+  });
+
+  it('calls addFollow and closes the menu when "Follow" succeeds', async () => {
+    const addFollow = jest.fn().mockResolvedValue(true);
+
+    renderWithProviders(
+      <ProfileWithDropdown pubkey={pubkey} dropDownKeys={["follow"]} />,
+      { isLoggedIn: true, addFollow }
+    );
+
+    openDropdownMenu();
+    fireEvent.click(screen.getByText("+ Follow"));
+
+    await waitFor(() => {
+      expect(addFollow).toHaveBeenCalledWith(pubkey);
+      expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    });
   });
 
   it('handles "Visit Seller" click', () => {
