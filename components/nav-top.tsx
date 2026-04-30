@@ -1,13 +1,21 @@
 import { useContext, useEffect, useState } from "react";
 import useNavigation from "@/components/hooks/use-navigation";
 import { Button, Image, useDisclosure } from "@heroui/react";
-import { Bars4Icon } from "@heroicons/react/24/outline";
+import {
+  AdjustmentsHorizontalIcon,
+  Bars4Icon,
+} from "@heroicons/react/24/outline";
 import { countNumberOfUnreadMessagesFromChatsContext } from "@/utils/messages/utils";
-import { ChatsContext, ShopMapContext } from "@/utils/context/context";
+import {
+  ChatsContext,
+  ShopMapContext,
+  UIContext,
+} from "@/utils/context/context";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import { useRouter } from "next/router";
 import SignInModal from "./sign-in/SignInModal";
 import { ProfileWithDropdown } from "./utility-components/profile/profile-dropdown";
+import PreferencesModal from "@/components/settings/preferences-modal";
 import { ShopProfile } from "../utils/types/types";
 import { getLocalStorageJson } from "@/utils/safe-json";
 
@@ -35,6 +43,8 @@ const TopNav = ({
   const [unreadMsgCount, setUnreadMsgCount] = useState(0);
   const [cartQuantity, setCartQuantity] = useState(0);
   const { isOpen, onOpen, onClose } = useDisclosure();
+  const { isPreferencesModalOpen, setPreferencesModalOpen } =
+    useContext(UIContext);
   const { isLoggedIn: signedIn, pubkey: userPubkey } =
     useContext(SignerContext);
 
@@ -213,17 +223,25 @@ const TopNav = ({
             <Bars4Icon className="text-light-text dark:text-dark-text h-6 w-6" />
           </Button>
           {signedIn ? (
-            <ProfileWithDropdown
-              pubkey={userPubkey!}
-              baseClassname="flex-shrink-0 dark:hover:shopstr-yellow-light rounded-3xl hover:scale-105 hover:bg-light-bg hover:shadow-lg dark:hover:bg-dark-bg"
-              dropDownKeys={[
-                "shop_profile",
-                "user_profile",
-                "settings",
-                "logout",
-              ]}
-              nameClassname="hidden"
-            />
+            <>
+              <ProfileWithDropdown
+                pubkey={userPubkey!}
+                baseClassname="flex-shrink-0 dark:hover:shopstr-yellow-light rounded-3xl hover:scale-105 hover:bg-light-bg hover:shadow-lg dark:hover:bg-dark-bg"
+                dropDownKeys={[
+                  "shop_profile",
+                  "user_profile",
+                  "settings",
+                  "logout",
+                ]}
+                nameClassname="hidden"
+              />
+              <Button
+                className="text-light-text dark:text-dark-text dark:hover:text-accent-dark-text ml-1 min-w-0 bg-transparent px-2 hover:text-purple-700"
+                onClick={() => setPreferencesModalOpen(true)}
+              >
+                <AdjustmentsHorizontalIcon className="h-6 w-6" />
+              </Button>
+            </>
           ) : (
             <Button
               onClick={onOpen}
@@ -307,17 +325,26 @@ const TopNav = ({
         </div>
         <div className="hidden flex-shrink-0 items-center md:flex">
           {signedIn ? (
-            <ProfileWithDropdown
-              pubkey={userPubkey!}
-              baseClassname="justify-start dark:hover:shopstr-yellow-light pl-2 rounded-3xl py-2 hover:scale-105 hover:bg-light-bg hover:shadow-lg dark:hover:bg-dark-bg"
-              dropDownKeys={[
-                "shop_profile",
-                "user_profile",
-                "settings",
-                "logout",
-              ]}
-              nameClassname="lg:block"
-            />
+            <>
+              <ProfileWithDropdown
+                pubkey={userPubkey!}
+                baseClassname="justify-start dark:hover:shopstr-yellow-light pl-2 rounded-3xl py-2 hover:scale-105 hover:bg-light-bg hover:shadow-lg dark:hover:bg-dark-bg"
+                dropDownKeys={[
+                  "shop_profile",
+                  "user_profile",
+                  "settings",
+                  "logout",
+                ]}
+                nameClassname="lg:block"
+              />
+
+              <Button
+                className="text-light-text dark:text-dark-text dark:hover:text-accent-dark-text ml-1 min-w-0 bg-transparent px-2 hover:text-purple-700"
+                onClick={() => setPreferencesModalOpen(true)}
+              >
+                <AdjustmentsHorizontalIcon className="h-6 w-6" />
+              </Button>
+            </>
           ) : (
             <Button
               onClick={onOpen}
@@ -334,6 +361,10 @@ const TopNav = ({
       </div>
       {isMobileMenuOpen && <MobileMenu />}
       <SignInModal isOpen={isOpen} onClose={onClose} />
+      <PreferencesModal
+        isOpen={isPreferencesModalOpen}
+        onClose={() => setPreferencesModalOpen(false)}
+      />
     </div>
   );
 };

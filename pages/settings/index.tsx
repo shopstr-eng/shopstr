@@ -2,7 +2,6 @@ import { Listbox, ListboxItem, ListboxSection } from "@heroui/react";
 import {
   ArrowRightStartOnRectangleIcon,
   BuildingStorefrontIcon,
-  Cog6ToothIcon,
   UserIcon,
   UserGroupIcon,
   BanknotesIcon,
@@ -69,17 +68,6 @@ const SettingsPage = () => {
                 }}
               >
                 Community Management
-              </ListboxItem>
-              <ListboxItem
-                key="preferences"
-                description="Change your mints, relays, media servers, and more"
-                classNames={listBoxClassnames}
-                startContent={<Cog6ToothIcon className={startIconClassnames} />}
-                onClick={() => {
-                  router.push("/settings/preferences");
-                }}
-              >
-                Preferences
               </ListboxItem>
               <ListboxItem
                 key="wallet"
