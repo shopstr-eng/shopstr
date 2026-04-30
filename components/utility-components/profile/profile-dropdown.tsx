@@ -208,6 +208,24 @@ export const ProfileWithDropdown = ({
     name = name.length > 15 ? name.slice(0, 15) + "..." : name;
     return name;
   })();
+  const showFollowingIndicator =
+    dropDownKeys.includes("follow") && isFollowing;
+  const displayNameContent = showFollowingIndicator ? (
+    <span className="flex min-w-0 items-center gap-1.5">
+      <span className="overflow-hidden text-ellipsis whitespace-nowrap">
+        {displayName}
+      </span>
+      <span className="inline-flex shrink-0 items-center gap-1 text-[10px] font-medium text-shopstr-purple dark:text-shopstr-yellow">
+        <span
+          aria-hidden="true"
+          className="h-1.5 w-1.5 rounded-full bg-current"
+        />
+        Following
+      </span>
+    </span>
+  ) : (
+    displayName
+  );
   const pfp = profileContent?.picture || `https://robohash.org/${pubkey}`;
   const isNip05Verified = profile?.nip05Verified || false;
 
@@ -399,7 +417,7 @@ export const ProfileWithDropdown = ({
                 } group-hover:underline group-hover:underline-offset-2`,
                 base: `${baseClassname}`,
               }}
-              name={displayName}
+              name={displayNameContent}
             />
           </DropdownTrigger>
           <DropdownMenu

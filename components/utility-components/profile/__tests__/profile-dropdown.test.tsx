@@ -7,7 +7,7 @@ import {
 } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import { ProfileWithDropdown } from "../profile-dropdown";
-import { ProfileMapContext } from "@/utils/context/context";
+import { FollowsContext, ProfileMapContext } from "@/utils/context/context";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import { LogOut } from "@/utils/nostr/nostr-helper-functions";
 import { nip19 } from "nostr-tools";
@@ -131,21 +131,40 @@ Object.defineProperty(navigator, "clipboard", {
 
 const renderWithProviders = (
   ui: React.ReactElement,
-  options: { profileData?: Map<string, any>; isLoggedIn?: boolean } = {}
+  options: {
+    profileData?: Map<string, any>;
+    isLoggedIn?: boolean;
+    directFollowList?: string[];
+  } = {}
 ) => {
-  const { profileData = new Map(), isLoggedIn = false } = options;
+  const {
+    profileData = new Map(),
+    isLoggedIn = false,
+    directFollowList = [],
+  } = options;
   return render(
-    <ProfileMapContext.Provider
+    <FollowsContext.Provider
       value={{
-        profileData,
+        directFollowList,
+        followList: directFollowList,
+        firstDegreeFollowsLength: directFollowList.length,
         isLoading: false,
-        updateProfileData: jest.fn(),
+        addFollow: jest.fn(),
+        removeFollow: jest.fn(),
       }}
     >
-      <SignerContext.Provider value={{ isLoggedIn }}>
-        {ui}
-      </SignerContext.Provider>
-    </ProfileMapContext.Provider>
+      <ProfileMapContext.Provider
+        value={{
+          profileData,
+          isLoading: false,
+          updateProfileData: jest.fn(),
+        }}
+      >
+        <SignerContext.Provider value={{ isLoggedIn }}>
+          {ui}
+        </SignerContext.Provider>
+      </ProfileMapContext.Provider>
+    </FollowsContext.Provider>
   );
 };
 
@@ -205,6 +224,15 @@ describe("ProfileWithDropdown", () => {
     );
 
     expect(screen.getByText("testuser")).toBeInTheDocument();
+  });
+
+  it('shows a visible "Following" indicator on follow-enabled seller surfaces', () => {
+    renderWithProviders(
+      <ProfileWithDropdown pubkey={pubkey} dropDownKeys={["follow"]} />,
+      { directFollowList: [pubkey] }
+    );
+
+    expect(screen.getByText("Following")).toBeInTheDocument();
   });
 
   it('handles "Visit Seller" click', () => {
