@@ -14,6 +14,33 @@ import {
 import { NostrEvent } from "@/utils/types/types";
 import { registerTool } from "./register-tool";
 
+const DB_TIMEOUT_MS = 15_000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`DB_TIMEOUT: ${label} timed out after ${ms}ms`)), ms)
+    ),
+  ]);
+}
+
+function dbError(error: unknown, startTime: number) {
+  return {
+    content: [
+      {
+        type: "text" as const,
+        text: JSON.stringify({
+          error: error instanceof Error ? error.message : "DB fetch failed",
+          code: error instanceof Error && error.message.startsWith("DB_TIMEOUT") ? "TIMEOUT" : "DB_ERROR",
+          _meta: { responseTimeMs: Date.now() - startTime, dataSource: "cached_db" },
+        }),
+      },
+    ],
+    isError: true,
+  };
+}
+
 function getTagValue(tags: string[][], key: string): string | undefined {
   const tag = tags.find((t) => t[0] === key);
   return tag ? tag[1] : undefined;
@@ -228,78 +255,82 @@ export function registerReadTools(server: McpServer) {
       limit,
     }) => {
       const startTime = Date.now();
-      const events = await fetchAllProductsFromDb();
-      let products = events.map(parseProductEvent);
+      try {
+        const events = await withTimeout(fetchAllProductsFromDb(), DB_TIMEOUT_MS, "fetchAllProductsFromDb");
+        let products = events.map(parseProductEvent);
 
-      if (keyword) {
-        const kw = keyword.toLowerCase();
-        products = products.filter(
-          (p) =>
-            p.title.toLowerCase().includes(kw) ||
-            p.summary.toLowerCase().includes(kw)
+        if (keyword) {
+          const kw = keyword.toLowerCase();
+          products = products.filter(
+            (p) =>
+              p.title.toLowerCase().includes(kw) ||
+              p.summary.toLowerCase().includes(kw)
+          );
+        }
+
+        if (category) {
+          const cat = category.toLowerCase();
+          products = products.filter((p) =>
+            p.categories.some((c) => c.toLowerCase() === cat)
+          );
+        }
+
+        if (location) {
+          const loc = location.toLowerCase();
+          products = products.filter((p) =>
+            p.location.toLowerCase().includes(loc)
+          );
+        }
+
+        if (currency) {
+          const cur = currency.toLowerCase();
+          products = products.filter((p) => p.currency.toLowerCase() === cur);
+        }
+
+        if (minPrice !== undefined) {
+          products = products.filter((p) => p.price >= minPrice);
+        }
+
+        if (maxPrice !== undefined) {
+          products = products.filter((p) => p.price <= maxPrice);
+        }
+
+        if (limit) {
+          products = products.slice(0, limit);
+        }
+
+        const latestTimestamp = products.reduce(
+          (max, p) =>
+            p.createdAt && Number(p.createdAt) > max ? Number(p.createdAt) : max,
+          0
         );
-      }
 
-      if (category) {
-        const cat = category.toLowerCase();
-        products = products.filter((p) =>
-          p.categories.some((c) => c.toLowerCase() === cat)
-        );
-      }
-
-      if (location) {
-        const loc = location.toLowerCase();
-        products = products.filter((p) =>
-          p.location.toLowerCase().includes(loc)
-        );
-      }
-
-      if (currency) {
-        const cur = currency.toLowerCase();
-        products = products.filter((p) => p.currency.toLowerCase() === cur);
-      }
-
-      if (minPrice !== undefined) {
-        products = products.filter((p) => p.price >= minPrice);
-      }
-
-      if (maxPrice !== undefined) {
-        products = products.filter((p) => p.price <= maxPrice);
-      }
-
-      if (limit) {
-        products = products.slice(0, limit);
-      }
-
-      const latestTimestamp = products.reduce(
-        (max, p) =>
-          p.createdAt && Number(p.createdAt) > max ? Number(p.createdAt) : max,
-        0
-      );
-
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify(
-              {
-                count: products.length,
-                products,
-                _meta: {
-                  responseTimeMs: Date.now() - startTime,
-                  dataSource: "cached_db",
-                  dataFreshness: latestTimestamp
-                    ? new Date(latestTimestamp * 1000).toISOString()
-                    : null,
-                  resultCount: products.length,
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify(
+                {
+                  count: products.length,
+                  products,
+                  _meta: {
+                    responseTimeMs: Date.now() - startTime,
+                    dataSource: "cached_db",
+                    dataFreshness: latestTimestamp
+                      ? new Date(latestTimestamp * 1000).toISOString()
+                      : null,
+                    resultCount: products.length,
+                  },
                 },
-              },
-              null,
-              2
-            ),
-          },
-        ],
-      };
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      } catch (error) {
+        return dbError(error, startTime);
+      }
     }
   );
 
@@ -312,51 +343,55 @@ export function registerReadTools(server: McpServer) {
     },
     async ({ productId }) => {
       const startTime = Date.now();
-      const events = await fetchAllProductsFromDb();
-      const event = events.find((e) => e.id === productId);
+      try {
+        const events = await withTimeout(fetchAllProductsFromDb(), DB_TIMEOUT_MS, "fetchAllProductsFromDb");
+        const event = events.find((e) => e.id === productId);
 
-      if (!event) {
+        if (!event) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify({
+                  error: "Product not found",
+                  _meta: {
+                    responseTimeMs: Date.now() - startTime,
+                    dataSource: "cached_db",
+                  },
+                }),
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        const product = parseProductEvent(event);
+
         return {
           content: [
             {
               type: "text" as const,
-              text: JSON.stringify({
-                error: "Product not found",
-                _meta: {
-                  responseTimeMs: Date.now() - startTime,
-                  dataSource: "cached_db",
+              text: JSON.stringify(
+                {
+                  ...product,
+                  _meta: {
+                    responseTimeMs: Date.now() - startTime,
+                    dataSource: "cached_db",
+                    dataFreshness: product.createdAt
+                      ? new Date(Number(product.createdAt) * 1000).toISOString()
+                      : null,
+                    resultCount: 1,
+                  },
                 },
-              }),
+                null,
+                2
+              ),
             },
           ],
-          isError: true,
         };
+      } catch (error) {
+        return dbError(error, startTime);
       }
-
-      const product = parseProductEvent(event);
-
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify(
-              {
-                ...product,
-                _meta: {
-                  responseTimeMs: Date.now() - startTime,
-                  dataSource: "cached_db",
-                  dataFreshness: product.createdAt
-                    ? new Date(Number(product.createdAt) * 1000).toISOString()
-                    : null,
-                  resultCount: 1,
-                },
-              },
-              null,
-              2
-            ),
-          },
-        ],
-      };
     }
   );
 
@@ -372,42 +407,46 @@ export function registerReadTools(server: McpServer) {
     },
     async ({ limit }) => {
       const startTime = Date.now();
-      const events = await fetchAllProfilesFromDb();
-      const shopProfiles = events
-        .filter((e) => e.kind === 30019)
-        .map(parseProfileEvent);
+      try {
+        const events = await withTimeout(fetchAllProfilesFromDb(), DB_TIMEOUT_MS, "fetchAllProfilesFromDb");
+        const shopProfiles = events
+          .filter((e) => e.kind === 30019)
+          .map(parseProfileEvent);
 
-      const results = limit ? shopProfiles.slice(0, limit) : shopProfiles;
+        const results = limit ? shopProfiles.slice(0, limit) : shopProfiles;
 
-      const latestTimestamp = results.reduce(
-        (max, p) =>
-          p.createdAt && Number(p.createdAt) > max ? Number(p.createdAt) : max,
-        0
-      );
+        const latestTimestamp = results.reduce(
+          (max, p) =>
+            p.createdAt && Number(p.createdAt) > max ? Number(p.createdAt) : max,
+          0
+        );
 
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify(
-              {
-                count: results.length,
-                companies: results,
-                _meta: {
-                  responseTimeMs: Date.now() - startTime,
-                  dataSource: "cached_db",
-                  dataFreshness: latestTimestamp
-                    ? new Date(latestTimestamp * 1000).toISOString()
-                    : null,
-                  resultCount: results.length,
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify(
+                {
+                  count: results.length,
+                  companies: results,
+                  _meta: {
+                    responseTimeMs: Date.now() - startTime,
+                    dataSource: "cached_db",
+                    dataFreshness: latestTimestamp
+                      ? new Date(latestTimestamp * 1000).toISOString()
+                      : null,
+                    resultCount: results.length,
+                  },
                 },
-              },
-              null,
-              2
-            ),
-          },
-        ],
-      };
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      } catch (error) {
+        return dbError(error, startTime);
+      }
     }
   );
 
@@ -420,11 +459,22 @@ export function registerReadTools(server: McpServer) {
     },
     async ({ pubkey }) => {
       const startTime = Date.now();
-      const [profileEvents, productEvents, reviewEvents] = await Promise.all([
-        fetchAllProfilesFromDb(),
-        fetchAllProductsFromDb(),
-        fetchCachedEvents(31555),
-      ]);
+      let profileEvents: Awaited<ReturnType<typeof fetchAllProfilesFromDb>>;
+      let productEvents: Awaited<ReturnType<typeof fetchAllProductsFromDb>>;
+      let reviewEvents: Awaited<ReturnType<typeof fetchCachedEvents>>;
+      try {
+        [profileEvents, productEvents, reviewEvents] = await withTimeout(
+          Promise.all([
+            fetchAllProfilesFromDb(),
+            fetchAllProductsFromDb(),
+            fetchCachedEvents(31555),
+          ]),
+          DB_TIMEOUT_MS,
+          "get_company_details DB fetch"
+        );
+      } catch (error) {
+        return dbError(error, startTime);
+      }
 
       const shopProfile = profileEvents
         .filter((e) => e.kind === 30019 && e.pubkey === pubkey)
@@ -567,46 +617,50 @@ export function registerReadTools(server: McpServer) {
         };
       }
 
-      const reviewEvents = await fetchCachedEvents(31555);
-      let reviews = reviewEvents.map(parseReviewEvent);
+      try {
+        const reviewEvents = await withTimeout(fetchCachedEvents(31555), DB_TIMEOUT_MS, "fetchCachedEvents");
+        let reviews = reviewEvents.map(parseReviewEvent);
 
-      if (productId) {
-        reviews = reviews.filter((r) => r.d && r.d.includes(productId));
-      }
+        if (productId) {
+          reviews = reviews.filter((r) => r.d && r.d.includes(productId));
+        }
 
-      if (sellerPubkey) {
-        reviews = reviews.filter((r) => r.d && r.d.includes(sellerPubkey));
-      }
+        if (sellerPubkey) {
+          reviews = reviews.filter((r) => r.d && r.d.includes(sellerPubkey));
+        }
 
-      const latestTimestamp = reviews.reduce(
-        (max, r) =>
-          r.createdAt && Number(r.createdAt) > max ? Number(r.createdAt) : max,
-        0
-      );
+        const latestTimestamp = reviews.reduce(
+          (max, r) =>
+            r.createdAt && Number(r.createdAt) > max ? Number(r.createdAt) : max,
+          0
+        );
 
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify(
-              {
-                count: reviews.length,
-                reviews,
-                _meta: {
-                  responseTimeMs: Date.now() - startTime,
-                  dataSource: "cached_db",
-                  dataFreshness: latestTimestamp
-                    ? new Date(latestTimestamp * 1000).toISOString()
-                    : null,
-                  resultCount: reviews.length,
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify(
+                {
+                  count: reviews.length,
+                  reviews,
+                  _meta: {
+                    responseTimeMs: Date.now() - startTime,
+                    dataSource: "cached_db",
+                    dataFreshness: latestTimestamp
+                      ? new Date(latestTimestamp * 1000).toISOString()
+                      : null,
+                    resultCount: reviews.length,
+                  },
                 },
-              },
-              null,
-              2
-            ),
-          },
-        ],
-      };
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      } catch (error) {
+        return dbError(error, startTime);
+      }
     }
   );
 
@@ -620,27 +674,31 @@ export function registerReadTools(server: McpServer) {
     },
     async ({ code, sellerPubkey }) => {
       const startTime = Date.now();
-      const result = await validateDiscountCode(code, sellerPubkey);
+      try {
+        const result = await withTimeout(validateDiscountCode(code, sellerPubkey), DB_TIMEOUT_MS, "validateDiscountCode");
 
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify(
-              {
-                ...result,
-                _meta: {
-                  responseTimeMs: Date.now() - startTime,
-                  dataSource: "cached_db",
-                  resultCount: 1,
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify(
+                {
+                  ...result,
+                  _meta: {
+                    responseTimeMs: Date.now() - startTime,
+                    dataSource: "cached_db",
+                    resultCount: 1,
+                  },
                 },
-              },
-              null,
-              2
-            ),
-          },
-        ],
-      };
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      } catch (error) {
+        return dbError(error, startTime);
+      }
     }
   );
 
@@ -686,10 +744,11 @@ export function registerReadTools(server: McpServer) {
 
         if (slug && !pubkey) {
           const dbPool = getDbPool();
-          const slugResult = await dbPool.query(
-            "SELECT pubkey FROM shop_slugs WHERE slug = $1",
-            [slug.toLowerCase()]
-          );
+          const slugResult = (await withTimeout(
+            dbPool.query("SELECT pubkey FROM shop_slugs WHERE slug = $1", [slug.toLowerCase()]),
+            DB_TIMEOUT_MS,
+            "shop_slugs query"
+          )) as { rows: { pubkey: string }[] };
           if (slugResult.rows.length === 0) {
             return {
               content: [
@@ -707,13 +766,14 @@ export function registerReadTools(server: McpServer) {
               isError: true,
             };
           }
-          resolvedPubkey = slugResult.rows[0].pubkey;
+          resolvedPubkey = slugResult.rows[0]!.pubkey;
         }
 
-        const [profileEvents, productEvents] = await Promise.all([
-          fetchAllProfilesFromDb(),
-          fetchAllProductsFromDb(),
-        ]);
+        const [profileEvents, productEvents] = await withTimeout(
+          Promise.all([fetchAllProfilesFromDb(), fetchAllProductsFromDb()]),
+          DB_TIMEOUT_MS,
+          "get_storefront profiles+products fetch"
+        );
 
         const shopProfile = profileEvents
           .filter((e) => e.kind === 30019 && e.pubkey === resolvedPubkey)
@@ -762,14 +822,15 @@ export function registerReadTools(server: McpServer) {
         let customDomain = null;
         try {
           const dbPool = getDbPool();
-          const domainResult = await dbPool.query(
-            "SELECT domain, verified FROM custom_domains WHERE pubkey = $1",
-            [resolvedPubkey!]
-          );
+          const domainResult = (await withTimeout(
+            dbPool.query("SELECT domain, verified FROM custom_domains WHERE pubkey = $1", [resolvedPubkey!]),
+            DB_TIMEOUT_MS,
+            "custom_domains query"
+          )) as { rows: { domain: string; verified: boolean }[] };
           if (domainResult.rows.length > 0) {
             customDomain = {
-              domain: domainResult.rows[0].domain,
-              verified: domainResult.rows[0].verified,
+              domain: domainResult.rows[0]!.domain,
+              verified: domainResult.rows[0]!.verified,
             };
           }
         } catch {}
@@ -813,23 +874,7 @@ export function registerReadTools(server: McpServer) {
           ],
         };
       } catch (error) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify({
-                error: "Failed to fetch storefront",
-                details:
-                  error instanceof Error ? error.message : "Unknown error",
-                _meta: {
-                  responseTimeMs: Date.now() - startTime,
-                  dataSource: "cached_db",
-                },
-              }),
-            },
-          ],
-          isError: true,
-        };
+        return dbError(error, startTime);
       }
     }
   );
