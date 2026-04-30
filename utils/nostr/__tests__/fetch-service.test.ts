@@ -90,3 +90,115 @@ describe("fetchProfile", () => {
     expect(cacheEventsToDatabase).not.toHaveBeenCalled();
   });
 });
+
+describe("fetchAllFollows", () => {
+  const userPubkey =
+    "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+  const directFromDb =
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+  const secondDegreeFromRelay =
+    "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+
+  beforeEach(() => {
+    jest.resetModules();
+    jest.clearAllMocks();
+  });
+
+  it("hydrates direct follows from DB first, then merges the latest event with relay WoT data", async () => {
+    const editFollowsContext = jest.fn();
+
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(() => ({
+        wot: 1,
+      })),
+      deleteEvent: jest.fn(),
+      verifyNip05Identifier: jest.fn(),
+    }));
+
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn(),
+    }));
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        contactList: {
+          id: "db-contact-list",
+          pubkey: userPubkey,
+          created_at: 200,
+          kind: 3,
+          tags: [["p", directFromDb]],
+          content: "",
+          sig: "db-sig",
+        },
+      }),
+    }) as typeof global.fetch;
+
+    const { fetchAllFollows } = await import("../fetch-service");
+
+    const nostr = {
+      fetch: jest
+        .fn()
+        .mockResolvedValueOnce([
+          {
+            id: "older-relay-contact-list",
+            pubkey: userPubkey,
+            created_at: 100,
+            kind: 3,
+            tags: [],
+            content: "",
+            sig: "relay-sig",
+          },
+        ])
+        .mockResolvedValueOnce([
+          {
+            id: "second-degree-event",
+            pubkey: directFromDb,
+            created_at: 250,
+            kind: 3,
+            tags: [["p", secondDegreeFromRelay]],
+            content: "",
+            sig: "second-degree-sig",
+          },
+        ]),
+    } as any;
+
+    const result = await fetchAllFollows(
+      nostr,
+      ["wss://relay.example"],
+      editFollowsContext,
+      userPubkey
+    );
+
+    expect(editFollowsContext).toHaveBeenNthCalledWith(
+      1,
+      [directFromDb],
+      [directFromDb],
+      1,
+      true
+    );
+    expect(editFollowsContext).toHaveBeenLastCalledWith(
+      [directFromDb],
+      [directFromDb, secondDegreeFromRelay],
+      1,
+      false
+    );
+    expect(result).toEqual({
+      directFollowList: [directFromDb],
+      followList: [directFromDb, secondDegreeFromRelay],
+      firstDegreeFollowsLength: 1,
+    });
+    expect(nostr.fetch).toHaveBeenNthCalledWith(
+      1,
+      [{ kinds: [3], authors: [userPubkey] }],
+      {},
+      ["wss://relay.example"]
+    );
+    expect(nostr.fetch).toHaveBeenNthCalledWith(
+      2,
+      [{ kinds: [3], authors: [directFromDb] }],
+      {},
+      ["wss://relay.example"]
+    );
+  });
+});

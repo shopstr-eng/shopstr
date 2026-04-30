@@ -52,9 +52,12 @@ const renderWithContext = (contextValue: any) => {
 
 describe("ShopstrSlider", () => {
   const defaultFollowsContext = {
+    directFollowList: [],
     followList: [],
     firstDegreeFollowsLength: 0,
     isLoading: false,
+    addFollow: jest.fn(),
+    removeFollow: jest.fn(),
   };
 
   beforeEach(() => {
@@ -92,9 +95,12 @@ describe("ShopstrSlider", () => {
 
   it("uses firstDegreeFollowsLength for maxValue when available", () => {
     const contextValue = {
+      directFollowList: [],
       followList: [],
       isLoading: false,
       firstDegreeFollowsLength: 150,
+      addFollow: jest.fn(),
+      removeFollow: jest.fn(),
     };
     renderWithContext(contextValue);
     expect(screen.getByTestId("slider")).toHaveAttribute(
@@ -105,9 +111,12 @@ describe("ShopstrSlider", () => {
 
   it("uses the wot value for maxValue when context data is not available", () => {
     const contextValue = {
+      directFollowList: [],
       followList: [],
       firstDegreeFollowsLength: 0,
       isLoading: true,
+      addFollow: jest.fn(),
+      removeFollow: jest.fn(),
     };
     renderWithContext(contextValue);
     expect(screen.getByTestId("slider")).toHaveAttribute("data-max-value", "5");
