@@ -118,6 +118,8 @@ jest.mock("@heroicons/react/24/outline", () => ({
   ArrowRightStartOnRectangleIcon: () => <div data-testid="icon-logout" />,
   ClipboardIcon: () => <div data-testid="icon-clipboard" />,
   CheckIcon: () => <div data-testid="icon-check" />,
+  UserMinusIcon: () => <div data-testid="icon-user-minus" />,
+  UserPlusIcon: () => <div data-testid="icon-user-plus" />,
 }));
 
 Object.defineProperty(navigator, "clipboard", {
