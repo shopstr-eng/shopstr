@@ -171,7 +171,7 @@ export class NostrManager {
     relayUrls?: string[],
     signal?: AbortSignal
   ): Promise<NostrEvent[]> {
-    return await newPromiseWithTimeout(async (resolve, _reject) => {
+    return await newPromiseWithTimeout(async (resolve, reject) => {
       if (!params) {
         params = {};
       }
@@ -247,7 +247,7 @@ export class NostrManager {
           resolve(fetchedEvents);
           return;
         }
-        reject(error);
+        reject(error instanceof Error ? error : new Error(String(error)));
         return;
       }
 
