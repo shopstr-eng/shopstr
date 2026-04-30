@@ -90,3 +90,120 @@ describe("fetchProfile", () => {
     expect(cacheEventsToDatabase).not.toHaveBeenCalled();
   });
 });
+
+describe("fetchAllFollows", () => {
+  const userPubkey =
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+  const olderFollowPubkey =
+    "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+  const latestFollowPubkey =
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
+
+  beforeEach(() => {
+    jest.resetModules();
+    jest.clearAllMocks();
+
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(() => ({ wot: 2 })),
+      deleteEvent: jest.fn(),
+      verifyNip05Identifier: jest.fn(),
+    }));
+
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn(),
+    }));
+  });
+
+  it("returns empty follows for logged-out users without fetching defaults", async () => {
+    const { fetchAllFollows } = await import("../fetch-service");
+    const editFollowsContext = jest.fn();
+    const nostr = {
+      fetch: jest.fn(),
+    } as any;
+
+    const result = await fetchAllFollows(
+      nostr,
+      ["wss://relay.example"],
+      editFollowsContext
+    );
+
+    expect(result.followList).toEqual([]);
+    expect(nostr.fetch).not.toHaveBeenCalled();
+    expect(editFollowsContext).toHaveBeenCalledWith([], 0, false);
+  });
+
+  it("keeps follows empty when a logged-in user has no contact list", async () => {
+    const { fetchAllFollows } = await import("../fetch-service");
+    const editFollowsContext = jest.fn();
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([]),
+    } as any;
+
+    const result = await fetchAllFollows(
+      nostr,
+      ["wss://relay.example"],
+      editFollowsContext,
+      userPubkey
+    );
+
+    expect(result.followList).toEqual([]);
+    expect(nostr.fetch).toHaveBeenCalledTimes(1);
+    expect(nostr.fetch).toHaveBeenCalledWith(
+      [{ kinds: [3], authors: [userPubkey] }],
+      {},
+      ["wss://relay.example"]
+    );
+    expect(editFollowsContext).toHaveBeenCalledWith([], 0, false);
+  });
+
+  it("uses only the latest kind 3 contact list for direct follows", async () => {
+    const { fetchAllFollows } = await import("../fetch-service");
+    const editFollowsContext = jest.fn();
+    const nostr = {
+      fetch: jest
+        .fn()
+        .mockResolvedValueOnce([
+          {
+            id: "older-contact-list",
+            pubkey: userPubkey,
+            created_at: 100,
+            kind: 3,
+            tags: [["p", olderFollowPubkey]],
+            content: "",
+            sig: "sig",
+          },
+          {
+            id: "latest-contact-list",
+            pubkey: userPubkey,
+            created_at: 200,
+            kind: 3,
+            tags: [["p", latestFollowPubkey]],
+            content: "",
+            sig: "sig",
+          },
+        ])
+        .mockResolvedValueOnce([]),
+    } as any;
+
+    const result = await fetchAllFollows(
+      nostr,
+      ["wss://relay.example"],
+      editFollowsContext,
+      userPubkey
+    );
+
+    expect(result.followList).toEqual([latestFollowPubkey]);
+    expect(result.followList).not.toContain(olderFollowPubkey);
+    expect(nostr.fetch).toHaveBeenNthCalledWith(
+      2,
+      [{ kinds: [3], authors: [latestFollowPubkey] }],
+      {},
+      ["wss://relay.example"]
+    );
+    expect(editFollowsContext).toHaveBeenCalledWith(
+      [latestFollowPubkey],
+      1,
+      false
+    );
+  });
+});

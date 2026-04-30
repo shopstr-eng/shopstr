@@ -128,6 +128,10 @@ function MarketplacePage({
     useContext(SignerContext);
 
   const searchBarRef = useRef<HTMLDivElement>(null);
+  const hasTrustGraph =
+    Boolean(loggedIn) &&
+    !followsContext.isLoading &&
+    followsContext.firstDegreeFollowsLength > 0;
 
   useEffect(() => {
     const slug = normalizeNpub(router.query.npub);
@@ -239,11 +243,14 @@ function MarketplacePage({
   }, [focusedPubkey, shopMapContext]);
 
   useEffect(() => {
-    setIsFetchingFollows(true);
-    if (followsContext.followList.length && !followsContext.isLoading) {
-      setIsFetchingFollows(false);
+    setIsFetchingFollows(followsContext.isLoading);
+  }, [followsContext.isLoading]);
+
+  useEffect(() => {
+    if (!hasTrustGraph && wotFilter) {
+      setWotFilter(false);
     }
-  }, [followsContext]);
+  }, [hasTrustGraph, wotFilter]);
 
   const handleFilteredProductsChange = (products: ProductData[]) => {
     setFilteredProducts(products);
@@ -548,7 +555,7 @@ function MarketplacePage({
                   setSelectedLocation(event.target.value);
                 }}
               />
-              {!isFetchingFollows ? (
+              {!isFetchingFollows && hasTrustGraph ? (
                 <ShopstrSwitch
                   wotFilter={wotFilter}
                   setWotFilter={setWotFilter}
