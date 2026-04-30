@@ -31,6 +31,24 @@ describe("parseShippingTag", () => {
       parseShippingTag(["shipping", "Added Cost", "-10", "USD"])
     ).toBeUndefined();
   });
+
+  it("property-style rejects legacy and malformed shipping tag shapes without throwing", () => {
+    const invalidTags = [
+      ["shipping"],
+      ["shipping", "Free"],
+      ["shipping", "5", "USD"],
+      ["shipping", "Added Cost", "", "USD"],
+      ["shipping", "Added Cost", "NaN", "USD"],
+      ["shipping", "Added Cost", "10"],
+      ["shipping", "Unsupported", "10", "USD"],
+      ["price", "10", "USD"],
+    ];
+
+    for (const tag of invalidTags) {
+      expect(() => parseShippingTag(tag)).not.toThrow();
+      expect(parseShippingTag(tag)).toBeUndefined();
+    }
+  });
 });
 
 describe("getEffectiveShippingCost", () => {
@@ -65,6 +83,21 @@ describe("parseShippingFromTags", () => {
     ).toEqual({
       shippingType: "Added Cost",
       shippingCost: 12,
+    });
+  });
+
+  it("keeps the last valid modern shipping tag and ignores later malformed tags", () => {
+    expect(
+      parseShippingFromTags([
+        ["shipping", "Added Cost", "12", "USD"],
+        ["shipping", "Added Cost", "-1", "USD"],
+        ["shipping", "Free"],
+        ["shipping", "Added Cost", "15", "USD"],
+        ["shipping", "Added Cost", "not-a-number", "USD"],
+      ])
+    ).toEqual({
+      shippingType: "Added Cost",
+      shippingCost: 15,
     });
   });
 });

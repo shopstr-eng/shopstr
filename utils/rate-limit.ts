@@ -67,12 +67,13 @@ export function checkRateLimit(
 }
 
 export function getRequestIp(req: NextApiRequest): string {
-  const forwarded = req.headers["x-forwarded-for"];
+  const headers = req.headers ?? {};
+  const forwarded = headers["x-forwarded-for"];
   const forwardedValue = Array.isArray(forwarded) ? forwarded[0] : forwarded;
   const fromForwarded = forwardedValue?.split(",")[0]?.trim();
   if (fromForwarded) return fromForwarded;
 
-  const realIp = req.headers["x-real-ip"];
+  const realIp = headers["x-real-ip"];
   const realIpValue = Array.isArray(realIp) ? realIp[0] : realIp;
   if (realIpValue) return realIpValue.trim();
 

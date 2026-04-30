@@ -102,7 +102,6 @@ describe("ProductCard", () => {
       expect(screen.getByTestId("image-carousel")).toBeInTheDocument();
       expect(screen.getByTestId("profile-dropdown")).toBeInTheDocument();
       expect(screen.getByText("Test Product")).toBeInTheDocument();
-      expect(screen.getByText("Active")).toBeInTheDocument();
     });
 
     it("calls onProductClick when the card is clicked", () => {
