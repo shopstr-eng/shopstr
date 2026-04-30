@@ -16,6 +16,7 @@ import {
   deleteEvent,
   verifyNip05Identifier,
 } from "@/utils/nostr/nostr-helper-functions";
+import { isHexPubkey } from "@/utils/nostr/pubkey";
 import {
   ProductData,
   parseTags,
@@ -48,10 +49,6 @@ function getUniqueProofs(proofs: Proof[]): Proof[] {
     }
     return false;
   });
-}
-
-function isHexString(value: string): boolean {
-  return /^[0-9a-fA-F]{64}$/.test(value);
 }
 
 export const fetchAllPosts = async (
@@ -970,9 +967,10 @@ export const fetchAllFollows = async (
     excluded = new Set<string>()
   ) =>
     tags
+      .filter((tag) => tag[0] === "p")
       .map((tag) => tag[1])
       .filter(
-        (pubkey) => isHexString(pubkey!) && !excluded.has(pubkey!)
+        (pubkey) => isHexPubkey(pubkey!) && !excluded.has(pubkey!)
       ) as string[];
 
   const getLatestEventByAuthor = (events: NostrEvent[]) => {
