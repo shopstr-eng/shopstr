@@ -15,6 +15,7 @@ import {
   DropdownTrigger,
   DropdownMenu,
   DropdownItem,
+  addToast,
 } from "@heroui/react";
 import {
   FaceFrownIcon,
@@ -115,6 +116,7 @@ function MarketplacePage({
   const [showEventIdModal, setShowEventIdModal] = useState(false);
 
   const [isFetchingFollows, setIsFetchingFollows] = useState(false);
+  const [isFollowActionLoading, setIsFollowActionLoading] = useState(false);
 
   const [categories, setCategories] = useState([""]);
 
@@ -128,6 +130,35 @@ function MarketplacePage({
     useContext(SignerContext);
 
   const searchBarRef = useRef<HTMLDivElement>(null);
+  const isFollowingFocusedPubkey =
+    followsContext.directFollowList.includes(focusedPubkey);
+
+  const handleFollowToggle = async () => {
+    if (!focusedPubkey) return;
+
+    if (!loggedIn) {
+      onOpen();
+      return;
+    }
+
+    setIsFollowActionLoading(true);
+    try {
+      const success = isFollowingFocusedPubkey
+        ? await followsContext.removeFollow(focusedPubkey)
+        : await followsContext.addFollow(focusedPubkey);
+
+      if (success) {
+        addToast({
+          title: isFollowingFocusedPubkey ? "Unfollowed merchant" : "Following",
+          color: isFollowingFocusedPubkey ? "default" : "success",
+        });
+      }
+    } catch (error) {
+      console.error("Follow action failed:", error);
+    } finally {
+      setIsFollowActionLoading(false);
+    }
+  };
 
   useEffect(() => {
     const slug = normalizeNpub(router.query.npub);
@@ -239,11 +270,8 @@ function MarketplacePage({
   }, [focusedPubkey, shopMapContext]);
 
   useEffect(() => {
-    setIsFetchingFollows(true);
-    if (followsContext.followList.length && !followsContext.isLoading) {
-      setIsFetchingFollows(false);
-    }
-  }, [followsContext]);
+    setIsFetchingFollows(followsContext.isLoading);
+  }, [followsContext.isLoading]);
 
   const handleFilteredProductsChange = (products: ProductData[]) => {
     setFilteredProducts(products);
@@ -336,7 +364,7 @@ function MarketplacePage({
                           dropDownKeys={
                             reviewerPubkey === userPubkey
                               ? ["shop_profile"]
-                              : ["shop", "inquiry", "copy_npub"]
+                              : ["shop", "inquiry", "follow", "copy_npub"]
                           }
                         />
                       </div>
@@ -463,6 +491,20 @@ function MarketplacePage({
               >
                 Message
               </Button>
+              {focusedPubkey !== userPubkey && (
+                <Button
+                  className="text-light-text dark:text-dark-text dark:hover:text-accent-dark-text bg-transparent text-lg hover:text-purple-700 sm:text-xl"
+                  onClick={handleFollowToggle}
+                  isLoading={isFollowActionLoading}
+                  isDisabled={isFollowActionLoading}
+                >
+                  {isFollowActionLoading
+                    ? "Please sign..."
+                    : isFollowingFocusedPubkey
+                      ? "Following"
+                      : "+ Follow"}
+                </Button>
+              )}
               {rawEvent && (
                 <Dropdown>
                   <DropdownTrigger>

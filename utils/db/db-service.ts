@@ -235,6 +235,22 @@ async function initializeTables(): Promise<void> {
       CREATE INDEX IF NOT EXISTS idx_product_events_pubkey ON product_events(pubkey);
       CREATE INDEX IF NOT EXISTS idx_product_events_created_at ON product_events(created_at DESC);
 
+      -- Contact list events (kind 3 - NIP-02 follows)
+      CREATE TABLE IF NOT EXISTS contact_list_events (
+          id TEXT PRIMARY KEY,
+          pubkey TEXT NOT NULL,
+          created_at BIGINT NOT NULL,
+          kind INTEGER NOT NULL,
+          tags JSONB NOT NULL,
+          content TEXT NOT NULL,
+          sig TEXT NOT NULL,
+          cached_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          CONSTRAINT contact_list_events_kind_check CHECK (kind = 3)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_contact_list_events_pubkey ON contact_list_events(pubkey);
+      CREATE INDEX IF NOT EXISTS idx_contact_list_events_created_at ON contact_list_events(created_at DESC);
+
       -- Reviews table (kind 31555)
       CREATE TABLE IF NOT EXISTS review_events (
           id TEXT PRIMARY KEY,
@@ -460,6 +476,9 @@ async function initializeTables(): Promise<void> {
 
 // Map event kinds to table names
 function getTableForKind(kind: number): string | null {
+  // Contact list
+  if (kind === 3) return "contact_list_events";
+
   // Products
   if (kind === 30402) return "product_events";
 
@@ -486,9 +505,9 @@ function getTableForKind(kind: number): string | null {
 
 // Helper function to check if event kind should only keep latest per pubkey
 function shouldKeepOnlyLatest(kind: number): boolean {
-  // Wallet config (17375), wallet state (37375), relay list (10002), blossom servers (10063)
+  // Contact list (3), wallet config (17375), wallet state (37375), relay list (10002), blossom servers (10063)
   // User profile (0), shop profile (30019), community definition (34550)
-  return [17375, 37375, 10002, 10063, 0, 30019, 34550].includes(kind);
+  return [3, 17375, 37375, 10002, 10063, 0, 30019, 34550].includes(kind);
 }
 
 // Helper function to check if event is a review (needs special handling per product)

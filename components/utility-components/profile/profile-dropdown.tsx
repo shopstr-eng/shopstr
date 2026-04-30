@@ -1,5 +1,9 @@
 import { LogOut } from "@/utils/nostr/nostr-helper-functions";
-import { ProfileMapContext, ShopMapContext } from "@/utils/context/context";
+import {
+  FollowsContext,
+  ProfileMapContext,
+  ShopMapContext,
+} from "@/utils/context/context";
 import {
   Dropdown,
   DropdownItem,
@@ -7,7 +11,9 @@ import {
   DropdownMenu,
   DropdownTrigger,
   User,
+  Spinner,
   useDisclosure,
+  addToast,
 } from "@heroui/react";
 import { nip19 } from "nostr-tools";
 import { useContext, useEffect, useState } from "react";
@@ -21,6 +27,8 @@ import {
   Cog6ToothIcon,
   GlobeAltIcon,
   UserIcon,
+  UserMinusIcon,
+  UserPlusIcon,
 } from "@heroicons/react/24/outline";
 import { useRouter } from "next/router";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
@@ -35,7 +43,8 @@ type DropDownKeys =
   | "settings"
   | "user_profile"
   | "logout"
-  | "copy_npub";
+  | "copy_npub"
+  | "follow";
 
 const fetchedProfileContentCache = new Map<string, ProfileData["content"]>();
 const inFlightProfileRequests = new Map<
@@ -95,16 +104,50 @@ export const ProfileWithDropdown = ({
   >(null);
   const [isNPubCopied, setIsNPubCopied] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isFollowLoading, setIsFollowLoading] = useState(false);
   const profileContext = useContext(ProfileMapContext);
   const shopMapContext = useContext(ShopMapContext);
+  const followsContext = useContext(FollowsContext);
+  const isFollowing = followsContext.directFollowList.includes(pubkey);
   const npub = pubkey ? nip19.npubEncode(pubkey) : "";
   const router = useRouter();
   const { isLoggedIn } = useContext(SignerContext);
   const { isOpen, onOpen, onClose } = useDisclosure();
 
-  const handleDropdownAction = (action: () => void) => {
+  const closeDropdown = () => {
     setIsDropdownOpen(false);
+  };
+
+  const handleDropdownAction = (action: () => void | Promise<void>) => {
+    closeDropdown();
     action();
+  };
+
+  const handleFollowPress = async () => {
+    if (!isLoggedIn) {
+      closeDropdown();
+      onOpen();
+      return;
+    }
+
+    setIsFollowLoading(true);
+    try {
+      const success = isFollowing
+        ? await followsContext.removeFollow(pubkey)
+        : await followsContext.addFollow(pubkey);
+
+      if (success) {
+        addToast({
+          title: isFollowing ? "Unfollowed merchant" : "Following",
+          color: isFollowing ? "default" : "success",
+        });
+      }
+    } catch (error) {
+      console.error("Follow action failed:", error);
+    } finally {
+      setIsFollowLoading(false);
+      closeDropdown();
+    }
   };
 
   useEffect(() => {
@@ -300,11 +343,33 @@ export const ProfileWithDropdown = ({
       },
       label: isNPubCopied ? "Copied!" : "Copy npub",
     },
+    follow: {
+      key: "follow",
+      color: "default",
+      className: "text-light-text dark:text-dark-text",
+      startContent: isFollowLoading ? (
+        <Spinner size="sm" />
+      ) : isFollowing ? (
+        <UserMinusIcon className="h-5 w-5" />
+      ) : (
+        <UserPlusIcon className="h-5 w-5" />
+      ),
+      onPress: () => {
+        void handleFollowPress();
+      },
+      label: isFollowLoading
+        ? "Please sign..."
+        : isFollowing
+          ? "Unfollow"
+          : "+ Follow",
+      isDisabled: isFollowLoading,
+    },
   };
 
   return (
     <>
       <div
+        data-profile-dropdown
         onClick={(e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -340,6 +405,7 @@ export const ProfileWithDropdown = ({
           <DropdownMenu
             aria-label="User Actions"
             variant="flat"
+            closeOnSelect={false}
             items={dropDownKeys.map((key) => DropDownItems[key])}
           >
             {(item) => {
@@ -350,6 +416,7 @@ export const ProfileWithDropdown = ({
                   className={item.className}
                   startContent={item.startContent}
                   onPress={item.onPress}
+                  isDisabled={item.isDisabled}
                 >
                   {item.label}
                 </DropdownItem>

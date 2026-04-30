@@ -16,6 +16,22 @@ CREATE TABLE IF NOT EXISTS product_events (
 CREATE INDEX IF NOT EXISTS idx_product_events_pubkey ON product_events(pubkey);
 CREATE INDEX IF NOT EXISTS idx_product_events_created_at ON product_events(created_at DESC);
 
+-- Contact list events (kind 3 - NIP-02 follows)
+CREATE TABLE IF NOT EXISTS contact_list_events (
+    id TEXT PRIMARY KEY,
+    pubkey TEXT NOT NULL,
+    created_at BIGINT NOT NULL,
+    kind INTEGER NOT NULL,
+    tags JSONB NOT NULL,
+    content TEXT NOT NULL,
+    sig TEXT NOT NULL,
+    cached_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT contact_list_events_kind_check CHECK (kind = 3)
+);
+
+CREATE INDEX IF NOT EXISTS idx_contact_list_events_pubkey ON contact_list_events(pubkey);
+CREATE INDEX IF NOT EXISTS idx_contact_list_events_created_at ON contact_list_events(created_at DESC);
+
 -- Reviews table (kind 31555)
 CREATE TABLE IF NOT EXISTS review_events (
     id TEXT PRIMARY KEY,
