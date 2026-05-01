@@ -37,7 +37,7 @@
     "autoprefixer": "10.4.27",
     "chart.js": "4.5.1",
     "crypto-js": "4.2.0",
-    "dexie": "3.2.4",
+    "dexie": "4.4.2",
     "dexie-react-hooks": "4.4.0",
     "eslint": "10.2.0",
     "eslint-config-next": "13.3.0",
