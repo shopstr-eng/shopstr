@@ -30,6 +30,7 @@ import {
 import { newPromiseWithTimeout } from "@/utils/timeout";
 import { getLocalStorageJson } from "@/utils/safe-json";
 import { isHexPubkey } from "@/utils/nostr/pubkey";
+import { pickPreferredReplaceableEvent } from "@/utils/nostr/replaceable-events";
 
 function containsRelay(relays: string[], relay: string): boolean {
   return relays.some((r) => r.includes(relay));
@@ -1012,27 +1013,29 @@ async function fetchLatestContactListEvent(
   nostr: NostrManager,
   userPubkey: string
 ): Promise<NostrEvent | null> {
-  // Fetch from relays
-  const relayEvents = await nostr.fetch(
-    [{ kinds: [3], authors: [userPubkey] }],
-    {},
-    getContactListRelays()
-  );
-
-  // Also check DB cache for the latest signed event (survives relay publish failures)
-  let dbEvent: NostrEvent | null = null;
-  try {
-    const response = await fetch(
+  // Fetch from relays and DB cache in parallel
+  const [relayResult, dbResult] = await Promise.allSettled([
+    nostr.fetch(
+      [{ kinds: [3], authors: [userPubkey] }],
+      {},
+      getContactListRelays()
+    ),
+    fetch(
       `/api/db/fetch-contacts?pubkey=${encodeURIComponent(userPubkey)}`
-    );
-    if (response.ok) {
+    ).then(async (response) => {
+      if (!response.ok) return null;
       const data = await response.json();
-      if (data?.contactList) {
-        dbEvent = data.contactList as NostrEvent;
-      }
-    }
-  } catch (error) {
-    console.error("Failed to fetch contact list from DB cache:", error);
+      return (data?.contactList as NostrEvent) ?? null;
+    }),
+  ]);
+
+  const relayEvents =
+    relayResult.status === "fulfilled" ? relayResult.value : [];
+  const dbEvent =
+    dbResult.status === "fulfilled" ? dbResult.value : null;
+
+  if (dbResult.status === "rejected") {
+    console.error("Failed to fetch contact list from DB cache:", dbResult.reason);
   }
 
   // Merge all sources and pick the latest
@@ -1041,12 +1044,7 @@ async function fetchLatestContactListEvent(
     allEvents.push(dbEvent);
   }
 
-  return allEvents.reduce<NostrEvent | null>((latestEvent, event) => {
-    if (!latestEvent || event.created_at > latestEvent.created_at) {
-      return event as NostrEvent;
-    }
-    return latestEvent;
-  }, null);
+  return pickPreferredReplaceableEvent(allEvents as NostrEvent[]);
 }
 
 export async function signNostrEvent(
