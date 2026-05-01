@@ -1,6 +1,8 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { randomUUID } from "crypto";
 import { z } from "zod/v4";
+import type { ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { ZodRawShapeCompat } from "@modelcontextprotocol/sdk/server/zod-compat.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { createMcpServer } from "@/mcp/server";
 import {
@@ -12,7 +14,7 @@ import {
 import { recordRequest } from "@/utils/mcp/metrics";
 import { registerWriteTools } from "@/mcp/tools/write-tools";
 import { applyRateLimit } from "@/utils/rate-limit";
-import { wrapWithAudit } from "@/mcp/audit-log";
+import { wrapWithAudit, type ToolCb } from "@/mcp/audit-log";
 
 // MCP protocol entry — high per-IP cap for legitimate session traffic, with
 // a tighter per-key cap so a single compromised credential cannot exhaust
@@ -47,13 +49,19 @@ function registerPurchaseTools(
 ) {
   const baseUrl = `http://localhost:${process.env.PORT || 5000}`;
   const auditContext = { apiKeyId: apiKey.id, pubkey: apiKey.pubkey };
-  const reg = (name: string, description: string, schema: any, cb: any) =>
-    server.tool(
+  function reg<Args extends ZodRawShapeCompat>(
+    name: string,
+    description: string,
+    schema: Args,
+    cb: ToolCallback<Args>
+  ) {
+    return server.tool(
       name,
       description,
       schema,
-      wrapWithAudit(name, cb, auditContext) as any
+      wrapWithAudit(name, cb as ToolCb, auditContext) as ToolCallback<Args>
     );
+  }
 
   function permissionError() {
     return {

@@ -70,10 +70,24 @@ describe("sanitizeParams", () => {
     expect(inner.safe).toBe("ok");
   });
 
-  it("truncates long string values to 200 chars", () => {
+  it("redacts private message, payment, address, and file fields", () => {
+    const result = sanitizeParams({
+      message: "Please leave this by the door",
+      invoice: "lnbc...",
+      fileBase64: "x".repeat(300),
+      shippingAddress: { address: "123 Market St" },
+    });
+
+    expect(result.message).toBe("[REDACTED]");
+    expect(result.invoice).toBe("[REDACTED]");
+    expect(result.fileBase64).toBe("[REDACTED]");
+    expect(result.shippingAddress).toBe("[REDACTED]");
+  });
+
+  it("truncates long non-sensitive string values to 200 chars", () => {
     const long = "x".repeat(300);
-    const result = sanitizeParams({ fileBase64: long });
-    const val = result.fileBase64 as string;
+    const result = sanitizeParams({ description: long });
+    const val = result.description as string;
     expect(val).toHaveLength("x".repeat(200).length + "...[truncated]".length);
     expect(val.endsWith("...[truncated]")).toBe(true);
   });
@@ -83,11 +97,11 @@ describe("sanitizeParams", () => {
     expect(result.note).toBe("hello");
   });
 
-  it("truncates long strings inside nested objects", () => {
+  it("redacts sensitive strings inside nested objects", () => {
     const long = "a".repeat(300);
     const result = sanitizeParams({ shipping: { address: long } });
     const shipping = result.shipping as Record<string, unknown>;
-    expect((shipping.address as string).endsWith("...[truncated]")).toBe(true);
+    expect(shipping.address).toBe("[REDACTED]");
   });
 
   it("sanitizes objects inside arrays", () => {
@@ -373,7 +387,7 @@ describe("wrapWithAudit", () => {
     expect(order.buyerNote).toBe("rush");
   });
 
-  it("truncates large field values before logging", async () => {
+  it("redacts large private field values before logging", async () => {
     const wrapped = wrapWithAudit(
       "upload_media",
       jest.fn().mockResolvedValue({ content: [] })
@@ -383,8 +397,7 @@ describe("wrapWithAudit", () => {
 
     const logged = loggedEntry(consoleSpy);
     const params = logged.params as Record<string, unknown>;
-    expect((params.fileBase64 as string).endsWith("...[truncated]")).toBe(true);
-    expect((params.fileBase64 as string).length).toBeLessThan(500);
+    expect(params.fileBase64).toBe("[REDACTED]");
   });
 
   it("includes a valid ISO timestamp in the log", async () => {

@@ -30,14 +30,29 @@ export type ToolCb = (
 const REDACTED = "[REDACTED]";
 const MAX_STRING_LENGTH = 200;
 
-const SENSITIVE_KEYS = new Set([
-  "nsec",
-  "password",
-  "secret",
-  "cashuToken",
-  "token",
-  "apiKey",
-]);
+const SENSITIVE_KEY_PATTERNS = [
+  /nsec/i,
+  /password/i,
+  /secret/i,
+  /token/i,
+  /api[-_]?key/i,
+  /authorization/i,
+  /private/i,
+  /seed/i,
+  /mnemonic/i,
+  /message/i,
+  /^content$/i,
+  /address/i,
+  /invoice/i,
+  /bolt11/i,
+  /^file/i,
+  /base64/i,
+  /tracking/i,
+];
+
+function isSensitiveKey(key: string): boolean {
+  return SENSITIVE_KEY_PATTERNS.some((pattern) => pattern.test(key));
+}
 
 function truncateString(s: string): string {
   return s.length > MAX_STRING_LENGTH
@@ -52,7 +67,7 @@ export function sanitizeParams(
   if (depth >= 4) return { _depth_limit: true };
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(params)) {
-    if (SENSITIVE_KEYS.has(k)) {
+    if (isSensitiveKey(k)) {
       out[k] = REDACTED;
     } else if (v !== null && typeof v === "object" && !Array.isArray(v)) {
       out[k] = sanitizeParams(v as Record<string, unknown>, depth + 1);
