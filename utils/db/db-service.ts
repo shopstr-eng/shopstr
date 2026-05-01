@@ -1,5 +1,9 @@
 import { Pool, PoolClient } from "pg";
 import { NostrEvent } from "../types/types";
+import {
+  pickPreferredReplaceableEvent,
+  selectPreferredReplaceableEvent,
+} from "../nostr/replaceable-events";
 import { findListingBySlug } from "../url-slugs";
 
 let pool: Pool | null = null;
@@ -519,6 +523,85 @@ export function buildReviewDTagFilter(dTag: string): string {
   return JSON.stringify([["d", dTag]]);
 }
 
+function buildEventUpsertQuery(table: string, event: NostrEvent) {
+  return {
+    text: `INSERT INTO ${table} (id, pubkey, created_at, kind, tags, content, sig)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)
+           ON CONFLICT (id) DO UPDATE SET
+             pubkey = EXCLUDED.pubkey,
+             created_at = EXCLUDED.created_at,
+             tags = EXCLUDED.tags,
+             content = EXCLUDED.content,
+             sig = EXCLUDED.sig,
+             cached_at = CURRENT_TIMESTAMP`,
+    values: [
+      event.id,
+      event.pubkey,
+      event.created_at,
+      event.kind,
+      JSON.stringify(event.tags),
+      event.content,
+      event.sig,
+    ] as any[],
+  };
+}
+
+async function fetchExistingLatestOnlyEvents(
+  client: PoolClient,
+  table: string,
+  pubkey: string,
+  kind: number
+): Promise<NostrEvent[]> {
+  const result = await client.query(
+    `SELECT id, pubkey, created_at, kind, tags, content, sig
+     FROM ${table}
+     WHERE pubkey = $1 AND kind = $2
+     ORDER BY created_at DESC, id ASC
+     FOR UPDATE`,
+    [pubkey, kind]
+  );
+
+  return result.rows.map((row) => ({
+    id: row.id,
+    pubkey: row.pubkey,
+    created_at: row.created_at,
+    kind: row.kind,
+    tags: row.tags,
+    content: row.content,
+    sig: row.sig,
+  }));
+}
+
+async function cacheLatestOnlyEvent(
+  client: PoolClient,
+  table: string,
+  event: NostrEvent
+): Promise<void> {
+  const existingEvents = await fetchExistingLatestOnlyEvents(
+    client,
+    table,
+    event.pubkey,
+    event.kind
+  );
+  const preferredEvent = pickPreferredReplaceableEvent([
+    event,
+    ...existingEvents,
+  ]);
+
+  if (!preferredEvent) {
+    return;
+  }
+
+  await client.query(
+    `DELETE FROM ${table} WHERE pubkey = $1 AND kind = $2 AND id != $3`,
+    [event.pubkey, event.kind, preferredEvent.id] as any[]
+  );
+
+  if (preferredEvent.id === event.id) {
+    await client.query(buildEventUpsertQuery(table, event));
+  }
+}
+
 // Cache a single event to the database
 export async function cacheEvent(event: NostrEvent): Promise<void> {
   const table = getTableForKind(event.kind);
@@ -535,30 +618,7 @@ export async function cacheEvent(event: NostrEvent): Promise<void> {
     // For events that should only keep the latest version per pubkey
     if (shouldKeepOnlyLatest(event.kind)) {
       await client.query("BEGIN");
-
-      // Delete older events from the same pubkey with the same kind
-      const deleteQuery = {
-        text: `DELETE FROM ${table} WHERE pubkey = $1 AND kind = $2`,
-        values: [event.pubkey, event.kind] as any[],
-      };
-      await client.query(deleteQuery);
-
-      // Insert the new event
-      const insertQuery = {
-        text: `INSERT INTO ${table} (id, pubkey, created_at, kind, tags, content, sig)
-               VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-        values: [
-          event.id,
-          event.pubkey,
-          event.created_at,
-          event.kind,
-          JSON.stringify(event.tags),
-          event.content,
-          event.sig,
-        ] as any[],
-      };
-      await client.query(insertQuery);
-
+      await cacheLatestOnlyEvent(client, table, event);
       await client.query("COMMIT");
     } else if (isReviewEvent(event.kind)) {
       // For reviews, keep only the latest per pubkey per product
@@ -599,27 +659,7 @@ export async function cacheEvent(event: NostrEvent): Promise<void> {
       await client.query("COMMIT");
     } else {
       // For other events, use the normal upsert behavior
-      const query = {
-        text: `INSERT INTO ${table} (id, pubkey, created_at, kind, tags, content, sig)
-               VALUES ($1, $2, $3, $4, $5, $6, $7)
-               ON CONFLICT (id) DO UPDATE SET
-                 pubkey = EXCLUDED.pubkey,
-                 created_at = EXCLUDED.created_at,
-                 tags = EXCLUDED.tags,
-                 content = EXCLUDED.content,
-                 sig = EXCLUDED.sig,
-                 cached_at = CURRENT_TIMESTAMP`,
-        values: [
-          event.id,
-          event.pubkey,
-          event.created_at,
-          event.kind,
-          JSON.stringify(event.tags),
-          event.content,
-          event.sig,
-        ] as any[],
-      };
-      await client.query(query);
+      await client.query(buildEventUpsertQuery(table, event));
     }
   } catch (error) {
     if (client) {
@@ -711,42 +751,16 @@ async function cacheEventsTransaction(events: NostrEvent[]): Promise<void> {
       for (const event of latestOnlyEvents) {
         const key = `${event.pubkey}:${event.kind}`;
         const existing = latestByPubkeyKind.get(key);
-        if (!existing || event.created_at > existing.created_at) {
-          latestByPubkeyKind.set(key, event);
-        }
+        latestByPubkeyKind.set(
+          key,
+          existing
+            ? selectPreferredReplaceableEvent(event, existing)
+            : event
+        );
       }
 
       for (const event of latestByPubkeyKind.values()) {
-        // First, lock and delete old rows
-        await client.query(
-          `DELETE FROM ${table} WHERE pubkey = $1 AND kind = $2 AND id != $3`,
-          [event.pubkey, event.kind, event.id] as any[]
-        );
-
-        // Then insert/update with ON CONFLICT
-        const upsertQuery = {
-          text: `
-            INSERT INTO ${table} (id, pubkey, created_at, kind, tags, content, sig)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
-            ON CONFLICT (id) DO UPDATE SET
-              pubkey = EXCLUDED.pubkey,
-              created_at = EXCLUDED.created_at,
-              tags = EXCLUDED.tags,
-              content = EXCLUDED.content,
-              sig = EXCLUDED.sig,
-              cached_at = CURRENT_TIMESTAMP
-          `,
-          values: [
-            event.id,
-            event.pubkey,
-            event.created_at,
-            event.kind,
-            JSON.stringify(event.tags),
-            event.content,
-            event.sig,
-          ] as any[],
-        };
-        await client.query(upsertQuery);
+        await cacheLatestOnlyEvent(client, table, event);
       }
 
       // Handle review events (latest per pubkey per product) - batch by pubkey+dtag
@@ -886,7 +900,7 @@ export async function fetchCachedEvents(
       params.push(filters.until);
     }
 
-    query += " ORDER BY created_at DESC";
+    query += " ORDER BY created_at DESC, id ASC";
 
     if (filters?.limit) {
       query += ` LIMIT $${paramIndex++}`;

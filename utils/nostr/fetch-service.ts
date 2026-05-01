@@ -18,6 +18,10 @@ import {
 } from "@/utils/nostr/nostr-helper-functions";
 import { isHexPubkey } from "@/utils/nostr/pubkey";
 import {
+  pickPreferredReplaceableEvent,
+  selectPreferredReplaceableEvent,
+} from "@/utils/nostr/replaceable-events";
+import {
   ProductData,
   parseTags,
 } from "@/utils/parsers/product-parser-functions";
@@ -977,9 +981,10 @@ export const fetchAllFollows = async (
     const latestByAuthor = new Map<string, NostrEvent>();
     for (const event of events) {
       const existing = latestByAuthor.get(event.pubkey);
-      if (!existing || event.created_at > existing.created_at) {
-        latestByAuthor.set(event.pubkey, event);
-      }
+      latestByAuthor.set(
+        event.pubkey,
+        existing ? selectPreferredReplaceableEvent(event, existing) : event
+      );
     }
     return latestByAuthor;
   };
@@ -1036,16 +1041,9 @@ export const fetchAllFollows = async (
       allFirstDegreeEvents.push(dbContactListEvent);
     }
 
-    const latestFirstDegreeEvent =
-      allFirstDegreeEvents.reduce<NostrEvent | null>(
-        (latestEvent, event) => {
-          if (!latestEvent || event.created_at > latestEvent.created_at) {
-            return event;
-          }
-          return latestEvent;
-        },
-        null
-      );
+    const latestFirstDegreeEvent = pickPreferredReplaceableEvent(
+      allFirstDegreeEvents as NostrEvent[]
+    );
 
     const directFollowList = latestFirstDegreeEvent
       ? Array.from(new Set(extractValidFollowTags(latestFirstDegreeEvent.tags)))
