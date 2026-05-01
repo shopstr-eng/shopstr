@@ -110,12 +110,6 @@ function registerPurchaseTools(
         .describe(
           "Payment method: lightning (default, Bitcoin Lightning invoice) or cashu (ecash tokens)"
         ),
-      mintUrl: z
-        .string()
-        .optional()
-        .describe(
-          "Cashu mint URL for Lightning invoice generation (optional, defaults to minibits mint)"
-        ),
       cashuToken: z
         .string()
         .optional()
@@ -131,7 +125,6 @@ function registerPurchaseTools(
       shippingAddress,
       discountCode,
       paymentMethod,
-      mintUrl,
       cashuToken,
     }) => {
       const startTime = Date.now();
@@ -158,7 +151,6 @@ function registerPurchaseTools(
             shippingAddress,
             discountCode,
             paymentMethod: paymentMethod || "lightning",
-            mintUrl,
             cashuToken,
           }),
         });

@@ -31,6 +31,7 @@ import {
 import { safeMeltProofs } from "@/utils/cashu/melt-retry-service";
 import { safeSwap } from "@/utils/cashu/swap-retry-service";
 import { withMintRetry } from "@/utils/cashu/mint-retry-service";
+import { toCashuMintAmountSats } from "@/utils/cashu/payment-amount";
 import {
   recordPendingMintQuote,
   markMintQuoteClaimed,
@@ -58,6 +59,7 @@ import { v4 as uuidv4 } from "uuid";
 import { nip19 } from "nostr-tools";
 import { NostrWebLNProvider } from "@getalby/sdk";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
+import type { ListingPricingResult } from "@/utils/payments/listing-pricing";
 import { formatWithCommas } from "./utility-components/display-monetary-info";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import SignInModal from "./sign-in/SignInModal";
@@ -70,6 +72,14 @@ import {
 } from "@/components/utility-components/nostr-context-provider";
 import { ShippingFormData, ContactFormData } from "@/utils/types/types";
 import { Controller } from "react-hook-form";
+
+type ListingMintQuoteResponse = {
+  request: string;
+  quote: string;
+  amount: number;
+  mintUrl: string;
+  pricing: ListingPricingResult;
+};
 
 export default function ProductInvoiceCard({
   productData,
@@ -585,9 +595,7 @@ export default function ProductInvoiceCard({
     price: number,
     data?: ShippingFormData | ContactFormData
   ) => {
-    if (price < 1) {
-      throw new Error("Payment amount must be greater than 0 sats");
-    }
+    toCashuMintAmountSats(price);
 
     if (data) {
       // Type guard to check which form data we received
@@ -618,6 +626,89 @@ export default function ProductInvoiceCard({
           throw new Error("Required fields are missing");
         }
       }
+    }
+  };
+
+  const createListingMintQuote =
+    async (): Promise<ListingMintQuoteResponse> => {
+      const response = await fetch("/api/listing/mint-quote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          productId: productData.id,
+          formType,
+          selectedSize,
+          selectedVolume,
+          selectedWeight,
+          selectedBulkOption,
+          discountCode,
+        }),
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(
+          typeof payload.error === "string"
+            ? payload.error
+            : "Failed to create listing invoice"
+        );
+      }
+
+      const quote = payload as ListingMintQuoteResponse;
+      validateQuoteMatchesSelectedListingOptions(quote);
+      return quote;
+    };
+
+  const updatePendingOrderAmount = (amount: number) => {
+    if (pendingOrderRef.current) {
+      pendingOrderRef.current.amount = String(amount);
+      pendingOrderRef.current.currency = "sats";
+    }
+  };
+
+  const normalizeOptionalSelection = (value?: string) => {
+    const trimmed = value?.trim();
+    return trimmed ? trimmed : undefined;
+  };
+
+  const normalizeBulkSelection = (value?: number) => {
+    return value && value !== 1 ? value : undefined;
+  };
+
+  const validateQuoteMatchesSelectedListingOptions = (
+    quote: ListingMintQuoteResponse
+  ) => {
+    if (!quote.pricing) {
+      throw new Error(
+        "Listing quote did not include validated pricing details"
+      );
+    }
+
+    const expected = {
+      selectedSize: normalizeOptionalSelection(selectedSize),
+      selectedVolume: normalizeOptionalSelection(selectedVolume),
+      selectedWeight: normalizeOptionalSelection(selectedWeight),
+      selectedBulkOption: normalizeBulkSelection(selectedBulkOption),
+    };
+    const received = {
+      selectedSize: normalizeOptionalSelection(quote.pricing.selectedSize),
+      selectedVolume: normalizeOptionalSelection(quote.pricing.selectedVolume),
+      selectedWeight: normalizeOptionalSelection(quote.pricing.selectedWeight),
+      selectedBulkOption: normalizeBulkSelection(
+        quote.pricing.selectedBulkOption
+      ),
+    };
+
+    const matches =
+      expected.selectedSize === received.selectedSize &&
+      expected.selectedVolume === received.selectedVolume &&
+      expected.selectedWeight === received.selectedWeight &&
+      expected.selectedBulkOption === received.selectedBulkOption;
+
+    if (!matches) {
+      throw new Error(
+        "Listing quote did not match the selected listing options. Please try again."
+      );
     }
   };
 
@@ -659,9 +750,7 @@ export default function ProductInvoiceCard({
         price = price * 100000000;
       }
 
-      if (price < 1) {
-        throw new Error("Listing price is less than 1 sat.");
-      }
+      const invoiceAmount = toCashuMintAmountSats(price);
 
       const commonData = {
         additionalInfo: data["Required"],
@@ -693,7 +782,7 @@ export default function ProductInvoiceCard({
       pendingOrderRef.current = {
         orderId: "",
         productTitle: productData.title,
-        amount: String(price),
+        amount: String(invoiceAmount),
         currency: "sats",
         paymentMethod: paymentType || "lightning",
         sellerPubkey: productData.pubkey,
@@ -702,11 +791,11 @@ export default function ProductInvoiceCard({
       };
 
       if (paymentType === "cashu") {
-        await handleCashuPayment(price, paymentData);
+        await handleCashuPayment(invoiceAmount, paymentData);
       } else if (paymentType === "nwc") {
-        await handleNWCPayment(price, paymentData);
+        await handleNWCPayment(invoiceAmount, paymentData);
       } else {
-        await handleLightningPayment(price, paymentData);
+        await handleLightningPayment(invoiceAmount, paymentData);
       }
     } catch (err: any) {
       // Surface a real, accurate failure modal instead of always claiming
@@ -768,8 +857,9 @@ export default function ProductInvoiceCard({
     let nwc: NostrWebLNProvider | null = null;
 
     try {
+      const invoiceAmount = toCashuMintAmountSats(convertedPrice);
       if (data.shippingName || data.shippingAddress) {
-        validatePaymentData(convertedPrice, {
+        validatePaymentData(invoiceAmount, {
           Name: data.shippingName || "",
           Address: data.shippingAddress || "",
           Unit: data.shippingUnitNo || "",
@@ -780,26 +870,30 @@ export default function ProductInvoiceCard({
           Required: data.additionalInfo || "",
         });
       } else if (data.contact || data.contactType) {
-        validatePaymentData(convertedPrice, {
+        validatePaymentData(invoiceAmount, {
           Contact: data.contact || "",
           "Contact Type": data.contactType || "",
           Instructions: data.contactInstructions || "",
           Required: data.additionalInfo || "",
         });
       } else {
-        validatePaymentData(convertedPrice);
+        validatePaymentData(invoiceAmount);
       }
 
-      const wallet = new CashuWallet(new CashuMint(mints[0]!));
+      const {
+        request: pr,
+        quote: hash,
+        amount,
+        mintUrl,
+      } = await createListingMintQuote();
+      const serverInvoiceAmount = toCashuMintAmountSats(amount);
+      updatePendingOrderAmount(serverInvoiceAmount);
+      const wallet = new CashuWallet(new CashuMint(mintUrl));
       await wallet.loadMint();
-      const { request: pr, quote: hash } = await withMintRetry(
-        () => wallet.createMintQuoteBolt11(convertedPrice),
-        { maxAttempts: 4, perAttemptTimeoutMs: 15000, totalTimeoutMs: 60000 }
-      );
       recordPendingMintQuote({
         quoteId: hash,
-        mintUrl: mints[0]!,
-        amount: convertedPrice,
+        mintUrl,
+        amount: serverInvoiceAmount,
         invoice: pr,
       });
       invoicePollRef.current = { cancelled: false, activeQuoteId: hash };
@@ -814,8 +908,9 @@ export default function ProductInvoiceCard({
 
       await invoiceHasBeenPaid(
         wallet,
-        convertedPrice,
+        serverInvoiceAmount,
         hash,
+        mintUrl,
         data.shippingName ? data.shippingName : undefined,
         data.shippingAddress ? data.shippingAddress : undefined,
         data.shippingUnitNo ? data.shippingUnitNo : undefined,
@@ -835,6 +930,7 @@ export default function ProductInvoiceCard({
 
   const handleLightningPayment = async (convertedPrice: number, data: any) => {
     try {
+      const invoiceAmount = toCashuMintAmountSats(convertedPrice);
       if (
         data.shippingName ||
         data.shippingAddress ||
@@ -843,7 +939,7 @@ export default function ProductInvoiceCard({
         data.shippingState ||
         data.shippingCountry
       ) {
-        validatePaymentData(convertedPrice, {
+        validatePaymentData(invoiceAmount, {
           Name: data.shippingName || "",
           Address: data.shippingAddress || "",
           Unit: data.shippingUnitNo || "",
@@ -854,28 +950,31 @@ export default function ProductInvoiceCard({
           Required: data.additionalInfo || "",
         });
       } else if (data.contact || data.contactType || data.contactInstructions) {
-        validatePaymentData(convertedPrice, {
+        validatePaymentData(invoiceAmount, {
           Contact: data.contact || "",
           "Contact Type": data.contactType || "",
           Instructions: data.contactInstructions || "",
           Required: data.additionalInfo || "",
         });
       } else {
-        validatePaymentData(convertedPrice);
+        validatePaymentData(invoiceAmount);
       }
 
       setShowInvoiceCard(true);
-      const wallet = new CashuWallet(new CashuMint(mints[0]!));
+      const {
+        request: pr,
+        quote: hash,
+        amount,
+        mintUrl,
+      } = await createListingMintQuote();
+      const serverInvoiceAmount = toCashuMintAmountSats(amount);
+      updatePendingOrderAmount(serverInvoiceAmount);
+      const wallet = new CashuWallet(new CashuMint(mintUrl));
       await wallet.loadMint();
-
-      const { request: pr, quote: hash } = await withMintRetry(
-        () => wallet.createMintQuoteBolt11(convertedPrice),
-        { maxAttempts: 4, perAttemptTimeoutMs: 15000, totalTimeoutMs: 60000 }
-      );
       recordPendingMintQuote({
         quoteId: hash,
-        mintUrl: mints[0]!,
-        amount: convertedPrice,
+        mintUrl,
+        amount: serverInvoiceAmount,
         invoice: pr,
       });
       invoicePollRef.current = { cancelled: false, activeQuoteId: hash };
@@ -911,8 +1010,9 @@ export default function ProductInvoiceCard({
       }
       await invoiceHasBeenPaid(
         wallet,
-        convertedPrice,
+        serverInvoiceAmount,
         hash,
+        mintUrl,
         data.shippingName ? data.shippingName : undefined,
         data.shippingAddress ? data.shippingAddress : undefined,
         data.shippingUnitNo ? data.shippingUnitNo : undefined,
@@ -935,6 +1035,7 @@ export default function ProductInvoiceCard({
     wallet: CashuWallet,
     newPrice: number,
     hash: string,
+    mintUrl: string,
     shippingName?: string,
     shippingAddress?: string,
     shippingUnitNo?: string,
@@ -974,7 +1075,7 @@ export default function ProductInvoiceCard({
           );
           recordPendingMintQuote({
             quoteId: hash,
-            mintUrl: mints[0]!,
+            mintUrl,
             amount: newPrice,
             invoice: existing?.invoice ?? "",
             status: "paid_unclaimed",
