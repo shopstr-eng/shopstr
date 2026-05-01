@@ -29,7 +29,7 @@
     "@getalby/lightning-tools": "8.1.0",
     "@getalby/sdk": "7.0.0",
     "@heroicons/react": "2.2.0",
-    "@heroui/react": "2.8.10",
+    "@heroui/react": "3.0.3",
     "@modelcontextprotocol/sdk": "1.29.0",
     "@tailwindcss/postcss": "4.2.2",
     "@typescript-eslint/eslint-plugin": "8.58.1",
