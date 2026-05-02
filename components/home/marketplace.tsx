@@ -92,6 +92,7 @@ function MarketplacePage({
   const [selectedCategories, setSelectedCategories] = useState(
     new Set<string>([])
   );
+  const [categorySearch, setCategorySearch] = useState("");
   const [selectedLocation, setSelectedLocation] = useState("");
   const [selectedSearch, setSelectedSearch] = useState("");
   const debouncedSearch = useDebounce(selectedSearch, 300);
@@ -532,9 +533,27 @@ function MarketplacePage({
                   }
                 }}
                 selectionMode="multiple"
+                listboxProps={{
+                  topContent: (
+                    <Input
+                      className="mb-1 px-1 py-1"
+                      value={categorySearch}
+                      onValueChange={setCategorySearch}
+                      placeholder="Search category..."
+                      type="text"
+                      startContent={
+                        <MagnifyingGlassIcon className="text-default-400 h-4 w-4" />
+                      }
+                      onKeyDown={(e) => e.stopPropagation()}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  ),
+                }}
               >
                 <SelectSection className="text-light-text dark:text-dark-text">
-                  {CATEGORIES.map((category) => (
+                  {CATEGORIES.filter((c) =>
+                    c.toLowerCase().includes(categorySearch.toLowerCase())
+                  ).map((category) => (
                     <SelectItem key={category}>{category}</SelectItem>
                   ))}
                 </SelectSection>
