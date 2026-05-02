@@ -189,8 +189,7 @@ const DisplayProducts = ({
       if (product.images.length === 0) return false;
       if (product.contentWarning) return false;
       if (
-        product.pubkey ===
-          BLOCKED_MARKETPLACE_SELLER &&
+        product.pubkey === BLOCKED_MARKETPLACE_SELLER &&
         userPubkey !== product.pubkey
       ) {
         return false;

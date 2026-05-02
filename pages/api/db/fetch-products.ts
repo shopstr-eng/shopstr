@@ -56,12 +56,13 @@ export default async function handler(
     const categoriesArray = parseStringArrayParam(
       categories as string | string[] | undefined
     );
-    const pubkeys = parseStringArrayParam(pubkey as string | string[] | undefined);
+    const pubkeys = parseStringArrayParam(
+      pubkey as string | string[] | undefined
+    );
     const excludedPubkeys = parseStringArrayParam(
       excludePubkeys as string | string[] | undefined
     );
-    const pubkeyFilter =
-      pubkeys && pubkeys.length === 1 ? pubkeys[0] : pubkeys;
+    const pubkeyFilter = pubkeys && pubkeys.length === 1 ? pubkeys[0] : pubkeys;
 
     const filters = {
       limit: limitNum,

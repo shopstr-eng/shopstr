@@ -9,10 +9,7 @@ jest.mock("@/utils/rate-limit", () => ({
 
 import type { NextApiRequest, NextApiResponse } from "next";
 import handler from "@/pages/api/db/fetch-products";
-import {
-  fetchAllProductsFromDb,
-  getEventCount,
-} from "@/utils/db/db-service";
+import { fetchAllProductsFromDb, getEventCount } from "@/utils/db/db-service";
 import { applyRateLimit } from "@/utils/rate-limit";
 
 const mockedFetchAllProductsFromDb =

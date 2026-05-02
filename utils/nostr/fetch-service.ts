@@ -236,8 +236,8 @@ export const fetchAllPosts = async (
 
       // Cache ALL valid relay events (products + zapsnags) to the database
       // for future paginated queries. This is a background task.
-      const validCacheEvents = fetchedEvents.filter(
-        (e: NostrEvent) => isEligibleProductRelayEvent(e, excludePubkeys)
+      const validCacheEvents = fetchedEvents.filter((e: NostrEvent) =>
+        isEligibleProductRelayEvent(e, excludePubkeys)
       );
       if (validCacheEvents.length > 0) {
         cacheEventsToDatabase(validCacheEvents).catch((error) =>
