@@ -102,6 +102,8 @@ describe("fetchAllFollows", () => {
     "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
   const directFromDb =
     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+  const directFromRelay =
+    "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
   const secondDegreeFromRelay =
     "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
   const ignoredHexTag =
@@ -211,6 +213,81 @@ describe("fetchAllFollows", () => {
       [{ kinds: [3], authors: [userPubkey] }],
       {},
       ["wss://relay.example"]
+    );
+    expect(nostr.fetch).toHaveBeenNthCalledWith(
+      2,
+      [{ kinds: [3], authors: [directFromDb] }],
+      {},
+      ["wss://relay.example"]
+    );
+  });
+
+  it("uses the lower event id when DB and relay contact lists share the same timestamp", async () => {
+    const editFollowsContext = jest.fn();
+
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(() => ({
+        wot: 1,
+      })),
+      deleteEvent: jest.fn(),
+      verifyNip05Identifier: jest.fn(),
+    }));
+
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn(),
+    }));
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        contactList: {
+          id: "0".repeat(64),
+          pubkey: userPubkey,
+          created_at: 200,
+          kind: 3,
+          tags: [["p", directFromDb]],
+          content: "",
+          sig: "db-sig",
+        },
+      }),
+    }) as typeof global.fetch;
+
+    const { fetchAllFollows } = await import("../fetch-service");
+
+    const nostr = {
+      fetch: jest
+        .fn()
+        .mockResolvedValueOnce([
+          {
+            id: "f".repeat(64),
+            pubkey: userPubkey,
+            created_at: 200,
+            kind: 3,
+            tags: [["p", directFromRelay]],
+            content: "",
+            sig: "relay-sig",
+          },
+        ])
+        .mockResolvedValueOnce([]),
+    } as any;
+
+    const result = await fetchAllFollows(
+      nostr,
+      ["wss://relay.example"],
+      editFollowsContext,
+      userPubkey
+    );
+
+    expect(result).toEqual({
+      directFollowList: [directFromDb],
+      followList: [directFromDb],
+      firstDegreeFollowsLength: 1,
+    });
+    expect(editFollowsContext).toHaveBeenLastCalledWith(
+      [directFromDb],
+      [directFromDb],
+      1,
+      false
     );
     expect(nostr.fetch).toHaveBeenNthCalledWith(
       2,
