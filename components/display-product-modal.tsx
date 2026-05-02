@@ -167,7 +167,7 @@ export default function DisplayProductModal({
                 dropDownKeys={
                   productData.pubkey === userPubkey
                     ? ["shop_profile"]
-                    : ["shop", "inquiry", "copy_npub"]
+                    : ["shop", "inquiry", "follow", "copy_npub"]
                 }
               />
               <Chip

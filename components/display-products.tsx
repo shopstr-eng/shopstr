@@ -123,7 +123,12 @@ const DisplayProducts = ({
       setProductEvents([]);
       setIsProductLoading(false);
     }
-  }, [productEventContext, wotFilter]);
+  }, [
+    productEventContext,
+    wotFilter,
+    followsContext.isLoading,
+    followsContext.followList,
+  ]);
 
   useEffect(() => {
     if (focusedPubkey && setCategories) {

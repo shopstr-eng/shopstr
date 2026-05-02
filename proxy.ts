@@ -60,6 +60,7 @@ export function proxy(request: NextRequest) {
     if (pathname.startsWith("/api/")) {
       const allowedApiPrefixes = [
         "/api/storefront/",
+        "/api/db/fetch-contacts",
         "/api/db/fetch-products",
         "/api/db/fetch-profiles",
         "/api/db/fetch-reviews",

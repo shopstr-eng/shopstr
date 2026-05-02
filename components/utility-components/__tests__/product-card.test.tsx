@@ -102,7 +102,7 @@ describe("ProductCard", () => {
       expect(screen.getByTestId("image-carousel")).toBeInTheDocument();
       expect(screen.getByTestId("profile-dropdown")).toBeInTheDocument();
       expect(screen.getByText("Test Product")).toBeInTheDocument();
-      expect(screen.getByText("Active")).toBeInTheDocument();
+      expect(screen.getByText("Online")).toBeInTheDocument();
     });
 
     it("calls onProductClick when the card is clicked", () => {
@@ -201,7 +201,7 @@ describe("ProductCard", () => {
       );
       const dropdown = screen.getByTestId("profile-dropdown");
       const keys = JSON.parse(dropdown.getAttribute("data-keys")!);
-      expect(keys).toEqual(["shop", "inquiry", "copy_npub"]);
+      expect(keys).toEqual(["shop", "inquiry", "follow", "copy_npub"]);
     });
 
     it("shows sold status correctly", () => {

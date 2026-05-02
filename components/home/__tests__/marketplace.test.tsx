@@ -134,9 +134,12 @@ const renderComponent = ({
           >
             <FollowsContext.Provider
               value={{
+                directFollowList: [],
                 followList: [],
                 firstDegreeFollowsLength: 0,
                 isLoading: false,
+                addFollow: jest.fn(),
+                removeFollow: jest.fn(),
               }}
             >
               <MarketplacePage

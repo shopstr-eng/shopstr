@@ -1,5 +1,8 @@
 import { LogOut } from "@/utils/nostr/nostr-helper-functions";
-import { ProfileMapContext, ShopMapContext } from "@/utils/context/context";
+import {
+  ProfileMapContext,
+  ShopMapContext,
+} from "@/utils/context/context";
 import {
   Dropdown,
   DropdownItem,
@@ -7,6 +10,7 @@ import {
   DropdownMenu,
   DropdownTrigger,
   User,
+  Spinner,
   useDisclosure,
 } from "@heroui/react";
 import { nip19 } from "nostr-tools";
@@ -21,11 +25,14 @@ import {
   Cog6ToothIcon,
   GlobeAltIcon,
   UserIcon,
+  UserMinusIcon,
+  UserPlusIcon,
 } from "@heroicons/react/24/outline";
 import { useRouter } from "next/router";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import SignInModal from "../../sign-in/SignInModal";
 import { ProfileData } from "@/utils/types/types";
+import { useFollowToggle } from "@/components/hooks/use-follow-toggle";
 
 type DropDownKeys =
   | "shop"
@@ -35,7 +42,8 @@ type DropDownKeys =
   | "settings"
   | "user_profile"
   | "logout"
-  | "copy_npub";
+  | "copy_npub"
+  | "follow";
 
 const fetchedProfileContentCache = new Map<string, ProfileData["content"]>();
 const inFlightProfileRequests = new Map<
@@ -102,10 +110,23 @@ export const ProfileWithDropdown = ({
   const { isLoggedIn } = useContext(SignerContext);
   const { isOpen, onOpen, onClose } = useDisclosure();
 
-  const handleDropdownAction = (action: () => void) => {
+  const closeDropdown = () => {
     setIsDropdownOpen(false);
-    action();
   };
+
+  const handleDropdownAction = (action: () => void | Promise<void>) => {
+    closeDropdown();
+    void action();
+  };
+
+  const { isFollowing, isLoading: isFollowLoading, toggle: toggleFollow } =
+    useFollowToggle(pubkey, {
+      onRequireSignIn: () => {
+        closeDropdown();
+        onOpen();
+      },
+      onSuccess: closeDropdown,
+    });
 
   useEffect(() => {
     let isCancelled = false;
@@ -165,6 +186,24 @@ export const ProfileWithDropdown = ({
     name = name.length > 15 ? name.slice(0, 15) + "..." : name;
     return name;
   })();
+  const showFollowingIndicator =
+    dropDownKeys.includes("follow") && isFollowing;
+  const displayNameContent = showFollowingIndicator ? (
+    <span className="flex min-w-0 items-center gap-1.5">
+      <span className="overflow-hidden text-ellipsis whitespace-nowrap">
+        {displayName}
+      </span>
+      <span className="inline-flex shrink-0 items-center gap-1 text-[10px] font-medium text-shopstr-purple dark:text-shopstr-yellow">
+        <span
+          aria-hidden="true"
+          className="h-1.5 w-1.5 rounded-full bg-current"
+        />
+        Following
+      </span>
+    </span>
+  ) : (
+    displayName
+  );
   const pfp = profileContent?.picture || `https://robohash.org/${pubkey}`;
   const isNip05Verified = profile?.nip05Verified || false;
 
@@ -300,11 +339,33 @@ export const ProfileWithDropdown = ({
       },
       label: isNPubCopied ? "Copied!" : "Copy npub",
     },
+    follow: {
+      key: "follow",
+      color: "default",
+      className: "text-light-text dark:text-dark-text",
+      startContent: isFollowLoading ? (
+        <Spinner size="sm" />
+      ) : isFollowing ? (
+        <UserMinusIcon className="h-5 w-5" />
+      ) : (
+        <UserPlusIcon className="h-5 w-5" />
+      ),
+      onPress: () => {
+        void toggleFollow();
+      },
+      label: isFollowLoading
+        ? "Please sign..."
+        : isFollowing
+          ? "Unfollow"
+          : "+ Follow",
+      isDisabled: isFollowLoading,
+    },
   };
 
   return (
     <>
       <div
+        data-profile-dropdown
         onClick={(e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -334,12 +395,13 @@ export const ProfileWithDropdown = ({
                 } group-hover:underline group-hover:underline-offset-2`,
                 base: `${baseClassname}`,
               }}
-              name={displayName}
+              name={displayNameContent}
             />
           </DropdownTrigger>
           <DropdownMenu
             aria-label="User Actions"
             variant="flat"
+            closeOnSelect={false}
             items={dropDownKeys.map((key) => DropDownItems[key])}
           >
             {(item) => {
@@ -350,6 +412,7 @@ export const ProfileWithDropdown = ({
                   className={item.className}
                   startContent={item.startContent}
                   onPress={item.onPress}
+                  isDisabled={item.isDisabled}
                 >
                   {item.label}
                 </DropdownItem>
