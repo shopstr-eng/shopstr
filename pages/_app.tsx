@@ -51,6 +51,7 @@ import {
   ProfileData,
   NostrMessageEvent,
   ShopProfile,
+  FilterParams,
 } from "../utils/types/types";
 import { Proof } from "@cashu/cashu-ts";
 import TopNav from "@/components/nav-top";
@@ -75,16 +76,26 @@ function Shopstr({ props }: { props: AppProps }) {
   const [productContext, setProductContext] = useState<ProductContextInterface>(
     {
       productEvents: [],
+      totalEvents: 0,
       isLoading: true,
+      setProductEvents: (events: NostrEvent[], total?: number) => {
+        setProductContext((productContext) => ({
+          ...productContext,
+          productEvents: events,
+          totalEvents: total ?? events.length,
+          isLoading: false,
+        }));
+      },
+      loadMoreProducts: async () => {},
+      refreshProducts: async () => {},
       addNewlyCreatedProductEvent: (productEvent: NostrEvent) => {
         setProductContext((productContext) => {
           const productEvents = [...productContext.productEvents, productEvent];
           return {
+            ...productContext,
             productEvents: productEvents,
+            totalEvents: productContext.totalEvents + 1,
             isLoading: false,
-            addNewlyCreatedProductEvent:
-              productContext.addNewlyCreatedProductEvent,
-            removeDeletedProductEvent: productContext.removeDeletedProductEvent,
           };
         });
       },
@@ -94,11 +105,10 @@ function Shopstr({ props }: { props: AppProps }) {
             (event) => event.id !== productId
           );
           return {
+            ...productContext,
             productEvents: productEvents,
+            totalEvents: Math.max(0, productContext.totalEvents - 1),
             isLoading: false,
-            addNewlyCreatedProductEvent:
-              productContext.addNewlyCreatedProductEvent,
-            removeDeletedProductEvent: productContext.removeDeletedProductEvent,
           };
         });
       },
@@ -335,18 +345,124 @@ function Shopstr({ props }: { props: AppProps }) {
     });
 
   const editProductContext = (
-    productEvents: NostrEvent[] | null,
-    isLoading: boolean
+    productEvents: NostrEvent[],
+    isLoading: boolean,
+    totalEvents?: number
   ) => {
     setProductContext((productContext) => {
       return {
-        productEvents: productEvents ?? productContext.productEvents,
+        ...productContext,
+        productEvents: productEvents,
         isLoading: isLoading,
-        addNewlyCreatedProductEvent: productContext.addNewlyCreatedProductEvent,
-        removeDeletedProductEvent: productContext.removeDeletedProductEvent,
+        totalEvents: totalEvents ?? productContext.totalEvents,
       };
     });
   };
+
+  const loadMoreProducts = useCallback(
+    async (filters?: FilterParams) => {
+      setProductContext((prev) => {
+        if (prev.isLoading || prev.productEvents.length === 0) return prev;
+
+        const oldestEvent = [...prev.productEvents].sort(
+          (a, b) => a.created_at - b.created_at
+        )[0];
+        if (!oldestEvent) return prev;
+
+        const performFetch = async () => {
+          const relays = getLocalStorageData().relays || [];
+          const readRelays = getLocalStorageData().readRelays || [];
+          const allRelaysBeforeCheck = [...relays, ...readRelays];
+          const allRelays =
+            allRelaysBeforeCheck.length > 0
+              ? allRelaysBeforeCheck
+              : getDefaultRelays();
+
+          await fetchAllPosts(
+            nostr!,
+            allRelays,
+            (newEvents, isLoading, total) => {
+              setProductContext((current) => {
+                const currentIds = new Set(
+                  current.productEvents.map((e) => e.id)
+                );
+                const merged = [...current.productEvents];
+
+                newEvents.forEach((event) => {
+                  if (!currentIds.has(event.id)) {
+                    merged.push(event);
+                  }
+                });
+
+                let finalTotal = total ?? current.totalEvents;
+                if (!isLoading && currentIds.size === merged.length) {
+                  finalTotal = merged.length;
+                }
+
+                return {
+                  ...current,
+                  productEvents: merged.sort(
+                    (a, b) => b.created_at - a.created_at
+                  ),
+                  isLoading: isLoading,
+                  totalEvents: finalTotal,
+                };
+              });
+            },
+            oldestEvent.created_at,
+            filters
+          );
+        };
+
+        performFetch();
+
+        return {
+          ...prev,
+          isLoading: true,
+        };
+      });
+    },
+    [nostr]
+  );
+
+  const refreshProducts = useCallback(
+    async (filters?: FilterParams) => {
+      setProductContext((prev) => ({ ...prev, isLoading: true }));
+
+      const relays = getLocalStorageData().relays || [];
+      const readRelays = getLocalStorageData().readRelays || [];
+      const allRelaysBeforeCheck = [...relays, ...readRelays];
+      const allRelays =
+        allRelaysBeforeCheck.length > 0
+          ? allRelaysBeforeCheck
+          : getDefaultRelays();
+
+      await fetchAllPosts(
+        nostr!,
+        allRelays,
+        (newEvents, isLoading, total) => {
+          setProductContext((current) => ({
+            ...current,
+            productEvents: newEvents,
+            isLoading,
+            totalEvents: total ?? current.totalEvents,
+          }));
+        },
+        undefined,
+        filters
+      );
+    },
+    [nostr]
+  );
+
+  // Update the productContext with the actual loadMoreProducts and refreshProducts implementations
+  useEffect(() => {
+    setProductContext((prev) => ({
+      ...prev,
+      loadMoreProducts,
+      refreshProducts,
+    }));
+  }, [loadMoreProducts, refreshProducts]);
 
   const editReviewsContext = (
     merchantReviewsData: Map<string, number[]>,
@@ -658,7 +774,7 @@ function Shopstr({ props }: { props: AppProps }) {
         const productsPromise = runTask(
           "fetching products",
           () => fetchAllPosts(nostr!, allRelays, guardedEditProductContext),
-          () => guardedEditProductContext(null, false)
+          () => guardedEditProductContext([], false)
         );
 
         const chatsPromise = isLoggedIn
