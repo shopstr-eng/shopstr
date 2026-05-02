@@ -536,13 +536,17 @@ function MarketplacePage({
                 listboxProps={{
                   topContent: (
                     <Input
+                      aria-label="Search categories"
                       className="mb-1 px-1 py-1"
                       value={categorySearch}
                       onValueChange={setCategorySearch}
                       placeholder="Search category..."
                       type="text"
                       startContent={
-                        <MagnifyingGlassIcon className="text-default-400 h-4 w-4" />
+                        <MagnifyingGlassIcon
+                          aria-hidden="true"
+                          className="text-default-400 h-4 w-4"
+                        />
                       }
                       onKeyDown={(e) => e.stopPropagation()}
                       onClick={(e) => e.stopPropagation()}

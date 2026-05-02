@@ -36,12 +36,14 @@ const LocationDropdown = ({ value, ...props }: { [x: string]: any }) => {
     const headingClasses =
       "flex w-full py-1.5 px-2 dark:bg-dark-bg bg-light-bg shadow-small rounded-small";
 
+    const q = searchValue.trim().toLowerCase();
+
     const filteredCountries = locations.countries.filter((country) =>
-      country.country.toLowerCase().includes(searchValue.toLowerCase())
+      country.country.toLowerCase().includes(q)
     );
 
     const filteredStates = locations.states.filter((state) =>
-      state.state.toLowerCase().includes(searchValue.toLowerCase())
+      state.state.toLowerCase().includes(q)
     );
 
     const regionalOptionsList = [
@@ -52,7 +54,7 @@ const LocationDropdown = ({ value, ...props }: { [x: string]: any }) => {
     ];
 
     const filteredRegional = regionalOptionsList.filter((regional) =>
-      regional.toLowerCase().includes(searchValue.toLowerCase())
+      regional.toLowerCase().includes(q)
     );
 
     const mappedCountryOptions =
@@ -143,17 +145,21 @@ const LocationDropdown = ({ value, ...props }: { [x: string]: any }) => {
     <Select
       startContent={locationAvatar(value)}
       {...props}
-      className={`text-light-text dark:text-dark-text ${props.className || "mt-2"}`}
+      className={`text-light-text dark:text-dark-text mt-2 ${props.className ?? ""}`}
       listboxProps={{
         topContent: (
           <Input
+            aria-label="Search location"
             className="mb-1 px-1 py-1"
             value={searchValue}
             onValueChange={setSearchValue}
             placeholder="Search location..."
             type="text"
             startContent={
-              <MagnifyingGlassIcon className="text-default-400 h-4 w-4" />
+              <MagnifyingGlassIcon
+                aria-hidden="true"
+                className="text-default-400 h-4 w-4"
+              />
             }
             onKeyDown={(e) => e.stopPropagation()}
             onClick={(e) => e.stopPropagation()}
