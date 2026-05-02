@@ -25,7 +25,7 @@ export const locationAvatar = (location: string) => {
 const LocationDropdown = ({ value, ...props }: { [x: string]: any }) => {
   const locationOptions = useMemo(() => {
     const headingClasses =
-      "flex w-full sticky top-1 z-20 py-1.5 px-2 dark:bg-dark-bg bg-light-bg shadow-small rounded-small";
+      "flex w-full py-1.5 px-2 dark:bg-dark-bg bg-light-bg shadow-small rounded-small";
 
     const countryOptions = (
       <SelectSection
