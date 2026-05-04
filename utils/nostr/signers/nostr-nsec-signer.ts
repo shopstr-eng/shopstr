@@ -151,7 +151,6 @@ export class NostrNSecSigner implements NostrSigner {
           () => (aborted = true),
           error
         );
-
         let privKeyBytes: Uint8Array;
 
         if (this.isNip49Format) {
