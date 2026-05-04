@@ -22,8 +22,11 @@ import {
 } from "@heroui/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
+  clearPendingIncomingProofs,
   getLocalStorageData,
   publishProofEvent,
+  setLocalCashuTokens,
+  stagePendingIncomingProofs,
 } from "@/utils/nostr/nostr-helper-functions";
 import { Mint as CashuMint, Wallet as CashuWallet } from "@cashu/cashu-ts";
 import QRCode from "qrcode";
@@ -207,8 +210,14 @@ const MintButton = () => {
           { maxAttempts: 5, perAttemptTimeoutMs: 15000, totalTimeoutMs: 60000 }
         );
         if (proofs && proofs.length > 0) {
+          const pendingProofId = await stagePendingIncomingProofs(
+            signer!,
+            mints[0]!,
+            proofs,
+            numSats.toString()
+          );
           const proofArray = [...tokens, ...proofs];
-          localStorage.setItem("tokens", JSON.stringify(proofArray));
+          setLocalCashuTokens(proofArray);
           localStorage.setItem(
             "history",
             JSON.stringify([
@@ -220,7 +229,8 @@ const MintButton = () => {
               ...history,
             ])
           );
-          await publishProofEvent(
+          markMintQuoteClaimed(hash);
+          const publishSucceeded = await publishProofEvent(
             nostr!,
             signer!,
             mints[0]!,
@@ -228,7 +238,9 @@ const MintButton = () => {
             "in",
             numSats.toString()
           );
-          markMintQuoteClaimed(hash);
+          if (publishSucceeded) {
+            clearPendingIncomingProofs([pendingProofId]);
+          }
           setPaymentConfirmed(true);
           setQrCodeUrl(null);
           setTimeout(() => {

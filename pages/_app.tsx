@@ -29,6 +29,7 @@ import {
   getLocalStorageData,
   getDefaultRelays,
   LogOut,
+  setLocalCashuTokens,
 } from "@/utils/nostr/nostr-helper-functions";
 import { createNip98AuthorizationHeader } from "@/utils/nostr/nip98-auth";
 import { HeroUIProvider } from "@heroui/react";
@@ -763,14 +764,14 @@ function Shopstr({ props }: { props: AppProps }) {
           );
         }
 
-        if (walletResult?.cashuMints?.length && walletResult.cashuProofs) {
+        if (walletResult?.cashuProofs) {
+          setLocalCashuTokens(walletResult.cashuProofs);
+        }
+
+        if (walletResult?.cashuMints?.length) {
           localStorage.setItem(
             "mints",
             JSON.stringify(walletResult.cashuMints)
-          );
-          localStorage.setItem(
-            "tokens",
-            JSON.stringify(walletResult.cashuProofs)
           );
         }
 

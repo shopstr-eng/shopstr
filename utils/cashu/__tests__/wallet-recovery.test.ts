@@ -6,13 +6,19 @@ import {
 } from "../wallet-recovery";
 
 jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
+  clearPendingIncomingProofs: jest.fn(),
   getLocalStorageData: jest.fn(() => ({ tokens: [], history: [] })),
   publishProofEvent: jest.fn(),
+  setLocalCashuTokens: jest.fn(),
+  stagePendingIncomingProofs: jest.fn().mockResolvedValue("pending-proof-id"),
 }));
 
 const helpers = jest.requireMock("@/utils/nostr/nostr-helper-functions") as {
+  clearPendingIncomingProofs: jest.Mock;
   getLocalStorageData: jest.Mock;
   publishProofEvent: jest.Mock;
+  setLocalCashuTokens: jest.Mock;
+  stagePendingIncomingProofs: jest.Mock;
 };
 
 const mkProof = (secret: string, amount = 10): Proof =>
@@ -28,11 +34,15 @@ describe("recoverProofsToBuyerWallet", () => {
     window.localStorage.clear();
     helpers.getLocalStorageData.mockReset();
     helpers.publishProofEvent.mockReset();
+    helpers.setLocalCashuTokens.mockReset();
+    helpers.stagePendingIncomingProofs.mockReset();
+    helpers.clearPendingIncomingProofs.mockReset();
     helpers.getLocalStorageData.mockReturnValue({ tokens: [], history: [] });
-    helpers.publishProofEvent.mockResolvedValue(undefined);
+    helpers.publishProofEvent.mockResolvedValue(true);
+    helpers.stagePendingIncomingProofs.mockResolvedValue("pending-proof-id");
   });
 
-  it("appends proofs to localStorage tokens and writes a history entry", async () => {
+  it("appends proofs to the active wallet and writes a history entry", async () => {
     const proofs = [mkProof("s1", 4), mkProof("s2", 6)];
     await recoverProofsToBuyerWallet(
       {} as never,
@@ -42,9 +52,11 @@ describe("recoverProofsToBuyerWallet", () => {
       10
     );
 
-    const tokens = JSON.parse(window.localStorage.getItem("tokens") ?? "[]");
-    expect(tokens).toHaveLength(2);
-    expect(tokens.map((p: Proof) => p.secret)).toEqual(["s1", "s2"]);
+    expect(helpers.setLocalCashuTokens).toHaveBeenCalledWith(proofs);
+    expect(helpers.clearPendingIncomingProofs).toHaveBeenCalledWith([
+      "pending-proof-id",
+    ]);
+    expect(window.localStorage.getItem("tokens")).toBeNull();
 
     const history = JSON.parse(window.localStorage.getItem("history") ?? "[]");
     expect(history[0]).toMatchObject({ type: 3, amount: 10 });
@@ -62,12 +74,14 @@ describe("recoverProofsToBuyerWallet", () => {
       [mkProof("new", 2)],
       2
     );
-    const tokens = JSON.parse(window.localStorage.getItem("tokens") ?? "[]");
-    expect(tokens.map((p: Proof) => p.secret)).toEqual(["existing", "new"]);
+    expect(helpers.setLocalCashuTokens).toHaveBeenCalledWith([
+      mkProof("existing", 1),
+      mkProof("new", 2),
+    ]);
   });
 
   it("does not throw when proof event publish fails", async () => {
-    helpers.publishProofEvent.mockRejectedValueOnce(new Error("relay down"));
+    helpers.publishProofEvent.mockResolvedValueOnce(false);
     await expect(
       recoverProofsToBuyerWallet(
         {} as never,
@@ -77,8 +91,8 @@ describe("recoverProofsToBuyerWallet", () => {
         5
       )
     ).resolves.toBeUndefined();
-    const tokens = JSON.parse(window.localStorage.getItem("tokens") ?? "[]");
-    expect(tokens).toHaveLength(1);
+    expect(helpers.setLocalCashuTokens).toHaveBeenCalledWith([mkProof("s1", 5)]);
+    expect(helpers.clearPendingIncomingProofs).not.toHaveBeenCalled();
   });
 
   it("no-ops on empty proof array", async () => {
@@ -91,6 +105,7 @@ describe("recoverProofsToBuyerWallet", () => {
     );
     expect(window.localStorage.getItem("tokens")).toBeNull();
     expect(helpers.publishProofEvent).not.toHaveBeenCalled();
+    expect(helpers.setLocalCashuTokens).not.toHaveBeenCalled();
   });
 });
 

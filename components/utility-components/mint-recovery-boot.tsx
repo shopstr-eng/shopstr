@@ -10,8 +10,11 @@ import {
   getPendingMintQuotes,
 } from "@/utils/cashu/pending-mint-operations";
 import {
+  clearPendingIncomingProofs,
   getLocalStorageData,
   publishProofEvent,
+  setLocalCashuTokens,
+  stagePendingIncomingProofs,
 } from "@/utils/nostr/nostr-helper-functions";
 import {
   NostrContext,
@@ -60,8 +63,14 @@ export function MintRecoveryBoot(): null {
           onProofsClaimed: async (quote: PendingMintQuote, proofs: Proof[]) => {
             if (cancelled) return;
             const { tokens, history } = getLocalStorageData();
+            const pendingProofId = await stagePendingIncomingProofs(
+              signer,
+              quote.mintUrl,
+              proofs,
+              quote.amount.toString()
+            );
             const proofArray = [...tokens, ...proofs];
-            window.localStorage.setItem("tokens", JSON.stringify(proofArray));
+            setLocalCashuTokens(proofArray);
             window.localStorage.setItem(
               "history",
               JSON.stringify([
@@ -73,7 +82,7 @@ export function MintRecoveryBoot(): null {
                 ...history,
               ])
             );
-            await publishProofEvent(
+            const publishSucceeded = await publishProofEvent(
               nostr,
               signer,
               quote.mintUrl,
@@ -81,6 +90,9 @@ export function MintRecoveryBoot(): null {
               "in",
               quote.amount.toString()
             );
+            if (publishSucceeded) {
+              clearPendingIncomingProofs([pendingProofId]);
+            }
           },
         });
 
