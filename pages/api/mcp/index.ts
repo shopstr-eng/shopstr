@@ -28,10 +28,37 @@ async function ensureTables() {
   }
 }
 
-const sessions = new Map<
-  string,
-  { transport: StreamableHTTPServerTransport; apiKey: ApiKeyRecord }
->();
+const SESSION_TTL_MS = 30 * 60 * 1000;
+const SWEEP_INTERVAL_MS = 5 * 60 * 1000;
+
+interface McpSession {
+  transport: StreamableHTTPServerTransport;
+  apiKey: ApiKeyRecord;
+  createdAt: number;
+  lastActivityAt: number;
+}
+
+const sessions = new Map<string, McpSession>();
+
+function rejectSessionMismatch(res: NextApiResponse) {
+  return res.status(403).json({
+    jsonrpc: "2.0",
+    error: { code: -32000, message: "Session belongs to a different API key" },
+    id: null,
+  });
+}
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [sid, session] of sessions) {
+    if (now - session.lastActivityAt > SESSION_TTL_MS) {
+      try {
+        session.transport.close?.();
+      } catch {}
+      sessions.delete(sid);
+    }
+  }
+}, SWEEP_INTERVAL_MS);
 
 export const config = {
   api: {
@@ -712,6 +739,8 @@ export default async function handler(
 
     if (sessionId && sessions.has(sessionId)) {
       const session = sessions.get(sessionId)!;
+      if (apiKey.id !== session.apiKey.id) return rejectSessionMismatch(res);
+      session.lastActivityAt = Date.now();
       await session.transport.handleRequest(req as any, res as any, req.body);
       return;
     }
@@ -724,7 +753,13 @@ export default async function handler(
       const transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: () => randomUUID(),
         onsessioninitialized: (sid) => {
-          sessions.set(sid, { transport, apiKey });
+          const now = Date.now();
+          sessions.set(sid, {
+            transport,
+            apiKey,
+            createdAt: now,
+            lastActivityAt: now,
+          });
         },
       });
 
@@ -753,6 +788,8 @@ export default async function handler(
     const sessionId = req.headers["mcp-session-id"] as string | undefined;
     if (sessionId && sessions.has(sessionId)) {
       const session = sessions.get(sessionId)!;
+      if (apiKey.id !== session.apiKey.id) return rejectSessionMismatch(res);
+      session.lastActivityAt = Date.now();
       await session.transport.handleRequest(req as any, res as any);
       return;
     }
@@ -770,6 +807,7 @@ export default async function handler(
     const sessionId = req.headers["mcp-session-id"] as string | undefined;
     if (sessionId && sessions.has(sessionId)) {
       const session = sessions.get(sessionId)!;
+      if (apiKey.id !== session.apiKey.id) return rejectSessionMismatch(res);
       await session.transport.handleRequest(req as any, res as any);
       sessions.delete(sessionId);
       return;
