@@ -51,20 +51,28 @@ describe("checkRateLimit", () => {
 });
 
 describe("getRequestIp", () => {
-  it("prefers the first entry in x-forwarded-for", () => {
+  it("uses the rightmost entry in x-forwarded-for", () => {
     const req = {
       headers: { "x-forwarded-for": "1.2.3.4, 5.6.7.8" },
       socket: { remoteAddress: "9.9.9.9" },
     } as any;
-    expect(getRequestIp(req)).toBe("1.2.3.4");
+    expect(getRequestIp(req)).toBe("5.6.7.8");
   });
 
-  it("falls back to x-real-ip", () => {
+  it("uses the rightmost entry across repeated x-forwarded-for headers", () => {
+    const req = {
+      headers: { "x-forwarded-for": ["1.2.3.4", "5.6.7.8, 6.7.8.9"] },
+      socket: { remoteAddress: "9.9.9.9" },
+    } as any;
+    expect(getRequestIp(req)).toBe("6.7.8.9");
+  });
+
+  it("ignores x-real-ip and falls back to the socket remote address", () => {
     const req = {
       headers: { "x-real-ip": "4.3.2.1" },
       socket: { remoteAddress: "9.9.9.9" },
     } as any;
-    expect(getRequestIp(req)).toBe("4.3.2.1");
+    expect(getRequestIp(req)).toBe("9.9.9.9");
   });
 
   it("falls back to the socket remote address", () => {

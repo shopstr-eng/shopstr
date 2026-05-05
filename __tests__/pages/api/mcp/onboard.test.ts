@@ -249,6 +249,21 @@ describe("MCP onboard API quick-start correctness", () => {
     });
   });
 
+  it("rate limits onboarding by the rightmost forwarded IP", async () => {
+    const req = createMockRequest({
+      headers: {
+        host: "localhost:5000",
+        "x-forwarded-for": "1.2.3.4, 5.6.7.8",
+      },
+    });
+    const res = createMockResponse();
+
+    await handler(req, res as unknown as NextApiResponse);
+
+    expect(res.statusCode).toBe(201);
+    expect(checkOnboardRateLimitMock).toHaveBeenCalledWith("5.6.7.8");
+  });
+
   it("ignores unallowlisted forwarded hosts in production", async () => {
     setNodeEnv("production");
     process.env.MCP_ALLOWED_HOSTS = "shopstr.example";
