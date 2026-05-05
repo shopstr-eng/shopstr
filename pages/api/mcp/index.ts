@@ -48,6 +48,17 @@ function rejectSessionMismatch(res: NextApiResponse) {
   });
 }
 
+function evictIfExpired(sessionId: string, session: McpSession): boolean {
+  if (Date.now() - session.lastActivityAt > SESSION_TTL_MS) {
+    try {
+      session.transport.close?.();
+    } catch {}
+    sessions.delete(sessionId);
+    return true;
+  }
+  return false;
+}
+
 setInterval(() => {
   const now = Date.now();
   for (const [sid, session] of sessions) {
@@ -739,6 +750,13 @@ export default async function handler(
 
     if (sessionId && sessions.has(sessionId)) {
       const session = sessions.get(sessionId)!;
+      if (evictIfExpired(sessionId, session)) {
+        return res.status(404).json({
+          jsonrpc: "2.0",
+          error: { code: -32000, message: "Session expired" },
+          id: null,
+        });
+      }
       if (apiKey.id !== session.apiKey.id) return rejectSessionMismatch(res);
       session.lastActivityAt = Date.now();
       await session.transport.handleRequest(req as any, res as any, req.body);
@@ -788,6 +806,13 @@ export default async function handler(
     const sessionId = req.headers["mcp-session-id"] as string | undefined;
     if (sessionId && sessions.has(sessionId)) {
       const session = sessions.get(sessionId)!;
+      if (evictIfExpired(sessionId, session)) {
+        return res.status(404).json({
+          jsonrpc: "2.0",
+          error: { code: -32000, message: "Session expired" },
+          id: null,
+        });
+      }
       if (apiKey.id !== session.apiKey.id) return rejectSessionMismatch(res);
       session.lastActivityAt = Date.now();
       await session.transport.handleRequest(req as any, res as any);
@@ -807,6 +832,13 @@ export default async function handler(
     const sessionId = req.headers["mcp-session-id"] as string | undefined;
     if (sessionId && sessions.has(sessionId)) {
       const session = sessions.get(sessionId)!;
+      if (evictIfExpired(sessionId, session)) {
+        return res.status(404).json({
+          jsonrpc: "2.0",
+          error: { code: -32000, message: "Session expired" },
+          id: null,
+        });
+      }
       if (apiKey.id !== session.apiKey.id) return rejectSessionMismatch(res);
       await session.transport.handleRequest(req as any, res as any);
       sessions.delete(sessionId);
