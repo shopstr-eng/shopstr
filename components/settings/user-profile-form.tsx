@@ -174,11 +174,15 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
         return;
       }
 
-      await createNostrProfileEvent(nostr, signer, JSON.stringify(updatedData));
+      const signedProfileEvent = await createNostrProfileEvent(
+        nostr,
+        signer,
+        JSON.stringify(updatedData)
+      );
       profileContext.updateProfileData({
         pubkey: userPubkey,
         content: updatedData,
-        created_at: Math.floor(Date.now() / 1000),
+        created_at: signedProfileEvent.created_at,
       });
 
       if (isOnboarding) {
