@@ -176,6 +176,7 @@ describe("MintButton Component", () => {
 
   it("should handle the full successful minting process", async () => {
     const satsToMint = "100";
+    const invoiceAmount = 100;
     const mockInvoice = "lnbc1...";
     const mockHash = "mock_hash";
     const mockProofs = [{ id: "proof1" }];
@@ -196,11 +197,11 @@ describe("MintButton Component", () => {
     fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
 
     await waitFor(() => {
-      expect(mockCreateMintQuote).toHaveBeenCalledWith(satsToMint);
+      expect(mockCreateMintQuote).toHaveBeenCalledWith(invoiceAmount);
     });
 
     await waitFor(() => {
-      expect(mockMintProofs).toHaveBeenCalledWith(satsToMint, mockHash);
+      expect(mockMintProofs).toHaveBeenCalledWith(invoiceAmount, mockHash);
       expect(screen.getByText("Payment confirmed!")).toBeVisible();
     });
   });

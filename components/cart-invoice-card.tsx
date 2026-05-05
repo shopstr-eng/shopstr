@@ -41,6 +41,7 @@ import {
 import { safeMeltProofs } from "@/utils/cashu/melt-retry-service";
 import { safeSwap } from "@/utils/cashu/swap-retry-service";
 import { withMintRetry } from "@/utils/cashu/mint-retry-service";
+import { toCashuMintAmountSats } from "@/utils/cashu/payment-amount";
 import {
   recordPendingMintQuote,
   markMintQuoteClaimed,
@@ -1045,18 +1046,19 @@ export default function CartInvoiceCard({
     let nwc: NostrWebLNProvider | null = null;
 
     try {
-      validatePaymentData(convertedPrice, data);
+      const invoiceAmount = toCashuMintAmountSats(convertedPrice);
+      validatePaymentData(invoiceAmount, data);
 
       const wallet = new CashuWallet(new CashuMint(mints[0]!));
       await wallet.loadMint();
       const { request: pr, quote: hash } = await withMintRetry(
-        () => wallet.createMintQuoteBolt11(convertedPrice),
+        () => wallet.createMintQuoteBolt11(invoiceAmount),
         { maxAttempts: 4, perAttemptTimeoutMs: 15000, totalTimeoutMs: 60000 }
       );
       recordPendingMintQuote({
         quoteId: hash,
         mintUrl: mints[0]!,
-        amount: convertedPrice,
+        amount: invoiceAmount,
         invoice: pr,
       });
       invoicePollRef.current = { cancelled: false, activeQuoteId: hash };
@@ -1068,7 +1070,7 @@ export default function CartInvoiceCard({
       await nwc.enable();
 
       await nwc.sendPayment(pr);
-      await invoiceHasBeenPaid(wallet, totalCost, hash, data);
+      await invoiceHasBeenPaid(wallet, invoiceAmount, hash, data);
     } catch (error: any) {
       handleNWCError(error);
     } finally {
@@ -1079,20 +1081,21 @@ export default function CartInvoiceCard({
 
   const handleLightningPayment = async (convertedPrice: number, data: any) => {
     try {
-      validatePaymentData(convertedPrice, data);
+      const invoiceAmount = toCashuMintAmountSats(convertedPrice);
+      validatePaymentData(invoiceAmount, data);
 
       setShowInvoiceCard(true);
       const wallet = new CashuWallet(new CashuMint(mints[0]!));
       await wallet.loadMint();
 
       const { request: pr, quote: hash } = await withMintRetry(
-        () => wallet.createMintQuoteBolt11(convertedPrice),
+        () => wallet.createMintQuoteBolt11(invoiceAmount),
         { maxAttempts: 4, perAttemptTimeoutMs: 15000, totalTimeoutMs: 60000 }
       );
       recordPendingMintQuote({
         quoteId: hash,
         mintUrl: mints[0]!,
-        amount: convertedPrice,
+        amount: invoiceAmount,
         invoice: pr,
       });
       invoicePollRef.current = { cancelled: false, activeQuoteId: hash };
@@ -1126,7 +1129,7 @@ export default function CartInvoiceCard({
           console.error(e);
         }
       }
-      await invoiceHasBeenPaid(wallet, totalCost, hash, data);
+      await invoiceHasBeenPaid(wallet, invoiceAmount, hash, data);
     } catch {
       if (setInvoiceGenerationFailed) {
         setInvoiceGenerationFailed(true);

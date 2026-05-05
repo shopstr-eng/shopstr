@@ -37,6 +37,7 @@ import {
   MintOperationError,
   withMintRetry,
 } from "@/utils/cashu/mint-retry-service";
+import { toCashuMintAmountSats } from "@/utils/cashu/payment-amount";
 import {
   markMintQuoteClaimed,
   markMintQuotePaid,
@@ -81,11 +82,12 @@ const MintButton = () => {
   };
 
   const handleMint = async (numSats: number) => {
+    const invoiceAmount = toCashuMintAmountSats(numSats);
     const wallet = new CashuWallet(new CashuMint(mints[0]!));
     await wallet.loadMint();
 
     const { request: pr, quote: hash } = await withMintRetry(
-      () => wallet.createMintQuoteBolt11(numSats),
+      () => wallet.createMintQuoteBolt11(invoiceAmount),
       { maxAttempts: 4, perAttemptTimeoutMs: 15000, totalTimeoutMs: 60000 }
     );
 
@@ -94,7 +96,7 @@ const MintButton = () => {
     recordPendingMintQuote({
       quoteId: hash,
       mintUrl: mints[0]!,
-      amount: numSats,
+      amount: invoiceAmount,
       invoice: pr,
     });
 
@@ -127,7 +129,7 @@ const MintButton = () => {
         console.error(e);
       }
     }
-    await invoiceHasBeenPaid(wallet, numSats, hash);
+    await invoiceHasBeenPaid(wallet, invoiceAmount, hash);
   };
 
   /**
@@ -137,7 +139,7 @@ const MintButton = () => {
    */
   async function invoiceHasBeenPaid(
     wallet: CashuWallet,
-    numSats: number,
+    invoiceAmount: number,
     hash: string
   ) {
     const pollMaxRounds = 30; // ~1 minute of UNPAID polling
@@ -203,7 +205,7 @@ const MintButton = () => {
 
       try {
         const proofs = await withMintRetry(
-          () => wallet.mintProofsBolt11(numSats, hash),
+          () => wallet.mintProofsBolt11(invoiceAmount, hash),
           { maxAttempts: 5, perAttemptTimeoutMs: 15000, totalTimeoutMs: 60000 }
         );
         if (proofs && proofs.length > 0) {
@@ -214,7 +216,7 @@ const MintButton = () => {
             JSON.stringify([
               {
                 type: 3,
-                amount: numSats,
+                amount: invoiceAmount,
                 date: Math.floor(Date.now() / 1000),
               },
               ...history,
@@ -226,7 +228,7 @@ const MintButton = () => {
             mints[0]!,
             proofs,
             "in",
-            numSats.toString()
+            invoiceAmount.toString()
           );
           markMintQuoteClaimed(hash);
           setPaymentConfirmed(true);

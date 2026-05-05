@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { randomBytes } from "crypto";
 import { Mint as CashuMint, Wallet as CashuWallet } from "@cashu/cashu-ts";
 import { withMintRetry } from "@/utils/cashu/mint-retry-service";
+import { toCashuMintAmountSats } from "@/utils/cashu/payment-amount";
 import { authenticateRequest, initializeApiKeysTable } from "@/utils/mcp/auth";
 import {
   fetchAllProductsFromDb,
@@ -18,6 +19,7 @@ import {
 } from "@/mcp/tools/purchase-tools";
 import { parseTags } from "@/utils/parsers/product-parser-functions";
 import { applyRateLimit } from "@/utils/rate-limit";
+import { getTrustedMintUrl } from "@/utils/cashu/trusted-mints";
 
 // MCP create-order is on the payment critical path; the per-IP cap is
 // generous so a buyer cannot accidentally lock themselves out across
@@ -25,8 +27,6 @@ import { applyRateLimit } from "@/utils/rate-limit";
 // mint quote pipeline.
 const RATE_LIMIT = { limit: 60, windowMs: 60 * 1000 };
 const PER_KEY_LIMIT = { limit: 30, windowMs: 60 * 1000 };
-
-const DEFAULT_MINT_URL = "https://mint.minibits.cash/Bitcoin";
 
 const pendingLightningPayments = new Map<
   string,
@@ -132,7 +132,6 @@ async function handleCreateOrder(
     selectedBulkUnits,
     discountCode,
     paymentMethod = "lightning",
-    mintUrl,
     cashuToken,
   } = req.body as CreateOrderInput & {
     selectedSize?: string;
@@ -141,7 +140,6 @@ async function handleCreateOrder(
     selectedBulkUnits?: number;
     discountCode?: string;
     paymentMethod?: PaymentMethod;
-    mintUrl?: string;
     cashuToken?: string;
   };
 
@@ -348,8 +346,7 @@ async function handleCreateOrder(
       totalAmount,
       currency,
       shippingAddress || null,
-      pricingBlock,
-      mintUrl
+      pricingBlock
     );
   } catch (error) {
     console.error("Failed to create MCP order:", error);
@@ -371,10 +368,9 @@ async function handleLightningPayment(
   totalAmount: number,
   currency: string,
   shippingAddress: Record<string, string> | null,
-  pricingBlock: any,
-  mintUrl?: string
+  pricingBlock: any
 ) {
-  const mint = mintUrl || DEFAULT_MINT_URL;
+  const mint = getTrustedMintUrl();
 
   let amountInSats: number;
   if (currency.toLowerCase() === "sats" || currency.toLowerCase() === "sat") {
@@ -383,7 +379,7 @@ async function handleLightningPayment(
     amountInSats = Math.round(totalAmount);
   }
 
-  if (amountInSats < 1) amountInSats = 1;
+  amountInSats = toCashuMintAmountSats(amountInSats);
 
   try {
     const cashuMint = new CashuMint(mint);

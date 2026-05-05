@@ -18,6 +18,9 @@ jest.mock("next/router", () => ({
 
 jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
   createNostrProfileEvent: jest.fn(),
+  getLocalUserProfileKey: jest.fn((pubkey: string) => `profile:${pubkey}`),
+  parseLocalProfileFallback: jest.fn(() => null),
+  isProfileContentPopulated: jest.fn(() => true),
 }));
 const mockCreateNostrProfileEvent = createNostrProfileEvent as jest.Mock;
 
