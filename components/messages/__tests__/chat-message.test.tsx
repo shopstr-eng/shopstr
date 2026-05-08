@@ -143,6 +143,17 @@ describe("ChatMessage", () => {
       expect(setBuyerPubkey).toHaveBeenCalledWith("");
     });
 
+    test("falls back to empty buyer pubkey when npub decoding fails", () => {
+      mockNip19Decode.mockImplementation(() => {
+        throw new Error("invalid npub");
+      });
+      const { setBuyerPubkey } = renderComponent({
+        messageEvent: { content: "Broken npub npub1abcde..." },
+      });
+      expect(mockNip19Decode).toHaveBeenCalledWith("npub1abcde");
+      expect(setBuyerPubkey).toHaveBeenCalledWith("");
+    });
+
     test("calls setCanReview(true) for order-related subjects", () => {
       const { setCanReview } = renderComponent({
         messageEvent: { tags: [["subject", "order-receipt"]] },
@@ -172,6 +183,7 @@ describe("ChatMessage", () => {
 
     test("renders a clickable npub link that calls router.replace", () => {
       const npub = "npub1testtest";
+      mockNip19Decode.mockReturnValue({ type: "npub", data: "decoded" });
       renderComponent({ messageEvent: { content: `Check out ${npub}` } });
       const link = screen.getByText(npub);
       expect(link).toBeInTheDocument();
@@ -180,6 +192,18 @@ describe("ChatMessage", () => {
         pathname: "/orders",
         query: { pk: npub, isInquiry: true },
       });
+    });
+
+    test("does not render malformed npub text as a clickable link", () => {
+      mockNip19Decode.mockImplementation(() => {
+        throw new Error("invalid npub");
+      });
+      renderComponent({
+        messageEvent: { content: "Broken npub npub1abcde" },
+      });
+
+      fireEvent.click(screen.getByText("Broken npub npub1abcde"));
+      expect(mockRouterReplace).not.toHaveBeenCalled();
     });
 
     test("renders a ClaimButton and copy icon for a valid cashu token", () => {
