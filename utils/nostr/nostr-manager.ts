@@ -168,11 +168,17 @@ export class NostrManager {
   public async fetch(
     filters: NostrFilter[],
     params?: SubscribeManyParams,
-    relayUrls?: string[]
+    relayUrls?: string[],
+    signal?: AbortSignal
   ): Promise<NostrEvent[]> {
-    return await newPromiseWithTimeout(async (resolve, _reject) => {
+    return await newPromiseWithTimeout(async (resolve, reject) => {
       if (!params) {
         params = {};
+      }
+
+      if (signal?.aborted) {
+        resolve([]);
+        return;
       }
 
       if (!params.onevent) {
@@ -186,19 +192,74 @@ export class NostrManager {
       const onEvent = params.onevent;
       const onEose = params.oneose;
       const fetchedEvents: Array<NostrEvent> = [];
+      let sub: NostrSub | undefined;
+
+      // Ensure abort handler closes subscription and resolves only after close completes
+      const onAbort = async () => {
+        try {
+          if (sub) {
+            await sub.close().catch((e) => {
+              console.error("Error closing sub on abort:", e);
+            });
+          }
+        } catch (e) {
+          console.error("Unexpected error during onAbort close:", e);
+        }
+        cleanup();
+        resolve(fetchedEvents);
+      };
+
+      const cleanup = () => {
+        try {
+          signal?.removeEventListener("abort", onAbort as EventListener);
+        } catch {
+          // ignore cleanup failures
+        }
+      };
+
+      signal?.addEventListener("abort", onAbort, { once: true });
 
       params.onevent = (event: NostrEvent) => {
         fetchedEvents.push(event);
         return onEvent!(event);
       };
 
-      params.oneose = () => {
-        sub!.close();
+      params.oneose = async () => {
+        try {
+          if (sub) {
+            await sub.close().catch((e) => {
+              console.error("Error closing sub on eose:", e);
+            });
+          }
+        } catch (e) {
+          console.error("Unexpected error during oneose close:", e);
+        }
+        cleanup();
         resolve(fetchedEvents);
         return onEose!();
       };
 
-      const sub = await this.subscribe(filters, params, relayUrls);
+      try {
+        sub = await this.subscribe(filters, params, relayUrls);
+      } catch (error) {
+        cleanup();
+        if (signal?.aborted) {
+          resolve(fetchedEvents);
+          return;
+        }
+        reject(error instanceof Error ? error : new Error(String(error)));
+        return;
+      }
+
+      if (signal?.aborted) {
+        cleanup();
+        try {
+          if (sub) await sub.close().catch((e) => console.error(e));
+        } catch (e) {
+          console.error(e);
+        }
+        resolve(fetchedEvents);
+      }
     });
   }
 
