@@ -3,7 +3,10 @@ import { useRouter } from "next/router";
 import { useForm, Controller } from "react-hook-form";
 import { Button, Input, Image } from "@heroui/react";
 import { ProfileMapContext } from "@/utils/context/context";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import {
+  AVATARBADGEBUTTONCLASSNAMES,
+  SHOPSTRBUTTONCLASSNAMES,
+} from "@/utils/STATIC-VARIABLES";
 import {
   SignerContext,
   NostrContext,
@@ -94,23 +97,24 @@ const BuyerProfileForm = ({ isOnboarding }: BuyerProfileFormProps) => {
   return (
     <>
       <div className="mb-16 flex items-center justify-center">
-        <div className="relative h-24 w-24">
+        <div className="relative h-24 w-24 overflow-visible">
           <FileUploaderButton
             isIconOnly
-            className={`absolute right-[-0.5rem] bottom-[-0.5rem] z-20 ${SHOPSTRBUTTONCLASSNAMES}`}
+            className={AVATARBADGEBUTTONCLASSNAMES}
+            containerClassName="absolute right-[-0.5rem] bottom-[-0.5rem] z-20"
             imgCallbackOnUpload={(imgUrl) => setValue("picture", imgUrl)}
           />
           {watchPicture ? (
             <Image
               src={watchPicture}
               alt="User Profile Picture"
-              className="rounded-full"
+              className="h-24 w-24 rounded-full object-cover"
             />
           ) : (
             <Image
               src={defaultImage}
               alt="User Profile Picture"
-              className="rounded-full"
+              className="h-24 w-24 rounded-full object-cover"
             />
           )}
         </div>
