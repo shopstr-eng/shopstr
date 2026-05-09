@@ -256,8 +256,21 @@ export default function StorefrontThemeWrapper({
     .storefront-themed.sf-neo .rounded-lg.border-2,
     .storefront-themed.sf-neo .rounded-xl.border-2,
     .storefront-themed.sf-neo .rounded-2xl.border-2,
-    .storefront-themed.sf-neo .rounded.border-2 {
+    .storefront-themed.sf-neo .rounded.border-2,
+    .storefront-themed.sf-neo .rounded-lg.border,
+    .storefront-themed.sf-neo .rounded-xl.border,
+    .storefront-themed.sf-neo .rounded-2xl.border,
+    .storefront-themed.sf-neo .rounded.border,
+    .storefront-themed.sf-neo img.border,
+    .storefront-themed.sf-neo img.border-2 {
       box-shadow: 4px 4px 0 var(--sf-secondary) !important;
+    }
+    .storefront-themed.sf-neo .rounded-lg.border,
+    .storefront-themed.sf-neo .rounded-xl.border,
+    .storefront-themed.sf-neo .rounded-2xl.border,
+    .storefront-themed.sf-neo .rounded.border {
+      border-width: 2px !important;
+      border-color: var(--sf-secondary) !important;
     }
     `
         : ""

@@ -650,8 +650,21 @@ export default function StorefrontPreviewPanel({
         .preview-container.sf-neo .rounded-lg.border-2,
         .preview-container.sf-neo .rounded-xl.border-2,
         .preview-container.sf-neo .rounded-2xl.border-2,
-        .preview-container.sf-neo .rounded.border-2 {
+        .preview-container.sf-neo .rounded.border-2,
+        .preview-container.sf-neo .rounded-lg.border,
+        .preview-container.sf-neo .rounded-xl.border,
+        .preview-container.sf-neo .rounded-2xl.border,
+        .preview-container.sf-neo .rounded.border,
+        .preview-container.sf-neo img.border,
+        .preview-container.sf-neo img.border-2 {
           box-shadow: 4px 4px 0 var(--sf-secondary) !important;
+        }
+        .preview-container.sf-neo .rounded-lg.border,
+        .preview-container.sf-neo .rounded-xl.border,
+        .preview-container.sf-neo .rounded-2xl.border,
+        .preview-container.sf-neo .rounded.border {
+          border-width: 2px !important;
+          border-color: var(--sf-secondary) !important;
         }
         `
             : ""

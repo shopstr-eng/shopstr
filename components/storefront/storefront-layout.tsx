@@ -387,8 +387,21 @@ export default function StorefrontLayout({
     .sf-layout.sf-neo .rounded-lg.border-2,
     .sf-layout.sf-neo .rounded-xl.border-2,
     .sf-layout.sf-neo .rounded-2xl.border-2,
-    .sf-layout.sf-neo .rounded.border-2 {
+    .sf-layout.sf-neo .rounded.border-2,
+    .sf-layout.sf-neo .rounded-lg.border,
+    .sf-layout.sf-neo .rounded-xl.border,
+    .sf-layout.sf-neo .rounded-2xl.border,
+    .sf-layout.sf-neo .rounded.border,
+    .sf-layout.sf-neo img.border,
+    .sf-layout.sf-neo img.border-2 {
       box-shadow: 4px 4px 0 var(--sf-secondary) !important;
+    }
+    .sf-layout.sf-neo .rounded-lg.border,
+    .sf-layout.sf-neo .rounded-xl.border,
+    .sf-layout.sf-neo .rounded-2xl.border,
+    .sf-layout.sf-neo .rounded.border {
+      border-width: 2px !important;
+      border-color: var(--sf-secondary) !important;
     }
     `
         : ""
