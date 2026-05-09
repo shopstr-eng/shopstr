@@ -1038,9 +1038,11 @@ function PreviewProductGrid({
               <h2 className="font-heading text-2xl font-bold md:text-3xl">
                 {featuredProduct.title}
               </h2>
-              <p className="font-body mt-3 opacity-70">
-                {featuredProduct.summary}
-              </p>
+              <FormattedText
+                as="p"
+                text={featuredProduct.summary || ""}
+                className="font-body mt-3 whitespace-pre-line opacity-70"
+              />
               <div className="mt-4">
                 <span
                   className="text-2xl font-bold"
@@ -1098,9 +1100,11 @@ function PreviewProductCard({
         )}
         <div className="flex flex-1 flex-col justify-center">
           <h3 className="font-heading text-base font-bold">{product.title}</h3>
-          <p className="font-body mt-1 line-clamp-2 text-sm opacity-60">
-            {product.summary}
-          </p>
+          <FormattedText
+            as="p"
+            text={product.summary || ""}
+            className="font-body mt-1 line-clamp-2 text-sm whitespace-pre-line opacity-60"
+          />
           <span
             className="mt-2 text-base font-bold"
             style={{ color: colors.accent }}
@@ -1130,9 +1134,11 @@ function PreviewProductCard({
         <h3 className="font-heading line-clamp-1 text-base font-bold">
           {product.title}
         </h3>
-        <p className="font-body mt-1 line-clamp-2 text-sm opacity-60">
-          {product.summary}
-        </p>
+        <FormattedText
+          as="p"
+          text={product.summary || ""}
+          className="font-body mt-1 line-clamp-2 text-sm whitespace-pre-line opacity-60"
+        />
         <div className="mt-3 flex items-center justify-between">
           <span className="text-lg font-bold" style={{ color: colors.accent }}>
             ${product.price}

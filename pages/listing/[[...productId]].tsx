@@ -29,6 +29,7 @@ import {
 import { findProductBySlug, getListingSlug } from "@/utils/url-slugs";
 import StorefrontThemeWrapper from "@/components/storefront/storefront-theme-wrapper";
 import ProductPageRenderer from "@/components/storefront/product-page-renderer";
+import FormattedText from "@/components/storefront/formatted-text";
 import { GetServerSideProps } from "next";
 import { OgMetaProps, DEFAULT_OG } from "@/components/og-head";
 import {
@@ -504,9 +505,11 @@ const Listing = ({ initialProductEvent }: ListingPageProps) => {
                       </Dropdown>
                     )}
                   </div>
-                  <p className="mb-6 whitespace-pre-wrap text-gray-600">
-                    {productData.summary}
-                  </p>
+                  <FormattedText
+                    as="p"
+                    text={productData.summary || ""}
+                    className="mb-6 whitespace-pre-wrap text-gray-600"
+                  />
                   <ZapsnagButton product={productData} />
                 </div>
               </div>

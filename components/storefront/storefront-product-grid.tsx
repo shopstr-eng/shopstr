@@ -3,6 +3,7 @@ import { ProductData } from "@/utils/parsers/product-parser-functions";
 import ProductCard from "@/components/utility-components/product-card";
 import { getListingSlug } from "@/utils/url-slugs";
 import { useState } from "react";
+import FormattedText from "./formatted-text";
 import { Pagination } from "@heroui/react";
 
 interface StorefrontProductGridProps {
@@ -69,7 +70,11 @@ export default function StorefrontProductGrid({
                 {featuredProduct.title}
               </h2>
               {featuredProduct.summary && (
-                <p className="mt-3 opacity-70">{featuredProduct.summary}</p>
+                <FormattedText
+                  as="p"
+                  text={featuredProduct.summary}
+                  className="mt-3 whitespace-pre-line opacity-70"
+                />
               )}
               <div className="mt-4">
                 <span
