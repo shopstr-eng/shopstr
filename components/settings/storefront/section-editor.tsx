@@ -227,21 +227,31 @@ export default function SectionEditor({
           )}
 
           {["hero", "about", "image"].includes(section.type) && (
-            <div className="flex items-center gap-3">
-              <Input
-                label="Image URL"
-                classNames={{ inputWrapper: inputWrapperClass }}
-                variant="bordered"
-                value={section.image || ""}
-                onChange={(e) => update({ image: e.target.value })}
-                className="flex-1"
-              />
-              <FileUploaderButton
-                className="mt-5 rounded-lg border-2 border-black bg-white px-3 py-2 text-sm font-bold text-black"
-                imgCallbackOnUpload={(url) => update({ image: url })}
-              >
-                Upload
-              </FileUploaderButton>
+            <div>
+              <div className="flex items-center gap-3">
+                <Input
+                  label="Image URL"
+                  classNames={{ inputWrapper: inputWrapperClass }}
+                  variant="bordered"
+                  value={section.image || ""}
+                  onChange={(e) => update({ image: e.target.value })}
+                  className="flex-1"
+                />
+                <FileUploaderButton
+                  className="mt-5 rounded-lg border-2 border-black bg-white px-3 py-2 text-sm font-bold text-black"
+                  imgCallbackOnUpload={(url) => update({ image: url })}
+                >
+                  Upload
+                </FileUploaderButton>
+              </div>
+              <p className="mt-1 text-xs text-gray-500">
+                Recommended:{" "}
+                {section.type === "hero"
+                  ? "1600 × 600 px (wide banner)"
+                  : section.type === "about"
+                    ? "1200 × 800 px (3:2)"
+                    : "1600 × 800 px (wide)"}
+              </p>
             </div>
           )}
 
@@ -780,8 +790,8 @@ function IngredientEditor({
   const getVisualMode = (
     item: StorefrontIngredientItem
   ): "none" | "emoji" | "image" => {
-    if (item.emoji) return "emoji";
-    if (item.image) return "image";
+    if (item.emoji !== undefined) return "emoji";
+    if (item.image !== undefined) return "image";
     return "none";
   };
 
@@ -892,22 +902,27 @@ function IngredientEditor({
                 />
               )}
               {mode === "image" && (
-                <div className="flex flex-1 items-center gap-2">
-                  <Input
-                    label="Image URL"
-                    size="sm"
-                    classNames={{ inputWrapper: inputWrapperClass }}
-                    variant="bordered"
-                    value={item.image || ""}
-                    onChange={(e) => edit(idx, { image: e.target.value })}
-                    className="flex-1"
-                  />
-                  <FileUploaderButton
-                    className="rounded-lg border-2 border-black bg-white px-3 py-2 text-xs font-bold text-black"
-                    imgCallbackOnUpload={(url) => edit(idx, { image: url })}
-                  >
-                    Upload
-                  </FileUploaderButton>
+                <div className="flex flex-1 flex-col gap-1">
+                  <div className="flex items-center gap-2">
+                    <Input
+                      label="Image URL"
+                      size="sm"
+                      classNames={{ inputWrapper: inputWrapperClass }}
+                      variant="bordered"
+                      value={item.image || ""}
+                      onChange={(e) => edit(idx, { image: e.target.value })}
+                      className="flex-1"
+                    />
+                    <FileUploaderButton
+                      className="rounded-lg border-2 border-black bg-white px-3 py-2 text-xs font-bold text-black"
+                      imgCallbackOnUpload={(url) => edit(idx, { image: url })}
+                    >
+                      Upload
+                    </FileUploaderButton>
+                  </div>
+                  <p className="text-[11px] text-gray-500">
+                    Recommended: 400 × 400 px (square — fits the circle)
+                  </p>
                 </div>
               )}
             </div>
@@ -1535,6 +1550,9 @@ function GalleryImageEditor({
       >
         Upload Image
       </FileUploaderButton>
+      <p className="text-[11px] text-gray-500">
+        Recommended: 1200 × 1200 px (square) for the product gallery grid.
+      </p>
     </div>
   );
 }

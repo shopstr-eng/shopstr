@@ -1309,6 +1309,9 @@ export default function ProductForm({
                       <label className="mb-2 block text-base font-semibold text-black">
                         Volumes (optional)
                       </label>
+                      <p className="mb-1 text-xs text-gray-500">
+                        Tap a selected volume again to remove it.
+                      </p>
                       <Select
                         classNames={{
                           trigger:
@@ -1324,10 +1327,11 @@ export default function ProductForm({
                         selectionMode="multiple"
                         isInvalid={isErrored}
                         errorMessage={errorMessage}
-                        onChange={(e) => handleVolumeChange(e.target.value)}
+                        onSelectionChange={(keys) =>
+                          handleVolumeChange(Array.from(keys as Set<string>))
+                        }
                         onBlur={onBlur}
-                        value={selectedVolumes}
-                        defaultSelectedKeys={new Set(selectedVolumes)}
+                        selectedKeys={new Set(selectedVolumes)}
                       >
                         <SelectSection>
                           <SelectItem key="Half-pint">Half-pint</SelectItem>
@@ -1443,6 +1447,9 @@ export default function ProductForm({
                       <label className="mb-2 block text-base font-semibold text-black">
                         Weights (optional)
                       </label>
+                      <p className="mb-1 text-xs text-gray-500">
+                        Tap a selected weight again to remove it.
+                      </p>
                       <Select
                         classNames={{
                           trigger:
@@ -1458,10 +1465,11 @@ export default function ProductForm({
                         selectionMode="multiple"
                         isInvalid={isErrored}
                         errorMessage={errorMessage}
-                        onChange={(e) => handleWeightChange(e.target.value)}
+                        onSelectionChange={(keys) =>
+                          handleWeightChange(Array.from(keys as Set<string>))
+                        }
                         onBlur={onBlur}
-                        value={selectedWeights}
-                        defaultSelectedKeys={new Set(selectedWeights)}
+                        selectedKeys={new Set(selectedWeights)}
                       >
                         <SelectSection>
                           <SelectItem key="1oz">1oz</SelectItem>
@@ -2272,6 +2280,9 @@ export default function ProductForm({
                           <label className="mb-2 block text-base font-semibold text-black">
                             Sizes
                           </label>
+                          <p className="mb-1 text-xs text-gray-500">
+                            Tap a selected size again to remove it.
+                          </p>
                           <Select
                             classNames={{
                               trigger:
@@ -2286,10 +2297,11 @@ export default function ProductForm({
                             selectionMode="multiple"
                             isInvalid={isErrored}
                             errorMessage={errorMessage}
-                            onChange={(e) => handleSizeChange(e.target.value)}
+                            onSelectionChange={(keys) =>
+                              handleSizeChange(Array.from(keys as Set<string>))
+                            }
                             onBlur={onBlur}
-                            value={selectedSizes}
-                            defaultSelectedKeys={new Set(selectedSizes)}
+                            selectedKeys={new Set(selectedSizes)}
                           >
                             <SelectSection>
                               <SelectItem key="XS">XS</SelectItem>

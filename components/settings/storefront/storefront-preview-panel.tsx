@@ -462,6 +462,7 @@ interface StorefrontPreviewPanelProps {
   footerColors?: StorefrontFooterColors;
   shopSlug: string;
   compact?: boolean;
+  realProducts?: ProductData[];
 }
 
 export default function StorefrontPreviewPanel({
@@ -486,7 +487,10 @@ export default function StorefrontPreviewPanel({
   footerColors,
   shopSlug,
   compact,
+  realProducts,
 }: StorefrontPreviewPanelProps) {
+  const previewProducts: ProductData[] =
+    realProducts && realProducts.length > 0 ? realProducts : MOCK_PRODUCTS;
   const [previewPage, setPreviewPage] = useState<string>("");
   const [viewportWidth, setViewportWidth] = useState<
     "desktop" | "tablet" | "mobile"
@@ -791,7 +795,7 @@ export default function StorefrontPreviewPanel({
                   ))}
                 </div>
                 <PreviewProductGrid
-                  products={MOCK_PRODUCTS}
+                  products={previewProducts}
                   layout={productLayout}
                   colors={colors}
                 />
@@ -833,7 +837,7 @@ export default function StorefrontPreviewPanel({
                             className="font-body mt-2 max-w-2xl opacity-70"
                           />
                           <div className="mt-2 flex items-center gap-3 text-sm opacity-60">
-                            <span>{MOCK_PRODUCTS.length} products</span>
+                            <span>{previewProducts.length} products</span>
                             <span>12 reviews</span>
                           </div>
                         </div>
@@ -856,7 +860,7 @@ export default function StorefrontPreviewPanel({
                             {displayName}
                           </h1>
                           <p className="text-sm opacity-60">
-                            {MOCK_PRODUCTS.length} products
+                            {previewProducts.length} products
                           </p>
                         </div>
                       </div>
@@ -888,7 +892,7 @@ export default function StorefrontPreviewPanel({
                     shopName={displayName}
                     shopPicture={displayPicture}
                     shopPubkey="preview"
-                    products={MOCK_PRODUCTS}
+                    products={previewProducts}
                     isPreview
                   />
                 ))}
@@ -900,7 +904,7 @@ export default function StorefrontPreviewPanel({
                 }`}
               >
                 <PreviewProductGrid
-                  products={MOCK_PRODUCTS}
+                  products={previewProducts}
                   layout={productLayout}
                   colors={colors}
                 />

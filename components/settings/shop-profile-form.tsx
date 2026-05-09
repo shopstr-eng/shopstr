@@ -956,9 +956,14 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
           >
             Upload Banner
           </FileUploaderButton>
+          {watchBanner && (
+            <span className="absolute bottom-2 left-2 z-20 rounded bg-black/60 px-2 py-1 text-[11px] text-white">
+              Recommended: 1400 × 400 px
+            </span>
+          )}
         </div>
 
-        <div className="flex items-center justify-center">
+        <div className="flex flex-col items-center justify-center">
           <div className="relative mt-[-4rem] h-32 w-32">
             <div className="relative h-full w-full overflow-hidden rounded-full border-4 border-black bg-white">
               {watchPicture ? (
@@ -987,6 +992,9 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
               imgCallbackOnUpload={(imgUrl) => setValue("picture", imgUrl)}
             />
           </div>
+          <p className="mt-2 text-[11px] text-gray-500">
+            Stall logo — recommended: 400 × 400 px (square)
+          </p>
         </div>
       </div>
 
@@ -2459,6 +2467,10 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                                       Upload
                                     </FileUploaderButton>
                                   </div>
+                                  <p className="mt-1 text-[11px] text-gray-500">
+                                    Recommended: 800 × 600 px (4:3 popup
+                                    background)
+                                  </p>
                                   {emailPopup.style?.backgroundImage && (
                                     <div className="mt-2 flex items-center gap-2">
                                       <img
@@ -3069,6 +3081,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                         }
                         shopSlug={shopSlug}
                         compact
+                        realProducts={sellerProducts}
                       />
                     </div>
                   </div>
@@ -3164,6 +3177,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                         : undefined
                     }
                     shopSlug={shopSlug}
+                    realProducts={sellerProducts}
                   />
                 </div>
                 <style>{`
