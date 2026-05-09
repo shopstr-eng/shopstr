@@ -454,6 +454,7 @@ interface StorefrontPreviewPanelProps {
   customFontHeadingName?: string;
   customFontBodyUrl?: string;
   customFontBodyName?: string;
+  neoShadows?: boolean;
   sections: StorefrontSection[];
   pages: StorefrontPage[];
   footer: StorefrontFooter;
@@ -479,6 +480,7 @@ export default function StorefrontPreviewPanel({
   customFontHeadingName,
   customFontBodyUrl,
   customFontBodyName,
+  neoShadows,
   sections,
   pages,
   footer,
@@ -642,6 +644,18 @@ export default function StorefrontPreviewPanel({
       <style>{`
         .preview-container .font-heading { font-family: var(--font-heading, inherit); }
         .preview-container .font-body { font-family: var(--font-body, inherit); }
+        ${
+          neoShadows
+            ? `
+        .preview-container.sf-neo .rounded-lg.border-2,
+        .preview-container.sf-neo .rounded-xl.border-2,
+        .preview-container.sf-neo .rounded-2xl.border-2,
+        .preview-container.sf-neo .rounded.border-2 {
+          box-shadow: 4px 4px 0 var(--sf-secondary) !important;
+        }
+        `
+            : ""
+        }
       `}</style>
 
       <div
@@ -735,7 +749,7 @@ export default function StorefrontPreviewPanel({
       <div className="flex flex-1 items-start justify-center overflow-auto bg-gray-800 p-3">
         <div
           ref={containerRef}
-          className={`preview-container ${viewportWidthClass} mx-auto min-h-[600px] overflow-hidden rounded-lg shadow-2xl`}
+          className={`preview-container ${neoShadows ? "sf-neo" : ""} ${viewportWidthClass} mx-auto min-h-[600px] overflow-hidden rounded-lg shadow-2xl`}
           style={{
             maxWidth: viewportWidth === "desktop" ? "100%" : undefined,
           }}

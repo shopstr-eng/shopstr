@@ -225,6 +225,7 @@ export interface StorefrontConfig {
   customFontHeadingName?: string;
   customFontBodyUrl?: string;
   customFontBodyName?: string;
+  neoShadows?: boolean;
   sections?: StorefrontSection[];
   pages?: StorefrontPage[];
   footer?: StorefrontFooter;

@@ -83,8 +83,8 @@ export default function StorefrontProductGrid({
                 >
                   {featuredProduct.currency === "sat" ||
                   featuredProduct.currency === "sats"
-                    ? `${featuredProduct.totalCost} sats`
-                    : `${featuredProduct.totalCost} ${
+                    ? `${featuredProduct.price} sats`
+                    : `${featuredProduct.price} ${
                         featuredProduct.currency?.toUpperCase() || "USD"
                       }`}
                 </span>

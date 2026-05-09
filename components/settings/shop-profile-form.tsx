@@ -273,6 +273,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
   const [customFontBodyName, setCustomFontBodyName] = useState("");
   const [fontUploadingHeading, setFontUploadingHeading] = useState(false);
   const [fontUploadingBody, setFontUploadingBody] = useState(false);
+  const [neoShadows, setNeoShadows] = useState(false);
   const [sections, setSections] = useState<StorefrontSection[]>([]);
   const sectionsDnd = useDragReorder(sections, setSections);
   const [newSectionId, setNewSectionId] = useState<string | null>(null);
@@ -378,6 +379,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
           setCustomFontHeadingName(sf.customFontHeadingName);
         if (sf.customFontBodyUrl) setCustomFontBodyUrl(sf.customFontBodyUrl);
         if (sf.customFontBodyName) setCustomFontBodyName(sf.customFontBodyName);
+        if (typeof sf.neoShadows === "boolean") setNeoShadows(sf.neoShadows);
         if (sf.sections) setSections(sf.sections);
         if (sf.pages) setPages(sf.pages);
         if (sf.footer) setFooter(sf.footer);
@@ -473,6 +475,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
         setCustomFontHeadingName(sf.customFontHeadingName);
       if (sf.customFontBodyUrl) setCustomFontBodyUrl(sf.customFontBodyUrl);
       if (sf.customFontBodyName) setCustomFontBodyName(sf.customFontBodyName);
+      if (typeof sf.neoShadows === "boolean") setNeoShadows(sf.neoShadows);
       if (sf.sections) setSections(sf.sections);
       if (sf.pages) setPages(sf.pages);
       if (sf.footer) setFooter(sf.footer);
@@ -746,6 +749,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
         customFontHeadingName,
         customFontBodyUrl,
         customFontBodyName,
+        neoShadows,
         sections,
         pages,
         footer,
@@ -774,6 +778,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
       customFontHeadingName,
       customFontBodyUrl,
       customFontBodyName,
+      neoShadows,
       sections,
       pages,
       footer,
@@ -860,6 +865,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
         customFontHeadingName: customFontHeadingName || undefined,
         customFontBodyUrl: customFontBodyUrl || undefined,
         customFontBodyName: customFontBodyName || undefined,
+        neoShadows: neoShadows || undefined,
         sections: sections.length > 0 ? sections : undefined,
         pages: pages.length > 0 ? pages : undefined,
         // Preserve productPageDefaults exactly as it currently exists on the
@@ -1953,6 +1959,23 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                             )}
                           </div>
                         </div>
+                      </div>
+
+                      <div className="mb-6">
+                        <label className="mb-2 flex items-center gap-3 text-base font-bold text-black">
+                          <input
+                            type="checkbox"
+                            checked={neoShadows}
+                            onChange={(e) => setNeoShadows(e.target.checked)}
+                            className="h-4 w-4 rounded border-gray-300"
+                          />
+                          Neo-brutalist Card Shadows
+                        </label>
+                        <p className="ml-7 text-sm text-gray-500">
+                          Adds a hard offset shadow to bordered cards across
+                          your stall — the same look used on the main Milk
+                          Market marketplace.
+                        </p>
                       </div>
 
                       <div className="mb-6">
@@ -3061,6 +3084,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                         customFontHeadingName={customFontHeadingName}
                         customFontBodyUrl={customFontBodyUrl}
                         customFontBodyName={customFontBodyName}
+                        neoShadows={neoShadows}
                         sections={sections}
                         pages={pages}
                         footer={footer}
@@ -3160,6 +3184,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                     customFontHeadingName={customFontHeadingName}
                     customFontBodyUrl={customFontBodyUrl}
                     customFontBodyName={customFontBodyName}
+                    neoShadows={neoShadows}
                     sections={sections}
                     pages={pages}
                     footer={footer}

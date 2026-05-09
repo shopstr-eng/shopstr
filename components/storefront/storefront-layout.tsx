@@ -381,6 +381,19 @@ export default function StorefrontLayout({
     .sf-layout .bg-blue-100 { background-color: color-mix(in srgb, var(--sf-accent) 15%, var(--sf-bg)) !important; }
     .sf-layout .hover\\:bg-blue-200:hover { background-color: color-mix(in srgb, var(--sf-accent) 25%, var(--sf-bg)) !important; }
 
+    ${
+      storefront.neoShadows
+        ? `
+    .sf-layout.sf-neo .rounded-lg.border-2,
+    .sf-layout.sf-neo .rounded-xl.border-2,
+    .sf-layout.sf-neo .rounded-2xl.border-2,
+    .sf-layout.sf-neo .rounded.border-2 {
+      box-shadow: 4px 4px 0 var(--sf-secondary) !important;
+    }
+    `
+        : ""
+    }
+
     body.sf-active [data-overlay-container] .border-black { border-color: var(--sf-secondary) !important; }
     body.sf-active [data-overlay-container] .shadow-neo {
       box-shadow: 4px 4px 0 var(--sf-secondary) !important;
@@ -460,7 +473,7 @@ export default function StorefrontLayout({
         <style>{themedCss}</style>
       </Head>
       <div
-        className="sf-layout min-h-screen"
+        className={`sf-layout min-h-screen ${storefront.neoShadows ? "sf-neo" : ""}`}
         style={{
           ...cssVars,
           ...fontStyles,
