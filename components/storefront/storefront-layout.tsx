@@ -185,7 +185,45 @@ export default function StorefrontLayout({
 
   const fontHeading = storefront.fontHeading || "";
   const fontBody = storefront.fontBody || "";
-  const googleFontsUrl = buildGoogleFontsUrl(fontHeading, fontBody);
+  const customFontHeadingUrl = storefront.customFontHeadingUrl || "";
+  const customFontHeadingName = storefront.customFontHeadingName || "";
+  const customFontBodyUrl = storefront.customFontBodyUrl || "";
+  const customFontBodyName = storefront.customFontBodyName || "";
+  const googleFontsUrl = buildGoogleFontsUrl(
+    fontHeading,
+    fontBody,
+    customFontHeadingUrl,
+    customFontBodyUrl
+  );
+
+  const getFontFormat = (url: string): string => {
+    if (url.includes(".woff2")) return "woff2";
+    if (url.includes(".woff")) return "woff";
+    if (url.includes(".otf")) return "opentype";
+    if (url.includes(".ttf")) return "truetype";
+    return "woff2";
+  };
+
+  const customFontFaceCss = useMemo(() => {
+    let css = "";
+    if (customFontHeadingUrl) {
+      const name =
+        customFontHeadingName?.replace(/\.[^.]+$/, "") || "CustomHeading";
+      const format = getFontFormat(customFontHeadingUrl);
+      css += `@font-face { font-family: '${name}'; src: url('${customFontHeadingUrl}') format('${format}'); font-weight: 100 900; font-display: swap; }\n`;
+    }
+    if (customFontBodyUrl && customFontBodyUrl !== customFontHeadingUrl) {
+      const name = customFontBodyName?.replace(/\.[^.]+$/, "") || "CustomBody";
+      const format = getFontFormat(customFontBodyUrl);
+      css += `@font-face { font-family: '${name}'; src: url('${customFontBodyUrl}') format('${format}'); font-weight: 100 900; font-display: swap; }\n`;
+    }
+    return css;
+  }, [
+    customFontHeadingUrl,
+    customFontHeadingName,
+    customFontBodyUrl,
+    customFontBodyName,
+  ]);
 
   const hasSections = storefront.sections && storefront.sections.length > 0;
   const hasNav = storefront.navLinks && storefront.navLinks.length > 0;
@@ -304,11 +342,20 @@ export default function StorefrontLayout({
     "--sf-text": colors.text,
   } as React.CSSProperties;
 
+  const resolvedHeadingFont = customFontHeadingUrl
+    ? `'${customFontHeadingName?.replace(/\.[^.]+$/, "") || "CustomHeading"}', 'Poppins', sans-serif`
+    : fontHeading
+      ? `'${fontHeading}', sans-serif`
+      : "";
+  const resolvedBodyFont = customFontBodyUrl
+    ? `'${customFontBodyName?.replace(/\.[^.]+$/, "") || "CustomBody"}', 'Poppins', sans-serif`
+    : fontBody
+      ? `'${fontBody}', sans-serif`
+      : "";
+
   const fontStyles = {
-    ...(fontHeading
-      ? { "--font-heading": `'${fontHeading}', sans-serif` }
-      : {}),
-    ...(fontBody ? { "--font-body": `'${fontBody}', sans-serif` } : {}),
+    ...(resolvedHeadingFont ? { "--font-heading": resolvedHeadingFont } : {}),
+    ...(resolvedBodyFont ? { "--font-body": resolvedBodyFont } : {}),
   } as React.CSSProperties;
 
   const defaultFooter: StorefrontFooter = hasFooter
@@ -405,6 +452,7 @@ export default function StorefrontLayout({
             <link href={googleFontsUrl} rel="stylesheet" />
           </>
         )}
+        {customFontFaceCss && <style>{customFontFaceCss}</style>}
         <style>{`
           .font-heading { font-family: var(--font-heading, inherit); }
           .font-body { font-family: var(--font-body, inherit); }
@@ -856,10 +904,18 @@ export default function StorefrontLayout({
   );
 }
 
-function buildGoogleFontsUrl(heading?: string, body?: string): string | null {
+function buildGoogleFontsUrl(
+  heading?: string,
+  body?: string,
+  customHeadingUrl?: string,
+  customBodyUrl?: string
+): string | null {
   const fonts = new Set<string>();
-  if (heading && GOOGLE_FONT_OPTIONS.includes(heading)) fonts.add(heading);
-  if (body && GOOGLE_FONT_OPTIONS.includes(body)) fonts.add(body);
+  if (heading && !customHeadingUrl && GOOGLE_FONT_OPTIONS.includes(heading))
+    fonts.add(heading);
+  if (body && !customBodyUrl && GOOGLE_FONT_OPTIONS.includes(body))
+    fonts.add(body);
+  if (customHeadingUrl || customBodyUrl) fonts.add("Poppins");
   if (fonts.size === 0) return null;
   const families = Array.from(fonts)
     .map((f) => `family=${f.replace(/ /g, "+")}:wght@400;600;700`)
