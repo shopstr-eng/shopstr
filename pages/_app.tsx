@@ -1320,7 +1320,8 @@ function MilkMarket({ props }: { props: AppProps }) {
                             router.pathname !== "/privacy" &&
                             router.pathname !== "/about" &&
                             router.pathname !== "/contact" &&
-                            !router.pathname.startsWith("/stall/") && (
+                            !router.pathname.startsWith("/stall/") &&
+                            !(router.asPath ?? "").startsWith("/stall/") && (
                               <TopNav
                                 setFocusedPubkey={setFocusedPubkey}
                                 setSelectedSection={setSelectedSection}
