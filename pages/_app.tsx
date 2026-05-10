@@ -506,7 +506,16 @@ function MilkMarket({ props }: { props: AppProps }) {
   const router = useRouter();
   const initializationRunRef = useRef(0);
 
-  const isStorefrontRoute = router.pathname.startsWith("/stall/");
+  // Stall-scoped routes can be served either by /pages/stall/** directly or
+  // by Next.js rewrites (e.g. /stall/<slug>/listing/<id> -> /listing/<id>,
+  // /stall/<slug>/cart -> /cart). In the rewrite case `router.pathname` is
+  // the destination page, so we also need to inspect `router.asPath` (the
+  // user-visible URL) to detect a stall context. Without this the storefront
+  // fast-path fetch never runs and the theme wrapper has no shop data to
+  // render against, so the custom nav / fonts / neo shadows never appear.
+  const isStorefrontRoute =
+    router.pathname.startsWith("/stall/") ||
+    (router.asPath ?? "").startsWith("/stall/");
 
   const currentStorefrontSlug = isStorefrontRoute
     ? decodeURIComponent(
