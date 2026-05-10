@@ -1,6 +1,6 @@
 # Overview
 
-Milk Market is a permissionless marketplace built on the Nostr protocol for Bitcoin-enabled commerce, specializing in raw milk and related products. It leverages various Nostr Implementation Possibilities (NIPs) to offer a decentralized, censorship-resistant platform. Users can buy and sell products using Bitcoin via Lightning Network, Cashu eCash tokens, and traditional fiat currencies. The platform supports product listings, order management, encrypted communication, and multi-currency payments, emphasizing user privacy and self-sovereignty within Nostr's architecture. Recent enhancements include a dedicated order summary page, an email notification system with guest checkout, a redesigned landing page for improved conversion, and integration with Stripe Connect for sellers to accept credit card payments.
+Milk Market is a permissionless Nostr-based marketplace specializing in raw milk and related products, with Bitcoin (Lightning, Cashu), Stripe, and fiat payment support. It implements 15+ NIPs for decentralized profiles, listings, messaging, reviews, and social graph, with PostgreSQL caching for SSR and analytics. Sellers can run customizable storefronts; buyers can check out as guests or with Nostr keys; AI agents can participate via the MCP API.
 
 # User Preferences
 
@@ -8,336 +8,273 @@ Preferred communication style: Simple, everyday language.
 
 # System Architecture
 
-## Frontend Architecture
+## Frontend
 
-- **Framework**: Next.js 16 with TypeScript v4 (App Router), React 19.
-- **UI/UX**: HeroUI, Tailwind CSS, Framer Motion for animations, PWA support.
-- **State Management**: React Context API for various domains (products, profiles, shops, chats, reviews, follows, relays, media, wallet, communities).
-- **Data Persistence**: Local storage for user preferences and authentication, service worker for caching.
-- **Routing**: Middleware-based URL rewriting, dynamic routing, protected routes for authenticated operations. Friendly URL slugs for listings (title-based) and profiles (name-based) with collision handling via pubkey disambiguation. naddr/npub inputs still resolve but redirect to friendly slugs. URL slug utilities in `utils/url-slugs.ts`.
-- **SSR OpenGraph Meta Tags**: Product (`/listing/`), shop (`/shop/`, `/shop/.../`), marketplace seller (`/marketplace/`), and community (`/communities/`) pages use `getServerSideProps` to fetch entity data from the PostgreSQL cache and render `og:title`, `og:description`, `og:image`, and Twitter Card meta tags server-side. This ensures social media crawlers (which don't execute JS) see personalized link previews. Single-entity DB query functions in `utils/db/db-service.ts`. SSR OG data flows from `getServerSideProps` → `pageProps.ogMeta` → `DynamicHead` component (via `_app.tsx`). Shared OG type/defaults in `components/og-head.tsx`.
+- **Stack**: Next.js 16 (App Router) + TypeScript v4, React 19, HeroUI, Tailwind CSS, Framer Motion, PWA.
+- **State**: React Context per domain (products, profiles, shops, chats, reviews, follows, relays, media, wallet, communities). Local storage for prefs/auth, service worker for caching.
+- **Routing**: Friendly slugs for listings (title-based) and profiles (name-based) with pubkey disambiguation; naddr/npub URLs redirect to slugs. Utilities in `utils/url-slugs.ts`.
+- **SSR OpenGraph**: `/listing/`, `/shop/`, `/marketplace/`, `/communities/` pages fetch from PostgreSQL in `getServerSideProps` and inject `og:*` / Twitter Card meta via `pageProps.ogMeta` → `DynamicHead` (`_app.tsx`). Helpers in `utils/db/db-service.ts`, shared types in `components/og-head.tsx`.
 
-## Backend Architecture
+## Backend
 
-- **API Routes**: Next.js API routes for server-side logic.
-- **Database**: PostgreSQL for relational data storage.
-- **File Handling**: Formidable for file uploads.
-- **Middleware**: Custom Next.js middleware for routing.
+- Next.js API routes, PostgreSQL, Formidable for uploads, custom middleware for routing.
 
 ## Authentication & Signing
 
-- **Multiple Signer Support**: NIP-07, NIP-46, and direct nsec key input.
-- **Key Management**: NIP-49 encrypted private key storage (ncryptsec). Sign-in supports both nsec and ncryptsec formats with auto-detection.
-- **Migration System**: Automatic migration to NIP-49 standard.
-- **Account Recovery**: Recovery key system for email and nsec users with email attached. Recovery keys (24-char, segmented format e.g. XXXX-XXXX-XXXX-XXXX-XXXX-XXXX) are generated at email signup and can be set up from profile settings for nsec users. Recovery flow: email verification token → recovery key + new password/passphrase → re-encrypted nsec. Recovery key is downloadable as .txt file. DB tables: `account_recovery` (pubkey, email, recovery_key_hash, recovery_encrypted_nsec, auth_type), `account_recovery_tokens`, `recovery_email_verifications`. API routes: `setup-recovery`, `check-recovery`, `request-recovery`, `verify-recovery-token`, `reset-password`, `send-recovery-verification`. UI: `RecoveryKeyModal`, `/auth/recover` page, "Forgot password?" link in SignInModal, recovery setup section in profile settings. Recovery utilities in `utils/auth/recovery.ts`. Security: cryptographically secure RNG (`crypto.randomBytes`) for key/token generation, PBKDF2 with 600,000 iterations (backward-compatible with legacy 1,000 iteration decryption), rate limiting on all recovery endpoints (`utils/auth/rate-limit.ts`), email verification required before recovery setup, `check-recovery` returns masked email only, `reset-password` sets no-cache headers. Recovery page dynamically labels fields as "password" (email users) or "passphrase" (nsec/OAuth users). Expired/used tokens are cleaned up during recovery requests.
+- **Signers**: NIP-07, NIP-46, direct nsec (with ncryptsec auto-detection on sign-in). NIP-49 encrypted storage with auto-migration.
+- **Account Recovery**: For email and nsec-with-email users. 24-char segmented recovery key (e.g. `XXXX-XXXX-...`) generated at email signup or via profile settings, downloadable as `.txt`. Flow: email-verification token → recovery key + new password/passphrase → re-encrypted nsec.
+  - Tables: `account_recovery`, `account_recovery_tokens`, `recovery_email_verifications`.
+  - API: `setup-recovery`, `check-recovery`, `request-recovery`, `verify-recovery-token`, `reset-password`, `send-recovery-verification`.
+  - UI: `RecoveryKeyModal`, `/auth/recover`, "Forgot password?" in `SignInModal`, recovery section in profile settings. Helpers in `utils/auth/recovery.ts`.
+  - Security: `crypto.randomBytes` RNG; PBKDF2 with 600,000 iterations (back-compat with 1,000); per-route rate limiting (`utils/auth/rate-limit.ts`); email verification required; `check-recovery` returns masked email; `reset-password` is no-cache. Recovery page labels fields "password" vs "passphrase" depending on auth type.
 
-## Nostr Protocol Implementation
+## Nostr Protocol
 
-- **Core NIPs**: Implements 15+ NIPs for profiles (NIP-01, NIP-05), marketplace (NIP-99), private messaging (NIP-17), media (Blossom), reviews (NIP-85), and social graph (NIP-02, NIP-51).
-- **Relay Management**: Multi-relay support with configurable lists (NIP-65).
-- **Event Caching**: Local caching of Nostr events.
+- Implements 15+ NIPs: profiles (NIP-01, NIP-05), marketplace (NIP-99), DMs (NIP-17), media (Blossom), reviews (NIP-85), social graph (NIP-02, NIP-51), relay lists (NIP-65).
+- Event caching is hybrid (IndexedDB + Postgres + live relays). Kind 1111 events disambiguated by tags: NIP-22 review replies (`K` tags) → `comment_events`; community posts (`a:34550:...`) → `community_events`. Community posts (1111) and approvals (4550) are cached on fetch and loaded DB-first via `fetchCommunityPostsFromDb` / `pages/api/db/fetch-community-posts.ts`.
+- File storage: Blossom servers. Encryption: NIP-44 for DMs and documents.
 
-## Order Message Handling & Payment Tags
+## Order Messages & Payment Tags
 
-- **Payment Method Resolution**: `resolveExplicitPaymentMethod()` in `utils/messages/order-message-utils.ts` maps raw payment tags from order messages to human-readable display names (e.g., "stripe" → "Card", "nwc" → "NWC", "cash app" → "Cash App", "paypal" → "PayPal", "apple pay" → "Apple Pay", "google pay" → "Google Pay"). Used in both the orders dashboard and email notifications. Unknown payment types get title-cased with word-boundary splitting.
-- **Order Currency Resolution**: Orders dashboard (`components/messages/orders-dashboard.tsx`) reads the `["currency", ...]` tag from order messages when available, falling back to the product listing's currency. This ensures correct currency display even when the product is deleted or the order was paid in a different currency.
-- **Shipping Tag Parsing**: `parseShippingTag()` and `parseShippingFromTags()` in `utils/parsers/product-tag-helpers.ts` enforce strict 4-element format `["shipping", type, cost, currency]` validated against `SHIPPING_OPTIONS` allowlist. `getEffectiveShippingCost()` returns 0 for zero-cost types (Free, Free/Pickup, Pickup, N/A) and handles "Added Cost/Pickup" with zero cost (pickup selected).
-- **Order Grouping**: `buildOrderGroupingKey()` groups related order messages using product reference + amount + fulfillment target (address or pickup location). `getOrderConsolidationKey()` and `registerTaggedOrderGroupingKey()` handle deduplication across explicit order tags and computed grouping keys.
-- **Email Payment Method Formatting**: The `/api/email/send-order-email` endpoint uses `resolveExplicitPaymentMethod()` to normalize raw payment type strings before sending to email templates, ensuring consistent branded names (e.g., "PayPal" not "paypal") in both buyer and seller notification emails.
-- **Order Subject Routing**: `messages.tsx` filters order-related messages for the Orders chat tab using subjects: `order-payment`, `order-info`, `payment-change`, `order-receipt`, `shipping-info`, `order-completed`, `zapsnag-order`, `address-change`. The `chat-panel.tsx` sends `order-completed` when a seller marks an order delivered.
-- **ZapsnagButton Order Tags**: `ZapsnagButton.tsx` sends full order metadata (productData, orderAmount, orderCurrency, paymentType, paymentReference, status) to `constructGiftWrappedEvent`, ensuring zapsnag orders display properly in the orders dashboard with product name, amount, and payment info.
-- **MCP Order Emails**: `pages/api/mcp/create-order.ts` `sendOrderEmail()` passes full order metadata (shippingAddress, selectedSize, selectedVolume, selectedWeight, selectedBulkOption, productId, quantity) to the email API, ensuring MCP-created orders produce complete seller/buyer notification emails with variant and shipping details.
-- **Order Summary Payment Display**: Both `pages/order-summary/index.tsx` and `components/storefront/storefront-order-confirmation.tsx` use `resolveExplicitPaymentMethod()` as the canonical source for payment method names, with additional descriptive labels for the summary context (e.g., "Lightning" → "Lightning Network", "Card" → "Credit Card (Stripe)"). Free shipping displays use the order's actual currency instead of hardcoded "$".
+- **Payment method names**: `resolveExplicitPaymentMethod()` in `utils/messages/order-message-utils.ts` is the canonical mapper (`stripe`→`Card`, `nwc`→`NWC`, `paypal`→`PayPal`, etc.). Used by orders dashboard, both order email APIs, and order-summary pages. Unknown types are title-cased on word boundaries. Order-summary pages add descriptive labels (e.g. `Lightning`→`Lightning Network`, `Card`→`Credit Card (Stripe)`).
+- **Currency**: Orders dashboard reads the `["currency", ...]` tag from the order message first, falling back to the listing's currency, so the right currency shows even after the listing is deleted or the order paid in a different currency.
+- **Shipping tags**: Strict 4-tuple `["shipping", type, cost, currency]` validated against `SHIPPING_OPTIONS` in `utils/parsers/product-tag-helpers.ts`. `getEffectiveShippingCost()` returns 0 for `Free`/`Free/Pickup`/`Pickup`/`N/A` and for `Added Cost/Pickup` when pickup is selected.
+- **Order grouping & dedupe**: `buildOrderGroupingKey()` keys on product ref + amount + fulfillment target. `getOrderConsolidationKey()` + `registerTaggedOrderGroupingKey()` dedupe across explicit order tags and computed keys.
+- **Subject routing**: `messages.tsx` routes order subjects (`order-payment`, `order-info`, `payment-change`, `order-receipt`, `shipping-info`, `order-completed`, `zapsnag-order`, `address-change`) to the Orders chat tab. `chat-panel.tsx` emits `order-completed` on delivery; `ZapsnagButton.tsx` includes full order metadata so zapsnag orders display correctly. MCP `create-order.ts` `sendOrderEmail()` passes full order metadata (shipping, variants, productId, quantity) for complete buyer/seller emails.
 
 ## Payment Systems
 
-- **Lightning Network**: Direct invoice generation and payment verification.
-- **Cashu eCash**: Integration with Cashu mints. Uses `@cashu/cashu-ts` v4.1.0 (`Mint`/`Wallet`/`Keyset` exports; bolt11-suffixed quote helpers; `Amount` boundary type with `.toNumber()`; `KeyChain.getKeysets()`; explicit `await wallet.loadMint()` after construction; `getDecodedToken(token, keysetIds)` requires the second argument). Proofs persisted to `localStorage["tokens"]` lose their `Amount` wrapper on JSON round-trip and come back as plain `number`; UI code that reads from `getLocalStorageData().tokens` must use `proofAmountToNumber` / `sumProofAmounts` from `utils/cashu/proof-amount.ts` instead of calling `.amount.toNumber()` directly (used by `pages/wallet/index.tsx`, `components/storefront/storefront-wallet.tsx`, and the localStorage-derived `filteredProofs` reduce in `components/wallet/pay-button.tsx`). Payment hardening utilities live in `utils/cashu/`: `mint-retry-service` (`withMintRetry` — rate-limit-aware exponential backoff for transient mint errors), `swap-retry-service` (`safeSwap` returns `{status, proofs}` outcomes), `melt-retry-service` (`safeMeltProofs` returns `{status, changeProofs, errorMessage}`), `pending-mint-operations` (DB-backed `pending_mint_quotes` table for orphan recovery via `recordPendingMintQuote`/`markMintQuotePaid`/`markMintQuoteClaimed`), and `wallet-recovery` (boot-time reconciler mounted via `components/utility-components/mint-recovery-boot.tsx` in `pages/_app.tsx`). All cashu call sites in `components/wallet/*`, `components/cart-invoice-card.tsx`, `components/product-invoice-card.tsx`, `components/utility-components/claim-button.tsx`, `mcp/tools/write-tools.ts`, and `pages/api/mcp/{create-order,verify-payment}.ts` use these wrappers and check melt/swap status before treating the operation as successful.
-- **Stripe Connect**: Express accounts for sellers to accept credit card payments. Uses embedded Stripe Elements card form (PaymentIntent API) for on-site checkout instead of external Stripe hosted pages. Card form component at `components/utility-components/stripe-card-form.tsx`, PaymentIntent API at `pages/api/stripe/create-payment-intent.ts`. Shared currency conversion utilities in `utils/stripe/currency.ts` (`satsToUSD`, `isCrypto`, `toSmallestUnit`, `convertToSmallestUnit`, `ZERO_DECIMAL_CURRENCIES`) — uses `@getalby/lightning-tools` for live BTC→fiat conversion with no hardcoded fallback. Both webhook endpoints (`webhook.ts` and `subscription-webhook.ts`) require `STRIPE_WEBHOOK_SECRET` / `STRIPE_SUBSCRIPTION_WEBHOOK_SECRET` and reject unverified payloads. Both webhooks dedupe replays by claiming the Stripe event ID via `claimStripeEvent` (table `stripe_processed_events`, fail-open on table errors). Transient Stripe API errors are retried with rate-limit-aware exponential backoff via `withStripeRetry` (`utils/stripe/retry-service.ts`); all PaymentIntent / Subscription / Invoice / Transfer create calls include a deterministic `idempotencyKey` derived from the request payload via `stableIdempotencyKey()` so a client-side retry of the same purchase dedupes at Stripe (returning the original resource within Stripe's 24h idempotency window) instead of creating duplicates. Pending payments are tracked in `stripe_pending_payments` (`utils/stripe/pending-payments.ts`) for orphan reconciliation; the webhook updates status on `payment_intent.succeeded` / `payment_failed`. Failed payments trigger email notifications to both buyer and seller via `sendPaymentFailedToBuyer` / `sendPaymentFailedToSeller`. Multi-merchant transfer failures trigger alert emails to platform admin via `sendTransferFailureAlert`.
-- **API Rate Limiting**: All public API endpoints under `pages/api/**` use the in-memory token bucket in `utils/rate-limit.ts` (`checkRateLimit` + `applyRateLimit`/`getRequestIp`) keyed by client IP. Standard `X-RateLimit-Limit` / `X-RateLimit-Remaining` / `X-RateLimit-Reset` headers are emitted, and 429 responses include a `Retry-After` header. Buckets are per-process (`Map`), so under horizontal scaling the effective ceiling is `N × limit`; this is intentional as a coarse DB-pool guard, not a strict cryptographic ceiling. Coverage extends beyond upstream to `pages/api/stripe/**` and to secret-gated cron endpoints (`email/flows/process`, `email/flows/cron-abandoned-cart`, `email/flows/cron-winback`, `stripe/cron-cleanup`) as belt-and-suspenders against secret leak; webhook endpoints rely on signature + Stripe-event idempotency instead of IP buckets.
-- **Stripe Table Maintenance**: `pages/api/stripe/cron-cleanup.ts` (POST, gated by `FLOW_PROCESSOR_SECRET`) prunes `stripe_processed_events` rows older than 45 days (Stripe's replay window is ~30) via `pruneStripeProcessedEvents`, and prunes `stripe_pending_payments` rows in terminal status (`succeeded`/`failed_terminal`/`abandoned`) older than 30 days via `pruneStripePendingPayments`. Active rows (`creating`/`created`) are preserved regardless of age so orphan-recovery still sees them. Both retention windows are overridable per-call via `processed_events_max_age_days` / `pending_payments_max_age_days` body params (minimum 7 days each).
-- **Donation Field**: Sellers' Milk Market platform-donation percentage lives in the Nostr profile JSON under `mm_donation` (was `shopstr_donation` upstream). When the field is absent the seller defaults to 2.1%; no fallback to the legacy key. The profile form writes only `mm_donation` and strips any stale `shopstr_donation` on save. Donation eCash is sent to `process.env.NEXT_PUBLIC_MILK_MARKET_PK` (was a hardcoded shopstr platform pubkey upstream); the send is skipped with a warn if the env var is unset.
-- **Stripe Donation Parity (DM + dashboard)**: Stripe success handlers in `components/cart-invoice-card.tsx` and `components/product-invoice-card.tsx` now compute the per-product/per-seller donation amount from the cached profile (`profileContext.profileData.get(pubkey).content.mm_donation`, defaulting to 2.1%) and pass `donationAmountValue`/`donationPercentageValue` into every payment-and-receipt `sendPaymentAndContactMessage` call. The shared helper in `utils/nostr/nostr-helper-functions.ts` already emits a `donation_amount` tag whenever those values are present, so the orders dashboard now displays the donation row for Stripe orders the same way it does for Cashu/Lightning. The Stripe webhook (`pages/api/stripe/webhook.ts`) also handles `application_fee.created` and `application_fee.refunded` events, logging `STRIPE_DONATION_COLLECTED` / `STRIPE_DONATION_REFUNDED` lines for reconciliation against those dashboard totals.
-- **Stripe Donation Parity**: All Stripe payment paths now apply the same `mm_donation` cut as the Cashu/Lightning paths so card-paying buyers fund the platform on equal terms with Bitcoin-paying buyers. The server-side helper `utils/stripe/donation.ts` reads the seller's `mm_donation` from the cached `profile_events` (kind=0) row, defaults to 2.1% when the row is missing/malformed, caches per-seller for 5 minutes, skips the deduction when the seller pubkey equals `NEXT_PUBLIC_MILK_MARKET_PK`, and falls back to no fee when the computed cut would be ≥ the gross (so a tiny floor charge never breaks). Wiring sites: `create-payment-intent.ts` adds `application_fee_amount` for single-merchant direct charges and embeds per-seller `donationPercent`/`donationCutSmallest` into the multi-merchant `sellerSplits` metadata; `process-transfers.ts` withholds that cut from each `Transfer.amount` (preferring the embedded values, falling back to a fresh profile lookup so older clients still get parity); `create-subscription.ts` and `create-cart-subscription.ts` set `application_fee_percent` on direct-charge subscriptions; `create-invoice.ts` sets `application_fee_amount` on direct-billed invoices; the multi-merchant cart-subscription helper enriches its `sellerSplits` metadata with the same donation fields so downstream invoice-paid transfers stay consistent. Platform-account selling-to-itself is a no-op everywhere.
-- **Runtime**: Node `>=22.4.0` (`.nvmrc` = `22`); `@cashu/cashu-ts` pinned to `4.1.0`.
-- **Pricing Round-Up Policy**: Display-side currency conversions and on-the-wire charge math all use `Math.ceil` (never `round` / `floor`) so the user is never quoted less than they will be charged. Applied across `pages/cart/index.tsx` (`convertPriceToSats`, `convertShippingToSats`, `subtotalNative`, cross-currency fiat subtotal), `pages/api/mcp/create-order.ts` (sats × 2 sites + Stripe cents), and `components/cart-invoice-card.tsx` seller-payout splitting. Stripe charges below the gateway floor surface a transparent "$0.50 minimum" banner instead of silently failing.
-- **Domain / User-Agent**: Storefront custom-domain verification (`pages/api/storefront/verify-domain.ts`) targets `milk.market` (CNAME + A-record fallback). Open Graph crawler (`pages/api/og-preview.ts`) advertises User-Agent `MilkMarket/1.0 (+https://milk.market)`.
-- **Fiat Support**: Traditional payment processing (Venmo, Zelle, Cash App, PayPal, Apple Pay, Google Pay, Cash). Multi-merchant fiat checkout supported: each seller with fiat options gets their own payment method dropdown, per-merchant payment instructions with per-merchant amounts, and individual confirmation checkboxes. Order is only confirmed when all merchant checkboxes are checked. Single-merchant carts retain the original single-dropdown flow.
-- **Multi-Currency**: Cart display currency is determined by the most common currency among cart items (tiebreak: USD > sats > alphabetical). Mixed-currency carts convert non-matching products to the cart currency via `@getalby/lightning-tools` exchange rates. Stripe payments use the native fiat currency directly (EUR, INR, GBP, etc.) — only sats/BTC are converted to USD. Zero-decimal currencies (JPY, KRW, etc.) are handled correctly. Both `create-subscription.ts` (single-product) and `create-cart-subscription.ts` (cart) use native fiat currencies for Stripe prices and subscription records. `process-transfers.ts` reads the currency from the PaymentIntent for multi-merchant transfers; `webhook.ts` reads the currency from the invoice for subscription renewal transfers. Bitcoin/Lightning payments always use sats; Lightning buttons show fiat amount + sats estimate for fiat-priced products. Nostr order messages include `["currency", "..."]` and `["amount", "..."]` tags. Emails and order summaries use the cart's native display currency. `nativeTotalCost` and `nativeCostsPerProduct` are async (useEffect+state) to support cross-currency conversion. Sats-only carts show USD estimate on Stripe/fiat payment buttons. Server-side Nostr DMs (subscription notifications) are published to relays via `ws` WebSocket connections in addition to being cached locally. Subscriptions are created with `status: "pending"` and activated to `"active"` on first successful payment via the subscription webhook.
+### Lightning & Cashu
+
+- **Lightning**: Direct invoice generation and verification.
+- **Cashu**: Uses `@cashu/cashu-ts` v4.1.0 (`Mint`/`Wallet`/`Keyset`, bolt11-suffixed quote helpers, `Amount` boundary type with `.toNumber()`, `KeyChain.getKeysets()`, explicit `await wallet.loadMint()`, `getDecodedToken(token, keysetIds)` requires the second arg).
+- **Proof amount JSON gotcha**: Proofs persisted to `localStorage["tokens"]` lose the `Amount` wrapper on JSON round-trip and come back as plain `number`. Code reading from `getLocalStorageData().tokens` must use `proofAmountToNumber` / `sumProofAmounts` from `utils/cashu/proof-amount.ts` instead of `.amount.toNumber()` (used by `pages/wallet/index.tsx`, `components/storefront/storefront-wallet.tsx`, and the `filteredProofs` reduce in `components/wallet/pay-button.tsx`).
+- **Hardening utilities** (`utils/cashu/`): `mint-retry-service` (`withMintRetry`, rate-limit-aware backoff), `swap-retry-service` (`safeSwap` → `{status, proofs}`), `melt-retry-service` (`safeMeltProofs` → `{status, changeProofs, errorMessage}`), `pending-mint-operations` (DB-backed `pending_mint_quotes` for orphan recovery), `wallet-recovery` (boot-time reconciler mounted via `components/utility-components/mint-recovery-boot.tsx`). All cashu call sites in `components/wallet/*`, `cart-invoice-card.tsx`, `product-invoice-card.tsx`, `claim-button.tsx`, `mcp/tools/write-tools.ts`, and `pages/api/mcp/{create-order,verify-payment}.ts` use these wrappers and check melt/swap status before treating the operation as successful.
+
+### Stripe Connect
+
+- **Express Connect** with embedded Stripe Elements (PaymentIntent API) for on-site checkout. Card form: `components/utility-components/stripe-card-form.tsx`. PaymentIntent API: `pages/api/stripe/create-payment-intent.ts`.
+- **Currency utils** (`utils/stripe/currency.ts`): `satsToUSD`, `isCrypto`, `toSmallestUnit`, `convertToSmallestUnit`, `ZERO_DECIMAL_CURRENCIES`. Live BTC→fiat via `@getalby/lightning-tools` (no hardcoded fallback). Stripe payments use the native fiat currency directly (EUR/INR/GBP/etc.); only sats/BTC are converted to USD.
+- **Webhooks**: `webhook.ts` and `subscription-webhook.ts` require `STRIPE_WEBHOOK_SECRET` / `STRIPE_SUBSCRIPTION_WEBHOOK_SECRET` and reject unverified payloads. Both dedupe via `claimStripeEvent` (table `stripe_processed_events`, fail-open). Both honor `application_fee.created`/`application_fee.refunded` for donation reconciliation (`STRIPE_DONATION_COLLECTED`/`STRIPE_DONATION_REFUNDED` log lines).
+- **Retries & idempotency**: `withStripeRetry` (`utils/stripe/retry-service.ts`) wraps API calls. All PaymentIntent / Subscription / Invoice / Transfer create calls include a deterministic `stableIdempotencyKey()` so client-side retries dedupe at Stripe within its 24h window.
+- **Pending payments & failures**: Tracked in `stripe_pending_payments` (`utils/stripe/pending-payments.ts`); webhook updates status. Failed payments email both parties (`sendPaymentFailedToBuyer`/`Seller`); transfer failures alert platform admin (`sendTransferFailureAlert`).
+- **Cron cleanup** (`pages/api/stripe/cron-cleanup.ts`, gated by `FLOW_PROCESSOR_SECRET`): prunes `stripe_processed_events` >45d (Stripe's replay window is ~30) and terminal-status `stripe_pending_payments` (`succeeded`/`failed_terminal`/`abandoned`) >30d. Active rows (`creating`/`created`) are preserved. Per-call overrides: `processed_events_max_age_days` / `pending_payments_max_age_days` (min 7 each).
+
+### Donations (Milk Market platform fee)
+
+- **Field**: Sellers' donation percent lives in the Nostr profile JSON under `mm_donation` (was `shopstr_donation` upstream). Defaults to 2.1% when absent — no fallback to the legacy key. Profile form writes only `mm_donation` and strips stale `shopstr_donation` on save.
+- **Cashu/Lightning**: Donation eCash sent to `process.env.NEXT_PUBLIC_MILK_MARKET_PK`; skipped with a warn if unset.
+- **Stripe parity**: `utils/stripe/donation.ts` reads the seller's `mm_donation` from cached `profile_events` (kind=0), defaults to 2.1%, caches per-seller for 5 min, skips when seller equals `NEXT_PUBLIC_MILK_MARKET_PK`, and falls back to no fee when the cut would be ≥ gross. Wiring:
+  - `create-payment-intent.ts` adds `application_fee_amount` for single-merchant direct charges and embeds per-seller `donationPercent`/`donationCutSmallest` into multi-merchant `sellerSplits` metadata.
+  - `process-transfers.ts` withholds the cut from each `Transfer.amount` (preferring embedded values, falling back to a fresh profile lookup).
+  - `create-subscription.ts` and `create-cart-subscription.ts` set `application_fee_percent` on direct-charge subscriptions; `create-invoice.ts` sets `application_fee_amount` on direct-billed invoices; multi-merchant cart-subscription helper enriches `sellerSplits` for downstream invoice-paid transfers.
+  - **Dashboard parity**: Stripe success handlers in `cart-invoice-card.tsx` and `product-invoice-card.tsx` compute the donation from the cached profile and pass `donationAmountValue`/`donationPercentageValue` into every `sendPaymentAndContactMessage`. The shared helper in `utils/nostr/nostr-helper-functions.ts` emits a `donation_amount` tag, so the orders dashboard renders the donation row for Stripe orders the same as Cashu/Lightning.
+- Platform-account selling-to-itself is a no-op everywhere.
+
+### Multi-currency & cart math
+
+- Cart display currency = most common currency among items (tiebreak: USD > sats > alphabetical). Mixed carts convert via `@getalby/lightning-tools`. Zero-decimal currencies (JPY/KRW/etc.) handled correctly. Bitcoin/Lightning always sats; Lightning buttons show fiat amount + sats estimate for fiat-priced products. Sats-only carts show USD estimate on Stripe/fiat buttons.
+- `nativeTotalCost` and `nativeCostsPerProduct` are async (`useEffect`+state) to support cross-currency conversion.
+- `process-transfers.ts` reads currency from the PaymentIntent for multi-merchant transfers; subscription-renewal transfers read it from the invoice. Order messages include `["currency", ...]` and `["amount", ...]` tags. Subscriptions are `pending` until the first successful payment activates them via the subscription webhook.
+- **Round-up policy**: All conversions and on-the-wire charge math use `Math.ceil` (never `round`/`floor`) so users are never quoted less than charged. Applied across `pages/cart/index.tsx`, `pages/api/mcp/create-order.ts`, and `cart-invoice-card.tsx` seller-payout splitting. Stripe charges below the gateway floor surface a transparent "$0.50 minimum" banner.
+
+### Fiat & multi-merchant fiat
+
+- Manual methods: Venmo, Zelle, Cash App, PayPal, Apple Pay, Google Pay, Cash. Multi-merchant fiat checkout: each seller gets their own dropdown, per-merchant instructions/amounts, individual confirmation checkboxes. Order is only confirmed when all checkboxes are checked. Single-merchant carts retain the original single-dropdown flow.
+
+### API rate limiting
+
+- All public `pages/api/**` endpoints use the in-memory token bucket in `utils/rate-limit.ts` (`checkRateLimit`, `applyRateLimit`, `getRequestIp`) keyed by client IP, with standard `X-RateLimit-*` headers and `Retry-After` on 429. Per-process buckets, so under horizontal scaling the effective ceiling is `N × limit` (intentional coarse DB-pool guard, not a strict ceiling). Coverage extends to `pages/api/stripe/**` and the secret-gated cron endpoints (`email/flows/process`, `email/flows/cron-abandoned-cart`, `email/flows/cron-winback`, `stripe/cron-cleanup`); webhooks rely on signature + Stripe-event idempotency instead.
+
+### Runtime & domain
+
+- Node `>=22.4.0` (`.nvmrc` = `22`); `@cashu/cashu-ts` pinned to `4.1.0`.
+- Storefront custom-domain verification (`pages/api/storefront/verify-domain.ts`) targets `milk.market` (CNAME + A-record fallback). OG crawler (`pages/api/og-preview.ts`) UA: `MilkMarket/1.0 (+https://milk.market)`.
 
 ## Inventory Management
 
-- **Centralized Inventory**: PostgreSQL `inventory` table tracks stock per product (and per variant like size), with automatic deduction on orders.
-- **Tables**: `inventory` (product_id, seller_pubkey, variant_key, quantity, source), `inventory_log` (audit trail with change_amount, reason, order_id).
-- **Variant Keys**: `_default` for global stock, `size:SizeName` for size-specific stock.
-- **Automatic Stock Deduction**: All order flows (MCP Stripe/Lightning/Cashu/Fiat, frontend checkout, cart checkout) automatically deduct stock from the central inventory after successful orders. Bulk/bundle orders correctly multiply the bundle size × order quantity for the deduction (e.g., 2 orders of a 5-pack deducts 10 units).
-- **Seller Manual Override**: When a seller publishes/updates a product listing (kind 30402) with quantity tags, the inventory is synced with `source: 'seller_override'`, overriding the tracked quantity.
-- **Availability Checks**: MCP order creation checks central inventory first; falls back to Nostr event quantities if the product isn't yet tracked in the inventory table.
-- **Stock Restore**: `restoreStock()` function available for cancelled/refunded orders.
-- **API Endpoint**: `/api/inventory` supports actions: `check`, `deduct`, `set`, `restore`, `sync`. GET returns stock for a product.
-- **Service**: `utils/db/inventory-service.ts` — `getStock`, `getAllStock`, `setStock`, `deductStock`, `restoreStock`, `syncFromNostrEvent`, `checkAvailability`.
-- **Integration Points**: `pages/api/mcp/create-order.ts` (stock check + deduction), `pages/api/mcp/verify-payment.ts` (deduction on Lightning confirm), `pages/api/email/send-order-email.ts` (deduction for frontend orders), `utils/db/db-service.ts` `cacheEvent()` (auto-sync on product event cache), `components/ZapsnagButton.tsx` (checks central inventory for sold count), `components/cart-invoice-card.tsx` (per-product deduction on cart payment confirm).
+- **Centralized**: Postgres `inventory` (product_id, seller_pubkey, variant_key, quantity, source) + `inventory_log` (audit trail). Variant keys: `_default` for global, `size:Name` for per-size.
+- **Auto deduction**: All order flows (MCP Stripe/Lightning/Cashu/Fiat, frontend checkout, cart) deduct on success. Bulk/bundle orders multiply bundle size × quantity (e.g. 2 orders of a 5-pack = 10 units).
+- **Seller override**: Publishing a kind 30402 with quantity tags syncs inventory with `source: 'seller_override'`.
+- **API**: `/api/inventory` actions: `check`, `deduct`, `set`, `restore`, `sync`. Service: `utils/db/inventory-service.ts` (`getStock`, `getAllStock`, `setStock`, `deductStock`, `restoreStock`, `syncFromNostrEvent`, `checkAvailability`).
+- **Integration points**: `mcp/create-order.ts` (stock check + deduction), `mcp/verify-payment.ts` (deduction on Lightning confirm), `email/send-order-email.ts` (frontend orders), `db-service.ts` `cacheEvent()` (auto-sync on product cache), `ZapsnagButton.tsx` (sold count from central inventory), `cart-invoice-card.tsx` (per-product deduction on cart payment confirm).
+- MCP availability checks consult the inventory table first, falling back to Nostr event quantities for untracked products.
 
-## Data Management
+## Trust & Reviews
 
-- **Event Parsing**: Custom parsers for various data types.
-- **Caching Strategy**: Hybrid local IndexedDB and real-time Nostr events. Kind 1111 events are disambiguated by tags: NIP-22 review replies (with `K` tags) go to `comment_events`, community posts (with `a:34550:...` tags) go to `community_events`. Community posts (kind 1111) and approval events (kind 4550) are cached on fetch and loaded DB-first via `fetchCommunityPostsFromDb` / `pages/api/db/fetch-community-posts.ts`.
-- **File Storage**: Blossom server integration for decentralized media.
-- **Encryption**: NIP-44 for private messages and documents.
-
-## Trust & Web of Trust
-
-- **Social Graph**: Follow-based trust system.
-- **Review System**: User reviews with weighted scoring. Sentiment-based quality labels (Trustworthy/Solid/Questionable/Don't trust) with color coding. Sellers can reply to reviews on their products using NIP-22 (kind 1111) comment events via `publishReviewReply` in `nostr-helper-functions.ts`. Replies are displayed across all review surfaces (checkout card, marketplace, storefront). Shared reply component: `components/utility-components/seller-review-reply.tsx`. Review event IDs and replies stored in `ReviewsContext` (`reviewEventIds`, `reviewReplies`). NIP-22 review reply events cached in `comment_events` DB table.
-- **WoT Filtering**: Filtering based on follow relationships.
+- **Social graph**: Follow-based trust with WoT filtering.
+- **Reviews**: Weighted scoring with sentiment quality labels (Trustworthy/Solid/Questionable/Don't trust) and color coding. Sellers reply via NIP-22 (kind 1111) using `publishReviewReply`. Replies render across checkout card, marketplace, and storefront via `components/utility-components/seller-review-reply.tsx`. Stored in `ReviewsContext` (`reviewEventIds`, `reviewReplies`); reply events cached in `comment_events`.
 
 ## Key Features
 
-- **Order Summary Page**: Dedicated page post-purchase, displaying product details, cost, payment, and shipping.
-- **Email Notifications & Guest Checkout**: Transactional emails via SendGrid for order confirmations, seller alerts, and shipping updates; allows purchases without sign-in using an email.
-- **Custom Email Flows**: Sellers can draft and manage automated email sequences (welcome series, abandoned cart, post-purchase, winback). Each flow contains timed steps with customizable subject lines and HTML body content. Supports merge tags (`{{buyer_name}}`, `{{shop_name}}`, `{{product_title}}`, `{{order_id}}`, `{{product_image}}`, `{{shop_url}}`). Default templates provided for all 4 flow types. Post-purchase and welcome series flows auto-trigger on order placement. Abandoned cart flow triggered automatically via cron endpoint (`pages/api/email/flows/cron-abandoned-cart.ts`) that scans `cart_reports` for stale unenrolled carts (default 60min) and enrolls them. Winback flow triggered via cron endpoint (`pages/api/email/flows/cron-winback.ts`) that finds customers inactive for N days (default 30) and enrolls them. Both cron endpoints secured with `FLOW_PROCESSOR_SECRET`. A processor endpoint handles sending pending emails in batches. Database tables: `email_flows`, `email_flow_steps`, `email_flow_enrollments`, `email_flow_executions`, `cart_reports`. DB helper functions: `getUnenrolledAbandonedCarts()`, `markCartEnrolled()`, `getWinbackCandidates()`. API routes under `pages/api/email/flows/`. Flow templates and merge tag rendering in `utils/email/flow-email-templates.ts`. Visual email builder component at `components/settings/flow-step-editor.tsx` with formatting toolbar (heading, paragraph, bold, italic, image upload via Blossom, link, CTA button, divider), raw HTML toggle, live preview, and clickable merge tag insertion. Per-flow sender settings: custom "From Name" (display name on sent emails) and "Reply-To" email address stored in `from_name` and `reply_to` columns on `email_flows` table. The processor uses these to customize the SendGrid `from` field (name + platform email) and `replyTo` header per flow. Flow deletion cascades to all related steps, enrollments, and executions in a transaction. Step update/delete endpoints verify the step belongs to the specified flow to prevent cross-flow authorization bypass. MCP tools: `create_email_flow`, `list_email_flows`, `update_email_flow`, `delete_email_flow`, `toggle_email_flow`, `get_email_flow_stats`. Processor endpoint (`pages/api/email/flows/process.ts`) secured with `FLOW_PROCESSOR_SECRET` env var. Internal scheduler (`utils/email/flow-scheduler.ts`) auto-starts via Next.js instrumentation (`instrumentation.ts`) and runs: email processor every 2 min, abandoned cart cron every 30 min, winback cron once daily. Scheduler requires `FLOW_PROCESSOR_SECRET` env var to be set; gracefully disables itself otherwise. Cart activity is reported per-merchant from the checkout component (`components/cart-invoice-card.tsx`) when the buyer's email is known.
-- **Landing Page Optimization**: Redesigned following YC best practices for improved conversion with a clear CTA, outcome-first headline, social proof, and simplified sections.
-- **Herdshare Agreement Management**: Column in orders dashboard for signing and viewing herdshare agreements using PDFAnnotator.
-- **Inquiry Email Notifications**: When a user sends a direct inquiry message, an email notification is sent to the recipient (if they have an email on file). The email includes the message content and sets the reply-to address to the sender's email (if available). If the sender has no email, the email tells the recipient to reply via the Inquiries chat. If neither party has email, no emails are sent. Email template `inquiryNotificationEmail` in `utils/email/email-templates.ts`, service function `sendInquiryNotification` in `utils/email/email-service.ts`, API endpoint `/api/email/send-inquiry-email`. Triggered from `components/messages/messages.tsx` after successful gift-wrapped DM send.
-- **Return/Refund/Exchange Requests**: Buyers can request returns, refunds, or exchanges from the orders dashboard. Opens a modal with request type selector and editable default message. Sends a gift-wrapped Nostr DM (subject `return-request`) to the seller with the request details, plus an email notification via `/api/email/send-return-request-email`. Buyer sees "Return Requested" status after sending. Sellers see an alert badge on the order's status column when a return request is received. Return request type stored in the `status` tag of the gift-wrapped event. Email template in `utils/email/email-templates.ts` (`returnRequestEmail`), service function in `utils/email/email-service.ts` (`sendReturnRequestToSeller`).
-- **Stripe Connect Integration**: Full Stripe Connect Express flow for sellers to accept credit card payments via their own connected accounts. Stripe Connect API endpoints (`create-account`, `create-account-link`, `account-status`) use the mandatory `McpRequestProof` signed event system (same as MCP API key endpoints) for authentication — proof builders in `utils/mcp/request-proof.ts`, server-side verification via `verifyAndConsumeSignedRequestProof` in `utils/mcp/request-proof-server.ts`.
-- **Bulk/Bundle Pricing**: Supports both global and per-variant (per-volume, per-weight) tiered pricing. Tag format: `["bulk", "units", "price"]` for global, `["bulk", "units", "price", "variantName"]` for variant-specific. The bundle selector only appears when the selected variant has bulk tiers defined. Parsed into `bulkPrices` (global) and `variantBulkPrices` (per-variant Map<string, Map<number, number>>). When switching variants, the bulk selection resets.
-- **Size and Volume Options**: Integration of product size and volume selections into order messages and dashboard displays.
-- **Pickup Location Selection**: Option for buyers to select pickup locations for orders with pickup shipping methods.
-- **Order Status Persistence**: Database persistence of order statuses with a priority system to prevent downgrades, ensuring consistent tracking.
-- **Unread/Read Indicator System**: Tracks read status of messages and orders, with visual indicators and automatic marking as read.
-- **Image Compression**: Automatic compression of large images before Blossom uploads, converting to WebP and scaling resolution if necessary.
-- **Subscribe & Save (Recurring Subscriptions)**: Sellers can enable subscription pricing on listings with configurable discount percentages and delivery frequencies (weekly, every 2 weeks, monthly, every 2 months, quarterly). Product pages show two pricing cards (Subscribe & Save default, One-Time Purchase). Checkout creates Stripe Subscriptions via connected accounts. Guest buyers must provide email for subscriptions. Subscription management page under Orders tab allows cancellation, delivery date changes, and address changes. Renewal reminders sent via email and Nostr DMs one week before billing. Address changes notify sellers via gift-wrapped Nostr DMs. Guest users can manage subscriptions via email lookup. Cart checkout supports subscription products: per-product subscription toggle and frequency selector on the cart page, subscription info badges in checkout order summaries, and a dedicated cart subscription API (`pages/api/stripe/create-cart-subscription.ts`) that handles mixed carts with both subscription (recurring) and one-time items on a single Stripe invoice. Multi-merchant subscriptions are supported when all sellers have Stripe — subscription is created on the platform account and funds are transferred to each merchant.
-- **Cart Multi-Payment Support**: Card payment is available whenever all merchants in the cart have Stripe enabled — single-merchant carts use direct charges on the connected account, multi-merchant carts use Stripe's "Separate Charges and Transfers" model where payment is collected on the platform and funds are transferred to each merchant's connected account via `pages/api/stripe/process-transfers.ts`. Fiat payment options are available only for single-merchant carts. Bitcoin payments (Lightning, Cashu, NWC) are always available. When any product has an active subscription selection, only card payment is available. A Stripe webhook endpoint (`pages/api/stripe/webhook.ts`) handles automatic fund distribution on subscription renewal payments for multi-merchant subscriptions.
-- **Free Shipping Threshold**: Merchants can set a minimum order amount (with currency) in their shop profile; when a buyer's order from that seller meets the threshold, all shipping costs drop to zero. Shipping is consolidated per seller (highest shipping cost used, not sum). Progress toward free shipping is shown in cart and checkout with progress bars, and a popup notification appears when adding items to cart from eligible merchants. Order summary shows strikethrough original shipping cost with green "Free" badge when threshold is met. Shop profile fields: `freeShippingThreshold` (number) and `freeShippingCurrency` (string) stored in Kind 30019 event content JSON.
-- **Payment Method Discounts**: Merchants can set flat percentage discounts for specific payment methods in their shop profile. Supports discounts for Bitcoin (Lightning/Cashu/NWC), Stripe (Card), and each individual fiat payment option (Cash, Venmo, etc.). Discounted prices are displayed on payment method buttons during checkout in both single-product and cart invoice cards, with a "(X% off)" label. The actual payment amount sent to invoices reflects the method-specific discount. Shop profile field: `paymentMethodDiscounts` (object mapping method keys like `"bitcoin"`, `"stripe"`, `"cash"`, `"venmo"` to discount percentages) stored in Kind 30019 event content JSON.
-- **Shopify → Milk Market Migration**: Sellers can import a Shopify product CSV export and republish it as NIP-99 listings (kind 30402). Entry points: (1) Settings → Market Stall → Products & Discounts has an "Import from Shopify" button with a dismissible tooltip; (2) the landing footer "Migrate from Shopify" link routes through onboarding (`migrate=shopify` query param propagated through new-account → market-profile → shop-profile → stripe-connect → `/settings/stall?tab=products&migrate=shopify`) which auto-opens the modal. Already signed-in users hitting `/onboarding/new-account` are redirected to the stall page so existing keys aren't regenerated. The modal is a 4-step flow (Upload → Configure → Review → Publish) in `components/stall/shopify-migration-modal.tsx`. CSV parsing groups variants by `Handle` (`utils/migrations/shopify-csv-parser.ts`). Mapping to NIP-99 in `utils/migrations/shopify-to-nip99.ts` includes a price-variance warning when variants have different prices, omits the `quantity` tag entirely when total inventory is 0 (so untracked Shopify items don't publish as out-of-stock), and supports per-variant `size` tags. During publish, every listing's remote image URLs are first re-uploaded to the seller's configured Blossom servers via `utils/migrations/rehost-images.ts` so listings keep working after Shopify is decommissioned; failures fall back to the original URL with a per-listing warning. The Done step shows a "Retry N failed" button that re-runs only the failed items.
-- **Seller Storefronts**: Sellers can set up customizable standalone shop pages accessible via `/shop/[slug]`. Custom domains available on request (contact us flow in settings). Storefront customization includes: color scheme (with per-color usage hints), independent navbar colors (background/text/accent), independent footer colors (background/text/accent), landing page style, product layout, Google Fonts or custom uploaded fonts (.woff2/.woff/.ttf/.otf via Blossom), section-based page builder, multi-page navigation, custom footer with social links, and store policies. **SEO & Open Graph Meta**: Each storefront supports custom SEO meta tags and Open Graph previews for search engines, social media, and AI-powered search (GEO). Fields: meta title, meta description, OG image, keywords, locale, location region (geo.region), location city (geo.placename). An "auto-generate" mode fills empty fields from shop name/about/slug at save time. SSR renders the SEO meta in `getServerSideProps` for both `[slug].tsx` and `[...shopPath].tsx`. The `storefront-layout.tsx` also injects meta tags client-side via `<Head>`. Type: `StorefrontSeoMeta` in `packages/domain/src/storefront.ts`. Settings UI in `shop-profile-form.tsx` under "SEO & Open Graph" section. **Built-in Shop Page**: Every storefront gets a dedicated "Shop" page (`/shop/[slug]/shop`) with search, category filters (pill toggles based on seller's actual product categories), location filter, sort options (newest/oldest/price/name), and paginated product grid — all styled with storefront colors. The "Shop" link is auto-injected into the navbar if not already present. Component: `components/storefront/storefront-shop-page.tsx`. Uses `productSatisfiesAllFilters` from `utils/parsers/product-filter-helpers.ts`. Preview panel shows a mockup of search/categories/grid for the shop page. **Independent Nav/Footer Colors**: Navbar and footer each have their own `StorefrontNavColors`/`StorefrontFooterColors` types with `background`, `text`, and `accent` fields in `StorefrontConfig`. When not set, they fall back to the general color scheme (secondary→bg, background→text, primary→accent). Settings UI shows color pickers with reset-to-default buttons for each. All rendering surfaces (storefront-layout, storefront-theme-wrapper, storefront-nav, storefront-footer, preview panel, preview modal) respect these overrides. **Custom Font Uploads**: Sellers can upload their own font files for heading and/or body text. Uploaded fonts are stored via Blossom and rendered using `@font-face` CSS injection in `StorefrontThemeWrapper`. Custom fonts override Google Font selections. Config fields: `customFontHeadingUrl`, `customFontHeadingName`, `customFontBodyUrl`, `customFontBodyName` in `StorefrontConfig`. **Live Preview Panel**: The storefront builder has a split-screen layout on large screens (≥1280px) with settings editor on the left (~45%) and a live preview panel on the right (~55%) that updates instantly as settings change. The preview panel includes viewport toggle (Desktop/Tablet/Mobile) and page switcher for custom pages. On small/medium screens, a floating "Preview" button opens a full-screen overlay with the same live preview. The "Add Section" menu uses visual thumbnail cards with icons and descriptions. Landing page style and product layout selectors show SVG mini-mockup previews illustrating each option's appearance. **Product Ordering**: Product sections support manual ordering via `productIds` (drag-and-drop reorder list in section editor) and `heroProductId` (dropdown to select which product is featured prominently in "featured" layout). Ordering is applied in `SectionProducts` via `applyProductOrder()` which first sorts by `productIds` then moves the hero product to position 0 for featured layout. Both live storefront and preview panel respect these ordering fields. The preview rendering logic is extracted into a reusable `StorefrontPreviewPanel` component (`components/settings/storefront/storefront-preview-panel.tsx`) that is shared between the side panel, mobile overlay, and the full-screen modal (which remains as a fallback). The Market Stall page (`pages/settings/stall.tsx`) wraps `ShopProfileForm` in a wide container on xl screens to accommodate the split layout. Storefront settings live under the "Storefront" tab and product management lives under the "Products & Discounts" tab; both are accessible at `/settings/stall` (with `?tab=storefront` or `?tab=products`). **Focused Storefront Loading**: When a storefront is accessed directly via slug URL, only data relevant to that specific seller is loaded (their products, profile, shop profile, reviews, and community). The full marketplace data (all products, all profiles, chats, wallet, follows) is deferred until the user navigates away to the marketplace or another non-storefront page. Slug-to-pubkey resolution happens immediately via the `/api/storefront/lookup` DB endpoint, bypassing the Nostr websocket initialization chain. The focused fetch function is `fetchStorefrontData` in `utils/nostr/fetch-service.ts`. Products can be fetched by pubkey via `GET /api/db/fetch-products?pubkey=...`. A 15-second timeout ensures the storefront page never spins indefinitely. **Store Policies**: Four policy types (Return & Refund, Terms of Service, Privacy Policy, Cancellation Policy) enabled by default with seller-adapted templates. Sellers can toggle each on/off and edit content (Markdown). Policy links in footer open full pages within the storefront. Templates in `utils/storefront-policies.ts`, types in `utils/types/types.ts`, renderer in `components/storefront/storefront-policy-page.tsx`. Policies stored in `footer.policies` of `StorefrontConfig`. Custom domain proxy routing in `proxy.ts` restricts custom domains to storefront-only routes. **Email Capture Popup**: Sellers can enable a popup that appears to new storefront visitors after 3 seconds, offering a seller-configured discount percentage in exchange for email (and optionally phone number). Auto-generates a unique discount code (valid 90 days), saves it to the `discount_codes` table for checkout use, stores capture in `popup_email_captures` table, and emails the code to the buyer via SendGrid. Popup dismissal persisted in localStorage per shop. Configuration stored in `emailPopup` field of `StorefrontConfig` with options for headline, subtext, button text, success message, phone collection, and discount percentage. Popup component at `components/storefront/storefront-email-popup.tsx`, API at `pages/api/storefront/popup-capture.ts`, email template `popupDiscountEmail` in `utils/email/email-templates.ts`, DB functions `savePopupEmailCapture` and `getPopupEmailCapture` in `utils/db/db-service.ts`. Settings UI in the "Email Capture Popup" section of the shop profile form.
+- **Order Summary Page** (`pages/order-summary/index.tsx`): Post-purchase page with product, cost, payment, and shipping details. Free-shipping displays use the order's actual currency.
+- **Email Notifications & Guest Checkout**: SendGrid for order/seller/shipping emails; guest purchases via email.
+- **Custom Email Flows**: Sellers manage automated sequences (welcome series, abandoned cart, post-purchase, winback).
+  - Each flow has timed steps with subject + HTML body. Merge tags: `{{buyer_name}}`, `{{shop_name}}`, `{{product_title}}`, `{{order_id}}`, `{{product_image}}`, `{{shop_url}}`. Default templates included for all 4 flow types.
+  - Triggers: post-purchase + welcome auto-trigger on order. Abandoned-cart cron (`pages/api/email/flows/cron-abandoned-cart.ts`) scans `cart_reports` for stale unenrolled carts (default 60min). Winback cron (`pages/api/email/flows/cron-winback.ts`) finds inactive customers (default 30d). Both gated by `FLOW_PROCESSOR_SECRET`. Cart activity is reported per-merchant from `cart-invoice-card.tsx` when buyer's email is known.
+  - Tables: `email_flows`, `email_flow_steps`, `email_flow_enrollments`, `email_flow_executions`, `cart_reports`. DB helpers: `getUnenrolledAbandonedCarts()`, `markCartEnrolled()`, `getWinbackCandidates()`. Routes under `pages/api/email/flows/`. Templates + merge rendering in `utils/email/flow-email-templates.ts`.
+  - Visual builder: `components/settings/flow-step-editor.tsx` (heading/paragraph/bold/italic, Blossom image upload, link, CTA button, divider, raw HTML toggle, live preview, clickable merge tags). Per-flow sender settings (`from_name`, `reply_to` columns on `email_flows`) customize SendGrid `from` and `replyTo`. Flow deletion cascades transactionally; step update/delete verifies step belongs to the flow (cross-flow auth bypass guard).
+  - MCP tools: `create_email_flow`, `list_email_flows`, `update_email_flow`, `delete_email_flow`, `toggle_email_flow`, `get_email_flow_stats`. Internal scheduler (`utils/email/flow-scheduler.ts`) auto-starts via `instrumentation.ts`: processor every 2 min, abandoned-cart every 30 min, winback once daily. Disabled gracefully if `FLOW_PROCESSOR_SECRET` is unset.
+- **Inquiry Email Notifications**: Direct inquiry DMs trigger emails to recipients with email on file. Reply-to set to sender's email if available; otherwise email tells recipient to reply via Inquiries chat. If neither party has email, no email is sent. Template `inquiryNotificationEmail`, service `sendInquiryNotification`, route `/api/email/send-inquiry-email`. Triggered from `messages.tsx` after gift-wrapped DM send.
+- **Return/Refund/Exchange Requests**: Buyers request from orders dashboard via modal (request type + editable default message). Sends gift-wrapped DM with subject `return-request` + email via `/api/email/send-return-request-email`. Buyer sees "Return Requested" status; sellers see an alert badge. Request type stored in the `status` tag. Template `returnRequestEmail`, service `sendReturnRequestToSeller`.
+- **Stripe Connect Onboarding**: Stripe Connect endpoints (`create-account`, `create-account-link`, `account-status`) use the mandatory `McpRequestProof` signed-event auth (same as MCP API key endpoints) — proof builders in `utils/mcp/request-proof.ts`, server-side verification via `verifyAndConsumeSignedRequestProof` in `utils/mcp/request-proof-server.ts`.
+- **Bulk/Bundle Pricing**: Global and per-variant tiered pricing. Tag format: `["bulk", units, price]` global, `["bulk", units, price, variantName]` variant-specific. The bundle selector only appears when the selected variant has bulk tiers. Parsed into `bulkPrices` (global) and `variantBulkPrices` (`Map<string, Map<number, number>>`). Switching variant resets bulk selection.
+- **Variants & Pickup**: Size, volume, weight (with per-weight pricing), and pickup-location selection are integrated into order messages and the dashboard. Order status is persisted with a priority system to prevent downgrades.
+- **Unread/Read Indicators**: Track read status for messages and orders, with visual indicators and auto-mark.
+- **Image Compression**: Auto-compress large images (WebP + scaling) before Blossom uploads.
+- **Subscribe & Save (Recurring Subscriptions)**: Configurable subscription pricing (weekly / 2-week / monthly / 2-month / quarterly) with discount %. Product pages show two pricing cards (Subscribe & Save + One-Time). Checkout creates Stripe Subscriptions on connected accounts (guest buyers must provide email). Renewal reminders via email + Nostr DMs one week before billing; address changes notify sellers via gift-wrapped DMs. Buyers manage subscriptions via Orders tab (or via email lookup for guests). Cart supports mixed subscription + one-time items via `pages/api/stripe/create-cart-subscription.ts` (single Stripe invoice). Multi-merchant subscriptions use platform charging + transfers when all sellers have Stripe.
+- **Cart Multi-Payment Support**: Card payment when all merchants have Stripe — single-merchant uses direct charges; multi-merchant uses Separate Charges and Transfers (`pages/api/stripe/process-transfers.ts`). Fiat options only for single-merchant carts. Bitcoin (Lightning, Cashu, NWC) always available. When any product has an active subscription selection, only card is available. Subscription-renewal multi-merchant payouts handled by the Stripe webhook.
+- **Free Shipping Threshold**: Per-merchant minimum (`freeShippingThreshold` + `freeShippingCurrency` in Kind 30019 JSON). When met, all shipping from that seller drops to zero. Shipping consolidates per seller (highest cost, not sum). Progress bars in cart/checkout, popup notification when adding eligible items, strikethrough on order summary with green "Free" badge.
+- **Payment Method Discounts**: Flat percent discounts per method (`paymentMethodDiscounts` in Kind 30019 JSON, mapping `bitcoin`/`stripe`/`cash`/`venmo`/etc. → percent). Discounted prices appear on payment buttons with "(X% off)" labels; actual invoice amount reflects the method-specific discount.
+- **Herdshare Agreement Management**: Column in orders dashboard for signing/viewing herdshare agreements via PDFAnnotator.
+- **Landing Page**: Redesigned per YC best practices (clear CTA, outcome-first headline, social proof, simplified sections).
+
+## Shopify → Milk Market Migration
+
+Sellers can import a Shopify product CSV export and republish as NIP-99 listings (kind 30402).
+
+- **Entry points**: (1) Settings → Market Stall → Products & Discounts has an "Import from Shopify" button + dismissible tooltip; (2) the landing footer "Migrate from Shopify" link routes through onboarding (`migrate=shopify` param propagated through new-account → market-profile → shop-profile → stripe-connect → `/settings/stall?tab=products&migrate=shopify`) which auto-opens the modal. Already signed-in users hitting `/onboarding/new-account` are redirected to the stall page so existing keys aren't regenerated.
+- **Modal**: 4-step flow (Upload → Configure → Review → Publish) in `components/stall/shopify-migration-modal.tsx`.
+- **Parsing & mapping**: `utils/migrations/shopify-csv-parser.ts` groups variants by `Handle`. `utils/migrations/shopify-to-nip99.ts` maps to NIP-99, surfaces a price-variance warning when variants have different prices, omits `quantity` entirely when total inventory is 0 (so untracked items don't publish as out-of-stock), and supports per-variant `size` tags.
+- **Image rehosting**: `utils/migrations/rehost-images.ts` re-uploads remote image URLs to the seller's Blossom servers during publish so listings keep working after Shopify is decommissioned; failures fall back to the original URL with a per-listing warning. The Done step shows a "Retry N failed" button that re-runs only the failed items.
+
+## Seller Storefronts
+
+Sellers run customizable standalone shops at `/shop/[slug]`. Custom domains available on request.
+
+- **Customization**: color scheme (with per-color usage hints), independent navbar colors (background/text/accent), independent footer colors (background/text/accent), landing page style, product layout, Google Fonts or custom uploaded fonts (`.woff2`/`.woff`/`.ttf`/`.otf` via Blossom), section-based page builder, multi-page navigation, custom footer with social links, store policies, optional neo-brutalist card shadows (`neoShadows` toggle in Kind 30019 — adds offset shadows on bordered cards/images using the storefront's secondary color, applied across the live storefront, product-page overlay, and editor previews).
+- **Custom font scope**: When a seller sets a heading or body font, it cascades across the entire storefront (navbar, buttons, inputs, product cards, footer, community, wallet, orders) via root-level CSS in `storefront-layout.tsx`, `storefront-theme-wrapper.tsx`, `storefront-preview-panel.tsx`, and `storefront-preview-frame.tsx`. The body font is the default for all text; the heading font applies to all `h1`–`h6` and elements with `.font-heading`.
+- **Markdown formatting**: `components/storefront/formatted-text.tsx` renders inline `*italic*`, `**bold**`, and `***bold italic***` for shop name (nav + footer + overlay nav), footer tagline, and the rest of the consumer-facing storefront text.
+- **SEO & OG meta**: Per-storefront fields (meta title, meta description, OG image, keywords, locale, geo region, geo city). An "auto-generate" mode fills empty fields from shop name/about/slug at save time. SSR renders SEO meta in `getServerSideProps` for `[slug].tsx` and `[...shopPath].tsx`. `storefront-layout.tsx` also injects meta client-side via `<Head>`. Type: `StorefrontSeoMeta` in `packages/domain/src/storefront.ts`. Settings UI: "SEO & Open Graph" section in `shop-profile-form.tsx`.
+- **Built-in Shop Page**: Every storefront gets `/shop/[slug]/shop` with search, category filters (pill toggles based on actual product categories), location filter, sort options (newest/oldest/price/name), and paginated product grid styled with storefront colors. The "Shop" link is auto-injected into the navbar if not already present. Component: `components/storefront/storefront-shop-page.tsx`. Uses `productSatisfiesAllFilters` from `utils/parsers/product-filter-helpers.ts`. Preview panel mocks search/categories/grid for the shop page.
+- **Independent Nav/Footer Colors**: `StorefrontNavColors` / `StorefrontFooterColors` types each carry `background`, `text`, `accent`.
 
 # External Dependencies
 
 ## Nostr Infrastructure
 
-- **Nostr Relays**: For event publishing and subscription.
-- **Blossom Servers**: For decentralized media storage.
-- **NIP-05 Verification**: For DNS-based identity verification.
+- **Relays** for event publishing/subscription, **Blossom** for media, **NIP-05** DNS verification.
 
 ## Payment Services
 
-- **Lightning Network**: For invoice generation and verification.
-- **Cashu Mints**: For eCash token services.
-- **Getalby Lightning Tools**: For Lightning address and payment utilities.
-- **Stripe**: For credit card payment processing via Stripe Connect.
-- **SendGrid**: For transactional email services.
+- **Lightning** (invoice gen/verify), **Cashu Mints** (eCash), **Getalby Lightning Tools** (LN address utils), **Stripe** (Connect for cards), **SendGrid** (transactional email).
 
 ## Third-Party Libraries
 
-- **Cryptography**: `crypto-js`, `nostr-tools`, `@cashu/cashu-ts`.
-- **UI Components**: `@heroui/react`, `@heroicons/react`, `framer-motion`.
+- **Crypto**: `crypto-js`, `nostr-tools`, `@cashu/cashu-ts`.
+- **UI**: `@heroui/react`, `@heroicons/react`, `framer-motion`.
 - **Payments**: `stripe`, `@stripe/stripe-js`, `@stripe/react-stripe-js`.
-- **File Processing**: `pdf-lib`, `qrcode`.
-- **MCP**: `@modelcontextprotocol/sdk` for AI agent integration.
+- **Files**: `pdf-lib`, `qrcode`.
+- **MCP**: `@modelcontextprotocol/sdk`.
 
-## MCP Server (AI Agent Integration)
+# MCP Server (AI Agent Integration)
 
-The platform exposes a Model Context Protocol (MCP) server enabling AI agents to programmatically participate in the marketplace as both buyers and sellers. Agents can browse products, place orders, create listings, manage shop profiles, upload media, send encrypted DMs, publish reviews, manage communities, configure relays/blossom servers, handle discount codes, and manage Cashu wallets — all using their Nostr keys for event signing.
+The platform exposes a Model Context Protocol server enabling AI agents to participate as buyers and sellers — browse products, place orders, create listings, manage profiles, upload media, send DMs, publish reviews, manage communities, configure relays/blossom, handle discount codes, and manage Cashu wallets — all using their Nostr keys for signing.
 
-### Architecture
+## Architecture
 
-- **MCP Endpoint**: `pages/api/mcp/index.ts` — Streamable HTTP transport endpoint that handles MCP protocol messages
-- **Server Factory**: `mcp/server.ts` — Creates the MCP server with registered tools and resources
-- **Read Tools**: `mcp/tools/read-tools.ts` — Tools for browsing products, companies, reviews, and discount codes
-- **Write Tools**: `mcp/tools/write-tools.ts` — Tools for full marketplace participation (profiles, listings, reviews, DMs, media, relay/blossom config, discount codes, Cashu wallet, custom domains, storefront policies, email popup config, email capture list)
-- **Purchase Tools**: Inline in `pages/api/mcp/index.ts` — Order creation, status, payment verification
-- **Resources**: `mcp/resources.ts` — MCP resources (product catalog via `milkmarket://catalog/products`)
-- **Nostr Signing**: `utils/mcp/nostr-signing.ts` — Server-side Nostr event signing (`McpNostrSigner`), relay management (`McpRelayManager`), encrypted nsec storage, and `signAndPublishEvent()` utility
-- **Auth Middleware**: `utils/mcp/auth.ts` — API key generation, validation, request authentication, nsec storage/retrieval, and `getAgentSigner()` for server-side signing
-- **Metrics**: `utils/mcp/metrics.ts` — Request tracking, latency percentiles, rate limiting
-- **API Key Management**: `pages/api/mcp/api-keys.ts` — CRUD endpoints for API keys
-- **Order API**: `pages/api/mcp/create-order.ts` — Order creation, status, and listing endpoint
-- **Payment Verification**: `pages/api/mcp/verify-payment.ts` — Lightning payment verification
-- **Onboarding**: `pages/api/mcp/onboard.ts` — Zero-touch agent registration with optional nsec storage
-- **Set Nsec**: `pages/api/mcp/set-nsec.ts` — Endpoint for agents to securely set their nsec after onboarding
-- **Status**: `pages/api/mcp/status.ts` — Service health and metrics
-- **Agent Manifest**: `pages/api/.well-known/agent.json.ts` — Machine-readable service description (v2.0.0)
-- **Settings UI**: `pages/settings/api-keys.tsx` — UI page for managing API keys
+- **Endpoint**: `pages/api/mcp/index.ts` — Streamable HTTP transport.
+- **Server factory**: `mcp/server.ts`. Read tools: `mcp/tools/read-tools.ts`. Write tools: `mcp/tools/write-tools.ts`. Resources: `mcp/resources.ts` (catalog via `milkmarket://catalog/products`). Purchase tools inline in `pages/api/mcp/index.ts`.
+- **Signing**: `utils/mcp/nostr-signing.ts` — `McpNostrSigner`, `McpRelayManager`, encrypted nsec storage, `signAndPublishEvent()`.
+- **Auth**: `utils/mcp/auth.ts` — API key generation, validation, request authentication, nsec storage, `getAgentSigner()`. Keys use PBKDF2 hashing + Bearer auth, prefix `sk_`. Three permission levels: `read` (browse only), `read_write` (browse + purchase), `full_access` (full participation with server-side Nostr signing). Agents can set their nsec post-onboarding via `POST /api/mcp/set-nsec`.
+- **Routes**: `api-keys.ts` (CRUD), `create-order.ts` (orders), `verify-payment.ts` (Lightning verify), `onboard.ts` (zero-touch registration), `set-nsec.ts`, `status.ts` (health/metrics).
+- **Manifest**: `pages/api/.well-known/agent.json.ts` — machine-readable description (v2.0.0), surfaced via middleware rewrite. Settings UI: `pages/settings/api-keys.tsx`.
+- **Tables**: `mcp_api_keys` (hashed secrets, permissions, usage, optional `encrypted_nsec`), `mcp_orders` (orders with payment + status).
+- **Server-side signing**: `full_access` keys store nsec encrypted with AES-256-GCM (`MCP_ENCRYPTION_KEY`). `McpNostrSigner` provides `sign()`, `encrypt()`, `decrypt()`, `getPubKey()` without browser deps. Events sign server-side, cache to DB, publish via `McpRelayManager` (nostr-tools `SimplePool`).
 
-### Available MCP Tools
+## Tools
 
-**Read Tools (any valid key):**
+**Read** (any key): `search_products`, `get_product_details`, `list_companies`, `get_company_details`, `get_reviews`, `check_discount_code`, `get_payment_methods`. Responses include subscription info, variant options (sizes/volumes/weights/bulk), herdshare agreements, pickup locations, required customer info, payment method discounts, free shipping settings.
 
-- `search_products` — Search/filter products by keyword, category, location, price range. Responses include subscription info, variant options (sizes, volumes, weights, bulk), herdshare agreements, pickup locations, and required customer info
-- `get_product_details` — Get full details for a product by ID, including all variant options, subscription settings, herdshare agreement URL, and pickup locations
-- `list_companies` — List all seller/shop profiles with fiat options, payment method discounts, and free shipping settings
-- `get_company_details` — Get a company's profile, products, and reviews. Profile includes fiat options, payment preferences, payment method discounts, and free shipping thresholds
-- `get_reviews` — Get reviews for a product or seller, including seller replies (kind 1111)
-- `check_discount_code` — Validate a discount code
-- `get_payment_methods` — Get available payment methods for a seller (stripe, lightning, cashu, fiat)
+**Purchase** (`read_write`+): `create_order` (`stripe`/`lightning`/`cashu`/`fiat` payment, variant + bulk + shipping address selection), `verify_payment`, `get_order_status`, `list_orders`, `create_subscription` / `list_subscriptions` / `cancel_subscription` / `update_subscription`, `list_seller_orders`, `get_notifications` (unread + recent buyer/seller orders + `actionRequired` summary).
 
-**Purchase Tools (requires read_write or full_access):**
+**Write** (`full_access` + stored nsec): `set_user_profile` (kind 0), `set_shop_profile` (kind 30019, with `paymentMethodDiscounts`/free shipping), `set_notification_email` / `get_notification_email`, `create_product_listing` / `update_product_listing` (kind 30402, full tag support inc. variants/bulk/pickup/expiration/herdshare/required-customer-info/subscriptions), `delete_listing` (kind 5), `publish_review` (kind 31555), `reply_to_review` (kind 1111, NIP-22, one reply per review), `create_community_post`, `send_direct_message` (NIP-17 1059/13/14), `set_relay_list` (10002), `set_blossom_servers` (10063), `upload_media` (24242), `create_discount_code` / `delete_discount_code` / `list_discount_codes`, `get_cashu_balance` (7375), `receive_cashu_tokens`, `set_cashu_mints` (17375), `send_cashu_payment` (melt to Lightning), `list_seller_subscriptions`, `update_order_address` (encrypted address-change DM), `send_shipping_update` (tracking + carrier + ETA, status → shipped), `update_order_status` (with optional notification DM), `list_messages` / `mark_messages_read`, plus the email-flow tools listed above.
 
-- `create_order` — Place an order with payment method selection (`stripe`/`lightning`/`cashu`/`fiat`), product spec selection (`selectedSize`/`selectedVolume`/`selectedBulkUnits`/`selectedWeight`), and optional `shippingAddress`. Supports: `stripe` (credit card), `lightning` (Bitcoin Lightning invoice), `cashu` (ecash tokens), `fiat` (Venmo, Cash App, Zelle, etc.)
-- `verify_payment` — Verify Lightning invoice payment status
-- `get_order_status` — Check order status
-- `list_orders` — List orders
-- `create_subscription` — Create a recurring subscription order for a subscription-enabled product. Requires product to have subscription tags. Parameters: productId, frequency (weekly/every_2_weeks/monthly/every_2_months/quarterly), buyerEmail, quantity, shippingAddress, selectedSize, selectedVolume, selectedWeight. Creates a Stripe Subscription via the seller's connected account.
-- `list_subscriptions` — List buyer's subscriptions by pubkey or email
-- `cancel_subscription` — Cancel an existing subscription (remains active until end of billing period)
-- `update_subscription` — Update subscription shipping address or next billing date
-- - `list_seller_orders` — List incoming orders as seller, with optional status filter
-- `get_notifications` — Check for new activity: unread message count, recent orders as buyer/seller, and `actionRequired` summary (pending payments, orders to fulfill, unread messages)
+## Payment methods
 
-**Write Tools (requires full_access + stored nsec):**
+- **Lightning**: Generates a Cashu mint quote (bolt11 invoice). Agent pays then calls `verify_payment`. Default mint: `https://mint.minibits.cash/Bitcoin`.
+- **Cashu**: Agent provides a serialized token; server verifies and redeems.
+- **Stripe**: Creates a PaymentIntent. Agent completes via Stripe SDK.
+- **Fiat**: Returns seller's handles (Venmo, Cash App, etc.); agent pays externally with order ID in memo and seller confirms manually.
+- Per-method discounts apply automatically.
 
-- `set_user_profile` — Create/update Nostr user profile (kind 0). Supports fiat_options (object mapping method names to usernames, e.g. `{venmo: "@handle"}`), payment_preference (ecash/lightning/fiat), and standard fields (name, about, picture, banner, lud16, nip05, website)
-- `set_shop_profile` — Create/update shop profile (kind 30019). Supports paymentMethodDiscounts (object mapping method keys like "bitcoin", "stripe", "venmo" to discount percentages), freeShippingThreshold, freeShippingCurrency, and standard fields (name, about, picture, banner, theme, darkMode, merchants)
-- `set_notification_email` — Set notification email address for order updates and communications. Supports both buyer and seller roles
-- `get_notification_email` — Retrieve configured notification email by pubkey and optional role
-- `create_product_listing` — Publish product listing (kind 30402) with full tag support, including sizes, volumes, weights (with per-weight pricing), bulk/bundle pricing, pickup locations, expiration, herdshareAgreement (URL), requiredCustomerInfo, and subscription settings (subscriptionEnabled, subscriptionDiscount, subscriptionFrequencies)
-- `update_product_listing` — Update existing listing by d-tag, supports all fields including sizes, volumes, weights, bulk pricing, pickup locations, expiration, herdshare agreement, required customer info, and subscription settings
-- `delete_listing` — Delete events (kind 5)
-- `publish_review` — Publish review (kind 31555) with ratings
-- `reply_to_review` — Reply to a product review as the seller (kind 1111, NIP-22). Validates seller ownership and enforces one reply per review
-- `create_community_post` — Post to communities (kind 1111), supports replies
-- `send_direct_message` — Send encrypted NIP-17 gift-wrapped DMs (kind 1059/13/14), supports order messages and listing inquiries
-- `set_relay_list` — Publish relay list (kind 10002, NIP-65)
-- `set_blossom_servers` — Publish blossom server list (kind 10063)
-- `upload_media` — Upload to Blossom servers with signed auth (kind 24242)
-- `create_discount_code` — Create shop discount codes
-- `delete_discount_code` — Delete discount codes
-- `list_discount_codes` — List shop discount codes
-- `get_cashu_balance` — Check Cashu wallet balance from proof events (kind 7375)
-- `receive_cashu_tokens` — Receive and store Cashu tokens (kind 7375)
-- `set_cashu_mints` — Configure wallet mints (kind 17375)
-- `send_cashu_payment` — Melt tokens to pay Lightning invoices
-- `list_seller_subscriptions` — List all subscriptions to your products with optional status filter (active/paused/canceled)
-- `update_order_address` — Change shipping address post-purchase, sends encrypted address change DM to seller and updates order record
-- `send_shipping_update` — Send shipping info (tracking number, carrier, ETA) to buyer via encrypted DM and update order status to shipped
-- `update_order_status` — Update order status (confirmed/shipped/delivered/completed/cancelled) with optional notification DM to buyer
-- `list_messages` — Fetch and decrypt incoming NIP-17 DMs with filters for unread, subject type, and sender. Returns decrypted content, subject, order IDs, and read status
-- `mark_messages_read` — Mark specific messages as read by event ID
-- `create_email_flow` — Create an automated email flow (welcome_series, abandoned_cart, post_purchase, winback) with optional default template steps or custom steps
-- `list_email_flows` — List all email flows for the authenticated seller
-- `update_email_flow` — Update a flow's name and/or steps (add, update, or delete steps)
-- `delete_email_flow` — Delete a flow and all associated data
-- `toggle_email_flow` — Toggle a flow between active and paused status
-- `get_email_flow_stats` — Get enrollment and per-step execution statistics for a flow
+## Agentic Commerce Endpoints
 
-### Payment Methods
+- `GET /.well-known/agent.json` — Capabilities manifest (unauth).
+- `POST /api/mcp/onboard` — Zero-touch registration (unauth). Accepts `{ name, permissions?, contact?, pubkey? }`. Generates a Nostr keypair when `pubkey` is omitted (returns `nsec`); reuses existing identity when provided (no nsec returned, `existingIdentity: true`). Always returns `npub`. Rate-limited to 10/IP/hour.
+- `GET /api/mcp/status` — Health + metrics (uptime, latency p50/p95/p99, throughput, reliability, freshness counts). Backed by `utils/mcp/metrics.ts`.
+- **Pricing in protocol**: Every product response has a structured `pricing` block (amount, currency, unit, shippingCost, shippingType, totalEstimate, paymentMethods). Order creation returns HTTP 402 with payment instructions when Stripe is required.
+- **Response metadata**: All MCP tool responses include `_meta` (`responseTimeMs`, `dataSource` ∈ {`cached_db`, `live`}, `dataFreshness`, `resultCount`). HTTP responses include `X-Response-Time`.
 
-- **Lightning**: Generates a Cashu mint quote (bolt11 invoice) via `@cashu/cashu-ts`. Agent pays the invoice, then calls `verify_payment` to confirm. Default mint: `https://mint.minibits.cash/Bitcoin`.
-- **Cashu**: Agent provides a serialized Cashu token string. Server verifies and redeems the tokens.
-- **Stripe**: Creates a Stripe PaymentIntent. Agent completes payment via Stripe SDK.
-- **Fiat**: Returns seller's fiat payment handles (Venmo, Cash App, etc.). Agent sends payment externally and includes order ID in memo. Seller confirms receipt manually.
-- **Payment method discounts**: Sellers can set per-method discounts (e.g., 10% off Bitcoin). Applied automatically in order pricing.
+# SEO & GEO
 
-#### Permission Levels
+- **On-page**: Descriptive alt text + explicit `width`/`height` on landing (`pages/index.tsx`), producers (`pages/producer-guide/index.tsx`), and image carousel (`components/utility-components/image-carousel.tsx`). Global JSON-LD (`Organization`, `WebSite`, `LocalBusiness`, `FAQPage`) via `components/structured-data.tsx` (loaded in `_app.tsx`). Contact page has its own `ContactPage` schema. `public/robots.txt` allows all crawlers but disallows admin/API; references the sitemap. Dynamic sitemap at `pages/api/sitemap.xml.ts`, served at `/sitemap.xml` via `next.config.mjs` rewrite (covers all 9 public pages).
+- **Trust signals**: About (`pages/about/index.tsx`) — mission, team, USDA citations, expert quote, stats. Contact (`pages/contact/index.tsx`) — email, Nostr, social, GitHub, mailto form with subject categories.
+- **GEO**: Inline USDA ERS / USDA AMS citations with specific numbers (e.g. "$44B+ farm revenue", "12% YoY growth in direct sales"); attributed dairy expert quote on landing + about; E-E-A-T signals (author/founder schema, team credentials, social proof).
 
-- `read` — Browse-only access (search products, view profiles/reviews)
-- `read_write` — Browse + purchase (place orders, verify payments)
-- `full_access` — Full marketplace participation (all read/write tools + server-side Nostr event signing). Requires nsec stored during onboarding or via `/api/mcp/set-nsec`.
+# Dev Mode Optimizations
 
-#### Server-Side Nostr Signing
+- **Turbopack** (Next.js default) for dev server (~36s vs ~87s initial, sub-second subsequent).
+- **PWA disabled in dev** via `next.config.mjs`. **Flow scheduler skipped in dev** to reduce memory pressure.
 
-Agents with `full_access` permission have their Nostr private key (nsec) stored encrypted in the database using AES-256-GCM. The encryption key is configured via the `MCP_ENCRYPTION_KEY` environment variable. The `McpNostrSigner` class provides `sign()`, `encrypt()`, `decrypt()`, and `getPubKey()` methods without browser dependencies. Events are signed server-side, cached to the database, and published to relays via `McpRelayManager` (using `nostr-tools` SimplePool).
-
-#### Database Tables
-
-- `mcp_api_keys` — API keys with hashed secrets, permissions (read/read_write/full_access), usage tracking, and optional encrypted_nsec for server-side signing
-- `mcp_orders` — Orders placed through the MCP/API with payment and status tracking
-
-### Agentic Commerce Endpoints
-
-- **Capabilities Manifest**: `GET /.well-known/agent.json` — Machine-readable service description (unauthenticated). Describes all tools, resources, auth method, endpoints, and pricing model. Implemented via `pages/api/.well-known/agent.json.ts` with a middleware rewrite in `middleware.ts`.
-- **Automated Onboarding**: `POST /api/mcp/onboard` — Zero-touch agent registration (unauthenticated). Accepts `{ name, permissions?, contact?, pubkey? }`. If `pubkey` is omitted, generates a new Nostr keypair and returns the `nsec` (bech32-encoded). If `pubkey` is provided (hex or npub1... format), uses that existing identity (no nsec returned, `existingIdentity: true`). Always returns `npub` in bech32 format. Rate-limited to 10 per IP per hour.
-- **Status & Metrics**: `GET /api/mcp/status` — Real-time service health and performance metrics (unauthenticated). Returns uptime, latency percentiles (p50/p95/p99), throughput, reliability rates, and data freshness counts. Backed by `utils/mcp/metrics.ts` in-memory collector.
-- **Pricing in Protocol**: Every product response includes a structured `pricing` block with amount, currency, unit, shippingCost, shippingType, totalEstimate, and paymentMethods. Order creation returns HTTP 402 with payment instructions when Stripe payment is required.
-- **Response Metadata**: All MCP tool responses include `_meta` blocks with `responseTimeMs`, `dataSource` ("cached_db" or "live"), `dataFreshness`, and `resultCount`. HTTP responses include `X-Response-Time` headers.
-
-### Authentication
-
-API keys are created via the `/settings/api-keys` UI page, the `/api/mcp/api-keys` endpoint, or the zero-touch `/api/mcp/onboard` endpoint. Keys use PBKDF2 hashing and Bearer token authentication. Three permission levels: `read` (browse only), `read_write` (browse + purchase), and `full_access` (full marketplace participation with Nostr signing). Key prefix: `sk_`. Agents can set their nsec post-onboarding via `POST /api/mcp/set-nsec`.
-
-## SEO & GEO Optimizations
-
-### On-Page SEO
-
-- **Alt Text & Image Optimization**: All images across landing page (`pages/index.tsx`), producers page (`pages/producer-guide/index.tsx`), and image carousel (`components/utility-components/image-carousel.tsx`) have descriptive alt text and explicit `width`/`height` attributes.
-- **Structured Data (JSON-LD)**: Global `Organization`, `WebSite`, `LocalBusiness`, and `FAQPage` schemas injected via `components/structured-data.tsx` (loaded in `_app.tsx`). Contact page has its own `ContactPage` schema.
-- **robots.txt**: `public/robots.txt` allows all crawlers, disallows admin/API paths, and references the sitemap.
-- **XML Sitemap**: Dynamic sitemap at `pages/api/sitemap.xml.ts`, accessible via `/sitemap.xml` (Next.js rewrite in `next.config.mjs`). Covers all 9 public pages.
-
-### Trust Signal Pages
-
-- **About Us** (`pages/about/index.tsx`): Mission, team info, industry context with USDA citations, expert quote, and statistics.
-- **Contact** (`pages/contact/index.tsx`): Email, Nostr, social media links, GitHub, and a mailto-based contact form with subject categories.
-
-### GEO (Generative Engine Optimization)
-
-- **Authoritative Citations**: Inline links to USDA ERS, USDA AMS with specific statistics (e.g., "$44B+ farm revenue", "12% YoY growth in direct sales").
-- **Expert Quotes**: Attributed dairy expert quote on landing page and about page.
-- **E-E-A-T Signals**: Author/founder schema, team credentials, social proof with real data, and comprehensive business information.
-
-## Dev Mode Optimizations
-
-- **Turbopack**: Dev server uses Turbopack (Next.js default) instead of webpack for significantly faster compilation (~36s vs ~87s initial, sub-second subsequent).
-- **PWA disabled in dev**: Service worker and PWA caching are disabled via `next.config.mjs` in development.
-- **Flow scheduler disabled in dev**: Email flow scheduler skipped in development to reduce memory pressure.
-
-## Affiliate / Referral System
+# Affiliate / Referral System
 
 Seller-managed affiliate links and codes that work for both Stripe and Bitcoin/Cashu payments.
 
-### Data model (`db/schema.sql`, `utils/db/affiliates.ts`)
+## Data model (`db/schema.sql`, `utils/db/affiliates.ts`)
 
-- `affiliates` — seller-owned affiliate record (name, email, optional pubkey, lightning address, Stripe Connect id, balance, invite token, `payouts_enabled`).
-- `affiliate_codes` — one or more codes per affiliate with rebate (percent/fixed) + buyer discount (percent/fixed), expiry, max uses, and a `payout_schedule` ∈ {`weekly`, `biweekly`, `monthly`} (default `monthly`).
-- `affiliate_referrals` — one row per (order, code); tracks gross/net/rebate/buyer-discount in smallest units, payment rail, status (`pending` → `payable` → `paid`, plus `cancelled`/`refunded`), `refunded_smallest`, `refund_event_ref`. Unique on `(order_id, code_id)` so re-posts are idempotent.
-- `affiliate_payouts` — settled payout batches (Stripe transfer id, lightning preimage, or manual mark-paid).
+- `affiliates` — seller-owned record (name, email, optional pubkey, lightning address, Stripe Connect id, balance, invite token, `payouts_enabled`, `payout_failure_count`, `last_payout_failure_at`, `last_payout_failure_reason`, `email_notifications_enabled`).
+- `affiliate_codes` — per-affiliate codes with rebate (% or fixed) + buyer discount (% or fixed), expiry, `max_uses`, `times_used`, `payout_schedule` ∈ {weekly, biweekly, monthly} (default monthly). Functional unique index on `(seller_pubkey, UPPER(code))` prevents case-variant collisions.
+- `affiliate_referrals` — one row per (order, code), tracks gross/net/rebate/buyer-discount in smallest units, payment rail, status (`pending` → `payable` → `paid`, plus `cancelled`/`refunded`), `refunded_smallest`, `refund_event_ref`. Unique on `(order_id, code_id)` so reposts are idempotent.
+- `affiliate_payouts` — settled batches (Stripe transfer id, lightning preimage, or manual mark-paid).
+- `affiliate_clicks` — `(code_id, seller_pubkey, occurred_at, optional landing_path, optional referer_host)`. **PII-free by design**: no IPs, no UAs, no cookies, no fingerprints. Future contributors must not add identifying columns without a privacy review and an updated public privacy notice.
 
-### API endpoints (`pages/api/affiliates/`)
+## API endpoints (`pages/api/affiliates/`)
 
-- `manage` (CRUD seller affiliates), `codes` (CRUD codes), `validate` (public buyer validation), `claim` (affiliate self-service via invite token; signed-pubkey proof required for any update after the first claim), `payouts` (seller view), `mark-paid` (manual settlement), `record-referral` (server-first attribution; atomic max_uses + idempotent), `process-payouts` (cron, `Authorization: Bearer $AFFILIATE_PAYOUT_CRON_SECRET`, advisory-locked per schedule, supports `?dryRun=1`), `self-stats` (token-gated affiliate dashboard data — balances + recent payouts), `stripe-onboarding` (creates a Stripe Express account on the affiliate's behalf and returns an Account Link URL), `ytd-payouts` (seller-scoped year-to-date paid totals with US 1099-NEC threshold flagging at $600).
+- `manage` (CRUD; PUT actions: `regenerate-token`, `set-payouts-enabled`, 409-guarded `force-delete`), `codes` (CRUD codes), `validate` (public buyer validation, requires `currency` for fixed-amount codes, returns uniform `{ valid: false }` on all failures), `claim` (affiliate self-service via invite token; signed-pubkey proof required for any update after first claim; GET masks email/lightning/Stripe id once claimed), `payouts` (seller view), `mark-paid` (manual settlement), `record-referral` (server-first attribution; atomic max_uses + idempotent), `process-payouts` (cron, `Authorization: Bearer $AFFILIATE_PAYOUT_CRON_SECRET`, advisory-locked per schedule + per affiliate, `?dryRun=1` supported), `self-stats` (token-gated dashboard data — balances + recent payouts), `stripe-onboarding` (creates Express account on the affiliate's behalf, returns Account Link URL), `ytd-payouts` (seller-scoped year-to-date paid totals with US 1099-NEC threshold flagging at $600), `record-click` (always 200, swallows errors), `click-stats` (signed seller request, 30-day click × conversion FULL OUTER JOIN), `reverse-referral` (seller-only manual clawback — `pubkey === sellerPubkey` signed-event auth, reuses `reverseReferralsForOrder` for partial-refund math), `unsubscribe` (RFC 8058 one-click).
 
-### Payment integration
+## Payment integration
 
 - `pages/api/stripe/create-payment-intent.ts` accepts per-seller `affiliateRebateSmallest`, `affiliateAccountId`, `affiliateId`, `affiliateCodeId`, `affiliateCode`.
-- `pages/api/stripe/process-transfers.ts` caps the rebate (seller keeps ≥1 unit after donation+rebate), subtracts rebate from the seller transfer, and calls `recordReferral` server-side (initial status `pending`). Real-time affiliate Stripe transfers were removed so refunds remain reversible during the hold window.
-- `pages/api/stripe/webhook.ts` handles `charge.refunded` and calls `reverseReferralsForOrder`, which cancels still-pending referrals and marks already-paid ones as `refunded` for out-of-band reconciliation.
+- `pages/api/stripe/process-transfers.ts` caps the rebate (seller keeps ≥1 unit after donation+rebate), subtracts rebate from the seller transfer, calls `recordReferral` server-side (initial status `pending`). Real-time affiliate Stripe transfers were removed so refunds remain reversible during the hold window.
+- `pages/api/stripe/webhook.ts` handles `charge.refunded` → `reverseReferralsForOrder` (cancels still-pending, marks already-paid as `refunded` for out-of-band reconciliation). Also handles `account.updated` → `syncAffiliateStripeAccountState` (mirrors `charges_enabled` / `payouts_enabled` / `details_submitted` so a Connect account that loses payouts capability auto-stops getting transfers; unknown accounts no-op silently).
 - Cashu/Lightning orders accrue to balance via the cart's record-referral call and are paid out by the cron once they age past `PAYOUT_HOLD_DAYS` for their code's schedule.
 
-### Anti-abuse
+## Anti-abuse
 
-- Self-referral blocked at both invite-claim time (`updateAffiliatePayoutMethod`) and referral-record time (`record-referral`).
-- `recordReferral` runs in a transaction with `SELECT ... FOR UPDATE` on the code row, enforcing `max_uses` atomically and incrementing `times_used` only on first insert. `ON CONFLICT (order_id, code_id) DO NOTHING` plus a SELECT fallback prevents the browser from overwriting the server-written row.
-- `process-payouts` takes a per-schedule Postgres advisory lock (weekly=91001, biweekly=91002, monthly=91003), enforces a min payout floor (100 sats / 50¢), and skips affiliates with `payouts_enabled = false`.
+- Self-referral blocked at invite-claim time (`updateAffiliatePayoutMethod`) and referral-record time.
+- `recordReferral` runs in a transaction with `SELECT ... FOR UPDATE` on the code row, enforcing `max_uses` atomically and incrementing `times_used` only on first insert. `ON CONFLICT (order_id, code_id) DO NOTHING` + SELECT fallback prevents the browser from overwriting the server-written row.
+- `process-payouts` takes per-schedule advisory locks (weekly=91001, biweekly=91002, monthly=91003) and per-affiliate locks (`92_000_000 + id`) so two schedules can't double-pay the same affiliate. Enforces a min payout floor (100 sats / 50¢) and skips affiliates with `payouts_enabled = false`. Emits structured `AFFILIATE_PAYOUT_RUN` / `AFFILIATE_PAYOUT_FAILURE` log lines and returns a per-affiliate summary.
+- After `MAX_PAYOUT_FAILURES` (5) consecutive failures the cron auto-pauses the affiliate.
+- Refund handling is partial-refund aware: `reverseReferralsForOrder` consumes `originalGrossSmallest` from the Stripe webhook, computes a refund ratio, scales pending rebates proportionally; already-paid rebates are recorded as clawbacks for out-of-band reconciliation.
+- Stripe payout idempotency: stable SHA-256 of `(affiliateId, currency, amount, sorted referralIds)` (key `aff-payout-{id}-{hash32}`), stored as `bundleDigest` in transfer metadata for forensic lookup.
+- Pure helpers (`computeRefundRatio`, `computeClawbackSmallest`, `computeBuyerDiscountSmallest`, `computeRebateSmallest`, `isSelfReferral`) covered by `__tests__/utils/db/affiliates.test.ts`.
+- `scripts/reconcile-affiliate-balances.ts` (`pnpm tsx scripts/reconcile-affiliate-balances.ts [--apply]`) recomputes per-affiliate per-currency balances and flags orphan paid rows, refund overshoots, and stale payable rows.
+- **Partial-refund caveat**: a single Stripe charge can span multiple sellers. `reverseReferralsForOrder` applies a global refund ratio (`refunded / original_gross`) to every pending rebate on the order. When a buyer refunds only one seller's portion of a multi-seller cart, the resulting clawback is best-effort and must be reconciled manually using the Stripe dashboard. See `docs/affiliate-payout-cron.md`.
 
-### UI
+## UI
 
-- `components/market/affiliates.tsx` — seller dashboard with 4 tabs (Affiliates, Codes, Balances, Payouts), wired into `market-page.tsx`. Schedule picker is weekly/biweekly/monthly (default monthly).
-- `pages/affiliate/[token].tsx` — affiliate self-service page. Shows per-currency pending/ready/paid balances, a recent-payouts table, and a paused-state warning banner pulled from `/api/affiliates/self-stats`. Includes a "Set up Stripe Connect for me" button that calls `/api/affiliates/stripe-onboarding` to create the Express account and redirect to the Account Link.
-- `components/utility-components/affiliate-ref-tracker.tsx` — mounted in `pages/_app.tsx`; on any `?ref=CODE` URL stores the code in a 30-day `mm_aff_ref` cookie. The cookie is now a JSON map keyed by seller pubkey (with a `*` wildcard fallback) so a code captured on seller A's storefront is preferred for seller A's checkout and won't bleed onto seller B. `?ref_seller=PUBKEY` lets links bind explicitly.
+- `components/market/affiliates.tsx` — seller dashboard (4 tabs: Affiliates, Codes, Balances, Payouts), wired into `market-page.tsx`. Schedule picker: weekly/biweekly/monthly (default monthly).
+- `pages/affiliate/[token].tsx` — affiliate self-service page. Per-currency pending/ready/paid balances, recent-payouts table, paused-state warning banner pulled from `/api/affiliates/self-stats`. Includes a "Set up Stripe Connect for me" button.
+- `components/utility-components/affiliate-ref-tracker.tsx` — mounted in `pages/_app.tsx`; on any `?ref=CODE` URL stores the code in a 30-day `mm_aff_ref` cookie. Cookie is a JSON map keyed by seller pubkey (with `*` wildcard fallback) so a code captured on seller A's storefront is preferred for seller A's checkout and won't bleed onto seller B. `?ref_seller=PUBKEY` lets links bind explicitly. Click POST is at-most-once per session via `sessionStorage`.
 - `pages/cart/index.tsx` — on cart load, calls `getAffiliateRefCookie(sellerPubkey)` per seller and validates against `/api/affiliates/validate`.
-- `components/cart-invoice-card.tsx` — passes affiliate fields into the payment-intent body and per-seller splits. Cashu success still POSTs `/api/affiliates/record-referral` (server-side enforcement); Stripe success no longer does, since process-transfers + webhook are authoritative.
+- `cart-invoice-card.tsx` — passes affiliate fields into the payment-intent body and per-seller splits. Cashu success still POSTs `/api/affiliates/record-referral` (server-side enforcement); Stripe success no longer does (process-transfers + webhook are authoritative).
 
-### Hardening (per-affiliate locks, failure tracking, partial refunds)
+## Email notifications & unsubscribe
 
-- `affiliates` table has `payouts_enabled`, `payout_failure_count`, `last_payout_failure_at`, `last_payout_failure_reason`. After `MAX_PAYOUT_FAILURES` (5) consecutive failures the cron auto-pauses the affiliate.
-- Functional unique index on `(seller_pubkey, UPPER(code))` prevents case-variant code collisions.
-- `process-payouts` now also takes a per-affiliate advisory lock (key `92_000_000 + id`) so two schedules can't double-pay the same affiliate. Each run emits structured `AFFILIATE_PAYOUT_RUN` / `AFFILIATE_PAYOUT_FAILURE` log lines and returns a per-affiliate summary.
-- `manage` endpoint adds a `PUT` action set: `regenerate-token`, `set-payouts-enabled`, and a 409-guarded `force-delete` (refuses while there are unsettled balances unless `force=true`).
-- `claim` GET masks the affiliate's email/lightning/Stripe id once the affiliate has claimed the link, so a leaked invite URL can't reveal contact info.
-- `validate` endpoint enforces a `currency` query param for fixed-amount codes (USD code rejected on a sats invoice and vice versa) and returns a uniform `{ valid: false }` shape on all failures. Cart now passes `currency` per seller.
-- Refund handling is partial-refund aware: `reverseReferralsForOrder` consumes `originalGrossSmallest` from the Stripe webhook, computes a refund ratio, and scales pending rebates proportionally; already-paid rebates are recorded as clawbacks for out-of-band reconciliation.
-- Pure helpers (`computeRefundRatio`, `computeClawbackSmallest`, `computeBuyerDiscountSmallest`, `computeRebateSmallest`, `isSelfReferral`) are covered by `__tests__/utils/db/affiliates.test.ts`.
-- `scripts/reconcile-affiliate-balances.ts` is a standalone CLI (`pnpm tsx scripts/reconcile-affiliate-balances.ts [--apply]`) that recomputes per-affiliate per-currency balances and flags orphan paid rows, refund overshoots, and stale payable rows.
-- Stripe payout idempotency is a stable SHA-256 of `(affiliateId, currency, amount, sorted referralIds)` (key format `aff-payout-{id}-{hash32}`), so a cron crash followed by a retry returns the original transfer instead of double-paying. The same hash is also stored as `bundleDigest` in Stripe transfer metadata for forensic lookup.
-- `process-payouts` sends `affiliatePaidEmail` on every successful Stripe payout, plus one-time `affiliatePausedToAffiliateEmail` and `affiliatePausedToSellerEmail` notifications the moment `MAX_PAYOUT_FAILURES` flips an affiliate's `payouts_enabled` to `false`. Seller emails are looked up via `getSellerEmailForPubkey` (a thin wrapper around `getSellerNotificationEmail`).
-- **Partial-refund caveat**: when a single Stripe charge spans multiple sellers, the webhook does not break the refund down per seller. `reverseReferralsForOrder` applies a global refund ratio (`refunded / original_gross`) to every pending rebate on the order. In the rare case where a buyer refunds only one seller's portion of a multi-seller cart, the resulting clawback is best-effort and must be reconciled manually using the Stripe dashboard. Documented at `docs/affiliate-payout-cron.md`.
+- `process-payouts` sends `affiliatePaidEmail` on every successful Stripe payout, plus one-time `affiliatePausedToAffiliateEmail` and `affiliatePausedToSellerEmail` notifications when `MAX_PAYOUT_FAILURES` flips `payouts_enabled` to `false`. Seller emails resolved via `getSellerEmailForPubkey` (wraps `getSellerNotificationEmail`).
+- Affiliate emails (`affiliatePaidEmail`, `affiliatePausedToAffiliateEmail`) emit `List-Unsubscribe` + `List-Unsubscribe-Post: List-Unsubscribe=One-Click` headers + footer link, all built from `mintAffiliateUnsubscribeToken` (HMAC, requires `AFFILIATE_UNSUBSCRIBE_SECRET`). Hitting the URL flips `email_notifications_enabled = false`; the cron then skips that affiliate's notifications without affecting payouts.
+- Tokens carry an issued-at timestamp and expire after 1 year (`UNSUBSCRIBE_TOKEN_TTL_MS` in `utils/email/unsubscribe-tokens.ts`). Rotating `AFFILIATE_UNSUBSCRIBE_SECRET` invalidates every outstanding link at once.
 
-### Scheduled deployment setup
+## Operator runbook
 
-`.replit` is read-only in this environment, so the affiliate payout crons are documented at `docs/affiliate-payout-cron.md` instead of being declared inline. Configure three Replit Scheduled Deployments — weekly (`0 14 * * 1`), biweekly (`0 14 1,15 * *`), and monthly (`0 14 1 * *`) — each running:
+- **Reverse a referral / clawback**: seller dashboard → Affiliates → Analytics → "Reverse referral". Calls `/api/affiliates/reverse-referral` with the seller's signed Nostr event; route applies `reverseReferralsForOrder` so pending rebates are scaled and already-paid rebates are recorded as clawbacks.
+- **Unsubscribe an affiliate from emails**: every affiliate email contains a one-click unsubscribe link. Operators can also POST to `/api/affiliates/unsubscribe` with a token from `mintAffiliateUnsubscribeToken(id)`. Re-subscribing requires updating `affiliates.email_notifications_enabled = true` directly in the DB (intentional — there's no public re-subscribe surface).
+- **Stripe Connect goes cold**: nothing to do — `account.updated` webhooks flip the affiliate's flags automatically; the next cron pass logs `payouts disabled`.
+
+## Scheduled deployment
+
+`.replit` is read-only here, so the affiliate payout crons are documented in `docs/affiliate-payout-cron.md`. Configure three Replit Scheduled Deployments — weekly (`0 14 * * 1`), biweekly (`0 14 1,15 * *`), monthly (`0 14 1 * *`) — each running:
 
 ```sh
 curl -fsSL -X POST \
@@ -345,32 +282,13 @@ curl -fsSL -X POST \
   "$NEXT_PUBLIC_BASE_URL/api/affiliates/process-payouts?schedule=<weekly|biweekly|monthly>"
 ```
 
-### Tests
+## Tests
 
-- `__tests__/utils/db/affiliates.test.ts` covers the pure helpers.
-- `__tests__/api/affiliates/validate.test.ts` covers the public validation endpoint, including the fixed-amount currency guard and the uniform `{ valid: false }` failure shape.
-- `__tests__/api/affiliates/record-referral.test.ts` covers self-referral blocking, currency-mismatch rejection, the happy path (returns computed amounts and writes with `initialStatus: 'pending'`), and the 409 surface for `max_uses` contention.
+- `__tests__/utils/db/affiliates.test.ts` — pure helpers.
+- `__tests__/api/affiliates/validate.test.ts` — public validation, fixed-amount currency guard, uniform `{ valid: false }` shape.
+- `__tests__/api/affiliates/record-referral.test.ts` — self-referral block, currency-mismatch reject, happy path (computed amounts + `initialStatus: 'pending'`), 409 surface for `max_uses` contention.
 
-### Click tracking, unsubscribe, and reverse-referral
+## Env
 
-- `affiliate_clicks` table records `(code_id, seller_pubkey, occurred_at)` only — no IPs, no user-agents. The public `record-click` endpoint always returns 200 (silently swallows errors so client-side noise can never leak rate-limit info), and `affiliate-ref-tracker.tsx` POSTs at most once per session via `sessionStorage`.
-- `click-stats` (signed seller request) returns a 30-day click × conversion table per code via FULL OUTER JOIN, so codes with clicks-but-no-conversions and conversions-but-no-clicks both surface. The dashboard Analytics tab also derives YTD paid-out locally from the payouts feed.
-- `reverse-referral` is the seller-only manual clawback. It enforces `pubkey === sellerPubkey` (signed-event auth), takes an `orderId` + optional `reason`, and reuses `reverseReferralsForOrder` so partial-refund math stays consistent.
-- `unsubscribe` is RFC 8058 one-click. Affiliate emails (`affiliatePaidEmail`, `affiliatePausedToAffiliateEmail`) emit `List-Unsubscribe` + `List-Unsubscribe-Post: List-Unsubscribe=One-Click` headers and a footer link, both built from `mintAffiliateUnsubscribeToken` (HMAC, requires `AFFILIATE_UNSUBSCRIBE_SECRET`). Hitting the URL flips `affiliates.email_notifications_enabled = false`; the cron then skips that affiliate's notifications without affecting payouts.
-- The Stripe webhook handles `account.updated` and mirrors `charges_enabled` / `payouts_enabled` / `details_submitted` into `affiliates` via `syncAffiliateStripeAccountState`, so a Connect account that loses payouts capability automatically stops getting Stripe transfers on the next cron run. Unknown accounts (Connect accounts not linked to any affiliate) no-op silently — the `UPDATE` simply touches zero rows.
-
-### Privacy & retention
-
-- `affiliate_clicks` is **PII-free by design**: only `(code_id, seller_pubkey, occurred_at, optional landing_path, optional referer_host)` are stored. No IPs, no user-agents, no cookies, no fingerprints. Future contributors must not add identifying columns without a privacy review and an updated public privacy notice.
-- Unsubscribe tokens carry an issued-at timestamp and expire after 1 year (`UNSUBSCRIBE_TOKEN_TTL_MS` in `utils/email/unsubscribe-tokens.ts`). Rotating `AFFILIATE_UNSUBSCRIBE_SECRET` invalidates every outstanding link at once.
-
-### Operator runbook
-
-- **Reverse a referral / clawback a rebate**: open the seller dashboard → Affiliates → Analytics tab → "Reverse referral" form. Enter the order id and (optionally) a reason. This calls `/api/affiliates/reverse-referral` with the seller's signed Nostr event; the route applies `reverseReferralsForOrder` so pending rebates are scaled and already-paid rebates are recorded as clawbacks for out-of-band reconciliation.
-- **Unsubscribe an affiliate from emails**: every affiliate email contains a one-click unsubscribe link. Operators can also POST to `/api/affiliates/unsubscribe` with a token minted by `mintAffiliateUnsubscribeToken(id)`. Re-subscribing requires updating `affiliates.email_notifications_enabled = true` directly in the DB (intentional — there is no public re-subscribe surface).
-- **Stripe Connect goes cold**: nothing to do — `account.updated` webhooks flip the affiliate's flags automatically, and the next cron pass logs `payouts disabled` for the affected affiliate.
-
-### Env
-
-- `AFFILIATE_PAYOUT_CRON_SECRET` — bearer token guarding `/api/affiliates/process-payouts`.
-- `AFFILIATE_UNSUBSCRIBE_SECRET` — HMAC key (≥16 chars) used to mint and verify one-click unsubscribe tokens. Required for the `unsubscribe` route and for any affiliate email that includes `List-Unsubscribe` headers.
+- `AFFILIATE_PAYOUT_CRON_SECRET` — bearer guarding `/api/affiliates/process-payouts`.
+- `AFFILIATE_UNSUBSCRIBE_SECRET` — HMAC key (≥16 chars) to mint/verify one-click unsubscribe tokens. Required for the `unsubscribe` route and for any affiliate email with `List-Unsubscribe` headers.

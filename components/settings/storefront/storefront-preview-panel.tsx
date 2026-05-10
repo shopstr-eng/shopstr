@@ -644,6 +644,13 @@ export default function StorefrontPreviewPanel({
       <style>{`
         .preview-container .font-heading { font-family: var(--font-heading, inherit); }
         .preview-container .font-body { font-family: var(--font-body, inherit); }
+        .preview-container, .preview-container p, .preview-container span, .preview-container li, .preview-container a, .preview-container label, .preview-container div, .preview-container input, .preview-container textarea, .preview-container select, .preview-container button {
+          font-family: var(--font-body, inherit);
+        }
+        .preview-container h1, .preview-container h2, .preview-container h3, .preview-container h4, .preview-container h5, .preview-container h6,
+        .preview-container .font-heading, .preview-container button.font-heading {
+          font-family: var(--font-heading, var(--font-body, inherit));
+        }
         ${
           neoShadows
             ? `

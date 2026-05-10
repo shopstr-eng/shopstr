@@ -110,6 +110,13 @@ export default function StorefrontPreviewFrame({
   const themedCss = `
     .sf-preview-frame .font-heading { font-family: var(--font-heading, inherit); }
     .sf-preview-frame .font-body { font-family: var(--font-body, inherit); }
+    .sf-preview-frame, .sf-preview-frame p, .sf-preview-frame span, .sf-preview-frame li, .sf-preview-frame a, .sf-preview-frame label, .sf-preview-frame div, .sf-preview-frame input, .sf-preview-frame textarea, .sf-preview-frame select, .sf-preview-frame button {
+      font-family: var(--font-body, inherit);
+    }
+    .sf-preview-frame h1, .sf-preview-frame h2, .sf-preview-frame h3, .sf-preview-frame h4, .sf-preview-frame h5, .sf-preview-frame h6,
+    .sf-preview-frame .font-heading, .sf-preview-frame button.font-heading {
+      font-family: var(--font-heading, var(--font-body, inherit));
+    }
     .sf-preview-frame .bg-primary-yellow { background-color: var(--sf-primary) !important; }
     .sf-preview-frame .bg-primary-blue { background-color: var(--sf-secondary) !important; }
     .sf-preview-frame .text-primary-blue { color: var(--sf-secondary) !important; }

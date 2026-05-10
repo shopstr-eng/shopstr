@@ -16,6 +16,7 @@ import {
   StorefrontColorScheme,
   StorefrontFooter,
 } from "@/utils/types/types";
+import FormattedText from "./formatted-text";
 import StorefrontFooterComponent from "./storefront-footer";
 
 const DEFAULT_COLORS: StorefrontColorScheme = {
@@ -234,6 +235,13 @@ export default function StorefrontThemeWrapper({
   const themedCss = `
     .storefront-themed .font-heading { font-family: var(--font-heading, inherit); }
     .storefront-themed .font-body { font-family: var(--font-body, inherit); }
+    .storefront-themed, .storefront-themed p, .storefront-themed span, .storefront-themed li, .storefront-themed a, .storefront-themed label, .storefront-themed div, .storefront-themed input, .storefront-themed textarea, .storefront-themed select, .storefront-themed button {
+      font-family: var(--font-body, inherit);
+    }
+    .storefront-themed h1, .storefront-themed h2, .storefront-themed h3, .storefront-themed h4, .storefront-themed h5, .storefront-themed h6,
+    .storefront-themed .font-heading, .storefront-themed button.font-heading {
+      font-family: var(--font-heading, var(--font-body, inherit));
+    }
     .storefront-themed .bg-primary-yellow { background-color: var(--sf-primary) !important; }
     .storefront-themed .bg-primary-blue { background-color: var(--sf-secondary) !important; }
     .storefront-themed .text-primary-blue { color: var(--sf-secondary) !important; }
@@ -287,6 +295,32 @@ export default function StorefrontThemeWrapper({
     body.sf-active [data-overlay-container] .border-primary-yellow { border-color: var(--sf-primary) !important; }
     body.sf-active [data-overlay-container] .font-heading { font-family: var(--font-heading, inherit); }
     body.sf-active [data-overlay-container] .font-body { font-family: var(--font-body, inherit); }
+
+    ${
+      storefront?.neoShadows
+        ? `
+    body.sf-active [data-overlay-container] .rounded-lg.border-2,
+    body.sf-active [data-overlay-container] .rounded-xl.border-2,
+    body.sf-active [data-overlay-container] .rounded-2xl.border-2,
+    body.sf-active [data-overlay-container] .rounded.border-2,
+    body.sf-active [data-overlay-container] .rounded-lg.border,
+    body.sf-active [data-overlay-container] .rounded-xl.border,
+    body.sf-active [data-overlay-container] .rounded-2xl.border,
+    body.sf-active [data-overlay-container] .rounded.border,
+    body.sf-active [data-overlay-container] img.border,
+    body.sf-active [data-overlay-container] img.border-2 {
+      box-shadow: 4px 4px 0 var(--sf-secondary) !important;
+    }
+    body.sf-active [data-overlay-container] .rounded-lg.border,
+    body.sf-active [data-overlay-container] .rounded-xl.border,
+    body.sf-active [data-overlay-container] .rounded-2xl.border,
+    body.sf-active [data-overlay-container] .rounded.border {
+      border-width: 2px !important;
+      border-color: var(--sf-secondary) !important;
+    }
+    `
+        : ""
+    }
   `;
 
   return (
@@ -332,12 +366,12 @@ export default function StorefrontThemeWrapper({
                   fetchPriority="high"
                 />
               )}
-              <span
+              <FormattedText
+                as="span"
                 className="font-heading text-lg font-bold"
                 style={{ color: navText }}
-              >
-                {shopName}
-              </span>
+                text={shopName}
+              />
             </a>
 
             <div className="flex items-center gap-2">

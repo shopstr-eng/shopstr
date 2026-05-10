@@ -5,6 +5,7 @@ import {
   StorefrontPolicies,
 } from "@/utils/types/types";
 import Link from "next/link";
+import FormattedText from "./formatted-text";
 import {
   POLICY_LABELS,
   POLICY_SLUGS,
@@ -81,11 +82,17 @@ export default function StorefrontFooterComponent({
       <div className="mx-auto max-w-6xl">
         <div className="flex flex-col items-center gap-8 md:flex-row md:items-start md:justify-between">
           <div className="text-center md:text-left">
-            <h3 className="font-heading text-lg font-bold">{shopName}</h3>
+            <FormattedText
+              as="h3"
+              className="font-heading text-lg font-bold"
+              text={shopName}
+            />
             {footer.text && (
-              <p className="font-body mt-2 max-w-sm text-sm opacity-60">
-                {footer.text}
-              </p>
+              <FormattedText
+                as="p"
+                className="font-body mt-2 max-w-sm text-sm opacity-60"
+                text={footer.text}
+              />
             )}
           </div>
 

@@ -418,6 +418,32 @@ export default function StorefrontLayout({
     body.sf-active [data-overlay-container] .border-primary-yellow { border-color: var(--sf-primary) !important; }
     body.sf-active [data-overlay-container] .font-heading { font-family: var(--font-heading, inherit); }
     body.sf-active [data-overlay-container] .font-body { font-family: var(--font-body, inherit); }
+
+    ${
+      storefront.neoShadows
+        ? `
+    body.sf-active [data-overlay-container] .rounded-lg.border-2,
+    body.sf-active [data-overlay-container] .rounded-xl.border-2,
+    body.sf-active [data-overlay-container] .rounded-2xl.border-2,
+    body.sf-active [data-overlay-container] .rounded.border-2,
+    body.sf-active [data-overlay-container] .rounded-lg.border,
+    body.sf-active [data-overlay-container] .rounded-xl.border,
+    body.sf-active [data-overlay-container] .rounded-2xl.border,
+    body.sf-active [data-overlay-container] .rounded.border,
+    body.sf-active [data-overlay-container] img.border,
+    body.sf-active [data-overlay-container] img.border-2 {
+      box-shadow: 4px 4px 0 var(--sf-secondary) !important;
+    }
+    body.sf-active [data-overlay-container] .rounded-lg.border,
+    body.sf-active [data-overlay-container] .rounded-xl.border,
+    body.sf-active [data-overlay-container] .rounded-2xl.border,
+    body.sf-active [data-overlay-container] .rounded.border {
+      border-width: 2px !important;
+      border-color: var(--sf-secondary) !important;
+    }
+    `
+        : ""
+    }
   `;
 
   if (!shopDataReady) {
@@ -482,6 +508,31 @@ export default function StorefrontLayout({
         <style>{`
           .font-heading { font-family: var(--font-heading, inherit); }
           .font-body { font-family: var(--font-body, inherit); }
+          .sf-layout, .sf-layout p, .sf-layout span, .sf-layout li, .sf-layout a, .sf-layout label, .sf-layout div, .sf-layout input, .sf-layout textarea, .sf-layout select, .sf-layout button {
+            font-family: var(--font-body, inherit);
+          }
+          .sf-layout h1, .sf-layout h2, .sf-layout h3, .sf-layout h4, .sf-layout h5, .sf-layout h6,
+          .sf-layout .font-heading, .sf-layout button.font-heading {
+            font-family: var(--font-heading, var(--font-body, inherit));
+          }
+          body.sf-active [data-overlay-container],
+          body.sf-active [data-overlay-container] p,
+          body.sf-active [data-overlay-container] span,
+          body.sf-active [data-overlay-container] li,
+          body.sf-active [data-overlay-container] a,
+          body.sf-active [data-overlay-container] label,
+          body.sf-active [data-overlay-container] div,
+          body.sf-active [data-overlay-container] button {
+            font-family: var(--font-body, inherit);
+          }
+          body.sf-active [data-overlay-container] h1,
+          body.sf-active [data-overlay-container] h2,
+          body.sf-active [data-overlay-container] h3,
+          body.sf-active [data-overlay-container] h4,
+          body.sf-active [data-overlay-container] h5,
+          body.sf-active [data-overlay-container] h6 {
+            font-family: var(--font-heading, var(--font-body, inherit));
+          }
         `}</style>
         <style>{themedCss}</style>
       </Head>

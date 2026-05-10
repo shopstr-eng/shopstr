@@ -6,6 +6,7 @@ import {
 } from "@/utils/types/types";
 import { sanitizeUrl } from "@braintree/sanitize-url";
 import Link from "next/link";
+import FormattedText from "./formatted-text";
 
 interface StorefrontNavProps {
   shopName: string;
@@ -57,12 +58,12 @@ export default function StorefrontNav({
               fetchPriority="high"
             />
           )}
-          <span
+          <FormattedText
+            as="span"
             className="font-heading text-lg font-bold"
             style={{ color: text }}
-          >
-            {shopName}
-          </span>
+            text={shopName}
+          />
         </Link>
 
         <div className="hidden items-center gap-1 md:flex">
