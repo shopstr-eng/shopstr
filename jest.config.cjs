@@ -8,6 +8,21 @@ const createJestConfig = nextJest({
 const customJestConfig = {
   setupFilesAfterEnv: ["<rootDir>/jest.setup.js"],
   testEnvironment: "jest-environment-jsdom",
+  collectCoverageFrom: [
+    "utils/nostr/nostr-helper-functions.ts",
+    "utils/nostr/fetch-service.ts",
+    "utils/db/cache-event-policy.ts",
+    "utils/parsers/product-parser-functions.ts",
+    "utils/parsers/product-tag-helpers.ts",
+  ],
+  coverageThreshold: {
+    global: {
+      branches: 10,
+      functions: 10,
+      lines: 20,
+      statements: 20,
+    },
+  },
   moduleNameMapper: {
     // Handle module aliases
     "^@/(.*)$": "<rootDir>/$1",

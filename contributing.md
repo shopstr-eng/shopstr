@@ -206,7 +206,9 @@ npm run lint-all
 
 ## Testing
 
-Jest CI runs on every PR, but for now it gates the currently green subset while a few known-red suites are being fixed upstream. The covered set still exercises cart logic, Nostr helpers, Cashu operations, and the parser—places where things break silently.
+Jest CI runs on every PR with coverage thresholds for the high-risk modules
+called out in `TESTING.md`, including Nostr helpers, fetch/cache behavior,
+cache policy, and parser logic.
 
 To find and run tests near what you changed:
 
@@ -214,7 +216,13 @@ To find and run tests near what you changed:
 # Run everything
 npm test
 
-# Watch mode while developing
+# Run the CI test command locally
+npm run test:ci
+
+# Run tests with coverage thresholds
+npm run test:coverage
+
+# Run tests in watch mode during development
 npm run test:watch
 
 # Run one file to stay focused
@@ -225,14 +233,12 @@ npx jest utils/parsers/__tests__/product-parser-functions.test.ts --runInBand
 npm test -- --coverage
 ```
 
-The current PR workflow skips these known-red suites until they are repaired:
-
-- `__tests__/api/nostr/verify-nip05.test.ts`
-- `pages/api/db/__tests__/update-order-status.test.ts`
-- `components/utility-components/__tests__/product-card.test.tsx`
-- `components/settings/__tests__/user-profile-form.test.tsx`
-
-**Writing tests:** Use the existing test files as a template. Mock external calls (fetch, localStorage, Nostr events). Test the unhappy paths—missing tags, malformed events, race conditions. If you're touching order logic or wallet code, add a test.
+- Write tests for new features and bug fixes
+- Place test files next to the components they test or in a `__tests__` directory
+- Use descriptive test names
+- Follow existing test patterns
+- See `TESTING.md` for CI coverage expectations and the high-risk modules that
+  currently define the enforced threshold.
 
 ## Creating a Pull Request
 
@@ -246,7 +252,7 @@ npm run build
 npm run lint-all
 
 # Run tests
-npm test
+npm run test:coverage
 
 # Format code
 npx prettier --write .

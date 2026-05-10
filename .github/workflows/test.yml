@@ -1,15 +1,17 @@
-name: Test Suite
+name: Tests
 
 on:
   pull_request:
+    branches: [main]
+  push:
     branches: [main]
 
 permissions:
   contents: read
 
 jobs:
-  test:
-    name: Run green Jest subset
+  jest:
+    name: Jest suite and coverage
     runs-on: ubuntu-latest
 
     steps:
@@ -25,10 +27,5 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run tests
-        run: >
-          npm test -- --ci
-          --testPathIgnorePatterns=__tests__/api/nostr/verify-nip05.test.ts
-          --testPathIgnorePatterns=pages/api/db/__tests__/update-order-status.test.ts
-          --testPathIgnorePatterns=components/utility-components/__tests__/product-card.test.tsx
-          --testPathIgnorePatterns=components/settings/__tests__/user-profile-form.test.tsx
+      - name: Run Jest with coverage thresholds
+        run: npm run test:coverage
