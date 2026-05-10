@@ -8,6 +8,7 @@ interface SectionProductsProps {
   colors: StorefrontColorScheme;
   products: ProductData[];
   isPreview?: boolean;
+  shopSlug?: string;
 }
 
 function applyProductOrder(
@@ -46,6 +47,7 @@ export default function SectionProducts({
   colors,
   products,
   isPreview,
+  shopSlug,
 }: SectionProductsProps) {
   const layout = section.productLayout || "grid";
   const limit = section.productLimit;
@@ -85,6 +87,7 @@ export default function SectionProducts({
           products={displayProducts}
           layout={layout}
           colors={colors}
+          shopSlug={shopSlug}
         />
       )}
     </div>

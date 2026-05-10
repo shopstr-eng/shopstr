@@ -104,6 +104,7 @@ export default function SectionRelatedProducts({
         products={displayProducts}
         layout={layout}
         colors={colors}
+        shopSlug={shopSlug}
       />
     </div>
   );

@@ -80,12 +80,25 @@ const nextConfig = {
     root: process.cwd(),
   },
   async rewrites() {
-    return [
-      {
-        source: "/sitemap.xml",
-        destination: "/api/sitemap.xml",
-      },
-    ];
+    return {
+      beforeFiles: [
+        {
+          source: "/stall/:slug/listing/:productSlug",
+          destination: "/listing/:productSlug?_sf=:slug",
+        },
+        {
+          source: "/stall/:slug/cart",
+          destination: "/cart?_sf=:slug",
+        },
+      ],
+      afterFiles: [
+        {
+          source: "/sitemap.xml",
+          destination: "/api/sitemap.xml",
+        },
+      ],
+      fallback: [],
+    };
   },
   images: {
     remotePatterns: [

@@ -129,7 +129,9 @@ export default function StorefrontOrderConfirmation({
         pubkey: product.pubkey,
         kind: 30402,
       });
-      return `/listing/${naddr}`;
+      return shopSlug
+        ? `/stall/${shopSlug}/listing/${naddr}`
+        : `/listing/${naddr}`;
     } catch {
       return null;
     }

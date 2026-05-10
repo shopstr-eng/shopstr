@@ -28,6 +28,7 @@ interface SectionRendererProps {
   products: ProductData[];
   isPreview?: boolean;
   currentProduct?: ProductData;
+  shopSlug?: string;
 }
 
 export default function SectionRenderer({
@@ -39,6 +40,7 @@ export default function SectionRenderer({
   products,
   isPreview,
   currentProduct,
+  shopSlug,
 }: SectionRendererProps) {
   if (section.enabled === false) return null;
 
@@ -63,6 +65,7 @@ export default function SectionRenderer({
           colors={colors}
           products={products}
           isPreview={isPreview}
+          shopSlug={shopSlug}
         />
       );
     case "testimonials":

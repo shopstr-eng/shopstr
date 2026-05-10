@@ -255,6 +255,37 @@ const Listing = ({ initialProductEvent }: ListingPageProps) => {
   const [sfSellerPubkey, setSfSellerPubkey] = useState("");
   const [isListingNotFound, setIsListingNotFound] = useState(false);
 
+  // When the listing was opened via a stall-scoped URL
+  // (e.g. /stall/<slug>/listing/<productSlug>, internally rewritten with
+  // ?_sf=<slug>), eagerly resolve the shop pubkey + slug so the storefront
+  // theme wraps the page even on direct loads / refreshes / shared links.
+  useEffect(() => {
+    if (!router.isReady) return;
+    const sfParam = router.query._sf;
+    const sfSlug = Array.isArray(sfParam) ? sfParam[0] : sfParam;
+    if (!sfSlug) return;
+    if (sfSellerPubkey) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(
+          `/api/storefront/lookup?slug=${encodeURIComponent(sfSlug)}`
+        );
+        if (!cancelled && res.ok) {
+          const data = await res.json();
+          if (data?.pubkey) {
+            sessionStorage.setItem("sf_seller_pubkey", data.pubkey);
+            sessionStorage.setItem("sf_shop_slug", sfSlug);
+            setSfSellerPubkey(data.pubkey);
+          }
+        }
+      } catch {}
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [router.isReady, router.query._sf, sfSellerPubkey]);
+
   const [fiatOrderIsPlaced, setFiatOrderIsPlaced] = useState(false);
   const [fiatOrderFailed, setFiatOrderFailed] = useState(false);
   const [invoiceIsPaid, setInvoiceIsPaid] = useState(false);
@@ -432,7 +463,12 @@ const Listing = ({ initialProductEvent }: ListingPageProps) => {
 
     const canonicalSlug = getListingSlug(productData, allParsed);
     if (canonicalSlug && productIdString !== canonicalSlug) {
-      router.replace(`/listing/${canonicalSlug}`, undefined, {
+      const sfParam = router.query._sf;
+      const sfSlug = Array.isArray(sfParam) ? sfParam[0] : sfParam;
+      const target = sfSlug
+        ? `/stall/${sfSlug}/listing/${canonicalSlug}`
+        : `/listing/${canonicalSlug}`;
+      router.replace(target, undefined, {
         shallow: true,
       });
     }

@@ -620,7 +620,9 @@ export default function StorefrontLayout({
 
             <div className="flex items-center gap-2">
               <button
-                onClick={() => router.push("/cart")}
+                onClick={() =>
+                  router.push(shopSlug ? `/stall/${shopSlug}/cart` : "/cart")
+                }
                 className="relative rounded-md p-2 transition-colors"
                 style={{ color: navText }}
               >
@@ -765,6 +767,7 @@ export default function StorefrontLayout({
               products={sellerProducts}
               colors={colors}
               shopName={shopName}
+              shopSlug={shopSlug}
             />
           </div>
         ) : currentPage === "order-confirmation" ? (
@@ -938,6 +941,7 @@ export default function StorefrontLayout({
                     shopPicture={pictureUrl}
                     shopPubkey={shopPubkey}
                     products={sellerProducts}
+                    shopSlug={shopSlug}
                   />
                 ))}
               </div>
@@ -951,6 +955,7 @@ export default function StorefrontLayout({
                   products={sellerProducts}
                   layout={layout}
                   colors={colors}
+                  shopSlug={shopSlug}
                 />
               </div>
             )}

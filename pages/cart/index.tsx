@@ -105,6 +105,7 @@ export default function Component() {
 
   const [sfSellerPubkey, setSfSellerPubkey] = useState("");
   const [sfShopSlug, setSfShopSlug] = useState("");
+  const cartRouter = useRouter();
 
   useEffect(() => {
     const stored = sessionStorage.getItem("sf_seller_pubkey");
@@ -112,6 +113,37 @@ export default function Component() {
     const storedSlug = sessionStorage.getItem("sf_shop_slug");
     if (storedSlug) setSfShopSlug(storedSlug);
   }, []);
+
+  // When the cart was opened via /stall/<slug>/cart (rewritten with ?_sf=<slug>),
+  // resolve the shop pubkey + slug so the storefront theme wraps the page even
+  // on direct loads / refreshes / shared links.
+  useEffect(() => {
+    if (!cartRouter.isReady) return;
+    const sfParam = cartRouter.query._sf;
+    const sfSlugFromUrl = Array.isArray(sfParam) ? sfParam[0] : sfParam;
+    if (!sfSlugFromUrl) return;
+    if (sfSellerPubkey) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(
+          `/api/storefront/lookup?slug=${encodeURIComponent(sfSlugFromUrl)}`
+        );
+        if (!cancelled && res.ok) {
+          const data = await res.json();
+          if (data?.pubkey) {
+            sessionStorage.setItem("sf_seller_pubkey", data.pubkey);
+            sessionStorage.setItem("sf_shop_slug", sfSlugFromUrl);
+            setSfSellerPubkey(data.pubkey);
+            setSfShopSlug(sfSlugFromUrl);
+          }
+        }
+      } catch {}
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [cartRouter.isReady, cartRouter.query._sf, sfSellerPubkey]);
 
   const [products, setProducts] = useState<ProductData[]>([]);
   const [satPrices, setSatPrices] = useState<{ [key: string]: number | null }>(
