@@ -44,6 +44,13 @@ const RESERVED_SLUGS = [
   "blog",
   "docs",
   "status",
+  "my-listings",
+  "about",
+  "contact",
+  "faq",
+  "privacy",
+  "terms",
+  "order-summary",
 ];
 
 export default async function handler(
