@@ -32,7 +32,7 @@ import { SignerContext } from "@/components/utility-components/nostr-context-pro
 import parseTags, {
   ProductData,
 } from "@/utils/parsers/product-parser-functions";
-import { ProductContext } from "@/utils/context/context";
+import { ProductContext, ShopMapContext } from "@/utils/context/context";
 import { getListingSlug } from "@/utils/url-slugs";
 import { NostrEvent } from "@/utils/types/types";
 
@@ -51,6 +51,7 @@ export default function DisplayProductModal({
 }: ProductModalProps) {
   const { pubkey: userPubkey, isLoggedIn } = useContext(SignerContext);
   const productEventContext = useContext(ProductContext);
+  const shopMapContext = useContext(ShopMapContext);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [showProductForm, setShowProductForm] = useState(false);
   const [showCustomizePageModal, setShowCustomizePageModal] = useState(false);
@@ -86,14 +87,20 @@ export default function DisplayProductModal({
 
     const slug = getListingSlug(productData, allParsed);
     const listingPath = slug || productData.id;
+    const sellerShop = shopMapContext.shopData.get(productData.pubkey);
+    const sellerShopSlug = sellerShop?.content?.storefront?.shopSlug;
+    const sharePath = sellerShopSlug
+      ? `/stall/${sellerShopSlug}/listing/${listingPath}`
+      : `/listing/${listingPath}`;
+    const shareUrl = `${window.location.origin}${sharePath}`;
     const shareData = {
       title: productData.title,
-      url: `${window.location.origin}/listing/${listingPath}`,
+      url: shareUrl,
     };
     if (navigator.share) {
       await navigator.share(shareData);
     } else {
-      await copyToClipboard(`${window.location.origin}/listing/${listingPath}`);
+      await copyToClipboard(shareUrl);
       setShowSuccessModal(true);
     }
   };

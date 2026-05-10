@@ -406,14 +406,20 @@ export default function CheckoutCard({
 
     const slug = getListingSlug(productData, allParsed);
     const listingPath = slug || productData.id;
+    const sellerShop = shopMapContext.shopData.get(productData.pubkey);
+    const sellerShopSlug = sellerShop?.content?.storefront?.shopSlug;
+    const sharePath = sellerShopSlug
+      ? `/stall/${sellerShopSlug}/listing/${listingPath}`
+      : `/listing/${listingPath}`;
+    const shareUrl = `${window.location.origin}${sharePath}`;
     const shareData = {
       title: productData.title,
-      url: `${window.location.origin}/listing/${listingPath}`,
+      url: shareUrl,
     };
     if (navigator.share) {
       await navigator.share(shareData);
     } else {
-      await copyToClipboard(`${window.location.origin}/listing/${listingPath}`);
+      await copyToClipboard(shareUrl);
       setShowSuccessModal(true);
     }
   };
