@@ -609,6 +609,19 @@ function Shopstr({ props }: { props: AppProps }) {
           allRelays = [...relayResult.relayList, ...relayResult.readRelayList];
         }
 
+        const initialUserProfileFetch =
+          isLoggedIn && userPubkey
+            ? fetchProfile(
+                nostr!,
+                allRelays,
+                [userPubkey],
+                guardedEditProfileContext,
+                profileContext.profileData
+              ).catch((error) => {
+                console.error("Error fetching current user profile:", error);
+              })
+            : Promise.resolve();
+
         // We just fire them and not await them so that they just update their context and not block others
         const blossomPromise = runTask(
           "fetching blossom servers",
@@ -701,6 +714,8 @@ function Shopstr({ props }: { props: AppProps }) {
         }
 
         const pubkeysToFetchProfilesFor = Array.from(pubkeySet);
+
+        await initialUserProfileFetch;
 
         // These start immediately — no waiting for wallet, blossom, follows, or communities.
         await Promise.all([
