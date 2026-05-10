@@ -7,10 +7,9 @@ import {
   validateDiscountCode,
   getDbPool,
 } from "@/utils/db/db-service";
-import {
-  getEffectiveShippingCost,
-  parseShippingFromTags,
-} from "@/utils/parsers/product-tag-helpers";
+import { getEffectiveShippingCost } from "@/utils/parsers/product-tag-helpers";
+import { parseCanonicalProductEvent } from "@/utils/parsers/product-event/base-parser";
+import { toMcpProductData } from "@/utils/parsers/product-event/mcp-adapter";
 import { NostrEvent } from "@/utils/types/types";
 import { registerTool } from "./register-tool";
 import { ToolContext } from "../audit-log";
@@ -18,13 +17,6 @@ import { ToolContext } from "../audit-log";
 function getTagValue(tags: string[][], key: string): string | undefined {
   const tag = tags.find((t) => t[0] === key);
   return tag ? tag[1] : undefined;
-}
-
-function getAllTagValues(tags: string[][], key: string): string[] {
-  return tags
-    .filter((t) => t[0] === key)
-    .map((t) => t[1]!)
-    .filter(Boolean);
 }
 
 function determinePaymentMethods(
@@ -38,7 +30,7 @@ function determinePaymentMethods(
   return methods;
 }
 
-function buildPricingBlock(
+export function buildPricingBlock(
   price: number,
   currency: string,
   shippingType?: string,
@@ -62,70 +54,18 @@ function buildPricingBlock(
   };
 }
 
-function parseProductEvent(event: NostrEvent) {
-  const tags = event.tags || [];
-  const priceTag = tags.find((t) => t[0] === "price");
-  const parsedShipping = parseShippingFromTags(tags);
-
-  const price = priceTag ? Number(priceTag[1]) : 0;
-  const currency = priceTag ? priceTag[2] || "" : "";
-  const shippingType = parsedShipping?.shippingType;
-  const shippingCost = parsedShipping?.shippingCost;
-
-  const sizes = tags
-    .filter((t) => t[0] === "size" && t[1])
-    .map((t) => ({ size: t[1]!, quantity: t[2] ? Number(t[2]) : undefined }));
-
-  const volumes = tags
-    .filter((t) => t[0] === "volume" && t[1])
-    .map((t) => ({ volume: t[1]!, price: t[2] ? Number(t[2]) : undefined }));
-
-  const weights = tags
-    .filter((t) => t[0] === "weight" && t[1])
-    .map((t) => ({ weight: t[1]!, price: t[2] ? Number(t[2]) : undefined }));
-
-  const bulk = tags
-    .filter((t) => t[0] === "bulk" && t[1] && t[2])
-    .map((t) => ({ units: Number(t[1]), price: Number(t[2]) }));
-
-  const pickupLocations = getAllTagValues(tags, "pickup_location");
+export function parseProductEvent(event: NostrEvent) {
+  const canonical = parseCanonicalProductEvent(event);
+  const parsed = toMcpProductData(canonical);
 
   return {
-    id: event.id,
-    pubkey: event.pubkey,
-    d: getTagValue(tags, "d"),
-    title: getTagValue(tags, "title") || "",
-    summary: getTagValue(tags, "summary") || "",
-    images: getAllTagValues(tags, "image"),
-    categories: getAllTagValues(tags, "t"),
-    location: getTagValue(tags, "location") || "",
-    price,
-    currency,
-    shippingType,
-    shippingCost,
-    quantity: getTagValue(tags, "quantity")
-      ? Number(getTagValue(tags, "quantity"))
-      : undefined,
-    condition: getTagValue(tags, "condition"),
-    status: getTagValue(tags, "status"),
-    sizes: sizes.length > 0 ? sizes : undefined,
-    volumes: volumes.length > 0 ? volumes : undefined,
-    weights: weights.length > 0 ? weights : undefined,
-    bulk: bulk.length > 0 ? bulk : undefined,
-    pickupLocations: pickupLocations.length > 0 ? pickupLocations : undefined,
-    requiredCustomerInfo: getTagValue(tags, "required_customer_info"),
-    createdAt: event.created_at,
-    pricing: buildPricingBlock(price, currency, shippingType, shippingCost),
-    subscription: {
-      enabled: getTagValue(tags, "subscription") === "true",
-      discount: getTagValue(tags, "subscription_discount")
-        ? Number(getTagValue(tags, "subscription_discount"))
-        : undefined,
-      frequencies: (() => {
-        const freqTag = tags.find((t) => t[0] === "subscription_frequency");
-        return freqTag ? freqTag.slice(1) : [];
-      })(),
-    },
+    ...parsed,
+    pricing: buildPricingBlock(
+      parsed.price,
+      parsed.currency,
+      parsed.shippingType,
+      parsed.shippingCost
+    ),
   };
 }
 
