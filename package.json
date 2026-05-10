@@ -72,7 +72,7 @@
     "@types/react-dom": "19.2.3",
     "@types/uuid": "11.0.0",
     "babel-jest": "30.3.0",
-    "eslint-config-prettier": "9.1.0",
+    "eslint-config-prettier": "10.1.8",
     "husky": "9.1.7",
     "jest": "30.3.0",
     "jest-environment-jsdom": "30.3.0",
