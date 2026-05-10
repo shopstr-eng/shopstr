@@ -1,10 +1,15 @@
-import { useState, useRef, useCallback, useContext } from "react";
+import { useState, useRef, useCallback, useContext, useMemo } from "react";
 import { Button, Progress } from "@heroui/react";
 import {
   blossomUpload,
   getLocalStorageData,
 } from "@/utils/nostr/nostr-helper-functions";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
+import {
+  renderFlowEmail,
+  FlowEmailStorefrontStyle,
+  MergeTagData,
+} from "@/utils/email/flow-email-templates";
 import {
   ArrowUpTrayIcon,
   LinkIcon,
@@ -27,7 +32,19 @@ const FLASH_DURATION = 1500;
 interface FlowStepEditorProps {
   value: string;
   onChange: (html: string) => void;
+  subject?: string;
+  shopName?: string;
+  storefrontStyle?: FlowEmailStorefrontStyle | null;
 }
+
+const PREVIEW_SAMPLE_DATA: MergeTagData = {
+  buyer_name: "Sample Buyer",
+  shop_name: "Your Shop",
+  product_title: "Raw Whole Milk (Half Gallon)",
+  order_id: "ord_8f2a1c",
+  product_image: "",
+  shop_url: "https://milk.market",
+};
 
 interface InsertModalState {
   type: "link" | "button" | null;
@@ -35,7 +52,13 @@ interface InsertModalState {
   url: string;
 }
 
-export const FlowStepEditor = ({ value, onChange }: FlowStepEditorProps) => {
+export const FlowStepEditor = ({
+  value,
+  onChange,
+  subject,
+  shopName,
+  storefrontStyle,
+}: FlowStepEditorProps) => {
   const [showRawHtml, setShowRawHtml] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [insertModal, setInsertModal] = useState<InsertModalState>({
@@ -201,11 +224,32 @@ export const FlowStepEditor = ({ value, onChange }: FlowStepEditorProps) => {
     wrapSelection(`<em>`, `</em>`);
   };
 
+  const previewSrcDoc = useMemo(() => {
+    const mergeData: MergeTagData = {
+      ...PREVIEW_SAMPLE_DATA,
+      shop_name: shopName || PREVIEW_SAMPLE_DATA.shop_name,
+    };
+    const { html } = renderFlowEmail(
+      subject || "Sample subject line",
+      value || '<p style="color:#9ca3af;font-style:italic;">(empty body)</p>',
+      mergeData,
+      storefrontStyle || undefined
+    );
+    return html;
+  }, [value, subject, shopName, storefrontStyle]);
+
   if (showPreview) {
+    const renderedSubject = (subject || "Sample subject line").replace(
+      /\{\{(\w+)\}\}/g,
+      (_m, k) =>
+        (k === "shop_name" ? shopName : undefined) ??
+        (PREVIEW_SAMPLE_DATA as Record<string, string | undefined>)[k] ??
+        ""
+    );
     return (
       <div>
         <div className="mb-2 flex items-center justify-between">
-          <span className="text-sm font-bold text-gray-600">Preview</span>
+          <span className="text-sm font-bold text-gray-600">Inbox preview</span>
           <Button
             className={TOOLBAR_BTN}
             size="sm"
@@ -214,10 +258,30 @@ export const FlowStepEditor = ({ value, onChange }: FlowStepEditorProps) => {
             <ArrowUturnLeftIcon className="h-4 w-4" />
           </Button>
         </div>
-        <div
-          className="min-h-[200px] rounded-md border-2 border-black bg-white p-4"
-          dangerouslySetInnerHTML={{ __html: value }}
-        />
+        <div className="overflow-hidden rounded-md border-2 border-black bg-white">
+          <div className="border-b-2 border-black bg-gray-50 px-4 py-3 text-xs">
+            <div className="mb-1 flex gap-2">
+              <span className="font-bold text-gray-500">From:</span>
+              <span className="text-black">
+                {shopName || "Your Shop"} &lt;orders@milk.market&gt;
+              </span>
+            </div>
+            <div className="flex gap-2">
+              <span className="font-bold text-gray-500">Subject:</span>
+              <span className="font-bold text-black">{renderedSubject}</span>
+            </div>
+          </div>
+          <iframe
+            title="Email preview"
+            srcDoc={previewSrcDoc}
+            sandbox=""
+            className="h-[520px] w-full border-0 bg-white"
+          />
+        </div>
+        <p className="mt-2 text-xs text-gray-500">
+          Merge tags (like {"{{buyer_name}}"}) are filled in with sample data
+          for this preview. Real emails use the actual buyer&apos;s details.
+        </p>
       </div>
     );
   }

@@ -3,10 +3,12 @@ import {
   getPendingExecutions,
   markExecutionSent,
   markExecutionFailed,
+  fetchShopProfileByPubkeyFromDb,
 } from "@/utils/db/db-service";
 import {
   renderFlowEmail,
   MergeTagData,
+  FlowEmailStorefrontStyle,
 } from "@/utils/email/flow-email-templates";
 import { getUncachableSendGridClient } from "@/utils/email/sendgrid-client";
 import { applyRateLimit } from "@/utils/rate-limit";
@@ -57,6 +59,50 @@ export default async function handler(
       error?: string;
     }> = [];
 
+    // Cache per-seller storefront style for the duration of this batch so we
+    // don't re-fetch the kind 30019 event for every execution from the same
+    // seller. `null` means "looked up, no storefront / no colors".
+    const styleCache = new Map<string, FlowEmailStorefrontStyle | null>();
+
+    const getStorefrontStyle = async (
+      sellerPubkey: string
+    ): Promise<FlowEmailStorefrontStyle | null> => {
+      if (styleCache.has(sellerPubkey))
+        return styleCache.get(sellerPubkey) ?? null;
+      try {
+        const evt = await fetchShopProfileByPubkeyFromDb(sellerPubkey);
+        if (!evt?.content) {
+          styleCache.set(sellerPubkey, null);
+          return null;
+        }
+        const parsed = JSON.parse(evt.content);
+        const sf = parsed?.storefront;
+        const cs = sf?.colorScheme;
+        if (!cs && !sf?.neoShadows) {
+          styleCache.set(sellerPubkey, null);
+          return null;
+        }
+        const style: FlowEmailStorefrontStyle = {
+          primary: cs?.primary,
+          secondary: cs?.secondary,
+          accent: cs?.accent,
+          background: cs?.background,
+          text: cs?.text,
+          neoShadows: !!sf?.neoShadows,
+        };
+        styleCache.set(sellerPubkey, style);
+        return style;
+      } catch (err) {
+        console.error(
+          "Failed to load storefront style for flow email:",
+          sellerPubkey,
+          err
+        );
+        styleCache.set(sellerPubkey, null);
+        return null;
+      }
+    };
+
     for (const execution of executions) {
       try {
         const mergeData: MergeTagData = {
@@ -67,10 +113,13 @@ export default async function handler(
             "Milk Market",
         };
 
+        const sfStyle = await getStorefrontStyle(execution.seller_pubkey);
+
         const { subject, html } = renderFlowEmail(
           execution.subject,
           execution.body_html,
-          mergeData
+          mergeData,
+          sfStyle ?? undefined
         );
 
         const fromAddress = execution.from_name

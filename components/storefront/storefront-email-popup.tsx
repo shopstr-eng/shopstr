@@ -15,6 +15,7 @@ interface StorefrontEmailPopupProps {
   shopName: string;
   fontHeading?: string;
   fontBody?: string;
+  neoShadows?: boolean;
 }
 
 export default function StorefrontEmailPopupComponent({
@@ -24,6 +25,7 @@ export default function StorefrontEmailPopupComponent({
   shopName,
   fontHeading,
   fontBody,
+  neoShadows,
 }: StorefrontEmailPopupProps) {
   const [isVisible, setIsVisible] = useState(false);
   const [email, setEmail] = useState("");
@@ -175,8 +177,17 @@ export default function StorefrontEmailPopupComponent({
             animate={{ scale: 1, opacity: 1, y: 0 }}
             exit={{ scale: 0.9, opacity: 0, y: 20 }}
             transition={{ type: "spring", damping: 25, stiffness: 300 }}
-            className="relative w-full max-w-md overflow-hidden rounded-2xl shadow-2xl"
-            style={{ backgroundColor: bg, ...fontStyles }}
+            className={`relative w-full max-w-md overflow-hidden rounded-2xl ${neoShadows ? "border-2" : "shadow-2xl"}`}
+            style={{
+              backgroundColor: bg,
+              ...fontStyles,
+              ...(neoShadows
+                ? {
+                    borderColor: colors.secondary,
+                    boxShadow: `8px 8px 0 ${colors.secondary}`,
+                  }
+                : {}),
+            }}
           >
             {bgImage && (
               <div

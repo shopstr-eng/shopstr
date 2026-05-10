@@ -1,4 +1,4 @@
-import { useState, useEffect, useContext, useCallback } from "react";
+import { useState, useEffect, useContext, useCallback, useMemo } from "react";
 import {
   Button,
   Input,
@@ -10,6 +10,8 @@ import {
 import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import { FlowStepEditor } from "@/components/settings/flow-step-editor";
+import { ShopMapContext, ProfileMapContext } from "@/utils/context/context";
+import { FlowEmailStorefrontStyle } from "@/utils/email/flow-email-templates";
 import {
   BLUEBUTTONCLASSNAMES,
   DANGERBUTTONCLASSNAMES,
@@ -81,6 +83,34 @@ function formatDelayHours(hours: number): string {
 
 const EmailFlowsPage = () => {
   const { pubkey, isLoggedIn } = useContext(SignerContext);
+  const shopMapContext = useContext(ShopMapContext);
+  const profileMapContext = useContext(ProfileMapContext);
+
+  const previewShopName = useMemo(() => {
+    if (!pubkey) return "Your Shop";
+    const shop = shopMapContext.shopData.get(pubkey);
+    if (shop?.content?.name) return shop.content.name;
+    const profile = profileMapContext.profileData?.get(pubkey);
+    return profile?.content?.name || "Your Shop";
+  }, [pubkey, shopMapContext.shopData, profileMapContext.profileData]);
+
+  const previewStorefrontStyle =
+    useMemo<FlowEmailStorefrontStyle | null>(() => {
+      if (!pubkey) return null;
+      const shop = shopMapContext.shopData.get(pubkey);
+      const sf = shop?.content?.storefront;
+      if (!sf) return null;
+      const cs = sf.colorScheme;
+      if (!cs && !sf.neoShadows) return null;
+      return {
+        primary: cs?.primary,
+        secondary: cs?.secondary,
+        accent: cs?.accent,
+        background: cs?.background,
+        text: cs?.text,
+        neoShadows: !!sf.neoShadows,
+      };
+    }, [pubkey, shopMapContext.shopData]);
   const [flows, setFlows] = useState<EmailFlow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -566,6 +596,9 @@ const EmailFlowsPage = () => {
                               onChange={(v) =>
                                 updateStep(index, "body_html", v)
                               }
+                              subject={step.subject}
+                              shopName={editFromName || previewShopName}
+                              storefrontStyle={previewStorefrontStyle}
                             />
                           </div>
                           <div className="flex items-end gap-4">

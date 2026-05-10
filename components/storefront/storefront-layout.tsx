@@ -980,6 +980,7 @@ export default function StorefrontLayout({
             shopName={shopName}
             fontHeading={fontHeading}
             fontBody={fontBody}
+            neoShadows={storefront.neoShadows}
           />
         )}
     </>
