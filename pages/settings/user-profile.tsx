@@ -122,12 +122,7 @@ const UserProfilePage = () => {
         console.error("Failed to read local profile fallback:", error);
       }
     }
-  }, [
-    userPubkey,
-    profileContext.isLoading,
-    profileContext.profileData,
-    reset,
-  ]);
+  }, [userPubkey, profileContext.isLoading, profileContext.profileData, reset]);
 
   const onSubmit = async (data: { [x: string]: string }) => {
     if (!userPubkey) {
