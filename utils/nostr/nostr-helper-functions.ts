@@ -214,9 +214,19 @@ export async function PostListing(
     created_at: Math.floor(Date.now() / 1000),
   };
 
+  // Publish the primary listing event and await it so we can return the
+  // signed event to the caller. The recommendation (NIP-89 kind 31989) and
+  // handler (kind 31990) events are non-critical metadata used for app
+  // discovery — fire them in the background so a slow / unreachable relay
+  // can't keep the publish UI spinning.
   const signedEvent = await finalizeAndSendNostrEvent(signer, nostr, event);
-  await finalizeAndSendNostrEvent(signer, nostr, recEvent);
-  await finalizeAndSendNostrEvent(signer, nostr, handlerEvent);
+
+  void finalizeAndSendNostrEvent(signer, nostr, recEvent).catch((err) =>
+    console.warn("Failed to publish recommendation event:", err)
+  );
+  void finalizeAndSendNostrEvent(signer, nostr, handlerEvent).catch((err) =>
+    console.warn("Failed to publish handler event:", err)
+  );
 
   return signedEvent;
 }
@@ -1124,18 +1134,23 @@ export async function finalizeAndSendNostrEvent(
         { timeout: 21000 } // 21 second timeout
       );
     } catch (error) {
-      // Timeout or relay publish error - track for retry
+      // Timeout or relay publish error - track for retry in the background
+      // so a stalled NIP-46 sign request inside the tracker can never keep
+      // the publish UI spinning.
       console.warn(
         "Relay publish timed out or failed, but event is saved to database:",
         error
       );
-      const { trackFailedRelayPublish } = await import("@/utils/db/db-client");
-      await trackFailedRelayPublish(
-        signedEvent.id,
-        signedEvent,
-        allWriteRelays,
-        signer
-      ).catch(console.error);
+      void import("@/utils/db/db-client")
+        .then(({ trackFailedRelayPublish }) =>
+          trackFailedRelayPublish(
+            signedEvent.id,
+            signedEvent,
+            allWriteRelays,
+            signer
+          )
+        )
+        .catch(console.error);
     }
 
     // return the signed event to caller so we know generated IDs

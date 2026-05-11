@@ -264,6 +264,23 @@ export default function ProductForm({
     }
 
     setIsPostingOrUpdatingProduct(true);
+    try {
+      await runSubmit(data);
+    } catch (error) {
+      console.error("Failed to publish listing:", error);
+      setImageError(
+        error instanceof Error
+          ? `Failed to publish listing: ${error.message}`
+          : "Failed to publish listing. Please try again."
+      );
+    } finally {
+      setIsPostingOrUpdatingProduct(false);
+    }
+  };
+
+  const runSubmit = async (data: {
+    [x: string]: string | Map<string, number> | string[];
+  }) => {
     const hashHex = CryptoJS.SHA256(data["Product Name"] as string).toString(
       CryptoJS.enc.Hex
     );
@@ -450,69 +467,78 @@ export default function ProductForm({
 
     const newListing = await PostListing(tags, signer!, isLoggedIn!, nostr!);
 
-    //Handle Flash Sale (Zapsnag) Publication
+    //Handle Flash Sale (Zapsnag) Publication — non-blocking; the primary
+    //listing has already been published, so don't keep the spinner up
+    //while we broadcast the optional kind-1 announcement.
     if (isFlashSale) {
-      try {
-        const finalContent = `${data["Description"]}\n\nPrice: ${
-          data["Price"]
-        } ${data["Currency"]}\n\n#zapsnag\n${images[0] || ""}`;
-        const flashSaleEvent = {
-          kind: 1,
-          created_at: Math.floor(Date.now() / 1000),
-          tags: [
-            ["t", "zapsnag"],
-            ["t", "milk-market-zapsnag"],
-            ["d", "zapsnag"],
-          ],
-          content: finalContent,
-        };
+      const finalContent = `${data["Description"]}\n\nPrice: ${
+        data["Price"]
+      } ${data["Currency"]}\n\n#zapsnag\n${images[0] || ""}`;
+      const flashSaleEvent = {
+        kind: 1,
+        created_at: Math.floor(Date.now() / 1000),
+        tags: [
+          ["t", "zapsnag"],
+          ["t", "milk-market-zapsnag"],
+          ["d", "zapsnag"],
+        ],
+        content: finalContent,
+      };
 
-        if (data["Quantity"]) {
-          flashSaleEvent.tags.push(["quantity", data["Quantity"].toString()]);
-        }
-        if (images[0]) flashSaleEvent.tags.push(["image", images[0]]);
-        await finalizeAndSendNostrEvent(signer!, nostr!, flashSaleEvent);
-      } catch (e) {
-        console.error("Failed to publish flash sale note", e);
+      if (data["Quantity"]) {
+        flashSaleEvent.tags.push(["quantity", data["Quantity"].toString()]);
       }
+      if (images[0]) flashSaleEvent.tags.push(["image", images[0]]);
+      void finalizeAndSendNostrEvent(signer!, nostr!, flashSaleEvent).catch(
+        (e) => console.error("Failed to publish flash sale note", e)
+      );
     }
 
-    if (isEdit) {
-      if (handleDelete && oldValues?.id) {
-        try {
-          await handleDelete(oldValues.id);
-        } catch (error) {
-          console.error("Failed to delete old product:", error);
-        }
-      }
+    if (isEdit && handleDelete && oldValues?.id) {
+      // Don't block the UI on the delete-event publish — the new
+      // replaceable listing already supersedes the old one for clients
+      // that respect NIP-33, and the deletion is best-effort cleanup.
+      const oldId = oldValues.id;
+      void Promise.resolve(handleDelete(oldId)).catch((error) =>
+        console.error("Failed to delete old product:", error)
+      );
     }
 
     clear();
     productEventContext.addNewlyCreatedProductEvent(newListing);
-    setIsPostingOrUpdatingProduct(false);
     if (onSubmitCallback) {
       onSubmitCallback();
     }
 
     if (pubkey && !isEdit && signer) {
-      try {
-        const signedEvent = await signer.sign(
-          buildMcpRequestProofTemplate(buildStripeAccountStatusProof(pubkey))
-        );
-        const res = await fetch("/api/stripe/connect/account-status", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ pubkey, signedEvent }),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (!data.chargesEnabled) {
-            setShowStripeConnectModal(true);
+      // Run the Stripe status check in the background — the listing is
+      // already published, and we don't want a slow Stripe API call to
+      // keep the submit spinner alive.
+      void (async () => {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000);
+        try {
+          const signedEvent = await signer.sign(
+            buildMcpRequestProofTemplate(buildStripeAccountStatusProof(pubkey))
+          );
+          const res = await fetch("/api/stripe/connect/account-status", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ pubkey, signedEvent }),
+            signal: controller.signal,
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (!data.chargesEnabled) {
+              setShowStripeConnectModal(true);
+            }
           }
+        } catch {
+          // silently fail
+        } finally {
+          clearTimeout(timeoutId);
         }
-      } catch {
-        // silently fail
-      }
+      })();
     }
   };
 
