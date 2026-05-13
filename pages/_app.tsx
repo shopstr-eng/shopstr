@@ -24,6 +24,7 @@ import {
   CashuWalletContextInterface,
   CommunityContext,
   CommunityContextInterface,
+  UIContext,
 } from "../utils/context/context";
 import {
   getLocalStorageData,
@@ -71,6 +72,8 @@ function Shopstr({ props }: { props: AppProps }) {
   const { Component, pageProps } = props;
   const { nostr } = useContext(NostrContext);
   const { signer, isLoggedIn } = useContext(SignerContext);
+
+  const [isPreferencesModalOpen, setPreferencesModalOpen] = useState(false);
 
   const [productContext, setProductContext] = useState<ProductContextInterface>(
     {
@@ -842,61 +845,65 @@ function Shopstr({ props }: { props: AppProps }) {
       />
       <StructuredData />
       <PageLoadingBar />
-      <CommunityContext.Provider value={communityContext}>
-        <RelaysContext.Provider value={relaysContext}>
-          <BlossomContext.Provider value={blossomContext}>
-            <CashuWalletContext.Provider value={cashuWalletContext}>
-              <FollowsContext.Provider value={followsContext}>
-                <ProductContext.Provider value={productContext}>
-                  <ReviewsContext.Provider value={reviewsContext}>
-                    <ProfileMapContext.Provider value={profileContext}>
-                      <ShopMapContext.Provider value={shopContext}>
-                        <ChatsContext.Provider
-                          value={
-                            {
-                              chatsMap: chatsMap,
-                              isLoading: isChatLoading,
-                              addNewlyCreatedMessageEvent:
-                                addNewlyCreatedMessageEvent,
-                              markAllMessagesAsRead: markAllMessagesAsRead,
-                              newOrderIds: newOrderIds,
-                            } as ChatsContextInterface
-                          }
-                        >
-                          {![
-                            "/",
-                            "/about",
-                            "/contact",
-                            "/faq",
-                            "/terms",
-                            "/privacy",
-                          ].includes(router.pathname) && (
-                            <TopNav
-                              setFocusedPubkey={setFocusedPubkey}
-                              setSelectedSection={setSelectedSection}
-                            />
-                          )}
-                          <div className="flex">
-                            <main className="flex-1">
-                              <Component
-                                {...pageProps}
-                                focusedPubkey={focusedPubkey}
+      <UIContext.Provider
+        value={{ isPreferencesModalOpen, setPreferencesModalOpen }}
+      >
+        <CommunityContext.Provider value={communityContext}>
+          <RelaysContext.Provider value={relaysContext}>
+            <BlossomContext.Provider value={blossomContext}>
+              <CashuWalletContext.Provider value={cashuWalletContext}>
+                <FollowsContext.Provider value={followsContext}>
+                  <ProductContext.Provider value={productContext}>
+                    <ReviewsContext.Provider value={reviewsContext}>
+                      <ProfileMapContext.Provider value={profileContext}>
+                        <ShopMapContext.Provider value={shopContext}>
+                          <ChatsContext.Provider
+                            value={
+                              {
+                                chatsMap: chatsMap,
+                                isLoading: isChatLoading,
+                                addNewlyCreatedMessageEvent:
+                                  addNewlyCreatedMessageEvent,
+                                markAllMessagesAsRead: markAllMessagesAsRead,
+                                newOrderIds: newOrderIds,
+                              } as ChatsContextInterface
+                            }
+                          >
+                            {![
+                              "/",
+                              "/about",
+                              "/contact",
+                              "/faq",
+                              "/terms",
+                              "/privacy",
+                            ].includes(router.pathname) && (
+                              <TopNav
                                 setFocusedPubkey={setFocusedPubkey}
-                                selectedSection={selectedSection}
                                 setSelectedSection={setSelectedSection}
                               />
-                            </main>
-                          </div>
-                        </ChatsContext.Provider>
-                      </ShopMapContext.Provider>
-                    </ProfileMapContext.Provider>
-                  </ReviewsContext.Provider>
-                </ProductContext.Provider>
-              </FollowsContext.Provider>
-            </CashuWalletContext.Provider>
-          </BlossomContext.Provider>
-        </RelaysContext.Provider>
-      </CommunityContext.Provider>
+                            )}
+                            <div className="flex">
+                              <main className="flex-1">
+                                <Component
+                                  {...pageProps}
+                                  focusedPubkey={focusedPubkey}
+                                  setFocusedPubkey={setFocusedPubkey}
+                                  selectedSection={selectedSection}
+                                  setSelectedSection={setSelectedSection}
+                                />
+                              </main>
+                            </div>
+                          </ChatsContext.Provider>
+                        </ShopMapContext.Provider>
+                      </ProfileMapContext.Provider>
+                    </ReviewsContext.Provider>
+                  </ProductContext.Provider>
+                </FollowsContext.Provider>
+              </CashuWalletContext.Provider>
+            </BlossomContext.Provider>
+          </RelaysContext.Provider>
+        </CommunityContext.Provider>
+      </UIContext.Provider>
     </>
   );
 }

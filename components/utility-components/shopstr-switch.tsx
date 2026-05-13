@@ -1,6 +1,9 @@
 import { Switch } from "@heroui/react";
-import { useRouter } from "next/router";
 import { useTheme } from "next-themes";
+import { UIContext } from "@/utils/context/context";
+import { useContext } from "react";
+import { useRouter } from "next/router";
+import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 
 const ShopstrSwitch = ({
   wotFilter,
@@ -9,10 +12,17 @@ const ShopstrSwitch = ({
   wotFilter: boolean;
   setWotFilter: (value: boolean) => void;
 }) => {
-  const router = useRouter();
   const { theme } = useTheme();
+  const { setPreferencesModalOpen } = useContext(UIContext);
+  const { isLoggedIn } = useContext(SignerContext);
+  const router = useRouter();
 
   const handleTrustClick = () => {
+    if (isLoggedIn) {
+      setPreferencesModalOpen(true);
+      return;
+    }
+
     router.push("/settings/preferences");
   };
 
