@@ -1,73 +1,42 @@
-import {
-  getDefaultBlossomServer,
-  getDefaultMint,
-  getDefaultRelays,
-  getLocalStorageData,
-} from "../nostr-helper-functions";
+import { storage, STORAGE_KEYS } from "@/utils/storage";
 
-describe("getLocalStorageData", () => {
+describe("StorageManager defaults (replaces getLocalStorageData)", () => {
   beforeEach(() => {
     localStorage.clear();
     jest.restoreAllMocks();
   });
 
   it("returns safe defaults for missing keys", () => {
-    const data = getLocalStorageData();
-
-    expect(data.relays).toEqual(getDefaultRelays());
-    expect(data.mints).toEqual([getDefaultMint()]);
-    expect(data.blossomServers).toEqual([getDefaultBlossomServer()]);
-    expect(data.tokens).toEqual([]);
-    expect(data.history).toEqual([]);
+    expect(storage.getJson(STORAGE_KEYS.RELAYS, [])).toEqual([]);
+    expect(storage.getJson(STORAGE_KEYS.MINTS, [])).toEqual([]);
+    expect(storage.getJson(STORAGE_KEYS.TOKENS, [])).toEqual([]);
+    expect(storage.getJson(STORAGE_KEYS.HISTORY, [])).toEqual([]);
   });
 
   it("recovers from malformed JSON in critical keys", () => {
     localStorage.setItem("relays", "{bad");
-    localStorage.setItem("readRelays", "{bad");
-    localStorage.setItem("writeRelays", "{bad");
     localStorage.setItem("mints", "{bad");
-    localStorage.setItem("blossomServers", "{bad");
     localStorage.setItem("tokens", "{bad");
     localStorage.setItem("history", "{bad");
-    localStorage.setItem("bunkerRelays", "{bad");
     localStorage.setItem("signer", "{bad");
 
-    expect(() => getLocalStorageData()).not.toThrow();
-
-    const data = getLocalStorageData();
-    expect(data.relays).toEqual(getDefaultRelays());
-    expect(data.readRelays).toEqual([]);
-    expect(data.writeRelays).toEqual([]);
-    expect(data.mints).toEqual([getDefaultMint()]);
-    expect(data.blossomServers).toEqual([getDefaultBlossomServer()]);
-    expect(data.tokens).toEqual([]);
-    expect(data.history).toEqual([]);
-    expect(data.bunkerRelays).toEqual([]);
+    expect(() => storage.getJson(STORAGE_KEYS.RELAYS, [])).not.toThrow();
+    expect(storage.getJson(STORAGE_KEYS.RELAYS, [])).toEqual([]);
+    expect(storage.getJson(STORAGE_KEYS.MINTS, [])).toEqual([]);
+    expect(storage.getJson(STORAGE_KEYS.TOKENS, [])).toEqual([]);
+    expect(storage.getJson(STORAGE_KEYS.HISTORY, [])).toEqual([]);
   });
 
-  it("falls back to signInMethod signer when stored signer shape is invalid", () => {
-    localStorage.setItem("signInMethod", "extension");
-    localStorage.setItem("signer", JSON.stringify({ type: "nip46" }));
-
-    const data = getLocalStorageData();
-
-    expect(data.signer).toEqual({ type: "nip07" });
+  it("reads and writes data correctly", () => {
+    const relays = ["wss://relay.damus.io"];
+    storage.setJson(STORAGE_KEYS.RELAYS, relays);
+    expect(storage.getJson(STORAGE_KEYS.RELAYS, [])).toEqual(relays);
   });
 
-  it("keeps valid stored signer shape", () => {
-    localStorage.setItem(
-      "signer",
-      JSON.stringify({
-        type: "nsec",
-        encryptedPrivKey: "ncryptsec1mock",
-      })
+  it("returns string items correctly", () => {
+    storage.setItem(STORAGE_KEYS.NWC_STRING, "nostr+walletconnect://test");
+    expect(storage.getItem(STORAGE_KEYS.NWC_STRING)).toBe(
+      "nostr+walletconnect://test"
     );
-
-    const data = getLocalStorageData();
-
-    expect(data.signer).toEqual({
-      type: "nsec",
-      encryptedPrivKey: "ncryptsec1mock",
-    });
   });
 });

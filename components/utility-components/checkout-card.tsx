@@ -45,8 +45,8 @@ import WeightSelector from "./weight-selector";
 import BulkSelector from "./bulk-selector";
 import ZapsnagButton from "@/components/ZapsnagButton";
 import { RawEventModal, EventIdModal } from "./modals/event-modals";
-import { getLocalStorageJson } from "@/utils/safe-json";
-import { CartDiscountsMap, isCartDiscountsMap } from "@/utils/cart-discounts";
+import { storage } from "@/utils/storage";
+import { CartDiscountsMap } from "@/utils/cart-discounts";
 
 const SUMMARY_CHARACTER_LIMIT = 100;
 
@@ -178,14 +178,9 @@ export default function CheckoutCard({
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const cartList = getLocalStorageJson<ProductData[]>("cart", [], {
-        removeOnError: true,
-        validate: Array.isArray,
-      });
-      if (cartList && cartList.length > 0) {
-        setCart(cartList);
-      }
+    const cartList = storage.getJson<ProductData[]>("cart", []);
+    if (cartList && cartList.length > 0) {
+      setCart(cartList);
     }
   }, []);
 
@@ -335,7 +330,7 @@ export default function CheckoutCard({
 
       updatedCart = [...cart, productToAdd];
       setCart(updatedCart);
-      localStorage.setItem("cart", JSON.stringify(updatedCart));
+      storage.setJson("cart", updatedCart);
 
       const sellerShop = shopMapContext.shopData.get(productData.pubkey);
       if (
@@ -348,19 +343,14 @@ export default function CheckoutCard({
 
       // Store discount code if applied
       if (appliedDiscount > 0 && discountCode) {
-        const discounts = getLocalStorageJson<CartDiscountsMap>(
+        const discounts = storage.getJson<CartDiscountsMap>(
           "cartDiscounts",
-          {},
-          {
-            removeOnError: true,
-            removeOnValidationError: true,
-            validate: isCartDiscountsMap,
-          }
+          {}
         );
         discounts[productData.pubkey] = {
           code: discountCode,
         };
-        localStorage.setItem("cartDiscounts", JSON.stringify(discounts));
+        storage.setJson("cartDiscounts", discounts);
       }
     } else {
       onOpen();

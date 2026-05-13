@@ -16,16 +16,18 @@ import {
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
 import {
-  getLocalStorageData,
   constructGiftWrappedEvent,
   constructMessageSeal,
   constructMessageGiftWrap,
+  getStoredRelays,
   sendGiftWrappedMessageEvent,
 } from "@/utils/nostr/nostr-helper-functions";
 import { generateSecretKey, getPublicKey } from "nostr-tools";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
 import { validateZapReceipt } from "@/utils/nostr/zap-validator";
+
+import { storage, STORAGE_KEYS } from "@/utils/storage";
 
 export default function ZapsnagButton({ product }: { product: ProductData }) {
   const { isOpen, onOpen, onClose } = useDisclosure();
@@ -48,16 +50,9 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
   const { signer, isLoggedIn, pubkey: userPubkey } = useContext(SignerContext);
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const savedInfo = localStorage.getItem("shopstr_shipping_info");
-      if (savedInfo) {
-        try {
-          const parsed = JSON.parse(savedInfo);
-          setShippingInfo((prev) => ({ ...prev, ...parsed }));
-        } catch (e) {
-          console.error("Failed to load saved shipping info", e);
-        }
-      }
+    const savedInfo = storage.getJson(STORAGE_KEYS.SHIPPING_INFO, null);
+    if (savedInfo) {
+      setShippingInfo((prev) => ({ ...prev, ...savedInfo }));
     }
   }, []);
 
@@ -121,7 +116,7 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
       }
 
       originalWebLN = (window as any).webln;
-      const { nwcString } = getLocalStorageData();
+      const nwcString = storage.getItem(STORAGE_KEYS.NWC_STRING);
       if (nwcString) {
         const nwcProvider = new NostrWebLNProvider({
           nostrWalletConnectUrl: nwcString,
@@ -179,7 +174,7 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
       const ln = new LightningAddress(lud16);
       await ln.fetch();
 
-      const { relays: userRelays } = getLocalStorageData();
+      const userRelays = getStoredRelays();
       const targetRelays =
         userRelays.length > 0
           ? userRelays
@@ -196,10 +191,7 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
       const response = await ln.zap(zapArgs);
 
       if (response.preimage) {
-        localStorage.setItem(
-          "shopstr_shipping_info",
-          JSON.stringify(shippingInfo)
-        );
+        storage.setJson(STORAGE_KEYS.SHIPPING_INFO, shippingInfo);
 
         setStatus("Verifying receipt...");
         const receiptFound = await validateZapReceipt(

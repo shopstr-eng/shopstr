@@ -16,8 +16,8 @@ import {
   NostrContext,
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
-import { getListingSlug } from "@/utils/url-slugs";
 import { productSatisfiesAllFilters } from "@/utils/parsers/product-filter-helpers";
+import { storage } from "@/utils/storage";
 
 const DisplayProducts = ({
   focusedPubkey,
@@ -64,7 +64,7 @@ const DisplayProducts = ({
       const storageKey = focusedPubkey
         ? `marketplace-page-${focusedPubkey}`
         : "marketplace-page-general";
-      const savedPage = sessionStorage.getItem(storageKey);
+      const savedPage = storage.getSessionItem(storageKey);
       if (savedPage) {
         const pageNum = parseInt(savedPage, 10);
         if (!isNaN(pageNum) && pageNum > 0) {
@@ -174,7 +174,7 @@ const DisplayProducts = ({
     const prevFiltersRef = `${selectedSearch}-${selectedLocation}-${Array.from(
       selectedCategories
     ).join(",")}`;
-    const currentFiltersRef = sessionStorage.getItem("last-filters-ref");
+    const currentFiltersRef = storage.getSessionItem("last-filters-ref");
 
     if (currentFiltersRef && currentFiltersRef !== prevFiltersRef) {
       // Filters changed, reset to page 1
@@ -183,14 +183,14 @@ const DisplayProducts = ({
         const storageKey = focusedPubkey
           ? `marketplace-page-${focusedPubkey}`
           : "marketplace-page-general";
-        sessionStorage.setItem(storageKey, "1");
+        storage.setSessionItem(storageKey, "1");
       }
     } else if (currentPage > newTotalPages) {
       // Current page exceeds total pages, go to last page
       setCurrentPage(newTotalPages);
     }
 
-    sessionStorage.setItem("last-filters-ref", prevFiltersRef);
+    storage.setSessionItem("last-filters-ref", prevFiltersRef);
 
     onFilteredProductsChange?.(filtered);
   }, [
@@ -287,7 +287,7 @@ const DisplayProducts = ({
       const storageKey = focusedPubkey
         ? `marketplace-page-${focusedPubkey}`
         : "marketplace-page-general";
-      sessionStorage.setItem(storageKey, page.toString());
+      storage.setSessionItem(storageKey, page.toString());
     }
   };
 

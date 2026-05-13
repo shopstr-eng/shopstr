@@ -2,7 +2,7 @@ import { useContext, useRef, useState } from "react";
 import { Button, Progress } from "@heroui/react";
 import {
   blossomUploadImages,
-  getLocalStorageData,
+  getStoredBlossomServers,
 } from "@/utils/nostr/nostr-helper-functions";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import { AnimatePresence, motion } from "framer-motion";
@@ -67,7 +67,7 @@ export const FileUploaderButton = ({
   const hiddenFileInput = useRef<HTMLInputElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
   const { signer, isLoggedIn } = useContext(SignerContext);
-  const { blossomServers } = getLocalStorageData() || {};
+  const blossomServers = getStoredBlossomServers();
 
   const getPreviewUrl = (file: File): string => URL.createObjectURL(file);
 

@@ -15,7 +15,6 @@ import {
 } from "@/components/utility-components/nostr-context-provider";
 import { getDecodedToken, Wallet as CashuWallet } from "@cashu/cashu-ts";
 import {
-  getLocalStorageData,
   publishProofEvent,
   publishWalletEvent,
 } from "@/utils/nostr/nostr-helper-functions";
@@ -24,7 +23,6 @@ import { NostrNIP46Signer } from "@/utils/nostr/signers/nostr-nip46-signer";
 jest.setTimeout(15000);
 
 jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
-  getLocalStorageData: jest.fn(),
   publishProofEvent: jest.fn(),
   publishWalletEvent: jest.fn(),
 }));
@@ -44,7 +42,7 @@ jest.mock("@heroicons/react/24/outline", () => ({
   InformationCircleIcon: () => <div data-testid="info-icon" />,
 }));
 
-const mockGetLocalStorageData = getLocalStorageData as jest.Mock;
+// No more mocks needed for getLocalStorageData as we use StorageManager now
 const mockGetDecodedToken = getDecodedToken as jest.Mock;
 const mockPublishProofEvent = publishProofEvent as jest.Mock;
 const mockPublishWalletEvent = publishWalletEvent as jest.Mock;
@@ -79,12 +77,7 @@ const VALID_TOKEN =
 describe("ReceiveButton", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    Storage.prototype.setItem = jest.fn();
-    mockGetLocalStorageData.mockReturnValue({
-      mints: [],
-      tokens: [],
-      history: [],
-    });
+    window.localStorage.clear();
     mockPublishProofEvent.mockResolvedValue(undefined);
     mockPublishWalletEvent.mockResolvedValue(undefined);
   });
@@ -208,11 +201,9 @@ describe("ReceiveButton", () => {
   test("shows an error modal for duplicate tokens and closes it", async () => {
     const user = userEvent.setup();
     const mockProof = { id: "test", amount: 10, secret: "secret", C: "C1" };
-    mockGetLocalStorageData.mockReturnValue({
-      mints: [],
-      tokens: [mockProof],
-      history: [],
-    });
+    window.localStorage.setItem("tokens", JSON.stringify([mockProof]));
+    window.localStorage.setItem("mints", JSON.stringify([]));
+    window.localStorage.setItem("history", JSON.stringify([]));
     mockGetDecodedToken.mockReturnValue({
       mint: "https://testmint.com",
       proofs: [mockProof],
