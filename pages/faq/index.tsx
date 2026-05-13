@@ -167,10 +167,8 @@ export default function Faq() {
           name="description"
           content="Get answers to common questions about Milk Market, the permissionless marketplace for raw dairy products. Learn about payments, selling, account setup, and privacy features."
         />
-        <link rel="canonical" href="https://milk.market/faq" />
         <link rel="apple-touch-icon" href="/milk-market.png" />
         <link rel="apple-touch-icon" sizes="180x180" href="/milk-market.png" />
-        <meta property="og:url" content="https://milk.market/faq" />
         <meta property="og:type" content="website" />
         <meta
           property="og:title"
@@ -181,9 +179,6 @@ export default function Faq() {
           content="Get answers to common questions about Milk Market, the permissionless marketplace for raw dairy products. Learn about payments, selling, account setup, and privacy features."
         />
         <meta property="og:image" content="/milk-market.png" />
-        <meta name="twitter:card" content="summary_large_image" />
-        <meta property="twitter:domain" content="https://milk.market" />
-        <meta property="twitter:url" content="https://milk.market/faq" />
         <meta
           name="twitter:title"
           content="FAQ - Milk Market | Frequently Asked Questions"

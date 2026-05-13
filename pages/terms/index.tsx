@@ -75,10 +75,8 @@ export default function Tos() {
           name="description"
           content="Read Milk Market's Terms of Service. Understand user responsibilities, prohibited items, transaction risks, and platform guidelines for our decentralized marketplace."
         />
-        <link rel="canonical" href="https://milk.market/terms" />
         <link rel="apple-touch-icon" href="/milk-market.png" />
         <link rel="apple-touch-icon" sizes="180x180" href="/milk-market.png" />
-        <meta property="og:url" content="https://milk.market/terms" />
         <meta property="og:type" content="website" />
         <meta
           property="og:title"
@@ -89,9 +87,6 @@ export default function Tos() {
           content="Read Milk Market's Terms of Service. Understand user responsibilities, prohibited items, transaction risks, and platform guidelines for our decentralized marketplace."
         />
         <meta property="og:image" content="/milk-market.png" />
-        <meta name="twitter:card" content="summary_large_image" />
-        <meta property="twitter:domain" content="https://milk.market" />
-        <meta property="twitter:url" content="https://milk.market/terms" />
         <meta
           name="twitter:title"
           content="Terms of Service - Milk Market | User Agreement"

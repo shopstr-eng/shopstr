@@ -29,7 +29,6 @@ export default function ContactPage() {
           name="description"
           content="Contact the Milk Market team for questions about our farm-fresh dairy marketplace. Reach us by email, social media, or Nostr. We're here to help farmers and buyers connect."
         />
-        <link rel="canonical" href="https://milk.market/contact" />
         <meta
           property="og:title"
           content="Contact Milk Market - Get in Touch"
@@ -38,12 +37,10 @@ export default function ContactPage() {
           property="og:description"
           content="Contact the Milk Market team for questions about our farm-fresh dairy marketplace."
         />
-        <meta property="og:url" content="https://milk.market/contact" />
         <meta
           property="og:image"
           content="https://milk.market/milk-market.png"
         />
-        <meta name="twitter:card" content="summary_large_image" />
         <meta
           name="twitter:title"
           content="Contact Milk Market - Get in Touch"

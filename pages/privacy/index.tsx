@@ -70,10 +70,8 @@ export default function PrivacyPolicy() {
           name="description"
           content="Learn how Milk Market protects your privacy as a permissionless marketplace. Understand our minimal data collection, Nostr protocol privacy, and user control policies."
         />
-        <link rel="canonical" href="https://milk.market/privacy" />
         <link rel="apple-touch-icon" href="/milk-market.png" />
         <link rel="apple-touch-icon" sizes="180x180" href="/milk-market.png" />
-        <meta property="og:url" content="https://milk.market/privacy" />
         <meta property="og:type" content="website" />
         <meta
           property="og:title"
@@ -84,9 +82,6 @@ export default function PrivacyPolicy() {
           content="Learn how Milk Market protects your privacy as a permissionless marketplace. Understand our minimal data collection, Nostr protocol privacy, and user control policies."
         />
         <meta property="og:image" content="/milk-market.png" />
-        <meta name="twitter:card" content="summary_large_image" />
-        <meta property="twitter:domain" content="https://milk.market" />
-        <meta property="twitter:url" content="https://milk.market/privacy" />
         <meta
           name="twitter:title"
           content="Privacy Policy - Milk Market | Data Protection & Privacy"

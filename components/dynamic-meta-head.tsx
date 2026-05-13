@@ -33,16 +33,21 @@ function ensureAbsoluteUrl(url: string, base: string): string {
 const getMetaTags = (
   windowOrigin: string,
   pathname: string,
+  asPath: string,
   query: { productId?: string[]; npub?: string[] },
   productEvents: NostrEvent[],
   shopEvents: Map<string, ShopProfile>,
   profileData: Map<string, ProfileData>
 ): MetaTagsType => {
+  // Strip query string and hash from asPath so the canonical is the
+  // bare page URL (Lighthouse flags canonical pointing to "/" for
+  // non-root pages, and we don't want tracking params in canonicals).
+  const cleanPath = (asPath || "/").split("?")[0]!.split("#")[0] || "/";
   const defaultTags = {
     title: DEFAULT_OG.title,
     description: DEFAULT_OG.description,
     image: ensureAbsoluteUrl("/milk-market.png", BASE_URL),
-    url: `${windowOrigin}`,
+    url: `${windowOrigin}${cleanPath === "/" ? "" : cleanPath}`,
   };
 
   if (pathname.startsWith("/listing/")) {
@@ -159,18 +164,26 @@ const DynamicHead = ({
     setOrigin(window.location.origin);
   }, []);
 
-  const effectiveOrigin = origin || BASE_URL;
+  // Canonical/og:url should always point to the production domain
+  // (https://milk.market) regardless of which origin (replit.app preview,
+  // localhost, etc.) the page was actually served from. Lighthouse flags
+  // mismatched canonicals as conflicting otherwise.
+  const canonicalOrigin = BASE_URL;
+  // Display origin (used only for the twitter:domain meta) can fall back
+  // to the live request origin when available.
+  const displayOrigin = origin || BASE_URL;
 
   const metaTags = ssrOgMeta
     ? {
         title: ssrOgMeta.title,
         description: ssrOgMeta.description,
-        image: ensureAbsoluteUrl(ssrOgMeta.image, effectiveOrigin),
-        url: ensureAbsoluteUrl(ssrOgMeta.url, effectiveOrigin),
+        image: ensureAbsoluteUrl(ssrOgMeta.image, canonicalOrigin),
+        url: ensureAbsoluteUrl(ssrOgMeta.url, canonicalOrigin),
       }
     : getMetaTags(
-        effectiveOrigin,
+        canonicalOrigin,
         router.pathname,
+        router.asPath,
         router.query,
         productEvents,
         shopEvents,
@@ -194,7 +207,13 @@ const DynamicHead = ({
       <meta property="og:description" content={metaTags.description} />
       <meta property="og:image" content={metaTags.image} />
       <meta name="twitter:card" content="summary_large_image" />
-      <meta property="twitter:domain" content={origin || "milk.market"} />
+      <meta
+        property="twitter:domain"
+        content={
+          displayOrigin.replace(/^https?:\/\//, "").split("/")[0] ||
+          "milk.market"
+        }
+      />
       <meta property="twitter:url" content={metaTags.url} />
       <meta name="twitter:title" content={metaTags.title} />
       <meta name="twitter:description" content={metaTags.description} />
