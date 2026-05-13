@@ -120,7 +120,10 @@ export default function ProductForm({
           Currency: oldValues.currency,
           Location: oldValues.location,
           "Shipping Option": oldValues.shippingType,
-          "Shipping Cost": oldValues.shippingCost,
+          "Shipping Cost":
+            oldValues.shippingCost !== undefined
+              ? String(oldValues.shippingCost)
+              : "",
           "Pickup Locations": oldValues.pickupLocations || [""],
           Category: oldValues.categories ? oldValues.categories.join(",") : "",
           Quantity: oldValues.quantity ? String(oldValues.quantity) : "",
@@ -312,7 +315,7 @@ export default function ProductForm({
         "client",
         "Milk Market",
         "31990:" + pubkey + ":" + (oldValues?.d || hashHex),
-        relayHint,
+        relayHint || "",
       ],
       ["title", data["Product Name"] as string],
       ["summary", data["Description"] as string],
@@ -320,9 +323,13 @@ export default function ProductForm({
       ["location", data["Location"] as string],
       [
         "shipping",
-        data["Shipping Option"] as string,
-        data["Shipping Cost"] ? (data["Shipping Cost"] as string) : "0",
-        data["Currency"] as string,
+        String(data["Shipping Option"] ?? ""),
+        data["Shipping Cost"] !== undefined &&
+        data["Shipping Cost"] !== null &&
+        data["Shipping Cost"] !== ""
+          ? String(data["Shipping Cost"])
+          : "0",
+        String(data["Currency"] ?? ""),
       ],
     ];
 
@@ -2610,12 +2617,12 @@ export default function ProductForm({
               </div>
             </ModalBody>
 
-            <ModalFooter className="flex flex-col items-stretch gap-3 border-t-2 border-black bg-white px-6 py-4 sm:flex-row sm:items-center sm:justify-end">
-              {validationError && (
-                <div className="mr-auto rounded-md border-2 border-red-500 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
-                  {validationError}
-                </div>
-              )}
+            {validationError && (
+              <div className="border-t-2 border-red-500 bg-red-50 px-6 py-3 text-sm font-semibold text-red-700">
+                {validationError}
+              </div>
+            )}
+            <ModalFooter className="border-t-2 border-black bg-white px-6 py-4">
               <ConfirmActionDropdown
                 helpText={
                   "Are you sure you want to clear this form? You will lose all current progress."
