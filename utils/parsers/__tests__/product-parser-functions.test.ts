@@ -54,15 +54,18 @@ describe("parseTags", () => {
     const event = {
       ...baseEvent,
       tags: [
-        ["image", "url1.jpg"],
-        ["image", "url2.jpg"],
+        ["image", "https://example.com/url1.jpg"],
+        ["image", "https://example.com/url2.jpg"],
         ["t", "electronics"],
         ["t", "nostr"],
       ],
     };
     const result = parseTags(event)!;
 
-    expect(result.images).toEqual(["url1.jpg", "url2.jpg"]);
+    expect(result.images).toEqual([
+      "https://example.com/url1.jpg",
+      "https://example.com/url2.jpg",
+    ]);
     expect(result.categories).toEqual(["electronics", "nostr"]);
   });
 
