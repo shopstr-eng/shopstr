@@ -79,6 +79,7 @@ export default function ProductForm({
   const router = useRouter();
   const [images, setImages] = useState<string[]>([]);
   const [imageError, setImageError] = useState<string | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [pubkey, setPubkey] = useState("");
   const [relayHint, setRelayHint] = useState("");
@@ -256,6 +257,7 @@ export default function ProductForm({
   const onSubmit = async (data: {
     [x: string]: string | Map<string, number> | string[];
   }) => {
+    setValidationError(null);
     if (images.length === 0) {
       setImageError("At least one image is required.");
       return;
@@ -277,6 +279,24 @@ export default function ProductForm({
       setIsPostingOrUpdatingProduct(false);
     }
   };
+
+  // Surface validation failures so the user isn't left staring at a stuck
+  // form when react-hook-form silently focuses the first invalid field.
+  const onInvalid = (errors: Record<string, { message?: string }>) => {
+    const fields = Object.keys(errors);
+    const first = fields[0];
+    const firstMessage = first ? errors[first]?.message : undefined;
+    setValidationError(
+      firstMessage
+        ? `${firstMessage}${fields.length > 1 ? ` (and ${fields.length - 1} more field${fields.length - 1 === 1 ? "" : "s"} need attention)` : ""}`
+        : `Please fix the highlighted field${fields.length === 1 ? "" : "s"} before publishing.`
+    );
+    if (images.length === 0) {
+      setImageError("At least one image is required.");
+    }
+  };
+
+  const submitForm = handleSubmit(onSubmit as any, onInvalid as any);
 
   const runSubmit = async (data: {
     [x: string]: string | Map<string, number> | string[];
@@ -545,6 +565,8 @@ export default function ProductForm({
   const clear = () => {
     handleModalToggle();
     setImages([]);
+    setImageError(null);
+    setValidationError(null);
     setHerdshareAgreementUrl("");
     setSubscriptionEnabled(false);
     setSubscriptionDiscount("");
@@ -653,10 +675,9 @@ export default function ProductForm({
           </ModalHeader>
           <form
             onSubmit={(e) => {
-              if (e.target !== e.currentTarget) {
-                e.preventDefault();
-              }
-              return handleSubmit(onSubmit as any)(e);
+              e.preventDefault();
+              e.stopPropagation();
+              void submitForm(e);
             }}
           >
             <ModalBody className="bg-white px-6 py-6">
@@ -2589,7 +2610,12 @@ export default function ProductForm({
               </div>
             </ModalBody>
 
-            <ModalFooter className="border-t-2 border-black bg-white px-6 py-4">
+            <ModalFooter className="flex flex-col items-stretch gap-3 border-t-2 border-black bg-white px-6 py-4 sm:flex-row sm:items-center sm:justify-end">
+              {validationError && (
+                <div className="mr-auto rounded-md border-2 border-red-500 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
+                  {validationError}
+                </div>
+              )}
               <ConfirmActionDropdown
                 helpText={
                   "Are you sure you want to clear this form? You will lose all current progress."
@@ -2606,17 +2632,14 @@ export default function ProductForm({
 
               <Button
                 className="rounded-md border-2 border-black bg-gray-800 px-8 py-3 text-base font-bold text-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
-                type="submit"
-                onClick={(e) => {
-                  if (signer && isLoggedIn) {
-                    e.preventDefault();
-                    handleSubmit(onSubmit as any)();
-                  }
+                type="button"
+                onClick={() => {
+                  void submitForm();
                 }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
                     e.preventDefault();
-                    handleSubmit(onSubmit as any)();
+                    void submitForm();
                   }
                 }}
                 isDisabled={isPostingOrUpdatingProduct}
