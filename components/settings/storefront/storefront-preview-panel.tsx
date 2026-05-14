@@ -275,12 +275,6 @@ export function fillSectionPlaceholders(
     placeholders.comparisonColumns
   )
     filled.comparisonColumns = placeholders.comparisonColumns;
-  if (
-    (!filled.timelineItems || filled.timelineItems.length === 0) &&
-    placeholders.timelineItems
-  )
-    filled.timelineItems = placeholders.timelineItems;
-
   return filled;
 }
 
@@ -794,7 +788,7 @@ export default function StorefrontPreviewPanel({
             />
 
             {previewPage === STALL_SENTINEL && (
-              <div className="mx-auto max-w-6xl px-4 pt-20 pb-8 md:px-6">
+              <div className="mx-auto max-w-6xl px-4 pt-6 pb-8 md:px-6">
                 <h2
                   className="font-heading mb-4 text-xl font-bold"
                   style={{ color: colors.text }}
@@ -837,7 +831,7 @@ export default function StorefrontPreviewPanel({
             )}
 
             {!previewPage && landingPageStyle !== "hero" && (
-              <div className="pt-14">
+              <div>
                 {landingPageStyle === "classic" && (
                   <>
                     <div className="w-full">
@@ -881,7 +875,7 @@ export default function StorefrontPreviewPanel({
                 )}
 
                 {landingPageStyle === "minimal" && (
-                  <div className="px-6 pt-24 pb-4">
+                  <div className="px-6 pt-8 pb-4">
                     <div className="mx-auto max-w-6xl">
                       <div className="flex items-center gap-4">
                         <img
@@ -906,15 +900,7 @@ export default function StorefrontPreviewPanel({
 
             {previewPage === STALL_SENTINEL ? null : hasSections &&
               activeSections.length > 0 ? (
-              <div
-                className={
-                  activeSections[0]?.type === "hero"
-                    ? "pt-14"
-                    : !previewPage
-                      ? ""
-                      : "pt-14"
-                }
-              >
+              <div>
                 {activeSections.map((section) => (
                   <SectionRenderer
                     key={section.id}
@@ -932,11 +918,7 @@ export default function StorefrontPreviewPanel({
                 ))}
               </div>
             ) : previewPage !== STALL_SENTINEL ? (
-              <div
-                className={`mx-auto max-w-6xl px-4 py-8 md:px-6 ${
-                  landingPageStyle === "hero" ? "pt-14" : ""
-                }`}
-              >
+              <div className="mx-auto max-w-6xl px-4 py-8 md:px-6">
                 <PreviewProductGrid
                   products={previewProducts}
                   layout={productLayout}
@@ -989,7 +971,7 @@ function PreviewNav({
         position: "sticky",
       }}
     >
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 md:px-6">
+      <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-2 md:px-6">
         <div className="flex items-center gap-3">
           {pictureUrl && (
             <img

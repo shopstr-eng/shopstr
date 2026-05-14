@@ -20,13 +20,11 @@ export default function CompactPriceDisplay({
   });
 
   const getShippingLabel = () => {
-    if (shippingType === "Added Cost")
-      return `+ ${formatter.format(Number(shippingCost))} ${currency}`;
+    if (shippingType === "Added Cost") return "+ shipping";
     else if (shippingType === "Free") return "Free Ship";
     else if (shippingType === "Pickup") return "Pickup Only";
     else if (shippingType == "Free/Pickup") return "Free/Pickup";
-    else if (shippingType == "Added Cost/Pickup")
-      return `+ ${formatter.format(Number(shippingCost))} ${currency}`;
+    else if (shippingType == "Added Cost/Pickup") return "+ shipping";
     else return "";
   };
 

@@ -10,10 +10,25 @@ export default function PageLoadingBar() {
   useEffect(() => {
     let progressTimer: number | null = null;
     let hideTimer: number | null = null;
+    let safetyTimer: number | null = null;
+
+    const clearAllTimers = () => {
+      if (progressTimer) {
+        clearInterval(progressTimer);
+        progressTimer = null;
+      }
+      if (hideTimer) {
+        clearTimeout(hideTimer);
+        hideTimer = null;
+      }
+      if (safetyTimer) {
+        clearTimeout(safetyTimer);
+        safetyTimer = null;
+      }
+    };
 
     const start = () => {
-      if (hideTimer) clearTimeout(hideTimer);
-      if (progressTimer) clearInterval(progressTimer);
+      clearAllTimers();
       setFadeOut(false);
       setVisible(true);
       setWidth(0);
@@ -31,10 +46,24 @@ export default function PageLoadingBar() {
           setWidth(Math.min(current, 85));
         }
       }, 400);
+
+      // Safety timeout: always clear the bar after 15s even if no
+      // routeChangeComplete fires (e.g. same-route navigation, hash change,
+      // or App Router transitions where the event may never reach us).
+      safetyTimer = window.setTimeout(() => {
+        done();
+      }, 15000);
     };
 
     const done = () => {
-      if (progressTimer) clearInterval(progressTimer);
+      if (progressTimer) {
+        clearInterval(progressTimer);
+        progressTimer = null;
+      }
+      if (safetyTimer) {
+        clearTimeout(safetyTimer);
+        safetyTimer = null;
+      }
       setWidth(100);
 
       hideTimer = window.setTimeout(() => {
@@ -52,13 +81,16 @@ export default function PageLoadingBar() {
     router.events.on("routeChangeStart", start);
     router.events.on("routeChangeComplete", done);
     router.events.on("routeChangeError", error);
+    router.events.on("hashChangeStart", start);
+    router.events.on("hashChangeComplete", done);
 
     return () => {
       router.events.off("routeChangeStart", start);
       router.events.off("routeChangeComplete", done);
       router.events.off("routeChangeError", error);
-      if (progressTimer) clearInterval(progressTimer);
-      if (hideTimer) clearTimeout(hideTimer);
+      router.events.off("hashChangeStart", start);
+      router.events.off("hashChangeComplete", done);
+      clearAllTimers();
     };
   }, [router]);
 

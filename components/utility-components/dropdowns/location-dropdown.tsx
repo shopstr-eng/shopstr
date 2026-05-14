@@ -24,11 +24,14 @@ export const locationAvatar = (location: string) => {
 
 const LocationDropdown = ({
   value,
+  selectedKeys: selectedKeysProp,
   classNames,
   ...props
 }: {
   [x: string]: any;
 }) => {
+  const resolvedSelectedKeys =
+    selectedKeysProp !== undefined ? selectedKeysProp : value ? [value] : [];
   const locationOptions = useMemo(() => {
     const headingClasses =
       "flex w-full sticky top-1 z-20 py-1.5 px-2 bg-white text-black font-semibold shadow-small rounded-small";
@@ -127,6 +130,7 @@ const LocationDropdown = ({
   return (
     <Select
       startContent={locationAvatar(value)}
+      selectedKeys={resolvedSelectedKeys}
       {...props}
       classNames={{
         ...classNames,

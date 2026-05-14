@@ -22,6 +22,7 @@ import {
   UserIcon,
 } from "@heroicons/react/24/outline";
 import { useRouter } from "next/router";
+import NextLink from "next/link";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import SignInModal from "../../sign-in/SignInModal";
 import { copyToClipboard } from "@/utils/clipboard";
@@ -174,6 +175,22 @@ export const ProfileWithDropdown = ({
   const pfp = profileContent?.picture || `https://robohash.org/${pubkey}`;
   const isNip05Verified = profile?.nip05Verified || false;
 
+  const shopHref = (() => {
+    if (stallSlug) return `/stall/${stallSlug}`;
+    const slug = getProfileSlug(pubkey, profileContext.profileData);
+    return `/marketplace/${slug}`;
+  })();
+  const storefrontHref = (() => {
+    const shopData = shopMapContext.shopData.get(pubkey);
+    const shopSlug = shopData?.content?.storefront?.shopSlug;
+    if (shopSlug) return `/stall/${shopSlug}`;
+    const slug = getProfileSlug(pubkey, profileContext.profileData);
+    return `/marketplace/${slug}`;
+  })();
+  const inquiryHref = isLoggedIn
+    ? `/orders?pk=${encodeURIComponent(npub)}&isInquiry=true`
+    : "";
+
   const DropDownItems: {
     [key in DropDownKeys]: DropdownItemProps & { label: string };
   } = {
@@ -185,14 +202,11 @@ export const ProfileWithDropdown = ({
       startContent: (
         <BuildingStorefrontIcon className={"h-5 w-5 !text-black"} />
       ),
+      as: NextLink as unknown as DropdownItemProps["as"],
+      href: shopHref,
       onPress: () => {
         handleDropdownAction(() => {
-          if (stallSlug) {
-            router.push(`/stall/${stallSlug}`);
-          } else {
-            const slug = getProfileSlug(pubkey, profileContext.profileData);
-            router.push(`/marketplace/${slug}`);
-          }
+          router.push(shopHref);
         });
       },
       label: stallSlug ? "Visit Stall" : "Visit Vendor",
@@ -203,16 +217,11 @@ export const ProfileWithDropdown = ({
       className:
         "!text-black hover:!bg-blue-400 hover:!text-white font-bold data-[hover=true]:!bg-blue-400 data-[hover=true]:!text-white",
       startContent: <GlobeAltIcon className={"h-5 w-5 !text-black"} />,
+      as: NextLink as unknown as DropdownItemProps["as"],
+      href: storefrontHref,
       onPress: () => {
         handleDropdownAction(() => {
-          const shopData = shopMapContext.shopData.get(pubkey);
-          const shopSlug = shopData?.content?.storefront?.shopSlug;
-          if (shopSlug) {
-            router.push(`/stall/${shopSlug}`);
-          } else {
-            const slug = getProfileSlug(pubkey, profileContext.profileData);
-            router.push(`/marketplace/${slug}`);
-          }
+          router.push(storefrontHref);
         });
       },
       label: "Visit Stall",
@@ -225,6 +234,8 @@ export const ProfileWithDropdown = ({
       startContent: (
         <BuildingStorefrontIcon className={"h-5 w-5 !text-black"} />
       ),
+      as: NextLink as unknown as DropdownItemProps["as"],
+      href: "/settings/stall",
       onPress: () => {
         handleDropdownAction(() => {
           router.push("/settings/stall");
@@ -240,6 +251,12 @@ export const ProfileWithDropdown = ({
       startContent: (
         <ChatBubbleBottomCenterIcon className={"h-5 w-5 !text-black"} />
       ),
+      ...(isLoggedIn
+        ? {
+            as: NextLink as unknown as DropdownItemProps["as"],
+            href: inquiryHref,
+          }
+        : {}),
       onPress: () => {
         handleDropdownAction(() => {
           if (isLoggedIn) {
@@ -260,6 +277,8 @@ export const ProfileWithDropdown = ({
       className:
         "!text-black hover:!bg-blue-400 hover:!text-white font-bold data-[hover=true]:!bg-blue-400 data-[hover=true]:!text-white",
       startContent: <UserIcon className={"h-5 w-5 !text-black"} />,
+      as: NextLink as unknown as DropdownItemProps["as"],
+      href: "/settings/market-profile",
       onPress: () => {
         handleDropdownAction(() => {
           router.push("/settings/market-profile");
@@ -273,6 +292,8 @@ export const ProfileWithDropdown = ({
       className:
         "!text-black hover:!bg-blue-400 hover:!text-white font-bold data-[hover=true]:!bg-blue-400 data-[hover=true]:!text-white",
       startContent: <Cog6ToothIcon className={"h-5 w-5 !text-black"} />,
+      as: NextLink as unknown as DropdownItemProps["as"],
+      href: "/settings",
       onPress: () => {
         handleDropdownAction(() => {
           router.push("/settings");

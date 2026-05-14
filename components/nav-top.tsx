@@ -6,6 +6,7 @@ import { countNumberOfUnreadMessagesFromChatsContext } from "@/utils/messages/ut
 import { ChatsContext, ShopMapContext } from "@/utils/context/context";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import { useRouter } from "next/router";
+import NextLink from "next/link";
 import SignInModal from "./sign-in/SignInModal";
 import { ProfileWithDropdown } from "./utility-components/profile/profile-dropdown";
 import { ShopProfile } from "../utils/types/types";
@@ -135,6 +136,8 @@ const TopNav = ({
   const MobileMenu = () => (
     <div className="bg-primary-blue absolute top-full left-0 w-full border-t border-black shadow-lg">
       <Button
+        as={NextLink}
+        href="/marketplace"
         className={`w-full bg-transparent ${
           isHomeActive ? "text-primary-yellow" : "text-white"
         } hover:text-primary-yellow`}
@@ -143,11 +146,12 @@ const TopNav = ({
         Marketplace
       </Button>
       <Button
+        as={NextLink}
+        href="/communities"
         className={`w-full bg-transparent ${
           isCommunitiesActive ? "text-primary-yellow" : "text-white"
         } hover:text-primary-yellow`}
         onClick={() => {
-          router.push("/communities");
           setIsMobileMenuOpen(false);
         }}
       >
@@ -155,19 +159,37 @@ const TopNav = ({
       </Button>
       {hasShopProfile && (
         <Button
+          as={NextLink}
+          href="/settings/stall?tab=products"
           className={`w-full bg-transparent ${
             isMyListingsActive ? "text-primary-yellow" : "text-white"
           } hover:text-primary-yellow`}
-          onClick={() => handleRoute("/settings/stall?tab=products")}
+          onClick={(e) => {
+            if (!signedIn) {
+              e.preventDefault();
+              onOpen();
+            } else {
+              setIsMobileMenuOpen(false);
+            }
+          }}
         >
           My Listings
         </Button>
       )}
       <Button
+        as={NextLink}
+        href="/orders"
         className={`w-full bg-transparent ${
           isMessagesActive ? "text-primary-yellow" : "text-white"
         } hover:text-primary-yellow`}
-        onClick={() => handleRoute("/orders")}
+        onClick={(e) => {
+          if (!signedIn) {
+            e.preventDefault();
+            onOpen();
+          } else {
+            setIsMobileMenuOpen(false);
+          }
+        }}
       >
         Orders
         {unreadMsgCount > 0 && (
@@ -177,19 +199,29 @@ const TopNav = ({
         )}
       </Button>
       <Button
+        as={NextLink}
+        href="/wallet"
         className={`w-full bg-transparent ${
           isWalletActive ? "text-primary-yellow" : "text-white"
         } hover:text-primary-yellow`}
-        onClick={() => handleRoute("/wallet")}
+        onClick={(e) => {
+          if (!signedIn) {
+            e.preventDefault();
+            onOpen();
+          } else {
+            setIsMobileMenuOpen(false);
+          }
+        }}
       >
         Wallet
       </Button>
       <Button
+        as={NextLink}
+        href="/cart"
         className={`w-full bg-transparent ${
           router.pathname === "/cart" ? "text-primary-yellow" : "text-white"
         } hover:text-primary-yellow`}
         onClick={() => {
-          router.push("/cart");
           setIsMobileMenuOpen(false);
         }}
       >
@@ -211,6 +243,8 @@ const TopNav = ({
       <div className="flex items-center justify-between py-2 pr-4">
         <div className="flex flex-shrink-0 items-center">
           <Button
+            as={NextLink}
+            href="/marketplace"
             onClick={handleHomeClick}
             className="hover:text-primary-yellow flex items-center bg-transparent text-white duration-200"
           >
@@ -257,6 +291,8 @@ const TopNav = ({
         </div>
         <div className="hidden flex-1 items-center justify-evenly md:flex">
           <Button
+            as={NextLink}
+            href="/marketplace"
             className={`bg-transparent ${
               isHomeActive ? "text-primary-yellow font-bold" : "text-white"
             } hover:text-primary-yellow`}
@@ -265,32 +301,47 @@ const TopNav = ({
             Marketplace
           </Button>
           <Button
+            as={NextLink}
+            href="/communities"
             className={`bg-transparent ${
               isCommunitiesActive
                 ? "text-primary-yellow font-bold"
                 : "text-white"
             } hover:text-primary-yellow`}
-            onClick={() => router.push("/communities")}
           >
             Communities
           </Button>
           {hasShopProfile && (
             <Button
+              as={NextLink}
+              href="/settings/stall?tab=products"
               className={`bg-transparent ${
                 isMyListingsActive
                   ? "text-primary-yellow font-bold"
                   : "text-white"
               } hover:text-primary-yellow`}
-              onClick={() => handleRoute("/settings/stall?tab=products")}
+              onClick={(e) => {
+                if (!signedIn) {
+                  e.preventDefault();
+                  onOpen();
+                }
+              }}
             >
               My Listings
             </Button>
           )}
           <Button
+            as={NextLink}
+            href="/orders"
             className={`bg-transparent ${
               isMessagesActive ? "text-primary-yellow font-bold" : "text-white"
             } hover:text-primary-yellow`}
-            onClick={() => handleRoute("/orders")}
+            onClick={(e) => {
+              if (!signedIn) {
+                e.preventDefault();
+                onOpen();
+              }
+            }}
           >
             Orders
             {unreadMsgCount > 0 && (
@@ -300,18 +351,26 @@ const TopNav = ({
             )}
           </Button>
           <Button
+            as={NextLink}
+            href="/wallet"
             className={`bg-transparent ${
               isWalletActive ? "text-primary-yellow font-bold" : "text-white"
             } hover:text-primary-yellow`}
-            onClick={() => handleRoute("/wallet")}
+            onClick={(e) => {
+              if (!signedIn) {
+                e.preventDefault();
+                onOpen();
+              }
+            }}
           >
             Wallet
           </Button>
           <Button
+            as={NextLink}
+            href="/cart"
             className={`bg-transparent ${
               isCartActive ? "text-primary-yellow font-bold" : "text-white"
             } hover:text-primary-yellow`}
-            onClick={() => router.push("/cart")}
           >
             Cart
             {cartQuantity > 0 && (
