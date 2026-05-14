@@ -27,7 +27,7 @@ const StallManagementPage = () => {
         label: "Stall",
         id: "storefront",
         children: (
-          <div className="mx-auto h-full w-full min-w-0 px-4 lg:w-[90%] lg:max-w-[1600px]">
+          <div className="mx-auto h-full w-full min-w-0 px-4">
             <ShopProfileForm />
           </div>
         ),

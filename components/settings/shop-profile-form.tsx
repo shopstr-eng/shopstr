@@ -943,7 +943,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
 
   return (
     <>
-      <div className="mb-8 lg:max-w-[600px]">
+      <div className="mx-auto mb-8 lg:max-w-[600px]">
         <div className="bg-primary-blue relative flex h-48 items-center justify-center overflow-hidden rounded-xl border-3 border-black">
           {watchBanner ? (
             <img
@@ -1005,7 +1005,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
       </div>
 
       <form onSubmit={handleSubmit(onSubmit as any)} className="space-y-6">
-        <div className="space-y-6 lg:max-w-[600px]">
+        <div className="mx-auto space-y-6 lg:max-w-[600px]">
           <Controller
             name="name"
             control={control}
@@ -3220,7 +3220,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
           </>
         )}
 
-        <div className="lg:max-w-[600px]">
+        <div className="mx-auto lg:max-w-[600px]">
           <Button
             className={`w-full text-lg ${BLUEBUTTONCLASSNAMES}`}
             type="submit"

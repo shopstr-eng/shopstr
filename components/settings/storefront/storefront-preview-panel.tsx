@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo } from "react";
+import { useState, useRef, useMemo, useEffect } from "react";
 import {
   StorefrontColorScheme,
   StorefrontSection,
@@ -492,6 +492,33 @@ export default function StorefrontPreviewPanel({
     "desktop" | "tablet" | "mobile"
   >("desktop");
   const containerRef = useRef<HTMLDivElement>(null);
+  const previewAreaRef = useRef<HTMLDivElement>(null);
+  const [previewAreaWidth, setPreviewAreaWidth] = useState(0);
+  const [innerHeight, setInnerHeight] = useState(0);
+
+  useEffect(() => {
+    const el = previewAreaRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setPreviewAreaWidth(entry.contentRect.width);
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setInnerHeight(entry.contentRect.height);
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   const displayName = shopName || "Your Stall";
   const displayAbout =
@@ -615,11 +642,17 @@ export default function StorefrontPreviewPanel({
     ...(resolvedBodyFont ? { "--font-body": resolvedBodyFont } : {}),
   } as React.CSSProperties;
 
-  const viewportWidthClass = {
-    desktop: "w-full",
-    tablet: "w-[768px]",
-    mobile: "w-[375px]",
-  }[viewportWidth];
+  const PREVIEW_TARGET_WIDTHS = {
+    desktop: 1440,
+    tablet: 768,
+    mobile: 375,
+  } as const;
+  const targetWidth = PREVIEW_TARGET_WIDTHS[viewportWidth];
+  const availableInnerWidth = Math.max(0, previewAreaWidth - 24);
+  const previewScale =
+    availableInnerWidth > 0
+      ? Math.min(1, availableInnerWidth / targetWidth)
+      : 1;
 
   return (
     <div className="flex h-full flex-col">
@@ -760,180 +793,195 @@ export default function StorefrontPreviewPanel({
         </div>
       </div>
 
-      <div className="flex flex-1 items-start justify-center overflow-auto bg-gray-800 p-3">
+      <div
+        ref={previewAreaRef}
+        className="flex flex-1 items-start justify-center overflow-auto bg-gray-800 p-3"
+      >
         <div
-          ref={containerRef}
-          className={`preview-container ${neoShadows ? "sf-neo" : ""} ${viewportWidthClass} mx-auto min-h-[600px] overflow-hidden rounded-lg shadow-2xl`}
           style={{
-            maxWidth: viewportWidth === "desktop" ? "100%" : undefined,
+            width: targetWidth * previewScale,
+            height: innerHeight > 0 ? innerHeight * previewScale : undefined,
+            minHeight: 600 * previewScale,
+            flexShrink: 0,
           }}
         >
           <div
-            className="min-h-screen"
+            ref={containerRef}
+            className={`preview-container ${neoShadows ? "sf-neo" : ""} min-h-[600px] overflow-hidden rounded-lg shadow-2xl`}
             style={{
-              ...cssVars,
-              ...fontStyles,
-              backgroundColor: "var(--sf-bg)",
-              color: "var(--sf-text)",
+              width: targetWidth,
+              transform: `scale(${previewScale})`,
+              transformOrigin: "top left",
             }}
           >
-            <PreviewNav
-              shopName={displayName}
-              pictureUrl={displayPicture}
-              colors={colors}
-              navColors={navColors}
-              navLinks={previewNavLinks}
-              currentPage={previewPage}
-              onNavClick={handleNavClick}
-            />
+            <div
+              className="min-h-screen"
+              style={{
+                ...cssVars,
+                ...fontStyles,
+                backgroundColor: "var(--sf-bg)",
+                color: "var(--sf-text)",
+              }}
+            >
+              <PreviewNav
+                shopName={displayName}
+                pictureUrl={displayPicture}
+                colors={colors}
+                navColors={navColors}
+                navLinks={previewNavLinks}
+                currentPage={previewPage}
+                onNavClick={handleNavClick}
+              />
 
-            {previewPage === STALL_SENTINEL && (
-              <div className="mx-auto max-w-6xl px-4 pt-6 pb-8 md:px-6">
-                <h2
-                  className="font-heading mb-4 text-xl font-bold"
-                  style={{ color: colors.text }}
-                >
-                  Stall
-                </h2>
-                <div
-                  className="mb-4 rounded-lg border-2 px-4 py-2"
-                  style={{
-                    borderColor: colors.primary + "44",
-                    backgroundColor: colors.background,
-                    color: colors.text + "66",
-                  }}
-                >
-                  Search products...
+              {previewPage === STALL_SENTINEL && (
+                <div className="mx-auto max-w-6xl px-4 pt-6 pb-8 md:px-6">
+                  <h2
+                    className="font-heading mb-4 text-xl font-bold"
+                    style={{ color: colors.text }}
+                  >
+                    Stall
+                  </h2>
+                  <div
+                    className="mb-4 rounded-lg border-2 px-4 py-2"
+                    style={{
+                      borderColor: colors.primary + "44",
+                      backgroundColor: colors.background,
+                      color: colors.text + "66",
+                    }}
+                  >
+                    Search products...
+                  </div>
+                  <div className="mb-4 flex flex-wrap gap-2">
+                    {["All", "Milk", "Cheese", "Eggs"].map((cat, i) => (
+                      <span
+                        key={cat}
+                        className="rounded-full border-2 px-3 py-1 text-xs font-medium"
+                        style={{
+                          borderColor:
+                            i === 0 ? colors.primary : colors.primary + "33",
+                          backgroundColor:
+                            i === 0 ? colors.primary : "transparent",
+                          color:
+                            i === 0 ? colors.background : colors.text + "CC",
+                        }}
+                      >
+                        {cat}
+                      </span>
+                    ))}
+                  </div>
+                  <PreviewProductGrid
+                    products={previewProducts}
+                    layout={productLayout}
+                    colors={colors}
+                  />
                 </div>
-                <div className="mb-4 flex flex-wrap gap-2">
-                  {["All", "Milk", "Cheese", "Eggs"].map((cat, i) => (
-                    <span
-                      key={cat}
-                      className="rounded-full border-2 px-3 py-1 text-xs font-medium"
-                      style={{
-                        borderColor:
-                          i === 0 ? colors.primary : colors.primary + "33",
-                        backgroundColor:
-                          i === 0 ? colors.primary : "transparent",
-                        color: i === 0 ? colors.background : colors.text + "CC",
-                      }}
-                    >
-                      {cat}
-                    </span>
-                  ))}
-                </div>
-                <PreviewProductGrid
-                  products={previewProducts}
-                  layout={productLayout}
-                  colors={colors}
-                />
-              </div>
-            )}
+              )}
 
-            {!previewPage && landingPageStyle !== "hero" && (
-              <div>
-                {landingPageStyle === "classic" && (
-                  <>
-                    <div className="w-full">
-                      <img
-                        src={displayBanner}
-                        alt={`${displayName} Banner`}
-                        className="h-[200px] w-full object-cover md:h-[280px]"
-                      />
-                    </div>
-                    <div
-                      className="border-b px-6 py-8"
-                      style={{ borderColor: colors.primary + "33" }}
-                    >
-                      <div className="mx-auto flex max-w-6xl items-center gap-6">
+              {!previewPage && landingPageStyle !== "hero" && (
+                <div>
+                  {landingPageStyle === "classic" && (
+                    <>
+                      <div className="w-full">
                         <img
-                          src={displayPicture}
-                          alt={displayName}
-                          className="h-20 w-20 rounded-full border-4 object-cover"
-                          style={{ borderColor: colors.primary }}
+                          src={displayBanner}
+                          alt={`${displayName} Banner`}
+                          className="h-[200px] w-full object-cover md:h-[280px]"
                         />
-                        <div>
-                          <h1
-                            className="font-heading text-3xl font-bold"
-                            style={{ color: "var(--sf-text)" }}
-                          >
-                            {displayName}
-                          </h1>
-                          <FormattedText
-                            text={displayAbout}
-                            as="p"
-                            className="font-body mt-2 max-w-2xl opacity-70"
+                      </div>
+                      <div
+                        className="border-b px-6 py-8"
+                        style={{ borderColor: colors.primary + "33" }}
+                      >
+                        <div className="mx-auto flex max-w-6xl items-center gap-6">
+                          <img
+                            src={displayPicture}
+                            alt={displayName}
+                            className="h-20 w-20 rounded-full border-4 object-cover"
+                            style={{ borderColor: colors.primary }}
                           />
-                          <div className="mt-2 flex items-center gap-3 text-sm opacity-60">
-                            <span>{previewProducts.length} products</span>
-                            <span>12 reviews</span>
+                          <div>
+                            <h1
+                              className="font-heading text-3xl font-bold"
+                              style={{ color: "var(--sf-text)" }}
+                            >
+                              {displayName}
+                            </h1>
+                            <FormattedText
+                              text={displayAbout}
+                              as="p"
+                              className="font-body mt-2 max-w-2xl opacity-70"
+                            />
+                            <div className="mt-2 flex items-center gap-3 text-sm opacity-60">
+                              <span>{previewProducts.length} products</span>
+                              <span>12 reviews</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {landingPageStyle === "minimal" && (
+                    <div className="px-6 pt-8 pb-4">
+                      <div className="mx-auto max-w-6xl">
+                        <div className="flex items-center gap-4">
+                          <img
+                            src={displayPicture}
+                            alt={displayName}
+                            className="h-14 w-14 rounded-full object-cover"
+                          />
+                          <div>
+                            <h1 className="font-heading text-2xl font-bold">
+                              {displayName}
+                            </h1>
+                            <p className="text-sm opacity-60">
+                              {previewProducts.length} products
+                            </p>
                           </div>
                         </div>
                       </div>
                     </div>
-                  </>
-                )}
+                  )}
+                </div>
+              )}
 
-                {landingPageStyle === "minimal" && (
-                  <div className="px-6 pt-8 pb-4">
-                    <div className="mx-auto max-w-6xl">
-                      <div className="flex items-center gap-4">
-                        <img
-                          src={displayPicture}
-                          alt={displayName}
-                          className="h-14 w-14 rounded-full object-cover"
-                        />
-                        <div>
-                          <h1 className="font-heading text-2xl font-bold">
-                            {displayName}
-                          </h1>
-                          <p className="text-sm opacity-60">
-                            {previewProducts.length} products
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {previewPage === STALL_SENTINEL ? null : hasSections &&
-              activeSections.length > 0 ? (
-              <div>
-                {activeSections.map((section) => (
-                  <SectionRenderer
-                    key={section.id}
-                    section={{
-                      ...section,
-                      productLayout: section.productLayout || productLayout,
-                    }}
-                    colors={colors}
-                    shopName={displayName}
-                    shopPicture={displayPicture}
-                    shopPubkey="preview"
+              {previewPage === STALL_SENTINEL ? null : hasSections &&
+                activeSections.length > 0 ? (
+                <div>
+                  {activeSections.map((section) => (
+                    <SectionRenderer
+                      key={section.id}
+                      section={{
+                        ...section,
+                        productLayout: section.productLayout || productLayout,
+                      }}
+                      colors={colors}
+                      shopName={displayName}
+                      shopPicture={displayPicture}
+                      shopPubkey="preview"
+                      products={previewProducts}
+                      isPreview
+                    />
+                  ))}
+                </div>
+              ) : previewPage !== STALL_SENTINEL ? (
+                <div className="mx-auto max-w-6xl px-4 py-8 md:px-6">
+                  <PreviewProductGrid
                     products={previewProducts}
-                    isPreview
+                    layout={productLayout}
+                    colors={colors}
                   />
-                ))}
-              </div>
-            ) : previewPage !== STALL_SENTINEL ? (
-              <div className="mx-auto max-w-6xl px-4 py-8 md:px-6">
-                <PreviewProductGrid
-                  products={previewProducts}
-                  layout={productLayout}
-                  colors={colors}
-                />
-              </div>
-            ) : null}
+                </div>
+              ) : null}
 
-            <StorefrontFooterComponent
-              footer={previewFooter}
-              colors={colors}
-              footerColors={footerColors}
-              shopName={displayName}
-              shopSlug={shopSlug || "preview"}
-            />
+              <StorefrontFooterComponent
+                footer={previewFooter}
+                colors={colors}
+                footerColors={footerColors}
+                shopName={displayName}
+                shopSlug={shopSlug || "preview"}
+              />
+            </div>
           </div>
         </div>
       </div>
