@@ -943,7 +943,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
 
   return (
     <>
-      <div className="mb-8 xl:max-w-[600px]">
+      <div className="mb-8 lg:max-w-[600px]">
         <div className="bg-primary-blue relative flex h-48 items-center justify-center overflow-hidden rounded-xl border-3 border-black">
           {watchBanner ? (
             <img
@@ -1005,7 +1005,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
       </div>
 
       <form onSubmit={handleSubmit(onSubmit as any)} className="space-y-6">
-        <div className="space-y-6 xl:max-w-[600px]">
+        <div className="space-y-6 lg:max-w-[600px]">
           <Controller
             name="name"
             control={control}
@@ -1228,8 +1228,8 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
         {!isOnboarding && (
           <>
             <div className="border-t-4 border-black pt-6">
-              <div className="flex items-start gap-6 xl:gap-0">
-                <div className="w-full xl:h-[calc(100vh-6rem)] xl:w-[45%] xl:overflow-y-auto xl:pr-6">
+              <div className="flex items-start gap-6 lg:gap-0">
+                <div className="w-full lg:h-[calc(100vh-6rem)] lg:w-[45%] lg:overflow-y-auto lg:pr-6">
                   <h2 className="mb-4 text-xl font-bold text-black">
                     Stall Settings
                   </h2>
@@ -3042,7 +3042,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                         </a>
                       </div>
 
-                      <div className="hidden rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 p-4 xl:block">
+                      <div className="hidden rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 p-4 lg:block">
                         <div className="flex items-center gap-3">
                           {shopSlug && (
                             <a
@@ -3068,7 +3068,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                 </div>
 
                 {storefrontAuthenticated && (
-                  <div className="sticky top-4 hidden h-[calc(100vh-6rem)] xl:block xl:w-[55%]">
+                  <div className="sticky top-4 hidden h-[calc(100vh-6rem)] lg:block lg:w-[55%]">
                     <div className="h-full overflow-hidden rounded-lg border-2 border-gray-200">
                       <StorefrontPreviewPanel
                         shopName={watch("name")}
@@ -3117,7 +3117,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
               <button
                 type="button"
                 onClick={() => setIsMobilePreviewOpen(true)}
-                className="fixed right-6 bottom-6 z-50 flex items-center gap-2 rounded-full border-3 border-black bg-black px-5 py-3 font-bold text-white shadow-lg transition-transform hover:scale-105 xl:hidden"
+                className="fixed right-6 bottom-6 z-50 flex items-center gap-2 rounded-full border-3 border-black bg-black px-5 py-3 font-bold text-white shadow-lg transition-transform hover:scale-105 lg:hidden"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -3144,7 +3144,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
 
             {(isMobilePreviewOpen || isMobilePreviewClosing) && (
               <div
-                className="fixed inset-0 z-[9998] flex flex-col bg-white xl:hidden"
+                className="fixed inset-0 z-[9998] flex flex-col bg-white lg:hidden"
                 style={{
                   animation: isMobilePreviewClosing
                     ? "slideOutDown 0.3s ease-in forwards"
@@ -3220,7 +3220,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
           </>
         )}
 
-        <div className="xl:max-w-[600px]">
+        <div className="lg:max-w-[600px]">
           <Button
             className={`w-full text-lg ${BLUEBUTTONCLASSNAMES}`}
             type="submit"

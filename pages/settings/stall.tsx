@@ -27,7 +27,7 @@ const StallManagementPage = () => {
         label: "Stall",
         id: "storefront",
         children: (
-          <div className="mx-auto h-full w-full min-w-0 px-4 lg:w-1/2 xl:w-[90%] xl:max-w-[1600px]">
+          <div className="mx-auto h-full w-full min-w-0 px-4 lg:w-[90%] lg:max-w-[1600px]">
             <ShopProfileForm />
           </div>
         ),
@@ -88,12 +88,12 @@ const StallManagementPage = () => {
             refreshPath="/settings/stall?stripe=refresh"
           />
         </div>
-        <div className="mx-auto w-full px-4 pb-2">
+        <div className="mx-auto w-full px-4 pb-2 lg:w-[90%] lg:max-w-[1600px]">
           <h1 className="text-3xl font-bold text-black">Market Stall</h1>
         </div>
         <div className="sticky inset-x-0 top-0 z-30 flex w-full translate-y-0 flex-col border-0 backdrop-blur-xl transition-all md:translate-y-0">
           <div className="w-full overflow-x-auto">
-            <div className="flex flex-row items-center justify-center px-4">
+            <div className="mx-auto flex flex-row items-center justify-center px-4 lg:w-[90%] lg:max-w-[1600px]">
               <Framer.Tabs {...framer.tabProps} />
             </div>
           </div>
