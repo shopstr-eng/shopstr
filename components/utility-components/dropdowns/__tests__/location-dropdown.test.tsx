@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import LocationDropdown, { locationAvatar } from "../location-dropdown";
 import locations from "../../../../public/locationSelection.json";
 
-jest.mock("@nextui-org/react", () => ({
+jest.mock("@heroui/react", () => ({
   Select: ({ children, startContent, ...props }: any) => (
     <div data-testid="select" {...props}>
       {startContent}

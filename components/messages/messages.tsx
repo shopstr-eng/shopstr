@@ -1,7 +1,7 @@
 import { useState, useEffect, useContext } from "react";
 import { nip19 } from "nostr-tools";
 import { useRouter } from "next/router";
-import { Button, useDisclosure } from "@nextui-org/react";
+import { Button, useDisclosure } from "@heroui/react";
 import {
   constructGiftWrappedEvent,
   constructMessageSeal,
@@ -23,6 +23,7 @@ import {
 } from "@/components/utility-components/nostr-context-provider";
 import SignInModal from "../sign-in/SignInModal";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import { createNip98AuthorizationHeader } from "@/utils/nostr/nip98-auth";
 
 const Messages = ({ isPayment }: { isPayment: boolean }) => {
   const router = useRouter();
@@ -47,6 +48,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
 
   const [showFailureModal, setShowFailureModal] = useState(false);
   const [failureText, setFailureText] = useState("");
+  const [initialMessage, setInitialMessage] = useState("");
 
   const [randomNpubForSender, setRandomNpubForSender] = useState<string>("");
   const [randomNsecForSender, setRandomNsecForSender] = useState<string>("");
@@ -92,6 +94,14 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
             });
           }
           enterChat(pubkey);
+          const productTitle = router.query.productTitle as string | undefined;
+          const productUrl = router.query.productUrl as string | undefined;
+          if (productTitle) {
+            const draftText = productUrl
+              ? `Re: "${productTitle}" — ${productUrl}\n\n`
+              : `Re: "${productTitle}"\n\n`;
+            setInitialMessage(draftText);
+          }
         }
         setChatsMap(decryptedChats);
         if (currentChatPubkey) {
@@ -216,13 +226,26 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
           }
         });
         if (wrappedIdsToMark.length > 0) {
-          fetch("/api/db/mark-messages-read", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ messageIds: wrappedIdsToMark }),
-          }).catch((err) =>
-            console.error("Failed to mark messages as read:", err)
-          );
+          const body = JSON.stringify({ messageIds: wrappedIdsToMark });
+          createNip98AuthorizationHeader(
+            signer!,
+            `${window.location.origin}/api/db/mark-messages-read`,
+            "POST",
+            body
+          )
+            .then((authHeader) =>
+              fetch("/api/db/mark-messages-read", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: authHeader,
+                },
+                body,
+              })
+            )
+            .catch((err) =>
+              console.error("Failed to mark messages as read:", err)
+            );
         }
         const newChatMap = new Map(prevChatMap);
         newChatMap.set(pubkeyOfChat, updatedChat);
@@ -284,8 +307,12 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
         decodedRandomPrivkeyForReceiver.data as Uint8Array,
         currentChatPubkey
       );
-      await sendGiftWrappedMessageEvent(nostr!, senderGiftWrappedEvent);
-      await sendGiftWrappedMessageEvent(nostr!, receiverGiftWrappedEvent);
+      await sendGiftWrappedMessageEvent(nostr!, senderGiftWrappedEvent, signer);
+      await sendGiftWrappedMessageEvent(
+        nostr!,
+        receiverGiftWrappedEvent,
+        signer
+      );
       chatsContext.addNewlyCreatedMessageEvent(
         {
           ...giftWrappedMessageEvent,
@@ -309,7 +336,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
   };
 
   return (
-    <div className="min-h-screen bg-light-bg text-gray-800 dark:bg-dark-bg dark:text-gray-200">
+    <div className="bg-light-bg dark:bg-dark-bg min-h-screen text-gray-800 dark:text-gray-200">
       <div className="container mx-auto px-4 py-10">
         {chatsMap.size === 0 ? (
           <div className="flex h-[66vh] items-center justify-center">
@@ -361,7 +388,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
           </div>
         ) : (
           <div className="flex flex-row">
-            <div className="h-[85vh] w-full overflow-y-auto rounded-md pb-12 dark:bg-dark-bg md:w-[450px] md:max-w-[33%] md:flex-shrink-0 md:pb-0 lg:pb-0">
+            <div className="dark:bg-dark-bg h-[85vh] w-full overflow-y-auto rounded-md pb-12 md:w-[450px] md:max-w-[33%] md:flex-shrink-0 md:pb-0 lg:pb-0">
               {sortedChatsByLastMessage.map(
                 ([pubkeyOfChat, chatObject]: [string, ChatObject]) => {
                   return (
@@ -383,6 +410,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
               isSendingDMLoading={isSendingDMLoading}
               handleSendMessage={handleSendGiftWrappedMessage}
               isPayment={isPayment}
+              initialMessage={initialMessage}
             />
           </div>
         )}

@@ -1,3 +1,4 @@
+import { type ReactElement, type ReactNode } from "react";
 import { StorefrontColorScheme, StorefrontPolicy } from "@/utils/types/types";
 
 interface StorefrontPolicyPageProps {
@@ -5,15 +6,86 @@ interface StorefrontPolicyPageProps {
   colors: StorefrontColorScheme;
 }
 
-function inlineFormat(text: string): string {
-  return text
-    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-    .replace(/\*(.+?)\*/g, "<em>$1</em>");
+function findClosingMarker(
+  text: string,
+  start: number,
+  marker: "*" | "**"
+): number {
+  let j = start;
+  while (j < text.length) {
+    if (text[j] === "\\" && j + 1 < text.length) {
+      j += 2;
+      continue;
+    }
+    if (marker === "**") {
+      if (text[j] === "*" && text[j + 1] === "*") return j;
+    } else {
+      if (text[j] === "*" && text[j + 1] !== "*") return j;
+    }
+    j++;
+  }
+  return -1;
+}
+
+function renderInline(text: string, keyPrefix = "i"): ReactNode[] {
+  const nodes: ReactNode[] = [];
+  let buffer = "";
+  let i = 0;
+  let counter = 0;
+
+  const flushBuffer = () => {
+    if (buffer.length > 0) {
+      nodes.push(buffer);
+      buffer = "";
+    }
+  };
+
+  while (i < text.length) {
+    const ch = text[i]!;
+
+    if (ch === "\\" && i + 1 < text.length) {
+      const next = text[i + 1]!;
+      if (next === "*" || next === "\\") {
+        buffer += next;
+        i += 2;
+        continue;
+      }
+    }
+
+    if (ch === "*") {
+      const isBold = text[i + 1] === "*";
+      const marker: "*" | "**" = isBold ? "**" : "*";
+      const contentStart = i + marker.length;
+      const closeIdx = findClosingMarker(text, contentStart, marker);
+
+      if (closeIdx > contentStart) {
+        flushBuffer();
+        const inner = text.slice(contentStart, closeIdx);
+        const key = `${keyPrefix}-${isBold ? "b" : "e"}-${counter++}`;
+        const innerNodes = renderInline(inner, `${key}-n`);
+        nodes.push(
+          isBold ? (
+            <strong key={key}>{innerNodes}</strong>
+          ) : (
+            <em key={key}>{innerNodes}</em>
+          )
+        );
+        i = closeIdx + marker.length;
+        continue;
+      }
+    }
+
+    buffer += ch;
+    i++;
+  }
+
+  flushBuffer();
+  return nodes.length > 0 ? nodes : [text];
 }
 
 function renderMarkdown(content: string, colors: StorefrontColorScheme) {
   const lines = content.split("\n");
-  const elements: JSX.Element[] = [];
+  const elements: ReactElement[] = [];
   let listItems: string[] = [];
   let listKey = 0;
 
@@ -27,7 +99,7 @@ function renderMarkdown(content: string, colors: StorefrontColorScheme) {
         >
           {listItems.map((item, i) => (
             <li key={i} className="text-sm leading-relaxed">
-              <span dangerouslySetInnerHTML={{ __html: inlineFormat(item) }} />
+              <span>{renderInline(item, `li-${listKey}-${i}`)}</span>
             </li>
           ))}
         </ul>
@@ -55,7 +127,7 @@ function renderMarkdown(content: string, colors: StorefrontColorScheme) {
       elements.push(
         <h2
           key={i}
-          className="font-heading mb-3 mt-8 text-xl font-bold"
+          className="font-heading mt-8 mb-3 text-xl font-bold"
           style={{ color: colors.text }}
         >
           {line.slice(3)}
@@ -66,7 +138,7 @@ function renderMarkdown(content: string, colors: StorefrontColorScheme) {
       elements.push(
         <h3
           key={i}
-          className="font-heading mb-2 mt-6 text-lg font-semibold"
+          className="font-heading mt-6 mb-2 text-lg font-semibold"
           style={{ color: colors.text }}
         >
           {line.slice(4)}
@@ -83,8 +155,9 @@ function renderMarkdown(content: string, colors: StorefrontColorScheme) {
           key={i}
           className="font-body mb-4 text-sm leading-relaxed"
           style={{ color: colors.text + "CC" }}
-          dangerouslySetInnerHTML={{ __html: inlineFormat(line) }}
-        />
+        >
+          {renderInline(line, `p-${i}`)}
+        </p>
       );
     }
   }
@@ -98,7 +171,7 @@ export default function StorefrontPolicyPage({
   colors,
 }: StorefrontPolicyPageProps) {
   return (
-    <div className="min-h-screen px-4 pb-16 pt-20 md:px-6">
+    <div className="min-h-screen px-4 pt-20 pb-16 md:px-6">
       <div className="mx-auto max-w-3xl">
         {renderMarkdown(policy.content, colors)}
       </div>

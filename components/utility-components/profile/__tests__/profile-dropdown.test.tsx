@@ -1,4 +1,10 @@
-import { render, screen, fireEvent, act, waitFor } from "@testing-library/react";
+import {
+  render,
+  screen,
+  fireEvent,
+  act,
+  waitFor,
+} from "@testing-library/react";
 import "@testing-library/jest-dom";
 import { ProfileWithDropdown } from "../profile-dropdown";
 import { ProfileMapContext } from "@/utils/context/context";
@@ -6,6 +12,9 @@ import { SignerContext } from "@/components/utility-components/nostr-context-pro
 import { LogOut } from "@/utils/nostr/nostr-helper-functions";
 import { nip19 } from "nostr-tools";
 import React from "react";
+
+const mockFetch = jest.fn();
+global.fetch = mockFetch as unknown as typeof fetch;
 
 const mockRouterPush = jest.fn();
 jest.mock("next/router", () => ({
@@ -19,9 +28,18 @@ jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
   LogOut: jest.fn(),
 }));
 
+const mockOpenReportFlow = jest.fn();
+jest.mock("../../use-report-event-flow", () => ({
+  __esModule: true,
+  default: () => ({
+    openReportFlow: mockOpenReportFlow,
+    reportFlowUi: null,
+  }),
+}));
+
 const mockOnOpen = jest.fn();
-jest.mock("@nextui-org/react", () => {
-  const originalModule = jest.requireActual("@nextui-org/react");
+jest.mock("@heroui/react", () => {
+  const originalModule = jest.requireActual("@heroui/react");
   const React = jest.requireActual("react");
   const DropdownContext = React.createContext({
     isOpen: false,
@@ -110,7 +128,6 @@ jest.mock("@heroicons/react/24/outline", () => ({
   ClipboardIcon: () => <div data-testid="icon-clipboard" />,
   CheckIcon: () => <div data-testid="icon-check" />,
   ExclamationTriangleIcon: () => <div data-testid="icon-report" />,
-  GlobeAltIcon: () => <div data-testid="icon-globe" />,
   CheckCircleIcon: () => <div data-testid="icon-success" />,
 }));
 
@@ -162,15 +179,22 @@ describe("ProfileWithDropdown", () => {
   beforeEach(() => {
     mockRouterPush.mockClear();
     mockOnOpen.mockClear();
+    mockOpenReportFlow.mockClear();
     (LogOut as jest.Mock).mockClear();
     (navigator.clipboard.writeText as jest.Mock).mockClear();
-    global.fetch = jest.fn().mockResolvedValue({
-      json: async () => ({ profile: null }),
-    }) as typeof global.fetch;
+    mockFetch.mockResolvedValue({
+      ok: true,
+      text: jest
+        .fn()
+        .mockResolvedValue(JSON.stringify({ profile: { content: null } })),
+      json: jest.fn().mockResolvedValue({ profile: { content: null } }),
+    });
   });
 
   afterEach(() => {
-    jest.runOnlyPendingTimers();
+    try {
+      jest.runOnlyPendingTimers();
+    } catch {}
     jest.useRealTimers();
   });
 

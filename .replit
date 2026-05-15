@@ -1,12 +1,12 @@
 run = "npm run dev"
-modules = ["nodejs-20", "postgresql-16"]
+modules = ["postgresql-16", "nodejs-22"]
 
 [nix]
 channel = "stable-22_11"
 
 [deployment]
 deploymentTarget = "autoscale"
-build = ["npm", "run", "build"]
+build = ["npm", "run", "build:deploy"]
 run = ["npm", "start"]
 
 [[ports]]

@@ -9,11 +9,8 @@ import {
   Select,
   SelectItem,
   Textarea,
-} from "@nextui-org/react";
-import {
-  REPORT_TYPES,
-  ReportType,
-} from "@/utils/nostr/nostr-helper-functions";
+} from "@heroui/react";
+import { REPORT_TYPES, ReportType } from "@/utils/nostr/nostr-helper-functions";
 
 const REPORT_TYPE_LABELS: Record<ReportType, string> = {
   nudity: "Nudity",
@@ -105,7 +102,7 @@ export default function ReportEventModal({
             }}
           >
             {REPORT_TYPES.map((reportType) => (
-              <SelectItem key={reportType} value={reportType}>
+              <SelectItem key={reportType}>
                 {REPORT_TYPE_LABELS[reportType]}
               </SelectItem>
             ))}
@@ -119,7 +116,11 @@ export default function ReportEventModal({
           />
         </ModalBody>
         <ModalFooter>
-          <Button variant="light" onPress={handleClose} isDisabled={isSubmitting}>
+          <Button
+            variant="light"
+            onPress={handleClose}
+            isDisabled={isSubmitting}
+          >
             Cancel
           </Button>
           <Button

@@ -2,6 +2,7 @@ import {
   createContext,
   useCallback,
   useEffect,
+  useRef,
   useState,
   ReactNode,
 } from "react";
@@ -64,6 +65,7 @@ export function SignerContextProvider({ children }: { children: ReactNode }) {
   const [isAuthStateResolved, setIsAuthStateResolved] = useState(false);
   const [showMigrationModal, setShowMigrationModal] = useState(false);
   const isLoggedIn = !!(signer && pubkey);
+  const lastSuccessfulSignerKeyRef = useRef<string>("");
 
   const challengeHandler: ChallengeHandler = (
     type,
@@ -122,7 +124,6 @@ export function SignerContextProvider({ children }: { children: ReactNode }) {
   };
 
   const loadSigner = useCallback((retryCount = 0) => {
-    setIsAuthStateResolved(false);
     let existingSigner;
     const { signer, signInMethod } = getLocalStorageData();
 
@@ -167,12 +168,20 @@ export function SignerContextProvider({ children }: { children: ReactNode }) {
         }
       }
     } else {
+      lastSuccessfulSignerKeyRef.current = "";
       setSigner(undefined);
       setPubKey(undefined);
       setNPub(undefined);
       setIsAuthStateResolved(true);
       return;
     }
+
+    const signerKey = JSON.stringify(existingSigner);
+    if (signerKey === lastSuccessfulSignerKeyRef.current) {
+      return;
+    }
+
+    setIsAuthStateResolved(false);
 
     let signerObject: NostrSigner;
     try {
@@ -193,6 +202,7 @@ export function SignerContextProvider({ children }: { children: ReactNode }) {
 
     if (!signerObject) return;
 
+    lastSuccessfulSignerKeyRef.current = signerKey;
     setSigner(signerObject);
     loadKeys(signerObject);
 

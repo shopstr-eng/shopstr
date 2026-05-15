@@ -1,6 +1,7 @@
 import { useState } from "react";
 import Head from "next/head";
 import Link from "next/link";
+import { safeJsonLdString } from "@/utils/safe-json-ld";
 import { ArrowLeftIcon, ChevronDownIcon } from "@heroicons/react/24/outline";
 
 const faqSections = [
@@ -178,31 +179,31 @@ export default function Faq() {
         <link rel="canonical" href="https://shopstr.market/faq" />
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
+          dangerouslySetInnerHTML={{ __html: safeJsonLdString(structuredData) }}
         />
       </Head>
 
-      <div className="flex min-h-screen flex-col bg-light-bg pt-24 dark:bg-dark-bg md:pb-20">
+      <div className="bg-light-bg dark:bg-dark-bg flex min-h-screen flex-col pt-24 md:pb-20">
         <div className="container mx-auto max-w-6xl px-4">
           <div className="mb-6 flex justify-end">
             <Link href="/" passHref legacyBehavior>
-              <a className="inline-flex items-center gap-1.5 rounded-lg border border-shopstr-purple/30 px-3 py-1.5 text-sm font-medium text-shopstr-purple transition-colors hover:bg-shopstr-purple/10 dark:border-shopstr-yellow/30 dark:text-shopstr-yellow dark:hover:bg-shopstr-yellow/10">
+              <a className="border-shopstr-purple/30 text-shopstr-purple hover:bg-shopstr-purple/10 dark:border-shopstr-yellow/30 dark:text-shopstr-yellow dark:hover:bg-shopstr-yellow/10 inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors">
                 <ArrowLeftIcon className="h-4 w-4" />
                 Back to Home
               </a>
             </Link>
           </div>
-          <h1 className="mb-8 text-center text-3xl font-bold text-light-text dark:text-dark-text">
+          <h1 className="text-light-text dark:text-dark-text mb-8 text-center text-3xl font-bold">
             Frequently Asked Questions
           </h1>
 
-          <p className="mx-auto mb-10 max-w-3xl text-center text-light-text/80 dark:text-dark-text/80">
+          <p className="text-light-text/80 dark:text-dark-text/80 mx-auto mb-10 max-w-3xl text-center">
             Answers to common questions about using Shopstr
           </p>
 
           {faqSections.map((section, sectionIndex) => (
             <div key={sectionIndex} className="mb-8">
-              <h2 className="mb-4 border-b border-gray-200 pb-2 text-xl font-semibold text-light-text dark:border-gray-700 dark:text-dark-text">
+              <h2 className="text-light-text dark:text-dark-text mb-4 border-b border-gray-200 pb-2 text-xl font-semibold dark:border-gray-700">
                 {section.title}
               </h2>
 
@@ -223,18 +224,18 @@ export default function Faq() {
                         onClick={() => toggle(key)}
                         className="flex w-full items-center justify-between px-5 py-4 text-left transition-colors hover:bg-gray-50 dark:hover:bg-gray-900/50"
                       >
-                        <span className="font-medium text-light-text dark:text-dark-text">
+                        <span className="text-light-text dark:text-dark-text font-medium">
                           {item.title}
                         </span>
                         <ChevronDownIcon
-                          className={`ml-4 h-5 w-5 flex-shrink-0 text-light-text/60 duration-200 transition-transform dark:text-dark-text/60 ${
+                          className={`text-light-text/60 dark:text-dark-text/60 ml-4 h-5 w-5 flex-shrink-0 transition-transform duration-200 ${
                             isOpen ? "rotate-180" : ""
                           }`}
                         />
                       </button>
                       {isOpen && (
-                        <div className="px-5 pb-5 pt-1">
-                          <p className="leading-relaxed text-light-text/90 dark:text-dark-text/90">
+                        <div className="px-5 pt-1 pb-5">
+                          <p className="text-light-text/90 dark:text-dark-text/90 leading-relaxed">
                             {item.content}
                           </p>
                         </div>

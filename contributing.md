@@ -206,22 +206,39 @@ npm run lint-all
 
 ## Testing
 
-### 1. Run Tests
+Jest CI runs on every PR with coverage thresholds for the high-risk modules
+called out in `TESTING.md`, including Nostr helpers, fetch/cache behavior,
+cache policy, and parser logic.
+
+To find and run tests near what you changed:
 
 ```bash
-# Run all tests
+# Run everything
 npm test
+
+# Run the CI test command locally
+npm run test:ci
+
+# Run tests with coverage thresholds
+npm run test:coverage
 
 # Run tests in watch mode during development
 npm run test:watch
-```
 
-### 2. Writing Tests
+# Run one file to stay focused
+npx jest utils/nostr/__tests__/fetch-service.test.ts --runInBand
+npx jest utils/parsers/__tests__/product-parser-functions.test.ts --runInBand
+
+# See what's not covered
+npm test -- --coverage
+```
 
 - Write tests for new features and bug fixes
 - Place test files next to the components they test or in a `__tests__` directory
 - Use descriptive test names
 - Follow existing test patterns
+- See `TESTING.md` for CI coverage expectations and the high-risk modules that
+  currently define the enforced threshold.
 
 ## Creating a Pull Request
 
@@ -235,7 +252,7 @@ npm run build
 npm run lint-all
 
 # Run tests
-npm test
+npm run test:coverage
 
 # Format code
 npx prettier --write .

@@ -68,7 +68,7 @@ const MessageFeed = ({ isInquiry = false }) => {
         </div>
       </div>
 
-      <div className="flex w-full min-w-0 flex-1 flex-col overflow-x-auto bg-light-bg pt-4 dark:bg-dark-bg">
+      <div className="bg-light-bg dark:bg-dark-bg flex w-full min-w-0 flex-1 flex-col overflow-x-auto pt-4">
         {showSpinner ? null : framer.selectedTab!.children}
       </div>
     </div>

@@ -1,11 +1,11 @@
 import { createContext } from "react";
 import {
+  NostrEvent,
   NostrMessageEvent,
   ProfileData,
   ShopProfile,
   Community,
   CommunityPost,
-  NostrEvent,
 } from "../types/types";
 import { Proof } from "@cashu/cashu-ts";
 
@@ -32,16 +32,16 @@ export const ShopMapContext = createContext({
 } as ShopContextInterface);
 
 export interface ProductContextInterface {
-  productEvents: any;
+  productEvents: NostrEvent[];
   isLoading: boolean;
-  addNewlyCreatedProductEvent: (productEvent: any) => void;
+  addNewlyCreatedProductEvent: (productEvent: NostrEvent) => void;
   removeDeletedProductEvent: (productId: string) => void;
 }
 
 export const ProductContext = createContext({
-  productEvents: {},
+  productEvents: [],
   isLoading: true,
-  addNewlyCreatedProductEvent: (_productEvent: any) => {},
+  addNewlyCreatedProductEvent: (_productEvent: NostrEvent) => {},
   removeDeletedProductEvent: (_productId: string) => {},
 } as ProductContextInterface);
 

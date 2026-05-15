@@ -1,7 +1,7 @@
 import { useContext, useEffect, useRef, useState, useMemo } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
-import { useDisclosure } from "@nextui-org/react";
+import { useDisclosure } from "@heroui/react";
 import {
   ShoppingCartIcon,
   Bars3Icon,
@@ -42,6 +42,10 @@ import StorefrontWallet from "./storefront-wallet";
 import StorefrontMyListings from "./storefront-my-listings";
 import StorefrontOrderConfirmation from "./storefront-order-confirmation";
 import StorefrontPolicyPage from "./storefront-policy-page";
+import {
+  isExternalStorefrontHref,
+  sanitizeStorefrontNavHref,
+} from "@/utils/storefront-links";
 
 const DEFAULT_COLORS: StorefrontColorScheme = {
   primary: "#a438ba",
@@ -349,20 +353,6 @@ export default function StorefrontLayout({
 
   const homeHref = shopSlug ? `/shop/${shopSlug}` : "/marketplace";
 
-  const resolveNavHref = (link: StorefrontNavLink) => {
-    if (link.isPage) return `/shop/${shopSlug}/${link.href}`;
-    if (
-      link.href.startsWith("/") ||
-      link.href.startsWith("http") ||
-      link.href.startsWith("mailto:")
-    )
-      return link.href;
-    return `/shop/${shopSlug}/${link.href}`;
-  };
-
-  const isExternalNavHref = (href: string) =>
-    href.startsWith("http") || href.startsWith("mailto:");
-
   const themedCss = `
     body.sf-active [data-overlay-container] .border-black { border-color: var(--sf-secondary) !important; }
     body.sf-active [data-overlay-container] .bg-white { background-color: var(--sf-bg) !important; }
@@ -406,7 +396,7 @@ export default function StorefrontLayout({
         }}
       >
         <nav
-          className="fixed left-0 right-0 top-0 z-50 border-b"
+          className="fixed top-0 right-0 left-0 z-50 border-b"
           style={{
             backgroundColor: colors.secondary,
             borderColor: colors.primary + "33",
@@ -432,7 +422,11 @@ export default function StorefrontLayout({
             {defaultNavLinks.length > 0 && (
               <div className="hidden items-center gap-1 lg:flex">
                 {defaultNavLinks.map((link, idx) => {
-                  const href = resolveNavHref(link);
+                  const href = sanitizeStorefrontNavHref(
+                    link,
+                    shopSlug,
+                    homeHref
+                  );
                   const isActive = currentPage
                     ? link.href === currentPage
                     : link.href === "" || link.href === "/";
@@ -441,7 +435,7 @@ export default function StorefrontLayout({
                   };
                   const linkClass =
                     "rounded-md px-3 py-2 text-sm font-medium transition-colors";
-                  if (isExternalNavHref(href)) {
+                  if (isExternalStorefrontHref(href)) {
                     return (
                       <a
                         key={idx}
@@ -482,7 +476,7 @@ export default function StorefrontLayout({
                 <ShoppingCartIcon className="h-5 w-5" />
                 {cartQuantity > 0 && (
                   <span
-                    className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full text-xs font-bold"
+                    className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full text-xs font-bold"
                     style={{
                       backgroundColor: colors.primary,
                       color: colors.secondary,
@@ -544,10 +538,14 @@ export default function StorefrontLayout({
             >
               {defaultNavLinks.length > 0 &&
                 defaultNavLinks.map((link, idx) => {
-                  const href = resolveNavHref(link);
+                  const href = sanitizeStorefrontNavHref(
+                    link,
+                    shopSlug,
+                    homeHref
+                  );
                   const mobileClass = "block px-6 py-3 text-sm font-medium";
                   const mobileStyle = { color: navTextColor + "CC" };
-                  if (isExternalNavHref(href)) {
+                  if (isExternalStorefrontHref(href)) {
                     return (
                       <a
                         key={idx}
@@ -753,7 +751,7 @@ export default function StorefrontLayout({
             )}
 
             {landingStyle === "minimal" && (
-              <div className="px-6 pb-4 pt-20">
+              <div className="px-6 pt-20 pb-4">
                 <div className="mx-auto max-w-6xl">
                   <div className="flex items-center gap-4">
                     {pictureUrl && (

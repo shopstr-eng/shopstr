@@ -9,7 +9,7 @@ import * as nostrHelpers from "@/utils/nostr/nostr-helper-functions";
 import * as zapValidator from "@/utils/nostr/zap-validator";
 import { LightningAddress } from "@getalby/lightning-tools";
 
-jest.mock("@nextui-org/react", () => ({
+jest.mock("@heroui/react", () => ({
   Button: ({
     onClick,
     children,

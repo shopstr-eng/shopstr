@@ -22,7 +22,10 @@ export default async function handler(
   try {
     const productIds = normalizeQueryParam(req.query.e);
     const profilePubkeys = normalizeQueryParam(req.query.p);
-    const reports = await fetchRelevantReportsFromDb(productIds, profilePubkeys);
+    const reports = await fetchRelevantReportsFromDb(
+      productIds,
+      profilePubkeys
+    );
     res.status(200).json(reports);
   } catch (error) {
     console.error("Failed to fetch reports from database:", error);
