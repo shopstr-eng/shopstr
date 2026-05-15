@@ -254,9 +254,7 @@ export default async function handler(
             }))
           ),
         },
-        automatic_payment_methods: {
-          enabled: true,
-        },
+        payment_method_types: ["card"],
       };
 
       if (safeCustomerEmail) {
@@ -367,9 +365,7 @@ export default async function handler(
         }),
         ...(taxCalculationId && { taxCalculationId: String(taxCalculationId) }),
       },
-      automatic_payment_methods: {
-        enabled: true,
-      },
+      payment_method_types: ["card"],
       ...(singleDonationCut > 0 && {
         application_fee_amount: singleDonationCut,
       }),
