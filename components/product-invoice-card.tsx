@@ -375,6 +375,13 @@ export default function ProductInvoiceCard({
   const [_stripePaymentIntentId, setStripePaymentIntentId] = useState<
     string | null
   >(null);
+
+  // Sales-tax states (populated after shipping address is filled in)
+  const [salesTaxSmallest, setSalesTaxSmallest] = useState(0);
+  const [salesTaxNative, setSalesTaxNative] = useState(0);
+  const [salesTaxCurrency, setSalesTaxCurrency] = useState("");
+  const [taxCalculationId, setTaxCalculationId] = useState<string | null>(null);
+  const [isCalculatingTax, setIsCalculatingTax] = useState(false);
   const [stripePaymentConfirmed, setStripePaymentConfirmed] = useState(false);
   const [_stripeTimeoutSeconds, setStripeTimeoutSeconds] =
     useState<number>(600); // 10 minutes
@@ -2971,11 +2978,11 @@ export default function ProductInvoiceCard({
           body: JSON.stringify({
             amount: stripeAmount,
             currency: stripeCurrency,
-            customerEmail:
-              buyerEmail ||
-              (userPubkey
+            customerEmail: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(buyerEmail || "")
+              ? buyerEmail
+              : userPubkey
                 ? `${userPubkey.substring(0, 8)}@nostr.com`
-                : `guest-${orderId.substring(0, 8)}@nostr.com`),
+                : `guest-${orderId.substring(0, 8)}@nostr.com`,
             productTitle: productData.title,
             productDescription:
               selectedSize || selectedVolume || selectedWeight
@@ -2984,15 +2991,19 @@ export default function ProductInvoiceCard({
                   }${selectedWeight ? ` Weight: ${selectedWeight}` : ""}`
                 : undefined,
             metadata: {
-              orderId,
-              productId: productData.id,
-              sellerPubkey: productData.pubkey,
-              buyerPubkey: userPubkey || "",
-              productTitle: productData.title,
-              selectedSize: selectedSize || "",
-              selectedVolume: selectedVolume || "",
-              selectedWeight: selectedWeight || "",
+              orderId: orderId.substring(0, 490),
+              productId: (productData.id || "").substring(0, 490),
+              sellerPubkey: (productData.pubkey || "").substring(0, 490),
+              buyerPubkey: (userPubkey || "").substring(0, 490),
+              productTitle: (productData.title || "").substring(0, 490),
+              selectedSize: (selectedSize || "").substring(0, 490),
+              selectedVolume: (selectedVolume || "").substring(0, 490),
+              selectedWeight: (selectedWeight || "").substring(0, 490),
             },
+            ...(salesTaxSmallest > 0 && {
+              salesTaxSmallest,
+              taxCalculationId: taxCalculationId || undefined,
+            }),
           }),
         });
 
@@ -3021,6 +3032,9 @@ export default function ProductInvoiceCard({
       console.error("Stripe payment error:", error);
       setInvoiceGenerationFailed(true);
       setShowInvoiceCard(false);
+      const detail = error instanceof Error ? error.message : "Unknown error";
+      setFailureText(`Card payment setup failed: ${detail}`);
+      setShowFailureModal(true);
     }
   };
 
@@ -3359,6 +3373,111 @@ export default function ProductInvoiceCard({
   const getFiatMethodTotal = (fiatKey: string) => {
     return getMethodDiscountedTotal(fiatKey);
   };
+
+  // Debounced Stripe Tax lookup — fires when the shipping form has at least a
+  // country + postal code. Resets when the form type changes away from shipping.
+  useEffect(() => {
+    const isShippingForm = formType === "shipping";
+    if (!isStripeMerchant || !isShippingForm) {
+      if (salesTaxSmallest !== 0 || salesTaxNative !== 0) {
+        setSalesTaxSmallest(0);
+        setSalesTaxNative(0);
+        setSalesTaxCurrency("");
+        setTaxCalculationId(null);
+      }
+      return;
+    }
+
+    const country = (watchedValues?.Country || "").toString().trim();
+    const postal = (watchedValues?.["Postal Code"] || "").toString().trim();
+    const city = (watchedValues?.City || "").toString().trim();
+    const state = (watchedValues?.["State/Province"] || "").toString().trim();
+    const line1 = (watchedValues?.Address || "").toString().trim();
+    const line2 = (watchedValues?.Unit || "").toString().trim();
+
+    if (!country || !postal) {
+      if (salesTaxSmallest !== 0) {
+        setSalesTaxSmallest(0);
+        setSalesTaxNative(0);
+        setSalesTaxCurrency("");
+        setTaxCalculationId(null);
+      }
+      return;
+    }
+
+    if (!stripeTotal || stripeTotal <= 0) return;
+
+    let cancelled = false;
+    setIsCalculatingTax(true);
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch("/api/stripe/calculate-tax", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            amount: stripeTotal,
+            currency: productData.currency,
+            shippingAddress: {
+              line1: line1 || undefined,
+              line2: line2 || undefined,
+              city: city || undefined,
+              state: state || undefined,
+              postal_code: postal,
+              country,
+            },
+            sellerPubkey: productData.pubkey,
+            isMultiMerchant: false,
+          }),
+        });
+        if (cancelled) return;
+        const data = await res.json();
+        if (
+          res.ok &&
+          data?.success &&
+          typeof data.taxAmountSmallest === "number" &&
+          data.taxAmountSmallest > 0
+        ) {
+          const denom = data.isZeroDecimal ? 1 : 100;
+          setSalesTaxSmallest(data.taxAmountSmallest);
+          setSalesTaxNative(data.taxAmountSmallest / denom);
+          setSalesTaxCurrency(data.currency || productData.currency);
+          setTaxCalculationId(data.calculationId || null);
+        } else {
+          setSalesTaxSmallest(0);
+          setSalesTaxNative(0);
+          setSalesTaxCurrency("");
+          setTaxCalculationId(null);
+        }
+      } catch {
+        if (!cancelled) {
+          setSalesTaxSmallest(0);
+          setSalesTaxNative(0);
+          setSalesTaxCurrency("");
+          setTaxCalculationId(null);
+        }
+      } finally {
+        if (!cancelled) setIsCalculatingTax(false);
+      }
+    }, 600);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+      setIsCalculatingTax(false);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    watchedValues?.Country,
+    watchedValues?.["Postal Code"],
+    watchedValues?.["State/Province"],
+    watchedValues?.City,
+    watchedValues?.Address,
+    watchedValues?.Unit,
+    formType,
+    isStripeMerchant,
+    stripeTotal,
+    productData.currency,
+    productData.pubkey,
+  ]);
 
   const isSatsCurrency =
     productData.currency.toLowerCase() === "sats" ||
@@ -3987,6 +4106,19 @@ export default function ProductInvoiceCard({
                         </div>
                       )}
                   </div>
+                  {(salesTaxNative > 0 || isCalculatingTax) && (
+                    <div className="mt-2 flex justify-between border-t pt-2 text-sm">
+                      <span className="ml-2">Sales tax:</span>
+                      <span>
+                        {isCalculatingTax && salesTaxNative === 0
+                          ? "Calculating..."
+                          : formatWithCommas(
+                              salesTaxNative,
+                              salesTaxCurrency || productData.currency
+                            )}
+                      </span>
+                    </div>
+                  )}
                   <div className="flex justify-between border-t pt-2 font-semibold">
                     <span>
                       {isSubscription && subscriptionFrequency
@@ -3994,7 +4126,10 @@ export default function ProductInvoiceCard({
                         : "Total:"}
                     </span>
                     <span>
-                      {formatWithCommas(discountedTotal, productData.currency)}
+                      {formatWithCommas(
+                        discountedTotal + salesTaxNative,
+                        productData.currency
+                      )}
                       {isSubscription && subscriptionFrequency && (
                         <span className="text-sm font-normal text-purple-600">
                           /
@@ -4225,10 +4360,26 @@ export default function ProductInvoiceCard({
                     </div>
                   )}
                 </div>
+                {(salesTaxNative > 0 || isCalculatingTax) && (
+                  <div className="mt-2 flex justify-between border-t pt-2 text-sm">
+                    <span className="ml-2">Sales tax:</span>
+                    <span>
+                      {isCalculatingTax && salesTaxNative === 0
+                        ? "Calculating..."
+                        : formatWithCommas(
+                            salesTaxNative,
+                            salesTaxCurrency || productData.currency
+                          )}
+                    </span>
+                  </div>
+                )}
                 <div className="flex justify-between border-t pt-2 font-semibold">
                   <span>Total:</span>
                   <span>
-                    {formatWithCommas(discountedTotal, productData.currency)}
+                    {formatWithCommas(
+                      discountedTotal + salesTaxNative,
+                      productData.currency
+                    )}
                     {!isSatsCurrency && satsEstimate != null && (
                       <span className="ml-2 text-sm font-normal text-gray-500">
                         ≈ {formatWithCommas(satsEstimate, "sats")}
