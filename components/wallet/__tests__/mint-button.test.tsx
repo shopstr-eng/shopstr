@@ -15,7 +15,11 @@ import { Mint as CashuMint, Wallet as CashuWallet } from "@cashu/cashu-ts";
 import * as NostrHelper from "@/utils/nostr/nostr-helper-functions";
 import QRCode from "qrcode";
 
-jest.mock("@cashu/cashu-ts");
+jest.mock("@cashu/cashu-ts", () => ({
+  ...jest.requireActual("@cashu/cashu-ts"),
+  Wallet: jest.fn(),
+  Mint: jest.fn().mockImplementation(() => ({})),
+}));
 const mockCreateMintQuote = jest.fn();
 const mockCheckMintQuote = jest.fn();
 const mockMintProofs = jest.fn();
