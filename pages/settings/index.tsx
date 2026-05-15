@@ -7,6 +7,7 @@ import {
   ArrowRightStartOnRectangleIcon,
   KeyIcon,
   EnvelopeIcon,
+  CreditCardIcon,
 } from "@heroicons/react/24/outline";
 import { LogOut } from "@/utils/nostr/nostr-helper-functions";
 import ProtectedRoute from "@/components/utility-components/protected-route";
@@ -46,6 +47,15 @@ const SettingsPage = () => {
       icon: UserGroupIcon,
       iconBg: "bg-slate-600",
       route: "/settings/community",
+    },
+    {
+      id: "payments",
+      title: "Payments",
+      description:
+        "Manage your Stripe account, payouts, bank accounts, and verification info",
+      icon: CreditCardIcon,
+      iconBg: "bg-slate-600",
+      route: "/settings/payments",
     },
     {
       id: "account",

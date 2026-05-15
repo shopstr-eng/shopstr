@@ -216,3 +216,24 @@ export function buildStripeAccountStatusProof(pubkey: string): McpRequestProof {
     pubkey,
   };
 }
+
+export function buildStripeManageLinkProof({
+  pubkey,
+  accountId,
+  mode,
+}: {
+  pubkey: string;
+  accountId: string;
+  mode: "dashboard" | "update";
+}): McpRequestProof {
+  return {
+    action: "stripe_manage_link",
+    method: "POST",
+    path: "/api/stripe/connect/manage-link",
+    pubkey,
+    fields: {
+      accountId,
+      mode,
+    },
+  };
+}
