@@ -68,6 +68,10 @@ export default async function handler(
 
     const account = await stripe.accounts.create({
       type: "express",
+      capabilities: {
+        card_payments: { requested: true },
+        transfers: { requested: true },
+      },
       metadata: {
         pubkey: normalizedPubkey,
       },

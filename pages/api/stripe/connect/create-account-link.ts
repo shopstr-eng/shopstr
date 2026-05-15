@@ -6,6 +6,7 @@ import {
   extractSignedEventFromRequest,
   verifyAndConsumeSignedRequestProof,
 } from "@/utils/mcp/request-proof-server";
+import { ensureConnectAccountCapabilities } from "@/utils/stripe/ensure-capabilities";
 import { verifyNostrAuth } from "@/utils/stripe/verify-nostr-auth";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
@@ -147,6 +148,8 @@ export default async function handler(
     if (!resolvedRefreshUrl.ok) {
       return res.status(400).json({ error: resolvedRefreshUrl.error });
     }
+
+    await ensureConnectAccountCapabilities(stripe, accountId);
 
     const accountLink = await stripe.accountLinks.create({
       account: accountId,

@@ -6,6 +6,7 @@ import {
   extractSignedEventFromRequest,
   verifyAndConsumeSignedRequestProof,
 } from "@/utils/mcp/request-proof-server";
+import { ensureConnectAccountCapabilities } from "@/utils/stripe/ensure-capabilities";
 import { verifyNostrAuth } from "@/utils/stripe/verify-nostr-auth";
 import { applyRateLimit } from "@/utils/rate-limit";
 
@@ -98,6 +99,8 @@ export default async function handler(
       (process.env.REPLIT_DEV_DOMAIN
         ? `https://${process.env.REPLIT_DEV_DOMAIN}`
         : "http://localhost:3000");
+
+    await ensureConnectAccountCapabilities(stripe, accountId);
 
     if (mode === "dashboard") {
       // Express dashboard login link — managers payouts, bank accounts,

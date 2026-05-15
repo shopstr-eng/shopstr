@@ -73,6 +73,7 @@ import SectionEditor from "./storefront/section-editor";
 import { useDragReorder } from "@/utils/hooks/useDragReorder";
 import FooterEditor from "./storefront/footer-editor";
 import PageEditor from "./storefront/page-editor";
+import CustomDomainSection from "./custom-domain-section";
 import StorefrontPreviewModal from "./storefront/storefront-preview-modal";
 import StorefrontPreviewPanel from "./storefront/storefront-preview-panel";
 import { sanitizeStorefrontConfigLinks } from "@/utils/storefront-links";
@@ -3026,20 +3027,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                       </div>
 
                       <div className="mb-6">
-                        <label className="mb-2 block text-base font-bold text-black">
-                          Custom Domain
-                        </label>
-                        <p className="mb-2 text-sm text-gray-500">
-                          Want to use your own domain (e.g.,
-                          shop.yourdomain.com) for your storefront? We can help
-                          set that up for you.
-                        </p>
-                        <a
-                          href="mailto:support@milk.market?subject=Custom%20Domain%20Request&body=Hi%2C%20I%27d%20like%20to%20set%20up%20a%20custom%20domain%20for%20my%20storefront.%0A%0AShop%20URL%3A%20milk.market%2Fshop%2F%0ADomain%3A%20"
-                          className="inline-block rounded-lg border-3 border-black bg-white px-4 py-2 text-sm font-bold text-black hover:bg-gray-100"
-                        >
-                          Contact Us
-                        </a>
+                        <CustomDomainSection />
                       </div>
 
                       <div className="hidden rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 p-4 lg:block">
