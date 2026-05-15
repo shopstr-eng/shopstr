@@ -5,6 +5,7 @@ import { useRouter } from "next/router";
 import { useTabs } from "@/components/hooks/use-tabs";
 import { Framer } from "@/components/framer";
 import ShopProfileForm from "@/components/settings/shop-profile-form";
+import CustomDomainSection from "@/components/settings/custom-domain-section";
 import StallFeed from "@/components/stall/stall-feed";
 import StripeConnectBanner from "@/components/stripe-connect/StripeConnectBanner";
 import ProtectedRoute from "@/components/utility-components/protected-route";
@@ -27,8 +28,11 @@ const StallManagementPage = () => {
         label: "Stall",
         id: "storefront",
         children: (
-          <div className="mx-auto h-full w-full min-w-0 px-4">
+          <div className="mx-auto h-full w-full min-w-0 space-y-6 px-4">
             <ShopProfileForm />
+            <div className="mx-auto w-full max-w-4xl">
+              <CustomDomainSection />
+            </div>
           </div>
         ),
       },

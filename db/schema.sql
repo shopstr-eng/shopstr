@@ -378,12 +378,18 @@ CREATE TABLE IF NOT EXISTS custom_domains (
     domain TEXT NOT NULL UNIQUE,
     shop_slug TEXT NOT NULL,
     verified BOOLEAN DEFAULT FALSE,
+    domain_type TEXT DEFAULT 'subdomain',
+    verification_token TEXT,
+    tls_status TEXT DEFAULT 'pending_dns',
+    attached_at TIMESTAMP,
+    admin_notified_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_custom_domains_domain ON custom_domains(domain);
 CREATE INDEX IF NOT EXISTS idx_custom_domains_pubkey ON custom_domains(pubkey);
+CREATE INDEX IF NOT EXISTS idx_custom_domains_tls_status ON custom_domains(tls_status);
 
 -- Email popup captures for storefront discount popups
 CREATE TABLE IF NOT EXISTS popup_email_captures (

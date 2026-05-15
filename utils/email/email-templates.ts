@@ -829,6 +829,34 @@ export function transferFailureAlertEmail(params: {
   };
 }
 
+export function customDomainAdminNotificationEmail(params: {
+  domain: string;
+  domainType: "subdomain" | "apex";
+  shopSlug: string;
+  sellerPubkey: string;
+  verificationToken: string;
+}): { subject: string; html: string } {
+  const body = `
+    <h2 style="margin:0 0 16px;color:#111827;font-size:20px;font-weight:700;">New Custom Domain Submission</h2>
+    <p style="margin:0 0 16px;color:#374151;font-size:15px;line-height:1.6;">
+      A seller has submitted a custom domain. Once DNS is verified, attach it to the Replit deployment to provision TLS.
+    </p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f9fafb;border-radius:8px;padding:16px;margin-bottom:24px;">
+      <tr><td style="padding:4px 0;color:#374151;font-size:14px;"><strong>Domain:</strong> ${esc(params.domain)}</td></tr>
+      <tr><td style="padding:4px 0;color:#374151;font-size:14px;"><strong>Type:</strong> ${esc(params.domainType)}</td></tr>
+      <tr><td style="padding:4px 0;color:#374151;font-size:14px;"><strong>Stall slug:</strong> ${esc(params.shopSlug)}</td></tr>
+      <tr><td style="padding:4px 0;color:#374151;font-size:14px;font-family:monospace;"><strong>Seller pubkey:</strong> ${esc(params.sellerPubkey)}</td></tr>
+      <tr><td style="padding:4px 0;color:#374151;font-size:14px;font-family:monospace;"><strong>TXT token:</strong> ${esc(params.verificationToken)}</td></tr>
+    </table>
+    <p style="margin:0;color:#6b7280;font-size:13px;line-height:1.5;">
+      Review and attach via the admin domains page or directly in the Replit Deployment dashboard.
+    </p>`;
+  return {
+    subject: `${BRAND_NAME} — New custom domain: ${params.domain}`,
+    html: baseTemplate("New Custom Domain", body),
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Affiliate program emails
 // ---------------------------------------------------------------------------

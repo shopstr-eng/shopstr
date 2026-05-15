@@ -432,6 +432,13 @@ async function initializeTables(): Promise<void> {
       CREATE INDEX IF NOT EXISTS idx_custom_domains_domain ON custom_domains(domain);
       CREATE INDEX IF NOT EXISTS idx_custom_domains_pubkey ON custom_domains(pubkey);
 
+      ALTER TABLE custom_domains ADD COLUMN IF NOT EXISTS domain_type TEXT DEFAULT 'subdomain';
+      ALTER TABLE custom_domains ADD COLUMN IF NOT EXISTS verification_token TEXT;
+      ALTER TABLE custom_domains ADD COLUMN IF NOT EXISTS tls_status TEXT DEFAULT 'pending_dns';
+      ALTER TABLE custom_domains ADD COLUMN IF NOT EXISTS attached_at TIMESTAMP;
+      ALTER TABLE custom_domains ADD COLUMN IF NOT EXISTS admin_notified_at TIMESTAMP;
+      CREATE INDEX IF NOT EXISTS idx_custom_domains_tls_status ON custom_domains(tls_status);
+
       -- Subscriptions table for recurring product subscriptions
       CREATE TABLE IF NOT EXISTS subscriptions (
           id SERIAL PRIMARY KEY,

@@ -13,6 +13,7 @@ import {
   paymentFailedBuyerEmail,
   paymentFailedSellerEmail,
   transferFailureAlertEmail,
+  customDomainAdminNotificationEmail,
   affiliatePaidEmail,
   affiliatePausedToAffiliateEmail,
   affiliatePausedToSellerEmail,
@@ -226,6 +227,20 @@ export async function sendAffiliatePausedToSeller(
 ): Promise<boolean> {
   const { subject, html } = affiliatePausedToSellerEmail(params);
   return sendEmail(sellerEmail, subject, html);
+}
+
+export async function sendCustomDomainAdminNotification(
+  adminEmail: string,
+  params: {
+    domain: string;
+    domainType: "subdomain" | "apex";
+    shopSlug: string;
+    sellerPubkey: string;
+    verificationToken: string;
+  }
+): Promise<boolean> {
+  const { subject, html } = customDomainAdminNotificationEmail(params);
+  return sendEmail(adminEmail, subject, html);
 }
 
 export async function sendTransferFailureAlert(
