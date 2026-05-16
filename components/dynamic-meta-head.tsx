@@ -31,20 +31,53 @@ function ensureAbsoluteUrl(url: string, base: string): string {
   return `${base}${url.startsWith("/") ? "" : "/"}${url}`;
 }
 
+const STATIC_PAGE_META: Record<string, { title: string; description: string }> =
+  {
+    "/about": {
+      title: "About Shopstr | Bitcoin-Native Nostr Marketplace",
+      description:
+        "Shopstr is a global, permissionless marketplace built on the Nostr protocol. Learn about our mission to enable censorship-resistant Bitcoin commerce worldwide.",
+    },
+    "/contact": {
+      title: "Contact Shopstr | Get in Touch via Nostr & GitHub",
+      description:
+        "Contact the Shopstr team via Nostr, GitHub, or X. We are a decentralized open-source project — all communication happens on open protocols.",
+    },
+    "/faq": {
+      title: "FAQ | Shopstr — Bitcoin Nostr Marketplace Help",
+      description:
+        "Answers to common questions about Shopstr — the permissionless Bitcoin marketplace on Nostr. Learn about payments, Lightning Network, selling, privacy, and more.",
+    },
+  };
+
 const getMetaTags = (
-  windowOrigin: string,
   pathname: string,
   query: { productId?: string[]; npub?: string[] },
   productEvents: NostrEvent[],
   shopEvents: Map<string, ShopProfile>,
   profileData: Map<string, ProfileData>
 ): MetaTagsType => {
+  // Canonical URL must always point to the production domain, regardless of
+  // the host the page is currently being served from (e.g. a *.replit.app
+  // preview). Lighthouse flags cross-origin canonicals as "blocked from
+  // indexing", and a canonical pointing at the homepage on every route is its
+  // own SEO error. So we anchor on BASE_URL and append the actual pathname.
+  const canonicalPath = pathname === "/" ? "" : pathname;
   const defaultTags = {
     title: DEFAULT_OG.title,
     description: DEFAULT_OG.description,
     image: ensureAbsoluteUrl("/shopstr-2000x2000.png", BASE_URL),
-    url: `${windowOrigin}`,
+    url: `${BASE_URL}${canonicalPath}`,
   };
+
+  const staticMeta = STATIC_PAGE_META[pathname];
+  if (staticMeta) {
+    return {
+      ...defaultTags,
+      title: staticMeta.title,
+      description: staticMeta.description,
+    };
+  }
 
   if (pathname.startsWith("/listing/")) {
     const productId = query.productId?.[0];
@@ -95,7 +128,7 @@ const getMetaTags = (
           productData.images?.[0] || "/shopstr-2000x2000.png",
           BASE_URL
         ),
-        url: `${windowOrigin}/listing/${slug || productId}`,
+        url: `${BASE_URL}/listing/${slug || productId}`,
       };
     }
 
@@ -129,7 +162,7 @@ const getMetaTags = (
           shopInfo.content.ui.picture || "/shopstr-2000x2000.png",
           BASE_URL
         ),
-        url: `${windowOrigin}/marketplace/${profileSlug}`,
+        url: `${BASE_URL}/marketplace/${profileSlug}`,
       };
     }
     return {
@@ -160,18 +193,15 @@ const DynamicHead = ({
     setOrigin(window.location.origin);
   }, []);
 
-  const effectiveOrigin = origin || BASE_URL;
-
   const metaTags = ssrOgMeta
     ? {
         title: ssrOgMeta.title,
         description: ssrOgMeta.description,
-        image: ensureAbsoluteUrl(ssrOgMeta.image, effectiveOrigin),
-        url: ensureAbsoluteUrl(ssrOgMeta.url, effectiveOrigin),
+        image: ensureAbsoluteUrl(ssrOgMeta.image, BASE_URL),
+        url: ensureAbsoluteUrl(ssrOgMeta.url, BASE_URL),
       }
     : getMetaTags(
-        effectiveOrigin,
-        router.pathname,
+        router.asPath.split("?")[0]?.split("#")[0] || router.pathname,
         router.query,
         productEvents,
         shopEvents,
@@ -282,8 +312,8 @@ const DynamicHead = ({
       />
       <title>{metaTags.title}</title>
       <meta name="description" content={metaTags.description} />
-      <link rel="canonical" href={metaTags.url} />
-      <meta property="og:url" content={metaTags.url} />
+      <link rel="canonical" href={metaTags.url} key="canonical" />
+      <meta property="og:url" content={metaTags.url} key="og:url" />
       <meta property="og:type" content="website" />
       <meta property="og:title" content={metaTags.title} />
       <meta property="og:description" content={metaTags.description} />

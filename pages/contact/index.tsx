@@ -65,7 +65,6 @@ export default function Contact() {
           name="description"
           content="Contact the Shopstr team via Nostr, GitHub, or X. We are a decentralized open-source project — all communication happens on open protocols."
         />
-        <link rel="canonical" href="https://shopstr.market/contact" />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: safeJsonLdString(structuredData) }}
