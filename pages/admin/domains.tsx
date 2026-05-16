@@ -28,6 +28,27 @@ const STATUS_OPTIONS = [
 
 type AdminGate = "checking" | "allowed" | "denied" | "no-signer";
 
+const SIGN_TIMEOUT_MS = 45_000;
+
+function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(
+      () => reject(new Error(`${label} timed out after ${ms / 1000}s`)),
+      ms
+    );
+    p.then(
+      (v) => {
+        clearTimeout(t);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(t);
+        reject(e);
+      }
+    );
+  });
+}
+
 function AdminDomainsInner() {
   const { signer, pubkey: userPubkey } = useContext(SignerContext);
 
@@ -36,26 +57,20 @@ function AdminDomainsInner() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [updating, setUpdating] = useState<string | null>(null);
+  const [phase, setPhase] = useState<string>("idle");
 
-  // Hold latest signer/pubkey in a ref so the load() callback identity stays
-  // stable across re-renders. Otherwise every signer-state churn (e.g. the
-  // passphrase challenge handler updating React state) would re-create load,
-  // re-fire the load effect, and start a second signer.sign() in parallel
-  // with the first — which collides on the NSec passphrase prompt and
-  // strands the original promise (it never resolves, so `loading` stays
-  // true forever).
+  // Hold latest signer in a ref so callbacks always read the current instance
+  // without re-running effects when signer churns.
   const signerRef = useRef(signer);
-  const pubkeyRef = useRef(userPubkey);
   useEffect(() => {
     signerRef.current = signer;
   }, [signer]);
-  useEffect(() => {
-    pubkeyRef.current = userPubkey;
-  }, [userPubkey]);
-  const inflightRef = useRef(false);
-  const loadedOnceRef = useRef(false);
 
-  // Check admin status as soon as we have the user's pubkey.
+  const inflightRef = useRef(false);
+
+  // Gate check only depends on userPubkey so signer churn doesn't keep
+  // cancelling the in-flight admin check. Signer readiness is verified
+  // again at load-time.
   useEffect(() => {
     let cancelled = false;
     async function run() {
@@ -69,16 +84,9 @@ function AdminDomainsInner() {
         );
         const data = await r.json();
         if (cancelled) return;
-        if (data.isAdmin) {
-          if (typeof signer?.sign !== "function") {
-            setGate("no-signer");
-          } else {
-            setGate("allowed");
-          }
-        } else {
-          setGate("denied");
-        }
-      } catch {
+        setGate(data.isAdmin ? "allowed" : "denied");
+      } catch (err) {
+        console.error("[admin/domains] admin check failed", err);
         if (!cancelled) setGate("denied");
       }
     }
@@ -86,27 +94,41 @@ function AdminDomainsInner() {
     return () => {
       cancelled = true;
     };
-  }, [userPubkey, signer]);
+  }, [userPubkey]);
 
   const load = useCallback(async () => {
     const currentSigner = signerRef.current;
-    const currentPubkey = pubkeyRef.current;
-    if (!currentPubkey || typeof currentSigner?.sign !== "function") return;
-    if (inflightRef.current) return; // guard against concurrent calls
+    if (!userPubkey) {
+      setError("Sign in required");
+      return;
+    }
+    if (typeof currentSigner?.sign !== "function") {
+      setError(
+        "Nostr signer isn't ready yet. Try refreshing the page or signing in again."
+      );
+      return;
+    }
+    if (inflightRef.current) return;
     inflightRef.current = true;
     setLoading(true);
     setError(null);
+    setPhase("signing auth event");
     try {
-      const signedEvent = await currentSigner.sign({
-        kind: 27235,
-        created_at: Math.floor(Date.now() / 1000),
-        tags: [
-          ["action", "admin-domain-list"],
-          ["method", "POST"],
-          ["path", "/api/admin/custom-domains"],
-        ],
-        content: "Authorize custom domain admin list",
-      } as any);
+      const signedEvent = await withTimeout(
+        currentSigner.sign({
+          kind: 27235,
+          created_at: Math.floor(Date.now() / 1000),
+          tags: [
+            ["action", "admin-domain-list"],
+            ["method", "POST"],
+            ["path", "/api/admin/custom-domains"],
+          ],
+          content: "Authorize custom domain admin list",
+        } as any),
+        SIGN_TIMEOUT_MS,
+        "Signer"
+      );
+      setPhase("fetching domains");
       const r = await fetch("/api/admin/custom-domains", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -134,37 +156,54 @@ function AdminDomainsInner() {
     } finally {
       inflightRef.current = false;
       setLoading(false);
+      setPhase("idle");
     }
-  }, []);
+  }, [userPubkey]);
 
+  // Auto-load once when allowed and signer is ready. Reset whenever the
+  // signed-in pubkey changes or the gate leaves "allowed" so account switches
+  // re-trigger a load.
+  const autoLoadedRef = useRef(false);
   useEffect(() => {
-    if (gate === "allowed" && !loadedOnceRef.current) {
-      loadedOnceRef.current = true;
+    autoLoadedRef.current = false;
+  }, [userPubkey]);
+  useEffect(() => {
+    if (gate !== "allowed") {
+      autoLoadedRef.current = false;
+      return;
+    }
+    if (!autoLoadedRef.current && typeof signer?.sign === "function") {
+      autoLoadedRef.current = true;
       load();
     }
-  }, [gate, load]);
+  }, [gate, signer, load]);
 
   const updateStatus = useCallback(
     async (domain: string, tlsStatus: string) => {
-      if (!userPubkey || typeof signer?.sign !== "function") {
+      const currentSigner = signerRef.current;
+      if (!userPubkey || typeof currentSigner?.sign !== "function") {
         setError("Sign in required");
         return;
       }
       setUpdating(domain);
       setError(null);
       try {
-        const signedEvent = await signer.sign({
-          kind: 27235,
-          created_at: Math.floor(Date.now() / 1000),
-          tags: [
-            ["action", "admin-domain-status"],
-            ["method", "POST"],
-            ["path", "/api/admin/custom-domains/status"],
-            ["field", "domain", domain.toLowerCase()],
-            ["field", "tlsStatus", tlsStatus],
-          ],
-          content: "Authorize custom domain status update",
-        } as any);
+        const signedEvent = await withTimeout(
+          currentSigner.sign({
+            kind: 27235,
+            created_at: Math.floor(Date.now() / 1000),
+            tags: [
+              ["action", "admin-domain-status"],
+              ["method", "POST"],
+              ["path", "/api/admin/custom-domains/status"],
+              ["field", "domain", domain.toLowerCase()],
+              ["field", "tlsStatus", tlsStatus],
+            ],
+            content: "Authorize custom domain status update",
+          } as any),
+          SIGN_TIMEOUT_MS,
+          "Signer"
+        );
         const r = await fetch("/api/admin/custom-domains/status", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -183,13 +222,16 @@ function AdminDomainsInner() {
         setUpdating(null);
       }
     },
-    [signer, userPubkey, load]
+    [userPubkey, load]
   );
 
   if (gate === "checking") {
     return (
       <div className="mx-auto max-w-6xl px-4 pt-24 pb-24">
         <p className="text-sm text-gray-500">Verifying admin access…</p>
+        <p className="mt-2 font-mono text-xs text-gray-400">
+          pubkey: {userPubkey || "(waiting for signer)"}
+        </p>
       </div>
     );
   }
@@ -215,19 +257,7 @@ function AdminDomainsInner() {
     );
   }
 
-  if (gate === "no-signer") {
-    return (
-      <div className="mx-auto max-w-6xl px-4 pt-24 pb-24">
-        <div className="rounded-lg border border-amber-200 bg-amber-50 p-6">
-          <h1 className="text-xl font-bold text-amber-900">Signer not ready</h1>
-          <p className="mt-2 text-sm text-amber-800">
-            You're signed in as an admin, but your Nostr signer isn't fully
-            initialized. Try refreshing the page or signing in again.
-          </p>
-        </div>
-      </div>
-    );
-  }
+  const signerReady = typeof signer?.sign === "function";
 
   return (
     <div className="mx-auto max-w-6xl px-4 pt-24 pb-24">
@@ -245,12 +275,19 @@ function AdminDomainsInner() {
         <button
           type="button"
           onClick={load}
-          disabled={loading}
+          disabled={loading || !signerReady}
           className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
         >
           {loading ? "Refreshing…" : "Refresh"}
         </button>
       </div>
+
+      {!signerReady && (
+        <div className="mt-4 rounded bg-amber-50 p-3 text-sm text-amber-800">
+          Waiting for Nostr signer to initialize. If this persists, refresh the
+          page or sign in again.
+        </div>
+      )}
 
       {error && (
         <div className="mt-4 rounded bg-red-50 p-3 text-sm text-red-700">
@@ -259,7 +296,15 @@ function AdminDomainsInner() {
       )}
 
       {loading ? (
-        <p className="mt-6 text-sm text-gray-500">Loading…</p>
+        <div className="mt-6 space-y-2">
+          <p className="text-sm text-gray-500">Loading… ({phase})</p>
+          {phase === "signing auth event" && (
+            <p className="text-xs text-gray-400">
+              Check your Nostr extension or unlock prompt. The page will time
+              out after {SIGN_TIMEOUT_MS / 1000}s if no response.
+            </p>
+          )}
+        </div>
       ) : domains.length === 0 ? (
         <p className="mt-6 text-sm text-gray-500">No custom domains yet.</p>
       ) : (
