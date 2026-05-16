@@ -37,3 +37,55 @@ CI hardening:
 Raise the threshold as coverage grows. New tests for Nostr order messaging,
 Cashu wallet reconciliation, cache policy, and NIP-99 parsing should prefer
 small, explicit fixtures that preserve real tags and event shapes.
+
+## Test Environment & Setup
+
+The project uses:
+
+- **React Testing Library** for component testing with jest-dom matchers
+- **jest-environment-jsdom** for DOM simulation
+- **Next.js Jest integration** for automatic Next.js config loading
+- **Module alias support** via `@/` path mapping
+- **Custom jest.setup.js** that:
+  - Mocks browser APIs (`TextEncoder`, `TextDecoder`)
+  - Polyfills `Number.prototype.toNumber()` for Cashu `Amount` class compatibility
+  - Filters out benign React/DOM warnings during test runs
+  - Handles third-party mocks (e.g., `@braintree/sanitize-url`)
+
+Transformed dependencies include: `dexie`, `nostr-tools`, `@noble/*`, `@scure/*`,
+`@getalby/lightning-tools`, `@cashu/cashu-ts`, and `uuid`.
+
+## Viewing Coverage Reports
+
+After running `npm run test:coverage`, open the HTML report:
+
+```bash
+open coverage/lcov-report/index.html
+```
+
+Coverage is tracked in `coverage/` with:
+
+- `lcov.info` - line/branch coverage data
+- `coverage-final.json` - summary by file
+- `lcov-report/` - interactive HTML report
+
+## Writing Tests
+
+### Component Tests
+
+- Use `render()` and `screen` queries from React Testing Library
+- Mock child components and external dependencies with `jest.mock()`
+- Mock Next.js router with `jest.mock("next/router")`
+- Use `waitFor()` for async state updates
+
+### Cashu Wallet Tests
+
+- Return plain numbers from mocks (the `Number.prototype.toNumber()` shim handles conversion)
+- Test quote flows with mock mint responses and wallet state changes
+- Verify rate-limit retry behavior in quote helpers
+
+### Nostr Tests
+
+- Use realistic event fixtures that preserve actual tag structure
+- Test tag parsing, filtering, and event ordering
+- Mock relay connections for deterministic output
