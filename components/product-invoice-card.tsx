@@ -233,9 +233,10 @@ export default function ProductInvoiceCard({
     quantity?: number;
   }) => {
     try {
-      await fetch("/api/email/send-order-email", {
+      const res = await fetch("/api/email/send-order-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        keepalive: true,
         body: JSON.stringify({
           buyerEmail: buyerEmail || undefined,
           buyerPubkey: userPubkey || undefined,
@@ -257,6 +258,28 @@ export default function ProductInvoiceCard({
           quantity: params.quantity,
         }),
       });
+      if (!res.ok) {
+        console.error("Order email API returned non-OK", {
+          status: res.status,
+          orderId: params.orderId,
+          sellerPubkey: params.sellerPubkey,
+        });
+      } else {
+        try {
+          const data = await res.json();
+          if (
+            data?.buyerEmailSent === false ||
+            data?.sellerEmailSent === false
+          ) {
+            console.error("Order email partial failure", {
+              orderId: params.orderId,
+              sellerPubkey: params.sellerPubkey,
+              buyerEmailSent: data?.buyerEmailSent,
+              sellerEmailSent: data?.sellerEmailSent,
+            });
+          }
+        } catch {}
+      }
     } catch (e) {
       console.error("Failed to send order email:", e);
     }
@@ -407,9 +430,11 @@ export default function ProductInvoiceCard({
             currency: pendingOrderEmailRef.current.currency,
             paymentMethod: pendingOrderEmailRef.current.paymentMethod,
             orderId: pendingOrderEmailRef.current.orderId,
-            shippingCost: productData.shippingCost
-              ? String(productData.shippingCost)
-              : undefined,
+            shippingCost:
+              pendingOrderEmailRef.current.shippingAddress &&
+              productData.shippingCost
+                ? String(productData.shippingCost)
+                : undefined,
             selectedSize,
             selectedVolume,
             selectedWeight,
@@ -1586,9 +1611,10 @@ export default function ProductInvoiceCard({
             currency: productData.currency || "sats",
             paymentMethod: selectedFiatOption || "fiat",
             orderId: orderId || "",
-            shippingCost: productData.shippingCost
-              ? String(productData.shippingCost)
-              : undefined,
+            shippingCost:
+              addressTag && productData.shippingCost
+                ? String(productData.shippingCost)
+                : undefined,
             selectedSize,
             selectedVolume,
             selectedWeight,

@@ -418,9 +418,10 @@ export default function CartInvoiceCard({
   }) => {
     try {
       const shouldIncludeBuyer = params.includeBuyerEmail !== false;
-      await fetch("/api/email/send-order-email", {
+      const res = await fetch("/api/email/send-order-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        keepalive: true,
         body: JSON.stringify({
           buyerEmail: shouldIncludeBuyer ? buyerEmail || undefined : undefined,
           buyerPubkey: shouldIncludeBuyer ? userPubkey || undefined : undefined,
@@ -445,6 +446,28 @@ export default function CartInvoiceCard({
           donationPercentage: params.donationPercentage,
         }),
       });
+      if (!res.ok) {
+        console.error("Order email API returned non-OK", {
+          status: res.status,
+          orderId: params.orderId,
+          sellerPubkey: params.sellerPubkey,
+        });
+      } else {
+        try {
+          const data = await res.json();
+          if (
+            data?.buyerEmailSent === false ||
+            data?.sellerEmailSent === false
+          ) {
+            console.error("Order email partial failure", {
+              orderId: params.orderId,
+              sellerPubkey: params.sellerPubkey,
+              buyerEmailSent: data?.buyerEmailSent,
+              sellerEmailSent: data?.sellerEmailSent,
+            });
+          }
+        } catch {}
+      }
     } catch (e) {
       console.error("Failed to send order email:", e);
     }
@@ -500,7 +523,13 @@ export default function CartInvoiceCard({
               : String(totalCostsInSats[p.id] || 0),
           currency: !isSatsCart && cartCurrency ? cartCurrency : "sats",
           quantity: quantities[p.id] || 1,
-          shipping: shippingTypes[p.id] || "",
+          shipping: selectedPickupLocations[p.id]
+            ? "Pickup"
+            : shippingTypes[p.id] &&
+                shippingTypes[p.id] !== "N/A" &&
+                shippingTypes[p.id] !== "Pickup"
+              ? "Shipping"
+              : undefined,
           pickupLocation: selectedPickupLocations[p.id] || undefined,
           selectedSize: p.selectedSize || undefined,
           selectedVolume: p.selectedVolume || undefined,
