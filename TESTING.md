@@ -7,14 +7,17 @@ Nostr helpers, parser logic, API handlers, and Cashu wallet flows.
 
 ```bash
 npm test
+npm test -- --watch
+npm test -- --testPathPattern=<pattern>
 npm run test:ci
 npm run test:coverage
 ```
 
-- `npm test` runs the suite in the default local mode.
-- `npm run test:ci` runs Jest serially for deterministic CI output.
-- `npm run test:coverage` runs the CI suite with coverage collection and the
-  configured threshold in `jest.config.cjs`.
+- `npm test` runs the suite in the default local mode with watch enabled.
+- `npm test -- --watch` enables file change detection for continuous testing during development.
+- `npm test -- --testPathPattern=nostr-helper` runs tests matching a file pattern (e.g., Nostr tests).
+- `npm run test:ci` runs Jest serially for deterministic CI output (no watch mode).
+- `npm run test:coverage` runs the CI suite with coverage collection and thresholds from `jest.config.cjs`.
 
 ## CI Enforcement
 
