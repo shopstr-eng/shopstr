@@ -104,6 +104,8 @@ function createMockResponse(): MockResponse {
 describe("MCP onboard API quick-start correctness", () => {
   const originalBaseUrl = process.env.NEXT_PUBLIC_BASE_URL;
   const originalAllowedHosts = process.env.MCP_ALLOWED_HOSTS;
+  const originalTrustProxyHeaders = process.env.TRUST_PROXY_HEADERS;
+  const originalTrustedProxyIps = process.env.TRUSTED_PROXY_IPS;
   const originalNodeEnv = process.env.NODE_ENV;
   let handler: typeof import("@/pages/api/mcp/onboard").default;
 
@@ -113,6 +115,8 @@ describe("MCP onboard API quick-start correctness", () => {
 
     delete process.env.NEXT_PUBLIC_BASE_URL;
     delete process.env.MCP_ALLOWED_HOSTS;
+    delete process.env.TRUST_PROXY_HEADERS;
+    delete process.env.TRUSTED_PROXY_IPS;
     setNodeEnv("test");
 
     checkOnboardRateLimitMock.mockReturnValue(true);
@@ -143,6 +147,18 @@ describe("MCP onboard API quick-start correctness", () => {
       delete process.env.MCP_ALLOWED_HOSTS;
     } else {
       process.env.MCP_ALLOWED_HOSTS = originalAllowedHosts;
+    }
+
+    if (originalTrustProxyHeaders === undefined) {
+      delete process.env.TRUST_PROXY_HEADERS;
+    } else {
+      process.env.TRUST_PROXY_HEADERS = originalTrustProxyHeaders;
+    }
+
+    if (originalTrustedProxyIps === undefined) {
+      delete process.env.TRUSTED_PROXY_IPS;
+    } else {
+      process.env.TRUSTED_PROXY_IPS = originalTrustedProxyIps;
     }
 
     if (originalNodeEnv === undefined) {
@@ -250,6 +266,7 @@ describe("MCP onboard API quick-start correctness", () => {
   });
 
   it("rate limits onboarding by the rightmost forwarded IP", async () => {
+    process.env.TRUST_PROXY_HEADERS = "true";
     const req = createMockRequest({
       headers: {
         host: "localhost:5000",

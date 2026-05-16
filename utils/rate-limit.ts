@@ -17,6 +17,62 @@ const buckets = new Map<
   Map<string, { count: number; resetAt: number }>
 >();
 
+function normalizeIp(ip: string | undefined): string | undefined {
+  const trimmed = ip?.trim();
+  if (!trimmed) return undefined;
+
+  return trimmed.startsWith("::ffff:")
+    ? trimmed.slice("::ffff:".length)
+    : trimmed;
+}
+
+function isTruthyEnv(value: string | undefined): boolean {
+  return ["1", "true", "yes", "on"].includes(value?.toLowerCase() ?? "");
+}
+
+function getTrustedProxyIps(): Set<string> {
+  return new Set(
+    (process.env.TRUSTED_PROXY_IPS ?? "")
+      .split(",")
+      .map((ip) => normalizeIp(ip))
+      .filter((ip): ip is string => !!ip)
+  );
+}
+
+function shouldTrustForwardedFor(remoteAddress: string | undefined): boolean {
+  if (isTruthyEnv(process.env.TRUST_PROXY_HEADERS)) return true;
+
+  const normalizedRemoteAddress = normalizeIp(remoteAddress);
+  if (!normalizedRemoteAddress) return false;
+
+  return getTrustedProxyIps().has(normalizedRemoteAddress);
+}
+
+function getForwardedForIp(
+  forwarded: string | string[] | undefined
+): string | undefined {
+  const forwardedValues = Array.isArray(forwarded)
+    ? forwarded
+    : forwarded
+      ? [forwarded]
+      : [];
+
+  for (let i = forwardedValues.length - 1; i >= 0; i--) {
+    const forwardedValue = forwardedValues[i];
+    if (!forwardedValue) continue;
+
+    const forwardedParts = forwardedValue
+      .split(",")
+      .map((part) => part.trim())
+      .filter(Boolean);
+    const rightmostForwarded = forwardedParts[forwardedParts.length - 1];
+    const normalizedForwarded = normalizeIp(rightmostForwarded);
+    if (normalizedForwarded) return normalizedForwarded;
+  }
+
+  return undefined;
+}
+
 function getBucket(
   name: string
 ): Map<string, { count: number; resetAt: number }> {
@@ -67,19 +123,14 @@ export function checkRateLimit(
 }
 
 export function getRequestIp(req: NextApiRequest): string {
-  const forwarded = req.headers["x-forwarded-for"];
-  const forwardedValues = Array.isArray(forwarded) ? forwarded : [forwarded];
-  for (let i = forwardedValues.length - 1; i >= 0; i--) {
-    const forwardedValue = forwardedValues[i];
-    const forwardedParts = forwardedValue
-      ?.split(",")
-      .map((part) => part.trim())
-      .filter(Boolean);
-    const rightmostForwarded = forwardedParts?.[forwardedParts.length - 1];
-    if (rightmostForwarded) return rightmostForwarded;
+  const remoteAddress = normalizeIp(req.socket?.remoteAddress);
+
+  if (shouldTrustForwardedFor(remoteAddress)) {
+    const forwardedIp = getForwardedForIp(req.headers["x-forwarded-for"]);
+    if (forwardedIp) return forwardedIp;
   }
 
-  return req.socket?.remoteAddress ?? "unknown";
+  return remoteAddress ?? "unknown";
 }
 
 /**
