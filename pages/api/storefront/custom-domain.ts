@@ -51,6 +51,25 @@ async function getApexIps(): Promise<string[]> {
   }
 }
 
+/**
+ * Compute the "host" / "name" value the seller should enter in their DNS
+ * provider's UI. Most registrars expect the *subdomain portion only* (or "@"
+ * for the apex), not the full FQDN. e.g. for `shop.example.com` the host is
+ * `shop`; for `example.com` the host is `@`.
+ */
+function dnsHostForDomain(domain: string): string {
+  const labels = domain.toLowerCase().trim().split(".");
+  // Heuristic mirrors classifyDomain: 2 labels => apex, 3+ => subdomain.
+  if (labels.length <= 2) return "@";
+  return labels.slice(0, labels.length - 2).join(".");
+}
+
+function dnsHostForTxt(domain: string): string {
+  const labels = domain.toLowerCase().trim().split(".");
+  if (labels.length <= 2) return "_milkmarket";
+  return `_milkmarket.${labels.slice(0, labels.length - 2).join(".")}`;
+}
+
 async function buildInstructions(domain: string, token: string) {
   const type = classifyDomain(domain);
   const apexIps = await getApexIps();
@@ -58,25 +77,34 @@ async function buildInstructions(domain: string, token: string) {
     apexIps.length > 0
       ? apexIps.join(", ")
       : `Resolve A record of ${APEX_RESOLVE_HOST} and use those IPs (or contact ${ADMIN_EMAIL}).`;
+  const recordHost = dnsHostForDomain(domain);
+  const txtHost = dnsHostForTxt(domain);
+  const fqdnHint =
+    recordHost === "@"
+      ? `Full record name: _milkmarket.${domain}`
+      : `Full record name: _milkmarket.${domain}`;
   return {
     domainType: type,
     txt: {
       type: "TXT",
-      host: `_milkmarket.${domain}`,
+      host: txtHost,
       value: token,
-      note: "Add this TXT record to prove you own the domain. Required.",
+      note: `Add this TXT record to prove you own the domain. Required. Most registrars want just the subdomain portion in the host/name field — enter "${txtHost}". ${fqdnHint}.`,
     },
     subdomain: {
       type: "CNAME",
-      host: domain,
+      host: recordHost,
       value: REPLIT_DEPLOYMENT_HOST,
-      note: "Use this if you're connecting a subdomain (e.g. shop.yourdomain.com).",
+      note:
+        recordHost === "@"
+          ? "Use this if you're connecting a subdomain (e.g. shop.yourdomain.com). Switch to the subdomain instructions below."
+          : `Use this if you're connecting a subdomain. In your DNS provider's host/name field enter "${recordHost}" (not the full domain).`,
     },
     apex: {
       type: "A",
-      host: domain,
+      host: "@",
       value: apexValue,
-      note: `Use this if you're connecting your root domain (e.g. yourdomain.com). Add an A record for each IP shown. Some DNS providers also support ALIAS/ANAME records pointing to ${APEX_RESOLVE_HOST}.`,
+      note: `Use this if you're connecting your root domain (e.g. yourdomain.com). In the host/name field enter "@" (some providers use a blank value or the literal apex domain — "@" is the most common). Add one A record per IP shown. Some DNS providers also support ALIAS/ANAME records pointing to ${APEX_RESOLVE_HOST}.`,
     },
     recommended: type === "apex" ? "apex" : "subdomain",
   };
