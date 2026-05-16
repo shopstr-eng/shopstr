@@ -7,7 +7,13 @@ import {
 } from "@milk-market/nostr";
 
 const AUTH_EVENT_KIND = 27235;
-const MAX_EVENT_AGE_SECONDS = 120;
+// Asymmetric time bounds. We accept events whose `created_at` is up to
+// MAX_EVENT_AGE_SECONDS in the past (so human-in-the-loop signers — NSec
+// passphrase prompts, slow NIP-49 scrypt decryption, NIP-46 bunker
+// round-trips — have time to complete) but only a small clock-skew window
+// in the future, so a captured event can't be accepted both early and late.
+const MAX_EVENT_AGE_SECONDS = 600;
+const MAX_EVENT_FUTURE_SKEW_SECONDS = 60;
 
 function tagsContain(eventTags: unknown, expected: string[]): boolean {
   if (!Array.isArray(eventTags)) return false;
@@ -38,8 +44,16 @@ export function verifyNostrAuth(
   }
 
   const now = Math.floor(Date.now() / 1000);
-  if (Math.abs(now - signedEvent.created_at) > MAX_EVENT_AGE_SECONDS) {
+  const ageSeconds = now - signedEvent.created_at;
+  if (ageSeconds > MAX_EVENT_AGE_SECONDS) {
     return { valid: false, pubkey: "", error: "Auth event has expired" };
+  }
+  if (-ageSeconds > MAX_EVENT_FUTURE_SKEW_SECONDS) {
+    return {
+      valid: false,
+      pubkey: "",
+      error: "Auth event timestamp is too far in the future",
+    };
   }
 
   if (expectedPubkey && signedEvent.pubkey !== expectedPubkey) {

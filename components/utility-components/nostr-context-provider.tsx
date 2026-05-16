@@ -74,9 +74,22 @@ export function SignerContextProvider({ children }: { children: ReactNode }) {
     abortSignal,
     error
   ) => {
-    return new Promise((resolve, _reject) => {
+    return new Promise((resolve, reject) => {
       setError(error);
-      setAbort(() => abort);
+      // Wrap `abort` so a cancel from the UI both (a) flips the signer's
+      // internal `aborted` flag (via the original `abort` callback) AND
+      // (b) rejects this in-flight challenge promise so the awaiting
+      // `getPassphrase` call returns control to `_getPrivKey`. Without
+      // the reject, the signer would hang forever at `await
+      // this.challengeHandler(...)` even though `aborted=true`, because
+      // the do/while loop never gets a chance to re-check the flag.
+      setAbort(() => () => {
+        try {
+          abort();
+        } finally {
+          reject(new Error("Action cancelled by user"));
+        }
+      });
       setChallengeResolver(() => {
         return async (res: any) => {
           resolve(res);
@@ -278,15 +291,30 @@ export function SignerContextProvider({ children }: { children: ReactNode }) {
       >
         <PassphraseChallengeModal
           actionOnSubmit={(passphrase: string, remind: boolean) => {
-            if (challengeResolver) {
-              challengeResolver({ res: passphrase, remind });
-              if (signer) loadKeys(signer);
-            }
+            if (!challengeResolver) return;
+            // Resolve the in-flight challenge with the user's passphrase.
+            // The waiting operation (initial `loadKeys` for sign-in OR a
+            // downstream `sign`/`encrypt`/`decrypt`) will continue from
+            // here, run scrypt/AES decryption, and either succeed or — on
+            // a bad passphrase — re-invoke `challengeHandler`, which will
+            // reopen this modal with the decryption error attached.
+            //
+            // Important: we do NOT call `loadKeys(signer)` here. That used
+            // to be a workaround to close the modal after a sign-only
+            // operation, but it kicked off a SECOND concurrent
+            // `_getPrivKey` whenever `signer.pubkey` wasn't cached, which
+            // replaced `challengeResolver` mid-flight and left the
+            // original awaiter hanging until the page-level timeout
+            // expired. Closing the modal here directly avoids the race.
+            challengeResolver({ res: passphrase, remind });
+            setChallengeResolver(undefined);
+            setIsPassphraseRequested(false);
           }}
           actionOnCancel={() => {
             if (abort) {
               abort();
             }
+            setChallengeResolver(undefined);
           }}
           error={error}
           isOpen={isPassphraseRequested}

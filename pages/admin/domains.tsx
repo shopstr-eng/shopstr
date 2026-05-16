@@ -28,7 +28,12 @@ const STATUS_OPTIONS = [
 
 type AdminGate = "checking" | "allowed" | "denied" | "no-signer";
 
-const SIGN_TIMEOUT_MS = 45_000;
+// Allow the full server-side auth-event window (10 min) for the signer to
+// complete. This includes the time the user spends entering an NSec
+// passphrase, scrypt decryption (NIP-49 is intentionally slow), and any
+// NIP-46 bunker round-trips. Anything shorter punishes NSec users for
+// taking a few extra seconds at the passphrase prompt.
+const SIGN_TIMEOUT_MS = 5 * 60 * 1000;
 
 function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
@@ -300,8 +305,9 @@ function AdminDomainsInner() {
           <p className="text-sm text-gray-500">Loading… ({phase})</p>
           {phase === "signing auth event" && (
             <p className="text-xs text-gray-400">
-              Check your Nostr extension or unlock prompt. The page will time
-              out after {SIGN_TIMEOUT_MS / 1000}s if no response.
+              Check your Nostr extension popup or passphrase prompt — it may be
+              hidden behind another window. Take your time; the page waits up to{" "}
+              {Math.round(SIGN_TIMEOUT_MS / 60_000)} minutes.
             </p>
           )}
         </div>
