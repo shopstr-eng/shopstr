@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useContext, useEffect, useState } from "react";
+import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import ProtectedRoute from "@/components/utility-components/protected-route";
 
@@ -37,6 +37,24 @@ function AdminDomainsInner() {
   const [error, setError] = useState<string | null>(null);
   const [updating, setUpdating] = useState<string | null>(null);
 
+  // Hold latest signer/pubkey in a ref so the load() callback identity stays
+  // stable across re-renders. Otherwise every signer-state churn (e.g. the
+  // passphrase challenge handler updating React state) would re-create load,
+  // re-fire the load effect, and start a second signer.sign() in parallel
+  // with the first — which collides on the NSec passphrase prompt and
+  // strands the original promise (it never resolves, so `loading` stays
+  // true forever).
+  const signerRef = useRef(signer);
+  const pubkeyRef = useRef(userPubkey);
+  useEffect(() => {
+    signerRef.current = signer;
+  }, [signer]);
+  useEffect(() => {
+    pubkeyRef.current = userPubkey;
+  }, [userPubkey]);
+  const inflightRef = useRef(false);
+  const loadedOnceRef = useRef(false);
+
   // Check admin status as soon as we have the user's pubkey.
   useEffect(() => {
     let cancelled = false;
@@ -71,46 +89,59 @@ function AdminDomainsInner() {
   }, [userPubkey, signer]);
 
   const load = useCallback(async () => {
-    if (!userPubkey || typeof signer?.sign !== "function") return;
+    const currentSigner = signerRef.current;
+    const currentPubkey = pubkeyRef.current;
+    if (!currentPubkey || typeof currentSigner?.sign !== "function") return;
+    if (inflightRef.current) return; // guard against concurrent calls
+    inflightRef.current = true;
     setLoading(true);
     setError(null);
     try {
-      const signedEvent = await signer.sign({
+      const signedEvent = await currentSigner.sign({
         kind: 27235,
         created_at: Math.floor(Date.now() / 1000),
         tags: [
           ["action", "admin-domain-list"],
-          ["method", "GET"],
+          ["method", "POST"],
           ["path", "/api/admin/custom-domains"],
         ],
         content: "Authorize custom domain admin list",
       } as any);
-      const r = await fetch(
-        `/api/admin/custom-domains?signedEvent=${encodeURIComponent(
-          JSON.stringify(signedEvent)
-        )}`
-      );
-      const data = await r.json();
+      const r = await fetch("/api/admin/custom-domains", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ signedEvent }),
+      });
+      let data: any = null;
+      try {
+        data = await r.json();
+      } catch {
+        data = null;
+      }
       if (!r.ok) {
         setError(
-          `${data.error || "Failed to load"}${
+          `${(data && data.error) || "Failed to load"}${
             r.status ? ` (HTTP ${r.status})` : ""
           }`
         );
         setDomains([]);
         return;
       }
-      setDomains(data.domains || []);
+      setDomains((data && data.domains) || []);
     } catch (err: any) {
       console.error("[admin/domains] load failed", err);
       setError(err?.message || "Failed to load domains");
     } finally {
+      inflightRef.current = false;
       setLoading(false);
     }
-  }, [userPubkey, signer]);
+  }, []);
 
   useEffect(() => {
-    if (gate === "allowed") load();
+    if (gate === "allowed" && !loadedOnceRef.current) {
+      loadedOnceRef.current = true;
+      load();
+    }
   }, [gate, load]);
 
   const updateStatus = useCallback(

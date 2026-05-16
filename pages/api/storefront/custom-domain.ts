@@ -19,7 +19,10 @@ const pool = getDbPool();
 
 const RATE_LIMIT = { limit: 20, windowMs: 60 * 1000 };
 
-const ADMIN_EMAIL = process.env.DOMAINS_ADMIN_EMAIL || "domains@milk.market";
+// Recipient for new-domain notifications. When unset, the email helper
+// falls back to SendGrid's verified `from_email` (operator's own mailbox)
+// so notifications are never silently dropped.
+const ADMIN_EMAIL = process.env.DOMAINS_ADMIN_EMAIL || undefined;
 const REPLIT_DEPLOYMENT_HOST =
   process.env.REPLIT_DEPLOYMENT_HOST || "milk-market.replit.app";
 const APEX_RESOLVE_HOST = (
@@ -76,7 +79,7 @@ async function buildInstructions(domain: string, token: string) {
   const apexValue =
     apexIps.length > 0
       ? apexIps.join(", ")
-      : `Resolve A record of ${APEX_RESOLVE_HOST} and use those IPs (or contact ${ADMIN_EMAIL}).`;
+      : `Resolve A record of ${APEX_RESOLVE_HOST} and use those IPs (or contact ${ADMIN_EMAIL || "support"}).`;
   const recordHost = dnsHostForDomain(domain);
   const txtHost = dnsHostForTxt(domain);
   const fqdnHint =

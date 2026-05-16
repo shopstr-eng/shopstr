@@ -230,7 +230,7 @@ export async function sendAffiliatePausedToSeller(
 }
 
 export async function sendCustomDomainAdminNotification(
-  adminEmail: string,
+  adminEmail: string | undefined,
   params: {
     domain: string;
     domainType: "subdomain" | "apex";
@@ -240,7 +240,40 @@ export async function sendCustomDomainAdminNotification(
   }
 ): Promise<boolean> {
   const { subject, html } = customDomainAdminNotificationEmail(params);
-  return sendEmail(adminEmail, subject, html);
+  // Resolve recipient: explicit env > SendGrid verified from_email (which is
+  // the operator's own mailbox by definition). This guarantees the notice
+  // lands somewhere the operator actually owns even when DOMAINS_ADMIN_EMAIL
+  // hasn't been configured.
+  let recipient = (adminEmail || "").trim();
+  try {
+    if (!recipient) {
+      const { fromEmail } = await getUncachableSendGridClient();
+      recipient = (fromEmail || "").trim();
+    }
+  } catch (err) {
+    console.error(
+      "[custom-domain] Failed to resolve admin email recipient:",
+      err
+    );
+    return false;
+  }
+  if (!recipient) {
+    console.error(
+      "[custom-domain] No admin email recipient available (set DOMAINS_ADMIN_EMAIL or configure SendGrid from_email)"
+    );
+    return false;
+  }
+  const ok = await sendEmail(recipient, subject, html);
+  if (!ok) {
+    console.error(
+      `[custom-domain] sendEmail returned false for admin notification to ${recipient} (domain=${params.domain})`
+    );
+  } else {
+    console.log(
+      `[custom-domain] Sent admin notification to ${recipient} for domain ${params.domain}`
+    );
+  }
+  return ok;
 }
 
 export async function sendTransferFailureAlert(
