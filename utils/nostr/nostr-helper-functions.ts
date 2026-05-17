@@ -29,6 +29,8 @@ import {
 } from "@/utils/nostr/request-auth";
 import { newPromiseWithTimeout } from "@/utils/timeout";
 import { getLocalStorageJson } from "@/utils/safe-json";
+import { isHexPubkey } from "@/utils/nostr/pubkey";
+import { pickPreferredReplaceableEvent } from "@/utils/nostr/replaceable-events";
 
 function containsRelay(relays: string[], relay: string): boolean {
   return relays.some((r) => r.includes(relay));
@@ -1002,46 +1004,203 @@ export async function retractApproval(
   return await finalizeAndSendNostrEvent(signer, nostr, eventTemplate);
 }
 
+function getContactListRelays(): string[] {
+  const { readRelays, writeRelays, relays } = getLocalStorageData();
+  return [...new Set([...readRelays, ...writeRelays, ...relays])];
+}
+
+async function fetchLatestContactListEvent(
+  nostr: NostrManager,
+  userPubkey: string
+): Promise<NostrEvent | null> {
+  // Fetch from relays and DB cache in parallel
+  const [relayResult, dbResult] = await Promise.allSettled([
+    nostr.fetch(
+      [{ kinds: [3], authors: [userPubkey] }],
+      {},
+      getContactListRelays()
+    ),
+    fetch(
+      `/api/db/fetch-contacts?pubkey=${encodeURIComponent(userPubkey)}`
+    ).then(async (response) => {
+      if (!response.ok) return null;
+      const data = await response.json();
+      return (data?.contactList as NostrEvent) ?? null;
+    }),
+  ]);
+
+  const relayEvents =
+    relayResult.status === "fulfilled" ? relayResult.value : [];
+  const dbEvent =
+    dbResult.status === "fulfilled" ? dbResult.value : null;
+
+  if (dbResult.status === "rejected") {
+    console.error("Failed to fetch contact list from DB cache:", dbResult.reason);
+  }
+
+  // Merge all sources and pick the latest
+  const allEvents = [...relayEvents];
+  if (dbEvent && dbEvent.id) {
+    allEvents.push(dbEvent);
+  }
+
+  return pickPreferredReplaceableEvent(allEvents as NostrEvent[]);
+}
+
+export async function signNostrEvent(
+  signer: NostrSigner,
+  eventTemplate: EventTemplate
+): Promise<NostrEvent> {
+  return (await signer.sign(eventTemplate)) as NostrEvent;
+}
+
+async function persistSignedEvent(
+  nostr: NostrManager,
+  signedEvent: NostrEvent,
+  signer?: NostrSigner
+) {
+  const { writeRelays, relays } = getLocalStorageData();
+  const allWriteRelays = withBlastr([...writeRelays, ...relays]);
+
+  try {
+    await cacheEventToDatabase(signedEvent);
+  } catch (error) {
+    console.error(
+      "Failed to cache signed event to database before relay publish:",
+      error
+    );
+  }
+
+  try {
+    await newPromiseWithTimeout(
+      async (resolve, reject) => {
+        try {
+          await nostr.publish(signedEvent, allWriteRelays);
+          resolve(undefined);
+        } catch (err) {
+          reject(err as Error);
+        }
+      },
+      { timeout: 21000 }
+    );
+  } catch (error) {
+    console.warn(
+      "Relay publish timed out or failed, but event is saved to database:",
+      error
+    );
+    const { trackFailedRelayPublish } = await import("@/utils/db/db-client");
+    await trackFailedRelayPublish(
+      signedEvent.id,
+      signedEvent,
+      allWriteRelays,
+      signer
+    ).catch(console.error);
+  }
+}
+
+export function cacheAndPublishSignedEventInBackground(
+  nostr: NostrManager,
+  signedEvent: NostrEvent,
+  signer?: NostrSigner
+) {
+  void persistSignedEvent(nostr, signedEvent, signer).catch((error) => {
+    console.error("Unexpected error while persisting signed event:", error);
+  });
+}
+
+/**
+ * User followed by appending their pubkey to the current NIP-02 kind:3 contact list.
+ * Returns as soon as signing succeeds; DB cache and relay publish continue in the background.
+ */
+export async function followUser(
+  nostr: NostrManager,
+  signer: NostrSigner,
+  targetPubkey: string
+): Promise<NostrEvent | null> {
+  try {
+    if (!isHexPubkey(targetPubkey)) return null;
+
+    const userPubkey = await signer.getPubKey();
+    if (userPubkey === targetPubkey) return null;
+
+    const latestEvent = await fetchLatestContactListEvent(nostr, userPubkey);
+    const existingTags = latestEvent?.tags ?? [];
+    const existingContent = latestEvent?.content ?? "";
+
+    const alreadyFollowing = existingTags.some(
+      (tag) => tag[0] === "p" && tag[1] === targetPubkey
+    );
+    if (alreadyFollowing) {
+      return latestEvent;
+    }
+
+    const eventTemplate: EventTemplate = {
+      kind: 3,
+      created_at: Math.floor(Date.now() / 1000),
+      tags: [...existingTags, ["p", targetPubkey]],
+      content: existingContent,
+    };
+
+    const signedEvent = await signNostrEvent(signer, eventTemplate);
+    cacheAndPublishSignedEventInBackground(nostr, signedEvent, signer);
+    return signedEvent;
+  } catch (error) {
+    console.error("followUser failed:", error);
+    return null;
+  }
+}
+
+/**
+ * User unfollowed by removing their pubkey from the current NIP-02 kind:3 contact list.
+ * Returns as soon as signing succeeds; DB cache and relay publish continue in the background.
+ */
+export async function unfollowUser(
+  nostr: NostrManager,
+  signer: NostrSigner,
+  targetPubkey: string
+): Promise<NostrEvent | null> {
+  try {
+    if (!isHexPubkey(targetPubkey)) return null;
+
+    const userPubkey = await signer.getPubKey();
+    const latestEvent = await fetchLatestContactListEvent(nostr, userPubkey);
+    if (!latestEvent) return null;
+
+    const isFollowing = latestEvent.tags.some(
+      (tag) => tag[0] === "p" && tag[1] === targetPubkey
+    );
+    if (!isFollowing) {
+      return latestEvent;
+    }
+
+    const eventTemplate: EventTemplate = {
+      kind: 3,
+      created_at: Math.floor(Date.now() / 1000),
+      tags: latestEvent.tags.filter(
+        (tag) => !(tag[0] === "p" && tag[1] === targetPubkey)
+      ),
+      content: latestEvent.content ?? "",
+    };
+
+    const signedEvent = await signNostrEvent(signer, eventTemplate);
+    cacheAndPublishSignedEventInBackground(nostr, signedEvent, signer);
+    return signedEvent;
+  } catch (error) {
+    console.error("unfollowUser failed:", error);
+    return null;
+  }
+}
+
 export async function finalizeAndSendNostrEvent(
   signer: NostrSigner,
   nostr: NostrManager,
   eventTemplate: EventTemplate
 ) {
   try {
-    const { writeRelays, relays } = getLocalStorageData();
     const signedEvent = await signer.sign(eventTemplate);
 
-    // Cache to database first and wait for confirmation
-    await cacheEventToDatabase(signedEvent);
-
-    // After DB confirmation, attempt to publish to relays with timeout
-    const allWriteRelays = withBlastr([...writeRelays, ...relays]);
-    try {
-      await newPromiseWithTimeout(
-        async (resolve, reject) => {
-          try {
-            await nostr.publish(signedEvent, allWriteRelays);
-            resolve(undefined);
-          } catch (err) {
-            reject(err as Error);
-          }
-        },
-        { timeout: 21000 } // 21 second timeout
-      );
-    } catch (error) {
-      // Timeout or relay publish error - track for retry
-      console.warn(
-        "Relay publish timed out or failed, but event is saved to database:",
-        error
-      );
-      const { trackFailedRelayPublish } = await import("@/utils/db/db-client");
-      await trackFailedRelayPublish(
-        signedEvent.id,
-        signedEvent,
-        allWriteRelays,
-        signer
-      ).catch(console.error);
-    }
+    // Cache to database first and wait for confirmation, then publish with retry tracking.
+    await persistSignedEvent(nostr, signedEvent, signer);
 
     // return the signed event to caller so we know generated IDs
     return signedEvent;

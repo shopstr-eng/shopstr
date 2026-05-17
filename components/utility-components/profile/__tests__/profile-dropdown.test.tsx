@@ -7,13 +7,14 @@ import {
 } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import { ProfileWithDropdown } from "../profile-dropdown";
-import { ProfileMapContext } from "@/utils/context/context";
+import { FollowsContext, ProfileMapContext } from "@/utils/context/context";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import { LogOut } from "@/utils/nostr/nostr-helper-functions";
 import { nip19 } from "nostr-tools";
 import React from "react";
 
 const mockFetch = jest.fn();
+const originalFetch = global.fetch;
 global.fetch = mockFetch as unknown as typeof fetch;
 
 const mockRouterPush = jest.fn();
@@ -118,6 +119,8 @@ jest.mock("@heroicons/react/24/outline", () => ({
   ArrowRightStartOnRectangleIcon: () => <div data-testid="icon-logout" />,
   ClipboardIcon: () => <div data-testid="icon-clipboard" />,
   CheckIcon: () => <div data-testid="icon-check" />,
+  UserMinusIcon: () => <div data-testid="icon-user-minus" />,
+  UserPlusIcon: () => <div data-testid="icon-user-plus" />,
 }));
 
 Object.defineProperty(navigator, "clipboard", {
@@ -129,21 +132,44 @@ Object.defineProperty(navigator, "clipboard", {
 
 const renderWithProviders = (
   ui: React.ReactElement,
-  options: { profileData?: Map<string, any>; isLoggedIn?: boolean } = {}
+  options: {
+    profileData?: Map<string, any>;
+    isLoggedIn?: boolean;
+    directFollowList?: string[];
+    addFollow?: jest.Mock;
+    removeFollow?: jest.Mock;
+  } = {}
 ) => {
-  const { profileData = new Map(), isLoggedIn = false } = options;
+  const {
+    profileData = new Map(),
+    isLoggedIn = false,
+    directFollowList = [],
+    addFollow = jest.fn(),
+    removeFollow = jest.fn(),
+  } = options;
   return render(
-    <ProfileMapContext.Provider
+    <FollowsContext.Provider
       value={{
-        profileData,
+        directFollowList,
+        followList: directFollowList,
+        firstDegreeFollowsLength: directFollowList.length,
         isLoading: false,
-        updateProfileData: jest.fn(),
+        addFollow,
+        removeFollow,
       }}
     >
-      <SignerContext.Provider value={{ isLoggedIn }}>
-        {ui}
-      </SignerContext.Provider>
-    </ProfileMapContext.Provider>
+      <ProfileMapContext.Provider
+        value={{
+          profileData,
+          isLoading: false,
+          updateProfileData: jest.fn(),
+        }}
+      >
+        <SignerContext.Provider value={{ isLoggedIn }}>
+          {ui}
+        </SignerContext.Provider>
+      </ProfileMapContext.Provider>
+    </FollowsContext.Provider>
   );
 };
 
@@ -163,6 +189,7 @@ describe("ProfileWithDropdown", () => {
 
   afterAll(() => {
     consoleWarnSpy.mockRestore();
+    global.fetch = originalFetch;
   });
 
   beforeEach(() => {
@@ -203,6 +230,44 @@ describe("ProfileWithDropdown", () => {
     );
 
     expect(screen.getByText("testuser")).toBeInTheDocument();
+  });
+
+  it('shows a visible "Following" indicator on follow-enabled seller surfaces', () => {
+    renderWithProviders(
+      <ProfileWithDropdown pubkey={pubkey} dropDownKeys={["follow"]} />,
+      { directFollowList: [pubkey] }
+    );
+
+    expect(screen.getByText("Following")).toBeInTheDocument();
+  });
+
+  it('opens sign-in when "Follow" is pressed while logged out', () => {
+    renderWithProviders(
+      <ProfileWithDropdown pubkey={pubkey} dropDownKeys={["follow"]} />,
+      { isLoggedIn: false }
+    );
+
+    openDropdownMenu();
+    fireEvent.click(screen.getByText("+ Follow"));
+
+    expect(mockOnOpen).toHaveBeenCalled();
+  });
+
+  it('calls addFollow and closes the menu when "Follow" succeeds', async () => {
+    const addFollow = jest.fn().mockResolvedValue(true);
+
+    renderWithProviders(
+      <ProfileWithDropdown pubkey={pubkey} dropDownKeys={["follow"]} />,
+      { isLoggedIn: true, addFollow }
+    );
+
+    openDropdownMenu();
+    fireEvent.click(screen.getByText("+ Follow"));
+
+    await waitFor(() => {
+      expect(addFollow).toHaveBeenCalledWith(pubkey);
+      expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    });
   });
 
   it('handles "Visit Seller" click', () => {

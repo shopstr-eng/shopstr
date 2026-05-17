@@ -29,9 +29,11 @@ import {
   getLocalStorageData,
   getDefaultRelays,
   LogOut,
+  followUser,
+  unfollowUser,
 } from "@/utils/nostr/nostr-helper-functions";
 import { createNip98AuthorizationHeader } from "@/utils/nostr/nip98-auth";
-import { HeroUIProvider } from "@heroui/react";
+import { HeroUIProvider, ToastProvider } from "@heroui/react";
 import { ThemeProvider as NextThemesProvider } from "next-themes";
 import {
   fetchAllPosts,
@@ -289,11 +291,79 @@ function Shopstr({ props }: { props: AppProps }) {
 
   const [followsContext, setFollowsContext] = useState<FollowsContextInterface>(
     {
+      directFollowList: [],
       followList: [],
       firstDegreeFollowsLength: 0,
       isLoading: true,
+      addFollow: async () => false,
+      removeFollow: async () => false,
     }
   );
+
+  const addFollow = useCallback(
+    async (targetPubkey: string): Promise<boolean> => {
+      if (!nostr || !signer) return false;
+
+      const result = await followUser(nostr, signer, targetPubkey);
+      if (!result) return false;
+
+      setFollowsContext((prev) => {
+        const alreadyDirect = prev.directFollowList.includes(targetPubkey);
+        const alreadyInWot = prev.followList.includes(targetPubkey);
+
+        return {
+          ...prev,
+          directFollowList: alreadyDirect
+            ? prev.directFollowList
+            : [...prev.directFollowList, targetPubkey],
+          followList: alreadyInWot
+            ? prev.followList
+            : [...prev.followList, targetPubkey],
+          firstDegreeFollowsLength: alreadyDirect
+            ? prev.firstDegreeFollowsLength
+            : prev.firstDegreeFollowsLength + 1,
+        };
+      });
+
+      return true;
+    },
+    [nostr, signer]
+  );
+
+  const removeFollow = useCallback(
+    async (targetPubkey: string): Promise<boolean> => {
+      if (!nostr || !signer) return false;
+
+      const result = await unfollowUser(nostr, signer, targetPubkey);
+      if (!result) return false;
+
+      setFollowsContext((prev) => {
+        const wasDirect = prev.directFollowList.includes(targetPubkey);
+
+        return {
+          ...prev,
+          directFollowList: prev.directFollowList.filter(
+            (pk) => pk !== targetPubkey
+          ),
+          followList: prev.followList.filter((pk) => pk !== targetPubkey),
+          firstDegreeFollowsLength: wasDirect
+            ? Math.max(0, prev.firstDegreeFollowsLength - 1)
+            : prev.firstDegreeFollowsLength,
+        };
+      });
+
+      return true;
+    },
+    [nostr, signer]
+  );
+
+  useEffect(() => {
+    setFollowsContext((prev) => ({
+      ...prev,
+      addFollow,
+      removeFollow,
+    }));
+  }, [addFollow, removeFollow]);
 
   const [communityContext, setCommunityContext] =
     useState<CommunityContextInterface>({
@@ -420,15 +490,18 @@ function Shopstr({ props }: { props: AppProps }) {
   };
 
   const editFollowsContext = (
+    directFollowList: string[],
     followList: string[],
     firstDegreeFollowsLength: number,
     isLoading: boolean
   ) => {
-    setFollowsContext({
+    setFollowsContext((prev) => ({
+      ...prev,
+      directFollowList,
       followList,
       firstDegreeFollowsLength,
       isLoading,
-    });
+    }));
   };
 
   const editCommunityContext = (
@@ -658,7 +731,7 @@ function Shopstr({ props }: { props: AppProps }) {
               guardedEditFollowsContext,
               userPubkey
             ),
-          () => guardedEditFollowsContext([], 0, false)
+          () => guardedEditFollowsContext([], [], 0, false)
         );
 
         const communitiesPromise = runTask(
@@ -806,7 +879,7 @@ function Shopstr({ props }: { props: AppProps }) {
         guardedEditShopContext(new Map(), false);
         guardedEditProfileContext(new Map(), false);
         guardedEditChatContext(new Map(), false);
-        guardedEditFollowsContext([], 0, false);
+        guardedEditFollowsContext([], [], 0, false);
         guardedEditRelaysContext([], [], [], false);
         guardedEditBlossomContext([], false);
         guardedEditCashuWalletContext([], [], [], false);
@@ -905,6 +978,7 @@ function App(props: AppProps) {
   return (
     <>
       <HeroUIProvider>
+        <ToastProvider />
         <NextThemesProvider attribute="class">
           <NostrContextProvider>
             <SignerContextProvider>
