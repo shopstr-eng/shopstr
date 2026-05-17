@@ -1,7 +1,15 @@
-import React from "react";
-import { Accordion, AccordionItem } from "@nextui-org/react";
+import { useState } from "react";
+import Link from "next/link";
+import { ArrowLeftIcon, ChevronDownIcon } from "@heroicons/react/24/outline";
 
 export default function Tos() {
+  const [openItems, setOpenItems] = useState<number[]>([]);
+
+  const toggle = (i: number) =>
+    setOpenItems((prev) =>
+      prev.includes(i) ? prev.filter((x) => x !== i) : [...prev, i]
+    );
+
   const tosContent = [
     {
       title: "1. Platform Nature",
@@ -61,47 +69,61 @@ export default function Tos() {
   ];
 
   return (
-    <div className="flex min-h-screen flex-col bg-light-bg pt-24 dark:bg-dark-bg md:pb-20">
+    <div className="bg-light-bg dark:bg-dark-bg flex min-h-screen flex-col pt-24 md:pb-20">
       <div className="container mx-auto max-w-6xl px-4">
-        <h1 className="mb-8 text-center text-3xl font-bold text-light-text dark:text-dark-text">
+        <div className="mb-6 flex justify-end">
+          <Link href="/" passHref legacyBehavior>
+            <a className="border-shopstr-purple/30 text-shopstr-purple hover:bg-shopstr-purple/10 dark:border-shopstr-yellow/30 dark:text-shopstr-yellow dark:hover:bg-shopstr-yellow/10 inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors">
+              <ArrowLeftIcon className="h-4 w-4" />
+              Back to Home
+            </a>
+          </Link>
+        </div>
+        <h1 className="text-light-text dark:text-dark-text mb-8 text-center text-3xl font-bold">
           Terms of Service
         </h1>
 
-        <p className="mx-auto mb-10 max-w-3xl text-center text-light-text/80 dark:text-dark-text/80">
+        <p className="text-light-text/80 dark:text-dark-text/80 mx-auto mb-10 max-w-3xl text-center">
           User agreement and usage guidelines for Shopstr
         </p>
 
-        <div className="mb-4 text-right text-sm text-light-text/70 dark:text-dark-text/70">
+        <div className="text-light-text/70 dark:text-dark-text/70 mb-4 text-right text-sm">
           Last updated: 2025-04-25
         </div>
 
-        <Accordion
-          selectionMode="multiple"
-          className="mb-6 px-0"
-          variant="bordered"
-        >
-          {tosContent.map((section, sectionIndex) => (
-            <AccordionItem
-              key={sectionIndex}
-              title={
-                <span className="font-medium text-light-text dark:text-dark-text">
+        <div className="mb-6 overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700">
+          {tosContent.map((section, i) => (
+            <div
+              key={i}
+              className={
+                i < tosContent.length - 1
+                  ? "border-b border-gray-200 dark:border-gray-700"
+                  : ""
+              }
+            >
+              <button
+                onClick={() => toggle(i)}
+                className="flex w-full items-center justify-between px-5 py-4 text-left transition-colors hover:bg-gray-50 dark:hover:bg-gray-900/50"
+              >
+                <span className="text-light-text dark:text-dark-text font-medium">
                   {section.title}
                 </span>
-              }
-              classNames={{
-                base: "group",
-                title: "text-md",
-                trigger:
-                  "py-5 px-3 data-[hover=true]:bg-gray-50 dark:data-[hover=true]:bg-gray-900/50 transition-all rounded-lg",
-                content: "py-2 px-3 text-light-text/90 dark:text-dark-text/90",
-              }}
-            >
-              <p className="leading-relaxed text-light-text dark:text-dark-text">
-                {section.content}
-              </p>
-            </AccordionItem>
+                <ChevronDownIcon
+                  className={`text-light-text/60 dark:text-dark-text/60 ml-4 h-5 w-5 flex-shrink-0 transition-transform duration-200 ${
+                    openItems.includes(i) ? "rotate-180" : ""
+                  }`}
+                />
+              </button>
+              {openItems.includes(i) && (
+                <div className="px-5 pt-1 pb-5">
+                  <p className="text-light-text/90 dark:text-dark-text/90 leading-relaxed">
+                    {section.content}
+                  </p>
+                </div>
+              )}
+            </div>
           ))}
-        </Accordion>
+        </div>
       </div>
     </div>
   );

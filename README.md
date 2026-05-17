@@ -8,26 +8,28 @@ A global, permissionless Nostr marketplace for Bitcoin commerce.
 - [x] NIP-05: Mapping Nostr keys to DNS-based internet identifiers
 - [x] NIP-07: window.nostr capability for web browsers
 - [x] NIP-09: Event Deletion
-- [ ] NIP-15: Nostr Marketplace (for resilient marketplaces)
 - [x] NIP-17: Private Direct Messages
 - [x] NIP-19: bech32-encoded entities
 - [x] NIP-24: Extra metadata fields and tags
 - [x] NIP-31: Dealing with Unknown Events
 - [x] NIP-36: Sensitive Content
+- [x] NIP-40: Expiration Timestamp
 - [ ] NIP-42: Authentication of clients to relays
 - [x] NIP-46: Nostr Remote Signing
-- [ ] NIP-47: Wallet Connect
+- [x] NIP-47: Wallet Connect
 - [x] NIP-49: Private Key Encryption
 - [ ] NIP-50: Search Capability
 - [x] NIP-51: Lists
 - [ ] NIP-56: Reporting
-- [ ] NIP-57: Lightning Zaps
+- [x] NIP-57: Lightning Zaps
 - [ ] NIP-58: Badges
 - [x] NIP-60: Cashu Wallet
 - [ ] NIP-61: Nutzaps
 - [x] NIP-65: Relay List Metadata
+- [x] NIP-72: Moderated Communities
 - [x] NIP-85: Reviews
 - [x] NIP-89: Recommended Application Handlers
+- [x] NIP-98: HTTP Auth
 - [x] NIP-99: Classified Listings
 - [x] NIP-B7: Blossom Media
 

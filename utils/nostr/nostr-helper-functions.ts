@@ -1,19 +1,34 @@
 import {
+  EventTemplate,
   finalizeEvent,
   generateSecretKey,
   getPublicKey,
+  getEventHash,
   nip19,
   nip44,
-  SimplePool,
 } from "nostr-tools";
-import CryptoJS from "crypto-js";
 import { v4 as uuidv4 } from "uuid";
-import { NostrEvent, ProductFormValues } from "@/utils/types/types";
+import CryptoJS from "crypto-js";
+import {
+  Community,
+  CommunityRelays,
+  NostrEvent,
+  ProductFormValues,
+} from "@/utils/types/types";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
 import { Proof } from "@cashu/cashu-ts";
 import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
-import { removeProductFromCache } from "@/utils/nostr/cache-service";
+import {
+  cacheEventToDatabase,
+  deleteEventsFromDatabase,
+} from "@/utils/db/db-client";
+import {
+  buildDeleteCachedEventsProof,
+  buildSignedHttpRequestProofTemplate,
+} from "@/utils/nostr/request-auth";
+import { newPromiseWithTimeout } from "@/utils/timeout";
+import { getLocalStorageJson } from "@/utils/safe-json";
 
 function containsRelay(relays: string[], relay: string): boolean {
   return relays.some((r) => r.includes(relay));
@@ -37,76 +52,50 @@ export async function generateKeys(): Promise<{ nsec: string; npub: string }> {
   return { nsec, npub };
 }
 
-function generateEventId(event: EncryptedMessageEvent) {
-  // Step 1: Create the array structure
-  const eventArray = [
-    0,
-    event.pubkey.toLowerCase(),
-    event.created_at,
-    event.kind,
-    event.tags,
-    event.content,
-  ];
-
-  // Step 2: JSON stringify the array with custom replacer for proper escaping
-  const serialized = JSON.stringify(eventArray, (_, value) => {
-    if (typeof value === "string") {
-      return value
-        .replace(/\\/g, "\\\\")
-        .replace(/\n/g, "\\n")
-        .replace(/"/g, '\\"')
-        .replace(/\r/g, "\\r")
-        .replace(/\t/g, "\\t")
-        .replace(/\b/g, "\\b")
-        .replace(/\f/g, "\\f");
-    }
-    return value;
-  });
-
-  // Step 3: Create SHA256 hash of the serialized string
-  const hashHex = CryptoJS.SHA256(serialized).toString(CryptoJS.enc.Hex);
-  return hashHex;
-}
-
 export async function deleteEvent(
   nostr: NostrManager,
   signer: NostrSigner,
-  event_ids_to_delete: string[]
+  event_ids_to_delete: string[],
+  deletedKind?: number
 ) {
-  const userPubkey: string = await signer.getPubKey();
-  const deletionEvent = await createNostrDeleteEvent(
-    nostr,
-    signer,
+  const deletionEvent = createNostrDeleteEvent(
     event_ids_to_delete,
-    userPubkey,
-    "NIP-99 listing deletion request"
+    "Shopstr deletion request",
+    deletedKind
   );
 
   await finalizeAndSendNostrEvent(signer, nostr, deletionEvent);
-  await removeProductFromCache(event_ids_to_delete);
+
+  // Delete from database via API
+  const pubkey = await signer.getPubKey();
+  const signedRequestProof = await signer.sign(
+    buildSignedHttpRequestProofTemplate(
+      buildDeleteCachedEventsProof({
+        pubkey,
+        eventIds: event_ids_to_delete,
+      })
+    )
+  );
+
+  deleteEventsFromDatabase(event_ids_to_delete, signedRequestProof).catch(
+    (error) => console.error("Failed to delete events from database:", error)
+  );
 }
 
-export async function createNostrDeleteEvent(
-  nostr: NostrManager,
-  signer: NostrSigner,
+export function createNostrDeleteEvent(
   event_ids: string[],
-  pubkey: string,
-  content: string
-) {
-  if (!signer || !nostr) throw new Error("Login required");
-  const msg = {
+  content: string,
+  deletedKind?: number
+): EventTemplate {
+  const msg: EventTemplate = {
     kind: 5,
     content: content,
-    tags: [],
+    tags: [
+      ...event_ids.map((id) => ["e", id]),
+      ...(deletedKind !== undefined ? [["k", deletedKind.toString()]] : []),
+    ],
     created_at: Math.floor(Date.now() / 1000),
-    pubkey,
-    id: "",
-    sig: "",
-  } as NostrEvent;
-
-  for (const event_id of event_ids) {
-    msg.tags.push(["e", event_id]);
-  }
+  };
 
   return msg;
 }
@@ -149,21 +138,26 @@ export function parseBunkerToken(token: string): BunkerTokenParams | null {
 export async function createNostrProfileEvent(
   nostr: NostrManager,
   signer: NostrSigner,
-  pubkey: string,
-  content: string
+  stringifiedContent: string
 ) {
-  const msg = {
-    kind: 0,
-    content: content,
-    tags: [],
+  const profileContent: EventTemplate = {
     created_at: Math.floor(Date.now() / 1000),
-    pubkey: pubkey,
-    id: "",
-    sig: "",
-  } as NostrEvent;
+    content: stringifiedContent,
+    kind: 0,
+    tags: [],
+  };
+  const signedEvent = await finalizeAndSendNostrEvent(
+    signer,
+    nostr,
+    profileContent
+  );
 
-  await finalizeAndSendNostrEvent(signer, nostr, msg);
-  return msg;
+  // Cache profile event to database
+  if (signedEvent) {
+    await cacheEventToDatabase(signedEvent).catch((error) =>
+      console.error("Failed to cache profile event to database:", error)
+    );
+  }
 }
 
 export async function PostListing(
@@ -172,7 +166,7 @@ export async function PostListing(
   isLoggedIn: boolean,
   nostr: NostrManager
 ) {
-  const { relays, writeRelays } = getLocalStorageData();
+  const { relays } = getLocalStorageData();
 
   if (!signer || !isLoggedIn) throw new Error("Login required");
   const userPubkey = await signer.getPubKey();
@@ -184,7 +178,7 @@ export async function PostListing(
   const created_at = Math.floor(Date.now() / 1000);
   const updatedValues = [...values, ["published_at", String(created_at)]];
 
-  const event = {
+  const event: EventTemplate = {
     created_at: created_at,
     kind: 30402,
     tags: updatedValues,
@@ -196,9 +190,9 @@ export async function PostListing(
   const origin =
     window && typeof window !== undefined
       ? window.location.origin
-      : "https://shopstr.store";
+      : "https://shopstr.market";
 
-  const handlerEvent = {
+  const handlerEvent: EventTemplate = {
     kind: 31990,
     tags: [
       ["d", handlerDTag],
@@ -210,7 +204,7 @@ export async function PostListing(
     created_at: Math.floor(Date.now() / 1000),
   };
 
-  const recEvent = {
+  const recEvent: EventTemplate = {
     kind: 31989,
     tags: [
       ["d", "30402"],
@@ -220,14 +214,9 @@ export async function PostListing(
     created_at: Math.floor(Date.now() / 1000),
   };
 
-  const signedEvent = await signer.sign(event);
-  const signedRecEvent = await signer.sign(recEvent);
-  const signedHandlerEvent = await signer.sign(handlerEvent);
-
-  const allWriteRelays = withBlastr([...writeRelays, ...relays]);
-  await nostr.publish(signedEvent, allWriteRelays);
-  await nostr.publish(signedRecEvent, allWriteRelays);
-  await nostr.publish(signedHandlerEvent, allWriteRelays);
+  const signedEvent = await finalizeAndSendNostrEvent(signer, nostr, event);
+  await finalizeAndSendNostrEvent(signer, nostr, recEvent);
+  await finalizeAndSendNostrEvent(signer, nostr, handlerEvent);
 
   return signedEvent;
 }
@@ -235,29 +224,27 @@ export async function PostListing(
 export async function createNostrShopEvent(
   nostr: NostrManager,
   signer: NostrSigner,
-  pubkey: string,
-  content: string
+  stringifiedContent: string
 ) {
-  const msg = {
-    kind: 30019, // NIP-15 - Stall Metadata
-    content: content,
-    tags: [],
+  const userPubkey = await signer?.getPubKey?.();
+  const shopContent: EventTemplate = {
     created_at: Math.floor(Date.now() / 1000),
-    pubkey: pubkey,
-    id: "",
-    sig: "",
-  } as NostrEvent;
+    content: stringifiedContent,
+    kind: 30019,
+    tags: [["d", userPubkey]],
+  };
+  const signedEvent = await finalizeAndSendNostrEvent(
+    signer,
+    nostr,
+    shopContent
+  );
 
-  await finalizeAndSendNostrEvent(signer, nostr, msg);
-  return msg;
-}
-
-interface EncryptedMessageEvent {
-  pubkey: string;
-  created_at: number;
-  content: string;
-  kind: number;
-  tags: string[][];
+  // Cache shop profile event to database
+  if (signedEvent) {
+    await cacheEventToDatabase(signedEvent).catch((error) =>
+      console.error("Failed to cache shop profile event to database:", error)
+    );
+  }
 }
 
 interface GiftWrappedMessageEvent {
@@ -290,6 +277,16 @@ export async function constructGiftWrappedEvent(
     carrier?: string;
     eta?: number;
     isOrder?: boolean;
+    contact?: string;
+    address?: string;
+    pickup?: string;
+    buyerPubkey?: string;
+    donationAmount?: number;
+    donationPercentage?: number;
+    selectedSize?: string;
+    selectedVolume?: string;
+    selectedWeight?: string;
+    selectedBulkOption?: number;
   } = {}
 ): Promise<GiftWrappedMessageEvent> {
   const { relays } = getLocalStorageData();
@@ -309,6 +306,16 @@ export async function constructGiftWrappedEvent(
     carrier,
     eta,
     isOrder,
+    contact,
+    address,
+    pickup,
+    buyerPubkey,
+    donationAmount,
+    donationPercentage,
+    selectedSize,
+    selectedVolume,
+    selectedWeight,
+    selectedBulkOption,
   } = options;
 
   const tags = [
@@ -320,14 +327,41 @@ export async function constructGiftWrappedEvent(
   if (isOrder) {
     tags.push(["order", orderId ? orderId : uuidv4()]);
 
+    if (buyerPubkey) tags.push(["b", buyerPubkey]);
     if (type) tags.push(["type", type.toString()]);
     if (orderAmount) tags.push(["amount", orderAmount.toString()]);
-    if (paymentType && paymentReference && paymentProof)
-      tags.push(["payment", paymentType, paymentReference, paymentProof]);
+    // Add payment tag with format: ["payment", paymentType, paymentReference, paymentProof?]
+    // For order-payment: ["payment", type, destination/token]
+    // For order-receipt: ["payment", type, reference, proof]
+    if (paymentType && paymentReference) {
+      if (paymentProof) {
+        tags.push(["payment", paymentType, paymentReference, paymentProof]);
+      } else {
+        tags.push(["payment", paymentType, paymentReference]);
+      }
+    }
     if (status) tags.push(["status", status]);
     if (tracking) tags.push(["tracking", tracking]);
     if (carrier) tags.push(["carrier", carrier]);
     if (eta) tags.push(["eta", eta.toString()]);
+    if (contact) tags.push(["contact", contact]);
+    if (address) tags.push(["address", address]);
+    if (pickup) tags.push(["pickup", pickup]);
+    if (selectedSize) tags.push(["size", selectedSize]);
+    if (selectedVolume) tags.push(["volume", selectedVolume]);
+    if (selectedWeight) tags.push(["weight", selectedWeight]);
+    if (selectedBulkOption) tags.push(["bulk", selectedBulkOption.toString()]);
+    if (
+      donationAmount &&
+      donationAmount > 0 &&
+      donationPercentage !== undefined
+    ) {
+      tags.push([
+        "donation_amount",
+        donationAmount.toString(),
+        donationPercentage.toString(),
+      ]);
+    }
 
     // Handle product information for orders
     if (productData || productAddress) {
@@ -360,11 +394,18 @@ export async function constructGiftWrappedEvent(
     tags,
   };
 
-  const eventId = generateEventId(bareEvent);
+  // To generate a predictable ID before signing (as required by NIP-17 gift wrap structure),
+  // we create a temporary full event object and hash it using the official NIP-01 method.
+  const eventToHash: NostrEvent = {
+    ...bareEvent,
+    id: "", // dummy value for hashing
+    sig: "", // dummy value for hashing
+  };
+  const eventId = getEventHash(eventToHash);
   return {
     id: eventId,
     ...bareEvent,
-  };
+  } as GiftWrappedMessageEvent;
 }
 
 export async function constructMessageSeal(
@@ -427,13 +468,43 @@ export async function constructMessageGiftWrap(
 }
 
 export async function sendGiftWrappedMessageEvent(
-  giftWrappedMessageEvent: NostrEvent
+  nostr: NostrManager,
+  giftWrappedMessageEvent: NostrEvent,
+  signer?: NostrSigner
 ) {
   const { relays, writeRelays } = getLocalStorageData();
-  const pool = new SimplePool();
   const allWriteRelays = withBlastr([...writeRelays, ...relays]);
 
-  await Promise.any(pool.publish(allWriteRelays, giftWrappedMessageEvent));
+  // Cache the gift-wrapped event to database first and wait for confirmation
+  await cacheEventToDatabase(giftWrappedMessageEvent);
+
+  // After DB confirmation, attempt to publish to relays with timeout
+  try {
+    await newPromiseWithTimeout(
+      async (resolve, reject) => {
+        try {
+          await nostr.publish(giftWrappedMessageEvent, allWriteRelays);
+          resolve(undefined);
+        } catch (err) {
+          reject(err as Error);
+        }
+      },
+      { timeout: 21000 } // 21 second timeout
+    );
+  } catch (error) {
+    // Timeout or relay publish error - track for retry
+    console.warn(
+      "Relay publish timed out or failed for gift-wrapped message, but event is saved to database:",
+      error
+    );
+    const { trackFailedRelayPublish } = await import("@/utils/db/db-client");
+    await trackFailedRelayPublish(
+      giftWrappedMessageEvent.id,
+      giftWrappedMessageEvent,
+      allWriteRelays,
+      signer
+    ).catch(console.error);
+  }
 }
 
 export async function publishReviewEvent(
@@ -443,40 +514,39 @@ export async function publishReviewEvent(
   eventTags: string[][]
 ) {
   try {
-    const { relays, writeRelays } = getLocalStorageData();
-    const allWriteRelays = withBlastr([...writeRelays, ...relays]);
-
-    const userPubkey = await signer?.getPubKey?.();
-
-    const reviewEvent = {
-      pubkey: userPubkey,
+    const reviewEvent: EventTemplate = {
       created_at: Math.floor(Date.now() / 1000),
       content: content,
       kind: 31555,
       tags: eventTags,
     };
+    const signedEvent = await finalizeAndSendNostrEvent(
+      signer,
+      nostr,
+      reviewEvent
+    );
 
-    const signedEvent = await signer.sign(reviewEvent);
-    await nostr.publish(signedEvent, allWriteRelays);
-  } catch (_) {
-    return;
+    // Cache review event to database
+    if (signedEvent) {
+      await cacheEventToDatabase(signedEvent).catch((error) =>
+        console.error("Failed to cache review event to database:", error)
+      );
+    }
+  } catch (error) {
+    console.error(error);
+    throw error;
   }
 }
 export async function createNostrRelayEvent(
   nostr: NostrManager,
-  signer: NostrSigner,
-  pubkey: string
+  signer: NostrSigner
 ) {
-  if (!signer || !nostr) throw new Error("Login required");
   const relayList = getLocalStorageData().relays;
   const readRelayList = getLocalStorageData().readRelays;
   const writeRelayList = getLocalStorageData().writeRelays;
   const relayTags = [];
-  if (relayList.length != 0) {
-    for (const relay of relayList) {
-      const relayTag = ["r", relay];
-      relayTags.push(relayTag);
-    }
+  for (const relay of relayList) {
+    relayTags.push(["r", relay]);
   }
   if (readRelayList.length != 0) {
     for (const relay of readRelayList) {
@@ -490,46 +560,87 @@ export async function createNostrRelayEvent(
       relayTags.push(relayTag);
     }
   }
-  const relayEvent = {
+  const relayEvent: EventTemplate = {
     kind: 10002, // NIP-65 - Relay List Metadata
     content: "",
     tags: relayTags,
     created_at: Math.floor(Date.now() / 1000),
-    pubkey: pubkey,
-    id: "",
-    sig: "",
-  } as NostrEvent;
+  };
 
   await finalizeAndSendNostrEvent(signer, nostr, relayEvent);
   return relayEvent;
 }
 
-export async function createBlossomServerEvent(
+export async function publishRelayEvent(
   nostr: NostrManager,
   signer: NostrSigner,
-  pubkey: string
+  relays: string[]
 ) {
-  if (!signer || !nostr) throw new Error("Login required");
+  const relayTags = relays.map((relay) => ["r", relay]);
+  const relayEvent: EventTemplate = {
+    kind: 10002,
+    tags: relayTags,
+    content: "",
+    created_at: Math.floor(Date.now() / 1000),
+  };
+  const signedEvent = await finalizeAndSendNostrEvent(
+    signer,
+    nostr,
+    relayEvent
+  );
+
+  // Cache relay list event to database
+  if (signedEvent) {
+    await cacheEventToDatabase(signedEvent).catch((error) =>
+      console.error("Failed to cache relay list event to database:", error)
+    );
+  }
+}
+
+export async function createBlossomServerEvent(
+  nostr: NostrManager,
+  signer: NostrSigner
+) {
   const blossomServers = getLocalStorageData().blossomServers;
   const serverTags = [];
-  if (blossomServers.length != 0) {
-    for (const server of blossomServers) {
-      const serverTag = ["server", server];
-      serverTags.push(serverTag);
-    }
+  for (const server of blossomServers) {
+    serverTags.push(["server", server]);
   }
-  const blossomServerEvent = {
+  const blossomServerEvent: EventTemplate = {
     kind: 10063,
     content: "",
     tags: serverTags,
     created_at: Math.floor(Date.now() / 1000),
-    pubkey: pubkey,
-    id: "",
-    sig: "",
-  } as NostrEvent;
+  };
 
   await finalizeAndSendNostrEvent(signer, nostr, blossomServerEvent);
   return blossomServerEvent;
+}
+
+export async function publishBlossomServerEvent(
+  nostr: NostrManager,
+  signer: NostrSigner,
+  servers: string[]
+) {
+  const serverTags = servers.map((server) => ["server", server]);
+  const blossomEvent: EventTemplate = {
+    kind: 10063,
+    tags: serverTags,
+    content: "",
+    created_at: Math.floor(Date.now() / 1000),
+  };
+  const signedEvent = await finalizeAndSendNostrEvent(
+    signer,
+    nostr,
+    blossomEvent
+  );
+
+  // Cache blossom server event to database
+  if (signedEvent) {
+    await cacheEventToDatabase(signedEvent).catch((error) =>
+      console.error("Failed to cache blossom server event to database:", error)
+    );
+  }
 }
 
 export async function publishSavedForLaterEvent(
@@ -542,9 +653,6 @@ export async function publishSavedForLaterEvent(
   quantity?: number
 ) {
   try {
-    const { relays, writeRelays } = getLocalStorageData();
-    const allWriteRelays = withBlastr([...writeRelays, ...relays]);
-
     let cartTags: string[][] = [];
 
     if (quantity && quantity < 0) {
@@ -570,18 +678,15 @@ export async function publishSavedForLaterEvent(
       productAddressTags
     );
 
-    const cartEvent = {
-      pubkey: userPubkey,
+    const cartEvent: EventTemplate = {
       created_at: Math.floor(Date.now() / 1000),
       content: encryptedContent,
       kind: 30405,
       tags: [],
     };
 
-    const signedEvent = await signer.sign(cartEvent);
-
-    await nostr.publish(signedEvent, allWriteRelays);
-  } catch (_) {
+    await finalizeAndSendNostrEvent(signer, nostr, cartEvent);
+  } catch {
     return;
   }
 }
@@ -591,30 +696,36 @@ export async function publishWalletEvent(
   signer: NostrSigner
 ) {
   try {
-    const { mints, relays, writeRelays } = getLocalStorageData();
+    const { mints } = getLocalStorageData();
     const userPubkey = await signer.getPubKey();
 
     const mintTagsSet = new Set<string>();
 
     let walletMints = [];
 
-    const allWriteRelays = withBlastr([...relays, ...writeRelays]);
     mints.forEach((mint) => mintTagsSet.add(mint));
     walletMints = Array.from(mintTagsSet);
     const mintTags = walletMints.map((mint) => ["mint", mint]);
     const walletContent = [...mintTags];
-    const cashuWalletEvent = {
+    const cashuWalletEvent: EventTemplate = {
       kind: 17375,
       tags: [],
-      content: await window.nostr.nip44.encrypt(
-        userPubkey,
-        JSON.stringify(walletContent)
-      ),
+      content: await signer.encrypt(userPubkey, JSON.stringify(walletContent)),
       created_at: Math.floor(Date.now() / 1000),
     };
-    const signedEvent = await signer.sign(cashuWalletEvent);
-    await nostr.publish(signedEvent, allWriteRelays);
-  } catch (_) {
+    const signedEvent = await finalizeAndSendNostrEvent(
+      signer,
+      nostr,
+      cashuWalletEvent
+    );
+
+    // Cache wallet event to database
+    if (signedEvent) {
+      await cacheEventToDatabase(signedEvent).catch((error) =>
+        console.error("Failed to cache wallet event to database:", error)
+      );
+    }
+  } catch {
     return;
   }
 }
@@ -629,28 +740,30 @@ export async function publishProofEvent(
   deletedEventsArray?: string[]
 ) {
   try {
-    const { relays, writeRelays } = getLocalStorageData();
-    const allWriteRelays = withBlastr([...relays, ...writeRelays]);
     const userPubkey = await signer?.getPubKey?.();
 
     let signedEvent;
     if (proofs.length > 0) {
       const tokenArray = {
         mint: mint,
+        unit: "sat",
         proofs: proofs,
         ...(deletedEventsArray ? { del: deletedEventsArray } : {}),
       };
-      const cashuProofEvent = {
+      const cashuProofEvent: EventTemplate = {
         kind: 7375,
         tags: [],
         content: await signer!.encrypt(userPubkey, JSON.stringify(tokenArray)),
         created_at: Math.floor(Date.now() / 1000),
       };
-      signedEvent = await signer!.sign(cashuProofEvent);
-      await nostr.publish(signedEvent, allWriteRelays);
+      signedEvent = await finalizeAndSendNostrEvent(
+        signer!,
+        nostr,
+        cashuProofEvent
+      );
     }
     if (deletedEventsArray && deletedEventsArray.length > 0) {
-      await deleteEvent(nostr!, signer!, deletedEventsArray);
+      await deleteEvent(nostr!, signer!, deletedEventsArray, 7375);
     }
 
     await publishSpendingHistoryEvent(
@@ -661,7 +774,7 @@ export async function publishProofEvent(
       signedEvent && signedEvent.id ? signedEvent.id : "",
       deletedEventsArray
     );
-  } catch (_) {
+  } catch {
     return;
   }
 }
@@ -681,6 +794,7 @@ export async function publishSpendingHistoryEvent(
     const eventContent = [
       ["direction", direction],
       ["amount", amount],
+      ["unit", "sat"],
     ];
     const userPubkey = await signer?.getPubKey?.();
     if (sentEventIds && sentEventIds.length > 0) {
@@ -693,31 +807,247 @@ export async function publishSpendingHistoryEvent(
       eventContent.push(["e", keptEventId, allWriteRelays[0]!, "created"]);
     }
 
-    const cashuSpendingHistoryEvent = {
+    const cashuSpendingHistoryEvent: EventTemplate = {
       kind: 7376,
       tags: [],
       content: await signer!.encrypt(userPubkey, JSON.stringify(eventContent)),
       created_at: Math.floor(Date.now() / 1000),
     };
-    const signedEvent = await signer!.sign(cashuSpendingHistoryEvent);
-    await nostr!.publish(signedEvent, allWriteRelays);
-  } catch (_) {
+    await finalizeAndSendNostrEvent(signer!, nostr!, cashuSpendingHistoryEvent);
+  } catch {
     return;
   }
+}
+
+export async function createOrUpdateCommunity(
+  signer: NostrSigner,
+  nostr: NostrManager,
+  details: {
+    d: string; // The unique identifier, should be constant for a community
+    name: string;
+    description: string;
+    image: string;
+    moderators: string[];
+    relays?: CommunityRelays; // optional relay declarations
+  }
+) {
+  const tags: string[][] = [
+    ["d", details.d],
+    ["name", details.name],
+    ["description", details.description],
+    ["image", details.image],
+    ["t", "shopstr"],
+  ];
+
+  // moderators as p tags with role marker
+  for (const mod_pk of details.moderators) {
+    tags.push(["p", mod_pk, "", "moderator"]);
+  }
+
+  // include relay tags if provided: ["relay", url, type]
+  if (details.relays) {
+    const {
+      approvals = [],
+      requests = [],
+      metadata = [],
+      all = [],
+    } = details.relays;
+    for (const r of approvals) tags.push(["relay", r, "approvals"]);
+    for (const r of requests) tags.push(["relay", r, "requests"]);
+    for (const r of metadata) tags.push(["relay", r, "metadata"]);
+    for (const r of all) tags.push(["relay", r]);
+  }
+
+  const eventTemplate: EventTemplate = {
+    kind: 34550,
+    created_at: Math.floor(Date.now() / 1000),
+    tags,
+    content: "",
+  };
+
+  const signedEvent = await finalizeAndSendNostrEvent(
+    signer,
+    nostr,
+    eventTemplate
+  );
+  // Cache community event to database
+  if (signedEvent) {
+    await cacheEventToDatabase(signedEvent).catch((error) =>
+      console.error("Failed to cache community event to database:", error)
+    );
+  }
+  return signedEvent;
+}
+
+export async function createCommunityPost(
+  signer: NostrSigner,
+  nostr: NostrManager,
+  community: Community,
+  content: string,
+  options?: {
+    parentEvent?: NostrEvent; // reply
+    crosspostCommunities?: Community[]; // cross-post to other communities (NIP-18)
+    externalId?: string; // NIP-73 external content id
+    contentKind?: string; // optional k/i usage
+  }
+) {
+  const communityAddress = `${community.kind}:${community.pubkey}:${community.d}`;
+  const tags: string[][] = [];
+
+  // Always include uppercase A/P tags pointing to the community address/pubkey
+  tags.push(["A", communityAddress]);
+  tags.push(["P", community.pubkey]);
+  tags.push(["K", String(community.kind)]);
+
+  if (options?.parentEvent) {
+    // reply: reference parent event via e and p tags and include parent kind
+    tags.push(["a", communityAddress]);
+    tags.push(["e", options.parentEvent.id, ""]);
+    tags.push(["p", options.parentEvent.pubkey, ""]);
+    tags.push(["k", String(options.parentEvent.kind)]);
+  } else {
+    // top-level announcement: include lowercase a/p/k pointing to the community address/kind
+    tags.push(["a", communityAddress]);
+    tags.push(["p", community.pubkey]);
+    tags.push(["k", String(community.kind)]);
+  }
+
+  // cross-posting: include additional lowercase a tags pointing to other communities' addresses
+  if (options?.crosspostCommunities) {
+    for (const c of options.crosspostCommunities) {
+      const addr = `${c.kind}:${c.pubkey}:${c.d}`;
+      tags.push(["a", addr]);
+    }
+  }
+
+  // NIP-73 external ID support (i tag)
+  if (options?.externalId) {
+    tags.push(["i", options.externalId]);
+    if (options?.contentKind) tags.push(["k", options.contentKind]);
+  }
+
+  const eventTemplate: EventTemplate = {
+    kind: 1111,
+    created_at: Math.floor(Date.now() / 1000),
+    tags,
+    content,
+  };
+
+  // returns signed event (so caller can know id)
+  const signedEvent = await finalizeAndSendNostrEvent(
+    signer,
+    nostr,
+    eventTemplate
+  );
+  // Cache community post event to database
+  if (signedEvent) {
+    await cacheEventToDatabase(signedEvent).catch((error) =>
+      console.error("Failed to cache community post event to database:", error)
+    );
+  }
+  return signedEvent;
+}
+
+export async function approveCommunityPost(
+  signer: NostrSigner,
+  nostr: NostrManager,
+  postToApprove: NostrEvent,
+  community: Community
+) {
+  const communityAddress = `${community.kind}:${community.pubkey}:${community.d}`;
+  const tags: string[][] = [
+    ["a", communityAddress],
+    ["e", postToApprove.id],
+    ["p", postToApprove.pubkey],
+    ["k", String(postToApprove.kind)],
+  ];
+  const eventTemplate: EventTemplate = {
+    kind: 4550,
+    created_at: Math.floor(Date.now() / 1000),
+    tags,
+    content: JSON.stringify(postToApprove),
+  };
+
+  // returns signed approval event (so caller can persist approval id)
+  const signedEvent = await finalizeAndSendNostrEvent(
+    signer,
+    nostr,
+    eventTemplate
+  );
+  // Cache community approval event to database
+  if (signedEvent) {
+    await cacheEventToDatabase(signedEvent).catch((error) =>
+      console.error(
+        "Failed to cache community approval event to database:",
+        error
+      )
+    );
+  }
+  return signedEvent;
+}
+
+// Moderator retract of approval -> publish deletion event (NIP-09, kind 5)
+export async function retractApproval(
+  signer: NostrSigner,
+  nostr: NostrManager,
+  approvalEventId: string,
+  reason?: string
+) {
+  const eventTemplate: EventTemplate = {
+    kind: 5,
+    created_at: Math.floor(Date.now() / 1000),
+    tags: [["e", approvalEventId]],
+    content: reason || `Retract approval ${approvalEventId}`,
+  };
+  return await finalizeAndSendNostrEvent(signer, nostr, eventTemplate);
 }
 
 export async function finalizeAndSendNostrEvent(
   signer: NostrSigner,
   nostr: NostrManager,
-  nostrEvent: NostrEvent
+  eventTemplate: EventTemplate
 ) {
   try {
     const { writeRelays, relays } = getLocalStorageData();
-    const signedEvent = await signer.sign(nostrEvent);
+    const signedEvent = await signer.sign(eventTemplate);
+
+    // Cache to database first and wait for confirmation
+    await cacheEventToDatabase(signedEvent);
+
+    // After DB confirmation, attempt to publish to relays with timeout
     const allWriteRelays = withBlastr([...writeRelays, ...relays]);
-    await nostr.publish(signedEvent, allWriteRelays);
-  } catch (_) {
-    return;
+    try {
+      await newPromiseWithTimeout(
+        async (resolve, reject) => {
+          try {
+            await nostr.publish(signedEvent, allWriteRelays);
+            resolve(undefined);
+          } catch (err) {
+            reject(err as Error);
+          }
+        },
+        { timeout: 21000 } // 21 second timeout
+      );
+    } catch (error) {
+      // Timeout or relay publish error - track for retry
+      console.warn(
+        "Relay publish timed out or failed, but event is saved to database:",
+        error
+      );
+      const { trackFailedRelayPublish } = await import("@/utils/db/db-client");
+      await trackFailedRelayPublish(
+        signedEvent.id,
+        signedEvent,
+        allWriteRelays,
+        signer
+      ).catch(console.error);
+    }
+
+    // return the signed event to caller so we know generated IDs
+    return signedEvent;
+  } catch (error) {
+    // Log the actual error and re-throw it so the calling function knows something went wrong
+    throw error;
   }
 }
 
@@ -737,7 +1067,17 @@ export async function blossomUploadImages(
     throw new Error("Only images are supported");
 
   const arrayBuffer = await image.arrayBuffer();
-  const wordArray = CryptoJS.lib.WordArray.create(arrayBuffer);
+  const uint8Array = new Uint8Array(arrayBuffer);
+  const words: number[] = [];
+  for (let i = 0; i < uint8Array.length; i += 4) {
+    words.push(
+      ((uint8Array[i] || 0) << 24) |
+        ((uint8Array[i + 1] || 0) << 16) |
+        ((uint8Array[i + 2] || 0) << 8) |
+        (uint8Array[i + 3] || 0)
+    );
+  }
+  const wordArray = CryptoJS.lib.WordArray.create(words, uint8Array.length);
   const hash = CryptoJS.SHA256(wordArray).toString(CryptoJS.enc.Hex);
 
   const event = {
@@ -748,7 +1088,10 @@ export async function blossomUploadImages(
       ["t", "upload"],
       ["x", hash],
       ["size", image.size.toString()],
-      ["expiration", Math.floor(60000 / 1000).toString()],
+      [
+        "expiration",
+        Math.floor((Date.now() + 24 * 60 * 60 * 1000) / 1000).toString(),
+      ],
     ],
   };
 
@@ -758,33 +1101,106 @@ export async function blossomUploadImages(
     CryptoJS.enc.Utf8.parse(JSON.stringify(signedEvent))
   )}`;
 
+  const validServers = servers
+    .map((s) => {
+      let server = (s || "").trim();
+      if (!server) return null;
+      if (!server.match(/^https?:\/\//i)) {
+        server = `https://${server}`;
+      }
+      try {
+        new URL(server);
+        return server;
+      } catch {
+        return null;
+      }
+    })
+    .filter((s): s is string => s !== null);
+
+  if (validServers.length === 0) {
+    throw new Error(
+      "No valid Blossom servers configured. Please check your media server settings."
+    );
+  }
+
   let tags: string[][] = [];
   let responseUrl: string = "";
-  for (let i = 0; i < servers.length; i++) {
-    const server = servers[i];
+  for (let i = 0; i < validServers.length; i++) {
+    const server = validServers[i];
+
     if (i == 0) {
       const url = new URL("/upload", server);
 
-      const response = await fetch(url, {
+      const res = await fetch(url, {
         method: "PUT",
         body: image,
         headers: {
           authorization,
           "content-type": image.type,
         },
-      }).then((res) => res.json());
+      });
 
-      responseUrl = response.url;
+      if (!res.ok) {
+        const errorText = await res.text().catch(() => "Unknown server error");
+        throw new Error(`Upload failed (${res.status}): ${errorText}`);
+      }
 
-      tags = [
-        ["url", responseUrl],
-        ["x", response.sha256],
-        ["ox", response.sha256],
-        ["size", response.size.toString()],
-      ];
+      const response = await res.json();
+      // Normalize Blossom responses across top-level and NIP-94 tag formats so uploads always yield a usable URL and metadata.
+      let currentResponseUrl = response.url;
+      let responseType = response.type;
+      let responseSha256 = response.sha256;
+      let responseSize = response.size;
 
-      if (response.type) {
-        tags.push(["m", response.type]);
+      if (response.nip94_event && response.nip94_event.tags) {
+        const findTag = (tagName: string) => {
+          const tag = response.nip94_event.tags.find(
+            (t: string[]) => t[0] === tagName
+          );
+          return tag ? tag[1] : undefined;
+        };
+        currentResponseUrl = currentResponseUrl || findTag("url");
+        responseSha256 = responseSha256 || findTag("ox") || findTag("x");
+        responseSize = responseSize || findTag("size");
+        responseType = responseType || findTag("m");
+      }
+
+      if (!currentResponseUrl && responseSha256) {
+        currentResponseUrl = new URL(`/${responseSha256}`, server).toString();
+      }
+
+      responseUrl = currentResponseUrl || "";
+
+      if (!responseUrl) {
+        console.error("Blossom upload response missing media URL", {
+          server,
+          responseType,
+          responseSha256,
+          responseSize,
+          hasNip94Tags: Boolean(response.nip94_event?.tags),
+          response,
+        });
+        throw new Error(
+          "Server successfully responded but didn't provide a media URL. Check your configured server URL."
+        );
+      }
+
+      tags = [["url", responseUrl]];
+
+      if (responseSha256) {
+        tags.push(["x", responseSha256], ["ox", responseSha256]);
+      }
+
+      if (
+        responseSize !== undefined &&
+        responseSize !== null &&
+        responseSize !== ""
+      ) {
+        tags.push(["size", responseSize.toString()]);
+      }
+
+      if (responseType) {
+        tags.push(["m", responseType]);
       }
     } else {
       const url = new URL("/mirror", server);
@@ -800,6 +1216,12 @@ export async function blossomUploadImages(
         },
       });
     }
+  }
+  // Cache blossom upload event to database
+  if (signedEvent) {
+    await cacheEventToDatabase(signedEvent).catch((error) =>
+      console.error("Failed to cache blossom upload event to database:", error)
+    );
   }
   return tags;
 }
@@ -835,6 +1257,8 @@ const LOCALSTORAGECONSTANTS = {
   bunkerRelays: "bunkerRelays",
   bunkerSecret: "bunkerSecret",
   signer: "signer",
+  nwcString: "nwcString",
+  nwcInfo: "nwcInfo",
 };
 
 export const setLocalStorageDataOnSignIn = ({
@@ -943,19 +1367,65 @@ export interface LocalStorageInterface {
   writeRelays: string[];
   mints: string[];
   blossomServers: string[];
-  tokens: [];
-  history: [];
+  tokens: any[];
+  history: any[];
   wot: number;
   encryptedPrivateKey?: string;
   clientPrivkey?: string;
   bunkerRemotePubkey?: string;
   bunkerRelays?: string[];
   bunkerSecret?: string;
-  signer?: { [key: string]: string };
+  signer?:
+    | { type: "nip07" }
+    | { type: "nip46"; bunker: string; appPrivKey?: string }
+    | { type: "nsec"; encryptedPrivKey: string; pubkey?: string };
+  nwcString?: string | null;
+  nwcInfo?: string | null;
   migrationComplete?: boolean;
 }
 
+function isStoredSignerData(
+  value: unknown
+): value is NonNullable<LocalStorageInterface["signer"]> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+
+  const candidate = value as {
+    type?: unknown;
+    bunker?: unknown;
+    appPrivKey?: unknown;
+    encryptedPrivKey?: unknown;
+    pubkey?: unknown;
+  };
+
+  if (candidate.type === "nip07") {
+    return true;
+  }
+
+  if (candidate.type === "nip46") {
+    return (
+      typeof candidate.bunker === "string" &&
+      (candidate.appPrivKey === undefined ||
+        typeof candidate.appPrivKey === "string")
+    );
+  }
+
+  if (candidate.type === "nsec") {
+    return (
+      typeof candidate.encryptedPrivKey === "string" &&
+      (candidate.pubkey === undefined || typeof candidate.pubkey === "string")
+    );
+  }
+
+  return false;
+}
+
 export const getLocalStorageData = (): LocalStorageInterface => {
+  const isStringArray = (value: unknown): value is string[] =>
+    Array.isArray(value) && value.every((entry) => typeof entry === "string");
+  const isArray = (value: unknown): value is unknown[] => Array.isArray(value);
+
   let signInMethod;
   let encryptedPrivateKey;
   let relays;
@@ -970,8 +1440,10 @@ export const getLocalStorageData = (): LocalStorageInterface => {
   let bunkerRemotePubkey;
   let bunkerRelays;
   let bunkerSecret;
-  let signer;
+  let signer: LocalStorageInterface["signer"] | undefined;
   let migrationComplete;
+  let nwcString;
+  let nwcInfo;
 
   if (typeof window !== "undefined") {
     encryptedPrivateKey = localStorage.getItem(
@@ -988,8 +1460,10 @@ export const getLocalStorageData = (): LocalStorageInterface => {
       localStorage.removeItem("cashuWalletRelays");
     }
 
-    const relaysString = localStorage.getItem(LOCALSTORAGECONSTANTS.relays);
-    relays = relaysString ? (JSON.parse(relaysString) as string[]) : [];
+    relays = getLocalStorageJson<string[]>(LOCALSTORAGECONSTANTS.relays, [], {
+      removeOnError: true,
+      validate: isStringArray,
+    });
 
     const defaultRelays = getDefaultRelays();
 
@@ -1007,36 +1481,44 @@ export const getLocalStorageData = (): LocalStorageInterface => {
       }
     }
 
-    readRelays = localStorage.getItem(LOCALSTORAGECONSTANTS.readRelays)
-      ? (
-          JSON.parse(
-            localStorage.getItem(LOCALSTORAGECONSTANTS.readRelays) as string
-          ) as string[]
-        ).filter((r) => r)
-      : [];
+    readRelays = getLocalStorageJson<string[]>(
+      LOCALSTORAGECONSTANTS.readRelays,
+      [],
+      {
+        removeOnError: true,
+        validate: isStringArray,
+      }
+    ).filter((r) => r);
 
-    writeRelays = localStorage.getItem(LOCALSTORAGECONSTANTS.writeRelays)
-      ? (
-          JSON.parse(
-            localStorage.getItem(LOCALSTORAGECONSTANTS.writeRelays) as string
-          ) as string[]
-        ).filter((r) => r)
-      : [];
+    writeRelays = getLocalStorageJson<string[]>(
+      LOCALSTORAGECONSTANTS.writeRelays,
+      [],
+      {
+        removeOnError: true,
+        validate: isStringArray,
+      }
+    ).filter((r) => r);
 
-    mints = localStorage.getItem(LOCALSTORAGECONSTANTS.mints)
-      ? JSON.parse(localStorage.getItem("mints") as string)
-      : null;
+    mints = getLocalStorageJson<string[]>(LOCALSTORAGECONSTANTS.mints, [], {
+      removeOnError: true,
+      validate: isStringArray,
+    });
 
-    if (mints === null) {
+    if (mints.length === 0) {
       mints = [getDefaultMint()];
       localStorage.setItem(LOCALSTORAGECONSTANTS.mints, JSON.stringify(mints));
     }
 
-    blossomServers = localStorage.getItem(LOCALSTORAGECONSTANTS.blossomServers)
-      ? JSON.parse(localStorage.getItem("blossomServers") as string)
-      : null;
+    blossomServers = getLocalStorageJson<string[]>(
+      LOCALSTORAGECONSTANTS.blossomServers,
+      [],
+      {
+        removeOnError: true,
+        validate: isStringArray,
+      }
+    );
 
-    if (blossomServers === null) {
+    if (blossomServers.length === 0) {
       blossomServers = [getDefaultBlossomServer()];
       localStorage.setItem(
         LOCALSTORAGECONSTANTS.blossomServers,
@@ -1044,13 +1526,31 @@ export const getLocalStorageData = (): LocalStorageInterface => {
       );
     }
 
-    tokens = localStorage.getItem(LOCALSTORAGECONSTANTS.tokens)
-      ? JSON.parse(localStorage.getItem("tokens") as string)
-      : localStorage.setItem(LOCALSTORAGECONSTANTS.tokens, JSON.stringify([]));
+    tokens = getLocalStorageJson<unknown[]>(LOCALSTORAGECONSTANTS.tokens, [], {
+      removeOnError: true,
+      validate: isArray,
+    });
+    if (
+      tokens.length === 0 &&
+      !localStorage.getItem(LOCALSTORAGECONSTANTS.tokens)
+    ) {
+      localStorage.setItem(LOCALSTORAGECONSTANTS.tokens, JSON.stringify([]));
+    }
 
-    history = localStorage.getItem(LOCALSTORAGECONSTANTS.history)
-      ? JSON.parse(localStorage.getItem("history") as string)
-      : localStorage.setItem(LOCALSTORAGECONSTANTS.history, JSON.stringify([]));
+    history = getLocalStorageJson<unknown[]>(
+      LOCALSTORAGECONSTANTS.history,
+      [],
+      {
+        removeOnError: true,
+        validate: isArray,
+      }
+    );
+    if (
+      history.length === 0 &&
+      !localStorage.getItem(LOCALSTORAGECONSTANTS.history)
+    ) {
+      localStorage.setItem(LOCALSTORAGECONSTANTS.history, JSON.stringify([]));
+    }
 
     wot = localStorage.getItem(LOCALSTORAGECONSTANTS.wot)
       ? Number(localStorage.getItem(LOCALSTORAGECONSTANTS.wot))
@@ -1064,23 +1564,27 @@ export const getLocalStorageData = (): LocalStorageInterface => {
     )
       ? localStorage.getItem(LOCALSTORAGECONSTANTS.bunkerRemotePubkey)
       : undefined;
-    bunkerRelays = localStorage.getItem(LOCALSTORAGECONSTANTS.bunkerRelays)
-      ? (
-          JSON.parse(
-            localStorage.getItem(LOCALSTORAGECONSTANTS.bunkerRelays) as string
-          ) as string[]
-        ).filter((r) => r)
-      : [];
+    bunkerRelays = getLocalStorageJson<string[]>(
+      LOCALSTORAGECONSTANTS.bunkerRelays,
+      [],
+      {
+        removeOnError: true,
+        validate: isStringArray,
+      }
+    ).filter((r) => r);
     bunkerSecret = localStorage.getItem(LOCALSTORAGECONSTANTS.bunkerSecret)
       ? localStorage.getItem(LOCALSTORAGECONSTANTS.bunkerSecret)
       : undefined;
 
-    const signerData: string | null = localStorage.getItem(
-      LOCALSTORAGECONSTANTS.signer
+    signer = getLocalStorageJson<LocalStorageInterface["signer"] | undefined>(
+      LOCALSTORAGECONSTANTS.signer,
+      undefined,
+      {
+        removeOnError: true,
+        validate: isStoredSignerData,
+      }
     );
-    if (signerData) {
-      signer = JSON.parse(signerData);
-    } else {
+    if (!signer) {
       switch (signInMethod) {
         case "extension":
           signer = {
@@ -1096,17 +1600,28 @@ export const getLocalStorageData = (): LocalStorageInterface => {
           signer = {
             type: "nip46",
             bunker: bunker,
-            appPrivKey: clientPrivkey,
+            appPrivKey:
+              typeof clientPrivkey === "string" ? clientPrivkey : undefined,
           };
           break;
         case "nsec":
-          signer = {
-            type: "nsec",
-            encryptedPrivKey: encryptedPrivateKey,
-          };
+          if (typeof encryptedPrivateKey === "string") {
+            signer = {
+              type: "nsec",
+              encryptedPrivKey: encryptedPrivateKey,
+            };
+          }
           break;
       }
     }
+
+    nwcString = localStorage.getItem(LOCALSTORAGECONSTANTS.nwcString)
+      ? localStorage.getItem(LOCALSTORAGECONSTANTS.nwcString)
+      : null;
+
+    nwcInfo = localStorage.getItem(LOCALSTORAGECONSTANTS.nwcInfo)
+      ? localStorage.getItem(LOCALSTORAGECONSTANTS.nwcInfo)
+      : null;
     migrationComplete = localStorage.getItem("migrationComplete") === "true";
   }
   return {
@@ -1115,7 +1630,7 @@ export const getLocalStorageData = (): LocalStorageInterface => {
     relays: relays || [],
     readRelays: readRelays || [],
     writeRelays: writeRelays || [],
-    mints,
+    mints: mints || [],
     blossomServers: blossomServers || [],
     tokens: tokens || [],
     history: history || [],
@@ -1125,6 +1640,8 @@ export const getLocalStorageData = (): LocalStorageInterface => {
     bunkerRelays: bunkerRelays || [],
     bunkerSecret: bunkerSecret?.toString(),
     signer,
+    nwcString: nwcString as string | null,
+    nwcInfo: nwcInfo as string | null,
     migrationComplete: migrationComplete || false,
   };
 };
@@ -1183,168 +1700,100 @@ export function getDefaultBlossomServer(): string {
 
 export async function verifyNip05Identifier(
   nip05: string,
-  pubkey: string
+  pubkey: string,
+  options?: { baseUrl?: string }
 ): Promise<boolean> {
+  if (!nip05 || !pubkey) return false;
+
   try {
-    if (!nip05 || !pubkey) return false;
+    const params = new URLSearchParams({ nip05, pubkey });
+    const path = `/api/nostr/verify-nip05?${params.toString()}`;
 
-    const parts = nip05.split("@");
-    if (parts.length !== 2) return false;
+    const baseUrl =
+      options?.baseUrl ??
+      (typeof window !== "undefined" ? window.location.origin : null);
 
-    const [username, domain] = parts;
-    if (!username || !domain) return false;
-
-    let url;
-    try {
-      url = `https://${domain}/.well-known/nostr.json?name=${username}`;
-    } catch {
-      return false;
+    if (!baseUrl && typeof window === "undefined") {
+      throw new Error("verifyNip05Identifier requires baseUrl in SSR");
     }
 
-    try {
-      // Use a timeout to prevent hanging requests
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+    const requestUrl = baseUrl ? new URL(path, baseUrl).toString() : path;
+    const response = await fetch(requestUrl);
 
-      const response = await fetch(url, { signal: controller.signal });
-      clearTimeout(timeoutId);
+    if (!response.ok) return false;
 
-      if (!response.ok) return false;
+    const data: unknown = await response.json();
 
-      let data;
-      try {
-        data = await response.json();
-      } catch {
-        return false;
-      }
-
-      if (!data || typeof data !== "object") return false;
-
-      const names = data.names || {};
-      return (
-        names[username] === pubkey || names[username.toLowerCase()] === pubkey
-      );
-    } catch {
-      // This will catch fetch errors, timeout errors, etc.
-      return false;
-    }
+    return (
+      typeof data === "object" &&
+      data !== null &&
+      "verified" in data &&
+      (data as { verified?: boolean }).verified === true
+    );
   } catch {
-    // Catch any unexpected errors
     return false;
   }
 }
 
-
-export async function sendPaymentConfirmationMessage(
-  signer: NostrSigner,
-  merchantPubkey: string,
-  buyerPubkey: string,
-  orderId: string,
-  amountSats: number
-): Promise<void> {
-  try {
-    // Create the message content
-    const messageContent = JSON.stringify({
-      type: "payment_confirmation",
-      orderId,
-      amount: amountSats,
-      timestamp: Date.now(),
-      text: `We have received payment of ${amountSats} sats for order ${orderId}.`
-    });
-
-    // Create the inner message event (kind 14) with id property
-    const messageEvent: GiftWrappedMessageEvent = {
-      id: "", // Will be set when signed
-      kind: 14,
-      content: messageContent,
-      created_at: Math.floor(Date.now() / 1000),
-      tags: [["p", buyerPubkey]],
-      pubkey: merchantPubkey,
-    };
-
-    // Generate random keys for the gift wrap
-    const randomPrivkey = generateSecretKey();
-    const randomPubkey = getPublicKey(randomPrivkey);
-
-    // Create the seal using existing function
-    const sealEvent = await constructMessageSeal(
-      signer,
-      messageEvent,
-      merchantPubkey,
-      buyerPubkey,
-      randomPrivkey
-    );
-
-    // Create the gift wrap using existing function
-    const giftWrappedEvent = await constructMessageGiftWrap(
-      sealEvent,
-      randomPubkey,
-      randomPrivkey,
-      buyerPubkey
-    );
-
-    // Send using existing function
-    await sendGiftWrappedMessageEvent(giftWrappedEvent);
-    
-    console.log("Payment confirmation DM sent successfully");
-  } catch (error) {
-    console.error("Error sending payment confirmation DM:", error);
-    throw error;
+export const saveNWCString = (nwcString: string) => {
+  if (nwcString) {
+    localStorage.setItem(LOCALSTORAGECONSTANTS.nwcString, nwcString);
+  } else {
+    localStorage.removeItem(LOCALSTORAGECONSTANTS.nwcString);
+    localStorage.removeItem(LOCALSTORAGECONSTANTS.nwcInfo);
   }
+  window.dispatchEvent(new Event("storage"));
+};
+
+export const getLocalUserProfileKey = (pubkey: string) =>
+  `shopstr:user-profile:${pubkey}`;
+
+export interface LocalProfileFallback {
+  content: Record<string, unknown>;
+  updatedAt: number;
 }
 
-export async function sendShippingConfirmationMessage(
-  signer: NostrSigner,
-  merchantPubkey: string,
-  buyerPubkey: string,
-  orderId: string
-): Promise<void> {
+export const isProfileContentPopulated = (content: Record<string, unknown>) =>
+  Object.values(content).some(
+    (value) => value !== "" && value !== null && value !== undefined
+  );
+
+export const parseLocalProfileFallback = (
+  raw: string | null
+): LocalProfileFallback | null => {
+  if (!raw) return null;
+
   try {
-    // Create the message content
-    const messageContent = JSON.stringify({
-      type: "shipping_confirmation",
-      orderId,
-      timestamp: Date.now(),
-      text: `Your order ${orderId} has shipped!`
-    });
+    const parsed = JSON.parse(raw);
 
-    // Create the inner message event (kind 14) with id property
-    const messageEvent: GiftWrappedMessageEvent = {
-      id: "", // Will be set when signed
-      kind: 14,
-      content: messageContent,
-      created_at: Math.floor(Date.now() / 1000),
-      tags: [["p", buyerPubkey]],
-      pubkey: merchantPubkey,
-    };
+    // Backward compatibility: previously we stored content directly.
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      !Array.isArray(parsed) &&
+      !("content" in parsed)
+    ) {
+      return {
+        content: parsed as Record<string, unknown>,
+        updatedAt: 0,
+      };
+    }
 
-    // Generate random keys for the gift wrap
-    const randomPrivkey = generateSecretKey();
-    const randomPubkey = getPublicKey(randomPrivkey);
-
-    // Create the seal using existing function
-    const sealEvent = await constructMessageSeal(
-      signer,
-      messageEvent,
-      merchantPubkey,
-      buyerPubkey,
-      randomPrivkey
-    );
-
-    // Create the gift wrap using existing function
-    const giftWrappedEvent = await constructMessageGiftWrap(
-      sealEvent,
-      randomPubkey,
-      randomPrivkey,
-      buyerPubkey
-    );
-
-    // Send using your existing function
-    await sendGiftWrappedMessageEvent(giftWrappedEvent);
-    
-    console.log("Shipping confirmation DM sent successfully");
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      !Array.isArray(parsed) &&
+      "content" in parsed
+    ) {
+      const fallback = parsed as LocalProfileFallback;
+      return {
+        content: fallback.content || {},
+        updatedAt: fallback.updatedAt || 0,
+      };
+    }
   } catch (error) {
-    console.error("Error sending shipping confirmation DM:", error);
-    throw error;
+    console.error("Failed to parse local profile fallback:", error);
   }
-}
+
+  return null;
+};

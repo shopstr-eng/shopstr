@@ -1,51 +1,80 @@
 /* eslint-disable @next/next/no-img-element */
 
-import React, { useContext, useEffect, useRef, useState } from "react";
-import { nip19 } from "nostr-tools";
-import { ProductData } from "@/utils/parsers/product-parser-functions";
+import { useContext, useEffect, useRef, useState } from "react";
+import { Event, nip19 } from "nostr-tools";
+import parseTags, {
+  ProductData,
+} from "@/utils/parsers/product-parser-functions";
+import { getListingSlug } from "@/utils/url-slugs";
 import { ProfileWithDropdown } from "./profile/profile-dropdown";
-import {
-  DisplayCostBreakdown,
-  DisplayCheckoutCost,
-} from "./display-monetary-info";
+import { DisplayCheckoutCost } from "./display-monetary-info";
 import ProductInvoiceCard from "../product-invoice-card";
 import { useRouter } from "next/router";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
-import { Button, Chip, useDisclosure } from "@nextui-org/react";
+import {
+  Button,
+  Chip,
+  Input,
+  useDisclosure,
+  Dropdown,
+  DropdownTrigger,
+  DropdownMenu,
+  DropdownItem,
+} from "@heroui/react";
 import { locationAvatar } from "./dropdowns/location-dropdown";
 import {
   FaceFrownIcon,
   FaceSmileIcon,
-  InformationCircleIcon,
+  ArrowLongDownIcon,
+  ArrowLongUpIcon,
+  EllipsisVerticalIcon,
 } from "@heroicons/react/24/outline";
-import { ReviewsContext } from "@/utils/context/context";
+import {
+  ReviewsContext,
+  ProductContext,
+  ShopMapContext,
+} from "@/utils/context/context";
+import FreeShippingNotification from "../free-shipping-notification";
 import FailureModal from "../utility-components/failure-modal";
 import SuccessModal from "../utility-components/success-modal";
 import SignInModal from "../sign-in/SignInModal";
 import currencySelection from "../../public/currencySelection.json";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
+import VolumeSelector from "./volume-selector";
+import WeightSelector from "./weight-selector";
+import BulkSelector from "./bulk-selector";
+import ZapsnagButton from "@/components/ZapsnagButton";
+import { RawEventModal, EventIdModal } from "./modals/event-modals";
+import { getLocalStorageJson } from "@/utils/safe-json";
+import { CartDiscountsMap, isCartDiscountsMap } from "@/utils/cart-discounts";
 
 const SUMMARY_CHARACTER_LIMIT = 100;
 
 export default function CheckoutCard({
   productData,
-  setFiatOrderIsPlaced,
   setInvoiceIsPaid,
   setInvoiceGenerationFailed,
   setCashuPaymentSent,
   setCashuPaymentFailed,
   uniqueKey,
+  rawEvent,
 }: {
   productData: ProductData;
-  setFiatOrderIsPlaced?: (fiatOrderIsPlaced: boolean) => void;
-  setInvoiceIsPaid?: (invoiceIsPaid: boolean) => void;
-  setInvoiceGenerationFailed?: (invoiceGenerationFailed: boolean) => void;
-  setCashuPaymentSent?: (cashuPaymentSent: boolean) => void;
-  setCashuPaymentFailed?: (cashuPaymentFailed: boolean) => void;
+  setInvoiceIsPaid: (invoiceIsPaid: boolean) => void;
+  setInvoiceGenerationFailed: (invoiceGenerationFailed: boolean) => void;
+  setCashuPaymentSent: (cashuPaymentSent: boolean) => void;
+  setCashuPaymentFailed: (cashuPaymentFailed: boolean) => void;
   uniqueKey?: string;
+  rawEvent?: Event;
 }) {
   const { pubkey: userPubkey, isLoggedIn } = useContext(SignerContext);
+  const productEventContext = useContext(ProductContext);
+  const shopMapContext = useContext(ShopMapContext);
   const { isOpen, onOpen, onClose } = useDisclosure();
+  const [showFreeShippingNotification, setShowFreeShippingNotification] =
+    useState(false);
+  const [showRawEventModal, setShowRawEventModal] = useState(false);
+  const [showEventIdModal, setShowEventIdModal] = useState(false);
 
   const router = useRouter();
 
@@ -72,8 +101,62 @@ export default function CheckoutCard({
   const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   const [cart, setCart] = useState<ProductData[]>([]);
+  const [selectedVolume, setSelectedVolume] = useState<string>("");
+  const [selectedWeight, setSelectedWeight] = useState<string>("");
+  const [selectedBulkOption, setSelectedBulkOption] = useState<string>("1");
+  const [currentPrice, setCurrentPrice] = useState(productData.price);
+  const [discountCode, setDiscountCode] = useState("");
+  const [appliedDiscount, setAppliedDiscount] = useState<number>(0);
+  const [discountError, setDiscountError] = useState("");
 
   const reviewsContext = useContext(ReviewsContext);
+
+  const hasVolumes = productData.volumes && productData.volumes.length > 0;
+  const hasWeights = productData.weights && productData.weights.length > 0;
+  const hasBulkPrices =
+    productData.bulkPrices && productData.bulkPrices.size > 0;
+
+  const isExpired = productData.expiration
+    ? Date.now() / 1000 > productData.expiration
+    : false;
+
+  const isZapsnag =
+    productData.d === "zapsnag" || productData.categories?.includes("zapsnag");
+
+  useEffect(() => {
+    if (
+      selectedBulkOption &&
+      selectedBulkOption !== "1" &&
+      productData.bulkPrices
+    ) {
+      const bulkPrice = productData.bulkPrices.get(
+        parseInt(selectedBulkOption)
+      );
+      if (bulkPrice !== undefined) {
+        setCurrentPrice(bulkPrice);
+      }
+    } else if (selectedVolume && productData.volumePrices) {
+      const volumePrice = productData.volumePrices.get(selectedVolume);
+      if (volumePrice !== undefined) {
+        setCurrentPrice(volumePrice);
+      }
+    } else if (selectedWeight && productData.weightPrices) {
+      const weightPrice = productData.weightPrices.get(selectedWeight);
+      if (weightPrice !== undefined) {
+        setCurrentPrice(weightPrice);
+      }
+    } else {
+      setCurrentPrice(productData.price);
+    }
+  }, [
+    selectedVolume,
+    selectedWeight,
+    selectedBulkOption,
+    productData.price,
+    productData.volumePrices,
+    productData.weightPrices,
+    productData.bulkPrices,
+  ]);
 
   const toggleExpand = () => {
     setIsExpanded(!isExpanded);
@@ -88,7 +171,7 @@ export default function CheckoutCard({
 
   const calculateVisibleImages = (containerHeight: number) => {
     const imageHeight = containerHeight / 3;
-    const visibleCount = Math.floor(containerHeight / imageHeight);
+    const visibleCount = Math.max(3, Math.floor(containerHeight / imageHeight));
     setVisibleImages(productData.images.slice(0, visibleCount));
   };
 
@@ -96,9 +179,10 @@ export default function CheckoutCard({
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const cartList = localStorage.getItem("cart")
-        ? JSON.parse(localStorage.getItem("cart") as string)
-        : [];
+      const cartList = getLocalStorageJson<ProductData[]>("cart", [], {
+        removeOnError: true,
+        validate: Array.isArray,
+      });
       if (cartList && cartList.length > 0) {
         setCart(cartList);
       }
@@ -165,7 +249,7 @@ export default function CheckoutCard({
       };
     }
     return;
-  }, [selectedImage]);
+  }, [selectedImage, isBeingPaid]);
 
   useEffect(() => {
     setHasSizes(
@@ -214,38 +298,92 @@ export default function CheckoutCard({
         return;
       }
       let updatedCart = [];
+      const productToAdd = { ...productData };
+
       if (selectedSize) {
-        const productWithSize = { ...productData, selectedSize: selectedSize };
-        updatedCart = [...cart, productWithSize];
-      } else {
-        updatedCart = [...cart, productData];
+        productToAdd.selectedSize = selectedSize;
       }
+      if (selectedVolume) {
+        productToAdd.selectedVolume = selectedVolume;
+        if (productData.volumePrices) {
+          const volumePrice = productData.volumePrices.get(selectedVolume);
+          if (volumePrice !== undefined) {
+            productToAdd.volumePrice = volumePrice;
+          }
+        }
+      }
+      if (selectedWeight) {
+        productToAdd.selectedWeight = selectedWeight;
+        if (productData.weightPrices) {
+          const weightPrice = productData.weightPrices.get(selectedWeight);
+          if (weightPrice !== undefined) {
+            productToAdd.weightPrice = weightPrice;
+          }
+        }
+      }
+      if (selectedBulkOption && selectedBulkOption !== "1") {
+        productToAdd.selectedBulkOption = parseInt(selectedBulkOption);
+        if (productData.bulkPrices) {
+          const bulkPrice = productData.bulkPrices.get(
+            parseInt(selectedBulkOption)
+          );
+          if (bulkPrice !== undefined) {
+            productToAdd.bulkPrice = bulkPrice;
+          }
+        }
+      }
+
+      updatedCart = [...cart, productToAdd];
       setCart(updatedCart);
       localStorage.setItem("cart", JSON.stringify(updatedCart));
+
+      const sellerShop = shopMapContext.shopData.get(productData.pubkey);
+      if (
+        sellerShop &&
+        sellerShop.content.freeShippingThreshold &&
+        sellerShop.content.freeShippingThreshold > 0
+      ) {
+        setShowFreeShippingNotification(true);
+      }
+
+      // Store discount code if applied
+      if (appliedDiscount > 0 && discountCode) {
+        const discounts = getLocalStorageJson<CartDiscountsMap>(
+          "cartDiscounts",
+          {},
+          {
+            removeOnError: true,
+            removeOnValidationError: true,
+            validate: isCartDiscountsMap,
+          }
+        );
+        discounts[productData.pubkey] = {
+          code: discountCode,
+        };
+        localStorage.setItem("cartDiscounts", JSON.stringify(discounts));
+      }
     } else {
       onOpen();
     }
   };
 
   const handleShare = async () => {
-    const naddr = nip19.naddrEncode({
-      identifier: productData.d as string,
-      pubkey: productData.pubkey,
-      kind: 30402,
-    });
-    // The content you want to share
+    const allParsed = productEventContext.productEvents
+      .filter((e: Event) => e.kind !== 1)
+      .map((e: Event) => parseTags(e))
+      .filter((p: ProductData | undefined): p is ProductData => !!p);
+
+    const slug = getListingSlug(productData, allParsed);
+    const listingPath = slug || productData.id;
     const shareData = {
       title: productData.title,
-      url: `${window.location.origin}/listing/${naddr}`,
+      url: `${window.location.origin}/listing/${listingPath}`,
     };
-    // Check if the Web Share API is available
     if (navigator.share) {
-      // Use the share API
       await navigator.share(shareData);
     } else {
-      // Fallback for browsers that do not support the Web Share API
       navigator.clipboard.writeText(
-        `${window.location.origin}/listing/${naddr}`
+        `${window.location.origin}/listing/${listingPath}`
       );
       setShowSuccessModal(true);
     }
@@ -253,13 +391,65 @@ export default function CheckoutCard({
 
   const handleSendMessage = (pubkeyToOpenChatWith: string) => {
     if (isLoggedIn) {
+      const allParsed = productEventContext.productEvents
+        .filter((e: Event) => e.kind !== 1)
+        .map((e: Event) => parseTags(e))
+        .filter((p: ProductData | undefined): p is ProductData => !!p);
+      const slug = getListingSlug(productData, allParsed);
+      const listingPath = slug || productData.id;
+      const productUrl = `${window.location.origin}/listing/${listingPath}`;
       router.push({
         pathname: "/orders",
-        query: { pk: nip19.npubEncode(pubkeyToOpenChatWith), isInquiry: true },
+        query: {
+          pk: nip19.npubEncode(pubkeyToOpenChatWith),
+          isInquiry: true,
+          productTitle: productData.title,
+          productUrl,
+        },
       });
     } else {
       onOpen();
     }
+  };
+
+  const handleApplyDiscount = async () => {
+    if (!discountCode.trim()) {
+      setDiscountError("Please enter a discount code");
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `/api/db/discount-codes?validate=true&code=${encodeURIComponent(
+          discountCode
+        )}&pubkey=${productData.pubkey}`
+      );
+
+      if (!response.ok) {
+        setDiscountError("Failed to validate discount code");
+        return;
+      }
+
+      const result = await response.json();
+
+      if (result.valid && result.discount_percentage) {
+        setAppliedDiscount(result.discount_percentage);
+        setDiscountError("");
+      } else {
+        setDiscountError("Invalid or expired discount code");
+        setAppliedDiscount(0);
+      }
+    } catch (error) {
+      console.error("Failed to apply discount:", error);
+      setDiscountError("Failed to apply discount code");
+      setAppliedDiscount(0);
+    }
+  };
+
+  const handleRemoveDiscount = () => {
+    setDiscountCode("");
+    setAppliedDiscount(0);
+    setDiscountError("");
   };
 
   const renderSizeGrid = () => {
@@ -271,7 +461,7 @@ export default function CheckoutCard({
               key={size}
               className={`rounded-md border p-2 text-sm ${
                 selectedSize === size
-                  ? "bg-shopstr-purple text-white dark:bg-shopstr-yellow dark:text-black"
+                  ? "bg-shopstr-purple dark:bg-shopstr-yellow text-white dark:text-black"
                   : "bg-white text-black dark:bg-black dark:text-white"
               }`}
               onClick={() => setSelectedSize(size)}
@@ -284,364 +474,570 @@ export default function CheckoutCard({
     );
   };
 
+  // Calculate discounted price with proper rounding
+  const discountAmount =
+    appliedDiscount > 0
+      ? Math.ceil(((currentPrice * appliedDiscount) / 100) * 100) / 100
+      : 0;
+
+  const discountedPrice =
+    appliedDiscount > 0 ? currentPrice - discountAmount : currentPrice;
+
+  const discountedTotal = discountedPrice + (productData.shippingCost ?? 0);
+
+  const updatedProductData = {
+    ...productData,
+    price: discountedPrice,
+    totalCost: discountedTotal,
+    originalPrice: currentPrice,
+    discountPercentage: appliedDiscount,
+    volumePrice:
+      selectedVolume && productData.volumePrices
+        ? productData.volumePrices.get(selectedVolume)
+        : undefined,
+    weightPrice:
+      selectedWeight && productData.weightPrices
+        ? productData.weightPrices.get(selectedWeight)
+        : undefined,
+    selectedBulkOption:
+      selectedBulkOption && selectedBulkOption !== "1"
+        ? parseInt(selectedBulkOption)
+        : undefined,
+    bulkPrice:
+      selectedBulkOption && selectedBulkOption !== "1" && productData.bulkPrices
+        ? productData.bulkPrices.get(parseInt(selectedBulkOption))
+        : undefined,
+  };
+
   return (
-    <>
-      {!isBeingPaid ? (
-        <>
-          <div className="max-w-screen pt-4">
-            <div
-              className="max-w-screen mx-3 my-3 flex flex-row whitespace-normal break-words"
-              key={uniqueKey}
-            >
-              <div className="w-1/2 pr-4">
-                <div className="flex w-full flex-row">
-                  <div className="flex w-1/4 flex-col pr-4">
-                    <div ref={containerRef} className="flex-1 overflow-hidden">
+    <div className="bg-light-bg dark:bg-dark-bg flex w-full items-center justify-center">
+      <div className="mx-auto flex w-full flex-col">
+        {!isBeingPaid ? (
+          <>
+            <div className="max-w-screen pt-4">
+              <div
+                className="mx-3 my-3 flex max-w-screen flex-row break-words whitespace-normal"
+                key={uniqueKey}
+              >
+                <div className="w-1/2 pr-4">
+                  <div className="flex w-full flex-row">
+                    <div className="flex w-1/4 flex-col pr-4">
                       <div
-                        className={`flex flex-col space-y-2 ${
-                          showAllImages ? "overflow-y-auto" : ""
-                        }`}
+                        ref={containerRef}
+                        className="flex-1 overflow-hidden"
                       >
-                        {(showAllImages
-                          ? productData.images
-                          : visibleImages
-                        ).map((image, index) => (
-                          <img
-                            key={index}
-                            src={image}
-                            alt={`Product image ${index + 1}`}
-                            className={`w-full cursor-pointer rounded-xl object-cover ${
-                              image === selectedImage
-                                ? "border-2 border-shopstr-purple dark:border-shopstr-yellow"
-                                : ""
-                            }`}
-                            style={{ aspectRatio: "1 / 1" }}
-                            onClick={() => setSelectedImage(image)}
-                          />
-                        ))}
+                        <div
+                          className={`flex flex-col space-y-2 ${
+                            showAllImages ? "overflow-y-auto" : ""
+                          }`}
+                        >
+                          {(showAllImages
+                            ? productData.images
+                            : visibleImages
+                          ).map((image, index) => (
+                            <img
+                              key={index}
+                              src={image}
+                              alt={`Product image ${index + 1}`}
+                              className={`w-full cursor-pointer rounded-xl object-cover ${
+                                image === selectedImage
+                                  ? "border-shopstr-purple dark:border-shopstr-yellow border-2"
+                                  : ""
+                              }`}
+                              style={{ aspectRatio: "1 / 1" }}
+                              onClick={() => setSelectedImage(image)}
+                            />
+                          ))}
+                        </div>
                       </div>
+                      {productData.images.length > 3 && (
+                        <button
+                          onClick={() => setShowAllImages(!showAllImages)}
+                          className="mt-2 flex flex-col items-center text-sm text-purple-500 hover:text-purple-700 dark:text-yellow-500 dark:hover:text-yellow-700"
+                        >
+                          {showAllImages ? (
+                            <ArrowLongUpIcon className="h-5 w-5" />
+                          ) : (
+                            <ArrowLongDownIcon className="h-5 w-5" />
+                          )}
+                        </button>
+                      )}
                     </div>
-                    {productData.images.length > visibleImages.length && (
+                    <div className="w-3/4">
+                      <img
+                        src={selectedImage}
+                        alt="Selected product image"
+                        className="w-full rounded-xl object-cover"
+                        style={{ aspectRatio: "1 / 1" }}
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div className="w-1/2 px-3">
+                  <div className="flex w-full flex-col gap-4">
+                    <div className="flex flex-wrap items-center gap-4">
+                      <ProfileWithDropdown
+                        pubkey={productData.pubkey}
+                        dropDownKeys={
+                          productData.pubkey === userPubkey
+                            ? ["shop_profile"]
+                            : ["shop", "inquiry", "copy_npub"]
+                        }
+                      />
+                      {merchantQuality !== "" && (
+                        <div className="inline-flex items-center gap-1 rounded-lg border-2 border-black px-2 dark:border-white">
+                          {merchantReview >= 0.5 ? (
+                            <>
+                              <FaceSmileIcon
+                                className={`h-10 w-10 p-1 ${
+                                  merchantReview >= 0.75
+                                    ? "text-green-500"
+                                    : "text-green-300"
+                                }`}
+                              />
+                              <span className="text-light-text dark:text-dark-text mr-2 text-sm whitespace-nowrap">
+                                {merchantQuality}
+                              </span>
+                            </>
+                          ) : (
+                            <>
+                              <FaceFrownIcon
+                                className={`h-10 w-10 p-1 ${
+                                  merchantReview >= 0.25
+                                    ? "text-red-300"
+                                    : "text-red-500"
+                                }`}
+                              />
+                              <span className="text-light-text dark:text-dark-text mr-2 text-sm whitespace-nowrap">
+                                {merchantQuality}
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="mt-4 flex w-full items-start justify-between">
+                    <h2 className="text-light-text dark:text-dark-text text-left text-2xl font-bold">
+                      {productData.title}
+                      {isExpired && (
+                        <Chip color="warning" variant="flat" className="ml-2">
+                          Outdated
+                        </Chip>
+                      )}
+                    </h2>
+                    {rawEvent && (
+                      <Dropdown>
+                        <DropdownTrigger>
+                          <Button
+                            isIconOnly
+                            variant="light"
+                            size="sm"
+                            className="h-8 min-w-8"
+                          >
+                            <EllipsisVerticalIcon className="h-6 w-6 text-gray-500" />
+                          </Button>
+                        </DropdownTrigger>
+                        <DropdownMenu aria-label="Event Actions">
+                          <DropdownItem
+                            key="view-raw"
+                            onPress={() => setShowRawEventModal(true)}
+                          >
+                            View Raw Event
+                          </DropdownItem>
+                          <DropdownItem
+                            key="view-id"
+                            onPress={() => setShowEventIdModal(true)}
+                          >
+                            View Event ID
+                          </DropdownItem>
+                        </DropdownMenu>
+                      </Dropdown>
+                    )}
+                  </div>
+                  {productData.expiration && (
+                    <p
+                      className={`mt-1 text-left text-sm ${
+                        isExpired ? "font-medium text-red-500" : "text-gray-500"
+                      }`}
+                    >
+                      {isExpired ? "Expired on: " : "Valid until: "}{" "}
+                      {new Date(
+                        productData.expiration * 1000
+                      ).toLocaleDateString()}
+                    </p>
+                  )}
+                  {productData.condition && (
+                    <div className="text-light-text dark:text-dark-text text-left text-xs">
+                      <span>Condition: {productData.condition}</span>
+                    </div>
+                  )}
+                  {productData.restrictions && (
+                    <div className="text-light-text dark:text-dark-text text-left text-xs">
+                      <span>Restrictions: </span>
+                      <span className="text-red-500">
+                        {productData.restrictions}
+                      </span>
+                    </div>
+                  )}
+                  <div className="hidden sm:block">
+                    <p className="text-light-text dark:text-dark-text mt-4 w-full text-left text-lg break-words whitespace-pre-wrap">
+                      {renderSummary()}
+                    </p>
+                    {productData.summary.length > SUMMARY_CHARACTER_LIMIT && (
                       <button
-                        onClick={() => setShowAllImages(!showAllImages)}
-                        className="mt-2 text-sm text-purple-500 hover:text-purple-700 dark:text-yellow-500 dark:hover:text-yellow-700"
+                        onClick={toggleExpand}
+                        className="mt-2 text-purple-500 hover:text-purple-700 dark:text-yellow-500 dark:hover:text-yellow-700"
                       >
-                        {showAllImages ? "∧" : "∨"}
+                        {isExpanded ? "Show less" : "Show more"}
                       </button>
                     )}
                   </div>
-                  <div className="w-3/4">
-                    <img
-                      src={selectedImage}
-                      alt="Selected product image"
-                      className="w-full rounded-xl object-cover"
-                      style={{ aspectRatio: "1 / 1" }}
+                  {hasVolumes && (
+                    <VolumeSelector
+                      volumes={productData.volumes!}
+                      volumePrices={productData.volumePrices!}
+                      currency={productData.currency}
+                      selectedVolume={selectedVolume}
+                      onVolumeChange={setSelectedVolume}
+                      isRequired={true}
                     />
-                  </div>
-                </div>
-              </div>
-              <div className="w-1/2 px-3">
-                <div className="flex w-full flex-col gap-4">
-                  <div className="flex flex-wrap items-center gap-4">
-                    <ProfileWithDropdown
-                      pubkey={productData.pubkey}
-                      dropDownKeys={
-                        productData.pubkey === userPubkey
-                          ? ["shop_profile"]
-                          : ["shop", "inquiry", "copy_npub"]
-                      }
+                  )}
+                  {hasWeights && (
+                    <WeightSelector
+                      weights={productData.weights!}
+                      weightPrices={productData.weightPrices!}
+                      currency={productData.currency}
+                      selectedWeight={selectedWeight}
+                      onWeightChange={setSelectedWeight}
+                      isRequired={true}
                     />
-                    {merchantQuality !== "" && (
-                      <div className="inline-flex items-center gap-1 rounded-lg border-2 border-black px-2 dark:border-white">
-                        {merchantReview >= 0.5 ? (
-                          <>
-                            <FaceSmileIcon
-                              className={`h-10 w-10 p-1 ${
-                                merchantReview >= 0.75
-                                  ? "text-green-500"
-                                  : "text-green-300"
-                              }`}
-                            />
-                            <span className="mr-2 whitespace-nowrap text-sm text-light-text dark:text-dark-text">
-                              {merchantQuality}
-                            </span>
-                          </>
-                        ) : (
-                          <>
-                            <FaceFrownIcon
-                              className={`h-10 w-10 p-1 ${
-                                merchantReview >= 0.25
-                                  ? "text-red-300"
-                                  : "text-red-500"
-                              }`}
-                            />
-                            <span className="mr-2 whitespace-nowrap text-sm text-light-text dark:text-dark-text">
-                              {merchantQuality}
-                            </span>
-                          </>
-                        )}
-                      </div>
+                  )}
+                  {hasBulkPrices && (
+                    <BulkSelector
+                      bulkPrices={productData.bulkPrices!}
+                      basePrice={productData.price}
+                      currency={productData.currency}
+                      selectedBulkOption={selectedBulkOption}
+                      onBulkChange={setSelectedBulkOption}
+                    />
+                  )}
+                  <div className="mt-4">
+                    <DisplayCheckoutCost monetaryInfo={updatedProductData} />
+                    {selectedBulkOption && selectedBulkOption !== "1" && (
+                      <p className="text-light-text dark:text-dark-text mt-1 text-sm">
+                        Bundle: {selectedBulkOption} units
+                      </p>
                     )}
                   </div>
-                </div>
-                <h2 className="mt-4 w-full text-left text-2xl font-bold text-light-text dark:text-dark-text">
-                  {productData.title}
-                </h2>
-                {productData.condition && (
-                  <div className="text-left text-xs text-light-text dark:text-dark-text">
-                    <span>Condition: {productData.condition}</span>
-                  </div>
-                )}
-                {productData.restrictions && (
-                  <div className="text-left text-xs text-light-text dark:text-dark-text">
-                    <span>Restrictions: </span>
-                    <span className="text-red-500">
-                      {productData.restrictions}
-                    </span>
-                  </div>
-                )}
-                <div className="hidden sm:block">
-                  <p className="mt-4 w-full text-left text-lg text-light-text dark:text-dark-text">
-                    {renderSummary()}
-                  </p>
-                  {productData.summary.length > SUMMARY_CHARACTER_LIMIT && (
-                    <button
-                      onClick={toggleExpand}
-                      className="mt-2 text-purple-500 hover:text-purple-700 dark:text-yellow-500 dark:hover:text-yellow-700"
+
+                  {isZapsnag ? (
+                    <div className="mt-4">
+                      <ZapsnagButton product={productData} />
+                    </div>
+                  ) : (
+                    <>
+                      {productData.pubkey !== userPubkey && (
+                        <div className="mt-4 space-y-2">
+                          <div className="flex gap-2">
+                            <Input
+                              label="Discount Code"
+                              placeholder="Enter code"
+                              value={discountCode}
+                              onChange={(e) =>
+                                setDiscountCode(e.target.value.toUpperCase())
+                              }
+                              className="text-light-text dark:text-dark-text flex-1"
+                              disabled={appliedDiscount > 0}
+                              isInvalid={!!discountError}
+                              errorMessage={discountError}
+                            />
+                            {appliedDiscount > 0 ? (
+                              <Button
+                                color="warning"
+                                onClick={handleRemoveDiscount}
+                              >
+                                Remove
+                              </Button>
+                            ) : (
+                              <Button
+                                className={SHOPSTRBUTTONCLASSNAMES}
+                                onClick={handleApplyDiscount}
+                              >
+                                Apply
+                              </Button>
+                            )}
+                          </div>
+                          {appliedDiscount > 0 && (
+                            <p className="text-sm text-green-600 dark:text-green-400">
+                              {appliedDiscount}% discount applied! You save{" "}
+                              {Math.ceil((discountAmount / 100) * 100) / 100}{" "}
+                              {productData.currency}
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="pb-1">
+                        <Chip
+                          key={productData.location}
+                          startContent={locationAvatar(productData.location)}
+                          className="min-h-fit max-w-full"
+                          classNames={{
+                            base: "h-auto py-1",
+                            content: "whitespace-normal break-words text-wrap",
+                          }}
+                        >
+                          {productData.location}
+                        </Chip>
+                      </div>
+                      {renderSizeGrid()}
+                      <div className="flex w-full flex-col gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          {productData.status !== "sold" ? (
+                            <>
+                              <Button
+                                className={`text-dark-text dark:text-light-text min-w-fit bg-gradient-to-tr from-purple-700 via-purple-500 to-purple-700 shadow-lg dark:from-yellow-700 dark:via-yellow-500 dark:to-yellow-700 ${
+                                  (hasSizes && !selectedSize) ||
+                                  (hasVolumes && !selectedVolume) ||
+                                  (hasWeights && !selectedWeight)
+                                    ? "cursor-not-allowed opacity-50"
+                                    : ""
+                                }`}
+                                onClick={toggleBuyNow}
+                                disabled={
+                                  (hasSizes && !selectedSize) ||
+                                  (hasVolumes && !selectedVolume) ||
+                                  (hasWeights && !selectedWeight) ||
+                                  isExpired
+                                }
+                              >
+                                Buy Now
+                              </Button>
+                              <Button
+                                className={`${SHOPSTRBUTTONCLASSNAMES} ${
+                                  isAdded ||
+                                  (hasSizes && !selectedSize) ||
+                                  (hasVolumes && !selectedVolume) ||
+                                  (hasWeights && !selectedWeight)
+                                    ? "cursor-not-allowed opacity-50"
+                                    : ""
+                                }`}
+                                onClick={handleAddToCart}
+                                disabled={
+                                  isAdded ||
+                                  (hasSizes && !selectedSize) ||
+                                  (hasVolumes && !selectedVolume) ||
+                                  (hasWeights && !selectedWeight) ||
+                                  isExpired
+                                }
+                              >
+                                Add To Cart
+                              </Button>
+                            </>
+                          ) : (
+                            <>
+                              <Button
+                                className={`${SHOPSTRBUTTONCLASSNAMES} cursor-not-allowed opacity-50`}
+                                disabled
+                              >
+                                Sold Out
+                              </Button>
+                            </>
+                          )}
+                          <Button
+                            type="submit"
+                            className={SHOPSTRBUTTONCLASSNAMES}
+                            onClick={handleShare}
+                          >
+                            Share
+                          </Button>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                  {productData.pubkey !== userPubkey && (
+                    <span
+                      onClick={() => {
+                        handleSendMessage(productData.pubkey);
+                      }}
+                      className="cursor-pointer text-gray-500"
                     >
-                      {isExpanded ? "Show less" : "Show more"}
-                    </button>
+                      or{" "}
+                      <span className="hover:text-light-text dark:hover:text-dark-text underline">
+                        contact
+                      </span>{" "}
+                      seller
+                    </span>
                   )}
                 </div>
-                <div className="mt-4">
-                  <DisplayCheckoutCost monetaryInfo={productData} />
-                </div>
-                <div className="pb-1">
-                  <Chip
-                    key={productData.location}
-                    startContent={locationAvatar(productData.location)}
+              </div>
+              <div className="mx-3 my-3 max-w-full max-w-screen overflow-hidden sm:hidden">
+                <p className="text-light-text dark:text-dark-text w-full text-left text-lg break-words whitespace-pre-wrap">
+                  {renderSummary()}
+                </p>
+                {productData.summary.length > SUMMARY_CHARACTER_LIMIT && (
+                  <button
+                    onClick={toggleExpand}
+                    className="mt-2 text-purple-500 hover:text-purple-700 dark:text-yellow-500 dark:hover:text-yellow-700"
                   >
-                    {productData.location}
-                  </Chip>
-                </div>
-                {renderSizeGrid()}
-                <div className="flex w-full flex-col gap-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    {productData.status !== "sold" ? (
-                      <>
-                        <Button
-                          className={`min-w-fit bg-gradient-to-tr from-purple-700 via-purple-500 to-purple-700 text-dark-text shadow-lg dark:from-yellow-700 dark:via-yellow-500 dark:to-yellow-700 dark:text-light-text ${
-                            hasSizes && !selectedSize
-                              ? "cursor-not-allowed opacity-50"
-                              : ""
-                          }`}
-                          onClick={toggleBuyNow}
-                          disabled={hasSizes && !selectedSize}
-                        >
-                          Buy Now
-                        </Button>
-                        <Button
-                          className={`${SHOPSTRBUTTONCLASSNAMES} ${
-                            isAdded || (hasSizes && !selectedSize)
-                              ? "cursor-not-allowed opacity-50"
-                              : ""
-                          }`}
-                          onClick={handleAddToCart}
-                          disabled={isAdded || (hasSizes && !selectedSize)}
-                        >
-                          Add To Cart
-                        </Button>
-                      </>
-                    ) : (
-                      <>
-                        <Button
-                          className={`${SHOPSTRBUTTONCLASSNAMES} cursor-not-allowed opacity-50`}
-                          disabled
-                        >
-                          Sold Out
-                        </Button>
-                      </>
-                    )}
-                    <Button
-                      type="submit"
-                      className={SHOPSTRBUTTONCLASSNAMES}
-                      onClick={handleShare}
-                    >
-                      Share
-                    </Button>
-                  </div>
-                </div>
-                {productData.pubkey !== userPubkey && (
-                  <span
-                    onClick={() => {
-                      handleSendMessage(productData.pubkey);
-                    }}
-                    className="cursor-pointer text-gray-500"
-                  >
-                    or{" "}
-                    <span className="underline hover:text-light-text dark:hover:text-dark-text">
-                      contact
-                    </span>{" "}
-                    seller
-                  </span>
+                    {isExpanded ? "Show less" : "Show more"}
+                  </button>
                 )}
               </div>
-            </div>
-            <div className="max-w-screen mx-3 my-3 max-w-full overflow-hidden whitespace-normal break-words sm:hidden">
-              <p className="break-words-all w-full text-left text-lg text-light-text dark:text-dark-text">
-                {renderSummary()}
-              </p>
-              {productData.summary.length > SUMMARY_CHARACTER_LIMIT && (
-                <button
-                  onClick={toggleExpand}
-                  className="mt-2 text-purple-500 hover:text-purple-700 dark:text-yellow-500 dark:hover:text-yellow-700"
-                >
-                  {isExpanded ? "Show less" : "Show more"}
-                </button>
-              )}
-            </div>
-            {!isFetchingReviews && productReviews && (
-              <div className="mt-4 max-w-full p-4 pt-4">
-                <h3 className="mb-3 text-lg font-semibold text-light-text dark:text-dark-text">
-                  Product Reviews
-                </h3>
-                {productReviews.size > 0 ? (
-                  <div className="space-y-3">
-                    {Array.from(productReviews.entries()).map(
-                      ([reviewerPubkey, reviewData]) => (
-                        <div
-                          key={reviewerPubkey}
-                          className="rounded-lg border-2 border-black p-3 dark:border-white"
-                        >
-                          <div className="mb-2 flex items-center gap-2">
-                            <ProfileWithDropdown
-                              pubkey={reviewerPubkey}
-                              dropDownKeys={
-                                reviewerPubkey === userPubkey
-                                  ? ["shop_profile"]
-                                  : ["shop", "inquiry", "copy_npub"]
-                              }
-                            />
-                          </div>
-                          <div className="flex flex-col">
-                            <div className="mb-1 flex flex-wrap gap-2">
-                              {reviewData.map(([_, value, category], index) => {
-                                if (category === undefined) {
-                                  // Don't render the comment here; we'll show it later.
-                                  return null;
-                                } else if (category === "thumb") {
+              {!isFetchingReviews && productReviews && (
+                <div className="mt-4 max-w-full p-4 pt-4">
+                  <h3 className="text-light-text dark:text-dark-text mb-3 text-lg font-semibold">
+                    Product Reviews
+                  </h3>
+                  {productReviews.size > 0 ? (
+                    <div className="space-y-3">
+                      {Array.from(productReviews.entries()).map(
+                        ([reviewerPubkey, reviewData]) => (
+                          <div
+                            key={reviewerPubkey}
+                            className="rounded-lg border-2 border-black p-3 dark:border-white"
+                          >
+                            <div className="mb-2 flex items-center gap-2">
+                              <ProfileWithDropdown
+                                pubkey={reviewerPubkey}
+                                dropDownKeys={
+                                  reviewerPubkey === userPubkey
+                                    ? ["shop_profile"]
+                                    : ["shop", "inquiry", "copy_npub"]
+                                }
+                              />
+                            </div>
+                            <div className="flex flex-col">
+                              <div className="mb-1 flex flex-wrap gap-2">
+                                {reviewData.map(
+                                  ([_, value, category], index) => {
+                                    if (category === undefined) {
+                                      // Don't render the comment here; we'll show it later.
+                                      return null;
+                                    } else if (category === "thumb") {
+                                      return (
+                                        <Chip
+                                          key={index}
+                                          className={`text-light-text dark:text-dark-text ${
+                                            value === "1"
+                                              ? "bg-green-500"
+                                              : "bg-red-500"
+                                          }`}
+                                        >
+                                          {`overall: ${
+                                            value === "1" ? "👍" : "👎"
+                                          }`}
+                                        </Chip>
+                                      );
+                                    } else {
+                                      // Render chips for other categories
+                                      return (
+                                        <Chip
+                                          key={index}
+                                          className={`text-light-text dark:text-dark-text ${
+                                            value === "1"
+                                              ? "bg-green-500"
+                                              : "bg-red-500"
+                                          }`}
+                                        >
+                                          {`${category}: ${
+                                            value === "1" ? "👍" : "👎"
+                                          }`}
+                                        </Chip>
+                                      );
+                                    }
+                                  }
+                                )}
+                              </div>
+                              {reviewData.map(([category, value], index) => {
+                                if (category === "comment" && value !== "") {
+                                  // Render the comment text below the chips
                                   return (
-                                    <Chip
+                                    <p
                                       key={index}
-                                      className={`text-light-text dark:text-dark-text ${
-                                        value === "1"
-                                          ? "bg-green-500"
-                                          : "bg-red-500"
-                                      }`}
+                                      className="text-light-text dark:text-dark-text italic"
                                     >
-                                      {`overall: ${
-                                        value === "1" ? "👍" : "👎"
-                                      }`}
-                                    </Chip>
-                                  );
-                                } else {
-                                  // Render chips for other categories
-                                  return (
-                                    <Chip
-                                      key={index}
-                                      className={`text-light-text dark:text-dark-text ${
-                                        value === "1"
-                                          ? "bg-green-500"
-                                          : "bg-red-500"
-                                      }`}
-                                    >
-                                      {`${category}: ${
-                                        value === "1" ? "👍" : "👎"
-                                      }`}
-                                    </Chip>
+                                      &ldquo;{value}&rdquo;
+                                    </p>
                                   );
                                 }
+                                return null;
                               })}
                             </div>
-                            {reviewData.map(([category, value], index) => {
-                              if (category === "comment" && value !== "") {
-                                // Render the comment text below the chips
-                                return (
-                                  <p
-                                    key={index}
-                                    className="italic text-light-text dark:text-dark-text"
-                                  >
-                                    &ldquo;{value}&rdquo;
-                                  </p>
-                                );
-                              }
-                              return null;
-                            })}
                           </div>
-                        </div>
-                      )
-                    )}
-                  </div>
-                ) : (
-                  <div className="flex justify-center">
-                    <div className="w-full max-w-xl rounded-lg bg-light-fg p-10 text-center shadow-lg dark:bg-dark-fg">
-                      <FaceFrownIcon className="mx-auto mb-5 h-20 w-20 text-light-text dark:text-dark-text" />
-                      <span className="block text-5xl text-light-text dark:text-dark-text">
-                        No reviews . . . yet!
-                      </span>
-                      <div className="flex flex-col items-center justify-center gap-3 pt-5 opacity-80">
-                        <span className="text-2xl text-light-text dark:text-dark-text">
-                          Be the first to leave a review!
+                        )
+                      )}
+                    </div>
+                  ) : (
+                    <div className="flex justify-center">
+                      <div className="bg-light-fg dark:bg-dark-fg w-full max-w-xl rounded-lg p-10 text-center shadow-lg">
+                        <span className="text-light-text dark:text-dark-text block text-5xl">
+                          No reviews . . . yet!
                         </span>
-                        <InformationCircleIcon className="h-10 w-10 text-light-text dark:text-dark-text" />
+                        <div className="flex flex-col items-center justify-center gap-3 pt-5 opacity-80">
+                          <span className="text-light-text dark:text-dark-text text-2xl">
+                            Be the first to leave a review!
+                          </span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </>
-      ) : (
-        <>
-          <div className="p-4 text-light-text dark:text-dark-text">
-            <h2 className="mb-4 text-2xl font-bold">{productData.title}</h2>
-            {selectedSize && (
-              <p className="mb-4 text-lg">Size: {selectedSize}</p>
-            )}
-            <DisplayCostBreakdown monetaryInfo={productData} />
-            <div className="mx-4 mt-2 flex items-center justify-center text-center">
-              <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
-              <p className="ml-2 text-xs text-light-text dark:text-dark-text">
-                Once purchased, the seller will receive a DM with your order
-                details.
-              </p>
+                  )}
+                </div>
+              )}
             </div>
-          </div>
+          </>
+        ) : (
           <div className="flex flex-col items-center">
             <ProductInvoiceCard
-              productData={productData}
-              setFiatOrderIsPlaced={setFiatOrderIsPlaced}
+              productData={updatedProductData}
+              setIsBeingPaid={setIsBeingPaid}
               setInvoiceIsPaid={setInvoiceIsPaid}
               setInvoiceGenerationFailed={setInvoiceGenerationFailed}
               setCashuPaymentSent={setCashuPaymentSent}
               setCashuPaymentFailed={setCashuPaymentFailed}
               selectedSize={selectedSize}
+              selectedVolume={selectedVolume}
+              selectedWeight={selectedWeight}
+              selectedBulkOption={
+                selectedBulkOption ? parseInt(selectedBulkOption) : undefined
+              }
+              discountCode={appliedDiscount > 0 ? discountCode : undefined}
+              discountPercentage={
+                appliedDiscount > 0 ? appliedDiscount : undefined
+              }
+              originalPrice={currentPrice}
             />
           </div>
-        </>
-      )}
-      <SignInModal isOpen={isOpen} onClose={onClose} />
-      <FailureModal
-        bodyText={failureText}
-        isOpen={showFailureModal}
-        onClose={() => setShowFailureModal(false)}
-      />
-      <SuccessModal
-        bodyText="Listing URL copied to clipboard!"
-        isOpen={showSuccessModal}
-        onClose={() => setShowSuccessModal(false)}
-      />
-    </>
+        )}
+        <SignInModal isOpen={isOpen} onClose={onClose} />
+        <FailureModal
+          bodyText={failureText}
+          isOpen={showFailureModal}
+          onClose={() => setShowFailureModal(false)}
+        />
+        <SuccessModal
+          bodyText="Listing URL copied to clipboard!"
+          isOpen={showSuccessModal}
+          onClose={() => setShowSuccessModal(false)}
+        />
+        <RawEventModal
+          isOpen={showRawEventModal}
+          onClose={() => setShowRawEventModal(false)}
+          rawEvent={rawEvent}
+        />
+        <EventIdModal
+          isOpen={showEventIdModal}
+          onClose={() => setShowEventIdModal(false)}
+          rawEvent={rawEvent}
+        />
+        <FreeShippingNotification
+          isVisible={showFreeShippingNotification}
+          onClose={() => setShowFreeShippingNotification(false)}
+          shopData={shopMapContext.shopData}
+          cart={cart}
+        />
+      </div>
+    </div>
   );
 }

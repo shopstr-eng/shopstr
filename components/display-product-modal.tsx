@@ -1,4 +1,4 @@
-import React, { useContext, useState } from "react";
+import { useContext, useState } from "react";
 import {
   PencilSquareIcon,
   ShareIcon,
@@ -13,7 +13,7 @@ import {
   Button,
   Chip,
   Divider,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import ProductForm from "./product-form";
 import ImageCarousel from "./utility-components/image-carousel";
 import CompactCategories from "./utility-components/compact-categories";
@@ -23,8 +23,12 @@ import ConfirmActionDropdown from "./utility-components/dropdowns/confirm-action
 import { ProfileWithDropdown } from "./utility-components/profile/profile-dropdown";
 import SuccessModal from "./utility-components/success-modal";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
-import { nip19 } from "nostr-tools";
-import { ProductData } from "@/utils/parsers/product-parser-functions";
+import parseTags, {
+  ProductData,
+} from "@/utils/parsers/product-parser-functions";
+import { ProductContext } from "@/utils/context/context";
+import { getListingSlug } from "@/utils/url-slugs";
+import { NostrEvent } from "@/utils/types/types";
 
 interface ProductModalProps {
   productData: ProductData;
@@ -40,10 +44,15 @@ export default function DisplayProductModal({
   handleDelete,
 }: ProductModalProps) {
   const { pubkey: userPubkey, isLoggedIn } = useContext(SignerContext);
+  const productEventContext = useContext(ProductContext);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [showProductForm, setShowProductForm] = useState(false);
 
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+
+  const isExpired = productData.expiration
+    ? Date.now() / 1000 > productData.expiration
+    : false;
 
   const displayDate = (timestamp: number): [string, string] => {
     if (timestamp == 0 || !timestamp) return ["", ""];
@@ -54,24 +63,22 @@ export default function DisplayProductModal({
   };
 
   const handleShare = async () => {
-    const naddr = nip19.naddrEncode({
-      identifier: productData.d as string,
-      pubkey: productData.pubkey,
-      kind: 30402,
-    });
-    // The content you want to share
+    const allParsed = productEventContext.productEvents
+      .filter((e: NostrEvent) => e.kind !== 1)
+      .map((e: NostrEvent) => parseTags(e))
+      .filter((p: ProductData | undefined): p is ProductData => !!p);
+
+    const slug = getListingSlug(productData, allParsed);
+    const listingPath = slug || productData.id;
     const shareData = {
       title: productData.title,
-      url: `${window.location.origin}/listing/${naddr}`,
+      url: `${window.location.origin}/listing/${listingPath}`,
     };
-    // Check if the Web Share API is available
     if (navigator.share) {
-      // Use the share API
       await navigator.share(shareData);
     } else {
-      // Fallback for browsers that do not support the Web Share API
       navigator.clipboard.writeText(
-        `${window.location.origin}/listing/${naddr}`
+        `${window.location.origin}/listing/${listingPath}`
       );
       setShowSuccessModal(true);
     }
@@ -114,11 +121,22 @@ export default function DisplayProductModal({
         size="2xl"
       >
         <ModalContent>
-          <ModalHeader className="flex flex-col text-light-text dark:text-dark-text">
+          <ModalHeader className="text-light-text dark:text-dark-text flex flex-col">
             <div className="flex items-center justify-between">
-              <h2 className="text-2xl font-bold text-light-text dark:text-dark-text">
+              <h2 className="text-light-text dark:text-dark-text text-2xl font-bold">
                 {productData.title}
+                {isExpired && (
+                  <Chip color="warning" variant="flat" className="ml-2">
+                    Outdated
+                  </Chip>
+                )}
               </h2>
+              {productData.expiration && (
+                <p className="text-sm text-gray-500">
+                  Valid until:{" "}
+                  {new Date(productData.expiration * 1000).toLocaleDateString()}
+                </p>
+              )}
               <div>
                 {productData.status === "active" && (
                   <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900 dark:text-green-300">
@@ -137,6 +155,7 @@ export default function DisplayProductModal({
             {productData.images ? (
               <ImageCarousel
                 images={productData.images}
+                productTitle={productData.title}
                 showThumbs={productData.images.length > 1}
                 classname="max-h-[80vh]"
               />
@@ -169,7 +188,7 @@ export default function DisplayProductModal({
             </div>
             <Divider />
             <span className="text-xl font-semibold">Summary: </span>
-            <span className="whitespace-break-spaces break-all">
+            <span className="break-words whitespace-pre-wrap">
               {productData.summary}
             </span>
             {productData.sizes && productData.sizes.length > 0 ? (
@@ -180,7 +199,7 @@ export default function DisplayProductModal({
                     ? productData.sizes.map((size: string) => (
                         <span
                           key={size}
-                          className="mb-2 mr-4 text-light-text dark:text-dark-text"
+                          className="text-light-text dark:text-dark-text mr-4 mb-2"
                         >
                           {size}: {productData.sizeQuantities?.get(size) || 0}
                         </span>
@@ -189,9 +208,62 @@ export default function DisplayProductModal({
                 </div>
               </>
             ) : null}
+            {productData.volumes && productData.volumes.length > 0 ? (
+              <>
+                <span className="text-xl font-semibold">Volumes: </span>
+                <div className="flex flex-wrap items-center">
+                  {productData.volumes && productData.volumes.length > 0
+                    ? productData.volumes.map((volume: string) => (
+                        <span
+                          key={volume}
+                          className="text-light-text dark:text-dark-text mr-4 mb-2"
+                        >
+                          {volume}: {productData.volumePrices?.get(volume) || 0}{" "}
+                          {productData.currency}
+                        </span>
+                      ))
+                    : null}
+                </div>
+              </>
+            ) : null}
+            {productData.weights && productData.weights.length > 0 ? (
+              <>
+                <span className="text-xl font-semibold">Weights: </span>
+                <div className="flex flex-wrap items-center">
+                  {productData.weights && productData.weights.length > 0
+                    ? productData.weights.map((weight: string) => (
+                        <span
+                          key={weight}
+                          className="text-light-text dark:text-dark-text mr-4 mb-2"
+                        >
+                          {weight}: {productData.weightPrices?.get(weight) || 0}{" "}
+                          {productData.currency}
+                        </span>
+                      ))
+                    : null}
+                </div>
+              </>
+            ) : null}
+            {productData.bulkPrices && productData.bulkPrices.size > 0 ? (
+              <>
+                <span className="text-xl font-semibold">Bulk Pricing: </span>
+                <div className="flex flex-wrap items-center">
+                  {Array.from(productData.bulkPrices.entries())
+                    .sort((a, b) => a[0] - b[0])
+                    .map(([units, price]) => (
+                      <span
+                        key={units}
+                        className="text-light-text dark:text-dark-text mr-4 mb-2"
+                      >
+                        {units} units: {price} {productData.currency}
+                      </span>
+                    ))}
+                </div>
+              </>
+            ) : null}
             {productData.condition && (
               <>
-                <div className="text-left text-xs text-light-text dark:text-dark-text">
+                <div className="text-light-text dark:text-dark-text text-left text-xs">
                   <span className="text-xl font-semibold">Condition: </span>
                   <span className="text-xl">{productData.condition}</span>
                 </div>
@@ -199,7 +271,7 @@ export default function DisplayProductModal({
             )}
             {productData.quantity && (
               <>
-                <div className="text-left text-xs text-light-text dark:text-dark-text">
+                <div className="text-light-text dark:text-dark-text text-left text-xs">
                   <span className="text-xl font-semibold">Quantity: </span>
                   <span className="text-xl">{productData.quantity}</span>
                 </div>
@@ -207,7 +279,7 @@ export default function DisplayProductModal({
             )}
             {productData.restrictions && (
               <>
-                <div className="text-left text-xs text-light-text dark:text-dark-text">
+                <div className="text-light-text dark:text-dark-text text-left text-xs">
                   <span className="text-xl font-semibold">Restrictions: </span>
                   <span className="text-xl text-red-500">
                     {productData.restrictions}
@@ -217,7 +289,7 @@ export default function DisplayProductModal({
             )}
             {productData.required && (
               <>
-                <div className="text-left text-xs text-light-text dark:text-dark-text">
+                <div className="text-light-text dark:text-dark-text text-left text-xs">
                   <span className="text-xl font-semibold">
                     Required Customer Information:{" "}
                   </span>

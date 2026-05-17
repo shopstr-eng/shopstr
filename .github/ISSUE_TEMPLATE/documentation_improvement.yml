@@ -1,0 +1,97 @@
+name: 📚 Documentation Improvement
+description: Suggest an improvement to our documentation
+title: "[DOCS] "
+labels: ["documentation"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping us improve our documentation! Clear and comprehensive documentation benefits everyone in the community.
+
+  - type: dropdown
+    id: documentation-area
+    attributes:
+      label: Documentation Area
+      description: Specify which documentation needs improvement
+      options:
+        - README.md
+        - Inline code comments
+        - API documentation
+        - Setup/Installation guide
+        - Contributing guidelines
+        - User guide
+        - Developer documentation
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: current-issue
+    attributes:
+      label: Current Documentation Issue
+      description: Describe what's currently unclear, missing, or incorrect in the documentation.
+      placeholder: What's wrong with the current documentation?
+    validations:
+      required: true
+
+  - type: textarea
+    id: suggested-improvement
+    attributes:
+      label: Suggested Improvement
+      description: Provide a clear description of how the documentation could be improved.
+      placeholder: How should the documentation be improved?
+    validations:
+      required: true
+
+  - type: textarea
+    id: why-matters
+    attributes:
+      label: Why This Matters
+      description: Explain why this documentation improvement would be valuable to users or developers.
+      placeholder: Why is this improvement important?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: experience-level
+    attributes:
+      label: Your Experience Level
+      description: Let us know your familiarity with Nostr and Bitcoin technologies to help us tailor the documentation appropriately.
+      options:
+        - Beginner with Nostr/Bitcoin
+        - Intermediate knowledge
+        - Advanced user
+        - Developer working with these technologies
+    validations:
+      required: false
+
+  - type: textarea
+    id: related-nips
+    attributes:
+      label: Related NIPs
+      description: If this documentation relates to specific Nostr Implementation Possibilities (NIPs), list them here.
+      placeholder: "e.g. NIP-01, NIP-04, etc."
+
+  - type: textarea
+    id: additional-resources
+    attributes:
+      label: Additional Resources
+      description: If applicable, provide links to external resources, screenshots, or examples that could help with this documentation improvement.
+      placeholder: Links, screenshots, or examples...
+
+  - type: textarea
+    id: implementation-suggestion
+    attributes:
+      label: Implementation Suggestion
+      description: If you have specific wording or content suggestions, please provide them here.
+      placeholder: Specific content or wording suggestions...
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Code of Conduct
+      description: By submitting this issue, you agree to follow our Code of Conduct
+      options:
+        - label: I agree to follow this project's Code of Conduct
+          required: true

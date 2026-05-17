@@ -1,14 +1,14 @@
-import React from "react";
 import { Carousel } from "react-responsive-carousel";
 import "react-responsive-carousel/lib/styles/carousel.min.css";
 import { ChevronLeftIcon, ChevronRightIcon } from "@heroicons/react/24/outline";
-import { Image } from "@nextui-org/react";
+import { Image } from "@heroui/react";
 import { buildSrcSet } from "@/utils/images";
 import { useRouter } from "next/router";
 import { PREVNEXTBUTTONSTYLES } from "@/utils/STATIC-VARIABLES";
 
 interface ImageCarouselProps {
   images: string[];
+  productTitle?: string;
   classname?: string;
   showThumbs?: boolean;
   fixedHeight?: boolean;
@@ -16,6 +16,7 @@ interface ImageCarouselProps {
 
 export default function ImageCarousel({
   images,
+  productTitle = "",
   classname = "",
   showThumbs = false,
   fixedHeight = true,
@@ -47,7 +48,11 @@ export default function ImageCarousel({
           src={image}
           srcSet={buildSrcSet(image)}
           className={imageClass}
-          alt={image || `Product image ${index + 1}`}
+          alt={
+            productTitle
+              ? `${productTitle} — image ${index + 1}`
+              : `Product image ${index + 1}`
+          }
           radius="none"
           style={{
             width: "100%",
@@ -73,8 +78,9 @@ export default function ImageCarousel({
           <button
             className={`left-4 ${PREVNEXTBUTTONSTYLES}`}
             onClick={(e) => {
-              onClickHandler();
+              e.preventDefault();
               e.stopPropagation();
+              onClickHandler();
             }}
             title={label}
           >
@@ -87,8 +93,9 @@ export default function ImageCarousel({
           <button
             className={`right-4 ${PREVNEXTBUTTONSTYLES}`}
             onClick={(e) => {
-              onClickHandler();
+              e.preventDefault();
               e.stopPropagation();
+              onClickHandler();
             }}
             title={label}
           >
@@ -107,8 +114,9 @@ export default function ImageCarousel({
                 : `${base} bg-gray-300 hover:bg-gray-500`
             }
             onClick={(e) => {
-              onClickHandler(e);
+              e.preventDefault();
               e.stopPropagation();
+              onClickHandler(e);
             }}
             title={`${label} ${index + 1}`}
             role="button"

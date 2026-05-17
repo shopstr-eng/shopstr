@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactElement } from "react";
 
 import { Tab } from "@/components/hooks/use-tabs";
 import classNames from "classnames";
@@ -8,7 +8,7 @@ const transition = {
   type: "tween",
   ease: "easeOut",
   duration: 0.15,
-};
+} as const;
 
 type Props = {
   selectedTabIndex: number;
@@ -20,7 +20,7 @@ const Tabs = ({
   tabs,
   selectedTabIndex,
   setSelectedTab,
-}: Props): JSX.Element => {
+}: Props): ReactElement => {
   const [buttonRefs, setButtonRefs] = useState<Array<HTMLButtonElement | null>>(
     []
   );
@@ -57,7 +57,7 @@ const Tabs = ({
   return (
     <nav
       ref={navRef}
-      className="relative z-0 flex w-full flex-shrink-0 items-center justify-center "
+      className="relative z-0 flex w-full flex-shrink-0 items-center justify-center"
     >
       {tabs.map((item, i) => {
         const isActive = selectedTabIndex === i;
@@ -66,13 +66,15 @@ const Tabs = ({
           <button
             key={i}
             className={classNames(
-              "relative z-20 flex h-10 w-full cursor-pointer select-none items-center  justify-center bg-transparent px-4 py-8 text-lg duration-200 transition-colors hover:bg-white/10",
+              "relative z-20 flex h-10 w-full cursor-pointer items-center justify-center bg-transparent px-4 py-8 text-lg transition-colors duration-200 select-none hover:bg-white/10",
               {
                 "text-light-text/60 dark:text-dark-text/60": !isActive, // Default color for non-active tabs
-                "font-bold text-light-text/90 dark:text-dark-text/90": isActive, // Color for active tabs
+                "text-light-text/90 dark:text-dark-text/90 font-bold": isActive, // Color for active tabs
               }
             )}
-            ref={(el) => (buttonRefs[i] = el)}
+            ref={(el) => {
+              buttonRefs[i] = el;
+            }}
             onClick={() => {
               setSelectedTab([i, i > selectedTabIndex ? 1 : -1]);
             }}
@@ -85,9 +87,8 @@ const Tabs = ({
       {selectedRect && navRect && (
         <motion.div
           className={
-            "absolute bottom-0 left-0.5 z-10 h-[5px] rounded-full bg-shopstr-purple dark:bg-shopstr-yellow"
+            "bg-shopstr-purple dark:bg-shopstr-yellow absolute bottom-0 left-0.5 z-10 h-[5px] rounded-full"
           }
-          initial={false}
           animate={{
             width: selectedRect.width * 0.2,
             x: `calc(${selectedRect.left - navRect.left}px + 195%)`,

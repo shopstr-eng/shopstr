@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ArrowDownTrayIcon,
   ArrowUpTrayIcon,
@@ -12,7 +12,7 @@ import { Transaction } from "@/utils/types/types";
 // add found proofs as nutsack deposit with different icon
 
 const Transactions = () => {
-  const [history, setHistory] = useState([]);
+  const [history, setHistory] = useState<Transaction[]>([]);
 
   useEffect(() => {
     // Function to fetch and update transactions
@@ -50,7 +50,7 @@ const Transactions = () => {
     <div className="relative mt-4 overflow-x-auto rounded-lg shadow-md">
       <div className="max-h-[50vh]">
         <table className="w-full min-w-[50vw] text-left text-sm text-gray-500 dark:text-gray-400">
-          <thead className="bg-gray-50 text-xs uppercase text-gray-700 dark:bg-gray-700 dark:text-gray-400">
+          <thead className="bg-gray-50 text-xs text-gray-700 uppercase dark:bg-gray-700 dark:text-gray-400">
             <tr>
               <th scope="col" className="px-6 py-3">
                 Type
@@ -79,7 +79,7 @@ const Transactions = () => {
                   ) : transaction.type === 4 ? (
                     <BoltIcon className="mr-2 h-5 w-5 text-red-500" />
                   ) : transaction.type === 5 ? (
-                    <ShoppingBagIcon className="mr-2 h-5 w-5 text-shopstr-purple-light dark:text-shopstr-yellow-light" />
+                    <ShoppingBagIcon className="text-shopstr-purple-light dark:text-shopstr-yellow-light mr-2 h-5 w-5" />
                   ) : null}
                 </td>
                 <td className="px-6 py-4">{transaction.amount} sats</td>

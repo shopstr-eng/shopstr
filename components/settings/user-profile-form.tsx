@@ -1,22 +1,27 @@
-import React, { useEffect, useState, useContext, useMemo } from "react";
+import { useEffect, useState, useContext, useMemo } from "react";
 import { useRouter } from "next/router";
 import { useForm, Controller } from "react-hook-form";
 import {
   Button,
-  Chip,
-  Textarea,
   Input,
   Image,
   Select,
   SelectItem,
-} from "@nextui-org/react";
+  Tooltip,
+} from "@heroui/react";
 import { ProfileMapContext } from "@/utils/context/context";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
   SignerContext,
   NostrContext,
 } from "@/components/utility-components/nostr-context-provider";
-import { createNostrProfileEvent } from "@/utils/nostr/nostr-helper-functions";
+import { NostrNSecSigner } from "@/utils/nostr/signers/nostr-nsec-signer";
+import {
+  createNostrProfileEvent,
+  getLocalUserProfileKey,
+  parseLocalProfileFallback,
+  isProfileContentPopulated,
+} from "@/utils/nostr/nostr-helper-functions";
 import { FileUploaderButton } from "@/components/utility-components/file-uploader";
 import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
 
@@ -29,8 +34,19 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
   const { nostr } = useContext(NostrContext);
   const [isUploadingProfile, setIsUploadingProfile] = useState(false);
   const [isFetchingProfile, setIsFetchingProfile] = useState(false);
+  const [isNPubCopied, setIsNPubCopied] = useState(false);
+  const [isNSecCopied, setIsNSecCopied] = useState(false);
+  const [isNSecVisible, setIsNSecVisible] = useState(false);
+  const [isNcryptsecCopied, setIsNcryptsecCopied] = useState(false);
+  const [isNcryptsecVisible, setIsNcryptsecVisible] = useState(false);
+  const [userNcryptsec, setUserNcryptsec] = useState("");
+  const [userNSec, setUserNSec] = useState("");
 
-  const { signer, pubkey: userPubkey } = useContext(SignerContext);
+  const {
+    signer,
+    pubkey: userPubkey,
+    npub: userNPub,
+  } = useContext(SignerContext);
 
   const profileContext = useContext(ProfileMapContext);
   const { handleSubmit, control, reset, watch, setValue } = useForm({
@@ -39,53 +55,139 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
       picture: "",
       display_name: "",
       name: "",
-      nip05: "", // Nostr address
+      nip05: "",
       about: "",
       website: "",
-      lud16: "", // Lightning address
+      lud16: "",
       payment_preference: "ecash",
-      fiat_options: [],
       shopstr_donation: 2.1,
     },
   });
 
-  const watchBanner = watch("banner");
   const watchPicture = watch("picture");
   const defaultImage = useMemo(() => {
     return "https://robohash.org/" + userPubkey;
   }, [userPubkey]);
+  const profileImageSrc = watchPicture || defaultImage;
 
   useEffect(() => {
     if (!userPubkey) return;
     setIsFetchingProfile(true);
+
+    const localFallback = parseLocalProfileFallback(
+      localStorage.getItem(getLocalUserProfileKey(userPubkey))
+    );
+
     const profileMap = profileContext.profileData;
     const profile = profileMap.has(userPubkey)
       ? profileMap.get(userPubkey)
       : undefined;
+
     if (profile) {
-      reset(profile.content);
+      const profileCreatedAt = profile.created_at || 0;
+      const shouldUseLocalFallback =
+        !!localFallback &&
+        localFallback.updatedAt > profileCreatedAt &&
+        isProfileContentPopulated(localFallback.content);
+
+      if (shouldUseLocalFallback) {
+        reset(localFallback.content);
+      } else {
+        reset(profile.content);
+      }
+
+      try {
+        localStorage.setItem(
+          getLocalUserProfileKey(userPubkey),
+          JSON.stringify({
+            content: shouldUseLocalFallback
+              ? localFallback!.content
+              : profile.content,
+            updatedAt: shouldUseLocalFallback
+              ? localFallback!.updatedAt
+              : profileCreatedAt,
+          })
+        );
+      } catch (error) {
+        console.error("Failed to persist profile fallback locally:", error);
+      }
+    } else {
+      try {
+        if (localFallback?.content) {
+          reset(localFallback.content);
+        }
+      } catch (error) {
+        console.error("Failed to read local profile fallback:", error);
+      }
     }
     setIsFetchingProfile(false);
-  }, [profileContext, userPubkey, reset]);
+
+    if (signer instanceof NostrNSecSigner) {
+      const nsecSigner = signer as NostrNSecSigner;
+      nsecSigner._getNSec().then(
+        (nsec) => {
+          setUserNSec(nsec);
+        },
+        (err: unknown) => {
+          console.error(err);
+        }
+      );
+      const encKey = nsecSigner.getEncryptedPrivKey();
+      if (encKey && encKey.startsWith("ncryptsec")) {
+        setUserNcryptsec(encKey);
+      }
+    }
+  }, [profileContext, userPubkey, signer, reset]);
 
   const onSubmit = async (data: { [x: string]: string }) => {
-    if (!userPubkey) throw new Error("pubkey is undefined");
-    setIsUploadingProfile(true);
-    await createNostrProfileEvent(
-      nostr!,
-      signer!,
-      userPubkey!,
-      JSON.stringify(data)
-    );
-    profileContext.updateProfileData({
-      pubkey: userPubkey!,
-      content: data,
-      created_at: 0,
-    });
-    setIsUploadingProfile(false);
+    if (!userPubkey) {
+      console.error("Cannot save profile: pubkey is undefined");
+      return;
+    }
 
-    if (isOnboarding) {
-      router.push("/onboarding/shop-profile");
+    setIsUploadingProfile(true);
+    try {
+      const profileMap = profileContext.profileData;
+      const existingProfile = profileMap.has(userPubkey)
+        ? profileMap.get(userPubkey)?.content
+        : {};
+
+      const updatedData = {
+        ...existingProfile,
+        ...data,
+      };
+
+      try {
+        localStorage.setItem(
+          getLocalUserProfileKey(userPubkey),
+          JSON.stringify({
+            content: updatedData,
+            updatedAt: Math.floor(Date.now() / 1000),
+          })
+        );
+      } catch (error) {
+        console.error("Failed to save local profile fallback:", error);
+      }
+
+      if (!nostr || !signer) {
+        console.error("Cannot save profile: nostr or signer is unavailable");
+        return;
+      }
+
+      await createNostrProfileEvent(nostr, signer, JSON.stringify(updatedData));
+      profileContext.updateProfileData({
+        pubkey: userPubkey,
+        content: updatedData,
+        created_at: Math.floor(Date.now() / 1000),
+      });
+
+      if (isOnboarding) {
+        router.push("/onboarding/wallet?type=seller");
+      }
+    } catch (error) {
+      console.error("Failed to save user profile:", error);
+    } finally {
+      setIsUploadingProfile(false);
     }
   };
 
@@ -95,47 +197,148 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
 
   return (
     <>
-      <div className="mb-20 h-40 rounded-lg bg-light-fg dark:bg-dark-fg">
-        <div className="relative flex h-40 items-center justify-center rounded-lg bg-shopstr-purple-light dark:bg-dark-fg">
-          {watchBanner && (
-            <Image
-              alt={"User banner image"}
-              src={watchBanner}
-              className="h-40 w-full rounded-lg object-cover object-fill"
-            />
-          )}
+      <div className="mb-8 flex items-center justify-center">
+        <div className="relative h-24 w-24">
           <FileUploaderButton
-            className={`absolute bottom-5 right-5 z-20 border-2 border-white bg-shopstr-purple shadow-md ${SHOPSTRBUTTONCLASSNAMES}`}
-            imgCallbackOnUpload={(imgUrl) => setValue("banner", imgUrl)}
-          >
-            Upload Banner
-          </FileUploaderButton>
-        </div>
-        <div className="flex items-center justify-center">
-          <div className="relative z-20 mt-[-3rem] h-24 w-24">
-            <div className="">
-              <FileUploaderButton
-                isIconOnly
-                className={`absolute bottom-[-0.5rem] right-[-0.5rem] z-20 ${SHOPSTRBUTTONCLASSNAMES}`}
-                imgCallbackOnUpload={(imgUrl) => setValue("picture", imgUrl)}
-              />
-              {watchPicture ? (
-                <Image
-                  src={watchPicture}
-                  alt="user profile picture"
-                  className="rounded-full"
-                />
-              ) : (
-                <Image
-                  src={defaultImage}
-                  alt="user profile picture"
-                  className="rounded-full"
-                />
-              )}
-            </div>
-          </div>
+            isIconOnly
+            className={`absolute right-[-0.5rem] bottom-[-0.5rem] z-20 ${SHOPSTRBUTTONCLASSNAMES}`}
+            imgCallbackOnUpload={(imgUrl) => setValue("picture", imgUrl)}
+          />
+          <Image
+            key={profileImageSrc}
+            src={profileImageSrc}
+            alt="user profile picture"
+            className="rounded-full"
+          />
         </div>
       </div>
+
+      {/* NPub Display */}
+      {!isOnboarding && userNPub && (
+        <div className="border-light-border dark:border-dark-border mb-4 flex items-center justify-between gap-2 overflow-hidden rounded-lg border p-3">
+          <p className="text-light-text dark:text-dark-text font-mono text-sm font-medium break-all">
+            {userNPub}
+          </p>
+          <Tooltip
+            content={isNPubCopied ? "Copied!" : "Copy npub"}
+            closeDelay={100}
+          >
+            <Button
+              isIconOnly
+              variant="light"
+              className="h-6 w-6 min-w-0 flex-shrink-0 p-0"
+              onClick={() => {
+                navigator.clipboard.writeText(userNPub);
+                setIsNPubCopied(true);
+                setTimeout(() => setIsNPubCopied(false), 2000);
+              }}
+            >
+              {isNPubCopied ? "✅" : "📋"}
+            </Button>
+          </Tooltip>
+        </div>
+      )}
+
+      {/* NSec Display */}
+      {!isOnboarding && userNSec ? (
+        <div className="border-light-border dark:border-dark-border mb-4 flex items-center justify-between gap-2 overflow-hidden rounded-lg border p-3">
+          <p className="text-light-text dark:text-dark-text font-mono text-sm font-medium break-all">
+            {isNSecVisible
+              ? userNSec
+              : "•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••"}
+          </p>
+          <div className="flex flex-shrink-0 gap-2">
+            <Tooltip
+              content={isNSecVisible ? "Hide nsec" : "Show nsec"}
+              closeDelay={100}
+            >
+              <Button
+                isIconOnly
+                variant="light"
+                className="h-6 w-6 min-w-0 p-0"
+                onClick={() => setIsNSecVisible(!isNSecVisible)}
+              >
+                {isNSecVisible ? "🙈" : "👁️"}
+              </Button>
+            </Tooltip>
+            <Tooltip
+              content={isNSecCopied ? "Copied!" : "Copy nsec"}
+              closeDelay={100}
+            >
+              <Button
+                isIconOnly
+                variant="light"
+                className="h-6 w-6 min-w-0 p-0"
+                onClick={() => {
+                  navigator.clipboard.writeText(userNSec);
+                  setIsNSecCopied(true);
+                  setTimeout(() => setIsNSecCopied(false), 2000);
+                }}
+              >
+                {isNSecCopied ? "✅" : "📋"}
+              </Button>
+            </Tooltip>
+          </div>
+        </div>
+      ) : !isOnboarding ? (
+        <div className="mb-4" />
+      ) : null}
+
+      {/* NCryptsec Display */}
+      {!isOnboarding && userNcryptsec ? (
+        <div className="border-light-border dark:border-dark-border mb-4 flex items-center justify-between gap-2 overflow-hidden rounded-lg border p-3">
+          <div className="min-w-0 flex-1">
+            <p className="mb-1 text-xs font-bold text-gray-500">ncryptsec</p>
+            <p className="text-light-text dark:text-dark-text font-mono text-sm font-medium break-all">
+              {isNcryptsecVisible
+                ? userNcryptsec
+                : "•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••"}
+            </p>
+          </div>
+          <div className="flex flex-shrink-0 gap-2">
+            <Tooltip
+              content={isNcryptsecVisible ? "Hide ncryptsec" : "Show ncryptsec"}
+              closeDelay={100}
+            >
+              <Button
+                isIconOnly
+                variant="light"
+                className="h-6 w-6 min-w-0 p-0"
+                onClick={() => setIsNcryptsecVisible(!isNcryptsecVisible)}
+              >
+                {isNcryptsecVisible ? "🙈" : "👁️"}
+              </Button>
+            </Tooltip>
+            <Tooltip
+              content={isNcryptsecCopied ? "Copied!" : "Copy ncryptsec"}
+              closeDelay={100}
+            >
+              <Button
+                isIconOnly
+                variant="light"
+                className="h-6 w-6 min-w-0 p-0"
+                onClick={() => {
+                  navigator.clipboard.writeText(userNcryptsec);
+                  setIsNcryptsecCopied(true);
+                  setTimeout(() => setIsNcryptsecCopied(false), 2000);
+                }}
+              >
+                {isNcryptsecCopied ? "✅" : "📋"}
+              </Button>
+            </Tooltip>
+          </div>
+        </div>
+      ) : !isOnboarding ? (
+        <div className="mb-4" />
+      ) : null}
+
+      {!isOnboarding && userNcryptsec && (
+        <p className="mb-4 text-xs text-gray-500">
+          Your ncryptsec is your nsec in encrypted form. It is safer to use your
+          ncryptsec instead of your nsec to sign in across devices, as it cannot
+          be used without your passphrase.
+        </p>
+      )}
 
       <form onSubmit={handleSubmit(onSubmit as any)}>
         <Controller
@@ -149,7 +352,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
             const errorMessage: string = error?.message ? error.message : "";
             return (
               <Input
-                className="pb-4 text-light-text dark:text-dark-text"
+                className="text-light-text dark:text-dark-text pb-4"
                 classNames={{
                   label: "text-light-text dark:text-dark-text text-lg",
                 }}
@@ -179,7 +382,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
             const errorMessage: string = error?.message ? error.message : "";
             return (
               <Input
-                className="pb-4 text-light-text dark:text-dark-text"
+                className="text-light-text dark:text-dark-text pb-4"
                 classNames={{
                   label: "text-light-text dark:text-dark-text text-lg",
                 }}
@@ -198,95 +401,37 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
           }}
         />
 
-        <Controller
-          name="about"
-          control={control}
-          render={({
-            field: { onChange, onBlur, value },
-            fieldState: { error },
-          }) => {
-            const isErrored = error !== undefined;
-            const errorMessage: string = error?.message ? error.message : "";
-            return (
-              <Textarea
-                className="pb-4 text-light-text dark:text-dark-text"
-                classNames={{
-                  label: "text-light-text dark:text-dark-text text-lg",
-                }}
-                variant="bordered"
-                fullWidth={true}
-                placeholder="Add something about yourself . . ."
-                isInvalid={isErrored}
-                errorMessage={errorMessage}
-                label="About"
-                labelPlacement="outside"
-                onChange={onChange}
-                onBlur={onBlur}
-                value={value}
-              />
-            );
-          }}
-        />
-
-        <Controller
-          name="website"
-          control={control}
-          render={({
-            field: { onChange, onBlur, value },
-            fieldState: { error },
-          }) => {
-            const isErrored = error !== undefined;
-            const errorMessage: string = error?.message ? error.message : "";
-            return (
-              <Input
-                className="pb-4 text-light-text dark:text-dark-text"
-                classNames={{
-                  label: "text-light-text dark:text-dark-text text-lg",
-                }}
-                variant="bordered"
-                fullWidth={true}
-                label="Website"
-                labelPlacement="outside"
-                isInvalid={isErrored}
-                errorMessage={errorMessage}
-                placeholder="Add your website URL . . ."
-                onChange={onChange}
-                onBlur={onBlur}
-                value={value}
-              />
-            );
-          }}
-        />
-
-        <Controller
-          name="nip05"
-          control={control}
-          render={({
-            field: { onChange, onBlur, value },
-            fieldState: { error },
-          }) => {
-            const isErrored = error !== undefined;
-            const errorMessage: string = error?.message ? error.message : "";
-            return (
-              <Input
-                className="pb-4 text-light-text dark:text-dark-text"
-                classNames={{
-                  label: "text-light-text dark:text-dark-text text-lg",
-                }}
-                variant="bordered"
-                fullWidth={true}
-                label="Nostr address"
-                labelPlacement="outside"
-                isInvalid={isErrored}
-                errorMessage={errorMessage}
-                placeholder="Add your NIP-05 address . . ."
-                onChange={onChange}
-                onBlur={onBlur}
-                value={value}
-              />
-            );
-          }}
-        />
+        {!isOnboarding && (
+          <Controller
+            name="nip05"
+            control={control}
+            render={({
+              field: { onChange, onBlur, value },
+              fieldState: { error },
+            }) => {
+              const isErrored = error !== undefined;
+              const errorMessage: string = error?.message ? error.message : "";
+              return (
+                <Input
+                  className="text-light-text dark:text-dark-text pb-4"
+                  classNames={{
+                    label: "text-light-text dark:text-dark-text text-lg",
+                  }}
+                  variant="bordered"
+                  fullWidth={true}
+                  label="Nostr address"
+                  labelPlacement="outside"
+                  isInvalid={isErrored}
+                  errorMessage={errorMessage}
+                  placeholder="Add your NIP-05 address . . ."
+                  onChange={onChange}
+                  onBlur={onBlur}
+                  value={value}
+                />
+              );
+            }}
+          />
+        )}
 
         <Controller
           name="lud16"
@@ -299,7 +444,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
             const errorMessage: string = error?.message ? error.message : "";
             return (
               <Input
-                className="pb-4 text-light-text dark:text-dark-text"
+                className="text-light-text dark:text-dark-text pb-4"
                 classNames={{
                   label: "text-light-text dark:text-dark-text text-lg",
                 }}
@@ -323,13 +468,13 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
           control={control}
           render={({ field: { onChange, onBlur, value } }) => (
             <Select
-              className="pb-4 text-light-text dark:text-dark-text"
+              className="text-light-text dark:text-dark-text pb-4"
               classNames={{
                 label: "text-light-text dark:text-dark-text text-lg",
               }}
               variant="bordered"
               fullWidth={true}
-              label="Bitcoin payment preference"
+              label="Payment preference (for sellers)"
               labelPlacement="outside"
               selectedKeys={value ? [value] : []}
               onChange={(e) => onChange(e.target.value)}
@@ -337,112 +482,18 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
             >
               <SelectItem
                 key="ecash"
-                value="ecash"
                 className="text-light-text dark:text-dark-text"
               >
-                Cashu
+                Cashu (Bitcoin)
               </SelectItem>
               <SelectItem
                 key="lightning"
-                value="lightning"
                 className="text-light-text dark:text-dark-text"
               >
-                Lightning
+                Lightning (Bitcoin)
               </SelectItem>
             </Select>
           )}
-        />
-
-        <Controller
-          name="fiat_options"
-          control={control}
-          render={({ field: { onChange, onBlur, value } }) => {
-            const selectedOptions = Array.isArray(value)
-              ? value
-              : value
-                ? [value]
-                : [];
-            return (
-              <Select
-                className="pb-4 text-light-text dark:text-dark-text"
-                classNames={{
-                  label: "text-light-text dark:text-dark-text text-lg",
-                }}
-                variant="bordered"
-                fullWidth={true}
-                label="Alternative payment options"
-                labelPlacement="outside"
-                selectionMode="multiple"
-                selectedKeys={new Set(selectedOptions)}
-                onChange={(e) => {
-                  const selectedValues = Array.from(
-                    new Set(e.target.value.split(","))
-                  );
-                  onChange(selectedValues);
-                }}
-                onBlur={onBlur}
-                renderValue={(items) => (
-                  <div className="flex flex-wrap gap-2">
-                    {items.map((item) => (
-                      <Chip key={item.key}>
-                        {item.key ? (item.key as string) : "unknown option"}
-                      </Chip>
-                    ))}
-                  </div>
-                )}
-              >
-                <SelectItem
-                  key="cash"
-                  value="cash"
-                  className="text-light-text dark:text-dark-text"
-                >
-                  Cash
-                </SelectItem>
-                <SelectItem
-                  key="venmo"
-                  value="venmo"
-                  className="text-light-text dark:text-dark-text"
-                >
-                  Venmo
-                </SelectItem>
-                <SelectItem
-                  key="zelle"
-                  value="zelle"
-                  className="text-light-text dark:text-dark-text"
-                >
-                  Zelle
-                </SelectItem>
-                <SelectItem
-                  key="cashapp"
-                  value="cashapp"
-                  className="text-light-text dark:text-dark-text"
-                >
-                  Cash App
-                </SelectItem>
-                <SelectItem
-                  key="applepay"
-                  value="applepay"
-                  className="text-light-text dark:text-dark-text"
-                >
-                  Apple Pay
-                </SelectItem>
-                <SelectItem
-                  key="googlepay"
-                  value="googlepay"
-                  className="text-light-text dark:text-dark-text"
-                >
-                  Google Pay
-                </SelectItem>
-                <SelectItem
-                  key="paypal"
-                  value="paypal"
-                  className="text-light-text dark:text-dark-text"
-                >
-                  PayPal
-                </SelectItem>
-              </Select>
-            );
-          }}
         />
 
         <Controller
@@ -454,17 +505,17 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
               min={0}
               max={100}
               step={0.1}
-              className="pb-4 text-light-text dark:text-dark-text"
+              className="text-light-text dark:text-dark-text pb-4"
               classNames={{
                 label: "text-light-text dark:text-dark-text text-lg",
               }}
               variant="bordered"
               fullWidth
-              label="Shopstr donation (%)"
+              label="Shopstr donation % (for sellers)"
               labelPlacement="outside"
               onChange={onChange}
               onBlur={onBlur}
-              value={value.toString()}
+              value={value?.toString() || ""}
             />
           )}
         />

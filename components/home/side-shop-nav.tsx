@@ -1,12 +1,12 @@
 "use client";
-import React, { useContext, useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 
 import { nip19 } from "nostr-tools";
 
 import useNavigation from "@/components/hooks/use-navigation";
 
 import { ShopMapContext } from "@/utils/context/context";
-import { Button, useDisclosure } from "@nextui-org/react";
+import { Button, useDisclosure } from "@heroui/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { useRouter } from "next/router";
 import SignInModal from "../sign-in/SignInModal";
@@ -77,13 +77,16 @@ const SideShopNav = ({
   };
 
   const tallyCategories = (categories: string[]): Record<string, number> => {
-    return categories.reduce(
-      (acc, category) => {
-        acc[category] = (acc[category] || 0) + 1;
-        return acc;
-      },
-      {} as Record<string, number>
-    );
+    const excludedCategories = ["shopstr"];
+    return categories
+      .filter((category) => !excludedCategories.includes(category))
+      .reduce(
+        (acc, category) => {
+          acc[category] = (acc[category] || 0) + 1;
+          return acc;
+        },
+        {} as Record<string, number>
+      );
   };
 
   const handleCreateNewListing = () => {
@@ -96,12 +99,12 @@ const SideShopNav = ({
 
   return (
     <>
-      <div className="hidden w-[120px] flex-col items-center bg-light-bg px-6 py-8 dark:bg-dark-bg sm:flex md:w-[250px] md:items-start">
+      <div className="bg-light-bg dark:bg-dark-bg hidden w-[120px] flex-col items-center px-6 py-8 sm:flex md:w-[250px] md:items-start">
         {!isEditingShop ? (
           <>
             <Button
               onClick={() => setSelectedCategories(new Set<string>([]))}
-              className="flex w-full flex-row justify-start bg-transparent py-8 text-light-text duration-200 hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+              className="text-light-text dark:text-dark-text dark:hover:text-accent-dark-text flex w-full flex-row justify-start bg-transparent py-8 duration-200 hover:text-purple-700"
             >
               <span className="hidden pt-2 text-2xl md:flex">All listings</span>
             </Button>
@@ -113,7 +116,7 @@ const SideShopNav = ({
                     onClick={() =>
                       setSelectedCategories(new Set<string>([category]))
                     }
-                    className="flex w-full flex-row justify-start bg-transparent py-2 text-light-text duration-200 hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+                    className="text-light-text dark:text-dark-text dark:hover:text-accent-dark-text flex w-full flex-row justify-start bg-transparent py-2 duration-200 hover:text-purple-700"
                   >
                     <span className="text-xl">{`- ${category} (${count})`}</span>
                   </Button>
@@ -137,7 +140,7 @@ const SideShopNav = ({
               </span>
             </Button>
             {shopAbout && (
-              <div className="flex w-full flex-col justify-start bg-transparent py-8 text-light-text dark:text-dark-text">
+              <div className="text-light-text dark:text-dark-text flex w-full flex-col justify-start bg-transparent py-8">
                 <h2 className="pb-2 text-2xl font-bold">About</h2>
                 <p className="text-base">{shopAbout}</p>
               </div>
@@ -149,7 +152,7 @@ const SideShopNav = ({
               <>
                 <Button
                   onClick={() => setSelectedCategories(new Set<string>([]))}
-                  className="flex w-full flex-row justify-start bg-transparent py-8 text-light-text duration-200 hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+                  className="text-light-text dark:text-dark-text dark:hover:text-accent-dark-text flex w-full flex-row justify-start bg-transparent py-8 duration-200 hover:text-purple-700"
                 >
                   <span className="hidden pt-2 text-2xl md:flex">
                     All listings
@@ -164,7 +167,7 @@ const SideShopNav = ({
                           onClick={() =>
                             setSelectedCategories(new Set<string>([category]))
                           }
-                          className="flex w-full flex-row justify-start bg-transparent py-2 text-light-text duration-200 hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+                          className="text-light-text dark:text-dark-text dark:hover:text-accent-dark-text flex w-full flex-row justify-start bg-transparent py-2 duration-200 hover:text-purple-700"
                         >
                           <span className="text-xl">{`- ${category} (${count})`}</span>
                         </Button>
@@ -182,12 +185,12 @@ const SideShopNav = ({
             </Button>
             <Button
               className={`${SHOPSTRBUTTONCLASSNAMES} mt-2 w-full`}
-              onClick={() => router.push("settings/shop-profile")}
+              onClick={() => router.push("/settings/shop-profile")}
             >
               Edit Shop
             </Button>
             {shopAbout && (
-              <div className="flex w-full flex-col justify-start bg-transparent py-8 text-light-text dark:text-dark-text">
+              <div className="text-light-text dark:text-dark-text flex w-full flex-col justify-start bg-transparent py-8">
                 <h2 className="pb-2 text-2xl font-bold">About</h2>
                 <p className="text-base">{shopAbout}</p>
               </div>

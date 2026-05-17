@@ -1,4 +1,4 @@
-import React, { useContext, useState } from "react";
+import { useContext, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import {
   ArrowDownTrayIcon,
@@ -14,15 +14,16 @@ import {
   ModalFooter,
   Button,
   Textarea,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
   getLocalStorageData,
   publishProofEvent,
+  publishWalletEvent,
 } from "@/utils/nostr/nostr-helper-functions";
 import {
-  CashuMint,
-  CashuWallet,
+  Mint as CashuMint,
+  Wallet as CashuWallet,
   getDecodedToken,
   Proof,
 } from "@cashu/cashu-ts";
@@ -47,7 +48,11 @@ const ReceiveButton = () => {
     handleSubmit: handleReceiveSubmit,
     control: receiveControl,
     reset: receiveReset,
-  } = useForm();
+  } = useForm({
+    defaultValues: {
+      token: "",
+    },
+  });
 
   const handleToggleReceiveModal = () => {
     receiveReset();
@@ -65,10 +70,11 @@ const ReceiveButton = () => {
     setIsSpent(false);
     setIsInvalidToken(false);
     try {
-      const token = getDecodedToken(tokenString);
+      const token = getDecodedToken(tokenString, []);
       const tokenMint = token.mint;
       const tokenProofs = token.proofs;
       const wallet = new CashuWallet(new CashuMint(tokenMint));
+      await wallet.loadMint();
       const proofsStates = await wallet.checkProofsStates(tokenProofs);
       const spentYs = new Set(
         proofsStates
@@ -88,11 +94,12 @@ const ReceiveButton = () => {
         if (!mints.includes(tokenMint)) {
           const updatedMints = [...mints, tokenMint];
           localStorage.setItem("mints", JSON.stringify(updatedMints));
+          await publishWalletEvent(nostr!, signer!);
         }
         setIsClaimed(true);
         handleToggleReceiveModal();
         const transactionAmount = tokenProofs.reduce(
-          (acc, token: Proof) => acc + token.amount,
+          (acc, token: Proof) => acc + token.amount.toNumber(),
           0
         );
         localStorage.setItem(
@@ -117,7 +124,7 @@ const ReceiveButton = () => {
       } else {
         setIsSpent(true);
       }
-    } catch (_) {
+    } catch {
       setIsInvalidToken(true);
     }
   };
@@ -150,7 +157,7 @@ const ReceiveButton = () => {
           size="2xl"
         >
           <ModalContent>
-            <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
+            <ModalHeader className="text-light-text dark:text-dark-text flex flex-col gap-1">
               Receive Token
             </ModalHeader>
             <form onSubmit={handleReceiveSubmit(onReceiveSubmit)}>
@@ -194,8 +201,8 @@ const ReceiveButton = () => {
                 />
                 {signer instanceof NostrNIP46Signer && (
                   <div className="mx-4 my-2 flex items-center justify-center text-center">
-                    <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
-                    <p className="ml-2 text-xs text-light-text dark:text-dark-text">
+                    <InformationCircleIcon className="text-light-text dark:text-dark-text h-6 w-6" />
+                    <p className="text-light-text dark:text-dark-text ml-2 text-xs">
                       If the token is taking a while to be received, make sure
                       to check your bunker application to approve the
                       transaction events.
@@ -241,11 +248,11 @@ const ReceiveButton = () => {
             size="2xl"
           >
             <ModalContent>
-              <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+              <ModalHeader className="text-light-text dark:text-dark-text flex items-center justify-center">
                 <CheckCircleIcon className="h-6 w-6 text-green-500" />
                 <div className="ml-2">Token successfully claimed!</div>
               </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+              <ModalBody className="text-light-text dark:text-dark-text flex flex-col overflow-hidden">
                 <div className="flex items-center justify-center">
                   Your Shopstr wallet balance should now be updated.
                 </div>
@@ -274,11 +281,11 @@ const ReceiveButton = () => {
             size="2xl"
           >
             <ModalContent>
-              <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+              <ModalHeader className="text-light-text dark:text-dark-text flex items-center justify-center">
                 <XCircleIcon className="h-6 w-6 text-red-500" />
                 <div className="ml-2">Duplicate token!</div>
               </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+              <ModalBody className="text-light-text dark:text-dark-text flex flex-col overflow-hidden">
                 <div className="flex items-center justify-center">
                   The token you are trying to claim is already in your Shopstr
                   wallet.
@@ -308,11 +315,11 @@ const ReceiveButton = () => {
             size="2xl"
           >
             <ModalContent>
-              <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+              <ModalHeader className="text-light-text dark:text-dark-text flex items-center justify-center">
                 <XCircleIcon className="h-6 w-6 text-red-500" />
                 <div className="ml-2">Invalid token!</div>
               </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+              <ModalBody className="text-light-text dark:text-dark-text flex flex-col overflow-hidden">
                 <div className="flex items-center justify-center">
                   The token you are trying to claim is not a valid Cashu string.
                 </div>
@@ -341,11 +348,11 @@ const ReceiveButton = () => {
             size="2xl"
           >
             <ModalContent>
-              <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+              <ModalHeader className="text-light-text dark:text-dark-text flex items-center justify-center">
                 <XCircleIcon className="h-6 w-6 text-red-500" />
                 <div className="ml-2">Spent token!</div>
               </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+              <ModalBody className="text-light-text dark:text-dark-text flex flex-col overflow-hidden">
                 <div className="flex items-center justify-center">
                   The token you are trying to claim has already been redeemed.
                 </div>

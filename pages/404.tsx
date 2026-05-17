@@ -1,5 +1,4 @@
-import React from "react";
-import { Button } from "@nextui-org/react";
+import { Button } from "@heroui/react";
 import { ArrowLongLeftIcon } from "@heroicons/react/24/outline";
 import { useRouter } from "next/router";
 import Link from "next/link";
@@ -9,18 +8,18 @@ export default function Custom404() {
   const router = useRouter();
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-light-bg px-4 dark:bg-dark-bg">
+    <div className="bg-light-bg dark:bg-dark-bg flex min-h-screen flex-col items-center justify-center px-4">
       <div className="mb-8 text-center">
-        <h1 className="mb-2 text-9xl font-bold text-shopstr-purple dark:text-shopstr-yellow">
+        <h1 className="text-shopstr-purple dark:text-shopstr-yellow mb-2 text-9xl font-bold">
           404
         </h1>
-        <h2 className="mb-6 text-2xl font-medium text-light-text dark:text-dark-text md:text-3xl">
+        <h2 className="text-light-text dark:text-dark-text mb-6 text-2xl font-medium md:text-3xl">
           Page Not Found
         </h2>
-        <p className="mb-8 text-light-text dark:text-dark-text">
+        <p className="text-light-text dark:text-dark-text mb-8">
           The page you&apos;re looking for doesn&apos;t exist or has been moved.
         </p>
-        <div className="flex flex-col items-center justify-center space-y-4 sm:flex-row sm:space-x-4 sm:space-y-0">
+        <div className="flex flex-col items-center justify-center space-y-4 sm:flex-row sm:space-y-0 sm:space-x-4">
           <Button
             className={SHOPSTRBUTTONCLASSNAMES}
             onClick={() => router.back()}

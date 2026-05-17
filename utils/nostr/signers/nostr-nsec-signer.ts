@@ -5,7 +5,7 @@ import {
   NostrEvent,
   finalizeEvent,
 } from "nostr-tools";
-import { hexToBytes } from "@noble/hashes/utils";
+import { hexToBytes } from "@noble/hashes/utils.js";
 import CryptoJS from "crypto-js";
 import { NostrEventTemplate } from "@/utils/nostr/nostr-manager";
 import {
@@ -101,6 +101,10 @@ export class NostrNSecSigner implements NostrSigner {
       encryptedPrivKey: this.encryptedPrivKey,
       pubkey: this.pubkey,
     };
+  }
+
+  public getEncryptedPrivKey(): string {
+    return this.encryptedPrivKey;
   }
 
   public async connect(): Promise<string> {

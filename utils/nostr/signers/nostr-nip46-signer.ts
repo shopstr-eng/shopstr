@@ -6,7 +6,7 @@ import {
   generateSecretKey,
 } from "nostr-tools";
 import { newPromiseWithTimeout } from "@/utils/timeout";
-import { bytesToHex, hexToBytes } from "@noble/hashes/utils";
+import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
 import { NostrEventTemplate, NostrManager } from "@/utils/nostr/nostr-manager";
 import {
   ChallengeHandler,
@@ -80,14 +80,12 @@ export class NostrNIP46Signer implements NostrSigner {
       [
         {
           kinds: [24133],
-          since: Math.floor(Date.now() / 1000),
-          authors: [this.bunker.bunkerPubkey],
           "#p": [this.appPubKey],
         },
       ],
       {
         onevent: (event) => {
-          this.onEvent(event);
+          this.onEvent(event).catch(() => {});
         },
       }
     );
@@ -116,17 +114,23 @@ export class NostrNIP46Signer implements NostrSigner {
   }
 
   private async onEvent(event: NostrEvent) {
-    const conversationKey = nip44.getConversationKey(
-      this.appPrivKey,
-      event.pubkey
-    );
-    event.content = nip44.decrypt(event.content, conversationKey);
-    const content: any = JSON.parse(event.content);
+    let content: any;
+    try {
+      const conversationKey = nip44.getConversationKey(
+        this.appPrivKey,
+        event.pubkey
+      );
+      const decrypted = nip44.decrypt(event.content, conversationKey);
+      content = JSON.parse(decrypted);
+      event.content = decrypted;
+    } catch {
+      return;
+    }
 
     const id = content.id;
     const error = content.error;
     const result = content.result;
-    if (!id) throw new Error("invalid event content");
+    if (!id) return;
 
     if (result === "auth_url") {
       const abortController = new AbortController();
@@ -170,7 +174,7 @@ export class NostrNIP46Signer implements NostrSigner {
     args.push(this.bunker.bunkerPubkey);
     args.push(this.bunker.secret || "");
     args.push(
-      "sign_event:0,sign_event:5,sign_event:13,sign_event:1059,sign_event:7375,sign_event:7376,sign_event:10002,sign_event:17375,kind:30019,sign_event:30402,sign_event:30405,sign_event:30406,sign_event:31555,sign_event:31989,sign_event:31990,get_public_key,nip44_encrypt,nip44_decrypt"
+      "sign_event:0,sign_event:5,sign_event:13,sign_event:1059,sign_event:1111,sign_event:4550,sign_event:7375,sign_event:7376,sign_event:10002,sign_event:17375,kind:30019,sign_event:30402,sign_event:30405,sign_event:30406,sign_event:31555,sign_event:31989,sign_event:31990,sign_event:34550,get_public_key,nip44_encrypt,nip44_decrypt"
     );
     return await this.sendRPC("connect", args);
   }

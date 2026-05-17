@@ -2,7 +2,7 @@
 
 "use client";
 
-import React, { useContext, useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import { ShopMapContext } from "@/utils/context/context";
 import { ShopProfile } from "../../utils/types/types";
 import { sanitizeUrl } from "@braintree/sanitize-url";
@@ -42,12 +42,12 @@ const HomeFeed = ({
       }
     }
     setIsFetchingShop(false);
-  }, [focusedPubkey, shopMapContext, shopBannerURL, router.pathname]);
+  }, [focusedPubkey, shopMapContext, router.pathname]);
 
   return (
     <>
       {focusedPubkey && shopBannerURL && !isFetchingShop && (
-        <div className="flex h-auto w-full items-center justify-center bg-light-bg bg-cover bg-center dark:bg-dark-bg">
+        <div className="bg-light-bg dark:bg-dark-bg flex h-auto w-full items-center justify-center bg-cover bg-center">
           <img
             src={sanitizeUrl(shopBannerURL)}
             alt="Shop Banner"
@@ -56,7 +56,7 @@ const HomeFeed = ({
         </div>
       )}
       <div className="flex flex-1 flex-col">
-        <div className="flex max-h-screen flex-1">
+        <div className="flex min-h-screen flex-1">
           <MarketplacePage
             focusedPubkey={focusedPubkey}
             setFocusedPubkey={setFocusedPubkey}

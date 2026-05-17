@@ -1,4 +1,3 @@
-import React from "react";
 import {
   Modal,
   ModalContent,
@@ -6,7 +5,7 @@ import {
   ModalBody,
   ModalFooter,
   Button,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { useRouter } from "next/router";
 
@@ -16,7 +15,7 @@ function sanitizeURL(s: string) {
     if (url.protocol !== "https:" && url.protocol !== "http:")
       throw new Error("invalid protocol");
     return url.href;
-  } catch (e) {
+  } catch {
     return null;
   }
 }
@@ -43,9 +42,11 @@ export default function AuthChallengeModal({
   const onCancel = () => {
     if (actionOnCancel) actionOnCancel();
     setIsOpen(false);
-    onCancelRouteTo
-      ? router.push(onCancelRouteTo)
-      : router.push("/marketplace");
+    if (onCancelRouteTo) {
+      router.push(onCancelRouteTo);
+    } else {
+      router.push("/marketplace");
+    }
   };
 
   return (
@@ -66,7 +67,7 @@ export default function AuthChallengeModal({
       isDismissable={false}
     >
       <ModalContent>
-        <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
+        <ModalHeader className="text-light-text dark:text-dark-text flex flex-col gap-1">
           Waiting for confirmation
         </ModalHeader>
         <ModalBody>

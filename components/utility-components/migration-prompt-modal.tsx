@@ -1,11 +1,5 @@
-import React, { useState } from "react";
-import {
-  Modal,
-  ModalContent,
-  ModalBody,
-  Button,
-  Input,
-} from "@nextui-org/react";
+import { useState } from "react";
+import { Modal, ModalContent, ModalBody, Button, Input } from "@heroui/react";
 import { migrateToNip49 } from "@/utils/nostr/encryption-migration";
 
 interface MigrationPromptModalProps {
@@ -80,7 +74,7 @@ export default function MigrationPromptModal({
       size="md"
     >
       <ModalContent>
-        <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+        <ModalBody className="text-light-text dark:text-dark-text flex flex-col overflow-hidden">
           <div className="mb-4 text-center">
             <h3 className="text-lg font-semibold">Encryption Upgrade</h3>
             <p className="mt-2 text-sm">

@@ -3,6 +3,7 @@ import { useRouter } from "next/router";
 import { nip19 } from "nostr-tools";
 import { CheckIcon, ClipboardIcon } from "@heroicons/react/24/outline";
 import ClaimButton from "../utility-components/claim-button";
+import LinkPreview from "./link-preview";
 import { NostrMessageEvent } from "../../utils/types/types";
 import { timeSinceMessageDisplayText } from "../../utils/messages/utils";
 import { getDecodedToken } from "@cashu/cashu-ts";
@@ -10,9 +11,9 @@ import { SignerContext } from "@/components/utility-components/nostr-context-pro
 
 function isDecodableToken(token: string): boolean {
   try {
-    getDecodedToken(token);
+    getDecodedToken(token, []);
     return true;
-  } catch (e) {
+  } catch {
     return false;
   }
 }
@@ -39,7 +40,7 @@ const ChatMessage = ({
   const { pubkey: userPubkey } = useContext(SignerContext);
 
   useEffect(() => {
-    if (messageEvent?.content && messageEvent.content.includes("npub")) {
+    if (messageEvent?.content && messageEvent.content.includes("npub1")) {
       // Find word containing npub using regex
       const npubMatch = messageEvent.content.match(/npub[a-zA-Z0-9]+/);
       if (npubMatch && setBuyerPubkey) {
@@ -70,7 +71,8 @@ const ChatMessage = ({
     setCanReview?.(
       subject === "order-info" ||
         subject === "order-receipt" ||
-        subject === "shipping-info"
+        subject === "shipping-info" ||
+        subject === "zapsnag-order"
     );
     setProductAddress?.(productAddress as string);
     setOrderId?.(orderId as string);
@@ -88,6 +90,16 @@ const ChatMessage = ({
     ? messageEvent.content.split(cashuPrefix)[0]
     : messageEvent.content;
 
+  let orderData = null;
+  try {
+    if (messageEvent.content.trim().startsWith("{")) {
+      const parsed = JSON.parse(messageEvent.content);
+      if (parsed.type === "zapsnag_order" && parsed.shipping) {
+        orderData = parsed;
+      }
+    }
+  } catch {}
+
   const handleCopyToken = (token: string) => {
     navigator.clipboard.writeText(token);
     setCopiedToClipboard(true);
@@ -97,26 +109,36 @@ const ChatMessage = ({
   };
 
   const renderMessageContent = (content: string) => {
-    const words = content.split(/(\s+)/);
-    return words.map((word, index) => {
-      const npubMatch = word.match(/npub[a-zA-Z0-9]+/);
-      if (npubMatch) {
+    const parts = content.split(/(https?:\/\/[^\s<>"']+)/g);
+    return parts.map((part, index) => {
+      if (/^https?:\/\//.test(part)) {
         return (
-          <span
-            key={index}
-            className="cursor-pointer text-shopstr-purple hover:underline dark:text-shopstr-yellow"
-            onClick={() => {
-              router.replace({
-                pathname: "/orders",
-                query: { pk: npubMatch[0], isInquiry: true },
-              });
-            }}
-          >
-            {word}
+          <span key={index} className="block">
+            <LinkPreview url={part} isUserMessage={isUserMessage} />
           </span>
         );
       }
-      return word;
+      const subParts = part.split(/(\s+)/);
+      return subParts.map((sub, subIndex) => {
+        const npubMatch = sub.match(/npub[a-zA-Z0-9]+/);
+        if (npubMatch) {
+          return (
+            <span
+              key={`${index}-${subIndex}`}
+              className="text-shopstr-purple dark:text-shopstr-yellow cursor-pointer hover:underline"
+              onClick={() => {
+                router.replace({
+                  pathname: "/orders",
+                  query: { pk: npubMatch[0], isInquiry: true },
+                });
+              }}
+            >
+              {sub}
+            </span>
+          );
+        }
+        return sub;
+      });
     });
   };
 
@@ -134,13 +156,13 @@ const ChatMessage = ({
       }`}
     >
       <div
-        className={`flex max-w-[90%] flex-col rounded-t-large p-3 ${
+        className={`rounded-t-large flex max-w-[90%] flex-col p-3 ${
           isUserMessage
-            ? "dark:from-shopstr-yellow-dark rounded-bl-lg bg-gradient-to-br from-shopstr-purple to-shopstr-purple-light text-white dark:to-shopstr-yellow-light dark:text-dark-bg"
-            : "rounded-br-lg bg-gray-300 text-light-text dark:bg-gray-700 dark:text-dark-text"
+            ? "dark:from-shopstr-yellow-dark from-shopstr-purple to-shopstr-purple-light dark:to-shopstr-yellow-light dark:text-dark-bg rounded-bl-lg bg-gradient-to-br text-white"
+            : "text-light-text dark:text-dark-text rounded-br-lg bg-gray-300 dark:bg-gray-700"
         }`}
       >
-        <p className="inline-block flex-wrap overflow-x-hidden break-all">
+        <div className="flex flex-col overflow-x-hidden break-all">
           {cashuPrefix && canDecodeToken && tokenAfterCashuVersion ? (
             <>
               {renderMessageContent(contentBeforeCashu!)}
@@ -158,10 +180,26 @@ const ChatMessage = ({
                 )}
               </div>
             </>
+          ) : orderData ? (
+            <div className="border-shopstr-purple dark:border-shopstr-yellow flex flex-col gap-2 border-l-4 pl-3">
+              <span className="text-sm font-bold uppercase opacity-70">
+                ⚡ Zapsnag Order
+              </span>
+              <div className="font-semibold">{orderData.shipping.name}</div>
+              <div className="text-sm">{orderData.shipping.address}</div>
+              <div className="text-sm">
+                {orderData.shipping.city}, {orderData.shipping.state}{" "}
+                {orderData.shipping.zip}
+              </div>
+              <div className="text-sm">{orderData.shipping.country}</div>
+              <div className="mt-1 text-xs opacity-50">
+                Order ID: {orderData.orderId.slice(0, 8)}...
+              </div>
+            </div>
           ) : (
             renderMessageContent(messageEvent.content)
           )}
-        </p>
+        </div>
         <div className="m-1"></div>
         <span
           className={`text-xs opacity-50 ${

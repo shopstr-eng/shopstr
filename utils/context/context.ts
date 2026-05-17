@@ -1,5 +1,12 @@
 import { createContext } from "react";
-import { NostrMessageEvent, ProfileData, ShopProfile } from "../types/types";
+import {
+  NostrEvent,
+  NostrMessageEvent,
+  ProfileData,
+  ShopProfile,
+  Community,
+  CommunityPost,
+} from "../types/types";
 import { Proof } from "@cashu/cashu-ts";
 
 export interface ProfileContextInterface {
@@ -25,16 +32,16 @@ export const ShopMapContext = createContext({
 } as ShopContextInterface);
 
 export interface ProductContextInterface {
-  productEvents: any;
+  productEvents: NostrEvent[];
   isLoading: boolean;
-  addNewlyCreatedProductEvent: (productEvent: any) => void;
+  addNewlyCreatedProductEvent: (productEvent: NostrEvent) => void;
   removeDeletedProductEvent: (productId: string) => void;
 }
 
 export const ProductContext = createContext({
-  productEvents: {},
+  productEvents: [],
   isLoading: true,
-  addNewlyCreatedProductEvent: (_productEvent: any) => {},
+  addNewlyCreatedProductEvent: (_productEvent: NostrEvent) => {},
   removeDeletedProductEvent: (_productId: string) => {},
 } as ProductContextInterface);
 
@@ -91,6 +98,8 @@ export interface ChatsContextInterface {
     messageEvent: NostrMessageEvent,
     sent?: boolean
   ) => void;
+  markAllMessagesAsRead: () => Promise<string[]>;
+  newOrderIds: Set<string>;
 }
 
 export const ChatsContext = createContext({
@@ -100,6 +109,8 @@ export const ChatsContext = createContext({
     _messageEvent: NostrMessageEvent,
     _sent?: boolean
   ) => {},
+  markAllMessagesAsRead: async () => [] as string[],
+  newOrderIds: new Set<string>(),
 } as ChatsContextInterface);
 
 export interface FollowsContextInterface {
@@ -151,3 +162,17 @@ export const CashuWalletContext = createContext({
   cashuProofs: [],
   isLoading: true,
 } as CashuWalletContextInterface);
+
+export interface CommunityContextInterface {
+  communities: Map<string, Community>; // key is event id
+  posts: Map<string, CommunityPost[]>; // key is community address (a-tag)
+  isLoading: boolean;
+  addCommunity: (community: Community) => void;
+}
+
+export const CommunityContext = createContext({
+  communities: new Map(),
+  posts: new Map(),
+  isLoading: true,
+  addCommunity: (_community: Community) => {},
+} as CommunityContextInterface);

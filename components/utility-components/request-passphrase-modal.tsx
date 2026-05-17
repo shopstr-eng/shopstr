@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Modal,
   ModalContent,
@@ -7,9 +7,10 @@ import {
   ModalFooter,
   Input,
   Button,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { useRouter } from "next/router";
+import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
 
 export default function PassphraseChallengeModal({
   actionOnSubmit,
@@ -28,10 +29,23 @@ export default function PassphraseChallengeModal({
 }) {
   const [remindToggled, setRemindToggled] = useState(false);
   const [passphraseInput, setPassphraseInput] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
   const isButtonDisabled = useMemo(() => {
     return passphraseInput.trim().length === 0;
   }, [passphraseInput]);
   const router = useRouter();
+
+  useEffect(() => {
+    if (!isOpen) {
+      setIsLoading(false);
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (error) {
+      setIsLoading(false);
+    }
+  }, [error]);
   const passphraseInputRef = useRef<HTMLInputElement>(null);
 
   const buttonClassName = useMemo(() => {
@@ -44,9 +58,11 @@ export default function PassphraseChallengeModal({
     if (isButtonDisabled && passphraseInputRef.current) {
       passphraseInputRef.current.focus();
     } else if (!isButtonDisabled) {
-      setIsOpen(false);
+      setIsLoading(true);
       if (actionOnSubmit) {
-        actionOnSubmit(passphraseInput, remindToggled);
+        setTimeout(() => {
+          actionOnSubmit(passphraseInput, remindToggled);
+        }, 0);
       }
     }
   };
@@ -54,9 +70,11 @@ export default function PassphraseChallengeModal({
   const onCancel = () => {
     if (actionOnCancel) actionOnCancel();
     setIsOpen(false);
-    onCancelRouteTo
-      ? router.push(onCancelRouteTo)
-      : router.push("/marketplace");
+    if (onCancelRouteTo) {
+      router.push(onCancelRouteTo);
+    } else {
+      router.push("/marketplace");
+    }
   };
 
   return (
@@ -77,7 +95,7 @@ export default function PassphraseChallengeModal({
       isDismissable={false}
     >
       <ModalContent>
-        <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
+        <ModalHeader className="text-light-text dark:text-dark-text flex flex-col gap-1">
           Enter Passphrase
         </ModalHeader>
         <ModalBody>
@@ -111,12 +129,28 @@ export default function PassphraseChallengeModal({
         </ModalBody>
 
         <ModalFooter>
-          <Button color="danger" variant="light" onClick={onCancel}>
+          <Button
+            color="danger"
+            variant="light"
+            onClick={onCancel}
+            isDisabled={isLoading}
+          >
             Cancel
           </Button>
 
-          <Button className={buttonClassName} type="submit" onClick={onSubmit}>
-            Submit
+          <Button
+            className={buttonClassName}
+            type="submit"
+            onClick={onSubmit}
+            isDisabled={isLoading}
+          >
+            {isLoading ? (
+              <div className="flex items-center justify-center">
+                <ShopstrSpinner />
+              </div>
+            ) : (
+              "Submit"
+            )}
           </Button>
         </ModalFooter>
       </ModalContent>
