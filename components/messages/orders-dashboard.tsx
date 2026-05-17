@@ -45,6 +45,7 @@ import {
   sendGiftWrappedMessageEvent,
   generateKeys,
   publishReviewEvent,
+  sendShippingConfirmationMessage,
 } from "@/utils/nostr/nostr-helper-functions";
 import {
   NostrContext,
@@ -936,6 +937,23 @@ const OrdersDashboard = () => {
       );
 
       await sendGiftWrappedMessageEvent(nostr, giftWrappedEvent, signer);
+      try {
+        await sendShippingConfirmationMessage({
+          nostr,
+          signer,
+          buyerPubkey: selectedOrder.buyerPubkey,
+          orderId: selectedOrder.orderId,
+          productAddress: selectedOrder.productAddress,
+          tracking: trackingNumber,
+          carrier: shippingCarrier,
+          eta: futureTimestamp,
+        });
+      } catch (notificationError) {
+        console.warn(
+          "Failed to send shipping confirmation DM:",
+          notificationError
+        );
+      }
 
       // Update local state to shipped status (removes Send Shipping Update button)
       setOrders((prevOrders) =>
