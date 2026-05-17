@@ -1819,7 +1819,7 @@ export async function sendPaymentConfirmationMessage({
   productAddress?: string;
 }): Promise<void> {
   const title = productTitle ? ` for ${productTitle}` : "";
-  const message = `Payment confirmed${title}. We received ${amountSats} sats for order ${orderId}.`;
+  const message = `Payment confirmed${title}. ${amountSats} sats were sent for order ${orderId}.`;
 
   await sendOrderNotificationMessage({
     nostr,
