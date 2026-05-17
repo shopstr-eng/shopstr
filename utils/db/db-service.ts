@@ -1143,7 +1143,8 @@ export async function fetchAllReviewsFromDb(): Promise<NostrEvent[]> {
 
 export async function fetchRelevantReportsFromDb(
   productIds: string[],
-  profilePubkeys: string[]
+  profilePubkeys: string[],
+  limit = 500
 ): Promise<NostrEvent[]> {
   if (productIds.length === 0 && profilePubkeys.length === 0) {
     return [];
@@ -1180,11 +1181,15 @@ export async function fetchRelevantReportsFromDb(
       params.push(productIds);
     }
 
+    const boundedLimit = Math.max(1, Math.min(limit, 500));
+    params.push(boundedLimit);
+
     const result = await client.query(
       `SELECT id, pubkey, created_at, kind, tags, content, sig
        FROM report_events
        WHERE ${clauses.join(" OR ")}
-       ORDER BY created_at DESC`,
+       ORDER BY created_at DESC
+       LIMIT $${paramIndex}`,
       params
     );
 
