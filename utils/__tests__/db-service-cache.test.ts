@@ -14,8 +14,9 @@ const getQueryText = (query: unknown): string =>
 
 async function loadDbServiceWithRows(rows: any[]) {
   jest.resetModules();
+  process.env.DATABASE_URL = "postgres://test:test@localhost:5432/shopstr_test";
 
-  const queryMock = jest.fn(async (query: unknown) => {
+  const queryMock = jest.fn(async (query: unknown, _params?: unknown[]) => {
     const text = getQueryText(query);
 
     if (
@@ -45,6 +46,7 @@ async function loadDbServiceWithRows(rows: any[]) {
   }));
 
   jest.doMock("pg", () => ({
+    __esModule: true,
     Pool: PoolMock,
   }));
 
@@ -53,6 +55,16 @@ async function loadDbServiceWithRows(rows: any[]) {
 }
 
 describe("db-service replaceable event caching", () => {
+  const originalDatabaseUrl = process.env.DATABASE_URL;
+
+  afterEach(() => {
+    if (originalDatabaseUrl === undefined) {
+      delete process.env.DATABASE_URL;
+    } else {
+      process.env.DATABASE_URL = originalDatabaseUrl;
+    }
+  });
+
   it("keeps the newer cached contact list when an older event arrives later", async () => {
     const storedEvent = createContactListEvent({
       id: "1".repeat(64),
