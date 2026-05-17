@@ -48,7 +48,7 @@ describe("DynamicHead", () => {
   });
 
   test("should render default meta tags for a generic page", async () => {
-    mockUseRouter.mockReturnValue({ pathname: "/", query: {} });
+    mockUseRouter.mockReturnValue({ pathname: "/", asPath: "/", query: {} });
     render(
       <DynamicHead
         productEvents={[]}
@@ -89,6 +89,7 @@ describe("DynamicHead", () => {
       ]);
       mockUseRouter.mockReturnValue({
         pathname: `/marketplace/${shopNpub}`,
+        asPath: `/marketplace/${shopNpub}`,
         query: { npub: [shopNpub] },
       });
       mockNip19.npubEncode.mockReturnValue(shopNpub);
@@ -106,6 +107,7 @@ describe("DynamicHead", () => {
       const shopNpub = "npub1shop_not_found";
       mockUseRouter.mockReturnValue({
         pathname: `/marketplace/${shopNpub}`,
+        asPath: `/marketplace/${shopNpub}`,
         query: { npub: [shopNpub] },
       });
       render(
@@ -121,6 +123,7 @@ describe("DynamicHead", () => {
     test("should render fallback tags if npub is missing from query", async () => {
       mockUseRouter.mockReturnValue({
         pathname: `/marketplace/npub`,
+        asPath: `/marketplace/npub`,
         query: {},
       });
       render(
@@ -157,6 +160,7 @@ describe("DynamicHead", () => {
       ]);
       mockUseRouter.mockReturnValue({
         pathname: `/marketplace/${shopNpub}`,
+        asPath: `/marketplace/${shopNpub}`,
         query: { npub: [shopNpub] },
       });
       mockNip19.npubEncode.mockReturnValue(shopNpub);
@@ -189,6 +193,7 @@ describe("DynamicHead", () => {
       const naddr = "naddr1product";
       mockUseRouter.mockReturnValue({
         pathname: `/listing/${productId}`,
+        asPath: `/listing/${productId}`,
         query: { productId: [productId] },
       });
       mockNip19.naddrEncode.mockReturnValue(naddr);
@@ -207,6 +212,7 @@ describe("DynamicHead", () => {
       const naddr = "naddr1product";
       mockUseRouter.mockReturnValue({
         pathname: `/listing/${productId}`,
+        asPath: `/listing/${productId}`,
         query: { productId: [productId] },
       });
       mockNip19.naddrEncode.mockReturnValue(naddr);
@@ -228,6 +234,7 @@ describe("DynamicHead", () => {
       const naddr = "naddr1product";
       mockUseRouter.mockReturnValue({
         pathname: `/listing/${productId}`,
+        asPath: `/listing/${productId}`,
         query: { productId: [productId] },
       });
       mockNip19.naddrEncode.mockReturnValue(naddr);
