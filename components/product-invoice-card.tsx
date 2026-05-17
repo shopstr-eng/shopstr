@@ -212,6 +212,7 @@ export default function ProductInvoiceCard({
   const { isOpen, onOpen, onClose } = useDisclosure();
 
   const [formType, setFormType] = useState<"shipping" | "contact" | null>(null);
+  const [convertedShippingCost, setConvertedShippingCost] = useState<number>(0);
   const [showOrderTypeSelection, setShowOrderTypeSelection] = useState(true);
 
   const triggerOrderEmail = async (params: {
@@ -413,44 +414,59 @@ export default function ProductInvoiceCard({
     useState<string | null>(null);
   const [pendingStripeData, setPendingStripeData] = useState<any>(null);
 
+  // Dispatch the queued order-confirmation email (and store the order summary
+  // in sessionStorage for the confirmation page) immediately. Called inline
+  // from every payment handler the moment payment confirms so the request is
+  // in flight before any re-render or tab navigation. `keepalive: true` on the
+  // fetch lets the POST survive even if the page closes mid-flight. The
+  // useEffect below remains as a safety net; it short-circuits once
+  // `pendingOrderEmailRef.current` is nulled here.
+  const flushPendingOrderEmail = () => {
+    if (!pendingOrderEmailRef.current) return;
+    const entry = pendingOrderEmailRef.current;
+    pendingOrderEmailRef.current = null;
+
+    triggerOrderEmail(entry);
+
+    try {
+      sessionStorage.setItem(
+        "orderSummary",
+        JSON.stringify({
+          productTitle: entry.productTitle,
+          productImage: productData.images[0] || "",
+          amount: entry.amount,
+          currency: entry.currency,
+          paymentMethod: entry.paymentMethod,
+          orderId: entry.orderId,
+          shippingCost:
+            entry.shippingAddress && productData.shippingCost
+              ? String(productData.shippingCost)
+              : undefined,
+          selectedSize,
+          selectedVolume,
+          selectedWeight,
+          selectedBulkOption: selectedBulkOption
+            ? String(selectedBulkOption)
+            : undefined,
+          buyerEmail: buyerEmail || undefined,
+          shippingAddress: entry.shippingAddress,
+          pickupLocation: selectedPickupLocation || undefined,
+          sellerPubkey: entry.sellerPubkey,
+          isSubscription: isSubscription && !!subscriptionFrequency,
+        })
+      );
+    } catch {}
+  };
+
   useEffect(() => {
     if (
       (paymentConfirmed || stripePaymentConfirmed) &&
       pendingOrderEmailRef.current
     ) {
-      triggerOrderEmail(pendingOrderEmailRef.current);
-
-      try {
-        sessionStorage.setItem(
-          "orderSummary",
-          JSON.stringify({
-            productTitle: pendingOrderEmailRef.current.productTitle,
-            productImage: productData.images[0] || "",
-            amount: pendingOrderEmailRef.current.amount,
-            currency: pendingOrderEmailRef.current.currency,
-            paymentMethod: pendingOrderEmailRef.current.paymentMethod,
-            orderId: pendingOrderEmailRef.current.orderId,
-            shippingCost:
-              pendingOrderEmailRef.current.shippingAddress &&
-              productData.shippingCost
-                ? String(productData.shippingCost)
-                : undefined,
-            selectedSize,
-            selectedVolume,
-            selectedWeight,
-            selectedBulkOption: selectedBulkOption
-              ? String(selectedBulkOption)
-              : undefined,
-            buyerEmail: buyerEmail || undefined,
-            shippingAddress: pendingOrderEmailRef.current.shippingAddress,
-            pickupLocation: selectedPickupLocation || undefined,
-            sellerPubkey: pendingOrderEmailRef.current.sellerPubkey,
-            isSubscription: isSubscription && !!subscriptionFrequency,
-          })
-        );
-      } catch {}
-
-      pendingOrderEmailRef.current = null;
+      // Safety-net flush in case a payment handler somehow didn't call
+      // flushPendingOrderEmail inline before confirming. Normal happy path:
+      // the ref is already nulled by the inline call and this is a no-op.
+      flushPendingOrderEmail();
     }
   }, [paymentConfirmed, stripePaymentConfirmed]);
 
@@ -1810,6 +1826,7 @@ export default function ProductInvoiceCard({
                 return;
               }
               markMintQuoteClaimed(hash);
+              flushPendingOrderEmail();
               setPaymentConfirmed(true);
               setQrCodeUrl(null);
               if (discountCode && productData.pubkey) {
@@ -1834,6 +1851,7 @@ export default function ProductInvoiceCard({
               // Quote was already processed elsewhere — proofs are not
               // recoverable client-side from this device.
               removePendingMintQuote(hash);
+              flushPendingOrderEmail();
               setPaymentConfirmed(true);
               setQrCodeUrl(null);
               setFailureText(
@@ -1847,6 +1865,7 @@ export default function ProductInvoiceCard({
         } else if (quoteState.state === "ISSUED") {
           // Quote was already processed successfully (likely on another tab/device).
           removePendingMintQuote(hash);
+          flushPendingOrderEmail();
           setPaymentConfirmed(true);
           setQrCodeUrl(null);
           setFailureText(
@@ -2861,6 +2880,7 @@ export default function ProductInvoiceCard({
         deletedEventIds
       );
       setCashuPaymentSent(true);
+      flushPendingOrderEmail();
       setPaymentConfirmed(true);
     } catch {
       setCashuPaymentFailed(true);
@@ -3074,6 +3094,7 @@ export default function ProductInvoiceCard({
       pendingOrderEmailRef.current.orderId = orderId;
     }
 
+    flushPendingOrderEmail();
     setStripePaymentConfirmed(true);
 
     let productDetails = "";
@@ -3377,9 +3398,12 @@ export default function ProductInvoiceCard({
   const discountAmount =
     appliedDiscount > 0 ? currentPrice - discountedPrice : 0;
 
-  // Calculate shipping cost based on form type
-  const shippingCostToAdd =
-    formType === "shipping" ? (productData.shippingCost ?? 0) : 0;
+  // Calculate shipping cost based on form type. Shipping is denominated in
+  // the seller's shipping-tag currency, which may differ from the product
+  // currency (e.g. USD product with sats shipping). Use the FX-converted
+  // value computed in the effect below so we never add raw sats to a USD
+  // price (which would inflate a $30 order to ~$38,030).
+  const shippingCostToAdd = formType === "shipping" ? convertedShippingCost : 0;
 
   const discountedTotal = discountedPrice + shippingCostToAdd;
 
@@ -3399,6 +3423,92 @@ export default function ProductInvoiceCard({
   const getFiatMethodTotal = (fiatKey: string) => {
     return getMethodDiscountedTotal(fiatKey);
   };
+
+  // Convert the seller's shipping cost into the product's currency. Sellers
+  // can denominate shipping in any currency (often sats), so we must FX it
+  // before adding to the product price. Without this, a USD product with
+  // sats shipping (e.g. 38000) would render a total of $38,030 for a $30
+  // order.
+  useEffect(() => {
+    if (formType !== "shipping") {
+      if (convertedShippingCost !== 0) setConvertedShippingCost(0);
+      return;
+    }
+    const rawShipping = productData.shippingCost ?? 0;
+    if (rawShipping === 0) {
+      if (convertedShippingCost !== 0) setConvertedShippingCost(0);
+      return;
+    }
+    const productCur = (productData.currency || "").toUpperCase();
+    const shipCur = (
+      productData.shippingCurrency ||
+      productData.currency ||
+      ""
+    ).toUpperCase();
+    if (!shipCur || shipCur === productCur) {
+      if (convertedShippingCost !== rawShipping) {
+        setConvertedShippingCost(rawShipping);
+      }
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const { getSatoshiValue: gsv, getFiatValue: gfv } =
+          await import("@getalby/lightning-tools");
+        let inProductCurrency: number;
+        const productIsSats = productCur === "SATS" || productCur === "SAT";
+        const shipIsSats = shipCur === "SATS" || shipCur === "SAT";
+        if (productIsSats) {
+          inProductCurrency = shipIsSats
+            ? rawShipping
+            : Math.ceil(
+                await gsv({
+                  amount: rawShipping,
+                  currency:
+                    productData.shippingCurrency || productData.currency,
+                })
+              );
+        } else {
+          const satVal = shipIsSats
+            ? rawShipping
+            : await gsv({
+                amount: rawShipping,
+                currency: productData.shippingCurrency || productData.currency,
+              });
+          inProductCurrency = await gfv({
+            satoshi: Math.ceil(satVal),
+            currency: productCur,
+          });
+          inProductCurrency = Math.ceil(inProductCurrency * 100) / 100;
+        }
+        if (!cancelled) {
+          setConvertedShippingCost((prev) =>
+            prev === inProductCurrency ? prev : inProductCurrency
+          );
+        }
+      } catch (err) {
+        console.error("Error converting product shipping cost:", err);
+        // Fall back to 0 rather than misrepresenting the total in the wrong
+        // unit.
+        if (!cancelled) {
+          setConvertedShippingCost((prev) => (prev === 0 ? prev : 0));
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // `convertedShippingCost` is intentionally omitted from deps: the setters
+    // use the functional form with equality checks to avoid re-running the
+    // async FX lookup in an infinite loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    formType,
+    productData.shippingCost,
+    productData.shippingCurrency,
+    productData.currency,
+  ]);
 
   // Debounced Stripe Tax lookup — fires when the shipping form has at least a
   // country + postal code. Resets when the form type changes away from shipping.

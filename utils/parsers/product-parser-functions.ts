@@ -17,6 +17,7 @@ export type ProductData = {
   currency: string;
   shippingType?: ShippingOptionsType;
   shippingCost?: number;
+  shippingCurrency?: string;
   totalCost: number;
   d?: string;
   contentWarning?: boolean;
@@ -106,6 +107,7 @@ export const parseTags = (productEvent: NostrEvent) => {
         if (parsedShipping) {
           parsedData.shippingType = parsedShipping.shippingType;
           parsedData.shippingCost = parsedShipping.shippingCost;
+          parsedData.shippingCurrency = parsedShipping.shippingCurrency;
         }
         break;
       case "d":

@@ -3,6 +3,7 @@ import { ShippingOptionsType } from "@/utils/STATIC-VARIABLES";
 type ProductMonetaryInfo = {
   shippingType?: ShippingOptionsType;
   shippingCost?: number;
+  shippingCurrency?: string;
   price: number;
   currency: string;
 };
@@ -12,7 +13,7 @@ export default function CompactPriceDisplay({
 }: {
   monetaryInfo: ProductMonetaryInfo;
 }) {
-  const { shippingType, shippingCost, price, currency } = monetaryInfo;
+  const { shippingType, price, currency } = monetaryInfo;
 
   const formatter = new Intl.NumberFormat("en-GB", {
     notation: "compact",
@@ -77,9 +78,30 @@ export function DisplayCheckoutCost({
 export const calculateTotalCost = (
   productMonetaryInfo: ProductMonetaryInfo
 ) => {
-  const { price, shippingCost } = productMonetaryInfo;
+  const { price, shippingCost, shippingCurrency, currency } =
+    productMonetaryInfo;
   let total = price;
-  total += shippingCost ? shippingCost : 0;
+  // Only add shipping if its currency matches the product currency. Adding a
+  // sats-denominated shipping cost to a USD price (or vice versa) produces
+  // wildly inflated totals (e.g. $30 + 38000 sats rendered as $38,030). When
+  // the currencies don't match, fall back to treating shipping as 0 here so
+  // downstream display code doesn't render the bogus total. The cart handles
+  // cross-currency shipping conversion separately.
+  if (shippingCost) {
+    const productCur = (currency || "").toLowerCase();
+    const shipCur = (shippingCurrency || productCur).toLowerCase();
+    if (!shipCur || shipCur === productCur) {
+      total += shippingCost;
+    } else if (
+      // Treat "sats"/"sat"/"satoshi" as equivalent so legacy data doesn't
+      // get silently dropped just because of a label variant.
+      (["sats", "sat", "satoshi"].includes(productCur) &&
+        ["sats", "sat", "satoshi"].includes(shipCur)) ||
+      productCur === shipCur
+    ) {
+      total += shippingCost;
+    }
+  }
   return total;
 };
 

@@ -473,118 +473,137 @@ export default function CartInvoiceCard({
     }
   };
 
+  // Dispatch all queued order-confirmation emails (and supporting side-effects
+  // like inventory deduction + order summary) immediately. Called inline from
+  // every payment handler the moment payment confirms so the request is in
+  // flight before any re-render or tab navigation. `keepalive: true` on the
+  // fetch lets the POST survive even if the page closes mid-flight. The
+  // useEffect below remains as a safety net; it short-circuits once
+  // `pendingOrderEmailRef.current` is nulled here.
+  const flushPendingOrderEmails = () => {
+    if (
+      !pendingOrderEmailRef.current ||
+      pendingOrderEmailRef.current.length === 0
+    ) {
+      return;
+    }
+    const emailEntries = pendingOrderEmailRef.current;
+    pendingOrderEmailRef.current = null;
+
+    emailEntries.forEach((entry, index) => {
+      triggerOrderEmail({
+        ...entry,
+        includeBuyerEmail: index === 0,
+      });
+    });
+
+    products.forEach((p: any) => {
+      const qty = quantities[p.id] || 1;
+      const bulkMultiplier = p.selectedBulkOption
+        ? Number(p.selectedBulkOption)
+        : 1;
+      const effectiveQty = qty * (isNaN(bulkMultiplier) ? 1 : bulkMultiplier);
+      const variantKey = p.selectedSize ? `size:${p.selectedSize}` : "_default";
+      fetch("/api/inventory", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        keepalive: true,
+        body: JSON.stringify({
+          action: "deduct",
+          productId: p.id,
+          amount: effectiveQty,
+          orderId: emailEntries[0]?.orderId || "cart_order",
+          variantKey,
+        }),
+      }).catch(() => {});
+    });
+
+    try {
+      const firstEntry = emailEntries[0]!;
+      const allProductTitles = emailEntries
+        .map((e) => e.productTitle)
+        .join("; ");
+      const cartItems = products.map((p: any) => ({
+        title: p.title || p.productName,
+        image: p.images?.[0] || "",
+        amount:
+          !isSatsCart && nativeCostsPerProduct
+            ? String(nativeCostsPerProduct[p.id] || 0)
+            : String(totalCostsInSats[p.id] || 0),
+        currency: !isSatsCart && cartCurrency ? cartCurrency : "sats",
+        quantity: quantities[p.id] || 1,
+        shipping: selectedPickupLocations[p.id]
+          ? "Pickup"
+          : shippingTypes[p.id] &&
+              shippingTypes[p.id] !== "N/A" &&
+              shippingTypes[p.id] !== "Pickup"
+            ? "Shipping"
+            : undefined,
+        pickupLocation: selectedPickupLocations[p.id] || undefined,
+        selectedSize: p.selectedSize || undefined,
+        selectedVolume: p.selectedVolume || undefined,
+        selectedWeight: p.selectedWeight || undefined,
+        selectedBulkOption: p.selectedBulkOption
+          ? String(p.selectedBulkOption)
+          : undefined,
+      }));
+      const anyFreeShipping = Object.values(sellerFreeShippingStatus).some(
+        (s) => s.qualifies
+      );
+      let originalShipping = 0;
+      if (anyFreeShipping) {
+        const sellersSeen = new Set<string>();
+        products.forEach((p) => {
+          if (sellersSeen.has(p.pubkey)) return;
+          sellersSeen.add(p.pubkey);
+          if (sellerFreeShippingStatus[p.pubkey]?.qualifies) {
+            const { highestShippingCost } = getConsolidatedShippingForSeller(
+              p.pubkey
+            );
+            originalShipping += highestShippingCost;
+          }
+        });
+      }
+      sessionStorage.setItem(
+        "orderSummary",
+        JSON.stringify({
+          productTitle: allProductTitles,
+          productImage: products[0]?.images?.[0] || "",
+          amount:
+            !isSatsCart && nativeTotalCost !== null
+              ? String(nativeTotalCost)
+              : String(totalCost),
+          subtotal:
+            !isSatsCart && nativeTotalCost !== null
+              ? String(nativeTotalCost)
+              : String(subtotalCost),
+          currency: firstEntry.currency,
+          paymentMethod: firstEntry.paymentMethod,
+          orderId: firstEntry.orderId,
+          buyerEmail: buyerEmail || undefined,
+          shippingAddress: firstEntry.shippingAddress,
+          sellerPubkey: firstEntry.sellerPubkey,
+          isCart: true,
+          cartItems,
+          freeShippingApplied: anyFreeShipping,
+          originalShippingCost: anyFreeShipping
+            ? String(originalShipping)
+            : undefined,
+        })
+      );
+    } catch {}
+  };
+
   useEffect(() => {
     if (
       (paymentConfirmed || stripePaymentConfirmed) &&
       pendingOrderEmailRef.current &&
       pendingOrderEmailRef.current.length > 0
     ) {
-      const emailEntries = pendingOrderEmailRef.current;
-      emailEntries.forEach((entry, index) => {
-        triggerOrderEmail({
-          ...entry,
-          includeBuyerEmail: index === 0,
-        });
-      });
-
-      products.forEach((p: any) => {
-        const qty = quantities[p.id] || 1;
-        const bulkMultiplier = p.selectedBulkOption
-          ? Number(p.selectedBulkOption)
-          : 1;
-        const effectiveQty = qty * (isNaN(bulkMultiplier) ? 1 : bulkMultiplier);
-        const variantKey = p.selectedSize
-          ? `size:${p.selectedSize}`
-          : "_default";
-        fetch("/api/inventory", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: "deduct",
-            productId: p.id,
-            amount: effectiveQty,
-            orderId: emailEntries[0]?.orderId || "cart_order",
-            variantKey,
-          }),
-        }).catch(() => {});
-      });
-
-      try {
-        const firstEntry = emailEntries[0]!;
-        const allProductTitles = emailEntries
-          .map((e) => e.productTitle)
-          .join("; ");
-        const cartItems = products.map((p: any) => ({
-          title: p.title || p.productName,
-          image: p.images?.[0] || "",
-          amount:
-            !isSatsCart && nativeCostsPerProduct
-              ? String(nativeCostsPerProduct[p.id] || 0)
-              : String(totalCostsInSats[p.id] || 0),
-          currency: !isSatsCart && cartCurrency ? cartCurrency : "sats",
-          quantity: quantities[p.id] || 1,
-          shipping: selectedPickupLocations[p.id]
-            ? "Pickup"
-            : shippingTypes[p.id] &&
-                shippingTypes[p.id] !== "N/A" &&
-                shippingTypes[p.id] !== "Pickup"
-              ? "Shipping"
-              : undefined,
-          pickupLocation: selectedPickupLocations[p.id] || undefined,
-          selectedSize: p.selectedSize || undefined,
-          selectedVolume: p.selectedVolume || undefined,
-          selectedWeight: p.selectedWeight || undefined,
-          selectedBulkOption: p.selectedBulkOption
-            ? String(p.selectedBulkOption)
-            : undefined,
-        }));
-        const anyFreeShipping = Object.values(sellerFreeShippingStatus).some(
-          (s) => s.qualifies
-        );
-        let originalShipping = 0;
-        if (anyFreeShipping) {
-          const sellersSeen = new Set<string>();
-          products.forEach((p) => {
-            if (sellersSeen.has(p.pubkey)) return;
-            sellersSeen.add(p.pubkey);
-            if (sellerFreeShippingStatus[p.pubkey]?.qualifies) {
-              const { highestShippingCost } = getConsolidatedShippingForSeller(
-                p.pubkey
-              );
-              originalShipping += highestShippingCost;
-            }
-          });
-        }
-        sessionStorage.setItem(
-          "orderSummary",
-          JSON.stringify({
-            productTitle: allProductTitles,
-            productImage: products[0]?.images?.[0] || "",
-            amount:
-              !isSatsCart && nativeTotalCost !== null
-                ? String(nativeTotalCost)
-                : String(totalCost),
-            subtotal:
-              !isSatsCart && nativeTotalCost !== null
-                ? String(nativeTotalCost)
-                : String(subtotalCost),
-            currency: firstEntry.currency,
-            paymentMethod: firstEntry.paymentMethod,
-            orderId: firstEntry.orderId,
-            buyerEmail: buyerEmail || undefined,
-            shippingAddress: firstEntry.shippingAddress,
-            sellerPubkey: firstEntry.sellerPubkey,
-            isCart: true,
-            cartItems,
-            freeShippingApplied: anyFreeShipping,
-            originalShippingCost: anyFreeShipping
-              ? String(originalShipping)
-              : undefined,
-          })
-        );
-      } catch {}
-
-      pendingOrderEmailRef.current = null;
+      // Safety-net flush in case a payment handler somehow didn't call
+      // flushPendingOrderEmails inline before confirming. Normal happy path:
+      // the ref is already nulled by the inline call and this is a no-op.
+      flushPendingOrderEmails();
     }
   }, [paymentConfirmed, stripePaymentConfirmed]);
 
@@ -918,6 +937,11 @@ export default function CartInvoiceCard({
   };
 
   const [nativeTotalCost, setNativeTotalCost] = useState<number | null>(null);
+  // Per-seller shipping total expressed in the cart's display currency.
+  // Computed alongside `nativeTotalCost` (which needs the same FX work) so
+  // downstream consumers like `getMethodDiscountedCosts` can add shipping in
+  // the correct unit without re-doing the conversion.
+  const [nativeShippingTotal, setNativeShippingTotal] = useState<number>(0);
 
   useEffect(() => {
     if (
@@ -926,6 +950,7 @@ export default function CartInvoiceCard({
       cartCurrency.toLowerCase() === "sat"
     ) {
       setNativeTotalCost(null);
+      setNativeShippingTotal(0);
       return;
     }
     let cancelled = false;
@@ -983,38 +1008,74 @@ export default function CartInvoiceCard({
         }
         totalSmallest += lineToSmallest(lineInCartCurrency);
       }
+      let nativeShippingSum = 0;
       if (
         formType === "shipping" ||
         (formType === "combined" && shippingPickupPreference === "shipping")
       ) {
         const sellersSeen = new Set<string>();
-        products.forEach((product) => {
-          if (sellersSeen.has(product.pubkey)) return;
+        for (const product of products) {
+          if (sellersSeen.has(product.pubkey)) continue;
           sellersSeen.add(product.pubkey);
-          if (sellerFreeShippingStatus[product.pubkey]?.qualifies) return;
+          if (sellerFreeShippingStatus[product.pubkey]?.qualifies) continue;
           const sellerProducts = products.filter(
             (p) => p.pubkey === product.pubkey
           );
           let shippingForSeller: number;
+          let shippingProductCurrency: string;
           if (sellerProducts.length > 1) {
-            const { highestShippingCost } = getConsolidatedShippingForSeller(
-              product.pubkey
-            );
+            const { highestShippingCost, highestShippingProduct } =
+              getConsolidatedShippingForSeller(product.pubkey);
             shippingForSeller = highestShippingCost;
+            const hsp = highestShippingProduct as ProductData | null;
+            // Prefer the explicit shipping-tag currency over the product
+            // price currency: a seller can legitimately price the product in
+            // USD while denominating shipping in sats.
+            shippingProductCurrency =
+              hsp?.shippingCurrency || hsp?.currency || product.currency;
           } else {
             shippingForSeller =
               (product.shippingCost || 0) * (quantities[product.id] || 1);
+            shippingProductCurrency =
+              product.shippingCurrency || product.currency;
           }
-          // Shipping is denominated in the seller's product currency. If that
-          // matches the cart currency we add it directly; otherwise we'd need
-          // FX which the existing code path didn't do either, so preserve
-          // behavior and treat it as cart-currency.
-          totalSmallest += lineToSmallest(shippingForSeller);
-        });
+          // Shipping is denominated in the seller's product currency. Convert
+          // it to the cart's display currency before adding — otherwise a
+          // sats-priced product's shipping (e.g. 38000 sats) added to a USD
+          // cart inflates the total to $38,030 instead of ~$30.
+          const shipCurUpper = (shippingProductCurrency || "").toUpperCase();
+          let shippingInCartCurrency = shippingForSeller;
+          if (shipCurUpper && shipCurUpper !== cartCurrencyUpper) {
+            try {
+              const satVal =
+                shipCurUpper === "SATS" || shipCurUpper === "SAT"
+                  ? shippingForSeller
+                  : await getSatoshiValue({
+                      amount: shippingForSeller,
+                      currency: shippingProductCurrency,
+                    });
+              shippingInCartCurrency = await getFiatValue({
+                satoshi: Math.ceil(satVal),
+                currency: cartCurrencyUpper,
+              });
+            } catch {
+              // If FX lookup fails, fall back to 0 rather than misrepresenting
+              // the total in the wrong unit.
+              shippingInCartCurrency = 0;
+            }
+          }
+          totalSmallest += lineToSmallest(shippingInCartCurrency);
+          nativeShippingSum += shippingInCartCurrency;
+        }
       }
       if (!cancelled) {
         setNativeTotalCost(
           cartIsZeroDecimal ? totalSmallest : totalSmallest / 100
+        );
+        setNativeShippingTotal(
+          cartIsZeroDecimal
+            ? Math.round(nativeShippingSum)
+            : Math.round(nativeShippingSum * 100) / 100
         );
       }
     };
@@ -2390,6 +2451,7 @@ export default function CartInvoiceCard({
       });
     }
 
+    flushPendingOrderEmails();
     setStripePaymentConfirmed(true);
 
     const productTitles = products
@@ -2683,6 +2745,7 @@ export default function CartInvoiceCard({
     }
 
     clearPurchasedFromCart();
+    flushPendingOrderEmails();
     setPaymentConfirmed(true);
     setOrderConfirmed(true);
     if (discountCodes) {
@@ -3118,6 +3181,7 @@ export default function CartInvoiceCard({
       }
 
       clearPurchasedFromCart();
+      flushPendingOrderEmails();
       setPaymentConfirmed(true);
       setOrderConfirmed(true);
       if (discountCodes) {
@@ -3244,6 +3308,7 @@ export default function CartInvoiceCard({
               }
               markMintQuoteClaimed(hash);
               clearPurchasedFromCart();
+              flushPendingOrderEmails();
               setPaymentConfirmed(true);
               if (discountCodes) {
                 Object.entries(discountCodes).forEach(([pubkey, code]) => {
@@ -3272,6 +3337,7 @@ export default function CartInvoiceCard({
               // recoverable client-side from this device.
               removePendingMintQuote(hash);
               clearPurchasedFromCart();
+              flushPendingOrderEmails();
               setPaymentConfirmed(true);
               setQrCodeUrl(null);
               setFailureText(
@@ -3291,6 +3357,7 @@ export default function CartInvoiceCard({
           // Quote was already processed successfully (likely on another tab/device).
           removePendingMintQuote(hash);
           clearPurchasedFromCart();
+          flushPendingOrderEmails();
           setPaymentConfirmed(true);
           setQrCodeUrl(null);
           setFailureText(
@@ -4460,22 +4527,30 @@ export default function CartInvoiceCard({
     product: ProductData
   ): Promise<number> => {
     const shippingCost = product.shippingCost || 0;
+    if (shippingCost === 0) return 0;
 
-    if (
-      product.currency.toLowerCase() === "sats" ||
-      product.currency.toLowerCase() === "sat"
-    ) {
+    // Shipping is denominated in the shipping-tag currency, which may differ
+    // from the product's price currency (e.g. USD product with sats shipping).
+    // Falling back to product.currency only when the shipping-tag currency is
+    // missing on legacy listings.
+    const shippingCurrency = (
+      product.shippingCurrency ||
+      product.currency ||
+      ""
+    ).toLowerCase();
+
+    if (shippingCurrency === "sats" || shippingCurrency === "sat") {
       return shippingCost;
     }
 
-    if (product.currency.toLowerCase() === "btc") {
+    if (shippingCurrency === "btc") {
       return shippingCost * 100000000;
     }
 
     try {
       const currencyData = {
         amount: shippingCost,
-        currency: product.currency,
+        currency: product.shippingCurrency || product.currency,
       };
       const { getSatoshiValue } = await import("@getalby/lightning-tools");
       const numSats = await getSatoshiValue(currencyData);
@@ -4517,24 +4592,31 @@ export default function CartInvoiceCard({
       formType === "shipping" ||
       (formType === "combined" && shippingPickupPreference === "shipping")
     ) {
-      const sellersSeen = new Set<string>();
-      products.forEach((product) => {
-        if (sellersSeen.has(product.pubkey)) return;
-        sellersSeen.add(product.pubkey);
-        if (sellerFreeShippingStatus[product.pubkey]?.qualifies) return;
-        const sellerProducts = products.filter(
-          (p) => p.pubkey === product.pubkey
-        );
-        if (sellerProducts.length > 1) {
-          const { highestShippingCost } = getConsolidatedShippingForSeller(
-            product.pubkey
+      if (!isSatsCart) {
+        // Use the FX-converted total computed in the nativeTotalCost effect so
+        // shipping in a different currency (e.g. sats shipping on a USD cart)
+        // doesn't get added as if it were already in cart-currency units.
+        nativeShipping = nativeShippingTotal;
+      } else {
+        const sellersSeen = new Set<string>();
+        products.forEach((product) => {
+          if (sellersSeen.has(product.pubkey)) return;
+          sellersSeen.add(product.pubkey);
+          if (sellerFreeShippingStatus[product.pubkey]?.qualifies) return;
+          const sellerProducts = products.filter(
+            (p) => p.pubkey === product.pubkey
           );
-          nativeShipping += highestShippingCost;
-        } else {
-          nativeShipping +=
-            (product.shippingCost || 0) * (quantities[product.id] || 1);
-        }
-      });
+          if (sellerProducts.length > 1) {
+            const { highestShippingCost } = getConsolidatedShippingForSeller(
+              product.pubkey
+            );
+            nativeShipping += highestShippingCost;
+          } else {
+            nativeShipping +=
+              (product.shippingCost || 0) * (quantities[product.id] || 1);
+          }
+        });
+      }
     }
     const nativeMethodTotal =
       Math.round((nativeMethodSubtotal + nativeShipping) * 100) / 100;
@@ -4836,6 +4918,7 @@ export default function CartInvoiceCard({
         deletedEventIds
       );
       clearPurchasedFromCart();
+      flushPendingOrderEmails();
       setOrderConfirmed(true);
       setPaymentConfirmed(true);
       recordAffiliateReferrals(uuidv4(), "cashu").catch(() => {});

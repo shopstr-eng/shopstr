@@ -957,32 +957,34 @@ export default function Component() {
     product: ProductData
   ): Promise<number> => {
     const shippingCost = product.shippingCost ? product.shippingCost : 0;
-    if (
-      product.currency.toLowerCase() === "sats" ||
-      product.currency.toLowerCase() === "sat"
-    ) {
+    if (shippingCost === 0) return 0;
+    // Shipping is denominated in the shipping-tag currency, which may differ
+    // from the product's price currency (e.g. USD product with sats shipping).
+    // Use product.currency only as a fallback for legacy listings without an
+    // explicit shipping currency.
+    const shippingCurrencyRaw =
+      product.shippingCurrency || product.currency || "";
+    const shippingCurrencyLower = shippingCurrencyRaw.toLowerCase();
+    const shippingCurrencyUpper = shippingCurrencyRaw.toUpperCase();
+    if (shippingCurrencyLower === "sats" || shippingCurrencyLower === "sat") {
       return shippingCost;
     }
     let cost = 0;
-    if (!currencySelection.hasOwnProperty(product.currency.toUpperCase())) {
-      throw new Error(`${product.currency} is not a supported currency.`);
-    } else if (
-      currencySelection.hasOwnProperty(product.currency.toUpperCase()) &&
-      product.currency.toLowerCase() !== "sats" &&
-      product.currency.toLowerCase() !== "sat"
-    ) {
+    if (!currencySelection.hasOwnProperty(shippingCurrencyUpper)) {
+      throw new Error(`${shippingCurrencyRaw} is not a supported currency.`);
+    } else if (shippingCurrencyLower === "btc") {
+      cost = shippingCost * 100000000;
+    } else {
       try {
         const currencyData = {
           amount: shippingCost,
-          currency: product.currency,
+          currency: shippingCurrencyRaw,
         };
         const numSats = await getSatoshiValue(currencyData);
         cost = Math.ceil(numSats);
       } catch (err) {
         console.error("ERROR", err);
       }
-    } else if (product.currency.toLowerCase() === "btc") {
-      cost = shippingCost * 100000000;
     }
     return cost;
   };

@@ -6,6 +6,7 @@ import {
 export type ParsedShippingTag = {
   shippingType: ShippingOptionsType;
   shippingCost: number;
+  shippingCurrency: string;
 };
 
 export function parseShippingTag(
@@ -43,6 +44,7 @@ export function parseShippingTag(
   return {
     shippingType: shippingType as ShippingOptionsType,
     shippingCost,
+    shippingCurrency,
   };
 }
 
