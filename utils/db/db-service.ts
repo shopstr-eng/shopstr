@@ -251,6 +251,22 @@ async function initializeTables(): Promise<void> {
       CREATE INDEX IF NOT EXISTS idx_review_events_pubkey ON review_events(pubkey);
       CREATE INDEX IF NOT EXISTS idx_review_events_tags ON review_events USING gin (tags jsonb_path_ops);
 
+      -- Reports table (kind 1984)
+      CREATE TABLE IF NOT EXISTS report_events (
+          id TEXT PRIMARY KEY,
+          pubkey TEXT NOT NULL,
+          created_at BIGINT NOT NULL,
+          kind INTEGER NOT NULL,
+          tags JSONB NOT NULL,
+          content TEXT NOT NULL,
+          sig TEXT NOT NULL,
+          cached_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          CONSTRAINT report_events_kind_check CHECK (kind = 1984)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_report_events_pubkey ON report_events(pubkey);
+      CREATE INDEX IF NOT EXISTS idx_report_events_created_at ON report_events(created_at DESC);
+
       -- Messages table (kind 1059 - gift wrapped DM)
       CREATE TABLE IF NOT EXISTS message_events (
           id TEXT PRIMARY KEY,
@@ -465,6 +481,9 @@ function getTableForKind(kind: number): string | null {
 
   // Reviews
   if (kind === 31555) return "review_events";
+
+  // Reports
+  if (kind === 1984) return "report_events";
 
   // Messages
   if (kind === 1059) return "message_events";
@@ -935,6 +954,7 @@ export async function deleteCachedEventsByIds(
   // All tables that can store events
   const otherTables = [
     "review_events",
+    "report_events",
     "message_events",
     "profile_events",
     "wallet_events",
@@ -1119,6 +1139,75 @@ export async function fetchAllProductsFromDb(
 // Fetch all reviews from database
 export async function fetchAllReviewsFromDb(): Promise<NostrEvent[]> {
   return fetchCachedEvents(31555);
+}
+
+export async function fetchRelevantReportsFromDb(
+  productIds: string[],
+  profilePubkeys: string[],
+  limit = 500
+): Promise<NostrEvent[]> {
+  if (productIds.length === 0 && profilePubkeys.length === 0) {
+    return [];
+  }
+
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    const clauses: string[] = [];
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    if (profilePubkeys.length > 0) {
+      clauses.push(`
+        EXISTS (
+          SELECT 1
+          FROM jsonb_array_elements(tags) elem
+          WHERE elem->>0 = 'p' AND elem->>1 = ANY($${paramIndex++})
+        )
+      `);
+      params.push(profilePubkeys);
+    }
+
+    if (productIds.length > 0) {
+      clauses.push(`
+        EXISTS (
+          SELECT 1
+          FROM jsonb_array_elements(tags) elem
+          WHERE elem->>0 = 'e' AND elem->>1 = ANY($${paramIndex++})
+        )
+      `);
+      params.push(productIds);
+    }
+
+    const boundedLimit = Math.max(1, Math.min(limit, 500));
+    params.push(boundedLimit);
+
+    const result = await client.query(
+      `SELECT id, pubkey, created_at, kind, tags, content, sig
+       FROM report_events
+       WHERE ${clauses.join(" OR ")}
+       ORDER BY created_at DESC
+       LIMIT $${paramIndex}`,
+      params
+    );
+
+    return result.rows.map((row) => ({
+      id: row.id,
+      pubkey: row.pubkey,
+      created_at: row.created_at,
+      kind: row.kind,
+      tags: row.tags,
+      content: row.content,
+      sig: row.sig,
+    }));
+  } catch (error) {
+    console.error("Failed to fetch relevant reports from database:", error);
+    return [];
+  } finally {
+    if (client) client.release();
+  }
 }
 
 // Fetch all messages from database with read status
