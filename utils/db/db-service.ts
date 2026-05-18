@@ -459,7 +459,7 @@ async function initializeTables(): Promise<void> {
 }
 
 // Map event kinds to table names
-function getTableForKind(kind: number): string | null {
+export function getTableForKind(kind: number): string | null {
   // Products
   if (kind === 30402) return "product_events";
 
@@ -485,14 +485,14 @@ function getTableForKind(kind: number): string | null {
 }
 
 // Helper function to check if event kind should only keep latest per pubkey
-function shouldKeepOnlyLatest(kind: number): boolean {
+export function shouldKeepOnlyLatest(kind: number): boolean {
   // Wallet config (17375), wallet state (37375), relay list (10002), blossom servers (10063)
   // User profile (0), shop profile (30019), community definition (34550)
   return [17375, 37375, 10002, 10063, 0, 30019, 34550].includes(kind);
 }
 
 // Helper function to check if event is a review (needs special handling per product)
-function isReviewEvent(kind: number): boolean {
+export function isReviewEvent(kind: number): boolean {
   return kind === 31555;
 }
 
@@ -1611,7 +1611,7 @@ export async function closeDbPool(): Promise<void> {
   }
 }
 
-function profileNameToSlug(name: string): string {
+export function profileNameToSlug(name: string): string {
   if (!name) return "";
   return name
     .trim()
