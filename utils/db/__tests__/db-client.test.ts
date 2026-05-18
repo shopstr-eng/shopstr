@@ -28,20 +28,21 @@ import {
 } from "../db-client";
 
 describe("db-client", () => {
+  let fetchMock: jest.MockedFunction<typeof fetch>;
+
   beforeEach(() => {
-    // @ts-ignore
-    global.fetch = jest.fn();
+    fetchMock = jest.fn() as jest.MockedFunction<typeof fetch>;
+    global.fetch = fetchMock;
     jest.clearAllMocks();
   });
 
   it("cacheEventToDatabase should POST single event", async () => {
-    // @ts-ignore
-    fetch.mockResolvedValue({ ok: true });
+    fetchMock.mockResolvedValue({ ok: true } as Response);
     const event = { id: "e1", kind: 1 };
     await cacheEventToDatabase(event as any);
 
-    expect(fetch).toHaveBeenCalledTimes(1);
-    expect(fetch).toHaveBeenCalledWith(
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith(
       "/api/db/cache-event",
       expect.objectContaining({
         method: "POST",
@@ -52,8 +53,7 @@ describe("db-client", () => {
   });
 
   it("cacheEventsToDatabase should chunk large arrays", async () => {
-    // @ts-ignore
-    fetch.mockResolvedValue({ ok: true });
+    fetchMock.mockResolvedValue({ ok: true } as Response);
 
     const events = Array.from({ length: 60 }, (_, i) => ({
       id: `e${i}`,
@@ -61,50 +61,53 @@ describe("db-client", () => {
     }));
     await cacheEventsToDatabase(events as any);
 
-    expect(fetch).toHaveBeenCalledTimes(2);
-    const firstCall = fetch.mock.calls[0][1];
-    const secondCall = fetch.mock.calls[1][1];
-    expect(JSON.parse(firstCall.body).length).toBe(50);
-    expect(JSON.parse(secondCall.body).length).toBe(10);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const firstCall = fetchMock.mock.calls[0]?.[1] as RequestInit | undefined;
+    const secondCall = fetchMock.mock.calls[1]?.[1] as RequestInit | undefined;
+    expect(firstCall).toBeDefined();
+    expect(secondCall).toBeDefined();
+    expect(JSON.parse(firstCall!.body as string).length).toBe(50);
+    expect(JSON.parse(secondCall!.body as string).length).toBe(10);
   });
 
   it("cacheEventsToDatabase no-op for empty array", async () => {
-    // @ts-ignore
-    fetch.mockResolvedValue({ ok: true });
+    fetchMock.mockResolvedValue({ ok: true } as Response);
     await cacheEventsToDatabase([]);
-    expect(fetch).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("deleteEventsFromDatabase posts with signed header", async () => {
-    // @ts-ignore
-    fetch.mockResolvedValue({ ok: true });
+    fetchMock.mockResolvedValue({ ok: true } as Response);
     const signedEvent = { id: "signed" } as any;
     await deleteEventsFromDatabase(["a", "b"], signedEvent as any);
 
-    expect(fetch).toHaveBeenCalledTimes(1);
-    const args = fetch.mock.calls[0];
-    expect(args[0]).toBe("/api/db/delete-events");
-    const options = args[1];
-    expect(options.method).toBe("POST");
-    expect(options.headers["x-signed-header"]).toBe(
-      JSON.stringify(signedEvent)
-    );
-    expect(JSON.parse(options.body)).toEqual({ eventIds: ["a", "b"] });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const args = fetchMock.mock.calls[0];
+    expect(args).toBeDefined();
+    const [url, options] = args!;
+    expect(url).toBe("/api/db/delete-events");
+    expect(options).toBeDefined();
+    const requestOptions = options as RequestInit;
+    expect(requestOptions.method).toBe("POST");
+    expect(
+      (requestOptions.headers as Record<string, string>)["x-signed-header"]
+    ).toBe(JSON.stringify(signedEvent));
+    expect(JSON.parse(requestOptions.body as string)).toEqual({
+      eventIds: ["a", "b"],
+    });
   });
 
   it("trackFailedRelayPublish returns early without signer", async () => {
-    // @ts-ignore
-    fetch.mockResolvedValue({ ok: true });
+    fetchMock.mockResolvedValue({ ok: true } as Response);
     const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
     await trackFailedRelayPublish("id", { id: "e" } as any, ["r1"]);
     expect(warnSpy).toHaveBeenCalled();
-    expect(fetch).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
     warnSpy.mockRestore();
   });
 
   it("trackFailedRelayPublish signs request and posts", async () => {
-    // @ts-ignore
-    fetch.mockResolvedValue({ ok: true });
+    fetchMock.mockResolvedValue({ ok: true } as Response);
     const signer = {
       getPubKey: jest.fn().mockResolvedValue("pubkey"),
       sign: jest.fn().mockResolvedValue({ id: "signedEvent" }),
@@ -114,7 +117,7 @@ describe("db-client", () => {
 
     expect(signer.getPubKey).toHaveBeenCalled();
     expect(signer.sign).toHaveBeenCalled();
-    expect(fetch).toHaveBeenCalledWith(
+    expect(fetchMock).toHaveBeenCalledWith(
       "/api/db/track-failed-publish",
       expect.objectContaining({
         method: "POST",
@@ -135,8 +138,10 @@ describe("db-client", () => {
     const payload = [
       { eventId: "e1", relays: ["r"], event: { id: "e1" }, retryCount: 0 },
     ];
-    // @ts-ignore
-    fetch.mockResolvedValue({ ok: true, json: async () => payload });
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => payload,
+    } as Response);
     const signer = {
       getPubKey: jest.fn().mockResolvedValue("pubkey"),
       sign: jest.fn().mockResolvedValue({ id: "signedEvent" }),
@@ -144,29 +149,27 @@ describe("db-client", () => {
 
     const res = await getFailedRelayPublishes(signer);
     expect(res).toEqual(payload);
-    expect(fetch).toHaveBeenCalledWith(
+    expect(fetchMock).toHaveBeenCalledWith(
       "/api/db/get-failed-publishes",
       expect.objectContaining({ headers: expect.any(Object) })
     );
   });
 
   it("clearFailedRelayPublish returns early without signer", async () => {
-    // @ts-ignore
-    fetch.mockResolvedValue({ ok: true });
+    fetchMock.mockResolvedValue({ ok: true } as Response);
     await clearFailedRelayPublish("id");
-    expect(fetch).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("clearFailedRelayPublish signs and posts", async () => {
-    // @ts-ignore
-    fetch.mockResolvedValue({ ok: true });
+    fetchMock.mockResolvedValue({ ok: true } as Response);
     const signer = {
       getPubKey: jest.fn().mockResolvedValue("pubkey"),
       sign: jest.fn().mockResolvedValue({ id: "signedEvent" }),
     } as any;
 
     await clearFailedRelayPublish("eid", signer, true);
-    expect(fetch).toHaveBeenCalledWith(
+    expect(fetchMock).toHaveBeenCalledWith(
       "/api/db/clear-failed-publish",
       expect.objectContaining({
         method: "POST",
@@ -181,8 +184,7 @@ describe("db-client", () => {
 
   // Error / catch branches
   it("cacheEventToDatabase logs error when response not ok", async () => {
-    // @ts-ignore
-    fetch.mockResolvedValue({ ok: false });
+    fetchMock.mockResolvedValue({ ok: false } as Response);
     const errSpy = jest.spyOn(console, "error").mockImplementation(() => {});
     await cacheEventToDatabase({ id: "e2" } as any);
     expect(errSpy).toHaveBeenCalledWith("Failed to cache event to database");
@@ -190,12 +192,11 @@ describe("db-client", () => {
   });
 
   it("cacheEventToDatabase logs error when fetch throws", async () => {
-    // @ts-ignore
-    fetch.mockRejectedValue(new Error("network"));
+    fetchMock.mockRejectedValue(new Error("network"));
     const errSpy = jest.spyOn(console, "error").mockImplementation(() => {});
     await cacheEventToDatabase({ id: "e3" } as any);
     expect(errSpy).toHaveBeenCalled();
-    expect(errSpy.mock.calls[0][0]).toMatch(
+    expect(errSpy.mock.calls[0]?.[0]).toMatch(
       /Failed to cache event to database:/
     );
     errSpy.mockRestore();
@@ -203,10 +204,9 @@ describe("db-client", () => {
 
   it("cacheEventsToDatabase logs error when a chunk response is not ok", async () => {
     // first chunk ok, second chunk not ok
-    // @ts-ignore
-    fetch
-      .mockResolvedValueOnce({ ok: true })
-      .mockResolvedValueOnce({ ok: false });
+    fetchMock
+      .mockResolvedValueOnce({ ok: true } as Response)
+      .mockResolvedValueOnce({ ok: false } as Response);
     const errSpy = jest.spyOn(console, "error").mockImplementation(() => {});
     const events = Array.from({ length: 55 }, (_, i) => ({ id: `e${i}` }));
     await cacheEventsToDatabase(events as any);
@@ -215,27 +215,24 @@ describe("db-client", () => {
   });
 
   it("cacheEventsToDatabase logs error when fetch throws", async () => {
-    // @ts-ignore
-    fetch.mockRejectedValue(new Error("boom"));
+    fetchMock.mockRejectedValue(new Error("boom"));
     const errSpy = jest.spyOn(console, "error").mockImplementation(() => {});
     await cacheEventsToDatabase([{ id: "x" }] as any);
     expect(errSpy).toHaveBeenCalled();
-    expect(errSpy.mock.calls[0][0]).toMatch(
+    expect(errSpy.mock.calls[0]?.[0]).toMatch(
       /Failed to cache events to database:/
     );
     errSpy.mockRestore();
   });
 
   it("deleteEventsFromDatabase no-op for empty list", async () => {
-    // @ts-ignore
-    fetch.mockResolvedValue({ ok: true });
+    fetchMock.mockResolvedValue({ ok: true } as Response);
     await deleteEventsFromDatabase([], { id: "s" } as any);
-    expect(fetch).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("getFailedRelayPublishes handles non-ok response and returns []", async () => {
-    // @ts-ignore
-    fetch.mockResolvedValue({ ok: false });
+    fetchMock.mockResolvedValue({ ok: false } as Response);
     const errSpy = jest.spyOn(console, "error").mockImplementation(() => {});
     const signer = {
       getPubKey: jest.fn().mockResolvedValue("pubkey"),
@@ -250,8 +247,7 @@ describe("db-client", () => {
   });
 
   it("getFailedRelayPublishes handles fetch throw and returns []", async () => {
-    // @ts-ignore
-    fetch.mockRejectedValue(new Error("net"));
+    fetchMock.mockRejectedValue(new Error("net"));
     const errSpy = jest.spyOn(console, "error").mockImplementation(() => {});
     const signer = {
       getPubKey: jest.fn().mockResolvedValue("pubkey"),
@@ -265,8 +261,7 @@ describe("db-client", () => {
 
   // Signer sync / throw edge cases
   it("trackFailedRelayPublish supports synchronous signer methods", async () => {
-    // @ts-ignore
-    fetch.mockResolvedValue({ ok: true });
+    fetchMock.mockResolvedValue({ ok: true } as Response);
     const signer = {
       getPubKey: () => "pubkey",
       sign: (_uEv: any) => ({ id: "signedSync" }),
@@ -277,7 +272,7 @@ describe("db-client", () => {
       ["r1"],
       signer
     );
-    expect(fetch).toHaveBeenCalledWith(
+    expect(fetchMock).toHaveBeenCalledWith(
       "/api/db/track-failed-publish",
       expect.objectContaining({
         headers: expect.objectContaining({
@@ -306,14 +301,13 @@ describe("db-client", () => {
   });
 
   it("clearFailedRelayPublish supports synchronous signer methods", async () => {
-    // @ts-ignore
-    fetch.mockResolvedValue({ ok: true });
+    fetchMock.mockResolvedValue({ ok: true } as Response);
     const signer = {
       getPubKey: () => "pubkey",
       sign: (_uEv: any) => ({ id: "signedSync" }),
     } as any;
     await clearFailedRelayPublish("eid-sync", signer, false);
-    expect(fetch).toHaveBeenCalledWith(
+    expect(fetchMock).toHaveBeenCalledWith(
       "/api/db/clear-failed-publish",
       expect.objectContaining({
         headers: expect.objectContaining({
@@ -337,8 +331,7 @@ describe("db-client", () => {
   });
 
   it("deleteEventsFromDatabase logs error when fetch throws", async () => {
-    // @ts-ignore
-    fetch.mockRejectedValue(new Error("del-err"));
+    fetchMock.mockRejectedValue(new Error("del-err"));
     const errSpy = jest.spyOn(console, "error").mockImplementation(() => {});
     await deleteEventsFromDatabase(["z"], { id: "s" } as any);
     expect(errSpy).toHaveBeenCalledWith(
