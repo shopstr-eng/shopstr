@@ -620,9 +620,7 @@ export default function StorefrontLayout({
 
             <div className="flex items-center gap-2">
               <button
-                onClick={() =>
-                  router.push(shopSlug ? `/stall/${shopSlug}/cart` : "/cart")
-                }
+                onClick={() => router.push("/cart")}
                 className="relative rounded-md p-2 transition-colors"
                 style={{ color: navText }}
               >

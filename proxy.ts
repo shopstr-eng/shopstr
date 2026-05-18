@@ -18,6 +18,33 @@ const CUSTOM_DOMAIN_PASSTHROUGH_PREFIXES = [
   "/service-worker.js",
 ];
 
+// Any path ending in a known static-asset extension is served as-is from
+// /public on the custom domain. Without this, root-level files like
+// `/instagram-icon.png`, `/milk-market.png`, `/workbox-*.js`,
+// `/currencySelection.json`, uploaded fonts, etc. get rewritten to
+// `/stall/<slug>/<file>` and return the storefront HTML instead of the
+// real asset.
+const STATIC_ASSET_EXT_RE =
+  /\.(?:png|jpe?g|gif|svg|ico|webp|avif|bmp|tiff?|css|js|mjs|map|json|txt|xml|webmanifest|woff2?|ttf|otf|eot|mp3|mp4|webm|ogg|wav|pdf)$/i;
+
+// Shared platform routes that render their own standalone pages on a
+// custom domain (rather than being absorbed under /stall/<slug>/). The
+// listing page already wraps itself in StorefrontThemeWrapper so it
+// inherits the seller's theme. Cart, checkout, auth, onboarding and
+// account settings render with their own chrome.
+const CUSTOM_DOMAIN_PLATFORM_PASSTHROUGH = [
+  "/listing/",
+  "/listing",
+  "/cart",
+  "/order-summary/",
+  "/order-summary",
+  "/auth/",
+  "/auth",
+  "/onboarding",
+  "/settings/",
+  "/settings",
+];
+
 const CUSTOM_DOMAIN_API_ALLOWLIST = [
   "/api/storefront/",
   "/api/db/fetch-products",
@@ -31,6 +58,12 @@ const CUSTOM_DOMAIN_API_ALLOWLIST = [
   "/api/email/",
   "/api/og-preview",
   "/api/sitemap.xml",
+  "/api/auth/",
+  "/api/signup",
+  "/api/validate-password",
+  "/api/validate-password-auth",
+  "/api/get-encryption-nsec",
+  "/api/health",
 ];
 
 // Canonical platform hosts that should NEVER be treated as a seller's
@@ -80,9 +113,42 @@ export async function proxy(request: NextRequest) {
   if (isCustomDomain(hostname)) {
     // Static assets and Next internals always pass through.
     if (
-      CUSTOM_DOMAIN_PASSTHROUGH_PREFIXES.some((p) => pathname.startsWith(p))
+      CUSTOM_DOMAIN_PASSTHROUGH_PREFIXES.some((p) => pathname.startsWith(p)) ||
+      STATIC_ASSET_EXT_RE.test(pathname)
     ) {
       return NextResponse.next();
+    }
+
+    // Look up the shop slug for this custom domain up-front so we can flag
+    // every render with `x-mm-custom-domain` + `x-mm-shop-slug`. _app.tsx
+    // reads these in getInitialProps to suppress the platform TopNav and
+    // wrap the page in the storefront chrome on the very first SSR pass
+    // (no client-side flash).
+    const origin = request.nextUrl.origin;
+    const slug =
+      pathname.startsWith("/api/") || pathname === "/.well-known/agent.json"
+        ? null
+        : await lookupSlugByHost(origin, hostname);
+
+    const buildHeaders = () => {
+      const h = new Headers(request.headers);
+      h.set("x-mm-custom-domain", "1");
+      h.set("x-mm-custom-domain-host", hostname);
+      if (slug) h.set("x-mm-shop-slug", slug);
+      return h;
+    };
+
+    // Shared platform routes (listing, cart, checkout, auth, etc.) render
+    // their own standalone pages instead of being rewritten under /stall/<slug>/.
+    if (
+      CUSTOM_DOMAIN_PLATFORM_PASSTHROUGH.some(
+        (p) =>
+          pathname === p ||
+          pathname === p.replace(/\/$/, "") ||
+          pathname.startsWith(p.endsWith("/") ? p : p + "/")
+      )
+    ) {
+      return NextResponse.next({ request: { headers: buildHeaders() } });
     }
 
     // API routes: gate to the allow-list. Storefront browsing + checkout +
@@ -98,11 +164,8 @@ export async function proxy(request: NextRequest) {
           { status: 403 }
         );
       }
-      return NextResponse.next();
+      return NextResponse.next({ request: { headers: buildHeaders() } });
     }
-
-    const origin = request.nextUrl.origin;
-    const slug = await lookupSlugByHost(origin, hostname);
 
     if (!slug) {
       // Fallback: render the legacy custom-domain placeholder which does a
@@ -113,27 +176,30 @@ export async function proxy(request: NextRequest) {
             hostname
           )}&path=${encodeURIComponent(pathname)}`,
           request.url
-        )
+        ),
+        { request: { headers: buildHeaders() } }
       );
     }
 
     const stallPrefix = `/stall/${slug}`;
     // Idempotent: if the path is already under /stall/<slug>, do nothing.
     if (pathname === stallPrefix || pathname.startsWith(`${stallPrefix}/`)) {
-      return NextResponse.next();
+      return NextResponse.next({ request: { headers: buildHeaders() } });
     }
 
     // Root → stall homepage.
     if (pathname === "/" || pathname === "") {
       return NextResponse.rewrite(
-        new URL(`${stallPrefix}${search}`, request.url)
+        new URL(`${stallPrefix}${search}`, request.url),
+        { request: { headers: buildHeaders() } }
       );
     }
 
     // Everything else: prefix with /stall/<slug> so the existing dynamic
     // routes ([...stallPath].tsx, /listing/[slug], /cart, /orders) handle SSR.
     return NextResponse.rewrite(
-      new URL(`${stallPrefix}${pathname}${search}`, request.url)
+      new URL(`${stallPrefix}${pathname}${search}`, request.url),
+      { request: { headers: buildHeaders() } }
     );
   }
 

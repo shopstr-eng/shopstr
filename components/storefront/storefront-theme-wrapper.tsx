@@ -18,6 +18,10 @@ import {
 } from "@/utils/types/types";
 import FormattedText from "./formatted-text";
 import StorefrontFooterComponent from "./storefront-footer";
+import {
+  StorefrontChromeProvider,
+  useInsideStorefrontChrome,
+} from "@/utils/storefront/storefront-chrome-context";
 
 const DEFAULT_COLORS: StorefrontColorScheme = {
   primary: "#FFD23F",
@@ -50,7 +54,17 @@ interface StorefrontThemeWrapperProps {
   children: React.ReactNode;
 }
 
-export default function StorefrontThemeWrapper({
+export default function StorefrontThemeWrapper(
+  props: StorefrontThemeWrapperProps
+) {
+  const alreadyInside = useInsideStorefrontChrome();
+  if (alreadyInside) {
+    return <>{props.children}</>;
+  }
+  return <StorefrontThemeWrapperInner {...props} />;
+}
+
+function StorefrontThemeWrapperInner({
   sellerPubkey,
   children,
 }: StorefrontThemeWrapperProps) {
@@ -324,7 +338,7 @@ export default function StorefrontThemeWrapper({
   `;
 
   return (
-    <>
+    <StorefrontChromeProvider>
       <Head>
         {googleFontsUrl && (
           <>
@@ -376,13 +390,7 @@ export default function StorefrontThemeWrapper({
 
             <div className="flex items-center gap-2">
               <button
-                onClick={() =>
-                  router.push(
-                    storefront?.shopSlug
-                      ? `/stall/${storefront.shopSlug}/cart`
-                      : "/cart"
-                  )
-                }
+                onClick={() => router.push("/cart")}
                 className="relative rounded-md p-2 transition-colors"
                 style={{ color: navText }}
               >
@@ -512,6 +520,6 @@ export default function StorefrontThemeWrapper({
         />
       </div>
       <SignInModal isOpen={isOpen} onClose={onClose} />
-    </>
+    </StorefrontChromeProvider>
   );
 }

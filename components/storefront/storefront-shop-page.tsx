@@ -32,7 +32,6 @@ const SORT_OPTIONS = [
 export default function StorefrontShopPage({
   products,
   colors,
-  shopSlug,
 }: StorefrontShopPageProps) {
   const [search, setSearch] = useState("");
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(
@@ -285,9 +284,7 @@ export default function StorefrontShopPage({
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {visibleProducts.map((product) => {
             const slug = getListingSlug(product, products);
-            const href = shopSlug
-              ? `/stall/${shopSlug}/listing/${slug}`
-              : `/listing/${slug}`;
+            const href = `/listing/${slug}`;
             return (
               <div key={product.id || product.d}>
                 <ProductCard productData={product} href={href} />

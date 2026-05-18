@@ -15,8 +15,8 @@ interface StorefrontProductGridProps {
 
 const ITEMS_PER_PAGE = 24;
 
-const buildListingHref = (slug: string, shopSlug?: string) =>
-  shopSlug ? `/stall/${shopSlug}/listing/${slug}` : `/listing/${slug}`;
+const buildListingHref = (slug: string, _shopSlug?: string) =>
+  `/listing/${slug}`;
 
 export default function StorefrontProductGrid({
   products,

@@ -1,4 +1,5 @@
-import type { AppProps } from "next/app";
+import type { AppProps, AppContext } from "next/app";
+import NextApp from "next/app";
 import "../styles/globals.css";
 import { useState, useEffect, useCallback, useContext, useRef } from "react";
 import { useRouter } from "next/router";
@@ -55,6 +56,7 @@ import {
 } from "../utils/types/types";
 import { Proof } from "@cashu/cashu-ts";
 import TopNav from "@/components/nav-top";
+import StorefrontThemeWrapper from "@/components/storefront/storefront-theme-wrapper";
 import PageLoadingBar from "@/components/page-loading-bar";
 import DynamicHead from "../components/dynamic-meta-head";
 import StructuredData from "../components/structured-data";
@@ -506,6 +508,41 @@ function MilkMarket({ props }: { props: AppProps }) {
   const router = useRouter();
   const initializationRunRef = useRef(0);
 
+  // Detect when the visitor is on a seller's custom domain (anything that
+  // isn't milk.market, *.milk.market, *.replit.app, *.replit.dev, *.repl.co,
+  // or localhost). On a custom domain we suppress the Milk Market TopNav and
+  // wrap the page in the seller's storefront chrome (nav + footer + theme).
+  //
+  // The initial value comes from middleware-set request headers via
+  // App.getInitialProps, so the first SSR render is already correct (no
+  // platform-chrome flash before client hydration).
+  const ssrIsCustomDomain = props.pageProps?.__isCustomDomainSsr === true;
+  const ssrShopSlug: string | null =
+    props.pageProps?.__customDomainShopSlug ?? null;
+  const [isCustomDomainVisit, setIsCustomDomainVisit] =
+    useState(ssrIsCustomDomain);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const host = window.location.hostname.toLowerCase();
+    if (!host) return;
+    const PLATFORM_EXACT = new Set(["localhost", "127.0.0.1", "0.0.0.0"]);
+    if (PLATFORM_EXACT.has(host)) {
+      if (isCustomDomainVisit) setIsCustomDomainVisit(false);
+      return;
+    }
+    const PLATFORM_SUFFIXES = [
+      "milk.market",
+      "replit.app",
+      "replit.dev",
+      "repl.co",
+    ];
+    const isPlatform = PLATFORM_SUFFIXES.some(
+      (s) => host === s || host.endsWith("." + s)
+    );
+    const detected = !isPlatform;
+    if (detected !== isCustomDomainVisit) setIsCustomDomainVisit(detected);
+  }, [isCustomDomainVisit]);
+
   // Stall-scoped routes can be served either by /pages/stall/** directly or
   // by Next.js rewrites (e.g. /stall/<slug>/listing/<id> -> /listing/<id>,
   // /stall/<slug>/cart -> /cart). In the rewrite case `router.pathname` is
@@ -515,15 +552,20 @@ function MilkMarket({ props }: { props: AppProps }) {
   // render against, so the custom nav / fonts / neo shadows never appear.
   const isStorefrontRoute =
     router.pathname.startsWith("/stall/") ||
-    (router.asPath ?? "").startsWith("/stall/");
+    (router.asPath ?? "").startsWith("/stall/") ||
+    (isCustomDomainVisit && !!ssrShopSlug);
 
-  const currentStorefrontSlug = isStorefrontRoute
-    ? decodeURIComponent(
-        (
-          (router.asPath ?? "").replace(/^\/stall\//, "").split("/")[0] ?? ""
-        ).split("?")[0] ?? ""
-      )
-    : null;
+  const currentStorefrontSlug =
+    router.pathname.startsWith("/stall/") ||
+    (router.asPath ?? "").startsWith("/stall/")
+      ? decodeURIComponent(
+          (
+            (router.asPath ?? "").replace(/^\/stall\//, "").split("/")[0] ?? ""
+          ).split("?")[0] ?? ""
+        )
+      : isCustomDomainVisit && ssrShopSlug
+        ? ssrShopSlug
+        : null;
 
   useEffect(() => {
     if (
@@ -569,10 +611,21 @@ function MilkMarket({ props }: { props: AppProps }) {
   };
 
   const resolveStorefrontPubkey = async (): Promise<string | null> => {
+    let slug: string | null = null;
+
     const stallPath =
       router.asPath.replace(/^\/stall\//, "").split("/")[0] ?? "";
-    if (!stallPath) return null;
-    const slug = decodeURIComponent(stallPath.split("?")[0] ?? "");
+    if (stallPath) {
+      slug = decodeURIComponent(stallPath.split("?")[0] ?? "");
+    }
+
+    // Custom-domain visit: the URL has no /stall/<slug> prefix, but
+    // middleware passed the slug along via getInitialProps so the
+    // storefront fast-path can still resolve the seller's pubkey.
+    if (!slug && isCustomDomainVisit && ssrShopSlug) {
+      slug = ssrShopSlug;
+    }
+
     if (!slug) return null;
 
     try {
@@ -1322,7 +1375,8 @@ function MilkMarket({ props }: { props: AppProps }) {
                             } as ChatsContextInterface
                           }
                         >
-                          {router.pathname !== "/" &&
+                          {!isCustomDomainVisit &&
+                            router.pathname !== "/" &&
                             router.pathname !== "/producer-guide" &&
                             router.pathname !== "/faq" &&
                             router.pathname !== "/terms" &&
@@ -1338,13 +1392,27 @@ function MilkMarket({ props }: { props: AppProps }) {
                             )}
                           <div className="flex">
                             <main className="flex-1">
-                              <Component
-                                {...pageProps}
-                                focusedPubkey={focusedPubkey}
-                                setFocusedPubkey={setFocusedPubkey}
-                                selectedSection={selectedSection}
-                                setSelectedSection={setSelectedSection}
-                              />
+                              {isCustomDomainVisit && storefrontLoadPubkey ? (
+                                <StorefrontThemeWrapper
+                                  sellerPubkey={storefrontLoadPubkey}
+                                >
+                                  <Component
+                                    {...pageProps}
+                                    focusedPubkey={focusedPubkey}
+                                    setFocusedPubkey={setFocusedPubkey}
+                                    selectedSection={selectedSection}
+                                    setSelectedSection={setSelectedSection}
+                                  />
+                                </StorefrontThemeWrapper>
+                              ) : (
+                                <Component
+                                  {...pageProps}
+                                  focusedPubkey={focusedPubkey}
+                                  setFocusedPubkey={setFocusedPubkey}
+                                  selectedSection={selectedSection}
+                                  setSelectedSection={setSelectedSection}
+                                />
+                              )}
                             </main>
                           </div>
                         </ChatsContext.Provider>
@@ -1377,5 +1445,35 @@ function App(props: AppProps) {
     </>
   );
 }
+
+// Read middleware-injected custom-domain headers on the server so the very
+// first SSR render of every page already knows whether it's serving a
+// seller's custom domain (and which seller). This is what eliminates the
+// "platform TopNav flash" before client-side detection kicks in, and lets
+// the page boot into the storefront chrome without a layout swap.
+App.getInitialProps = async (appContext: AppContext) => {
+  const appProps = await NextApp.getInitialProps(appContext);
+  const req = appContext.ctx.req as
+    | (typeof appContext.ctx.req & {
+        headers: Record<string, string | string[] | undefined>;
+      })
+    | undefined;
+  const headers = req?.headers ?? {};
+  const headerVal = (name: string): string | null => {
+    const v = headers[name];
+    if (Array.isArray(v)) return v[0] ?? null;
+    return typeof v === "string" ? v : null;
+  };
+  const isCustomDomainSsr = headerVal("x-mm-custom-domain") === "1";
+  const customDomainShopSlug = headerVal("x-mm-shop-slug");
+  return {
+    ...appProps,
+    pageProps: {
+      ...(appProps as { pageProps?: Record<string, unknown> }).pageProps,
+      __isCustomDomainSsr: isCustomDomainSsr,
+      __customDomainShopSlug: customDomainShopSlug,
+    },
+  };
+};
 
 export default App;
