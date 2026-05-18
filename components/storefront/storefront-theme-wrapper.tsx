@@ -22,6 +22,10 @@ import {
   StorefrontChromeProvider,
   useInsideStorefrontChrome,
 } from "@/utils/storefront/storefront-chrome-context";
+import {
+  applyCustomDomainHref,
+  useIsCustomDomain,
+} from "@/utils/storefront/custom-domain-context";
 
 const DEFAULT_COLORS: StorefrontColorScheme = {
   primary: "#FFD23F",
@@ -73,6 +77,7 @@ function StorefrontThemeWrapperInner({
   const { isLoggedIn, pubkey: userPubkey } = useContext(SignerContext);
   const router = useRouter();
   const { isOpen, onOpen, onClose } = useDisclosure();
+  const isCustomDomain = useIsCustomDomain();
 
   const [storefront, setStorefront] = useState<StorefrontConfig | null>(null);
   const [colors, setColors] = useState<StorefrontColorScheme>(DEFAULT_COLORS);
@@ -220,7 +225,16 @@ function StorefrontThemeWrapperInner({
     return <>{children}</>;
   }
 
-  const homeHref = shopSlug ? `/stall/${shopSlug}` : "/marketplace";
+  const homeHref = isCustomDomain
+    ? "/"
+    : shopSlug
+      ? `/stall/${shopSlug}`
+      : "/marketplace";
+  const ordersHref = applyCustomDomainHref(
+    shopSlug ? `/stall/${shopSlug}/orders` : "/orders",
+    shopSlug,
+    isCustomDomain
+  );
 
   const cssVars = {
     "--sf-primary": colors.primary,
@@ -496,7 +510,7 @@ function StorefrontThemeWrapperInner({
                     Back to Stall
                   </a>
                   <a
-                    href={`/stall/${shopSlug}/orders`}
+                    href={ordersHref}
                     className="block px-6 py-3 text-sm font-medium"
                     style={{ color: navText + "CC" }}
                     onClick={() => setMobileMenuOpen(false)}
