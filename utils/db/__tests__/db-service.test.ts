@@ -4,9 +4,6 @@ import {
   isReviewEvent,
   buildReviewDTagFilter,
   profileNameToSlug,
-  cacheEvents,
-  cacheEvent,
-  getDbPool,
 } from "../db-service";
 
 describe("db-service helpers", () => {
@@ -57,26 +54,73 @@ describe("db-service helpers", () => {
   });
 
   test("cacheEvents short-circuits on empty input (no DB calls)", async () => {
-    const spy = jest.spyOn({ getDbPool }, "getDbPool");
-    // call with empty array
-    await cacheEvents([]);
-    expect(spy).not.toHaveBeenCalled();
-    spy.mockRestore();
+    await jest.isolateModulesAsync(async () => {
+      const prev = process.env.DATABASE_URL;
+      process.env.DATABASE_URL = "postgres://test@localhost/testdb";
+      try {
+        let connectCalled = false;
+        const pool = {
+          connect: jest.fn(async () => {
+            connectCalled = true;
+            return { query: jest.fn(), release: jest.fn() };
+          }),
+          on: jest.fn(),
+        } as any;
+
+        jest.doMock("pg", () => ({
+          Pool: class {
+            constructor() {
+              return pool;
+            }
+          },
+        }));
+
+        const mod = await import("../db-service");
+        await mod.cacheEvents([]);
+        expect(connectCalled).toBe(false);
+      } finally {
+        process.env.DATABASE_URL = prev;
+      }
+    });
   });
 
   test("cacheEvent returns early for unknown kind (no DB calls)", async () => {
-    const spy = jest.spyOn({ getDbPool }, "getDbPool");
-    await cacheEvent({
-      id: "e1",
-      pubkey: "p1",
-      created_at: Date.now(),
-      kind: 999999,
-      tags: [],
-      content: "x",
-      sig: "s",
-    } as any);
-    expect(spy).not.toHaveBeenCalled();
-    spy.mockRestore();
+    await jest.isolateModulesAsync(async () => {
+      const prev = process.env.DATABASE_URL;
+      process.env.DATABASE_URL = "postgres://test@localhost/testdb";
+      try {
+        let connectCalled = false;
+        const pool = {
+          connect: jest.fn(async () => {
+            connectCalled = true;
+            return { query: jest.fn(), release: jest.fn() };
+          }),
+          on: jest.fn(),
+        } as any;
+
+        jest.doMock("pg", () => ({
+          Pool: class {
+            constructor() {
+              return pool;
+            }
+          },
+        }));
+
+        const mod = await import("../db-service");
+        await mod.cacheEvent({
+          id: "e1",
+          pubkey: "p1",
+          created_at: Date.now(),
+          kind: 999999,
+          tags: [],
+          content: "x",
+          sig: "s",
+        } as any);
+        expect(connectCalled).toBe(false);
+      } finally {
+        process.env.DATABASE_URL = prev;
+      }
+    });
   });
 
   test("cacheEvents groups events and runs transaction (calls BEGIN)", async () => {
@@ -98,50 +142,56 @@ describe("db-service helpers", () => {
     } as any;
 
     await jest.isolateModulesAsync(async () => {
-      jest.doMock("pg", () => ({
-        Pool: class {
-          constructor() {
-            return pool;
-          }
-        },
-      }));
-      const mod = await import("../db-service");
+      const prev = process.env.DATABASE_URL;
+      process.env.DATABASE_URL = "postgres://test@localhost/testdb";
+      try {
+        jest.doMock("pg", () => ({
+          Pool: class {
+            constructor() {
+              return pool;
+            }
+          },
+        }));
+        const mod = await import("../db-service");
 
-      const events = [
-        {
-          id: "a1",
-          pubkey: "u1",
-          created_at: 1,
-          kind: 17375,
-          tags: [],
-          content: "",
-          sig: "",
-        },
-        {
-          id: "r1",
-          pubkey: "u1",
-          created_at: 2,
-          kind: 31555,
-          tags: [["d", "prod1"]],
-          content: "",
-          sig: "",
-        },
-        {
-          id: "p1",
-          pubkey: "u2",
-          created_at: 3,
-          kind: 30402,
-          tags: [],
-          content: "",
-          sig: "",
-        },
-      ];
+        const events = [
+          {
+            id: "a1",
+            pubkey: "u1",
+            created_at: 1,
+            kind: 17375,
+            tags: [],
+            content: "",
+            sig: "",
+          },
+          {
+            id: "r1",
+            pubkey: "u1",
+            created_at: 2,
+            kind: 31555,
+            tags: [["d", "prod1"]],
+            content: "",
+            sig: "",
+          },
+          {
+            id: "p1",
+            pubkey: "u2",
+            created_at: 3,
+            kind: 30402,
+            tags: [],
+            content: "",
+            sig: "",
+          },
+        ];
 
-      await mod.cacheEvents(events as any[]);
+        await mod.cacheEvents(events as any[]);
 
-      // Expect that a transaction was started
-      expect(queries.some((q) => /BEGIN/i.test(q))).toBe(true);
-      expect(queries.some((q) => /COMMIT/i.test(q))).toBe(true);
+        // Expect that a transaction was started
+        expect(queries.some((q) => /BEGIN/i.test(q))).toBe(true);
+        expect(queries.some((q) => /COMMIT/i.test(q))).toBe(true);
+      } finally {
+        process.env.DATABASE_URL = prev;
+      }
     });
   });
 });
