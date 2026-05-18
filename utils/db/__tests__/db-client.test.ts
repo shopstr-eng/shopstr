@@ -178,4 +178,173 @@ describe("db-client", () => {
       })
     );
   });
+
+  // Error / catch branches
+  it("cacheEventToDatabase logs error when response not ok", async () => {
+    // @ts-ignore
+    fetch.mockResolvedValue({ ok: false });
+    const errSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+    await cacheEventToDatabase({ id: "e2" } as any);
+    expect(errSpy).toHaveBeenCalledWith("Failed to cache event to database");
+    errSpy.mockRestore();
+  });
+
+  it("cacheEventToDatabase logs error when fetch throws", async () => {
+    // @ts-ignore
+    fetch.mockRejectedValue(new Error("network"));
+    const errSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+    await cacheEventToDatabase({ id: "e3" } as any);
+    expect(errSpy).toHaveBeenCalled();
+    expect(errSpy.mock.calls[0][0]).toMatch(
+      /Failed to cache event to database:/
+    );
+    errSpy.mockRestore();
+  });
+
+  it("cacheEventsToDatabase logs error when a chunk response is not ok", async () => {
+    // first chunk ok, second chunk not ok
+    // @ts-ignore
+    fetch
+      .mockResolvedValueOnce({ ok: true })
+      .mockResolvedValueOnce({ ok: false });
+    const errSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+    const events = Array.from({ length: 55 }, (_, i) => ({ id: `e${i}` }));
+    await cacheEventsToDatabase(events as any);
+    expect(errSpy).toHaveBeenCalledWith("Failed to cache events to database");
+    errSpy.mockRestore();
+  });
+
+  it("cacheEventsToDatabase logs error when fetch throws", async () => {
+    // @ts-ignore
+    fetch.mockRejectedValue(new Error("boom"));
+    const errSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+    await cacheEventsToDatabase([{ id: "x" }] as any);
+    expect(errSpy).toHaveBeenCalled();
+    expect(errSpy.mock.calls[0][0]).toMatch(
+      /Failed to cache events to database:/
+    );
+    errSpy.mockRestore();
+  });
+
+  it("deleteEventsFromDatabase no-op for empty list", async () => {
+    // @ts-ignore
+    fetch.mockResolvedValue({ ok: true });
+    await deleteEventsFromDatabase([], { id: "s" } as any);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("getFailedRelayPublishes handles non-ok response and returns []", async () => {
+    // @ts-ignore
+    fetch.mockResolvedValue({ ok: false });
+    const errSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+    const signer = {
+      getPubKey: jest.fn().mockResolvedValue("pubkey"),
+      sign: jest.fn().mockResolvedValue({ id: "signedEvent" }),
+    } as any;
+    const res = await getFailedRelayPublishes(signer);
+    expect(res).toEqual([]);
+    expect(errSpy).toHaveBeenCalledWith(
+      "Failed to fetch failed relay publishes"
+    );
+    errSpy.mockRestore();
+  });
+
+  it("getFailedRelayPublishes handles fetch throw and returns []", async () => {
+    // @ts-ignore
+    fetch.mockRejectedValue(new Error("net"));
+    const errSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+    const signer = {
+      getPubKey: jest.fn().mockResolvedValue("pubkey"),
+      sign: jest.fn().mockResolvedValue({ id: "signedEvent" }),
+    } as any;
+    const res = await getFailedRelayPublishes(signer);
+    expect(res).toEqual([]);
+    expect(errSpy).toHaveBeenCalled();
+    errSpy.mockRestore();
+  });
+
+  // Signer sync / throw edge cases
+  it("trackFailedRelayPublish supports synchronous signer methods", async () => {
+    // @ts-ignore
+    fetch.mockResolvedValue({ ok: true });
+    const signer = {
+      getPubKey: () => "pubkey",
+      sign: (_uEv: any) => ({ id: "signedSync" }),
+    } as any;
+    await trackFailedRelayPublish(
+      "eid-sync",
+      { id: "e" } as any,
+      ["r1"],
+      signer
+    );
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/db/track-failed-publish",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          "x-signed-header": JSON.stringify({ id: "signedSync" }),
+        }),
+      })
+    );
+  });
+
+  it("trackFailedRelayPublish logs and swallows if signer.sign throws", async () => {
+    const signer = {
+      getPubKey: jest.fn().mockResolvedValue("pubkey"),
+      sign: jest.fn().mockImplementation(() => {
+        throw new Error("sign-fail");
+      }),
+    } as any;
+    const errSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+    await trackFailedRelayPublish(
+      "eid-err",
+      { id: "e" } as any,
+      ["r1"],
+      signer
+    );
+    expect(errSpy).toHaveBeenCalled();
+    errSpy.mockRestore();
+  });
+
+  it("clearFailedRelayPublish supports synchronous signer methods", async () => {
+    // @ts-ignore
+    fetch.mockResolvedValue({ ok: true });
+    const signer = {
+      getPubKey: () => "pubkey",
+      sign: (_uEv: any) => ({ id: "signedSync" }),
+    } as any;
+    await clearFailedRelayPublish("eid-sync", signer, false);
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/db/clear-failed-publish",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          "x-signed-header": JSON.stringify({ id: "signedSync" }),
+        }),
+      })
+    );
+  });
+
+  it("clearFailedRelayPublish logs and swallows if signer.sign throws", async () => {
+    const signer = {
+      getPubKey: jest.fn().mockResolvedValue("pubkey"),
+      sign: jest.fn().mockImplementation(() => {
+        throw new Error("sign-err");
+      }),
+    } as any;
+    const errSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+    await clearFailedRelayPublish("eid-err", signer, false);
+    expect(errSpy).toHaveBeenCalled();
+    errSpy.mockRestore();
+  });
+
+  it("deleteEventsFromDatabase logs error when fetch throws", async () => {
+    // @ts-ignore
+    fetch.mockRejectedValue(new Error("del-err"));
+    const errSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+    await deleteEventsFromDatabase(["z"], { id: "s" } as any);
+    expect(errSpy).toHaveBeenCalledWith(
+      "Failed to delete events from database:",
+      expect.any(Error)
+    );
+    errSpy.mockRestore();
+  });
 });
