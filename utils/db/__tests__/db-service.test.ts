@@ -41,14 +41,15 @@ describe("db-service helpers", () => {
       process.env.DATABASE_URL = `postgres://shopstr:shopstr@${host}:${port}/shopstr`;
 
       try {
-        const init = await import("../init-db");
         const { Pool } = await import("pg");
         const prepPool = new Pool({
           connectionString: process.env.DATABASE_URL,
         });
         const client = await prepPool.connect();
         try {
-          await init.ensureFailedRelayPublishesTable(client as any);
+          // Use the inline ensure function exported from db-service to prepare table
+          const dbSvc = await import("../db-service");
+          await dbSvc.ensureFailedRelayPublishesTable(client as any);
         } finally {
           client.release();
           await prepPool.end();
@@ -87,189 +88,6 @@ describe("db-service helpers", () => {
       await container.stop();
     }
   });
-
-  // Integration test using pg‑mem (skipped if pg-mem not installed)
-  let newDb: any;
-  try {
-    // require dynamically so test file doesn't hard-fail at parse time
-    newDb = require("pg-mem").newDb;
-  } catch {
-    newDb = null;
-  }
-
-  const maybeIt = newDb ? test : test.skip;
-
-  maybeIt(
-    "ensureFailedRelayPublishesTable + track/get flow (pg-mem)",
-    async () => {
-      const mem = newDb();
-      const { Pool: MemPool } = mem.adapters.createPg();
-      const pool = new (MemPool as any)();
-
-      // Provide a lightweight in-memory handler for the failed_relay_publishes
-      // table to avoid pg-mem parsing limitations for the production DDL.
-      const failedStore = new Map<string, any>();
-      const originalConnect = pool.connect.bind(pool);
-      pool.connect = async () => {
-        const client = await originalConnect();
-        return {
-          query: (q: any, params?: any[]) => {
-            const text = typeof q === "string" ? q : q.text || "";
-            const lc = text.toLowerCase();
-            // Short-circuit DDL that pg-mem can't parse reliably.
-            if (
-              lc.startsWith("create table") ||
-              lc.includes("alter table") ||
-              lc.includes(
-                "delete from failed_relay_publishes\n    where owner_pubkey is null"
-              )
-            ) {
-              return { rows: [], rowCount: 0 };
-            }
-
-            if (lc.includes("failed_relay_publishes")) {
-              if (lc.includes("insert into failed_relay_publishes")) {
-                const [eventId, ownerPubkey, eventData, relaysJson, createdAt] =
-                  params || [];
-                const existing = failedStore.get(eventId);
-                if (!existing) {
-                  failedStore.set(eventId, {
-                    event_id: eventId,
-                    owner_pubkey: ownerPubkey,
-                    event_data: eventData,
-                    relays: relaysJson,
-                    created_at: createdAt,
-                    retry_count: 0,
-                  });
-                  return { rows: [{ event_id: eventId }], rowCount: 1 };
-                }
-
-                // ON CONFLICT ... WHERE owner_pubkey = EXCLUDED.owner_pubkey
-                if (existing.owner_pubkey === ownerPubkey) {
-                  existing.event_data = eventData;
-                  existing.relays = relaysJson;
-                  existing.created_at = createdAt;
-                  return { rows: [{ event_id: eventId }], rowCount: 1 };
-                }
-
-                return { rows: [], rowCount: 0 };
-              }
-
-              if (
-                lc.startsWith("select") &&
-                lc.includes("where owner_pubkey = $1")
-              ) {
-                const owner = params && params[0];
-                const rows = Array.from(failedStore.values())
-                  .filter(
-                    (r) =>
-                      r.owner_pubkey === owner &&
-                      r.retry_count < 5 &&
-                      r.event_data != null
-                  )
-                  .sort((a, b) => a.created_at - b.created_at)
-                  .slice(0, 50)
-                  .map((r) => ({
-                    event_id: r.event_id,
-                    event_data: r.event_data,
-                    relays: r.relays,
-                    retry_count: r.retry_count,
-                  }));
-                return { rows, rowCount: rows.length };
-              }
-
-              if (
-                lc.startsWith("delete from failed_relay_publishes") &&
-                lc.includes("where event_id = $1 and owner_pubkey = $2")
-              ) {
-                const [eventId, owner] = params || [];
-                const existing = failedStore.get(eventId);
-                if (existing && existing.owner_pubkey === owner) {
-                  failedStore.delete(eventId);
-                  return { rows: [], rowCount: 1 };
-                }
-                return { rows: [], rowCount: 0 };
-              }
-
-              if (
-                lc.startsWith("update failed_relay_publishes") &&
-                lc.includes("set retry_count = retry_count + 1")
-              ) {
-                const [eventId, owner] = params || [];
-                const existing = failedStore.get(eventId);
-                if (existing && existing.owner_pubkey === owner) {
-                  existing.retry_count = (existing.retry_count || 0) + 1;
-                  return { rows: [], rowCount: 1 };
-                }
-                return { rows: [], rowCount: 0 };
-              }
-            }
-
-            return client.query(q, params);
-          },
-          release: client.release.bind(client),
-          on: client.on && client.on.bind(client),
-        } as any;
-      };
-
-      await jest.isolateModulesAsync(async () => {
-        const prev = process.env.DATABASE_URL;
-        process.env.DATABASE_URL = "postgres://test@localhost/testdb";
-        try {
-          // Mock the init-db module to no-op the heavy DDL when running under
-          // pg-mem; this avoids pg-mem AST limitations for complex CREATE/ALTER
-          // statements.
-          jest.doMock("../init-db", () => ({
-            ensureFailedRelayPublishesTable: async () => {
-              /* no-op for tests */
-            },
-          }));
-
-          jest.doMock("pg", () => ({
-            Pool: class {
-              constructor() {
-                return pool;
-              }
-            },
-          }));
-
-          const db = await import("../db-service");
-
-          // pg-mem has limited DDL support; the client returned by our mocked
-          // pool intercepts queries touching `failed_relay_publishes` and
-          // implements a lightweight in-memory behavior, so we don't need to
-          // override module functions here.
-
-          const event = {
-            id: "evt1",
-            pubkey: "owner1",
-            created_at: Math.floor(Date.now() / 1000),
-            kind: 0,
-            tags: [],
-            content: "x",
-            sig: "s",
-          } as any;
-
-          const inserted = await db.trackFailedRelayPublishRecord({
-            eventId: "evt1",
-            ownerPubkey: "owner1",
-            event,
-            relays: ["relay1"],
-          });
-
-          expect(inserted).toBe(true);
-
-          const rows = await db.getFailedRelayPublishesForOwner("owner1");
-          expect(rows.length).toBe(1);
-          expect(rows[0].eventId).toBe("evt1");
-          expect(rows[0].relays).toEqual(["relay1"]);
-          expect(rows[0].event).toMatchObject({ id: "evt1" });
-        } finally {
-          process.env.DATABASE_URL = prev;
-        }
-      });
-    }
-  );
 
   test("shouldKeepOnlyLatest returns true for configured kinds", () => {
     const trueKinds = [17375, 37375, 10002, 10063, 0, 30019, 34550];

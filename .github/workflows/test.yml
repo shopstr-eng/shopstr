@@ -48,4 +48,4 @@ jobs:
         run: npm ci
 
       - name: Run Testcontainers integration test
-        run: RUN_TESTCONTAINERS=1 npx jest utils/db/__tests__/db-service.test.ts -i --runInBand --testTimeout=180000 -t "testcontainers: initialize + failed publish flow"
+        run: npm run test:integration
