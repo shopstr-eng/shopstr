@@ -11,6 +11,7 @@ import {
   buildReviewDTagFilter,
   profileNameToSlug,
 } from "../db-service";
+import type { NostrEvent } from "../../types/types";
 
 describe("db-service helpers", () => {
   test("getTableForKind maps known kinds and returns null for unknown", () => {
@@ -25,8 +26,7 @@ describe("db-service helpers", () => {
 
   maybeItTc("testcontainers: initialize + failed publish flow", async () => {
     // Dynamically import Testcontainers so tests still run if the package isn't installed
-    const tc = await import("testcontainers");
-    const { PostgreSqlContainer } = tc as any;
+    const { PostgreSqlContainer } = await import("testcontainers");
 
     const container = await new PostgreSqlContainer("postgres:15-alpine")
       .withDatabase("shopstr")
@@ -49,7 +49,7 @@ describe("db-service helpers", () => {
         try {
           // Use the inline ensure function exported from db-service to prepare table
           const dbSvc = await import("../db-service");
-          await dbSvc.ensureFailedRelayPublishesTable(client as any);
+          await dbSvc.ensureFailedRelayPublishesTable(client);
         } finally {
           client.release();
           await prepPool.end();
@@ -57,7 +57,7 @@ describe("db-service helpers", () => {
 
         const db = await import("../db-service");
 
-        const event = {
+        const event: NostrEvent = {
           id: `tc-${Date.now()}`,
           pubkey: "owner-tc",
           created_at: Math.floor(Date.now() / 1000),
@@ -65,7 +65,7 @@ describe("db-service helpers", () => {
           tags: [],
           content: "x",
           sig: "s",
-        } as any;
+        };
 
         const inserted = await db.trackFailedRelayPublishRecord({
           eventId: event.id,
@@ -77,10 +77,9 @@ describe("db-service helpers", () => {
 
         const rows = await db.getFailedRelayPublishesForOwner("owner-tc");
         expect(rows.length).toBeGreaterThanOrEqual(1);
-        expect(rows.some((r: any) => r.eventId === event.id)).toBe(true);
+        expect(rows.some((r) => r?.eventId === event.id)).toBe(true);
 
-        const pool = db.getDbPool();
-        await pool.end();
+        await db.closeDbPool();
       } finally {
         process.env.DATABASE_URL = prev;
       }
