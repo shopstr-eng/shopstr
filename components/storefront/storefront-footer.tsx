@@ -16,10 +16,6 @@ import {
   sanitizeStorefrontNavHref,
   sanitizeStorefrontSocialLink,
 } from "@/utils/storefront-links";
-import {
-  applyCustomDomainHref,
-  useIsCustomDomain,
-} from "@/utils/storefront/custom-domain-context";
 
 interface StorefrontFooterProps {
   footer: StorefrontFooter;
@@ -58,7 +54,6 @@ export default function StorefrontFooterComponent({
   shopName,
   shopSlug,
 }: StorefrontFooterProps) {
-  const isCustomDomain = useIsCustomDomain();
   const socialLinks = footer.socialLinks || [];
   const navLinks = footer.navLinks || [];
   const showPoweredBy = footer.showPoweredBy !== false;
@@ -104,11 +99,7 @@ export default function StorefrontFooterComponent({
           {navLinks.length > 0 && (
             <div className="flex flex-wrap justify-center gap-x-6 gap-y-2">
               {navLinks.map((link, idx) => {
-                const href = applyCustomDomainHref(
-                  sanitizeStorefrontNavHref(link, shopSlug),
-                  shopSlug,
-                  isCustomDomain
-                );
+                const href = sanitizeStorefrontNavHref(link, shopSlug);
 
                 if (isExternalStorefrontHref(href)) {
                   return (
@@ -190,11 +181,7 @@ export default function StorefrontFooterComponent({
             {enabledPolicies.map((key) => (
               <Link
                 key={key}
-                href={applyCustomDomainHref(
-                  `/stall/${shopSlug}/${POLICY_SLUGS[key]}`,
-                  shopSlug,
-                  isCustomDomain
-                )}
+                href={`/stall/${shopSlug}/${POLICY_SLUGS[key]}`}
                 className="font-body text-xs opacity-40 transition-opacity hover:opacity-80"
                 style={{ color: text }}
               >

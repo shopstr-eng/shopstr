@@ -7,10 +7,6 @@ import {
 import { sanitizeUrl } from "@braintree/sanitize-url";
 import Link from "next/link";
 import FormattedText from "./formatted-text";
-import {
-  applyCustomDomainHref,
-  useIsCustomDomain,
-} from "@/utils/storefront/custom-domain-context";
 
 interface StorefrontNavProps {
   shopName: string;
@@ -32,26 +28,17 @@ export default function StorefrontNav({
   currentPage,
 }: StorefrontNavProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const isCustomDomain = useIsCustomDomain();
 
   const bg = navColors?.background || colors.secondary;
   const text = navColors?.text || colors.background;
   const accent = navColors?.accent || colors.primary;
 
   const resolveHref = (link: StorefrontNavLink) => {
-    let href: string;
-    if (link.isPage) href = `/stall/${shopSlug}/${link.href}`;
-    else if (link.href.startsWith("/") || link.href.startsWith("http"))
-      href = link.href;
-    else href = `/stall/${shopSlug}/${link.href}`;
-    return applyCustomDomainHref(href, shopSlug, isCustomDomain);
+    if (link.isPage) return `/stall/${shopSlug}/${link.href}`;
+    if (link.href.startsWith("/") || link.href.startsWith("http"))
+      return link.href;
+    return `/stall/${shopSlug}/${link.href}`;
   };
-
-  const homeHref = applyCustomDomainHref(
-    `/stall/${shopSlug}`,
-    shopSlug,
-    isCustomDomain
-  );
 
   return (
     <nav
@@ -62,7 +49,7 @@ export default function StorefrontNav({
       }}
     >
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 md:px-6">
-        <Link href={homeHref} className="flex items-center gap-3">
+        <Link href={`/stall/${shopSlug}`} className="flex items-center gap-3">
           {pictureUrl && (
             <img
               src={sanitizeUrl(pictureUrl)}

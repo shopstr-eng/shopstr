@@ -16,7 +16,6 @@ import parseTags, {
 } from "@/utils/parsers/product-parser-functions";
 import { nip19 } from "nostr-tools";
 import ProductCard from "@/components/utility-components/product-card";
-import { useIsCustomDomain } from "@/utils/storefront/custom-domain-context";
 
 interface OrderSummaryData {
   productTitle: string;
@@ -71,11 +70,6 @@ export default function StorefrontOrderConfirmation({
   const { isLoggedIn } = useContext(SignerContext);
   const productContext = useContext(ProductContext);
   const [orderData, setOrderData] = useState<OrderSummaryData | null>(null);
-  const isCustomDomain = useIsCustomDomain();
-  const homeHref = isCustomDomain ? "/" : `/stall/${shopSlug}`;
-  const ordersHref = isCustomDomain
-    ? "/orders"
-    : `/stall/${shopSlug}/orders`;
 
   useEffect(() => {
     const stored = sessionStorage.getItem("orderSummary");
@@ -83,12 +77,12 @@ export default function StorefrontOrderConfirmation({
       try {
         setOrderData(JSON.parse(stored));
       } catch {
-        router.push(homeHref);
+        router.push(`/stall/${shopSlug}`);
       }
     } else {
-      router.push(homeHref);
+      router.push(`/stall/${shopSlug}`);
     }
-  }, [router, homeHref]);
+  }, [router, shopSlug]);
 
   const sellerProducts = useMemo(() => {
     if (!productContext.productEvents) return [];
@@ -140,6 +134,9 @@ export default function StorefrontOrderConfirmation({
       return null;
     }
   };
+
+  const homeHref = `/stall/${shopSlug}`;
+  const ordersHref = `/stall/${shopSlug}/orders`;
 
   if (!orderData) {
     return (

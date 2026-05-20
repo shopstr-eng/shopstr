@@ -46,10 +46,6 @@ import {
   isExternalStorefrontHref,
   sanitizeStorefrontNavHref,
 } from "@/utils/storefront-links";
-import {
-  applyCustomDomainHref,
-  useIsCustomDomain,
-} from "@/utils/storefront/custom-domain-context";
 
 const DEFAULT_COLORS: StorefrontColorScheme = {
   primary: "#FFD23F",
@@ -94,7 +90,6 @@ export default function StorefrontLayout({
   const { isLoggedIn, pubkey: userPubkey } = useContext(SignerContext);
   const router = useRouter();
   const { isOpen, onOpen, onClose } = useDisclosure();
-  const isCustomDomain = useIsCustomDomain();
 
   const [shop, setShop] = useState<ShopProfile | undefined>();
   const [storefront, setStorefront] = useState<StorefrontConfig>({});
@@ -367,11 +362,7 @@ export default function StorefrontLayout({
     ? storefront.footer!
     : { showPoweredBy: true };
 
-  const homeHref = isCustomDomain
-    ? "/"
-    : shopSlug
-      ? `/stall/${shopSlug}`
-      : "/marketplace";
+  const homeHref = shopSlug ? `/stall/${shopSlug}` : "/marketplace";
 
   const themedCss = `
     .sf-layout .bg-primary-yellow { background-color: var(--sf-primary) !important; }
@@ -582,10 +573,10 @@ export default function StorefrontLayout({
             {defaultNavLinks.length > 0 && (
               <div className="hidden items-center gap-1 lg:flex">
                 {defaultNavLinks.map((link, idx) => {
-                  const href = applyCustomDomainHref(
-                    sanitizeStorefrontNavHref(link, shopSlug, homeHref),
+                  const href = sanitizeStorefrontNavHref(
+                    link,
                     shopSlug,
-                    isCustomDomain
+                    homeHref
                   );
                   const isActive = currentPage
                     ? link.href === currentPage
@@ -699,10 +690,10 @@ export default function StorefrontLayout({
             >
               {defaultNavLinks.length > 0 &&
                 defaultNavLinks.map((link, idx) => {
-                  const href = applyCustomDomainHref(
-                    sanitizeStorefrontNavHref(link, shopSlug, homeHref),
+                  const href = sanitizeStorefrontNavHref(
+                    link,
                     shopSlug,
-                    isCustomDomain
+                    homeHref
                   );
                   const mobileClass = "block px-6 py-3 text-sm font-medium";
                   const mobileStyle = { color: navText + "CC" };

@@ -57,7 +57,6 @@ import {
 import { Proof } from "@cashu/cashu-ts";
 import TopNav from "@/components/nav-top";
 import StorefrontThemeWrapper from "@/components/storefront/storefront-theme-wrapper";
-import { CustomDomainProvider } from "@/utils/storefront/custom-domain-context";
 import PageLoadingBar from "@/components/page-loading-bar";
 import DynamicHead from "../components/dynamic-meta-head";
 import StructuredData from "../components/structured-data";
@@ -1393,21 +1392,10 @@ function MilkMarket({ props }: { props: AppProps }) {
                             )}
                           <div className="flex">
                             <main className="flex-1">
-                              <CustomDomainProvider value={isCustomDomainVisit}>
-                                {isCustomDomainVisit &&
-                                storefrontLoadPubkey ? (
-                                  <StorefrontThemeWrapper
-                                    sellerPubkey={storefrontLoadPubkey}
-                                  >
-                                    <Component
-                                      {...pageProps}
-                                      focusedPubkey={focusedPubkey}
-                                      setFocusedPubkey={setFocusedPubkey}
-                                      selectedSection={selectedSection}
-                                      setSelectedSection={setSelectedSection}
-                                    />
-                                  </StorefrontThemeWrapper>
-                                ) : (
+                              {isCustomDomainVisit && storefrontLoadPubkey ? (
+                                <StorefrontThemeWrapper
+                                  sellerPubkey={storefrontLoadPubkey}
+                                >
                                   <Component
                                     {...pageProps}
                                     focusedPubkey={focusedPubkey}
@@ -1415,8 +1403,16 @@ function MilkMarket({ props }: { props: AppProps }) {
                                     selectedSection={selectedSection}
                                     setSelectedSection={setSelectedSection}
                                   />
-                                )}
-                              </CustomDomainProvider>
+                                </StorefrontThemeWrapper>
+                              ) : (
+                                <Component
+                                  {...pageProps}
+                                  focusedPubkey={focusedPubkey}
+                                  setFocusedPubkey={setFocusedPubkey}
+                                  selectedSection={selectedSection}
+                                  setSelectedSection={setSelectedSection}
+                                />
+                              )}
                             </main>
                           </div>
                         </ChatsContext.Provider>

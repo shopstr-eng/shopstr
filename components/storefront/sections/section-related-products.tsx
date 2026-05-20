@@ -3,7 +3,6 @@ import { StorefrontSection, StorefrontColorScheme } from "@/utils/types/types";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
 import StorefrontProductGrid from "../storefront-product-grid";
 import { ShopMapContext } from "@/utils/context/context";
-import { useIsCustomDomain } from "@/utils/storefront/custom-domain-context";
 
 interface Props {
   section: StorefrontSection;
@@ -21,16 +20,11 @@ export default function SectionRelatedProducts({
   shopPubkey,
 }: Props) {
   const shopMapContext = useContext(ShopMapContext);
-  const isCustomDomain = useIsCustomDomain();
   const targetPubkey = shopPubkey || currentProduct.pubkey;
   const shopSlug = targetPubkey
     ? shopMapContext.shopData.get(targetPubkey)?.content?.storefront?.shopSlug
     : undefined;
-  const browseHref = isCustomDomain
-    ? "/"
-    : shopSlug
-      ? `/stall/${shopSlug}`
-      : "/marketplace";
+  const browseHref = shopSlug ? `/stall/${shopSlug}` : "/marketplace";
   const limit = section.productLimit ?? 6;
   const layout = section.productLayout || "grid";
 
