@@ -1,3 +1,9 @@
+/**
+ * @jest-environment node
+ */
+
+jest.setTimeout(180000);
+
 import {
   getTableForKind,
   shouldKeepOnlyLatest,
@@ -5,6 +11,7 @@ import {
   buildReviewDTagFilter,
   profileNameToSlug,
 } from "../db-service";
+import type { NostrEvent } from "../../types/types";
 
 describe("db-service helpers", () => {
   test("getTableForKind maps known kinds and returns null for unknown", () => {
@@ -13,6 +20,72 @@ describe("db-service helpers", () => {
     expect(getTableForKind(1059)).toBe("message_events");
     expect(getTableForKind(0)).toBe("profile_events");
     expect(getTableForKind(999999)).toBeNull();
+  });
+
+  const maybeItTc = process.env.RUN_TESTCONTAINERS ? test : test.skip;
+
+  maybeItTc("testcontainers: initialize + failed publish flow", async () => {
+    // Dynamically import Testcontainers so tests still run if the package isn't installed
+    const { PostgreSqlContainer } = await import("testcontainers");
+
+    const container = await new PostgreSqlContainer("postgres:15-alpine")
+      .withDatabase("shopstr")
+      .withUsername("shopstr")
+      .withPassword("shopstr")
+      .start();
+
+    try {
+      const host = container.getHost();
+      const port = container.getMappedPort(5432);
+      const prev = process.env.DATABASE_URL;
+      process.env.DATABASE_URL = `postgres://shopstr:shopstr@${host}:${port}/shopstr`;
+
+      try {
+        const { Pool } = await import("pg");
+        const prepPool = new Pool({
+          connectionString: process.env.DATABASE_URL,
+        });
+        const client = await prepPool.connect();
+        try {
+          // Use the inline ensure function exported from db-service to prepare table
+          const dbSvc = await import("../db-service");
+          await dbSvc.ensureFailedRelayPublishesTable(client);
+        } finally {
+          client.release();
+          await prepPool.end();
+        }
+
+        const db = await import("../db-service");
+
+        const event: NostrEvent = {
+          id: `tc-${Date.now()}`,
+          pubkey: "owner-tc",
+          created_at: Math.floor(Date.now() / 1000),
+          kind: 0,
+          tags: [],
+          content: "x",
+          sig: "s",
+        };
+
+        const inserted = await db.trackFailedRelayPublishRecord({
+          eventId: event.id,
+          ownerPubkey: "owner-tc",
+          event,
+          relays: ["tc-relay"],
+        });
+        expect(inserted).toBe(true);
+
+        const rows = await db.getFailedRelayPublishesForOwner("owner-tc");
+        expect(rows.length).toBeGreaterThanOrEqual(1);
+        expect(rows.some((r) => r?.eventId === event.id)).toBe(true);
+
+        await db.closeDbPool();
+      } finally {
+        process.env.DATABASE_URL = prev;
+      }
+    } finally {
+      await container.stop();
+    }
   });
 
   test("shouldKeepOnlyLatest returns true for configured kinds", () => {
