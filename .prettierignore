@@ -3,6 +3,7 @@ node_modules
 public
 out
 build
+dist
 coverage
 .github
 .husky
