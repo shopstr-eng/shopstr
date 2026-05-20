@@ -1,0 +1,1 @@
+### Shopstr MCP Server — A Read-Only Agent Interface for the Decentralized Bitcoin Marketplace
