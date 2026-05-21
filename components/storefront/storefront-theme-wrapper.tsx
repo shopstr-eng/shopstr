@@ -22,6 +22,10 @@ import {
   StorefrontChromeProvider,
   useInsideStorefrontChrome,
 } from "@/utils/storefront/storefront-chrome-context";
+import {
+  applyCustomDomainHref,
+  useIsCustomDomain,
+} from "@/utils/storefront/custom-domain-context";
 
 const DEFAULT_COLORS: StorefrontColorScheme = {
   primary: "#FFD23F",
@@ -51,6 +55,12 @@ const GOOGLE_FONT_OPTIONS = [
 
 interface StorefrontThemeWrapperProps {
   sellerPubkey: string;
+  // Whether to actually render the storefront chrome (nav, themed CSS,
+  // footer, mobile menu). When false we return children untouched so the
+  // wrapper can be mounted unconditionally from _app.tsx without changing
+  // the component tree shape on hydration. The decision is driven by
+  // `isCustomDomainVisit` in _app.tsx.
+  renderChrome: boolean;
   children: React.ReactNode;
 }
 
@@ -59,6 +69,9 @@ export default function StorefrontThemeWrapper(
 ) {
   const alreadyInside = useInsideStorefrontChrome();
   if (alreadyInside) {
+    return <>{props.children}</>;
+  }
+  if (!props.renderChrome) {
     return <>{props.children}</>;
   }
   return <StorefrontThemeWrapperInner {...props} />;
@@ -73,6 +86,7 @@ function StorefrontThemeWrapperInner({
   const { isLoggedIn, pubkey: userPubkey } = useContext(SignerContext);
   const router = useRouter();
   const { isOpen, onOpen, onClose } = useDisclosure();
+  const isCustomDomain = useIsCustomDomain();
 
   const [storefront, setStorefront] = useState<StorefrontConfig | null>(null);
   const [colors, setColors] = useState<StorefrontColorScheme>(DEFAULT_COLORS);
@@ -220,7 +234,20 @@ function StorefrontThemeWrapperInner({
     return <>{children}</>;
   }
 
-  const homeHref = shopSlug ? `/stall/${shopSlug}` : "/marketplace";
+  // NOTE: `isCustomDomain` is already in scope from the top of this component
+  // (line 87). Calling useIsCustomDomain() again here was both a duplicate
+  // declaration and a Rules-of-Hooks violation (the hook would be called
+  // conditionally, since the early-return above could skip past it).
+  const homeHref = applyCustomDomainHref(
+    shopSlug ? `/stall/${shopSlug}` : "/marketplace",
+    shopSlug,
+    isCustomDomain
+  );
+  const ordersHref = applyCustomDomainHref(
+    shopSlug ? `/stall/${shopSlug}/orders` : "/orders",
+    shopSlug,
+    isCustomDomain
+  );
 
   const cssVars = {
     "--sf-primary": colors.primary,
@@ -496,7 +523,7 @@ function StorefrontThemeWrapperInner({
                     Back to Stall
                   </a>
                   <a
-                    href={`/stall/${shopSlug}/orders`}
+                    href={ordersHref}
                     className="block px-6 py-3 text-sm font-medium"
                     style={{ color: navText + "CC" }}
                     onClick={() => setMobileMenuOpen(false)}

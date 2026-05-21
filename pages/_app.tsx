@@ -57,6 +57,7 @@ import {
 import { Proof } from "@cashu/cashu-ts";
 import TopNav from "@/components/nav-top";
 import StorefrontThemeWrapper from "@/components/storefront/storefront-theme-wrapper";
+import { CustomDomainProvider } from "@/utils/storefront/custom-domain-context";
 import PageLoadingBar from "@/components/page-loading-bar";
 import DynamicHead from "../components/dynamic-meta-head";
 import StructuredData from "../components/structured-data";
@@ -516,32 +517,52 @@ function MilkMarket({ props }: { props: AppProps }) {
   // The initial value comes from middleware-set request headers via
   // App.getInitialProps, so the first SSR render is already correct (no
   // platform-chrome flash before client hydration).
+  // Middleware injects __isCustomDomainSsr / __customDomainShopSlug into
+  // pageProps via App.getInitialProps below. When that signal is present we
+  // mark domainState.isResolved = true on the very first render so consumers
+  // (CustomDomainProvider, links, the theme wrapper) can render the correct
+  // hrefs immediately — no post-hydration flip, no tree-shape change.
+  //
+  // The follow-up useEffect only runs if the SSR signal disagreed with the
+  // client's hostname (e.g. middleware missing in dev) and corrects it once.
   const ssrIsCustomDomain = props.pageProps?.__isCustomDomainSsr === true;
   const ssrShopSlug: string | null =
     props.pageProps?.__customDomainShopSlug ?? null;
-  const [isCustomDomainVisit, setIsCustomDomainVisit] =
-    useState(ssrIsCustomDomain);
+  const hasSsrCustomDomainSignal =
+    props.pageProps?.__isCustomDomainSsr !== undefined;
+  const [domainState, setDomainState] = useState<{
+    isCustomDomain: boolean;
+    isResolved: boolean;
+  }>({
+    isCustomDomain: ssrIsCustomDomain,
+    isResolved: hasSsrCustomDomainSignal,
+  });
+  const { isCustomDomain: isCustomDomainVisit } = domainState;
   useEffect(() => {
     if (typeof window === "undefined") return;
     const host = window.location.hostname.toLowerCase();
     if (!host) return;
     const PLATFORM_EXACT = new Set(["localhost", "127.0.0.1", "0.0.0.0"]);
+    let detected: boolean;
     if (PLATFORM_EXACT.has(host)) {
-      if (isCustomDomainVisit) setIsCustomDomainVisit(false);
-      return;
+      detected = false;
+    } else {
+      const PLATFORM_SUFFIXES = [
+        "milk.market",
+        "replit.app",
+        "replit.dev",
+        "repl.co",
+      ];
+      const isPlatform = PLATFORM_SUFFIXES.some(
+        (s) => host === s || host.endsWith("." + s)
+      );
+      detected = !isPlatform;
     }
-    const PLATFORM_SUFFIXES = [
-      "milk.market",
-      "replit.app",
-      "replit.dev",
-      "repl.co",
-    ];
-    const isPlatform = PLATFORM_SUFFIXES.some(
-      (s) => host === s || host.endsWith("." + s)
-    );
-    const detected = !isPlatform;
-    if (detected !== isCustomDomainVisit) setIsCustomDomainVisit(detected);
-  }, [isCustomDomainVisit]);
+    setDomainState((prev) => {
+      if (prev.isCustomDomain === detected && prev.isResolved) return prev;
+      return { isCustomDomain: detected, isResolved: true };
+    });
+  }, []);
 
   // Stall-scoped routes can be served either by /pages/stall/** directly or
   // by Next.js rewrites (e.g. /stall/<slug>/listing/<id> -> /listing/<id>,
@@ -1392,10 +1413,26 @@ function MilkMarket({ props }: { props: AppProps }) {
                             )}
                           <div className="flex">
                             <main className="flex-1">
-                              {isCustomDomainVisit && storefrontLoadPubkey ? (
-                                <StorefrontThemeWrapper
-                                  sellerPubkey={storefrontLoadPubkey}
-                                >
+                              <CustomDomainProvider
+                                value={domainState.isCustomDomain}
+                                isResolved={domainState.isResolved}
+                              >
+                                {storefrontLoadPubkey ? (
+                                  <StorefrontThemeWrapper
+                                    sellerPubkey={storefrontLoadPubkey}
+                                    // Wrapper internally decides whether to render storefront chrome
+                                    // based on isCustomDomain — but its mount/unmount is stable.
+                                    renderChrome={domainState.isCustomDomain}
+                                  >
+                                    <Component
+                                      {...pageProps}
+                                      focusedPubkey={focusedPubkey}
+                                      setFocusedPubkey={setFocusedPubkey}
+                                      selectedSection={selectedSection}
+                                      setSelectedSection={setSelectedSection}
+                                    />
+                                  </StorefrontThemeWrapper>
+                                ) : (
                                   <Component
                                     {...pageProps}
                                     focusedPubkey={focusedPubkey}
@@ -1403,16 +1440,8 @@ function MilkMarket({ props }: { props: AppProps }) {
                                     selectedSection={selectedSection}
                                     setSelectedSection={setSelectedSection}
                                   />
-                                </StorefrontThemeWrapper>
-                              ) : (
-                                <Component
-                                  {...pageProps}
-                                  focusedPubkey={focusedPubkey}
-                                  setFocusedPubkey={setFocusedPubkey}
-                                  selectedSection={selectedSection}
-                                  setSelectedSection={setSelectedSection}
-                                />
-                              )}
+                                )}
+                              </CustomDomainProvider>
                             </main>
                           </div>
                         </ChatsContext.Provider>
