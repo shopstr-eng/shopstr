@@ -2,9 +2,10 @@
 
 Standalone read-only MCP server package for Shopstr marketplace data.
 
-This PR only initializes the package shell: configuration loading, JSON stderr
-logging, stdio startup, graceful shutdown, and empty MCP discovery handlers.
-Listing, seller, review, and community tools will be added in follow-up PRs.
+This package currently contains the standalone MCP shell plus shared read-only
+infrastructure for relay access, validation, JSON-safe parsing, deduplication,
+structured errors, timeouts, and audit logging. Listing, seller, review, and
+community tools will be added in follow-up PRs.
 
 ## Current Scope
 
@@ -14,6 +15,9 @@ Listing, seller, review, and community tools will be added in follow-up PRs.
 - Starts an MCP server over stdio for local MCP-compatible clients.
 - Registers disabled placeholders so `tools/list`, `resources/list`, and
   `prompts/list` return valid empty lists until real read tools are added.
+- Provides reusable infrastructure modules for upcoming tools:
+  `nostr-manager`, `relay-fetch`, `parse-tags`, `dedup`, `validation`,
+  `errors`, `timeout`, and `audit-log`.
 
 ## Usage
 
@@ -44,7 +48,8 @@ Invalid or missing values fall back to safe defaults.
 This package is intended to expose public Shopstr/Nostr read paths only. It
 must not accept private keys, sign events, create orders, access wallets, or
 perform checkout actions. Future tools should use allowlisted relay URLs,
-validated schemas, bounded timeouts, and audit logging.
+validated schemas, bounded timeouts, per-relay graceful degradation metadata,
+and audit logging.
 
 ## Development
 
