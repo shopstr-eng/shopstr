@@ -48,21 +48,45 @@ export async function lookupSlugByHost(
 }
 
 /**
+ * Canonical platform origin used for the edge-runtime lookup.
+ *
+ * The proxy runs at the edge on every request, including requests that
+ * arrive at a seller's custom domain (e.g. https://naughtygoat.co). If we
+ * naively used `request.nextUrl.origin` as the lookup origin, the edge
+ * worker would call `https://naughtygoat.co/api/storefront/lookup?...`,
+ * looping back out through DNS + TLS into the same edge. On Vercel / Replit
+ * this either times out or fails the TLS handshake silently — `fetch`
+ * rejects, the surrounding try/catch swallows the error, and `lookupByHost`
+ * returns `{ slug: null }`. The proxy then rewrites to `/stall/_custom-domain`
+ * and the visitor sees a "Domain Not Configured" placeholder even though
+ * the row exists and is verified.
+ *
+ * Always talking to the platform host avoids the loop entirely. Override
+ * with MM_LOOKUP_ORIGIN in non-prod (e.g. preview deployments) if needed.
+ */
+const PLATFORM_LOOKUP_ORIGIN =
+  process.env.MM_LOOKUP_ORIGIN ?? "https://milk.market";
+
+/**
  * Resolve a host to both its shop slug and the seller's pubkey in one
- * round-trip. Middleware uses this to inject `x-mm-shop-pubkey` so the
+ * round-trip. The proxy uses this to inject `x-mm-shop-pubkey` so the
  * client can seed `storefrontLoadPubkey` from SSR and skip the
  * "mount-bare, fetch slug, then remount inside StorefrontThemeWrapper"
  * race that blanked Safari sessions.
+ *
+ * The first argument is ignored — we always hit the canonical platform
+ * origin (see PLATFORM_LOOKUP_ORIGIN). The signature is preserved for
+ * backwards compatibility with proxy.ts.
  */
 export async function lookupByHost(
-  origin: string,
+  _requestOrigin: string,
   host: string
 ): Promise<HostResolution> {
   const cached = getCached(host);
   if (cached !== undefined) return cached;
   try {
     const r = await fetch(
-      `${origin}/api/storefront/lookup?domain=${encodeURIComponent(host)}`,
+      `${PLATFORM_LOOKUP_ORIGIN}/api/storefront/lookup?domain=${encodeURIComponent(host)}`,
       { headers: { "x-internal-lookup": "1" } }
     );
     if (!r.ok) {
@@ -70,12 +94,16 @@ export async function lookupByHost(
       setCached(host, empty);
       return empty;
     }
+    // The lookup API has shipped two response shapes across branches:
+    // `{ shopSlug, pubkey }` and `{ slug, pubkey }`. Accept either so this
+    // file works regardless of which lookup.ts is currently deployed.
     const data = (await r.json()) as {
       shopSlug?: string;
+      slug?: string;
       pubkey?: string;
     };
     const resolution: HostResolution = {
-      slug: data?.shopSlug ?? null,
+      slug: data?.shopSlug ?? data?.slug ?? null,
       pubkey: data?.pubkey ?? null,
     };
     setCached(host, resolution);
