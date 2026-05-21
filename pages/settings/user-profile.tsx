@@ -1,3 +1,4 @@
+import { nip19 } from "nostr-tools";
 import { useEffect, useState, useContext, useMemo } from "react";
 import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs";
 import { ProfileMapContext } from "@/utils/context/context";
@@ -35,6 +36,43 @@ import { FileUploaderButton } from "@/components/utility-components/file-uploade
 import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
 import ProtectedRoute from "@/components/utility-components/protected-route";
 
+function decodeNpubOrHexPubkey(value: string): string {
+  if (/^[0-9A-Fa-f]{64}$/.test(value)) return value;
+  const decoded = nip19.decode(value);
+  if (decoded.type !== "npub") {
+    throw new Error("Must be npub");
+  }
+  return decoded.data as string;
+}
+
+function profileContentToFormValues(content: Record<string, unknown>) {
+  const p2pk = content.p2pk as
+    | {
+        enabled?: boolean;
+        pubkey?: string;
+        refundDelayDays?: number;
+        locktime?: number;
+        refund?: string[];
+      }
+    | undefined;
+
+  return {
+    ...content,
+    p2pkEnabled: p2pk?.enabled ?? (content.p2pkEnabled as boolean) ?? false,
+    p2pkPubkey: p2pk?.pubkey ?? (content.p2pkPubkey as string) ?? "",
+    refundDelayDays: String(
+      p2pk?.refundDelayDays ??
+        p2pk?.locktime ??
+        content.refundDelayDays ??
+        content.lockTime ??
+        ""
+    ),
+    refundPubKeys: Array.isArray(p2pk?.refund)
+      ? p2pk.refund.join(", ")
+      : ((content.refundPubKeys as string) ?? ""),
+  };
+}
+
 const UserProfilePage = () => {
   const { nostr } = useContext(NostrContext);
   const [isUploadingProfile, setIsUploadingProfile] = useState(false);
@@ -49,7 +87,7 @@ const UserProfilePage = () => {
   const [viewState, setViewState] = useState<"shown" | "hidden">("hidden");
 
   const profileContext = useContext(ProfileMapContext);
-  const { handleSubmit, control, reset, watch, setValue } = useForm({
+  const { handleSubmit, control, reset, watch, setValue, setError } = useForm({
     defaultValues: {
       banner: "",
       picture: "",
@@ -61,11 +99,17 @@ const UserProfilePage = () => {
       lud16: "", // Lightning address
       payment_preference: "ecash",
       shopstr_donation: 2.1,
+      p2pkEnabled: false,
+      p2pkPubkey: "",
+      refundDelayDays: "",
+      refundPubKeys: "",
     },
   });
 
   const watchBanner = watch("banner");
   const watchPicture = watch("picture");
+  const watchP2pkEnabled = watch("p2pkEnabled");
+
   const hasCurrentUserProfile =
     !!userPubkey && profileContext.profileData.has(userPubkey);
   const isFetchingProfile =
@@ -96,9 +140,9 @@ const UserProfilePage = () => {
         isProfileContentPopulated(localFallback.content);
 
       if (shouldUseLocalFallback) {
-        reset(localFallback.content);
+        reset(profileContentToFormValues(localFallback.content));
       } else {
-        reset(profile.content);
+        reset(profileContentToFormValues(profile.content));
       }
 
       try {
@@ -119,7 +163,7 @@ const UserProfilePage = () => {
     } else {
       try {
         if (localFallback?.content) {
-          reset(localFallback.content);
+          reset(profileContentToFormValues(localFallback.content));
         }
       } catch (error) {
         console.error("Failed to read local profile fallback:", error);
@@ -127,7 +171,13 @@ const UserProfilePage = () => {
     }
   }, [userPubkey, profileContext.isLoading, profileContext.profileData, reset]);
 
-  const onSubmit = async (data: { [x: string]: string }) => {
+  const onSubmit = async (data: {
+    [x: string]: any;
+    p2pkEnabled?: boolean;
+    p2pkPubkey?: string;
+    refundDelayDays?: string;
+    refundPubKeys?: string;
+  }) => {
     if (!userPubkey) {
       console.error("Cannot save profile: pubkey is undefined");
       return;
@@ -144,6 +194,54 @@ const UserProfilePage = () => {
         ...existingProfile,
         ...data,
       };
+
+      if (data?.p2pkEnabled) {
+        let mainHex: string;
+        try {
+          mainHex = decodeNpubOrHexPubkey(data?.p2pkPubkey as string);
+        } catch {
+          setError("p2pkPubkey", { message: "Must be valid hex or npub" });
+          setIsUploadingProfile(false);
+          return;
+        }
+
+        const refundArr: string[] = [];
+        const invalidRefundKeys: string[] = [];
+        for (const s of (data?.refundPubKeys ?? "").split(",")) {
+          const trimmed = s.trim();
+          if (!trimmed) continue;
+          try {
+            refundArr.push(decodeNpubOrHexPubkey(trimmed));
+          } catch {
+            invalidRefundKeys.push(trimmed);
+          }
+        }
+        if (invalidRefundKeys.length > 0) {
+          setError("refundPubKeys", {
+            message: `Invalid refund key(s): ${invalidRefundKeys.join(", ")}`,
+          });
+          setIsUploadingProfile(false);
+          return;
+        }
+        if (refundArr.length === 0) {
+          setError("refundPubKeys", {
+            message: "At least one refund pubkey is required",
+          });
+          setIsUploadingProfile(false);
+          return;
+        }
+
+        const refundDelayDays = parseInt(data?.refundDelayDays as string);
+
+        updatedData.p2pk = {
+          enabled: true,
+          pubkey: mainHex,
+          refundDelayDays,
+          refund: refundArr,
+        };
+      } else {
+        updatedData.p2pk = { enabled: false };
+      }
 
       try {
         localStorage.setItem(
@@ -570,6 +668,158 @@ const UserProfilePage = () => {
                     />
                   )}
                 />
+
+                {/* P2PK Toggle */}
+                <Controller
+                  name="p2pkEnabled"
+                  control={control}
+                  render={({ field: { onChange, value } }) => (
+                    <div className="pb-4">
+                      <label className="text-light-text dark:text-dark-text flex items-center gap-2 text-lg">
+                        <input
+                          type="checkbox"
+                          checked={!!value}
+                          onChange={(e) => onChange(e.target.checked)}
+                        />
+                        Enable Time-Locked P2PK Escrow
+                      </label>
+                    </div>
+                  )}
+                />
+
+                {watchP2pkEnabled && (
+                  <>
+                    <Controller
+                      name="p2pkPubkey"
+                      control={control}
+                      rules={{
+                        required: "Required",
+                        validate: (v: string) => {
+                          try {
+                            decodeNpubOrHexPubkey(v);
+                            return true;
+                          } catch {
+                            return "Must be valid hex or npub";
+                          }
+                        },
+                      }}
+                      render={({
+                        field: { onChange, onBlur, value },
+                        fieldState: { error },
+                      }) => (
+                        <Input
+                          className="text-light-text dark:text-dark-text pb-4"
+                          classNames={{
+                            label:
+                              "text-light-text dark:text-dark-text text-lg",
+                          }}
+                          variant="bordered"
+                          fullWidth
+                          label="P2PK Redeem Pubkey (hex or npub)"
+                          labelPlacement="outside"
+                          placeholder="Your pubkey that will claim payments"
+                          isInvalid={!!error}
+                          errorMessage={error?.message}
+                          onChange={onChange}
+                          onBlur={onBlur}
+                          value={value}
+                        />
+                      )}
+                    />
+
+                    <Controller
+                      name="refundDelayDays"
+                      control={control}
+                      rules={{
+                        required: "Required",
+                        min: { value: 1, message: "Minimum 1 day" },
+                        max: { value: 365, message: "Maximum 365 days" },
+                      }}
+                      render={({
+                        field: { onChange, onBlur, value },
+                        fieldState: { error },
+                      }) => (
+                        <Input
+                          type="number"
+                          min={1}
+                          max={365}
+                          className="text-light-text dark:text-dark-text pb-4"
+                          classNames={{
+                            label:
+                              "text-light-text dark:text-dark-text text-lg",
+                          }}
+                          variant="bordered"
+                          fullWidth
+                          label="Refund Delay (days)"
+                          labelPlacement="outside"
+                          placeholder="e.g. 7"
+                          isInvalid={!!error}
+                          errorMessage={error?.message}
+                          onChange={onChange}
+                          onBlur={onBlur}
+                          value={value}
+                        />
+                      )}
+                    />
+
+                    <Controller
+                      name="refundPubKeys"
+                      control={control}
+                      rules={{
+                        required: "At least one refund pubkey is required",
+                        validate: (v: string) => {
+                          const keys = v
+                            .split(",")
+                            .map((s) => s.trim())
+                            .filter(Boolean);
+                          if (keys.length === 0) {
+                            return "At least one refund pubkey is required";
+                          }
+                          for (const trimmed of keys) {
+                            try {
+                              decodeNpubOrHexPubkey(trimmed);
+                            } catch {
+                              try {
+                                if (!/^[0-9A-Fa-f]{64}$/.test(trimmed)) {
+                                  const decoded = nip19.decode(trimmed);
+                                  if (decoded.type !== "npub") {
+                                    return "Refund keys must be npub";
+                                  }
+                                }
+                              } catch {
+                                // fall through to generic message
+                              }
+                              return `Invalid refund key: ${trimmed}`;
+                            }
+                          }
+                          return true;
+                        },
+                      }}
+                      render={({
+                        field: { onChange, onBlur, value },
+                        fieldState: { error },
+                      }) => (
+                        <Textarea
+                          className="text-light-text dark:text-dark-text pb-4"
+                          classNames={{
+                            label:
+                              "text-light-text dark:text-dark-text text-lg",
+                          }}
+                          variant="bordered"
+                          fullWidth
+                          label="Refund Pubkeys (comma separated)"
+                          labelPlacement="outside"
+                          placeholder="Buyer pubkeys that can refund after the refund delay expires"
+                          isInvalid={!!error}
+                          errorMessage={error?.message}
+                          onChange={onChange}
+                          onBlur={onBlur}
+                          value={value}
+                        />
+                      )}
+                    />
+                  </>
+                )}
 
                 <Button
                   className={`mb-10 w-full ${SHOPSTRBUTTONCLASSNAMES}`}

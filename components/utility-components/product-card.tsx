@@ -24,6 +24,8 @@ import { useRouter } from "next/router";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import SignInModal from "../sign-in/SignInModal";
 import useReportEventFlow from "./use-report-event-flow";
+import { ProfileMapContext } from "@/utils/context/context";
+import { ProfileData } from "@/utils/types/types";
 
 export default function ProductCard({
   productData,
@@ -61,6 +63,28 @@ export default function ProductCard({
   const isExpired = productData.expiration
     ? Date.now() / 1000 > productData.expiration
     : false;
+
+  const profileMap = useContext(ProfileMapContext).profileData;
+  const sellerProfile: ProfileData | undefined = profileMap.get(
+    productData.pubkey
+  );
+  const p2pk = sellerProfile?.content.p2pk;
+
+  const p2pkIndicator = () => {
+    if (!p2pk?.enabled) return null;
+
+    const days = p2pk.refundDelayDays;
+
+    if (!days || days <= 0) return null;
+
+    return (
+      <div className="mb-2 flex items-center gap-2">
+        <Chip color="secondary" size="sm" variant="flat">
+          🔒 P2PK Escrow · {days}d refund window
+        </Chip>
+      </div>
+    );
+  };
 
   const shouldBlockCardNavigation = (target: Element | null) => {
     const isCarouselControl =
@@ -310,6 +334,8 @@ export default function ProductCard({
             }
           />
         </div>
+
+        {p2pkIndicator()}
 
         {/* Location */}
         {router.pathname !== "/" && (

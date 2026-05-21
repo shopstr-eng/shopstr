@@ -68,6 +68,11 @@ const faqSections = [
         content:
           "Shopstr has no mandatory platform fees — buyers and sellers keep the full amount of every transaction, minus only standard Bitcoin network fees. Sellers may optionally specify a donation rate on their listings to give back to the Shopstr platform on their sales; this is entirely at the seller's discretion and is never required.",
       },
+      {
+        title: "What is P2PK escrow, and how does it work?",
+        content:
+          "P2PK (Pay-to-Pubkey) escrow adds an extra layer of protection to Cashu payments on Shopstr. When enabled, payments sent to a seller are locked to the seller’s public key and can only be redeemed by the intended recipient. Sellers may also configure a refund delay period and optional refund pubkeys. If the seller does not claim the payment before the refund window expires, the buyer can reclaim the locked funds using the configured refund key. This creates a safer checkout flow by preventing accidental or unauthorized redemption of tokens while still allowing automatic refunds after the lock period. To enable it, go to Profile Settings, enable “P2PK Escrow”, add your public key, choose a refund delay duration, and optionally configure refund pubkeys.",
+      },
     ],
   },
   {

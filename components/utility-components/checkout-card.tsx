@@ -59,6 +59,7 @@ export default function CheckoutCard({
   setCashuPaymentFailed,
   uniqueKey,
   rawEvent,
+  p2pk,
 }: {
   productData: ProductData;
   setInvoiceIsPaid: (invoiceIsPaid: boolean) => void;
@@ -67,6 +68,7 @@ export default function CheckoutCard({
   setCashuPaymentFailed: (cashuPaymentFailed: boolean) => void;
   uniqueKey?: string;
   rawEvent?: Event;
+  p2pk?: { enabled: boolean; refundDelayDays: number; refundPubKeys: string[] };
 }) {
   const { pubkey: userPubkey, isLoggedIn } = useContext(SignerContext);
   const productEventContext = useContext(ProductContext);
@@ -168,6 +170,40 @@ export default function CheckoutCard({
     productData.weightPrices,
     productData.bulkPrices,
   ]);
+
+  const p2pkIndicator = () => {
+    if (!p2pk?.enabled) return null;
+
+    const days = p2pk.refundDelayDays;
+
+    if (!days || days <= 0) return null;
+
+    const estimatedRefundDate = new Date(
+      Date.now() + days * 24 * 60 * 60 * 1000
+    );
+
+    return (
+      <div className="mb-3 rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-3">
+        <div className="flex items-center gap-2 text-sm font-medium text-yellow-700 dark:text-yellow-300">
+          <span>🔒</span>
+          <span>P2PK Escrow Enabled</span>
+        </div>
+
+        <p className="mt-1 text-xs leading-relaxed text-gray-700 dark:text-gray-300">
+          Funds are locked to the seller&apos;s public key. If the seller does
+          not redeem the payment, buyer refund becomes available after{" "}
+          <span className="font-semibold">
+            {days} day{days > 1 ? "s" : ""}
+          </span>
+          .
+        </p>
+
+        <p className="mt-2 text-[11px] text-gray-500 dark:text-gray-400">
+          Estimated refund availability: {estimatedRefundDate.toLocaleString()}
+        </p>
+      </div>
+    );
+  };
 
   const toggleExpand = () => {
     setIsExpanded(!isExpanded);
@@ -817,6 +853,7 @@ export default function CheckoutCard({
                           {productData.location}
                         </Chip>
                       </div>
+                      {p2pkIndicator()}
                       {renderSizeGrid()}
                       <div className="flex w-full flex-col gap-2">
                         <div className="flex flex-wrap items-center gap-2">

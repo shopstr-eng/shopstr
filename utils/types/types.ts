@@ -221,6 +221,13 @@ export interface ProfileData {
     payment_preference?: string;
     fiat_options?: string[];
     shopstr_donation?: number;
+
+    p2pk?: {
+      enabled: boolean;
+      pubkey?: string;
+      refundDelayDays?: number;
+      refund?: string[];
+    };
   };
   created_at: number;
 }
