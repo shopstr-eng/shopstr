@@ -215,12 +215,12 @@ export class NostrManager {
   ): void {
     if (this.relays.some((relay) => relay.url === relayUrl)) return;
 
-    const relayPromise = this.pool.ensureRelay(relayUrl, params);
+    let relayPromise = this.pool.ensureRelay(relayUrl, params);
     const relay: NostrRelay = {
       url: relayUrl,
       connect: async () => {
-        this.pool.ensureRelay(relayUrl, params);
-        await (await relayPromise).connect();
+        relayPromise = this.pool.ensureRelay(relayUrl, params);
+        await relayPromise;
       },
       disconnect: async () => {
         (await relayPromise).close();

@@ -51,6 +51,20 @@ function truncateString(value: string): string {
     : value;
 }
 
+function sanitizeArray(items: unknown[], depth: number): unknown {
+  if (depth >= MAX_DEPTH) return { _depth_limit: true };
+
+  return items.map((item) => {
+    if (Array.isArray(item)) {
+      return sanitizeArray(item, depth + 1);
+    }
+    if (item !== null && typeof item === "object") {
+      return sanitizeParams(item as Record<string, unknown>, depth + 1);
+    }
+    return typeof item === "string" ? truncateString(item) : item;
+  });
+}
+
 export function sanitizeParams(
   params: Record<string, unknown>,
   depth = 0
@@ -64,13 +78,7 @@ export function sanitizeParams(
     } else if (typeof value === "string") {
       output[key] = truncateString(value);
     } else if (Array.isArray(value)) {
-      output[key] = value.map((item) =>
-        item !== null && typeof item === "object" && !Array.isArray(item)
-          ? sanitizeParams(item as Record<string, unknown>, depth + 1)
-          : typeof item === "string"
-            ? truncateString(item)
-            : item
-      );
+      output[key] = sanitizeArray(value, depth);
     } else if (value !== null && typeof value === "object") {
       output[key] = sanitizeParams(
         value as Record<string, unknown>,

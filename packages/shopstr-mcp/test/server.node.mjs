@@ -27,5 +27,16 @@ test("exposes valid empty MCP discovery handlers for the setup package", async (
     assert.deepEqual(await client.listPrompts(), { prompts: [] });
   } finally {
     await client.close();
+    await server.close();
+    if (typeof clientTransport.close === "function") {
+      await clientTransport.close();
+    } else if (typeof clientTransport.dispose === "function") {
+      await clientTransport.dispose();
+    }
+    if (typeof serverTransport.close === "function") {
+      await serverTransport.close();
+    } else if (typeof serverTransport.dispose === "function") {
+      await serverTransport.dispose();
+    }
   }
 });
