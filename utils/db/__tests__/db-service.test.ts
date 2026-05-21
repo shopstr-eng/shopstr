@@ -13,6 +13,8 @@ import {
 } from "../db-service";
 import type { NostrEvent } from "../../types/types";
 
+type DbServiceModule = typeof import("../db-service");
+
 async function withPostgresTestContainer<T>(
   callback: (databaseUrl: string) => Promise<T>
 ): Promise<T> {
@@ -34,6 +36,78 @@ async function withPostgresTestContainer<T>(
   }
 }
 
+async function withPostgresDbService<T>(
+  callback: (db: DbServiceModule) => Promise<T>
+): Promise<T> {
+  return withPostgresTestContainer(async (databaseUrl) => {
+    const prev = process.env.DATABASE_URL;
+    process.env.DATABASE_URL = databaseUrl;
+
+    try {
+      let result: T | undefined;
+      await jest.isolateModulesAsync(async () => {
+        jest.resetModules();
+        jest.unmock("pg");
+        const db = await import("../db-service");
+
+        try {
+          result = await callback(db);
+        } finally {
+          await db.closeDbPool();
+        }
+      });
+
+      return result as T;
+    } finally {
+      process.env.DATABASE_URL = prev;
+    }
+  });
+}
+
+async function waitForTables(
+  db: DbServiceModule,
+  tableNames: string[]
+): Promise<void> {
+  const deadline = Date.now() + 10000;
+  const pool = db.getDbPool();
+
+  while (Date.now() < deadline) {
+    const client = await pool.connect();
+    try {
+      const result = await client.query<{ tablename: string }>(
+        `SELECT tablename
+         FROM pg_tables
+         WHERE schemaname = 'public'
+           AND tablename = ANY($1::text[])`,
+        [tableNames]
+      );
+
+      if (result.rows.length === tableNames.length) {
+        return;
+      }
+    } finally {
+      client.release();
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+
+  throw new Error(`Timed out waiting for tables: ${tableNames.join(", ")}`);
+}
+
+function productEvent(overrides: Partial<NostrEvent>): NostrEvent {
+  return {
+    id: "product-event",
+    pubkey: "seller",
+    created_at: 1,
+    kind: 30402,
+    tags: [],
+    content: "content",
+    sig: "sig",
+    ...overrides,
+  };
+}
+
 describe("db-service helpers", () => {
   test("getTableForKind maps known kinds and returns null for unknown", () => {
     expect(getTableForKind(30402)).toBe("product_events");
@@ -43,7 +117,7 @@ describe("db-service helpers", () => {
     expect(getTableForKind(999999)).toBeNull();
   });
 
-  const maybeItTc = process.env.RUN_TESTCONTAINERS ? test : test.skip;
+  const maybeItTc = process.env.RUN_TESTCONTAINERS === "1" ? test : test.skip;
 
   maybeItTc("testcontainers: initialize + failed publish flow", async () => {
     // Dynamically import Testcontainers so tests still run if the package isn't installed
@@ -405,73 +479,34 @@ describe("db-service helpers", () => {
 
   describe("db-service with Testcontainers (discounts, stats, cached events)", () => {
     maybeItTc("discount code CRUD using Postgres", async () => {
-      await withPostgresTestContainer(async (databaseUrl) => {
-        await jest.isolateModulesAsync(async () => {
-          jest.resetModules();
-          jest.unmock("pg");
-          const { Pool } = await import("pg");
-          const prepPool = new Pool({ connectionString: databaseUrl });
-          const prepClient = await prepPool.connect();
-          try {
-            await prepClient.query(`
-              CREATE TABLE IF NOT EXISTS discount_codes (
-                id SERIAL PRIMARY KEY,
-                code TEXT NOT NULL,
-                pubkey TEXT NOT NULL,
-                discount_percentage DECIMAL(5,2) NOT NULL CHECK (discount_percentage > 0 AND discount_percentage <= 100),
-                expiration BIGINT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(code, pubkey)
-              )
-            `);
+      await withPostgresDbService(async (db) => {
+        await waitForTables(db, ["discount_codes"]);
 
-            await prepClient.query(
-              `INSERT INTO discount_codes (code, pubkey, discount_percentage, expiration)
-               VALUES ($1, $2, $3, $4)`,
-              ["CODE1", "pk1", 25, Math.floor(Date.now() / 1000) + 3600]
-            );
+        const expiration = Math.floor(Date.now() / 1000) + 3600;
+        await db.addDiscountCode("CODE1", "pk1", 25, expiration);
 
-            const inserted = await prepClient.query(
-              `SELECT code, pubkey, discount_percentage, expiration
-               FROM discount_codes
-               WHERE pubkey = $1`,
-              ["pk1"]
-            );
-            expect(inserted.rows).toHaveLength(1);
-            expect(inserted.rows[0].code).toBe("CODE1");
-            expect(Number(inserted.rows[0].discount_percentage)).toBeCloseTo(
-              25
-            );
+        const inserted = await db.getDiscountCodesByPubkey("pk1");
+        expect(inserted).toHaveLength(1);
+        const insertedCode = inserted[0]!;
+        expect(insertedCode.code).toBe("CODE1");
+        expect(insertedCode.discount_percentage).toBeCloseTo(25);
+        expect(insertedCode.expiration).toBe(expiration);
 
-            await prepClient.query(
-              `UPDATE discount_codes
-               SET discount_percentage = $1
-               WHERE code = $2 AND pubkey = $3`,
-              [30, "CODE1", "pk1"]
-            );
+        const valid = await db.validateDiscountCode("CODE1", "pk1");
+        expect(valid.valid).toBe(true);
+        expect(valid.discount_percentage).toBeCloseTo(25);
 
-            const updated = await prepClient.query(
-              `SELECT discount_percentage
-               FROM discount_codes
-               WHERE code = $1 AND pubkey = $2`,
-              ["CODE1", "pk1"]
-            );
-            expect(Number(updated.rows[0].discount_percentage)).toBeCloseTo(30);
+        await db.addDiscountCode("CODE1", "pk1", 30, expiration);
+        const updated = await db.validateDiscountCode("CODE1", "pk1");
+        expect(updated.valid).toBe(true);
+        expect(updated.discount_percentage).toBeCloseTo(30);
 
-            await prepClient.query(
-              `DELETE FROM discount_codes WHERE code = $1 AND pubkey = $2`,
-              ["CODE1", "pk1"]
-            );
-
-            const deleted = await prepClient.query(
-              `SELECT 1 FROM discount_codes WHERE code = $1 AND pubkey = $2`,
-              ["CODE1", "pk1"]
-            );
-            expect(deleted.rows).toHaveLength(0);
-          } finally {
-            prepClient.release();
-            await prepPool.end();
-          }
+        await db.deleteDiscountCode("CODE1", "pk1");
+        await expect(db.getDiscountCodesByPubkey("pk1")).resolves.toHaveLength(
+          0
+        );
+        await expect(db.validateDiscountCode("CODE1", "pk1")).resolves.toEqual({
+          valid: false,
         });
       });
     });
@@ -479,55 +514,16 @@ describe("db-service helpers", () => {
     maybeItTc(
       "fetchMarketplaceStats returns correct listing and seller counts",
       async () => {
-        await withPostgresTestContainer(async (databaseUrl) => {
-          await jest.isolateModulesAsync(async () => {
-            jest.resetModules();
-            jest.unmock("pg");
-            const { Pool } = await import("pg");
-            const prepPool = new Pool({ connectionString: databaseUrl });
-            const prepClient = await prepPool.connect();
-            try {
-              await prepClient.query(`
-              CREATE TABLE IF NOT EXISTS product_events (
-                id TEXT PRIMARY KEY,
-                pubkey TEXT NOT NULL,
-                created_at BIGINT NOT NULL,
-                kind INTEGER NOT NULL,
-                tags JSONB NOT NULL,
-                content TEXT NOT NULL,
-                sig TEXT NOT NULL,
-                cached_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                CONSTRAINT product_events_kind_check CHECK (kind = 30402)
-              )
-            `);
+        await withPostgresDbService(async (db) => {
+          await waitForTables(db, ["product_events"]);
 
-              await prepClient.query(
-                `INSERT INTO product_events (id, pubkey, created_at, kind, tags, content, sig)
-               VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-                ["p1", "seller1", 1, 30402, JSON.stringify([]), "c", "s"]
-              );
-              await prepClient.query(
-                `INSERT INTO product_events (id, pubkey, created_at, kind, tags, content, sig)
-               VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-                ["p2", "seller2", 2, 30402, JSON.stringify([]), "c2", "s2"]
-              );
-              await prepClient.query(
-                `INSERT INTO product_events (id, pubkey, created_at, kind, tags, content, sig)
-               VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-                ["p3", "seller1", 3, 30402, JSON.stringify([]), "c3", "s3"]
-              );
+          await db.cacheEvent(productEvent({ id: "p1", pubkey: "seller1" }));
+          await db.cacheEvent(productEvent({ id: "p2", pubkey: "seller2" }));
+          await db.cacheEvent(productEvent({ id: "p3", pubkey: "seller1" }));
 
-              const stats = await prepClient.query(
-                `SELECT COUNT(*)::int AS listing_count,
-                      COUNT(DISTINCT pubkey)::int AS seller_count
-               FROM product_events`
-              );
-              expect(stats.rows[0].listing_count).toBe(3);
-              expect(stats.rows[0].seller_count).toBe(2);
-            } finally {
-              prepClient.release();
-              await prepPool.end();
-            }
+          await expect(db.fetchMarketplaceStats()).resolves.toEqual({
+            listingCount: 3,
+            sellerCount: 2,
           });
         });
       }
@@ -536,81 +532,54 @@ describe("db-service helpers", () => {
     maybeItTc(
       "fetchCachedEvents supports pubkey/limit/offset/since/until filters",
       async () => {
-        await withPostgresTestContainer(async (databaseUrl) => {
-          await jest.isolateModulesAsync(async () => {
-            jest.resetModules();
-            jest.unmock("pg");
-            const { Pool } = await import("pg");
-            const prepPool = new Pool({ connectionString: databaseUrl });
-            const prepClient = await prepPool.connect();
-            try {
-              await prepClient.query(`
-              CREATE TABLE IF NOT EXISTS product_events (
-                id TEXT PRIMARY KEY,
-                pubkey TEXT NOT NULL,
-                created_at BIGINT NOT NULL,
-                kind INTEGER NOT NULL,
-                tags JSONB NOT NULL,
-                content TEXT NOT NULL,
-                sig TEXT NOT NULL,
-                cached_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                CONSTRAINT product_events_kind_check CHECK (kind = 30402)
-              )
-            `);
+        await withPostgresDbService(async (db) => {
+          await waitForTables(db, ["product_events"]);
 
-              await prepClient.query(
-                `INSERT INTO product_events (id, pubkey, created_at, kind, tags, content, sig)
-               VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-                ["e1", "alice", 10, 30402, JSON.stringify([]), "c1", "s1"]
-              );
-              await prepClient.query(
-                `INSERT INTO product_events (id, pubkey, created_at, kind, tags, content, sig)
-               VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-                ["e2", "bob", 20, 30402, JSON.stringify([]), "c2", "s2"]
-              );
-              await prepClient.query(
-                `INSERT INTO product_events (id, pubkey, created_at, kind, tags, content, sig)
-               VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-                ["e3", "alice", 30, 30402, JSON.stringify([]), "c3", "s3"]
-              );
+          await db.cacheEvent(
+            productEvent({
+              id: "e1",
+              pubkey: "alice",
+              created_at: 10,
+              content: "c1",
+              sig: "s1",
+            })
+          );
+          await db.cacheEvent(
+            productEvent({
+              id: "e2",
+              pubkey: "bob",
+              created_at: 20,
+              content: "c2",
+              sig: "s2",
+            })
+          );
+          await db.cacheEvent(
+            productEvent({
+              id: "e3",
+              pubkey: "alice",
+              created_at: 30,
+              content: "c3",
+              sig: "s3",
+            })
+          );
 
-              const all = await prepClient.query(
-                `SELECT id FROM product_events
-               WHERE kind = $1
-               ORDER BY created_at DESC`,
-                [30402]
-              );
-              expect(all.rows.map((r) => r.id)).toEqual(["e3", "e2", "e1"]);
+          const all = await db.fetchCachedEvents(30402);
+          expect(all.map((event) => event.id)).toEqual(["e3", "e2", "e1"]);
 
-              const alice = await prepClient.query(
-                `SELECT id FROM product_events
-               WHERE kind = $1 AND pubkey = $2
-               ORDER BY created_at DESC`,
-                [30402, "alice"]
-              );
-              expect(alice.rows.map((r) => r.id)).toEqual(["e3", "e1"]);
+          const alice = await db.fetchCachedEvents(30402, { pubkey: "alice" });
+          expect(alice.map((event) => event.id)).toEqual(["e3", "e1"]);
 
-              const between = await prepClient.query(
-                `SELECT id FROM product_events
-               WHERE kind = $1 AND created_at >= $2 AND created_at <= $3
-               ORDER BY created_at DESC`,
-                [30402, 15, 30]
-              );
-              expect(between.rows.map((r) => r.id)).toEqual(["e3", "e2"]);
-
-              const limited = await prepClient.query(
-                `SELECT id FROM product_events
-               WHERE kind = $1
-               ORDER BY created_at DESC
-               LIMIT $2 OFFSET $3`,
-                [30402, 1, 1]
-              );
-              expect(limited.rows.map((r) => r.id)).toEqual(["e2"]);
-            } finally {
-              prepClient.release();
-              await prepPool.end();
-            }
+          const between = await db.fetchCachedEvents(30402, {
+            since: 15,
+            until: 30,
           });
+          expect(between.map((event) => event.id)).toEqual(["e3", "e2"]);
+
+          const limited = await db.fetchCachedEvents(30402, {
+            limit: 1,
+            offset: 1,
+          });
+          expect(limited.map((event) => event.id)).toEqual(["e2"]);
         });
       }
     );

@@ -1473,7 +1473,7 @@ export async function addDiscountCode(
              ON CONFLICT (code, pubkey) DO UPDATE SET
                discount_percentage = EXCLUDED.discount_percentage,
                expiration = EXCLUDED.expiration`,
-      values: [code, pubkey, discountPercentage, expiration || null] as any[],
+      values: [code, pubkey, discountPercentage, expiration ?? null] as any[],
     };
     await client.query(query);
   } catch (error) {
@@ -1503,7 +1503,11 @@ export async function getDiscountCodesByPubkey(pubkey: string): Promise<
       `SELECT code, discount_percentage, expiration FROM discount_codes WHERE pubkey = $1 ORDER BY created_at DESC`,
       [pubkey]
     );
-    return result.rows;
+    return result.rows.map((row) => ({
+      code: row.code,
+      discount_percentage: Number(row.discount_percentage),
+      expiration: row.expiration === null ? null : Number(row.expiration),
+    }));
   } catch (error) {
     console.error("Failed to fetch discount codes:", error);
     return [];
@@ -1540,7 +1544,7 @@ export async function validateDiscountCode(
       return { valid: false };
     }
 
-    return { valid: true, discount_percentage };
+    return { valid: true, discount_percentage: Number(discount_percentage) };
   } catch (error) {
     console.error("Failed to validate discount code:", error);
     return { valid: false };
