@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { nip19 } from "nostr-tools";
-import { lookupSlugByHost } from "@/utils/storefront/host-cache";
+import { lookupByHost } from "@/utils/storefront/host-cache";
 
 // Routes that should NOT be rewritten under /stall/<slug>/ on a custom
 // domain — they live at the root of the seller's site (or fall through to
@@ -125,16 +125,23 @@ export async function proxy(request: NextRequest) {
     // wrap the page in the storefront chrome on the very first SSR pass
     // (no client-side flash).
     const origin = request.nextUrl.origin;
-    const slug =
+    const resolution =
       pathname.startsWith("/api/") || pathname === "/.well-known/agent.json"
-        ? null
-        : await lookupSlugByHost(origin, hostname);
+        ? { slug: null as string | null, pubkey: null as string | null }
+        : await lookupByHost(origin, hostname);
+    const slug = resolution.slug;
+    const pubkey = resolution.pubkey;
 
     const buildHeaders = () => {
       const h = new Headers(request.headers);
       h.set("x-mm-custom-domain", "1");
       h.set("x-mm-custom-domain-host", hostname);
       if (slug) h.set("x-mm-shop-slug", slug);
+      // Seed SSR with the seller pubkey so _app.tsx can mount the storefront
+      // wrapper on first render. Without this, the page renders once bare,
+      // fetches the slug client-side, then remounts inside the wrapper —
+      // visible as a flash or, in Safari with stale SW caches, a blank screen.
+      if (pubkey) h.set("x-mm-shop-pubkey", pubkey);
       return h;
     };
 

@@ -134,8 +134,21 @@ function StorefrontThemeWrapperInner({
   }, [sellerPubkey]);
 
   useEffect(() => {
-    if (!storefront) return;
     document.body.classList.add("sf-active");
+    // While the seller's storefront config is still loading from relays,
+    // paint a neutral background + text color immediately. Without this
+    // the page sits as a flash of unstyled darkness for a couple of
+    // seconds while Nostr profile data round-trips — which is exactly
+    // the "blank screen" symptom reported on the custom domain.
+    if (!storefront) {
+      document.body.style.setProperty("--sf-bg", DEFAULT_COLORS.background);
+      document.body.style.setProperty("--sf-text", DEFAULT_COLORS.text);
+      return () => {
+        document.body.classList.remove("sf-active");
+        document.body.style.removeProperty("--sf-bg");
+        document.body.style.removeProperty("--sf-text");
+      };
+    }
     const vars: Record<string, string> = {
       "--sf-primary": colors.primary,
       "--sf-secondary": colors.secondary,

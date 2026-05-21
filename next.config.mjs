@@ -10,39 +10,49 @@ const withPWA = withPWAInit({
   dest: "public",
   register: true,
   skipWaiting: true,
+  clientsClaim: true,
+  cleanupOutdatedCaches: true,
+  reloadOnOnline: true,
   disable: process.env.NODE_ENV === "development",
   runtimeCaching: [
+    // Page navigations (HTML) — NEVER cache. A stale HTML doc on a
+    // seller's custom domain is what bricked the storefront for 7 days.
     {
-      urlPattern: /^https:\/\/.*\.(png|jpg|jpeg|svg|gif|ico|css|js)$/,
+      urlPattern: ({ request }) => request.mode === "navigate",
+      handler: "NetworkOnly",
+    },
+    // Storefront slug/domain lookup — NEVER cache. A stale negative
+    // (404 before the seller's domain was verified, or before a slug
+    // was registered) would otherwise stick around for 24h and make
+    // the custom domain look permanently misconfigured.
+    {
+      urlPattern: ({ url }) => url.pathname.startsWith("/api/storefront/"),
+      handler: "NetworkOnly",
+    },
+    // Other APIs — short NetworkFirst, do NOT keep for a day.
+    {
+      urlPattern: ({ url }) =>
+        url.pathname.startsWith("/api/") &&
+        !url.pathname.startsWith("/api/storefront/"),
+      handler: "NetworkFirst",
+      options: {
+        cacheName: "api-cache",
+        networkTimeoutSeconds: 5,
+        expiration: {
+          maxEntries: 50,
+          maxAgeSeconds: 5 * 60,
+        },
+      },
+    },
+    // Static assets by extension — CacheFirst is fine.
+    {
+      urlPattern:
+        /\.(?:png|jpg|jpeg|svg|gif|ico|webp|avif|css|js|mjs|woff2?|ttf)$/i,
       handler: "CacheFirst",
       options: {
         cacheName: "static-assets",
         expiration: {
           maxEntries: 200,
-          maxAgeSeconds: 7 * 24 * 60 * 60,
-        },
-      },
-    },
-    {
-      urlPattern: /^https:\/\/.*\/api\/.*/,
-      handler: "NetworkFirst",
-      options: {
-        cacheName: "api-cache",
-        networkTimeoutSeconds: 10,
-        expiration: {
-          maxEntries: 50,
-          maxAgeSeconds: 24 * 60 * 60,
-        },
-      },
-    },
-    {
-      urlPattern: /^https?.*/,
-      handler: "NetworkFirst",
-      options: {
-        cacheName: "general-cache",
-        networkTimeoutSeconds: 15,
-        expiration: {
-          maxEntries: 100,
           maxAgeSeconds: 7 * 24 * 60 * 60,
         },
       },

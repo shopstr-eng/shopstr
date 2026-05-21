@@ -502,9 +502,18 @@ function MilkMarket({ props }: { props: AppProps }) {
   const [focusedPubkey, setFocusedPubkey] = useState("");
   const [selectedSection, setSelectedSection] = useState("");
   const [fullLoadComplete, setFullLoadComplete] = useState(false);
+  // Seed `storefrontLoadPubkey` from the SSR signal that middleware injects
+  // via `x-mm-shop-pubkey` (see proxy.ts + utils/storefront/host-cache.ts).
+  // Without this seed the page mounts once with the bare <Component/>,
+  // then `setStorefrontLoadPubkey(sfPubkey)` fires from an effect ~100ms
+  // later, the wrapper mounts, and React remounts the page subtree inside
+  // it. On Safari with the old aggressive service worker that remount was
+  // visible as a blank screen.
+  const ssrShopPubkey: string | null =
+    props.pageProps?.__customDomainShopPubkey ?? null;
   const [storefrontLoadPubkey, setStorefrontLoadPubkey] = useState<
     string | null
-  >(null);
+  >(ssrShopPubkey);
 
   const router = useRouter();
   const initializationRunRef = useRef(0);
@@ -1424,7 +1433,13 @@ function MilkMarket({ props }: { props: AppProps }) {
                                     // based on isCustomDomain — but its mount/unmount is stable.
                                     renderChrome={domainState.isCustomDomain}
                                   >
+                                    {/* Stable key on both branches so if
+                                        the wrapper ever flips in/out
+                                        (e.g. _error.tsx paths) React
+                                        treats the page as the same
+                                        element instead of remounting. */}
                                     <Component
+                                      key="page"
                                       {...pageProps}
                                       focusedPubkey={focusedPubkey}
                                       setFocusedPubkey={setFocusedPubkey}
@@ -1434,6 +1449,7 @@ function MilkMarket({ props }: { props: AppProps }) {
                                   </StorefrontThemeWrapper>
                                 ) : (
                                   <Component
+                                    key="page"
                                     {...pageProps}
                                     focusedPubkey={focusedPubkey}
                                     setFocusedPubkey={setFocusedPubkey}
@@ -1495,12 +1511,17 @@ App.getInitialProps = async (appContext: AppContext) => {
   };
   const isCustomDomainSsr = headerVal("x-mm-custom-domain") === "1";
   const customDomainShopSlug = headerVal("x-mm-shop-slug");
+  // Also forward the pubkey so the client can seed `storefrontLoadPubkey`
+  // synchronously on the first render and avoid a post-hydration remount
+  // when the wrapper appears around <Component/>.
+  const customDomainShopPubkey = headerVal("x-mm-shop-pubkey");
   return {
     ...appProps,
     pageProps: {
       ...(appProps as { pageProps?: Record<string, unknown> }).pageProps,
       __isCustomDomainSsr: isCustomDomainSsr,
       __customDomainShopSlug: customDomainShopSlug,
+      __customDomainShopPubkey: customDomainShopPubkey,
     },
   };
 };

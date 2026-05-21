@@ -80,19 +80,24 @@ export default function StorefrontOrderConfirmation({
     homeHrefRef.current = homeHref;
   }, [homeHref]);
 
+  // Only run while we still have no order data. Once it's loaded we must
+  // NOT re-read sessionStorage (it may have been cleared by a sibling tab
+  // or a navigation away) and we must not redirect on subsequent renders
+  // when `shopSlug` arrives async on a custom-domain visit — that was the
+  // root cause of the "order summary flashes then bounces home" bug.
   useEffect(() => {
+    if (orderData) return;
     const stored = sessionStorage.getItem("orderSummary");
     if (stored) {
       try {
         setOrderData(JSON.parse(stored));
+        return;
       } catch {
-        router.push(homeHrefRef.current);
+        /* fall through to redirect */
       }
-    } else {
-      router.push(homeHrefRef.current);
     }
-    // Intentionally run once on mount; redirect target is read via ref.
-  }, [router, shopSlug]);
+    router.push(homeHrefRef.current);
+  }, [router, orderData]);
 
   const sellerProducts = useMemo(() => {
     if (!productContext.productEvents) return [];

@@ -35,6 +35,19 @@ export function useIsCustomDomainResolved(): boolean {
 }
 
 /**
+ * Returns both flags together. Use this when you need to gate behavior
+ * on "we know the answer AND the answer is yes" — e.g. when generating
+ * navigation hrefs that would 404 if we guessed wrong about whether the
+ * current visit is on a custom domain.
+ */
+export function useIsCustomDomainKnown(): {
+  isCustomDomain: boolean;
+  isResolved: boolean;
+} {
+  return useContext(CustomDomainContext);
+}
+
+/**
  * Strip a leading `/stall/<shopSlug>` prefix when rendering on a custom
  * domain so seller-configured nav/footer links resolve to the root
  * (e.g. `/about`, `/orders`, `/policies/returns`) instead of leaking the
