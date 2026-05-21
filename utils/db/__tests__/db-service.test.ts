@@ -335,6 +335,72 @@ describe("db-service helpers", () => {
         }
       });
     });
+
+    test("deleteCachedEvent issues DELETE for known kind and is no-op for unknown kind", async () => {
+      const prev = process.env.DATABASE_URL;
+      try {
+        // First: known kind, ensure DELETE is issued
+        await jest.isolateModulesAsync(async () => {
+          process.env.DATABASE_URL = "postgres://test@localhost/testdb";
+
+          const client = {
+            query: jest.fn(async () => ({ rowCount: 1 })),
+            release: jest.fn(),
+          } as any;
+
+          const pool = {
+            connect: jest.fn(async () => client),
+            on: jest.fn(),
+          } as any;
+
+          jest.doMock("pg", () => ({
+            Pool: class {
+              constructor() {
+                return pool;
+              }
+            },
+          }));
+
+          const mod = await import("../db-service");
+          await mod.deleteCachedEvent("evt-123", 30402);
+          expect(pool.connect).toHaveBeenCalled();
+          expect(client.query).toHaveBeenCalledWith(
+            expect.stringContaining("DELETE FROM product_events"),
+            ["evt-123"]
+          );
+        });
+
+        // Second: unknown kind should not call DB (fresh module to avoid init side-effects)
+        await jest.isolateModulesAsync(async () => {
+          process.env.DATABASE_URL = "postgres://test@localhost/testdb";
+
+          const client2 = {
+            query: jest.fn(async () => ({ rowCount: 1 })),
+            release: jest.fn(),
+          } as any;
+
+          const pool2 = {
+            connect: jest.fn(async () => client2),
+            on: jest.fn(),
+          } as any;
+
+          jest.doMock("pg", () => ({
+            Pool: class {
+              constructor() {
+                return pool2;
+              }
+            },
+          }));
+
+          const mod2 = await import("../db-service");
+          await mod2.deleteCachedEvent("evt-999", 999999);
+          expect(pool2.connect).not.toHaveBeenCalled();
+          expect(client2.query).not.toHaveBeenCalled();
+        });
+      } finally {
+        process.env.DATABASE_URL = prev;
+      }
+    });
   });
 
   describe("db-service with Testcontainers (discounts, stats, cached events)", () => {
