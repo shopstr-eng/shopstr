@@ -52,6 +52,10 @@ The project uses:
   - Filters out benign React/DOM warnings during test runs
   - Handles third-party mocks (e.g., `@braintree/sanitize-url`)
 
+Additional environment variables used by tests
+
+- **`RUN_TESTCONTAINERS`**: Set to `1` to enable Testcontainers-backed integration tests. These tests will start real containers (e.g., Postgres) via Testcontainers and therefore require Docker to be available on the host or CI runner. Tests that require real Postgres are guarded by `process.env.RUN_TESTCONTAINERS` so they are skipped by default locally.
+
 Transformed dependencies include: `dexie`, `nostr-tools`, `@noble/*`, `@scure/*`,
 `@getalby/lightning-tools`, `@cashu/cashu-ts`, and `uuid`.
 
