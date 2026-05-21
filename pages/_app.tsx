@@ -1431,7 +1431,20 @@ function MilkMarket({ props }: { props: AppProps }) {
                                     sellerPubkey={storefrontLoadPubkey}
                                     // Wrapper internally decides whether to render storefront chrome
                                     // based on isCustomDomain — but its mount/unmount is stable.
-                                    renderChrome={domainState.isCustomDomain}
+                                    //
+                                    // Suppress chrome for /stall/* pages: they render
+                                    // <StorefrontLayout> themselves, which already paints
+                                    // its own nav + footer. Wrapping them in another set
+                                    // of chrome doubled the footer (and nav) on custom
+                                    // domains once the SSR pubkey seed started populating
+                                    // `storefrontLoadPubkey` on first render. The
+                                    // `useInsideStorefrontChrome` guard inside the wrapper
+                                    // only catches nested <StorefrontThemeWrapper> calls
+                                    // (e.g. /listing, /cart), not StorefrontLayout.
+                                    renderChrome={
+                                      domainState.isCustomDomain &&
+                                      !router.pathname.startsWith("/stall/")
+                                    }
                                   >
                                     {/* Stable key on both branches so if
                                         the wrapper ever flips in/out
