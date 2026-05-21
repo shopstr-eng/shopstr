@@ -3,7 +3,10 @@ import { StorefrontSection, StorefrontColorScheme } from "@/utils/types/types";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
 import StorefrontProductGrid from "../storefront-product-grid";
 import { ShopMapContext } from "@/utils/context/context";
-import { useIsCustomDomain } from "@/utils/storefront/custom-domain-context";
+import { 
+  useIsCustomDomain,
+  applyCustomDomainHref, 
+} from "@/utils/storefront/custom-domain-context";
 
 interface Props {
   section: StorefrontSection;
