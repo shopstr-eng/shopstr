@@ -44,7 +44,10 @@ const DEFAULT_FETCH_TIMEOUT_MS = 60_000;
 export class NostrManager {
   private readonly pool: SimplePool;
   private readonly params: Required<
-    Pick<NostrManagerParams, "keepAliveTime" | "gcInterval" | "readable" | "writable">
+    Pick<
+      NostrManagerParams,
+      "keepAliveTime" | "gcInterval" | "readable" | "writable"
+    >
   > & {
     connectionTimeout?: number;
   };

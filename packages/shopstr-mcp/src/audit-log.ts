@@ -80,10 +80,7 @@ export function sanitizeParams(
     } else if (Array.isArray(value)) {
       output[key] = sanitizeArray(value, depth);
     } else if (value !== null && typeof value === "object") {
-      output[key] = sanitizeParams(
-        value as Record<string, unknown>,
-        depth + 1
-      );
+      output[key] = sanitizeParams(value as Record<string, unknown>, depth + 1);
     } else {
       output[key] = value;
     }
@@ -114,7 +111,9 @@ function stringArrayFromMeta(value: unknown): string[] | undefined {
 }
 
 function numberFromMeta(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : undefined;
 }
 
 export function wrapWithAudit<

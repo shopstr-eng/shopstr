@@ -65,7 +65,8 @@ export async function fetchFromRelays(
       relaysSucceeded,
       relaysFailed,
       degraded: relaysFailed.length > 0,
-      coverage: relays.length === 0 ? 0 : relaysSucceeded.length / relays.length,
+      coverage:
+        relays.length === 0 ? 0 : relaysSucceeded.length / relays.length,
       responseTimeMs: Date.now() - startedAt,
       eventCount: events.length,
     },

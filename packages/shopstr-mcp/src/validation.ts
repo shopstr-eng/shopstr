@@ -114,6 +114,9 @@ export const reviewsInputSchema = z
     productId: eventIdSchema.optional(),
     sellerPubkey: pubkeySchema.optional(),
   })
-  .refine((data) => data.productId !== undefined || data.sellerPubkey !== undefined, {
-    message: "Either productId or sellerPubkey is required",
-  });
+  .refine(
+    (data) => data.productId !== undefined || data.sellerPubkey !== undefined,
+    {
+      message: "Either productId or sellerPubkey is required",
+    }
+  );

@@ -20,7 +20,7 @@ export function mergeAndDeduplicateProducts(
   for (const event of events) {
     const coordinate =
       event.kind === 30402
-        ? getParameterizedReplaceableCoordinate(event) ?? event.id
+        ? (getParameterizedReplaceableCoordinate(event) ?? event.id)
         : event.id;
     const existing = byCoordinate.get(coordinate);
     if (!existing || event.created_at > existing.created_at) {
@@ -35,7 +35,5 @@ export function mergeAndDeduplicateProducts(
     }
   }
 
-  return Array.from(byId.values()).sort(
-    (a, b) => b.created_at - a.created_at
-  );
+  return Array.from(byId.values()).sort((a, b) => b.created_at - a.created_at);
 }

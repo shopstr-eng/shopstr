@@ -286,8 +286,9 @@ export function parseProfileEvent(event: NostrEvent): ProfileResponse {
         !Array.isArray(storefront) &&
         typeof (storefront as { shopSlug?: unknown }).shopSlug === "string"
       ) {
-        response.storefrontUrl = `/shop/${(storefront as { shopSlug: string }).shopSlug
-          }`;
+        response.storefrontUrl = `/shop/${
+          (storefront as { shopSlug: string }).shopSlug
+        }`;
       }
     }
   }
