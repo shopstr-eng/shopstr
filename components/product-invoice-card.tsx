@@ -1205,7 +1205,26 @@ export default function ProductInvoiceCard({
     let remainingProofs = proofs;
     let sellerToken;
     let donationToken;
+
     const sellerProfile = profileContext.profileData.get(productData.pubkey);
+    const sellerP2pk = sellerProfile?.content.p2pk;
+    const refundDelayDays = sellerP2pk?.refundDelayDays;
+    const locktime = refundDelayDays
+      ? Math.floor(Date.now() / 1000) + refundDelayDays * 24 * 60 * 60
+      : undefined;
+    const buyerProfile = profileContext.profileData.get(userPubkey!);
+    const buyerRefundKeys = buyerProfile?.content?.p2pk?.refund?.length
+      ? buyerProfile?.content?.p2pk?.refund
+      : [userPubkey!];
+    const p2pkConfig =
+      sellerP2pk?.enabled && sellerP2pk?.pubkey
+        ? {
+            pubkey: sellerP2pk.pubkey,
+            locktime,
+            refundKeys: buyerRefundKeys,
+          }
+        : undefined;
+
     const donationPercentage = sellerProfile?.content?.shopstr_donation || 2.1;
     const donationAmount = Math.ceil((totalPrice * donationPercentage) / 100);
     const sellerAmount = totalPrice - donationAmount;
@@ -1216,8 +1235,19 @@ export default function ProductInvoiceCard({
         wallet,
         sellerAmount,
         remainingProofs,
-        { sendConfig: { includeFees: true } }
+        {
+          sendConfig: { includeFees: true },
+          outputConfig: p2pkConfig
+            ? {
+                send: {
+                  type: "p2pk",
+                  options: p2pkConfig,
+                },
+              }
+            : undefined,
+        }
       );
+
       if (swapOutcome.status !== "swapped") {
         throw new Error(
           swapOutcome.errorMessage ??

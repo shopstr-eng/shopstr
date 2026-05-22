@@ -430,6 +430,29 @@ export default function CartInvoiceCard({
     }
   };
 
+  const getP2pk = (
+    sellerPubkey: string
+  ):
+    | { enabled?: boolean; refundDelayDays?: number; refund?: string[] }
+    | undefined => {
+    if (!sellerPubkey) return undefined;
+    return profileContext.profileData.get(sellerPubkey)?.content.p2pk as
+      | { enabled?: boolean; refundDelayDays?: number; refund?: string[] }
+      | undefined;
+  };
+
+  const renderP2pkCartBadge = (sellerPubkey: string) => {
+    const p2pk = getP2pk(sellerPubkey);
+    if (!p2pk?.enabled || !p2pk.refundDelayDays || p2pk.refundDelayDays <= 0) {
+      return null;
+    }
+    return (
+      <div className="mt-2 inline-flex items-center gap-1 rounded-full border border-yellow-500/30 bg-yellow-500/10 px-2 py-1 text-[11px] font-medium text-yellow-700 dark:text-yellow-300">
+        🔒 P2PK Escrow · {p2pk.refundDelayDays}d refund window
+      </div>
+    );
+  };
+
   const [showFailureModal, setShowFailureModal] = useState(false);
 
   // NWC State
@@ -2935,6 +2958,7 @@ export default function CartInvoiceCard({
                       <p className="text-sm text-gray-600 dark:text-gray-400">
                         Quantity: {quantities[product.id] || 1}
                       </p>
+                      {renderP2pkCartBadge(product.pubkey)}
                     </div>
                   </div>
                 ))}
@@ -3166,6 +3190,7 @@ export default function CartInvoiceCard({
                     <p className="text-sm text-gray-600 dark:text-gray-400">
                       Quantity: {quantities[product.id] || 1}
                     </p>
+                    {renderP2pkCartBadge(product.pubkey)}
                   </div>
                 </div>
               ))}

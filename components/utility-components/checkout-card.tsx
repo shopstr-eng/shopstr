@@ -178,9 +178,13 @@ export default function CheckoutCard({
 
     if (!days || days <= 0) return null;
 
-    const estimatedRefundDate = new Date(
+    const refundAvailableAfter = new Date(
       Date.now() + days * 24 * 60 * 60 * 1000
-    );
+    ).toLocaleDateString(undefined, {
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    });
 
     return (
       <div className="mb-3 rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-3">
@@ -199,7 +203,7 @@ export default function CheckoutCard({
         </p>
 
         <p className="mt-2 text-[11px] text-gray-500 dark:text-gray-400">
-          Estimated refund availability: {estimatedRefundDate.toLocaleString()}
+          Refund available after {refundAvailableAfter}
         </p>
       </div>
     );

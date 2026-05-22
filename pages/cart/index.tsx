@@ -85,6 +85,29 @@ export default function Component() {
   const shopContext = useContext(ShopMapContext);
   const profileContext = useContext(ProfileMapContext);
 
+  const getP2pk = (
+    sellerPubkey: string
+  ):
+    | { enabled?: boolean; refundDelayDays?: number; refund?: string[] }
+    | undefined => {
+    if (!sellerPubkey) return undefined;
+    return profileContext.profileData.get(sellerPubkey)?.content.p2pk as
+      | { enabled?: boolean; refundDelayDays?: number; refund?: string[] }
+      | undefined;
+  };
+
+  const renderP2pkCartBadge = (sellerPubkey: string) => {
+    const p2pk = getP2pk(sellerPubkey);
+    if (!p2pk?.enabled || !p2pk.refundDelayDays || p2pk.refundDelayDays <= 0) {
+      return null;
+    }
+    return (
+      <div className="mt-2 inline-flex items-center gap-1 rounded-full border border-yellow-500/30 bg-yellow-500/10 px-2 py-1 text-[11px] font-medium text-yellow-700 dark:text-yellow-300">
+        🔒 P2PK Escrow · {p2pk.refundDelayDays}d refund window
+      </div>
+    );
+  };
+
   const [products, setProducts] = useState<ProductData[]>([]);
   const [satPrices, setSatPrices] = useState<{ [key: string]: number | null }>(
     {}
@@ -731,6 +754,7 @@ export default function Component() {
                                       )}
                                     </div>
                                   )}
+                                  {renderP2pkCartBadge(product.pubkey)}
                                 </div>
                               </div>
                               <div className="mt-4 flex md:mt-0 md:items-center">
