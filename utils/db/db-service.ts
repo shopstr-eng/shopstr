@@ -952,30 +952,35 @@ export async function deleteCachedEventsByIds(
     // version that may already exist (e.g. an edit published before the old
     // one was explicitly removed).
     await client.query(
-      `DELETE FROM product_events
-       WHERE id = ANY($1)
-          OR (
-            kind = 30402
-            AND EXISTS (
-              SELECT 1
-              FROM product_events ref,
-              LATERAL (
-                SELECT elem->>'1' AS d_tag
-                FROM jsonb_array_elements(ref.tags) elem
-                WHERE elem->>'0' = 'd'
-                LIMIT 1
-              ) ref_d
-              WHERE ref.id = ANY($1)
-                AND ref.pubkey = product_events.pubkey
-                AND product_events.created_at < ref.created_at
-                AND EXISTS (
-                  SELECT 1
-                  FROM jsonb_array_elements(product_events.tags) elem
-                  WHERE elem->>'0' = 'd'
-                    AND elem->>'1' = ref_d.d_tag
-                )
-            )
-          )`,
+      `WITH refs AS (
+         SELECT
+           ref.pubkey,
+           ref.created_at,
+           d.d_tag
+         FROM product_events ref
+         CROSS JOIN LATERAL (
+           SELECT elem->>1 AS d_tag
+           FROM jsonb_array_elements(ref.tags) elem
+           WHERE elem->>0 = 'd'
+           LIMIT 1
+         ) d
+         WHERE ref.id = ANY($1)
+       )
+       DELETE FROM product_events pe
+       WHERE pe.id = ANY($1)
+         OR EXISTS (
+           SELECT 1
+           FROM refs
+           WHERE pe.kind = 30402
+             AND pe.pubkey = refs.pubkey
+             AND pe.created_at < refs.created_at
+             AND EXISTS (
+               SELECT 1
+               FROM jsonb_array_elements(pe.tags) elem
+               WHERE elem->>0 = 'd'
+                 AND elem->>1 = refs.d_tag
+             )
+         )`,
       [eventIds]
     );
 
