@@ -2983,6 +2983,12 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                                   icon: "💬",
                                   desc: "Show customer reviews from Nostr",
                                 },
+                                {
+                                  type: "social_posts" as StorefrontSectionType,
+                                  label: "Social Posts",
+                                  icon: "📱",
+                                  desc: "Link out to posts from X, Instagram, Nostr, etc.",
+                                },
                               ] as const
                             ).map((st) => (
                               <button
@@ -3678,6 +3684,37 @@ function SectionPreviewSvg({ type }: { type: string }) {
           <rect x="10" y="37" width="30" height="3" rx="1" fill="#F59E0B" />
           <rect x="10" y="42" width="55" height="2" rx="1" fill="#94A3B8" />
           <rect x="10" y="46" width="20" height="2" rx="1" fill="#334155" />
+        </svg>
+      );
+    case "social_posts":
+      return (
+        <svg
+          width={w}
+          height={h}
+          viewBox={`0 0 ${w} ${h}`}
+          fill="none"
+          className="rounded"
+        >
+          <rect width={w} height={h} rx="3" fill="#F8FAFC" />
+          <rect x="6" y="5" width="34" height="4" rx="1.5" fill="#334155" />
+          <rect x="6" y="14" width="26" height="36" rx="2" fill="#E2E8F0" />
+          <circle cx="12" cy="20" r="2.5" fill="#3B82F6" />
+          <rect x="17" y="18" width="12" height="2" rx="1" fill="#334155" />
+          <rect x="17" y="21" width="8" height="1.5" rx="1" fill="#94A3B8" />
+          <rect x="9" y="26" width="20" height="14" rx="1.5" fill="#CBD5E1" />
+          <rect x="9" y="42" width="16" height="2" rx="1" fill="#94A3B8" />
+          <rect x="37" y="14" width="26" height="36" rx="2" fill="#E2E8F0" />
+          <circle cx="43" cy="20" r="2.5" fill="#EC4899" />
+          <rect x="48" y="18" width="12" height="2" rx="1" fill="#334155" />
+          <rect x="48" y="21" width="8" height="1.5" rx="1" fill="#94A3B8" />
+          <rect x="40" y="26" width="20" height="14" rx="1.5" fill="#CBD5E1" />
+          <rect x="40" y="42" width="16" height="2" rx="1" fill="#94A3B8" />
+          <rect x="68" y="14" width="26" height="36" rx="2" fill="#E2E8F0" />
+          <circle cx="74" cy="20" r="2.5" fill="#8B5CF6" />
+          <rect x="79" y="18" width="12" height="2" rx="1" fill="#334155" />
+          <rect x="79" y="21" width="8" height="1.5" rx="1" fill="#94A3B8" />
+          <rect x="71" y="26" width="20" height="14" rx="1.5" fill="#CBD5E1" />
+          <rect x="71" y="42" width="16" height="2" rx="1" fill="#94A3B8" />
         </svg>
       );
     default:
