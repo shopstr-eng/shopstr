@@ -41,6 +41,10 @@ import {
 } from "@cashu/cashu-ts";
 import { safeMeltProofs } from "@/utils/cashu/melt-retry-service";
 import { safeSwap } from "@/utils/cashu/swap-retry-service";
+import {
+  buildP2pkOutputConfig,
+  isSellerP2pkEscrowActive,
+} from "@/utils/cashu/p2pk-checkout";
 import { withMintRetry } from "@/utils/cashu/mint-retry-service";
 import {
   recordPendingMintQuote,
@@ -430,25 +434,12 @@ export default function CartInvoiceCard({
     }
   };
 
-  const getP2pk = (
-    sellerPubkey: string
-  ):
-    | { enabled?: boolean; refundDelayDays?: number; refund?: string[] }
-    | undefined => {
-    if (!sellerPubkey) return undefined;
-    return profileContext.profileData.get(sellerPubkey)?.content.p2pk as
-      | { enabled?: boolean; refundDelayDays?: number; refund?: string[] }
-      | undefined;
-  };
-
   const renderP2pkCartBadge = (sellerPubkey: string) => {
-    const p2pk = getP2pk(sellerPubkey);
-    if (!p2pk?.enabled || !p2pk.refundDelayDays || p2pk.refundDelayDays <= 0) {
-      return null;
-    }
+    const p2pk = profileContext.profileData.get(sellerPubkey)?.content.p2pk;
+    if (!isSellerP2pkEscrowActive(p2pk)) return null;
     return (
       <div className="mt-2 inline-flex items-center gap-1 rounded-full border border-yellow-500/30 bg-yellow-500/10 px-2 py-1 text-[11px] font-medium text-yellow-700 dark:text-yellow-300">
-        🔒 P2PK Escrow · {p2pk.refundDelayDays}d refund window
+        🔒 P2PK Escrow · {p2pk!.refundDelayDays}d reclaim opens
       </div>
     );
   };
@@ -1472,6 +1463,14 @@ export default function CartInvoiceCard({
       let sellerToken;
       let donationToken;
       const sellerProfile = profileContext.profileData.get(pubkey);
+      const buyerProfile = userPubkey
+        ? profileContext.profileData.get(userPubkey)
+        : undefined;
+      const p2pkOutputConfig = buildP2pkOutputConfig(
+        sellerProfile?.content?.p2pk,
+        buyerProfile?.content,
+        userPubkey ?? ""
+      );
       const donationPercentage =
         sellerProfile?.content?.shopstr_donation || 2.1;
       const donationAmount = Math.ceil(
@@ -1565,7 +1564,10 @@ export default function CartInvoiceCard({
           wallet,
           sellerAmount,
           remainingProofs,
-          { sendConfig: { includeFees: true } }
+          {
+            sendConfig: { includeFees: true },
+            outputConfig: p2pkOutputConfig,
+          }
         );
         if (swapOutcome.status !== "swapped") {
           throw new Error(

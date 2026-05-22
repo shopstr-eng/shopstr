@@ -230,7 +230,7 @@ const Listing = ({ initialProductEvent }: ListingPageProps) => {
   });
   const profileMap = useContext(ProfileMapContext).profileData;
 
-  // Resolve seller before productData finishes loading (SSR seed / raw event).
+  // seller pk before productData loads (SSR / raw event)
   const sellerPubkey = useMemo(
     () =>
       productData?.pubkey ||

@@ -26,6 +26,7 @@ import SignInModal from "../sign-in/SignInModal";
 import useReportEventFlow from "./use-report-event-flow";
 import { ProfileMapContext } from "@/utils/context/context";
 import { ProfileData } from "@/utils/types/types";
+import { isSellerP2pkEscrowActive } from "@/utils/cashu/p2pk-checkout";
 
 export default function ProductCard({
   productData,
@@ -71,16 +72,12 @@ export default function ProductCard({
   const p2pk = sellerProfile?.content.p2pk;
 
   const p2pkIndicator = () => {
-    if (!p2pk?.enabled) return null;
-
-    const days = p2pk.refundDelayDays;
-
-    if (!days || days <= 0) return null;
+    if (!isSellerP2pkEscrowActive(p2pk)) return null;
 
     return (
       <div className="mb-2 flex items-center gap-2">
         <Chip color="secondary" size="sm" variant="flat">
-          🔒 P2PK Escrow · {days}d refund window
+          🔒 P2PK Escrow · {p2pk!.refundDelayDays}d reclaim opens
         </Chip>
       </div>
     );

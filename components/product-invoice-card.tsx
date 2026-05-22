@@ -30,6 +30,7 @@ import {
 } from "@cashu/cashu-ts";
 import { safeMeltProofs } from "@/utils/cashu/melt-retry-service";
 import { safeSwap } from "@/utils/cashu/swap-retry-service";
+import { buildP2pkOutputConfig } from "@/utils/cashu/p2pk-checkout";
 import { withMintRetry } from "@/utils/cashu/mint-retry-service";
 import {
   recordPendingMintQuote,
@@ -1207,23 +1208,12 @@ export default function ProductInvoiceCard({
     let donationToken;
 
     const sellerProfile = profileContext.profileData.get(productData.pubkey);
-    const sellerP2pk = sellerProfile?.content.p2pk;
-    const refundDelayDays = sellerP2pk?.refundDelayDays;
-    const locktime = refundDelayDays
-      ? Math.floor(Date.now() / 1000) + refundDelayDays * 24 * 60 * 60
-      : undefined;
     const buyerProfile = profileContext.profileData.get(userPubkey!);
-    const buyerRefundKeys = buyerProfile?.content?.p2pk?.refund?.length
-      ? buyerProfile?.content?.p2pk?.refund
-      : [userPubkey!];
-    const p2pkConfig =
-      sellerP2pk?.enabled && sellerP2pk?.pubkey
-        ? {
-            pubkey: sellerP2pk.pubkey,
-            locktime,
-            refundKeys: buyerRefundKeys,
-          }
-        : undefined;
+    const p2pkOutputConfig = buildP2pkOutputConfig(
+      sellerProfile?.content?.p2pk,
+      buyerProfile?.content,
+      userPubkey!
+    );
 
     const donationPercentage = sellerProfile?.content?.shopstr_donation || 2.1;
     const donationAmount = Math.ceil((totalPrice * donationPercentage) / 100);
@@ -1237,14 +1227,7 @@ export default function ProductInvoiceCard({
         remainingProofs,
         {
           sendConfig: { includeFees: true },
-          outputConfig: p2pkConfig
-            ? {
-                send: {
-                  type: "p2pk",
-                  options: p2pkConfig,
-                },
-              }
-            : undefined,
+          outputConfig: p2pkOutputConfig,
         }
       );
 

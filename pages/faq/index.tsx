@@ -71,7 +71,7 @@ const faqSections = [
       {
         title: "What is P2PK escrow, and how does it work?",
         content:
-          "P2PK (Pay-to-Pubkey) escrow adds an extra layer of protection to Cashu payments on Shopstr. When enabled, payments sent to a seller are locked to the seller’s public key and can only be redeemed by the intended recipient. Sellers may also configure a refund delay period and optional refund pubkeys. If the seller does not claim the payment before the refund window expires, the buyer can reclaim the locked funds using the configured refund key. This creates a safer checkout flow by preventing accidental or unauthorized redemption of tokens while still allowing automatic refunds after the lock period. To enable it, go to Profile Settings, enable “P2PK Escrow”, add your public key, choose a refund delay duration, and optionally configure refund pubkeys.",
+          "P2PK (Pay-to-Pubkey) escrow adds time-locked Cashu payments on Shopstr. Sellers can enable escrow on their shop, set the pubkey that claims payments while the lock is active, and choose how many days must pass before a buyer reclaim path opens. Buyers may optionally list reclaim pubkeys in Profile Settings (when you buy); if you leave that empty, your paying pubkey is used. Reclaim is manual in your wallet—it is not automatic. After the delay, Cashu NUT-11 allows an additional spend path for your reclaim keys; the seller’s redeem path may still exist, so whoever spends the proof first (seller claim or your reclaim) determines the outcome. Sellers: enable P2PK escrow, add your redeem pubkey, and set the reclaim delay. Buyers: optionally add reclaim pubkeys under “Escrow reclaim keys (when you buy).”",
       },
     ],
   },

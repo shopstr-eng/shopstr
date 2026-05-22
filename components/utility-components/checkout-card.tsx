@@ -68,7 +68,11 @@ export default function CheckoutCard({
   setCashuPaymentFailed: (cashuPaymentFailed: boolean) => void;
   uniqueKey?: string;
   rawEvent?: Event;
-  p2pk?: { enabled: boolean; refundDelayDays: number; refundPubKeys: string[] };
+  p2pk?: {
+    enabled: boolean;
+    refundDelayDays?: number;
+    reclaimKeys?: string[];
+  };
 }) {
   const { pubkey: userPubkey, isLoggedIn } = useContext(SignerContext);
   const productEventContext = useContext(ProductContext);
@@ -178,7 +182,7 @@ export default function CheckoutCard({
 
     if (!days || days <= 0) return null;
 
-    const refundAvailableAfter = new Date(
+    const reclaimOpensAfter = new Date(
       Date.now() + days * 24 * 60 * 60 * 1000
     ).toLocaleDateString(undefined, {
       month: "long",
@@ -194,16 +198,17 @@ export default function CheckoutCard({
         </div>
 
         <p className="mt-1 text-xs leading-relaxed text-gray-700 dark:text-gray-300">
-          Funds are locked to the seller&apos;s public key. If the seller does
-          not redeem the payment, buyer refund becomes available after{" "}
+          Payment ecash is locked to the seller&apos;s pubkey while the lock is
+          active. After{" "}
           <span className="font-semibold">
             {days} day{days > 1 ? "s" : ""}
           </span>
-          .
+          , you gain an additional reclaim spend path (manual wallet action).
+          The seller may still be able to claim under Cashu rules.
         </p>
 
         <p className="mt-2 text-[11px] text-gray-500 dark:text-gray-400">
-          Refund available after {refundAvailableAfter}
+          Reclaim path opens after {reclaimOpensAfter}
         </p>
       </div>
     );

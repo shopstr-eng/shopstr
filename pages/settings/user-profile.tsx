@@ -52,7 +52,7 @@ function profileContentToFormValues(content: Record<string, unknown>) {
         pubkey?: string;
         refundDelayDays?: number;
         locktime?: number;
-        refund?: string[];
+        reclaimKeys?: string[];
       }
     | undefined;
 
@@ -62,14 +62,14 @@ function profileContentToFormValues(content: Record<string, unknown>) {
     p2pkPubkey: p2pk?.pubkey ?? (content.p2pkPubkey as string) ?? "",
     refundDelayDays: String(
       p2pk?.refundDelayDays ??
-        p2pk?.locktime ??
+        p2pk?.locktime ?? // old dev field name
         content.refundDelayDays ??
         content.lockTime ??
         ""
     ),
-    refundPubKeys: Array.isArray(p2pk?.refund)
-      ? p2pk.refund.join(", ")
-      : ((content.refundPubKeys as string) ?? ""),
+    reclaimPubKeys: Array.isArray(p2pk?.reclaimKeys)
+      ? p2pk.reclaimKeys.join(", ")
+      : ((content.reclaimPubKeys as string) ?? ""),
   };
 }
 
@@ -102,7 +102,7 @@ const UserProfilePage = () => {
       p2pkEnabled: false,
       p2pkPubkey: "",
       refundDelayDays: "",
-      refundPubKeys: "",
+      reclaimPubKeys: "",
     },
   });
 
@@ -176,7 +176,7 @@ const UserProfilePage = () => {
     p2pkEnabled?: boolean;
     p2pkPubkey?: string;
     refundDelayDays?: string;
-    refundPubKeys?: string;
+    reclaimPubKeys?: string;
   }) => {
     if (!userPubkey) {
       console.error("Cannot save profile: pubkey is undefined");
@@ -195,6 +195,29 @@ const UserProfilePage = () => {
         ...data,
       };
 
+      const reclaimArr: string[] = [];
+      const invalidReclaimKeys: string[] = [];
+      for (const s of (data?.reclaimPubKeys ?? "").split(",")) {
+        const trimmed = s.trim();
+        if (!trimmed) continue;
+        try {
+          reclaimArr.push(decodeNpubOrHexPubkey(trimmed));
+        } catch {
+          invalidReclaimKeys.push(trimmed);
+        }
+      }
+      if (invalidReclaimKeys.length > 0) {
+        setError("reclaimPubKeys", {
+          message: `Invalid reclaim key(s): ${invalidReclaimKeys.join(", ")}`,
+        });
+        setIsUploadingProfile(false);
+        return;
+      }
+
+      const existingP2pk = existingProfile?.p2pk as
+        | { pubkey?: string; refundDelayDays?: number }
+        | undefined;
+
       if (data?.p2pkEnabled) {
         let mainHex: string;
         try {
@@ -205,42 +228,28 @@ const UserProfilePage = () => {
           return;
         }
 
-        const refundArr: string[] = [];
-        const invalidRefundKeys: string[] = [];
-        for (const s of (data?.refundPubKeys ?? "").split(",")) {
-          const trimmed = s.trim();
-          if (!trimmed) continue;
-          try {
-            refundArr.push(decodeNpubOrHexPubkey(trimmed));
-          } catch {
-            invalidRefundKeys.push(trimmed);
-          }
-        }
-        if (invalidRefundKeys.length > 0) {
-          setError("refundPubKeys", {
-            message: `Invalid refund key(s): ${invalidRefundKeys.join(", ")}`,
-          });
-          setIsUploadingProfile(false);
-          return;
-        }
-        if (refundArr.length === 0) {
-          setError("refundPubKeys", {
-            message: "At least one refund pubkey is required",
-          });
-          setIsUploadingProfile(false);
-          return;
-        }
-
         const refundDelayDays = parseInt(data?.refundDelayDays as string);
+        if (!refundDelayDays || refundDelayDays <= 0) {
+          setError("refundDelayDays", { message: "Required" });
+          setIsUploadingProfile(false);
+          return;
+        }
 
         updatedData.p2pk = {
           enabled: true,
           pubkey: mainHex,
           refundDelayDays,
-          refund: refundArr,
+          ...(reclaimArr.length > 0 ? { reclaimKeys: reclaimArr } : {}),
         };
       } else {
-        updatedData.p2pk = { enabled: false };
+        updatedData.p2pk = {
+          enabled: false,
+          ...(existingP2pk?.pubkey ? { pubkey: existingP2pk.pubkey } : {}),
+          ...(existingP2pk?.refundDelayDays
+            ? { refundDelayDays: existingP2pk.refundDelayDays }
+            : {}),
+          ...(reclaimArr.length > 0 ? { reclaimKeys: reclaimArr } : {}),
+        };
       }
 
       try {
@@ -669,7 +678,14 @@ const UserProfilePage = () => {
                   )}
                 />
 
-                {/* P2PK Toggle */}
+                <p className="text-light-text dark:text-dark-text mb-2 text-lg font-semibold">
+                  P2PK escrow (for your shop)
+                </p>
+                <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">
+                  When enabled, Cashu payments to you are locked to your redeem
+                  pubkey for a delay period. Buyers can configure their own
+                  reclaim keys separately below.
+                </p>
                 <Controller
                   name="p2pkEnabled"
                   control={control}
@@ -681,7 +697,7 @@ const UserProfilePage = () => {
                           checked={!!value}
                           onChange={(e) => onChange(e.target.checked)}
                         />
-                        Enable Time-Locked P2PK Escrow
+                        Enable P2PK escrow on my listings
                       </label>
                     </div>
                   )}
@@ -750,66 +766,9 @@ const UserProfilePage = () => {
                           }}
                           variant="bordered"
                           fullWidth
-                          label="Refund Delay (days)"
+                          label="Reclaim opens after (days)"
                           labelPlacement="outside"
-                          placeholder="e.g. 7"
-                          isInvalid={!!error}
-                          errorMessage={error?.message}
-                          onChange={onChange}
-                          onBlur={onBlur}
-                          value={value}
-                        />
-                      )}
-                    />
-
-                    <Controller
-                      name="refundPubKeys"
-                      control={control}
-                      rules={{
-                        required: "At least one refund pubkey is required",
-                        validate: (v: string) => {
-                          const keys = v
-                            .split(",")
-                            .map((s) => s.trim())
-                            .filter(Boolean);
-                          if (keys.length === 0) {
-                            return "At least one refund pubkey is required";
-                          }
-                          for (const trimmed of keys) {
-                            try {
-                              decodeNpubOrHexPubkey(trimmed);
-                            } catch {
-                              try {
-                                if (!/^[0-9A-Fa-f]{64}$/.test(trimmed)) {
-                                  const decoded = nip19.decode(trimmed);
-                                  if (decoded.type !== "npub") {
-                                    return "Refund keys must be npub";
-                                  }
-                                }
-                              } catch {
-                                // fall through to generic message
-                              }
-                              return `Invalid refund key: ${trimmed}`;
-                            }
-                          }
-                          return true;
-                        },
-                      }}
-                      render={({
-                        field: { onChange, onBlur, value },
-                        fieldState: { error },
-                      }) => (
-                        <Textarea
-                          className="text-light-text dark:text-dark-text pb-4"
-                          classNames={{
-                            label:
-                              "text-light-text dark:text-dark-text text-lg",
-                          }}
-                          variant="bordered"
-                          fullWidth
-                          label="Refund Pubkeys (comma separated)"
-                          labelPlacement="outside"
-                          placeholder="Buyer pubkeys that can refund after the refund delay expires"
+                          placeholder="e.g. 7 — then buyers gain an additional reclaim path"
                           isInvalid={!!error}
                           errorMessage={error?.message}
                           onChange={onChange}
@@ -820,6 +779,68 @@ const UserProfilePage = () => {
                     />
                   </>
                 )}
+
+                <p className="text-light-text dark:text-dark-text mt-6 mb-2 text-lg font-semibold">
+                  Escrow reclaim keys (when you buy)
+                </p>
+                <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">
+                  Optional. Embedded into P2PK payments you make so you (or
+                  other keys you list) can manually reclaim after the
+                  seller&apos;s delay. If empty, your paying pubkey is used.
+                  This does not remove the seller&apos;s spend path after the
+                  delay (Cashu NUT-11).
+                </p>
+                <Controller
+                  name="reclaimPubKeys"
+                  control={control}
+                  rules={{
+                    validate: (v: string) => {
+                      const keys = v
+                        .split(",")
+                        .map((s) => s.trim())
+                        .filter(Boolean);
+                      if (keys.length === 0) return true;
+                      for (const trimmed of keys) {
+                        try {
+                          decodeNpubOrHexPubkey(trimmed);
+                        } catch {
+                          try {
+                            if (!/^[0-9A-Fa-f]{64}$/.test(trimmed)) {
+                              const decoded = nip19.decode(trimmed);
+                              if (decoded.type !== "npub") {
+                                return "Reclaim keys must be npub";
+                              }
+                            }
+                          } catch {
+                            return `Invalid reclaim key: ${trimmed}`;
+                          }
+                        }
+                      }
+                      return true;
+                    },
+                  }}
+                  render={({
+                    field: { onChange, onBlur, value },
+                    fieldState: { error },
+                  }) => (
+                    <Textarea
+                      className="text-light-text dark:text-dark-text pb-4"
+                      classNames={{
+                        label: "text-light-text dark:text-dark-text text-lg",
+                      }}
+                      variant="bordered"
+                      fullWidth
+                      label="Reclaim pubkeys (comma separated, optional)"
+                      labelPlacement="outside"
+                      placeholder="Leave empty to use your account pubkey when paying"
+                      isInvalid={!!error}
+                      errorMessage={error?.message}
+                      onChange={onChange}
+                      onBlur={onBlur}
+                      value={value}
+                    />
+                  )}
+                />
 
                 <Button
                   className={`mb-10 w-full ${SHOPSTRBUTTONCLASSNAMES}`}

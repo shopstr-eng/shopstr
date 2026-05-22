@@ -224,9 +224,9 @@ export interface ProfileData {
 
     p2pk?: {
       enabled: boolean;
-      pubkey?: string;
-      refundDelayDays?: number;
-      refund?: string[];
+      pubkey?: string; // seller redeem while locked
+      refundDelayDays?: number; // days; locktime unix set at checkout
+      reclaimKeys?: string[]; // buyer reclaim after lock (optional)
     };
   };
   created_at: number;
