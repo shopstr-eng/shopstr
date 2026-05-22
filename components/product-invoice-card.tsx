@@ -4706,7 +4706,7 @@ export default function ProductInvoiceCard({
                   {!(isSubscription && subscriptionFrequency) && (
                     <>
                       <Button
-                        className={`bg-primary-blue shadow-neo w-full rounded-md border-2 border-black px-4 py-2 font-bold text-white transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
+                        className={`bg-primary-blue shadow-neo h-auto min-h-12 w-full rounded-md border-2 border-black px-4 py-3 text-center font-bold break-words whitespace-normal text-white transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
                           !isFormValid || (!isLoggedIn && !buyerEmail)
                             ? "cursor-not-allowed opacity-50"
                             : ""
@@ -4725,7 +4725,7 @@ export default function ProductInvoiceCard({
 
                       {hasTokensAvailable && (
                         <Button
-                          className={`shadow-neo w-full rounded-md border-2 border-black bg-black px-4 py-2 font-bold text-white transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
+                          className={`shadow-neo h-auto min-h-12 w-full rounded-md border-2 border-black bg-black px-4 py-3 text-center font-bold break-words whitespace-normal text-white transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
                             !isFormValid || (!isLoggedIn && !buyerEmail)
                               ? "cursor-not-allowed opacity-50"
                               : ""
@@ -4750,7 +4750,7 @@ export default function ProductInvoiceCard({
                   {/* Stripe Payment Button */}
                   {isStripeMerchant && (
                     <Button
-                      className={`shadow-neo w-full rounded-md border-2 border-black bg-black px-4 py-2 font-bold text-white transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
+                      className={`shadow-neo h-auto min-h-12 w-full rounded-md border-2 border-black bg-black px-4 py-3 text-center font-bold break-words whitespace-normal text-white transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
                         !isFormValid ||
                         (!isLoggedIn && !buyerEmail) ||
                         (isSubscription && !buyerEmail)
@@ -4786,7 +4786,7 @@ export default function ProductInvoiceCard({
                     <>
                       {Object.keys(fiatPaymentOptions).length > 0 && (
                         <Button
-                          className={`shadow-neo w-full rounded-md border-2 border-black bg-black px-4 py-2 font-bold text-white transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
+                          className={`shadow-neo h-auto min-h-12 w-full rounded-md border-2 border-black bg-black px-4 py-3 text-center font-bold break-words whitespace-normal text-white transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
                             !isFormValid || (!isLoggedIn && !buyerEmail)
                               ? "cursor-not-allowed opacity-50"
                               : ""
@@ -4832,7 +4832,7 @@ export default function ProductInvoiceCard({
                       {/* NWC Button */}
                       {nwcInfo && (
                         <Button
-                          className={`shadow-neo w-full rounded-md border-2 border-black bg-black px-4 py-2 font-bold text-white transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
+                          className={`shadow-neo h-auto min-h-12 w-full rounded-md border-2 border-black bg-black px-4 py-3 text-center font-bold break-words whitespace-normal text-white transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
                             !isFormValid || (!isLoggedIn && !buyerEmail)
                               ? "cursor-not-allowed opacity-50"
                               : ""

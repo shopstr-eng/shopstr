@@ -6506,7 +6506,7 @@ export default function CartInvoiceCard({
                   {!hasActiveSubscription && !hasSubscriptionStripeConflict && (
                     <>
                       <Button
-                        className={`${BLUEBUTTONCLASSNAMES} w-full ${
+                        className={`${BLUEBUTTONCLASSNAMES} h-auto min-h-12 w-full py-3 text-center break-words whitespace-normal ${
                           !isFormValid || (!isLoggedIn && !buyerEmail)
                             ? "cursor-not-allowed opacity-50"
                             : ""
@@ -6525,7 +6525,7 @@ export default function CartInvoiceCard({
 
                       {hasTokensAvailable && (
                         <Button
-                          className={`${BLUEBUTTONCLASSNAMES} w-full ${
+                          className={`${BLUEBUTTONCLASSNAMES} h-auto min-h-12 w-full py-3 text-center break-words whitespace-normal ${
                             !isFormValid || (!isLoggedIn && !buyerEmail)
                               ? "cursor-not-allowed opacity-50"
                               : ""
@@ -6547,7 +6547,7 @@ export default function CartInvoiceCard({
 
                       {nwcInfo && (
                         <Button
-                          className={`${BLUEBUTTONCLASSNAMES} w-full ${
+                          className={`${BLUEBUTTONCLASSNAMES} h-auto min-h-12 w-full py-3 text-center break-words whitespace-normal ${
                             !isFormValid || (!isLoggedIn && !buyerEmail)
                               ? "cursor-not-allowed opacity-50"
                               : ""
@@ -6576,7 +6576,7 @@ export default function CartInvoiceCard({
                   {((isSingleSeller && isStripeMerchant) ||
                     (!isSingleSeller && allSellersHaveStripe)) && (
                     <Button
-                      className={`shadow-neo w-full rounded-md border-2 border-black bg-black px-4 py-2 font-bold text-white transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
+                      className={`shadow-neo h-auto min-h-12 w-full rounded-md border-2 border-black bg-black px-4 py-3 text-center font-bold break-words whitespace-normal text-white transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
                         !isFormValid || (!isLoggedIn && !buyerEmail)
                           ? "cursor-not-allowed opacity-50"
                           : ""
@@ -6607,7 +6607,7 @@ export default function CartInvoiceCard({
                       ? Object.keys(fiatPaymentOptions).length > 0
                       : isMultiFiatAvailable) && (
                       <Button
-                        className={`shadow-neo w-full rounded-md border-2 border-black bg-black px-4 py-2 font-bold text-white transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
+                        className={`shadow-neo h-auto min-h-12 w-full rounded-md border-2 border-black bg-black px-4 py-3 text-center font-bold break-words whitespace-normal text-white transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
                           !isFormValid || (!isLoggedIn && !buyerEmail)
                             ? "cursor-not-allowed opacity-50"
                             : ""
