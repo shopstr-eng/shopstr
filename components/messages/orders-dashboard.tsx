@@ -1104,6 +1104,7 @@ const OrdersDashboard = ({
             (trackingNumber ? ` Tracking: ${trackingNumber}` : ""),
           trackingNumber: trackingNumber || undefined,
           carrier: shippingCarrier || undefined,
+          sellerPubkey: selectedOrder.sellerPubkey || undefined,
         }),
       }).catch(() => {});
 
@@ -1736,6 +1737,7 @@ const OrdersDashboard = ({
           productTitle: addressChangeOrder.productTitle || "Your product",
           newAddress: newAddress,
           subscriptionId: addressChangeOrder.subscriptionId,
+          sellerPubkey: addressChangeOrder.sellerPubkey || undefined,
         }),
       }).catch(() => {});
 

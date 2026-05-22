@@ -11,6 +11,7 @@ import {
   sendSubscriptionCancellation,
 } from "@/utils/email/email-service";
 import { sendServerSideNostrDM } from "@/utils/nostr/server-nostr-helpers";
+import { loadStorefrontBranding } from "@/utils/email/storefront-branding";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
   apiVersion: "2025-09-30.clover",
@@ -114,16 +115,23 @@ export default async function handler(
             )
           : "Upcoming";
 
-        await sendRenewalReminder(subscription.buyer_email, {
-          productTitle:
-            subscription.product_title || subscription.product_event_id,
-          frequency: subscription.frequency,
-          discountPercent: Number(subscription.discount_percent),
-          regularPrice: String(subscription.base_price),
-          subscriptionPrice: String(subscription.subscription_price),
-          currency: subscription.currency,
-          nextBillingDate,
-        }).catch((err) =>
+        const renewalBranding = await loadStorefrontBranding(
+          subscription.seller_pubkey
+        );
+        await sendRenewalReminder(
+          subscription.buyer_email,
+          {
+            productTitle:
+              subscription.product_title || subscription.product_event_id,
+            frequency: subscription.frequency,
+            discountPercent: Number(subscription.discount_percent),
+            regularPrice: String(subscription.base_price),
+            subscriptionPrice: String(subscription.subscription_price),
+            currency: subscription.currency,
+            nextBillingDate,
+          },
+          renewalBranding
+        ).catch((err) =>
           console.error("Failed to send renewal reminder email:", err)
         );
 
@@ -237,11 +245,18 @@ export default async function handler(
                 day: "numeric",
               });
 
-          await sendSubscriptionCancellation(subscription.buyer_email, {
-            productTitle:
-              subscription.product_title || subscription.product_event_id,
-            endDate,
-          }).catch((err) =>
+          const cancelBranding = await loadStorefrontBranding(
+            subscription.seller_pubkey
+          );
+          await sendSubscriptionCancellation(
+            subscription.buyer_email,
+            {
+              productTitle:
+                subscription.product_title || subscription.product_event_id,
+              endDate,
+            },
+            cancelBranding
+          ).catch((err) =>
             console.error("Failed to send cancellation email:", err)
           );
 

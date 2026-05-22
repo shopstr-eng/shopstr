@@ -2,6 +2,7 @@ import { NextApiRequest, NextApiResponse } from "next";
 import { sendOrderUpdateToBuyer } from "@/utils/email/email-service";
 import { getBuyerNotificationEmail } from "@/utils/db/db-service";
 import { applyRateLimit } from "@/utils/rate-limit";
+import { loadStorefrontBranding } from "@/utils/email/storefront-branding";
 
 const RATE_LIMIT = { limit: 30, windowMs: 60 * 1000 };
 
@@ -23,6 +24,7 @@ export default async function handler(
     trackingNumber,
     carrier,
     estimatedDelivery,
+    sellerPubkey,
   } = req.body;
 
   if (!orderId || !productTitle || !updateType || !message) {
@@ -42,15 +44,20 @@ export default async function handler(
       });
     }
 
-    const emailSent = await sendOrderUpdateToBuyer(buyerEmail, {
-      orderId,
-      productTitle,
-      updateType,
-      message,
-      trackingNumber,
-      carrier,
-      estimatedDelivery,
-    });
+    const branding = await loadStorefrontBranding(sellerPubkey);
+    const emailSent = await sendOrderUpdateToBuyer(
+      buyerEmail,
+      {
+        orderId,
+        productTitle,
+        updateType,
+        message,
+        trackingNumber,
+        carrier,
+        estimatedDelivery,
+      },
+      branding
+    );
 
     return res.status(200).json({ success: true, emailSent });
   } catch (error) {

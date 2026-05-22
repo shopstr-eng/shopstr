@@ -1,3 +1,8 @@
+import { FlowEmailStorefrontStyle } from "./flow-email-templates";
+import { StorefrontBranding } from "./storefront-branding";
+
+export type { StorefrontBranding } from "./storefront-branding";
+
 const BRAND_NAME = "Milk Market";
 
 function escapeHtml(str: string): string {
@@ -14,7 +19,89 @@ function esc(value: string | undefined): string {
   return escapeHtml(value);
 }
 
-function baseTemplate(title: string, bodyContent: string): string {
+function pickContrastColor(hex: string): string {
+  const m = hex.replace("#", "").match(/^([0-9a-f]{3}|[0-9a-f]{6})$/i);
+  if (!m) return "#ffffff";
+  let h = m[1]!;
+  if (h.length === 3)
+    h = h
+      .split("")
+      .map((c) => c + c)
+      .join("");
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance > 0.6 ? "#111827" : "#ffffff";
+}
+
+// Expand a hex color to a 6-digit form (without alpha). Returns undefined if
+// the input isn't a valid hex color, so callers can fall back to a safe
+// default rather than emitting broken CSS like "#abc99".
+function expandHex(hex: string | undefined): string | undefined {
+  if (!hex) return undefined;
+  const m = hex.replace("#", "").match(/^([0-9a-f]{3}|[0-9a-f]{6})$/i);
+  if (!m) return undefined;
+  let h = m[1]!;
+  if (h.length === 3)
+    h = h
+      .split("")
+      .map((c) => c + c)
+      .join("");
+  return `#${h}`;
+}
+
+// Recolor the default CTA buttons (black bg / white text) baked into our
+// transactional templates so they match the seller's storefront. Only the
+// exact inline styles we ship in the defaults are touched.
+function applyStorefrontButtonColors(
+  html: string,
+  style: FlowEmailStorefrontStyle
+): string {
+  if (!style.primary && !style.secondary) return html;
+  const btnBg = style.primary || style.secondary || "#000000";
+  const btnText = pickContrastColor(btnBg);
+  return html
+    .replace(
+      /background-color:#000000;border-radius:6px;padding:12px 24px;/g,
+      `background-color:${btnBg};border-radius:6px;padding:12px 24px;`
+    )
+    .replace(
+      /color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;display:inline-block;/g,
+      `color:${btnText};font-size:15px;font-weight:600;text-decoration:none;display:inline-block;`
+    );
+}
+
+function baseTemplate(
+  title: string,
+  bodyContent: string,
+  branding?: StorefrontBranding | null
+): string {
+  const style = branding?.style;
+  const shopName = branding?.shopName?.trim() || BRAND_NAME;
+  const headerBg = style?.secondary || "#000000";
+  const headerText = style?.secondary ? pickContrastColor(headerBg) : "#ffffff";
+  const cardBg = style?.background || "#ffffff";
+  const bodyText = style?.text || "#111827";
+  const pageBg = "#f4f4f5";
+  const footerBg = style?.background ? cardBg : "#f9fafb";
+  // Build a translucent footer text color, but only when we can expand the
+  // theme color to 6-digit hex — otherwise "#abc99" would be invalid CSS.
+  const expandedText = expandHex(style?.text);
+  const footerText = expandedText ? `${expandedText}99` : "#9ca3af";
+  const accentBorder = style?.accent || "#e5e7eb";
+  const cardShadow =
+    style?.neoShadows && style?.secondary
+      ? `box-shadow:6px 6px 0 ${style.secondary};border:2px solid ${style.secondary};`
+      : `box-shadow:0 2px 8px rgba(0,0,0,0.08);`;
+  const finalBody = style
+    ? applyStorefrontButtonColors(bodyContent, style)
+    : bodyContent;
+  const isBranded = !!branding?.shopName || !!style;
+  const footerCopy = isBranded
+    ? `You received this email from ${escapeHtml(shopName)}. Sent via ${BRAND_NAME}.`
+    : `This email was sent by ${BRAND_NAME}. You received this because an order was placed with your email address.`;
+
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -22,24 +109,26 @@ function baseTemplate(title: string, bodyContent: string): string {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${title}</title>
 </head>
-<body style="margin:0;padding:0;background-color:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f4f5;padding:40px 20px;">
+<body style="margin:0;padding:0;background-color:${pageBg};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:${pageBg};padding:40px 20px;">
     <tr>
       <td align="center">
-        <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="background-color:${cardBg};border-radius:8px;overflow:hidden;${cardShadow}">
           <tr>
-            <td style="background-color:#000000;padding:24px 32px;text-align:center;">
-              <h1 style="margin:0;color:#ffffff;font-size:24px;font-weight:700;">${BRAND_NAME}</h1>
+            <td style="background-color:${headerBg};padding:24px 32px;text-align:center;">
+              <h1 style="margin:0;color:${headerText};font-size:24px;font-weight:700;">${escapeHtml(
+                shopName
+              )}</h1>
             </td>
           </tr>
           <tr>
-            <td style="padding:32px;">
-              ${bodyContent}
+            <td style="padding:32px;color:${bodyText};">
+              ${finalBody}
             </td>
           </tr>
           <tr>
-            <td style="background-color:#f9fafb;padding:20px 32px;text-align:center;border-top:1px solid #e5e7eb;">
-              <p style="margin:0;color:#9ca3af;font-size:12px;">This email was sent by ${BRAND_NAME}. You received this because an order was placed with your email address.</p>
+            <td style="background-color:${footerBg};padding:20px 32px;text-align:center;border-top:1px solid ${accentBorder};">
+              <p style="margin:0;color:${footerText};font-size:12px;">${footerCopy}</p>
             </td>
           </tr>
         </table>
@@ -156,7 +245,10 @@ function buildDonationSection(params: OrderEmailParams): string {
       </tr>`;
 }
 
-export function orderConfirmationEmail(params: OrderEmailParams): {
+export function orderConfirmationEmail(
+  params: OrderEmailParams,
+  branding?: StorefrontBranding | null
+): {
   subject: string;
   html: string;
 } {
@@ -225,11 +317,14 @@ export function orderConfirmationEmail(params: OrderEmailParams): {
     subject: `Order Confirmed - ${esc(params.productTitle)} (#${esc(
       params.orderId.slice(0, 8)
     )})`,
-    html: baseTemplate("Order Confirmation", body),
+    html: baseTemplate("Order Confirmation", body, branding),
   };
 }
 
-export function sellerNewOrderEmail(params: OrderEmailParams): {
+export function sellerNewOrderEmail(
+  params: OrderEmailParams,
+  branding?: StorefrontBranding | null
+): {
   subject: string;
   html: string;
 } {
@@ -308,7 +403,7 @@ export function sellerNewOrderEmail(params: OrderEmailParams): {
     subject: `New Order - ${esc(params.productTitle)} (#${esc(
       params.orderId.slice(0, 8)
     )})`,
-    html: baseTemplate("New Order", body),
+    html: baseTemplate("New Order", body, branding),
   };
 }
 
@@ -354,7 +449,8 @@ function buildSubscriptionDetailsSection(
 }
 
 export function subscriptionConfirmationEmail(
-  params: SubscriptionEmailParams
+  params: SubscriptionEmailParams,
+  branding?: StorefrontBranding | null
 ): {
   subject: string;
   html: string;
@@ -382,11 +478,14 @@ export function subscriptionConfirmationEmail(
 
   return {
     subject: `Subscription Confirmed - ${esc(params.productTitle)}`,
-    html: baseTemplate("Subscription Confirmation", body),
+    html: baseTemplate("Subscription Confirmation", body, branding),
   };
 }
 
-export function renewalReminderEmail(params: SubscriptionEmailParams): {
+export function renewalReminderEmail(
+  params: SubscriptionEmailParams,
+  branding?: StorefrontBranding | null
+): {
   subject: string;
   html: string;
 } {
@@ -408,16 +507,19 @@ export function renewalReminderEmail(params: SubscriptionEmailParams): {
     subject: `Upcoming Renewal - ${esc(params.productTitle)} on ${esc(
       params.nextBillingDate
     )}`,
-    html: baseTemplate("Subscription Renewal Reminder", body),
+    html: baseTemplate("Subscription Renewal Reminder", body, branding),
   };
 }
 
-export function addressChangeConfirmationEmail(params: {
-  productTitle: string;
-  newAddress: string;
-  buyerName?: string;
-  subscriptionId?: string;
-}): { subject: string; html: string } {
+export function addressChangeConfirmationEmail(
+  params: {
+    productTitle: string;
+    newAddress: string;
+    buyerName?: string;
+    subscriptionId?: string;
+  },
+  branding?: StorefrontBranding | null
+): { subject: string; html: string } {
   const greeting = params.buyerName
     ? `Hi ${esc(params.buyerName)},`
     : "Hi there,";
@@ -441,16 +543,19 @@ export function addressChangeConfirmationEmail(params: {
 
   return {
     subject: `Address Updated - ${esc(params.productTitle)} Subscription`,
-    html: baseTemplate("Address Change Confirmation", body),
+    html: baseTemplate("Address Change Confirmation", body, branding),
   };
 }
 
-export function subscriptionCancellationEmail(params: {
-  productTitle: string;
-  buyerName?: string;
-  endDate: string;
-  subscriptionId?: string;
-}): { subject: string; html: string } {
+export function subscriptionCancellationEmail(
+  params: {
+    productTitle: string;
+    buyerName?: string;
+    endDate: string;
+    subscriptionId?: string;
+  },
+  branding?: StorefrontBranding | null
+): { subject: string; html: string } {
   const greeting = params.buyerName
     ? `Hi ${esc(params.buyerName)},`
     : "Hi there,";
@@ -480,19 +585,22 @@ export function subscriptionCancellationEmail(params: {
 
   return {
     subject: `Subscription Canceled - ${esc(params.productTitle)}`,
-    html: baseTemplate("Subscription Canceled", body),
+    html: baseTemplate("Subscription Canceled", body, branding),
   };
 }
 
-export function orderUpdateEmail(params: {
-  orderId: string;
-  productTitle: string;
-  updateType: "shipping" | "status" | "message";
-  message: string;
-  trackingNumber?: string;
-  carrier?: string;
-  estimatedDelivery?: string;
-}): { subject: string; html: string } {
+export function orderUpdateEmail(
+  params: {
+    orderId: string;
+    productTitle: string;
+    updateType: "shipping" | "status" | "message";
+    message: string;
+    trackingNumber?: string;
+    carrier?: string;
+    estimatedDelivery?: string;
+  },
+  branding?: StorefrontBranding | null
+): { subject: string; html: string } {
   let updateTitle = "Order Update";
   let subjectLine = `Order Update - ${esc(params.productTitle)}`;
 
@@ -545,17 +653,20 @@ export function orderUpdateEmail(params: {
 
   return {
     subject: subjectLine,
-    html: baseTemplate(updateTitle, body),
+    html: baseTemplate(updateTitle, body, branding),
   };
 }
 
-export function returnRequestEmail(params: {
-  orderId: string;
-  productTitle: string;
-  requestType: "return" | "refund" | "exchange";
-  message: string;
-  buyerName?: string;
-}): { subject: string; html: string } {
+export function returnRequestEmail(
+  params: {
+    orderId: string;
+    productTitle: string;
+    requestType: "return" | "refund" | "exchange";
+    message: string;
+    buyerName?: string;
+  },
+  branding?: StorefrontBranding | null
+): { subject: string; html: string } {
   const typeLabel =
     params.requestType === "return"
       ? "Return"
@@ -598,15 +709,18 @@ export function returnRequestEmail(params: {
     subject: `${typeLabel} Request - ${esc(params.productTitle)} (#${esc(
       params.orderId.slice(0, 8)
     )})`,
-    html: baseTemplate(`${typeLabel} Request`, body),
+    html: baseTemplate(`${typeLabel} Request`, body, branding),
   };
 }
 
-export function inquiryNotificationEmail(params: {
-  senderName: string;
-  message: string;
-  senderHasEmail: boolean;
-}): { subject: string; html: string } {
+export function inquiryNotificationEmail(
+  params: {
+    senderName: string;
+    message: string;
+    senderHasEmail: boolean;
+  },
+  branding?: StorefrontBranding | null
+): { subject: string; html: string } {
   const replyNote = params.senderHasEmail
     ? `<p style="margin:16px 0 0;color:#374151;font-size:15px;line-height:1.6;">You can reply directly to this email to respond, or message them through ${BRAND_NAME}.</p>`
     : `<p style="margin:16px 0 0;color:#374151;font-size:15px;line-height:1.6;">This person does not have an email on file. To reply, please message them directly through the <strong>Inquiries</strong> chat on ${BRAND_NAME}.</p>`;
@@ -630,7 +744,7 @@ export function inquiryNotificationEmail(params: {
 
   return {
     subject: `New inquiry from ${esc(params.senderName)} on ${BRAND_NAME}`,
-    html: baseTemplate("New Inquiry", body),
+    html: baseTemplate("New Inquiry", body, branding),
   };
 }
 

@@ -231,6 +231,7 @@ const SubscriptionManagement = ({
             endDate:
               cancelSubscription.next_billing_date || new Date().toISOString(),
             subscriptionId: cancelSubscription.stripe_subscription_id,
+            sellerPubkey: cancelSubscription.seller_pubkey || undefined,
           }),
         }).catch(() => {});
       }
@@ -406,6 +407,7 @@ const SubscriptionManagement = ({
               addressSubscription.product_event_id,
             newAddress: newAddress,
             subscriptionId: addressSubscription.stripe_subscription_id,
+            sellerPubkey: addressSubscription.seller_pubkey || undefined,
           }),
         }).catch(() => {});
       }

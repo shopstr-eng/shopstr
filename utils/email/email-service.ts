@@ -19,6 +19,7 @@ import {
   affiliatePausedToSellerEmail,
   OrderEmailParams,
   SubscriptionEmailParams,
+  StorefrontBranding,
 } from "./email-templates";
 
 export async function sendEmail(
@@ -26,13 +27,22 @@ export async function sendEmail(
   subject: string,
   html: string,
   replyTo?: string,
-  headers?: Record<string, string>
+  headers?: Record<string, string>,
+  fromName?: string
 ): Promise<boolean> {
   try {
     const { client, fromEmail } = await getUncachableSendGridClient();
+    // Sanitize the display name to keep SendGrid happy: strip control chars
+    // and newlines, cap length. Fall back to bare email if nothing usable.
+    const safeFromName = fromName
+      ? fromName
+          .replace(/[\r\n\t\u0000-\u001F]/g, " ")
+          .slice(0, 78)
+          .trim()
+      : "";
     const msg: any = {
       to,
-      from: fromEmail,
+      from: safeFromName ? { email: fromEmail, name: safeFromName } : fromEmail,
       subject,
       html,
     };
@@ -54,18 +64,34 @@ export async function sendEmail(
 
 export async function sendOrderConfirmationToBuyer(
   buyerEmail: string,
-  params: OrderEmailParams
+  params: OrderEmailParams,
+  branding?: StorefrontBranding | null
 ): Promise<boolean> {
-  const { subject, html } = orderConfirmationEmail(params);
-  return sendEmail(buyerEmail, subject, html);
+  const { subject, html } = orderConfirmationEmail(params, branding);
+  return sendEmail(
+    buyerEmail,
+    subject,
+    html,
+    undefined,
+    undefined,
+    branding?.shopName
+  );
 }
 
 export async function sendNewOrderToSeller(
   sellerEmail: string,
-  params: OrderEmailParams
+  params: OrderEmailParams,
+  branding?: StorefrontBranding | null
 ): Promise<boolean> {
-  const { subject, html } = sellerNewOrderEmail(params);
-  return sendEmail(sellerEmail, subject, html);
+  const { subject, html } = sellerNewOrderEmail(params, branding);
+  return sendEmail(
+    sellerEmail,
+    subject,
+    html,
+    undefined,
+    undefined,
+    branding?.shopName
+  );
 }
 
 export async function sendOrderUpdateToBuyer(
@@ -78,26 +104,50 @@ export async function sendOrderUpdateToBuyer(
     trackingNumber?: string;
     carrier?: string;
     estimatedDelivery?: string;
-  }
+  },
+  branding?: StorefrontBranding | null
 ): Promise<boolean> {
-  const { subject, html } = orderUpdateEmail(params);
-  return sendEmail(buyerEmail, subject, html);
+  const { subject, html } = orderUpdateEmail(params, branding);
+  return sendEmail(
+    buyerEmail,
+    subject,
+    html,
+    undefined,
+    undefined,
+    branding?.shopName
+  );
 }
 
 export async function sendSubscriptionConfirmation(
   buyerEmail: string,
-  params: SubscriptionEmailParams
+  params: SubscriptionEmailParams,
+  branding?: StorefrontBranding | null
 ): Promise<boolean> {
-  const { subject, html } = subscriptionConfirmationEmail(params);
-  return sendEmail(buyerEmail, subject, html);
+  const { subject, html } = subscriptionConfirmationEmail(params, branding);
+  return sendEmail(
+    buyerEmail,
+    subject,
+    html,
+    undefined,
+    undefined,
+    branding?.shopName
+  );
 }
 
 export async function sendRenewalReminder(
   buyerEmail: string,
-  params: SubscriptionEmailParams
+  params: SubscriptionEmailParams,
+  branding?: StorefrontBranding | null
 ): Promise<boolean> {
-  const { subject, html } = renewalReminderEmail(params);
-  return sendEmail(buyerEmail, subject, html);
+  const { subject, html } = renewalReminderEmail(params, branding);
+  return sendEmail(
+    buyerEmail,
+    subject,
+    html,
+    undefined,
+    undefined,
+    branding?.shopName
+  );
 }
 
 export async function sendAddressChangeConfirmation(
@@ -107,10 +157,18 @@ export async function sendAddressChangeConfirmation(
     newAddress: string;
     buyerName?: string;
     subscriptionId?: string;
-  }
+  },
+  branding?: StorefrontBranding | null
 ): Promise<boolean> {
-  const { subject, html } = addressChangeConfirmationEmail(params);
-  return sendEmail(buyerEmail, subject, html);
+  const { subject, html } = addressChangeConfirmationEmail(params, branding);
+  return sendEmail(
+    buyerEmail,
+    subject,
+    html,
+    undefined,
+    undefined,
+    branding?.shopName
+  );
 }
 
 export async function sendSubscriptionCancellation(
@@ -120,10 +178,18 @@ export async function sendSubscriptionCancellation(
     buyerName?: string;
     endDate: string;
     subscriptionId?: string;
-  }
+  },
+  branding?: StorefrontBranding | null
 ): Promise<boolean> {
-  const { subject, html } = subscriptionCancellationEmail(params);
-  return sendEmail(buyerEmail, subject, html);
+  const { subject, html } = subscriptionCancellationEmail(params, branding);
+  return sendEmail(
+    buyerEmail,
+    subject,
+    html,
+    undefined,
+    undefined,
+    branding?.shopName
+  );
 }
 
 export async function sendInquiryNotification(
@@ -133,14 +199,25 @@ export async function sendInquiryNotification(
     message: string;
     senderHasEmail: boolean;
     senderEmail?: string;
-  }
+  },
+  branding?: StorefrontBranding | null
 ): Promise<boolean> {
-  const { subject, html } = inquiryNotificationEmail({
-    senderName: params.senderName,
-    message: params.message,
-    senderHasEmail: params.senderHasEmail,
-  });
-  return sendEmail(recipientEmail, subject, html, params.senderEmail);
+  const { subject, html } = inquiryNotificationEmail(
+    {
+      senderName: params.senderName,
+      message: params.message,
+      senderHasEmail: params.senderHasEmail,
+    },
+    branding
+  );
+  return sendEmail(
+    recipientEmail,
+    subject,
+    html,
+    params.senderEmail,
+    undefined,
+    branding?.shopName
+  );
 }
 
 export async function sendRecoveryEmail(
@@ -159,10 +236,18 @@ export async function sendReturnRequestToSeller(
     requestType: "return" | "refund" | "exchange";
     message: string;
     buyerName?: string;
-  }
+  },
+  branding?: StorefrontBranding | null
 ): Promise<boolean> {
-  const { subject, html } = returnRequestEmail(params);
-  return sendEmail(sellerEmail, subject, html);
+  const { subject, html } = returnRequestEmail(params, branding);
+  return sendEmail(
+    sellerEmail,
+    subject,
+    html,
+    undefined,
+    undefined,
+    branding?.shopName
+  );
 }
 
 export async function sendPaymentFailedToBuyer(

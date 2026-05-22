@@ -6,6 +6,7 @@ import {
   sendSubscriptionCancellation,
 } from "@/utils/email/email-service";
 import { applyRateLimit } from "@/utils/rate-limit";
+import { loadStorefrontBranding } from "@/utils/email/storefront-branding";
 
 const RATE_LIMIT = { limit: 20, windowMs: 60 * 1000 };
 
@@ -19,13 +20,14 @@ export default async function handler(
 
   if (!applyRateLimit(req, res, "email-send-subscription", RATE_LIMIT)) return;
 
-  const { type, buyerEmail, ...params } = req.body;
+  const { type, buyerEmail, sellerPubkey, ...params } = req.body;
 
   if (!type || !buyerEmail) {
     return res.status(400).json({ error: "type and buyerEmail are required" });
   }
 
   try {
+    const branding = await loadStorefrontBranding(sellerPubkey);
     let emailSent = false;
 
     switch (type) {
@@ -36,19 +38,23 @@ export default async function handler(
               "productTitle, frequency, and currency are required for confirmation emails",
           });
         }
-        emailSent = await sendSubscriptionConfirmation(buyerEmail, {
-          productTitle: params.productTitle,
-          frequency: params.frequency,
-          discountPercent: params.discountPercent || 0,
-          regularPrice: params.regularPrice || "N/A",
-          subscriptionPrice: params.subscriptionPrice || "N/A",
-          currency: params.currency,
-          nextBillingDate: params.nextBillingDate || "N/A",
-          buyerName: params.buyerName,
-          shippingAddress: params.shippingAddress,
-          orderId: params.orderId,
-          subscriptionId: params.subscriptionId,
-        });
+        emailSent = await sendSubscriptionConfirmation(
+          buyerEmail,
+          {
+            productTitle: params.productTitle,
+            frequency: params.frequency,
+            discountPercent: params.discountPercent || 0,
+            regularPrice: params.regularPrice || "N/A",
+            subscriptionPrice: params.subscriptionPrice || "N/A",
+            currency: params.currency,
+            nextBillingDate: params.nextBillingDate || "N/A",
+            buyerName: params.buyerName,
+            shippingAddress: params.shippingAddress,
+            orderId: params.orderId,
+            subscriptionId: params.subscriptionId,
+          },
+          branding
+        );
         break;
 
       case "renewal_reminder":
@@ -58,18 +64,22 @@ export default async function handler(
               "productTitle, frequency, and currency are required for renewal reminder emails",
           });
         }
-        emailSent = await sendRenewalReminder(buyerEmail, {
-          productTitle: params.productTitle,
-          frequency: params.frequency,
-          discountPercent: params.discountPercent || 0,
-          regularPrice: params.regularPrice || "N/A",
-          subscriptionPrice: params.subscriptionPrice || "N/A",
-          currency: params.currency,
-          nextBillingDate: params.nextBillingDate || "N/A",
-          buyerName: params.buyerName,
-          shippingAddress: params.shippingAddress,
-          subscriptionId: params.subscriptionId,
-        });
+        emailSent = await sendRenewalReminder(
+          buyerEmail,
+          {
+            productTitle: params.productTitle,
+            frequency: params.frequency,
+            discountPercent: params.discountPercent || 0,
+            regularPrice: params.regularPrice || "N/A",
+            subscriptionPrice: params.subscriptionPrice || "N/A",
+            currency: params.currency,
+            nextBillingDate: params.nextBillingDate || "N/A",
+            buyerName: params.buyerName,
+            shippingAddress: params.shippingAddress,
+            subscriptionId: params.subscriptionId,
+          },
+          branding
+        );
         break;
 
       case "address_change":
@@ -79,12 +89,16 @@ export default async function handler(
               "productTitle and newAddress are required for address change emails",
           });
         }
-        emailSent = await sendAddressChangeConfirmation(buyerEmail, {
-          productTitle: params.productTitle,
-          newAddress: params.newAddress,
-          buyerName: params.buyerName,
-          subscriptionId: params.subscriptionId,
-        });
+        emailSent = await sendAddressChangeConfirmation(
+          buyerEmail,
+          {
+            productTitle: params.productTitle,
+            newAddress: params.newAddress,
+            buyerName: params.buyerName,
+            subscriptionId: params.subscriptionId,
+          },
+          branding
+        );
         break;
 
       case "cancellation":
@@ -94,12 +108,16 @@ export default async function handler(
               "productTitle and endDate are required for cancellation emails",
           });
         }
-        emailSent = await sendSubscriptionCancellation(buyerEmail, {
-          productTitle: params.productTitle,
-          buyerName: params.buyerName,
-          endDate: params.endDate,
-          subscriptionId: params.subscriptionId,
-        });
+        emailSent = await sendSubscriptionCancellation(
+          buyerEmail,
+          {
+            productTitle: params.productTitle,
+            buyerName: params.buyerName,
+            endDate: params.endDate,
+            subscriptionId: params.subscriptionId,
+          },
+          branding
+        );
         break;
 
       default:

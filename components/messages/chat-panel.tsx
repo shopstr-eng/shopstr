@@ -283,6 +283,7 @@ const ChatPanel = ({
             (shippingInfo?.carrier ? ` Carrier: ${shippingInfo.carrier}` : ""),
           trackingNumber: shippingInfo?.tracking || undefined,
           carrier: shippingInfo?.carrier || undefined,
+          sellerPubkey: userPubkey || undefined,
         }),
       }).catch(() => {});
     } catch (error) {

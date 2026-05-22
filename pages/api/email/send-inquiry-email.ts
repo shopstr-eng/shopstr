@@ -5,6 +5,7 @@ import {
   getUserAuthEmail,
 } from "@/utils/db/db-service";
 import { applyRateLimit } from "@/utils/rate-limit";
+import { loadStorefrontBranding } from "@/utils/email/storefront-branding";
 
 const RATE_LIMIT = { limit: 20, windowMs: 60 * 1000 };
 
@@ -52,12 +53,19 @@ export default async function handler(
     let emailsSent = 0;
 
     if (recipientEmail) {
-      const sent = await sendInquiryNotification(recipientEmail, {
-        senderName: displayName,
-        message,
-        senderHasEmail: !!senderEmail,
-        senderEmail: senderEmail || undefined,
-      });
+      // Inquiries land in the seller's inbox — brand with their stall so the
+      // email matches the storefront the buyer engaged with.
+      const branding = await loadStorefrontBranding(recipientPubkey);
+      const sent = await sendInquiryNotification(
+        recipientEmail,
+        {
+          senderName: displayName,
+          message,
+          senderHasEmail: !!senderEmail,
+          senderEmail: senderEmail || undefined,
+        },
+        branding
+      );
       if (sent) emailsSent++;
     }
 

@@ -5,6 +5,7 @@ import {
   getUserAuthEmail,
 } from "@/utils/db/db-service";
 import { applyRateLimit } from "@/utils/rate-limit";
+import { loadStorefrontBranding } from "@/utils/email/storefront-branding";
 
 const RATE_LIMIT = { limit: 20, windowMs: 60 * 1000 };
 
@@ -48,13 +49,18 @@ export default async function handler(
       });
     }
 
-    const emailSent = await sendReturnRequestToSeller(sellerEmail, {
-      orderId,
-      productTitle,
-      requestType,
-      message,
-      buyerName,
-    });
+    const branding = await loadStorefrontBranding(sellerPubkey);
+    const emailSent = await sendReturnRequestToSeller(
+      sellerEmail,
+      {
+        orderId,
+        productTitle,
+        requestType,
+        message,
+        buyerName,
+      },
+      branding
+    );
 
     return res.status(200).json({ success: true, emailSent });
   } catch (error) {

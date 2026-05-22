@@ -16,6 +16,7 @@ import {
 import { deductStock } from "@/utils/db/inventory-service";
 import { resolveExplicitPaymentMethod } from "@/utils/messages/order-message-utils";
 import { applyRateLimit } from "@/utils/rate-limit";
+import { loadStorefrontBranding } from "@/utils/email/storefront-branding";
 
 const RATE_LIMIT = { limit: 30, windowMs: 60 * 1000 };
 
@@ -86,6 +87,8 @@ export default async function handler(
   };
 
   try {
+    const branding = await loadStorefrontBranding(sellerPubkey);
+
     if (buyerEmail) {
       await saveNotificationEmail(
         buyerEmail,
@@ -95,7 +98,8 @@ export default async function handler(
       );
       results.buyerEmailSent = await sendOrderConfirmationToBuyer(
         buyerEmail,
-        emailParams
+        emailParams,
+        branding
       );
     }
 
@@ -108,7 +112,8 @@ export default async function handler(
       if (sellerEmail) {
         results.sellerEmailSent = await sendNewOrderToSeller(
           sellerEmail,
-          emailParams
+          emailParams,
+          branding
         );
       }
     }
