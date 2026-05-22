@@ -4539,7 +4539,7 @@ export default function ProductInvoiceCard({
         <div className="h-px w-full bg-gray-300 lg:h-full lg:w-px"></div>
 
         {/* Right Side - Order Type Selection, Forms, and Payment */}
-        <div className="w-full min-w-0 p-6 lg:w-1/2">
+        <div className="w-full max-w-full min-w-0 overflow-x-hidden p-4 sm:p-6 lg:w-1/2">
           {/* Order Type Selection */}
           {showOrderTypeSelection && (
             <>
@@ -4609,7 +4609,7 @@ export default function ProductInvoiceCard({
 
               <form
                 onSubmit={handleFormSubmit((data) => onFormSubmit(data))}
-                className="space-y-6"
+                className="w-full max-w-full min-w-0 space-y-6"
               >
                 {renderContactForm()}
 
