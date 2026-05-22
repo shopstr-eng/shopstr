@@ -215,6 +215,8 @@ export class NostrManager {
 
       const originalOnevent = params.onevent;
       const originalOneose = params.oneose;
+      const originalOnclose = params.onclose;
+      let closeReasons: string[] | undefined;
       const fetchParams: SubscribeManyParams = {
         ...params,
         onevent: (event) => {
@@ -223,7 +225,22 @@ export class NostrManager {
         },
         oneose: () => {
           originalOneose?.();
-          settle(() => resolve(fetchedEvents));
+          queueMicrotask(() => {
+            const reasons = closeReasons;
+            if (reasons && reasons.length > 0) {
+              settle(() =>
+                reject(
+                  new Error(`Relay subscription closed: ${reasons.join("; ")}`)
+                )
+              );
+              return;
+            }
+            settle(() => resolve(fetchedEvents));
+          });
+        },
+        onclose: (reasons) => {
+          closeReasons = reasons;
+          originalOnclose?.(reasons);
         },
       };
 
