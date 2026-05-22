@@ -6,6 +6,7 @@ import {
 } from "nostr-tools";
 import type { SubscribeManyParams, SubCloser } from "nostr-tools/abstract-pool";
 
+import type { Logger } from "./logger.js";
 import { TimeoutError } from "./timeout.js";
 
 export type NostrEvent = NostrToolsEvent;
@@ -29,6 +30,7 @@ export type NostrManagerParams = {
   connectionTimeout?: number;
   keepAliveTime?: number;
   gcInterval?: number;
+  logger?: Pick<Logger, "warn">;
   readable?: boolean;
   writable?: boolean;
 };
@@ -50,6 +52,7 @@ export class NostrManager {
     >
   > & {
     connectionTimeout?: number;
+    logger?: Pick<Logger, "warn">;
   };
   private readonly relays: NostrRelay[] = [];
   private gcTimeout?: ReturnType<typeof setTimeout>;
@@ -64,6 +67,9 @@ export class NostrManager {
       ...(params.connectionTimeout !== undefined && {
         connectionTimeout: params.connectionTimeout,
       }),
+      ...(params.logger !== undefined && {
+        logger: params.logger,
+      }),
     };
     this.addRelays(relays, {
       connectionTimeout: this.params.connectionTimeout,
@@ -72,15 +78,31 @@ export class NostrManager {
   }
 
   private async keepAlive(relays: NostrRelay[]): Promise<void> {
-    await Promise.allSettled(
+    await Promise.all(
       relays.map(async (relay) => {
-        if (relay.sleeping) {
-          await relay.connect();
-          relay.sleeping = false;
+        try {
+          if (relay.sleeping) {
+            await relay.connect();
+            relay.sleeping = false;
+          }
+        } catch (error) {
+          this.logRelayWarning("Relay keep-alive failed", relay.url, error);
+        } finally {
+          relay.lastActive = Date.now();
         }
-        relay.lastActive = Date.now();
       })
     );
+  }
+
+  private logRelayWarning(
+    message: string,
+    relayUrl: string,
+    error: unknown
+  ): void {
+    this.params.logger?.warn(message, {
+      relay: relayUrl,
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 
   private scheduleGc(): void {
@@ -98,7 +120,15 @@ export class NostrManager {
           relay.activeSubs.length === 0 &&
           now - relay.lastActive > this.params.keepAliveTime
         ) {
-          await relay.disconnect();
+          try {
+            await relay.disconnect();
+          } catch (error) {
+            this.logRelayWarning(
+              "Relay GC disconnect failed",
+              relay.url,
+              error
+            );
+          }
           relay.sleeping = true;
         }
       }
@@ -219,14 +249,22 @@ export class NostrManager {
     if (this.relays.some((relay) => relay.url === relayUrl)) return;
 
     let relayPromise = this.pool.ensureRelay(relayUrl, params);
+    relayPromise.catch(() => undefined);
+
+    const ensureRelaySafely = (): typeof relayPromise => {
+      relayPromise = this.pool.ensureRelay(relayUrl, params);
+      relayPromise.catch(() => undefined);
+      return relayPromise;
+    };
+
     const relay: NostrRelay = {
       url: relayUrl,
       connect: async () => {
-        relayPromise = this.pool.ensureRelay(relayUrl, params);
-        await relayPromise;
+        await ensureRelaySafely();
       },
       disconnect: async () => {
-        (await relayPromise).close();
+        const relayHandle = await relayPromise.catch(() => null);
+        relayHandle?.close();
       },
       activeSubs: [],
       sleeping: true,
