@@ -26,7 +26,7 @@ export default async function handler(
   if (!domain || !tlsStatus) {
     return res.status(400).json({ error: "domain and tlsStatus are required" });
   }
-  if (!VALID_STATUSES.includes(tlsStatus)) {
+  if (!VALID_STATUSES.includes(tlsStatus as TlsStatus)) {
     return res.status(400).json({ error: "Invalid tlsStatus" });
   }
 

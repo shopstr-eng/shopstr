@@ -15,7 +15,8 @@ type Instructions = {
   domainType: "subdomain" | "apex";
   txt: DnsInstruction;
   subdomain: DnsInstruction;
-  apex: DnsInstruction;
+  apex: DnsInstruction & { ips?: string[] };
+  replitVerify: DnsInstruction;
   recommended: "subdomain" | "apex";
 };
 
@@ -283,6 +284,27 @@ export default function CustomDomainSection() {
             </div>
           </details>
         </div>
+        <div>
+          <h4 className="mb-2 text-sm font-semibold text-gray-900">
+            Step 3 — Replit deployment verification (TXT record)
+          </h4>
+          <DnsRow instruction={ins.replitVerify} />
+        </div>
+        {ins.apex.ips && ins.apex.ips.length > 0 && (
+          <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs text-gray-600">
+            <p className="font-semibold text-gray-700">
+              Deployment IP{ins.apex.ips.length > 1 ? "s" : ""} (for A records)
+            </p>
+            <p className="mt-1 font-mono break-all text-gray-800">
+              {ins.apex.ips.join(", ")}
+            </p>
+            <p className="mt-1">
+              Useful if you&apos;re configuring records ahead of time or your
+              DNS provider needs the value separately from the rest of the
+              instructions.
+            </p>
+          </div>
+        )}
       </div>
     );
   }, [domain]);
