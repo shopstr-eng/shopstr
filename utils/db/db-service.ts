@@ -2636,6 +2636,45 @@ export async function savePopupEmailCapture(
   }
 }
 
+export interface PopupEmailCaptureRow {
+  email: string;
+  phone: string | null;
+  discount_code: string;
+  discount_percentage: number;
+  created_at: string;
+  times_used: number;
+}
+
+export async function getPopupEmailCapturesBySeller(
+  sellerPubkey: string
+): Promise<PopupEmailCaptureRow[]> {
+  const dbPool = getDbPool();
+  let client;
+  try {
+    client = await dbPool.connect();
+    const result = await client.query(
+      `SELECT p.email,
+              p.phone,
+              p.discount_code,
+              p.discount_percentage,
+              p.created_at,
+              COALESCE(d.times_used, 0) AS times_used
+         FROM popup_email_captures p
+         LEFT JOIN discount_codes d
+           ON d.code = p.discount_code AND d.pubkey = p.seller_pubkey
+        WHERE p.seller_pubkey = $1
+        ORDER BY p.created_at DESC`,
+      [sellerPubkey]
+    );
+    return result.rows as PopupEmailCaptureRow[];
+  } catch (error) {
+    console.error("Failed to list popup email captures:", error);
+    return [];
+  } finally {
+    if (client) client.release();
+  }
+}
+
 export async function getPopupEmailCapture(
   sellerPubkey: string,
   email: string

@@ -2,6 +2,7 @@ import { useEffect, useState, useContext, useRef } from "react";
 import { useRouter } from "next/router";
 import { ShopMapContext } from "@/utils/context/context";
 import StorefrontLayout from "@/components/storefront/storefront-layout";
+import ThemedStallOrders from "@/components/storefront/themed-stall-orders";
 import MilkMarketSpinner from "@/components/utility-components/mm-spinner";
 import { GetServerSideProps } from "next";
 import { OgMetaProps, DEFAULT_OG } from "@/components/og-head";
@@ -209,6 +210,18 @@ export default function ShopSubPage() {
           Back to Stall
         </a>
       </div>
+    );
+  }
+
+  if (subPage === "orders") {
+    const tabParam = router.query.tab;
+    const initialTab = typeof tabParam === "string" ? tabParam : undefined;
+    return (
+      <ThemedStallOrders
+        sellerPubkey={shopPubkey}
+        shopSlug={slug}
+        {...(initialTab ? { initialTab } : {})}
+      />
     );
   }
 

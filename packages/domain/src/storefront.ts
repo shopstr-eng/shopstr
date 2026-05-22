@@ -103,11 +103,30 @@ export type StorefrontSectionType =
   | "image"
   | "contact"
   | "reviews"
+  | "social_posts"
   | "product_description"
   | "product_specifications"
   | "product_shipping_returns"
   | "product_gallery"
   | "related_products";
+
+export type StorefrontSocialPostPlatform =
+  | "instagram"
+  | "x"
+  | "facebook"
+  | "youtube"
+  | "tiktok"
+  | "telegram"
+  | "website"
+  | "other";
+
+export interface StorefrontSocialPost {
+  platform: StorefrontSocialPostPlatform;
+  url: string;
+  caption?: string;
+  image?: string;
+  author?: string;
+}
 
 export interface StorefrontSpecificationItem {
   label: string;
@@ -149,6 +168,10 @@ export interface StorefrontSection {
   useProductImages?: boolean;
   excludeCurrentProduct?: boolean;
   mergeAutoSpecs?: boolean;
+  socialPosts?: StorefrontSocialPost[];
+  socialPostsLayout?: "grid" | "carousel";
+  socialPostsAutoplay?: boolean;
+  socialPostsSpeed?: number;
 }
 
 export interface StorefrontProductPageConfig {

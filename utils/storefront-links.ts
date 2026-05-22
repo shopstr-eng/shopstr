@@ -115,12 +115,26 @@ export function isExternalStorefrontHref(href: string): boolean {
 }
 
 function sanitizeSection(section: StorefrontSection): StorefrontSection {
-  if (!section.ctaLink) return section;
+  let updated = section;
 
-  return {
-    ...section,
-    ctaLink: sanitizeStorefrontSectionLink(section.ctaLink),
-  };
+  if (updated.ctaLink) {
+    updated = {
+      ...updated,
+      ctaLink: sanitizeStorefrontSectionLink(updated.ctaLink),
+    };
+  }
+
+  if (updated.socialPosts && updated.socialPosts.length > 0) {
+    updated = {
+      ...updated,
+      socialPosts: updated.socialPosts.map((post) => ({
+        ...post,
+        url: sanitizeStorefrontSocialLink(post.url),
+      })),
+    };
+  }
+
+  return updated;
 }
 
 function sanitizePage(page: StorefrontPage): StorefrontPage {

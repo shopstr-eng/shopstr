@@ -1,0 +1,219 @@
+import { useEffect, useRef, useState } from "react";
+import { sanitizeUrl } from "@braintree/sanitize-url";
+import {
+  StorefrontColorScheme,
+  StorefrontSection,
+  StorefrontSocialPost,
+} from "@/utils/types/types";
+import FormattedText from "../formatted-text";
+import { sanitizeStorefrontSocialLink } from "@/utils/storefront-links";
+
+interface SectionSocialPostsProps {
+  section: StorefrontSection;
+  colors: StorefrontColorScheme;
+}
+
+const SOCIAL_IMAGE_ICONS: Record<string, string> = {
+  instagram: "/instagram-icon.png",
+  x: "/x-logo-black.png",
+  youtube: "/youtube-icon.png",
+  tiktok: "/tiktok-icon.png",
+  telegram: "/telegram-icon.png",
+  facebook: "/facebook-icon.png",
+};
+
+const SOCIAL_EMOJI_ICONS: Record<string, string> = {
+  website: "🌐",
+  other: "🔗",
+};
+
+const PLATFORM_LABEL: Record<string, string> = {
+  instagram: "Instagram",
+  x: "X",
+  facebook: "Facebook",
+  youtube: "YouTube",
+  tiktok: "TikTok",
+  telegram: "Telegram",
+  website: "Website",
+  other: "Link",
+};
+
+function PostCard({
+  post,
+  colors,
+}: {
+  post: StorefrontSocialPost;
+  colors: StorefrontColorScheme;
+}) {
+  const href = sanitizeStorefrontSocialLink(post.url, "#");
+  const iconSrc = SOCIAL_IMAGE_ICONS[post.platform];
+  const emoji = SOCIAL_EMOJI_ICONS[post.platform];
+
+  return (
+    <a
+      href={href}
+      target={href.startsWith("http") ? "_blank" : undefined}
+      rel={href.startsWith("http") ? "noopener noreferrer" : undefined}
+      className="group flex h-full w-full flex-col overflow-hidden rounded-xl border transition-transform hover:-translate-y-1"
+      style={{
+        borderColor: colors.primary + "22",
+        backgroundColor: colors.background,
+      }}
+    >
+      {post.image && (
+        <div
+          className="aspect-square w-full overflow-hidden"
+          style={{ backgroundColor: colors.secondary + "11" }}
+        >
+          <img
+            src={sanitizeUrl(post.image)}
+            alt={post.caption || post.author || PLATFORM_LABEL[post.platform]}
+            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+            loading="lazy"
+          />
+        </div>
+      )}
+      <div className="flex flex-1 flex-col gap-2 p-4">
+        <div className="flex items-center gap-2">
+          <span
+            className="flex h-7 w-7 items-center justify-center rounded-full text-sm"
+            style={{
+              backgroundColor: colors.primary + "22",
+              color: colors.primary,
+            }}
+          >
+            {iconSrc ? (
+              <img
+                src={iconSrc}
+                alt={PLATFORM_LABEL[post.platform]}
+                className="h-4 w-4 object-contain"
+              />
+            ) : (
+              emoji || SOCIAL_EMOJI_ICONS.other
+            )}
+          </span>
+          <span
+            className="font-heading text-xs font-bold tracking-wide uppercase opacity-70"
+            style={{ color: colors.text }}
+          >
+            {post.author || PLATFORM_LABEL[post.platform]}
+          </span>
+        </div>
+        {post.caption && (
+          <FormattedText
+            as="p"
+            text={post.caption}
+            className="font-body line-clamp-4 text-sm opacity-80"
+          />
+        )}
+      </div>
+    </a>
+  );
+}
+
+export default function SectionSocialPosts({
+  section,
+  colors,
+}: SectionSocialPostsProps) {
+  const posts = (section.socialPosts || []).filter((p) => p && p.url?.trim());
+  const layout = section.socialPostsLayout || "grid";
+  const autoplay = section.socialPostsAutoplay !== false;
+  const speed = section.socialPostsSpeed ?? 40;
+
+  const trackRef = useRef<HTMLDivElement>(null);
+  const [paused, setPaused] = useState(false);
+
+  useEffect(() => {
+    if (layout !== "carousel" || !autoplay || posts.length === 0) return;
+    const track = trackRef.current;
+    if (!track) return;
+    track.style.animationDuration = `${speed}s`;
+  }, [layout, autoplay, speed, posts.length]);
+
+  if (posts.length === 0) return null;
+
+  return (
+    <div
+      className="px-4 py-16 md:px-6"
+      style={{ backgroundColor: colors.secondary + "08" }}
+    >
+      <div className="mx-auto max-w-6xl">
+        {section.heading && (
+          <FormattedText
+            text={section.heading}
+            as="h2"
+            className="font-heading mb-3 text-center text-3xl font-bold"
+            style={{ color: "var(--sf-text)" }}
+          />
+        )}
+        {section.subheading && (
+          <FormattedText
+            text={section.subheading}
+            as="p"
+            className="font-body mb-10 text-center text-base opacity-70"
+            style={{ color: "var(--sf-text)" }}
+          />
+        )}
+
+        {layout === "grid" ? (
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {posts.map((post, idx) => (
+              <PostCard key={idx} post={post} colors={colors} />
+            ))}
+          </div>
+        ) : (
+          <div
+            className={`storefront-social-carousel relative ${
+              autoplay ? "overflow-hidden" : "overflow-x-auto pb-2"
+            }`}
+            onMouseEnter={() => setPaused(true)}
+            onMouseLeave={() => setPaused(false)}
+          >
+            <div
+              ref={trackRef}
+              className={`flex gap-6 ${
+                autoplay ? "storefront-social-carousel-track" : ""
+              }`}
+              style={{
+                animationPlayState: paused ? "paused" : "running",
+              }}
+            >
+              {(autoplay ? [...posts, ...posts] : posts).map((post, idx) => (
+                <div
+                  key={idx}
+                  className="w-72 flex-shrink-0 sm:w-80"
+                  style={{ scrollSnapAlign: "start" }}
+                >
+                  <PostCard post={post} colors={colors} />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <style jsx>{`
+        @keyframes storefront-social-scroll {
+          0% {
+            transform: translateX(0);
+          }
+          100% {
+            transform: translateX(-50%);
+          }
+        }
+        .storefront-social-carousel-track {
+          animation-name: storefront-social-scroll;
+          animation-timing-function: linear;
+          animation-iteration-count: infinite;
+          width: max-content;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .storefront-social-carousel-track {
+            animation: none;
+            overflow-x: auto;
+          }
+        }
+      `}</style>
+    </div>
+  );
+}

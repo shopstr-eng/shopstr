@@ -12,6 +12,7 @@ import SectionText from "./sections/section-text";
 import SectionImage from "./sections/section-image";
 import SectionContact from "./sections/section-contact";
 import SectionReviews from "./sections/section-reviews";
+import SectionSocialPosts from "./sections/section-social-posts";
 import SectionProductDescription from "./sections/section-product-description";
 import SectionProductSpecifications from "./sections/section-product-specifications";
 import SectionProductShippingReturns from "./sections/section-product-shipping-returns";
@@ -82,6 +83,8 @@ export default function SectionRenderer({
       return <SectionImage section={section} colors={colors} />;
     case "contact":
       return <SectionContact section={section} colors={colors} />;
+    case "social_posts":
+      return <SectionSocialPosts section={section} colors={colors} />;
     case "reviews":
       if (currentProduct?.d) {
         return (

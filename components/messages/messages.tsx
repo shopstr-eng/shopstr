@@ -25,7 +25,13 @@ import SignInModal from "../sign-in/SignInModal";
 import { WHITEBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { createNip98AuthorizationHeader } from "@/utils/nostr/nip98-auth";
 
-const Messages = ({ isPayment }: { isPayment: boolean }) => {
+const Messages = ({
+  isPayment,
+  filterByCounterpartyPubkey,
+}: {
+  isPayment: boolean;
+  filterByCounterpartyPubkey?: string;
+}) => {
   const router = useRouter();
   const { isOpen, onOpen, onClose } = useDisclosure();
   const chatsContext = useContext(ChatsContext);
@@ -204,7 +210,12 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
         }
       }
       if (decryptedChat.length > 0) {
-        decryptedChats.set(chatPubkey, { unreadCount, decryptedChat });
+        if (
+          !filterByCounterpartyPubkey ||
+          chatPubkey === filterByCounterpartyPubkey
+        ) {
+          decryptedChats.set(chatPubkey, { unreadCount, decryptedChat });
+        }
       }
     }
     return decryptedChats;

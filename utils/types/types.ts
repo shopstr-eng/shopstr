@@ -28,6 +28,8 @@ export type {
   StorefrontSectionType,
   StorefrontSpecificationItem,
   StorefrontSocialLink,
+  StorefrontSocialPost,
+  StorefrontSocialPostPlatform,
   StorefrontTestimonial,
   StorefrontTimelineItem,
 } from "@milk-market/domain";

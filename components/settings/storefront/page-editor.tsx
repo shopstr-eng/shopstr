@@ -31,6 +31,7 @@ const SECTION_TYPES: { type: StorefrontSectionType; label: string }[] = [
   { type: "image", label: "Image" },
   { type: "contact", label: "Contact" },
   { type: "reviews", label: "Customer Reviews" },
+  { type: "social_posts", label: "Social Posts" },
 ];
 
 const inputWrapperClass =

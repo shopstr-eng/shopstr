@@ -2052,6 +2052,14 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                           in exchange for their email address. Optionally add
                           interactive question flows before the capture step.
                         </p>
+                        <p className="mb-3 ml-7 text-sm">
+                          <a
+                            href="/orders?tab=contacts"
+                            className="font-semibold text-blue-600 hover:underline"
+                          >
+                            View captured contacts →
+                          </a>
+                        </p>
 
                         {emailPopup.enabled && (
                           <div className="ml-7 space-y-4 border-t border-gray-100 pt-4">

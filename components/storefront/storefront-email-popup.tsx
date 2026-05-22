@@ -35,6 +35,7 @@ export default function StorefrontEmailPopupComponent({
   >("idle");
   const [discountCode, setDiscountCode] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
+  const [codeCopied, setCodeCopied] = useState(false);
 
   const flowSteps = config.flowSteps || [];
   const hasFlow = flowSteps.length > 0;
@@ -266,16 +267,21 @@ export default function StorefrontEmailPopupComponent({
                         </p>
                       </div>
                       <button
-                        onClick={() => {
-                          void copyToClipboard(discountCode);
+                        onClick={async () => {
+                          const ok = await copyToClipboard(discountCode);
+                          if (ok !== false) {
+                            setCodeCopied(true);
+                            setTimeout(() => setCodeCopied(false), 2000);
+                          }
                         }}
+                        aria-live="polite"
                         className="mb-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors"
                         style={{
                           backgroundColor: btnColor,
                           color: btnText,
                         }}
                       >
-                        Copy Code
+                        {codeCopied ? "✓ Copied!" : "Copy Code"}
                       </button>
                       <button
                         onClick={handleDismiss}

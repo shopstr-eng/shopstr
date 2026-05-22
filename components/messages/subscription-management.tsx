@@ -69,7 +69,11 @@ const FREQUENCY_LABELS: Record<string, string> = {
   quarterly: "Quarterly",
 };
 
-const SubscriptionManagement = () => {
+const SubscriptionManagement = ({
+  filterBySellerPubkey,
+}: {
+  filterBySellerPubkey?: string;
+} = {}) => {
   const [subscriptions, setSubscriptions] = useState<SubscriptionData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [guestEmail, setGuestEmail] = useState("");
@@ -496,10 +500,13 @@ const SubscriptionManagement = () => {
     );
   }
 
-  const activeSubscriptions = subscriptions.filter(
+  const scopedSubscriptions = filterBySellerPubkey
+    ? subscriptions.filter((s) => s.seller_pubkey === filterBySellerPubkey)
+    : subscriptions;
+  const activeSubscriptions = scopedSubscriptions.filter(
     (s) => s.status === "active"
   );
-  const inactiveSubscriptions = subscriptions.filter(
+  const inactiveSubscriptions = scopedSubscriptions.filter(
     (s) => s.status !== "active"
   );
 

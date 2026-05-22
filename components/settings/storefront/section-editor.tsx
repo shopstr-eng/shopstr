@@ -9,6 +9,8 @@ import {
   StorefrontComparisonColumn,
   StorefrontTimelineItem,
   StorefrontSpecificationItem,
+  StorefrontSocialPost,
+  StorefrontSocialPostPlatform,
 } from "@/utils/types/types";
 import { FileUploaderButton } from "@/components/utility-components/file-uploader";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
@@ -45,6 +47,7 @@ const SECTION_LABELS: Record<StorefrontSectionType, string> = {
   image: "Image",
   contact: "Contact",
   reviews: "Customer Reviews",
+  social_posts: "Social Posts",
   product_description: "Product Description",
   product_specifications: "Product Specifications",
   product_shipping_returns: "Shipping & Returns",
@@ -605,6 +608,66 @@ export default function SectionEditor({
                 />
                 Exclude the current product
               </label>
+            </>
+          )}
+
+          {section.type === "social_posts" && (
+            <>
+              <Select
+                label="Layout"
+                classNames={selectClassNames}
+                variant="bordered"
+                selectedKeys={[section.socialPostsLayout || "grid"]}
+                onChange={(e) =>
+                  update({
+                    socialPostsLayout: e.target.value as "grid" | "carousel",
+                  })
+                }
+              >
+                <SelectItem key="grid" className="text-black">
+                  Static Grid
+                </SelectItem>
+                <SelectItem key="carousel" className="text-black">
+                  Moving Carousel
+                </SelectItem>
+              </Select>
+
+              {(section.socialPostsLayout || "grid") === "carousel" && (
+                <>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={section.socialPostsAutoplay !== false}
+                      onChange={(e) =>
+                        update({ socialPostsAutoplay: e.target.checked })
+                      }
+                    />
+                    Auto-scroll the carousel
+                  </label>
+                  <div>
+                    <label className="mb-1 block text-xs text-gray-500">
+                      Scroll Speed: {section.socialPostsSpeed ?? 40}s per loop
+                    </label>
+                    <input
+                      type="range"
+                      min="10"
+                      max="120"
+                      value={section.socialPostsSpeed ?? 40}
+                      onChange={(e) =>
+                        update({
+                          socialPostsSpeed: parseInt(e.target.value),
+                        })
+                      }
+                      className="w-full"
+                    />
+                  </div>
+                </>
+              )}
+
+              <SocialPostsEditor
+                posts={section.socialPosts || []}
+                onChange={(socialPosts) => update({ socialPosts })}
+              />
             </>
           )}
 
@@ -1553,6 +1616,138 @@ function GalleryImageEditor({
       <p className="text-[11px] text-gray-500">
         Recommended: 1200 × 1200 px (square) for the product gallery grid.
       </p>
+    </div>
+  );
+}
+
+const SOCIAL_POST_PLATFORMS: {
+  value: StorefrontSocialPostPlatform;
+  label: string;
+}[] = [
+  { value: "instagram", label: "Instagram" },
+  { value: "x", label: "X (Twitter)" },
+  { value: "facebook", label: "Facebook" },
+  { value: "youtube", label: "YouTube" },
+  { value: "tiktok", label: "TikTok" },
+  { value: "telegram", label: "Telegram" },
+  { value: "website", label: "Website / Blog" },
+  { value: "other", label: "Other" },
+];
+
+function SocialPostsEditor({
+  posts,
+  onChange,
+}: {
+  posts: StorefrontSocialPost[];
+  onChange: (posts: StorefrontSocialPost[]) => void;
+}) {
+  const add = () => onChange([...posts, { platform: "instagram", url: "" }]);
+  const remove = (idx: number) => onChange(posts.filter((_, i) => i !== idx));
+  const edit = (idx: number, fields: Partial<StorefrontSocialPost>) => {
+    const updated = [...posts];
+    updated[idx] = { ...updated[idx]!, ...fields };
+    onChange(updated);
+  };
+
+  return (
+    <div className="space-y-3">
+      <label className="block text-sm font-bold text-gray-700">
+        Social Posts
+      </label>
+      <p className="text-xs text-gray-500">
+        Add links to your posts on Instagram, TikTok, X, YouTube, etc. Each card
+        links out to the original post.
+      </p>
+      {posts.map((post, idx) => (
+        <div key={idx} className="rounded border border-gray-200 p-3">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex-1 space-y-2">
+              <div className="flex gap-2">
+                <Select
+                  label="Platform"
+                  size="sm"
+                  classNames={selectClassNames}
+                  variant="bordered"
+                  selectedKeys={[post.platform]}
+                  onChange={(e) =>
+                    edit(idx, {
+                      platform: e.target.value as StorefrontSocialPostPlatform,
+                    })
+                  }
+                  className="w-40"
+                >
+                  {SOCIAL_POST_PLATFORMS.map((p) => (
+                    <SelectItem key={p.value} className="text-black">
+                      {p.label}
+                    </SelectItem>
+                  ))}
+                </Select>
+                <Input
+                  label="Post URL"
+                  size="sm"
+                  classNames={{ inputWrapper: inputWrapperClass }}
+                  variant="bordered"
+                  value={post.url}
+                  onChange={(e) => edit(idx, { url: e.target.value })}
+                  placeholder="https://instagram.com/p/..."
+                  className="flex-1"
+                />
+              </div>
+              <Textarea
+                label="Caption (optional)"
+                size="sm"
+                classNames={{ inputWrapper: inputWrapperClass }}
+                variant="bordered"
+                minRows={2}
+                value={post.caption || ""}
+                onChange={(e) => edit(idx, { caption: e.target.value })}
+              />
+              <div className="flex gap-2">
+                <Input
+                  label="Author / Handle (optional)"
+                  size="sm"
+                  classNames={{ inputWrapper: inputWrapperClass }}
+                  variant="bordered"
+                  value={post.author || ""}
+                  onChange={(e) => edit(idx, { author: e.target.value })}
+                  placeholder="@yourfarm"
+                  className="flex-1"
+                />
+                <Input
+                  label="Thumbnail URL (optional)"
+                  size="sm"
+                  classNames={{ inputWrapper: inputWrapperClass }}
+                  variant="bordered"
+                  value={post.image || ""}
+                  onChange={(e) => edit(idx, { image: e.target.value })}
+                  className="flex-1"
+                />
+                <FileUploaderButton
+                  className="mt-5 rounded-lg border-2 border-black bg-white px-3 py-2 text-xs font-bold text-black"
+                  imgCallbackOnUpload={(url) => edit(idx, { image: url })}
+                >
+                  Upload
+                </FileUploaderButton>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => remove(idx)}
+              className="text-xs text-red-500"
+              aria-label="Remove post"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      ))}
+      <button
+        type="button"
+        onClick={add}
+        className="text-sm font-bold text-blue-600 hover:underline"
+      >
+        + Add Social Post
+      </button>
     </div>
   );
 }
