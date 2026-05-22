@@ -402,10 +402,15 @@ describe("db-service helpers", () => {
               return { rows: [], rowCount: 1 };
             }
 
-            if (typeof text === "string" && text.includes("INSERT INTO product_events")) {
+            if (
+              typeof text === "string" &&
+              text.includes("INSERT INTO product_events")
+            ) {
               insertAttempts += 1;
               if (insertAttempts === 1) {
-                const error = new Error("synthetic deadlock") as Error & { code: string };
+                const error = new Error("synthetic deadlock") as Error & {
+                  code: string;
+                };
                 error.code = "40P01";
                 throw error;
               }
@@ -771,9 +776,8 @@ describe("db-service helpers", () => {
           await db.cacheEvent(first);
           await db.cacheEvent(second);
 
-          const walletEvents = await db.fetchAllWalletEventsFromDb(
-            "wallet-owner"
-          );
+          const walletEvents =
+            await db.fetchAllWalletEventsFromDb("wallet-owner");
           expect(walletEvents).toHaveLength(1);
           expect(walletEvents[0]?.id).toBe("wallet-2");
           expect(walletEvents[0]?.content).toBe("second");
@@ -870,13 +874,13 @@ describe("db-service helpers", () => {
             }),
           ]);
 
-          const walletEvents = await db.fetchAllWalletEventsFromDb("wallet-owner");
+          const walletEvents =
+            await db.fetchAllWalletEventsFromDb("wallet-owner");
           expect(walletEvents).toHaveLength(1);
           expect(walletEvents[0]?.id).toBe("wallet-new");
 
-          const otherWalletEvents = await db.fetchAllWalletEventsFromDb(
-            "wallet-other-owner"
-          );
+          const otherWalletEvents =
+            await db.fetchAllWalletEventsFromDb("wallet-other-owner");
           expect(otherWalletEvents).toHaveLength(1);
           expect(otherWalletEvents[0]?.id).toBe("wallet-other");
 
@@ -932,13 +936,21 @@ describe("db-service helpers", () => {
 
           await db.deleteCachedEventsByIds(["product-a2"]);
 
-          await expect(db.fetchProductByIdFromDb("product-a1")).resolves.toBeNull();
-          await expect(db.fetchProductByIdFromDb("product-a2")).resolves.toBeNull();
-          await expect(db.fetchProductByIdFromDb("product-a3")).resolves.toMatchObject({
+          await expect(
+            db.fetchProductByIdFromDb("product-a1")
+          ).resolves.toBeNull();
+          await expect(
+            db.fetchProductByIdFromDb("product-a2")
+          ).resolves.toBeNull();
+          await expect(
+            db.fetchProductByIdFromDb("product-a3")
+          ).resolves.toMatchObject({
             id: "product-a3",
             content: "new listing a",
           });
-          await expect(db.fetchProductByIdFromDb("product-b1")).resolves.toMatchObject({
+          await expect(
+            db.fetchProductByIdFromDb("product-b1")
+          ).resolves.toMatchObject({
             id: "product-b1",
             content: "listing b",
           });
