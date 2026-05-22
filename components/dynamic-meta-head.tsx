@@ -151,11 +151,15 @@ const DynamicHead = ({
   shopEvents,
   profileData,
   ssrOgMeta,
+  isCustomDomain,
+  customDomainShopPubkey,
 }: {
   productEvents: NostrEvent[];
   shopEvents: Map<string, ShopProfile>;
   profileData: Map<string, ProfileData>;
   ssrOgMeta?: OgMetaProps | null;
+  isCustomDomain?: boolean;
+  customDomainShopPubkey?: string | null;
 }) => {
   const router = useRouter();
   const [origin, setOrigin] = useState("");
@@ -190,6 +194,16 @@ const DynamicHead = ({
         profileData
       );
 
+  // On a seller's custom domain, prefer the seller's storefront logo as the
+  // browser tab favicon (and apple-touch-icon) so the tab matches their
+  // brand instead of showing the Milk Market icon.
+  const customDomainShopLogo =
+    isCustomDomain && customDomainShopPubkey
+      ? shopEvents.get(customDomainShopPubkey)?.content?.ui?.picture || ""
+      : "";
+  const faviconUrl = customDomainShopLogo || "/milk-market.ico";
+  const appleTouchIconUrl = customDomainShopLogo || "/milk-market.png";
+
   return (
     <Head>
       <meta
@@ -199,8 +213,24 @@ const DynamicHead = ({
       <title>{metaTags.title}</title>
       <meta name="description" content={metaTags.description} />
       <link rel="canonical" href={metaTags.url} />
-      <link rel="apple-touch-icon" href="/milk-market.png" />
-      <link rel="apple-touch-icon" sizes="180x180" href="/milk-market.png" />
+      <link rel="icon" key="favicon" href={faviconUrl} />
+      <link
+        rel="apple-touch-icon"
+        key="apple-touch-icon"
+        href={appleTouchIconUrl}
+      />
+      <link
+        rel="apple-touch-icon"
+        key="apple-touch-icon-152"
+        sizes="152x152"
+        href={appleTouchIconUrl}
+      />
+      <link
+        rel="apple-touch-icon"
+        key="apple-touch-icon-180"
+        sizes="180x180"
+        href={appleTouchIconUrl}
+      />
       <meta property="og:url" content={metaTags.url} />
       <meta property="og:type" content="website" />
       <meta property="og:title" content={metaTags.title} />

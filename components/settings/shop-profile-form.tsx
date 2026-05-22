@@ -1334,6 +1334,10 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                       </div>
 
                       <div className="mb-6">
+                        <CustomDomainSection />
+                      </div>
+
+                      <div className="mb-6">
                         <label className="mb-2 block text-base font-bold text-black">
                           Color Scheme
                         </label>
@@ -3024,10 +3028,6 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                           onChange={setFooter}
                           shopName={watch("name")}
                         />
-                      </div>
-
-                      <div className="mb-6">
-                        <CustomDomainSection />
                       </div>
 
                       <div className="hidden rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 p-4 lg:block">

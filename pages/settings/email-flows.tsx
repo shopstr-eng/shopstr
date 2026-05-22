@@ -128,6 +128,12 @@ const EmailFlowsPage = () => {
   const [expandedStep, setExpandedStep] = useState<number | null>(null);
   const [editFromName, setEditFromName] = useState("");
   const [editReplyTo, setEditReplyTo] = useState("");
+  const [testEmailByStep, setTestEmailByStep] = useState<
+    Record<string, string>
+  >({});
+  const [sendingTestForStep, setSendingTestForStep] = useState<string | null>(
+    null
+  );
 
   const fetchFlows = useCallback(async () => {
     if (!pubkey) return;
@@ -348,6 +354,45 @@ const EmailFlowsPage = () => {
     }
   };
 
+  const handleSendTest = async (step: FlowStep, stepKey: string) => {
+    if (!editingFlow) return;
+    const targetEmail = (testEmailByStep[stepKey] || "").trim();
+    if (!targetEmail) {
+      setError("Enter an email address to send the test to.");
+      return;
+    }
+    if (!step.subject.trim() || !step.body_html.trim()) {
+      setError("Add a subject and email body before sending a test.");
+      return;
+    }
+    setSendingTestForStep(stepKey);
+    setError(null);
+    try {
+      const res = await fetch(`/api/email/flows/${editingFlow.id}/send-test`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          seller_pubkey: pubkey,
+          target_email: targetEmail,
+          subject: step.subject,
+          body_html: step.body_html,
+          shop_name: editFromName.trim() || previewShopName,
+          storefront_style: previewStorefrontStyle,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setSuccessMessage(`Test email sent to ${targetEmail}.`);
+      } else {
+        setError(data.error || "Failed to send test email.");
+      }
+    } catch {
+      setError("Failed to send test email.");
+    } finally {
+      setSendingTestForStep(null);
+    }
+  };
+
   const addNewStep = () => {
     const maxOrder = editingSteps.reduce(
       (max, s) => Math.max(max, s.step_order),
@@ -536,107 +581,157 @@ const EmailFlowsPage = () => {
             <div className="space-y-3">
               {editingSteps
                 .sort((a, b) => a.step_order - b.step_order)
-                .map((step, index) => (
-                  <div
-                    key={step.id || `new-${index}`}
-                    className="shadow-neo rounded-md border-2 border-black bg-white"
-                  >
-                    <button
-                      onClick={() =>
-                        setExpandedStep(expandedStep === index ? null : index)
-                      }
-                      className="flex w-full items-center justify-between p-4"
+                .map((step, index) => {
+                  const stepKey = step.id
+                    ? `id-${step.id}`
+                    : `new-${index}-${step.step_order}`;
+                  return (
+                    <div
+                      key={stepKey}
+                      className="shadow-neo rounded-md border-2 border-black bg-white"
                     >
-                      <div className="flex items-center gap-3">
-                        <div className="bg-primary-blue flex h-8 w-8 items-center justify-center rounded-full border-2 border-black text-sm font-bold text-white">
-                          {step.step_order}
-                        </div>
-                        <div className="text-left">
-                          <p className="font-bold text-black">
-                            {step.subject || "(No subject)"}
-                          </p>
-                          <div className="flex items-center gap-1 text-xs text-gray-500">
-                            <ClockIcon className="h-3 w-3" />
-                            {formatDelayHours(step.delay_hours)}
-                            {index > 0 && " previous step"}
-                            {index === 0 && " enrollment"}
+                      <button
+                        onClick={() =>
+                          setExpandedStep(expandedStep === index ? null : index)
+                        }
+                        className="flex w-full items-center justify-between p-4"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="bg-primary-blue flex h-8 w-8 items-center justify-center rounded-full border-2 border-black text-sm font-bold text-white">
+                            {step.step_order}
                           </div>
-                        </div>
-                      </div>
-                      {expandedStep === index ? (
-                        <ChevronUpIcon className="h-5 w-5 text-gray-500" />
-                      ) : (
-                        <ChevronDownIcon className="h-5 w-5 text-gray-500" />
-                      )}
-                    </button>
-
-                    {expandedStep === index && (
-                      <div className="border-t-2 border-black p-4">
-                        <div className="space-y-4">
-                          <Input
-                            label="Subject Line"
-                            value={step.subject}
-                            onValueChange={(v) =>
-                              updateStep(index, "subject", v)
-                            }
-                            placeholder="e.g., Welcome to {{shop_name}}!"
-                            classNames={{
-                              label: "text-black",
-                              input: "!text-black",
-                              inputWrapper:
-                                "rounded-md border-2 border-black bg-white shadow-none data-[hover=true]:bg-white data-[focus=true]:bg-white group-data-[focus=true]:bg-white group-data-[focus=true]:border-black",
-                            }}
-                          />
-                          <div>
-                            <p className="mb-1 text-sm font-bold text-black">
-                              Email Body
+                          <div className="text-left">
+                            <p className="font-bold text-black">
+                              {step.subject || "(No subject)"}
                             </p>
-                            <FlowStepEditor
-                              value={step.body_html}
-                              onChange={(v) =>
-                                updateStep(index, "body_html", v)
-                              }
-                              subject={step.subject}
-                              shopName={editFromName || previewShopName}
-                              storefrontStyle={previewStorefrontStyle}
-                            />
+                            <div className="flex items-center gap-1 text-xs text-gray-500">
+                              <ClockIcon className="h-3 w-3" />
+                              {formatDelayHours(step.delay_hours)}
+                              {index > 0 && " previous step"}
+                              {index === 0 && " enrollment"}
+                            </div>
                           </div>
-                          <div className="flex items-end gap-4">
+                        </div>
+                        {expandedStep === index ? (
+                          <ChevronUpIcon className="h-5 w-5 text-gray-500" />
+                        ) : (
+                          <ChevronDownIcon className="h-5 w-5 text-gray-500" />
+                        )}
+                      </button>
+
+                      {expandedStep === index && (
+                        <div className="border-t-2 border-black p-4">
+                          <div className="space-y-4">
                             <Input
-                              label="Delay (hours)"
-                              type="number"
-                              min={0}
-                              value={String(step.delay_hours)}
+                              label="Subject Line"
+                              value={step.subject}
                               onValueChange={(v) =>
-                                updateStep(
-                                  index,
-                                  "delay_hours",
-                                  parseInt(v) || 0
-                                )
+                                updateStep(index, "subject", v)
                               }
-                              description={formatDelayHours(step.delay_hours)}
+                              placeholder="e.g., Welcome to {{shop_name}}!"
                               classNames={{
-                                base: "max-w-[200px]",
                                 label: "text-black",
                                 input: "!text-black",
                                 inputWrapper:
                                   "rounded-md border-2 border-black bg-white shadow-none data-[hover=true]:bg-white data-[focus=true]:bg-white group-data-[focus=true]:bg-white group-data-[focus=true]:border-black",
                               }}
                             />
-                            <Button
-                              className={DANGERBUTTONCLASSNAMES}
-                              size="sm"
-                              onClick={() => handleDeleteStep(step, index)}
-                            >
-                              <TrashIcon className="h-4 w-4" />
-                              Remove
-                            </Button>
+                            <div>
+                              <p className="mb-1 text-sm font-bold text-black">
+                                Email Body
+                              </p>
+                              <FlowStepEditor
+                                value={step.body_html}
+                                onChange={(v) =>
+                                  updateStep(index, "body_html", v)
+                                }
+                                subject={step.subject}
+                                shopName={editFromName || previewShopName}
+                                storefrontStyle={previewStorefrontStyle}
+                              />
+                            </div>
+                            <div className="flex items-end gap-4">
+                              <Input
+                                label="Delay (hours)"
+                                type="number"
+                                min={0}
+                                value={String(step.delay_hours)}
+                                onValueChange={(v) =>
+                                  updateStep(
+                                    index,
+                                    "delay_hours",
+                                    parseInt(v) || 0
+                                  )
+                                }
+                                description={formatDelayHours(step.delay_hours)}
+                                classNames={{
+                                  base: "max-w-[200px]",
+                                  label: "text-black",
+                                  input: "!text-black",
+                                  inputWrapper:
+                                    "rounded-md border-2 border-black bg-white shadow-none data-[hover=true]:bg-white data-[focus=true]:bg-white group-data-[focus=true]:bg-white group-data-[focus=true]:border-black",
+                                }}
+                              />
+                              <Button
+                                className={DANGERBUTTONCLASSNAMES}
+                                size="sm"
+                                onClick={() => handleDeleteStep(step, index)}
+                              >
+                                <TrashIcon className="h-4 w-4" />
+                                Remove
+                              </Button>
+                            </div>
+                            <div className="rounded-md border-2 border-black bg-gray-50 p-3">
+                              <p className="mb-2 text-sm font-bold text-black">
+                                Send Test Email
+                              </p>
+                              <p className="mb-3 text-xs text-gray-600">
+                                Delivers this email (with sample merge tags) to
+                                the address below so you can preview it live in
+                                an inbox.
+                              </p>
+                              <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                                <Input
+                                  label="Test recipient"
+                                  type="email"
+                                  value={testEmailByStep[stepKey] || ""}
+                                  onValueChange={(v) =>
+                                    setTestEmailByStep((prev) => ({
+                                      ...prev,
+                                      [stepKey]: v,
+                                    }))
+                                  }
+                                  placeholder="you@example.com"
+                                  classNames={{
+                                    label: "text-black text-xs",
+                                    input: "!text-black",
+                                    inputWrapper:
+                                      "rounded-md border-2 border-black bg-white shadow-none data-[hover=true]:bg-white data-[focus=true]:bg-white group-data-[focus=true]:bg-white group-data-[focus=true]:border-black",
+                                  }}
+                                />
+                                <Button
+                                  className={BLUEBUTTONCLASSNAMES}
+                                  size="sm"
+                                  onClick={() => handleSendTest(step, stepKey)}
+                                  isLoading={sendingTestForStep === stepKey}
+                                  isDisabled={
+                                    sendingTestForStep !== null ||
+                                    !(testEmailByStep[stepKey] || "").trim()
+                                  }
+                                >
+                                  <EnvelopeIcon className="h-4 w-4" />
+                                  {sendingTestForStep === stepKey
+                                    ? "Sending..."
+                                    : "Send Test"}
+                                </Button>
+                              </div>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
+                      )}
+                    </div>
+                  );
+                })}
             </div>
           )}
 

@@ -1380,6 +1380,10 @@ function MilkMarket({ props }: { props: AppProps }) {
         shopEvents={shopContext.shopData}
         profileData={profileContext.profileData}
         ssrOgMeta={pageProps?.ogMeta || null}
+        isCustomDomain={isCustomDomainVisit}
+        customDomainShopPubkey={
+          isCustomDomainVisit ? storefrontLoadPubkey || ssrShopPubkey : null
+        }
       />
       <StructuredData />
       <PageLoadingBar />
