@@ -83,7 +83,7 @@ function getTwitterEmbed(url: string): SocialEmbedInfo | null {
     src: `https://platform.twitter.com/embed/Tweet.html?id=${tweetId}&dnt=true`,
     aspectRatio: "3 / 4",
     allowFullScreen: true,
-    scrolling: "no",
+    scrolling: "auto",
   };
 }
 
@@ -94,16 +94,19 @@ function getInstagramEmbed(url: string): SocialEmbedInfo | null {
   if (host !== "instagram.com" && host !== "instagr.am") return null;
   const parts = parsed.pathname.split("/").filter(Boolean);
   const kindIdx = parts.findIndex(
-    (p) => p === "p" || p === "reel" || p === "tv"
+    (p) => p === "p" || p === "reel" || p === "reels" || p === "tv"
   );
   if (kindIdx === -1) return null;
-  const kind = parts[kindIdx];
+  const rawKind = parts[kindIdx];
   const id = parts[kindIdx + 1];
   if (!id || !/^[A-Za-z0-9_-]+$/.test(id)) return null;
+  const isVertical =
+    rawKind === "reel" || rawKind === "reels" || rawKind === "tv";
+  const embedKind = rawKind === "reels" ? "reel" : rawKind;
   return {
-    src: `https://www.instagram.com/${kind}/${id}/embed/`,
-    aspectRatio: "1 / 1.4",
-    scrolling: "no",
+    src: `https://www.instagram.com/${embedKind}/${id}/embed/`,
+    aspectRatio: isVertical ? "9 / 16" : "1 / 1.4",
+    scrolling: "auto",
     allowFullScreen: true,
   };
 }
@@ -126,7 +129,7 @@ function getTikTokEmbed(url: string): SocialEmbedInfo | null {
     src: `https://www.tiktok.com/embed/v2/${videoId}`,
     aspectRatio: "9 / 16",
     allowFullScreen: true,
-    scrolling: "no",
+    scrolling: "auto",
   };
 }
 
