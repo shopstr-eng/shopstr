@@ -45,7 +45,6 @@ let sharedPostgresPort = 0;
 
 async function ensureSharedPostgresContainer(): Promise<void> {
   if (sharedPostgresContainer) return;
-
   const { PostgreSqlContainer } = await import("testcontainers");
   const container = await new PostgreSqlContainer("postgres:15-alpine")
     .withDatabase("shopstr")
