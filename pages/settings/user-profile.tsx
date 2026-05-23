@@ -16,7 +16,7 @@ import {
   EyeSlashIcon,
   EyeIcon,
 } from "@heroicons/react/24/outline";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import { PRIMARYBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
   SignerContext,
   NostrContext,
@@ -29,7 +29,7 @@ import {
   isProfileContentPopulated,
 } from "@/utils/nostr/nostr-helper-functions";
 import { FileUploaderButton } from "@/components/utility-components/file-uploader";
-import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
+import MilkMarketSpinner from "@/components/utility-components/mm-spinner";
 import ProtectedRoute from "@/components/utility-components/protected-route";
 
 const UserProfilePage = () => {
@@ -178,7 +178,7 @@ const UserProfilePage = () => {
         <div className="mx-auto h-full w-full px-4 lg:w-1/2">
           <SettingsBreadCrumbs />
           {isFetchingProfile ? (
-            <ShopstrSpinner />
+            <MilkMarketSpinner />
           ) : (
             <>
               <div className="bg-light-fg dark:bg-dark-fg mb-20 h-40 rounded-lg">
@@ -191,7 +191,7 @@ const UserProfilePage = () => {
                     />
                   )}
                   <FileUploaderButton
-                    className={`bg-shopstr-purple absolute right-5 bottom-5 z-20 border-2 border-white shadow-md ${SHOPSTRBUTTONCLASSNAMES}`}
+                    className={`bg-shopstr-purple absolute right-5 bottom-5 z-20 border-2 border-white shadow-md ${PRIMARYBUTTONCLASSNAMES}`}
                     imgCallbackOnUpload={(imgUrl) => setValue("banner", imgUrl)}
                   >
                     Upload Banner
@@ -202,7 +202,7 @@ const UserProfilePage = () => {
                     <div className="">
                       <FileUploaderButton
                         isIconOnly
-                        className={`absolute right-[-0.5rem] bottom-[-0.5rem] z-20 ${SHOPSTRBUTTONCLASSNAMES}`}
+                        className={`absolute right-[-0.5rem] bottom-[-0.5rem] z-20 ${PRIMARYBUTTONCLASSNAMES}`}
                         imgCallbackOnUpload={(imgUrl) =>
                           setValue("picture", imgUrl)
                         }
@@ -566,7 +566,7 @@ const UserProfilePage = () => {
                 />
 
                 <Button
-                  className={`mb-10 w-full ${SHOPSTRBUTTONCLASSNAMES}`}
+                  className={`mb-10 w-full ${PRIMARYBUTTONCLASSNAMES}`}
                   type="submit"
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
