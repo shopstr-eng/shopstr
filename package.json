@@ -86,7 +86,12 @@
   "overrides": {
     "serialize-javascript": "7.0.5",
     "picomatch": "4.0.4",
-    "postcss": "8.5.13"
+    "postcss": "8.5.13",
+    "immutable": "4.3.8",
+    "tar-fs": "2.1.4",
+    "brace-expansion": "5.0.6",
+    "qs": "6.15.2",
+    "ws": "8.20.1"
   },
   "resolutions": {
     "@types/react": "19.2.14",
