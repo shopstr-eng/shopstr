@@ -31,7 +31,7 @@ describe("parseTags", () => {
     mockedCalculateTotalCost.mockReturnValue(999);
   });
 
-  it("should parse top-level event data and simple tags correctly", () => {
+  it("should parse top-level event data and prefer content as description", () => {
     const event = {
       ...baseEvent,
       tags: [
@@ -46,8 +46,30 @@ describe("parseTags", () => {
     expect(result.pubkey).toBe("test-pubkey");
     expect(result.createdAt).toBe(1672531200);
     expect(result.title).toBe("My Product");
-    expect(result.summary).toBe("A great product");
+    expect(result.summary).toBe("Product description");
     expect(result.location).toBe("Online");
+  });
+
+  it("should fallback to summary tag when content is empty", () => {
+    const event = {
+      ...baseEvent,
+      content: "",
+      tags: [["summary", "Fallback summary"]],
+    };
+    const result = parseTags(event)!;
+
+    expect(result.summary).toBe("Fallback summary");
+  });
+
+  it("should fallback to summary tag when content is only whitespace", () => {
+    const event = {
+      ...baseEvent,
+      content: "   ",
+      tags: [["summary", "Whitespace fallback summary"]],
+    };
+    const result = parseTags(event)!;
+
+    expect(result.summary).toBe("Whitespace fallback summary");
   });
 
   it("should parse multiple image and category tags into arrays", () => {
