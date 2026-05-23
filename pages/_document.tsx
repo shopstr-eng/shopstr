@@ -9,6 +9,12 @@ export default function Document() {
         <link rel="apple-icon" href="/shopstr.png" />
         <link rel="manifest" href="/manifest.json" />
         <meta name="theme-color" content="#E8E8E8" />
+        <link
+          rel="preload"
+          as="image"
+          href="/shopstr-2000x2000.png"
+          fetchPriority="high"
+        />
       </Head>
       <body>
         <Main />

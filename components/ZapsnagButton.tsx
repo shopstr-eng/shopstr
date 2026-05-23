@@ -7,10 +7,10 @@ import {
   ModalBody,
   Input,
   useDisclosure,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import { BoltIcon } from "@heroicons/react/24/outline";
 import { LightningAddress } from "@getalby/lightning-tools";
-import { webln } from "@getalby/sdk";
+import { NostrWebLNProvider } from "@getalby/sdk";
 import {
   NostrContext,
   SignerContext,
@@ -84,7 +84,7 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
   }, [nostrManager, product.id, product.quantity]);
 
   const handleBuy = async () => {
-    let originalWebLN: WebLNProvider | null = null;
+    let originalWebLN: Window["webln"] | null = null;
     if (!signer || !isLoggedIn || !userPubkey) {
       alert("Please sign in to purchase.");
       return;
@@ -103,7 +103,9 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
       let lud16 = "";
 
       if (events.length > 0) {
-        const kind0 = events.sort((a, b) => b.created_at - a.created_at)[0];
+        const kind0 = [...events].sort(
+          (a, b) => b.created_at - a.created_at
+        )[0];
         if (kind0) {
           try {
             const content = JSON.parse(kind0.content || "{}");
@@ -121,11 +123,11 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
       originalWebLN = window.webln;
       const { nwcString } = getLocalStorageData();
       if (nwcString) {
-        const nwcProvider = new webln.NostrWebLNProvider({
+        const nwcProvider = new NostrWebLNProvider({
           nostrWalletConnectUrl: nwcString,
         });
         await nwcProvider.enable();
-        window.webln = nwcProvider as unknown as WebLNProvider;
+        window.webln = nwcProvider as Window["webln"];
       } else if (window.webln) {
         await window.webln.enable();
       } else {
@@ -171,7 +173,7 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
         product.pubkey
       );
 
-      await sendGiftWrappedMessageEvent(nostrManager!, finalEvent);
+      await sendGiftWrappedMessageEvent(nostrManager!, finalEvent, signer);
 
       setStatus("Paying via Lightning...");
       const ln = new LightningAddress(lud16);

@@ -1,8 +1,7 @@
 import type { AppProps } from "next/app";
 import "../styles/globals.css";
-import { useState, useEffect, useCallback, useContext } from "react";
+import { useState, useEffect, useCallback, useContext, useRef } from "react";
 import { useRouter } from "next/router";
-import dynamic from "next/dynamic";
 import {
   ProfileMapContext,
   ProfileContextInterface,
@@ -15,6 +14,8 @@ import {
   ChatsMap,
   ReviewsContextInterface,
   ReviewsContext,
+  ReportsContextInterface,
+  ReportsContext,
   FollowsContextInterface,
   FollowsContext,
   RelaysContextInterface,
@@ -22,96 +23,75 @@ import {
   BlossomContextInterface,
   BlossomContext,
   CashuWalletContext,
-  CashuProofEvent,
   CashuWalletContextInterface,
   CommunityContext,
   CommunityContextInterface,
 } from "../utils/context/context";
-import { NextUIProvider } from "@nextui-org/react";
+import {
+  getLocalStorageData,
+  getDefaultRelays,
+  LogOut,
+} from "@/utils/nostr/nostr-helper-functions";
+import { createNip98AuthorizationHeader } from "@/utils/nostr/nip98-auth";
+import { HeroUIProvider } from "@heroui/react";
 import { ThemeProvider as NextThemesProvider } from "next-themes";
-import type {
+import {
+  fetchAllPosts,
+  fetchReviews,
+  fetchShopProfile,
+  fetchProfile,
+  fetchAllFollows,
+  fetchAllRelays,
+  fetchAllBlossomServers,
+  fetchCashuWallet,
+  fetchAllCommunities,
+  fetchGiftWrappedChatsAndMessages,
+  fetchReports,
+} from "@/utils/nostr/fetch-service";
+import {
   NostrEvent,
   Community,
   ProfileData,
   NostrMessageEvent,
   ShopProfile,
 } from "../utils/types/types";
-import type { Proof } from "@cashu/cashu-ts";
+import { Proof } from "@cashu/cashu-ts";
+import TopNav from "@/components/nav-top";
+import PageLoadingBar from "@/components/page-loading-bar";
 import DynamicHead from "../components/dynamic-meta-head";
+import StructuredData from "../components/structured-data";
 import {
   NostrContextProvider,
   SignerContextProvider,
   NostrContext,
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
+import { retryFailedRelayPublishes } from "@/utils/nostr/retry-service";
+import { MintRecoveryBoot } from "@/components/utility-components/mint-recovery-boot";
+import { NostrManager } from "@/utils/nostr/nostr-manager";
 
-const TopNav = dynamic(() => import("@/components/nav-top"), {
-  ssr: false,
-});
+const mergeReportEvents = (
+  existingReports: NostrEvent[],
+  nextReports: NostrEvent[]
+) => {
+  const mergedReports = new Map(
+    existingReports.map((event) => [event.id, event])
+  );
 
-type RouteBootstrapFlags = {
-  loadCatalog: boolean;
-  loadChats: boolean;
-  loadFollows: boolean;
-  loadCommunities: boolean;
-  loadWallet: boolean;
+  nextReports.forEach((reportEvent) => {
+    const existingReport = mergedReports.get(reportEvent.id);
+    if (
+      !existingReport ||
+      reportEvent.created_at >= existingReport.created_at
+    ) {
+      mergedReports.set(reportEvent.id, reportEvent);
+    }
+  });
+
+  return Array.from(mergedReports.values()).sort(
+    (a, b) => b.created_at - a.created_at
+  );
 };
-
-const STATIC_CONTENT_ROUTES = new Set(["/faq", "/privacy", "/terms", "/404"]);
-
-function getRouteBootstrapFlags(pathname: string): RouteBootstrapFlags {
-  const isStaticContent = STATIC_CONTENT_ROUTES.has(pathname);
-  const isLanding = pathname === "/";
-  const isOrders = pathname.startsWith("/orders");
-  const isMarketplace = pathname.startsWith("/marketplace");
-  const isCommunities =
-    pathname.startsWith("/communities") ||
-    pathname.startsWith("/settings/community");
-  const isWalletHeavy =
-    pathname.startsWith("/wallet") ||
-    pathname.startsWith("/cart") ||
-    pathname.startsWith("/listing") ||
-    pathname.startsWith("/order-summary");
-  const isSettings = pathname.startsWith("/settings");
-
-  if (isStaticContent) {
-    return {
-      loadCatalog: false,
-      loadChats: false,
-      loadFollows: false,
-      loadCommunities: false,
-      loadWallet: false,
-    };
-  }
-
-  return {
-    loadCatalog: true,
-    loadChats: isOrders,
-    loadFollows: isMarketplace,
-    loadCommunities: isCommunities,
-    loadWallet:
-      isWalletHeavy || isOrders || isSettings || (!isLanding && isMarketplace),
-  };
-}
-
-type CatalogBackfillMode = "none" | "background" | "until-match";
-
-function getCatalogBackfillConfig(
-  pathname: string,
-  targetProductId?: string
-): { mode: CatalogBackfillMode; targetProductId?: string } {
-  if (pathname === "/" || pathname.startsWith("/marketplace")) {
-    return { mode: "background" };
-  }
-
-  if (pathname.startsWith("/listing")) {
-    return targetProductId
-      ? { mode: "until-match", targetProductId }
-      : { mode: "none" };
-  }
-
-  return { mode: "none" };
-}
 
 function Shopstr({ props }: { props: AppProps }) {
   const { Component, pageProps } = props;
@@ -124,9 +104,8 @@ function Shopstr({ props }: { props: AppProps }) {
       isLoading: true,
       addNewlyCreatedProductEvent: (productEvent: NostrEvent) => {
         setProductContext((productContext) => {
-          const productEvents = [...productContext.productEvents, productEvent];
           return {
-            productEvents: productEvents,
+            productEvents: [...productContext.productEvents, productEvent],
             isLoading: false,
             addNewlyCreatedProductEvent:
               productContext.addNewlyCreatedProductEvent,
@@ -145,6 +124,24 @@ function Shopstr({ props }: { props: AppProps }) {
             addNewlyCreatedProductEvent:
               productContext.addNewlyCreatedProductEvent,
             removeDeletedProductEvent: productContext.removeDeletedProductEvent,
+          };
+        });
+      },
+    }
+  );
+
+  const [reportsContext, setReportsContext] = useState<ReportsContextInterface>(
+    {
+      reportEvents: [],
+      isLoading: true,
+      addReportEvent: (reportEvent: NostrEvent) => {
+        setReportsContext((reportsContext) => {
+          return {
+            reportEvents: mergeReportEvents(reportsContext.reportEvents, [
+              reportEvent,
+            ]),
+            isLoading: false,
+            addReportEvent: reportsContext.addReportEvent,
           };
         });
       },
@@ -296,10 +293,20 @@ function Shopstr({ props }: { props: AppProps }) {
       try {
         const idsForDb =
           wrappedEventIds.length > 0 ? wrappedEventIds : unreadMessageIds;
+        const body = JSON.stringify({ messageIds: idsForDb });
+        const authHeader = await createNip98AuthorizationHeader(
+          signer!,
+          `${window.location.origin}/api/db/mark-messages-read`,
+          "POST",
+          body
+        );
         await fetch("/api/db/mark-messages-read", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ messageIds: idsForDb }),
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: authHeader,
+          },
+          body,
         });
 
         setNewOrderIds(new Set(unreadMessageIds));
@@ -321,7 +328,7 @@ function Shopstr({ props }: { props: AppProps }) {
     }
 
     return unreadMessageIds;
-  }, [chatsMap]);
+  }, [chatsMap, signer]);
 
   const [followsContext, setFollowsContext] = useState<FollowsContextInterface>(
     {
@@ -369,14 +376,50 @@ function Shopstr({ props }: { props: AppProps }) {
       cashuProofs: [],
       isLoading: true,
     });
+  const hydratedMarketplaceProductIdsRef = useRef<Set<string>>(new Set());
+  const pendingMarketplaceProductIdsRef = useRef<Set<string>>(new Set());
+  const didCompleteInitialMarketplaceHydrationRef = useRef(false);
+
+  const mergeReportsContext = (nextReports: NostrEvent[]) => {
+    if (nextReports.length === 0) return;
+
+    setReportsContext((reportsContext) => {
+      return {
+        reportEvents: mergeReportEvents(
+          reportsContext.reportEvents,
+          nextReports
+        ),
+        isLoading: false,
+        addReportEvent: reportsContext.addReportEvent,
+      };
+    });
+  };
+
+  const getReviewerPubkeysFromReviewMap = (
+    productReviewsMap: Map<string, Map<string, Map<string, string[][]>>>
+  ) => {
+    const reviewerPubkeys = new Set<string>();
+
+    productReviewsMap.forEach((merchantProducts) => {
+      merchantProducts.forEach((productReviews) => {
+        productReviews.forEach((_, reviewerPubkey) => {
+          if (reviewerPubkey) {
+            reviewerPubkeys.add(reviewerPubkey);
+          }
+        });
+      });
+    });
+
+    return Array.from(reviewerPubkeys);
+  };
 
   const editProductContext = (
-    productEvents: NostrEvent[],
+    productEvents: NostrEvent[] | null,
     isLoading: boolean
   ) => {
     setProductContext((productContext) => {
       return {
-        productEvents: productEvents,
+        productEvents: productEvents ?? productContext.productEvents,
         isLoading: isLoading,
         addNewlyCreatedProductEvent: productContext.addNewlyCreatedProductEvent,
         removeDeletedProductEvent: productContext.removeDeletedProductEvent,
@@ -400,6 +443,19 @@ function Shopstr({ props }: { props: AppProps }) {
     });
   };
 
+  const editReportsContext = (
+    reportEvents: NostrEvent[],
+    isLoading: boolean
+  ) => {
+    setReportsContext((reportsContext) => {
+      return {
+        reportEvents,
+        isLoading,
+        addReportEvent: reportsContext.addReportEvent,
+      };
+    });
+  };
+
   const editShopContext = (
     shopData: Map<string, ShopProfile>,
     isLoading: boolean
@@ -414,12 +470,36 @@ function Shopstr({ props }: { props: AppProps }) {
   };
 
   const editProfileContext = (
-    profileData: Map<string, ProfileData>,
+    profileData: Map<string, any>,
     isLoading: boolean
   ) => {
     setProfileContext((profileContext) => {
+      const mergedProfileData = new Map(profileContext.profileData);
+
+      profileData.forEach((incomingProfile, pubkey) => {
+        const existingProfile = mergedProfileData.get(pubkey);
+        if (
+          !existingProfile ||
+          (incomingProfile?.created_at ?? 0) >
+            (existingProfile?.created_at ?? 0)
+        ) {
+          mergedProfileData.set(pubkey, incomingProfile);
+          return;
+        }
+
+        if (
+          (incomingProfile?.created_at ?? 0) ===
+          (existingProfile?.created_at ?? 0)
+        ) {
+          mergedProfileData.set(pubkey, {
+            ...existingProfile,
+            ...incomingProfile,
+          });
+        }
+      });
+
       return {
-        profileData,
+        profileData: mergedProfileData,
         isLoading,
         updateProfileData: profileContext.updateProfileData,
       };
@@ -476,7 +556,7 @@ function Shopstr({ props }: { props: AppProps }) {
   };
 
   const editCashuWalletContext = (
-    proofEvents: CashuProofEvent[],
+    proofEvents: any[],
     cashuMints: string[],
     cashuProofs: Proof[],
     isLoading: boolean
@@ -493,135 +573,453 @@ function Shopstr({ props }: { props: AppProps }) {
   const [selectedSection, setSelectedSection] = useState("");
 
   const router = useRouter();
+  const initializationRunRef = useRef(0);
 
+  /** FETCH initial FOLLOWS, RELAYS, PRODUCTS, and PROFILES **/
   useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    if (window.__shopstrStoragePatched) return;
-    window.__shopstrStoragePatched = true;
-
-    const storage = window.localStorage;
-    const originalSetItem = storage.setItem.bind(storage);
-    const originalRemoveItem = storage.removeItem.bind(storage);
-
-    storage.setItem = function setItem(key: string, value: string) {
-      originalSetItem(key, value);
-      window.dispatchEvent(
-        new CustomEvent("shopstr:storage", { detail: { key } })
-      );
-    };
-
-    storage.removeItem = function removeItem(key: string) {
-      originalRemoveItem(key);
-      window.dispatchEvent(
-        new CustomEvent("shopstr:storage", { detail: { key } })
-      );
-    };
-
-    return () => {
-      storage.setItem = originalSetItem;
-      storage.removeItem = originalRemoveItem;
-      delete window.__shopstrStoragePatched;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (router.pathname.startsWith("/listing") && !router.isReady) {
-      return;
-    }
-
-    let isCancelled = false;
-    const abortController = new AbortController();
-
-    const resetAllContextsToLoaded = () => {
-      editProductContext([], false);
-      editReviewsContext(new Map(), new Map(), false);
-      editShopContext(new Map(), false);
-      editProfileContext(new Map(), false);
-      editChatContext(new Map(), false);
-      editFollowsContext([], 0, false);
-      editRelaysContext([], [], [], false);
-      editBlossomContext([], false);
-      editCashuWalletContext([], [], [], false);
-      editCommunityContext(new Map(), false);
-    };
-
     async function fetchData() {
+      const runId = ++initializationRunRef.current;
+      const isCurrentRun = () => runId === initializationRunRef.current;
+      type EditorFn = (...args: any[]) => void;
+
+      const guard = <TFn extends EditorFn>(fn: TFn) => {
+        return ((...args: Parameters<TFn>) => {
+          if (!isCurrentRun()) return;
+          fn(...args);
+        }) as TFn;
+      };
+      const createGuardedEditors = <T extends Record<string, EditorFn>>(
+        editors: T
+      ): T => {
+        const guardedEditors = {} as T;
+
+        (Object.keys(editors) as Array<keyof T>).forEach((key) => {
+          guardedEditors[key] = guard(editors[key]);
+        });
+
+        return guardedEditors;
+      };
+
+      const {
+        guardedEditProductContext,
+        guardedEditReviewsContext,
+        guardedEditReportsContext,
+        guardedEditShopContext,
+        guardedEditProfileContext,
+        guardedEditChatContext,
+        guardedEditFollowsContext,
+        guardedEditRelaysContext,
+        guardedEditBlossomContext,
+        guardedEditCashuWalletContext,
+        guardedEditCommunityContext,
+      } = createGuardedEditors({
+        guardedEditProductContext: editProductContext,
+        guardedEditReviewsContext: editReviewsContext,
+        guardedEditReportsContext: editReportsContext,
+        guardedEditShopContext: editShopContext,
+        guardedEditProfileContext: editProfileContext,
+        guardedEditChatContext: editChatContext,
+        guardedEditFollowsContext: editFollowsContext,
+        guardedEditRelaysContext: editRelaysContext,
+        guardedEditBlossomContext: editBlossomContext,
+        guardedEditCashuWalletContext: editCashuWalletContext,
+        guardedEditCommunityContext: editCommunityContext,
+      });
+
+      const runTask = async <T,>(
+        taskName: string,
+        task: () => Promise<T>,
+        onError?: () => void
+      ): Promise<T | undefined> => {
+        try {
+          return await task();
+        } catch (error) {
+          console.error(`Error ${taskName}:`, error);
+          if (isCurrentRun()) {
+            onError?.();
+          }
+          return undefined;
+        }
+      };
+
       try {
-        if (!nostr || abortController.signal.aborted) return;
-
-        const flags = getRouteBootstrapFlags(router.pathname);
-        const listingProductId =
-          router.pathname.startsWith("/listing") &&
-          Array.isArray(router.query.productId)
-            ? router.query.productId[0]
-            : undefined;
-        const { mode: catalogBackfillMode, targetProductId: catalogTargetId } =
-          getCatalogBackfillConfig(router.pathname, listingProductId);
-
-        if (
-          !flags.loadCatalog &&
-          !flags.loadChats &&
-          !flags.loadFollows &&
-          !flags.loadCommunities &&
-          !flags.loadWallet
-        ) {
-          resetAllContextsToLoaded();
+        // Check login status
+        if (getLocalStorageData().signInMethod === "amber") {
+          LogOut();
           return;
         }
 
-        const { runRouteBootstrap } = await import("@/utils/route-bootstrap");
-        await runRouteBootstrap({
-          flags,
-          nostr,
-          signer,
-          isLoggedIn,
-          catalogBackfillMode,
-          catalogTargetId,
-          signal: abortController.signal,
-          editProductContext,
-          editReviewsContext,
-          editShopContext,
-          editProfileContext,
-          editChatContext,
-          editFollowsContext,
-          editRelaysContext,
-          editBlossomContext,
-          editCashuWalletContext,
-          editCommunityContext,
+        if (
+          getLocalStorageData().signInMethod === "extension" ||
+          getLocalStorageData().signer?.type === "nip07"
+        ) {
+          if (!window.nostr?.nip44) {
+            LogOut();
+            return;
+          }
+        }
+
+        // Initialize relays
+        const relays = getLocalStorageData().relays || [];
+        const readRelays = getLocalStorageData().readRelays || [];
+        let allRelays = [...relays, ...readRelays];
+
+        if (allRelays.length === 0) {
+          allRelays = getDefaultRelays();
+          localStorage.setItem("relays", JSON.stringify(allRelays));
+        }
+
+        // Fire them first and in parellel since independent of each other and other depend on it
+        const [relayResult, userPubkey] = await Promise.all([
+          runTask(
+            "fetching relays",
+            () =>
+              fetchAllRelays(
+                nostr!,
+                signer!,
+                allRelays,
+                guardedEditRelaysContext
+              ),
+            () => guardedEditRelaysContext([], [], [], false)
+          ),
+          runTask(
+            "resolving signer pubkey",
+            async () => (await signer?.getPubKey()) || undefined
+          ),
+        ]);
+
+        if (!isCurrentRun()) return;
+
+        if (relayResult && relayResult.relayList.length !== 0) {
+          localStorage.setItem("relays", JSON.stringify(relayResult.relayList));
+          localStorage.setItem(
+            "readRelays",
+            JSON.stringify(relayResult.readRelayList)
+          );
+          localStorage.setItem(
+            "writeRelays",
+            JSON.stringify(relayResult.writeRelayList)
+          );
+          allRelays = [...relayResult.relayList, ...relayResult.readRelayList];
+        }
+
+        const initialUserProfileFetch =
+          isLoggedIn && userPubkey
+            ? fetchProfile(
+                nostr!,
+                allRelays,
+                [userPubkey],
+                guardedEditProfileContext,
+                profileContext.profileData
+              ).catch((error) => {
+                console.error("Error fetching current user profile:", error);
+              })
+            : Promise.resolve();
+
+        // We just fire them and not await them so that they just update their context and not block others
+        const blossomPromise = runTask(
+          "fetching blossom servers",
+          () =>
+            fetchAllBlossomServers(
+              nostr!,
+              signer!,
+              allRelays,
+              guardedEditBlossomContext
+            ),
+          () => guardedEditBlossomContext([], false)
+        );
+
+        const walletPromise = isLoggedIn
+          ? runTask(
+              "fetching wallet",
+              () =>
+                fetchCashuWallet(
+                  nostr!,
+                  signer!,
+                  allRelays,
+                  guardedEditCashuWalletContext
+                ),
+              () => guardedEditCashuWalletContext([], [], [], false)
+            )
+          : Promise.resolve(undefined);
+
+        const followsPromise = runTask(
+          "fetching follows",
+          () =>
+            fetchAllFollows(
+              nostr!,
+              allRelays,
+              guardedEditFollowsContext,
+              userPubkey
+            ),
+          () => guardedEditFollowsContext([], 0, false)
+        );
+
+        const communitiesPromise = runTask(
+          "fetching communities",
+          () =>
+            fetchAllCommunities(nostr!, allRelays, guardedEditCommunityContext),
+          () => guardedEditCommunityContext(new Map(), false)
+        );
+
+        const productsPromise = runTask(
+          "fetching products",
+          () => fetchAllPosts(nostr!, allRelays, guardedEditProductContext),
+          () => guardedEditProductContext(null, false)
+        );
+
+        const chatsPromise = isLoggedIn
+          ? runTask(
+              "fetching chats",
+              () =>
+                fetchGiftWrappedChatsAndMessages(
+                  nostr!,
+                  signer!,
+                  allRelays,
+                  guardedEditChatContext,
+                  userPubkey
+                ),
+              () => guardedEditChatContext(new Map(), false)
+            )
+          : Promise.resolve(undefined);
+
+        // Run them in parellel first since required for profile/shops/reviews
+        const [productsResult, chatsResult] = await Promise.all([
+          productsPromise,
+          chatsPromise,
+        ]);
+
+        if (!isCurrentRun()) return;
+
+        // Derive the pubkey list
+        const productEvents = productsResult?.productEvents ?? [];
+        const profileSetFromProducts =
+          productsResult?.profileSetFromProducts ?? new Set<string>();
+        const profileSetFromChats =
+          chatsResult?.profileSetFromChats ?? new Set<string>();
+
+        const pubkeySet = new Set<string>([
+          ...profileSetFromProducts,
+          ...profileSetFromChats,
+        ]);
+
+        if (userPubkey) {
+          pubkeySet.add(userPubkey);
+        }
+
+        const pubkeysToFetchProfilesFor = Array.from(pubkeySet);
+
+        await initialUserProfileFetch;
+
+        // These start immediately — no waiting for wallet, blossom, follows, or communities.
+        const [, , reviewsResult] = await Promise.all([
+          runTask(
+            "fetching profiles",
+            () =>
+              fetchProfile(
+                nostr!,
+                allRelays,
+                pubkeysToFetchProfilesFor,
+                guardedEditProfileContext,
+                profileContext.profileData
+              ),
+            () =>
+              guardedEditProfileContext(
+                new Map(profileContext.profileData),
+                false
+              )
+          ),
+          runTask(
+            "fetching shop profiles",
+            () =>
+              fetchShopProfile(
+                nostr!,
+                allRelays,
+                pubkeysToFetchProfilesFor,
+                guardedEditShopContext
+              ),
+            () => guardedEditShopContext(new Map(), false)
+          ),
+          runTask(
+            "fetching reviews",
+            () =>
+              fetchReviews(
+                nostr!,
+                allRelays,
+                productEvents,
+                guardedEditReviewsContext
+              ),
+            () => guardedEditReviewsContext(new Map(), new Map(), false)
+          ),
+        ]);
+
+        if (!isCurrentRun()) return;
+
+        const reviewerPubkeysFromReviews = reviewsResult?.productReviewsMap
+          ? getReviewerPubkeysFromReviewMap(reviewsResult.productReviewsMap)
+          : [];
+
+        await runTask(
+          "fetching reports",
+          () =>
+            fetchReports(
+              nostr!,
+              allRelays,
+              productEvents,
+              guardedEditReportsContext,
+              reviewerPubkeysFromReviews
+            ),
+          () => guardedEditReportsContext([], false)
+        );
+
+        if (!isCurrentRun()) return;
+
+        hydratedMarketplaceProductIdsRef.current = new Set(
+          productEvents.map((event) => event.id).filter(Boolean)
+        );
+        didCompleteInitialMarketplaceHydrationRef.current = true;
+
+        // By now these are likely already done; we await to catch errors and read results.
+        const [blossomResult, walletResult] = await Promise.all([
+          blossomPromise,
+          walletPromise,
+          followsPromise,
+          communitiesPromise,
+        ]);
+
+        if (!isCurrentRun()) return;
+
+        if (blossomResult?.blossomServers?.length) {
+          localStorage.setItem(
+            "blossomServers",
+            JSON.stringify(blossomResult.blossomServers)
+          );
+        }
+
+        if (walletResult?.cashuMints?.length && walletResult.cashuProofs) {
+          localStorage.setItem(
+            "mints",
+            JSON.stringify(walletResult.cashuMints)
+          );
+          localStorage.setItem(
+            "tokens",
+            JSON.stringify(walletResult.cashuProofs)
+          );
+        }
+
+        await runTask("retrying relay publishes", async () => {
+          if (!signer) {
+            return;
+          }
+
+          const { relays, writeRelays } = getLocalStorageData();
+          const retryNostr = new NostrManager([...relays, ...writeRelays]);
+          await retryFailedRelayPublishes(retryNostr, signer);
         });
       } catch (error) {
         console.error("Critical error during app initialization:", error);
-        if (!isCancelled) {
-          resetAllContextsToLoaded();
-        }
+        if (!isCurrentRun()) return;
+        guardedEditProductContext([], false);
+        guardedEditReviewsContext(new Map(), new Map(), false);
+        guardedEditReportsContext([], false);
+        guardedEditShopContext(new Map(), false);
+        guardedEditProfileContext(new Map(), false);
+        guardedEditChatContext(new Map(), false);
+        guardedEditFollowsContext([], 0, false);
+        guardedEditRelaysContext([], [], [], false);
+        guardedEditBlossomContext([], false);
+        guardedEditCashuWalletContext([], [], [], false);
+        guardedEditCommunityContext(new Map(), false);
+        didCompleteInitialMarketplaceHydrationRef.current = true;
       }
     }
 
-    void fetchData();
+    fetchData();
+  }, [nostr, signer, isLoggedIn]);
 
-    const handleStorage = () => {
-      if (!isCancelled) {
-        void fetchData();
+  useEffect(() => {
+    if (
+      !nostr ||
+      !didCompleteInitialMarketplaceHydrationRef.current ||
+      productContext.isLoading ||
+      !Array.isArray(productContext.productEvents)
+    ) {
+      return;
+    }
+
+    const allRelays = [
+      ...new Set([...relaysContext.relayList, ...relaysContext.readRelayList]),
+    ];
+    const effectiveRelays =
+      allRelays.length > 0 ? allRelays : getDefaultRelays();
+
+    const nextProducts = (productContext.productEvents as NostrEvent[]).filter(
+      (event) =>
+        event.id &&
+        !hydratedMarketplaceProductIdsRef.current.has(event.id) &&
+        !pendingMarketplaceProductIdsRef.current.has(event.id)
+    );
+
+    if (nextProducts.length === 0) return;
+
+    nextProducts.forEach((event) => {
+      pendingMarketplaceProductIdsRef.current.add(event.id);
+    });
+
+    let isActive = true;
+
+    const hydrateReportDelta = async () => {
+      try {
+        const { reportEvents } = await fetchReports(
+          nostr,
+          effectiveRelays,
+          nextProducts,
+          () => {}
+        );
+
+        if (!isActive) return;
+
+        mergeReportsContext(reportEvents);
+
+        nextProducts.forEach((event) => {
+          hydratedMarketplaceProductIdsRef.current.add(event.id);
+        });
+      } catch (error) {
+        console.error("Failed to hydrate report data for new listings:", error);
+      } finally {
+        nextProducts.forEach((event) => {
+          pendingMarketplaceProductIdsRef.current.delete(event.id);
+        });
       }
     };
 
-    window.addEventListener("storage", handleStorage);
+    hydrateReportDelta();
 
     return () => {
-      isCancelled = true;
-      abortController.abort();
-      window.removeEventListener("storage", handleStorage);
+      isActive = false;
     };
   }, [
     nostr,
-    signer,
-    isLoggedIn,
-    router.pathname,
-    router.asPath,
-    router.isReady,
-    router.query.productId,
+    productContext.isLoading,
+    productContext.productEvents,
+    relaysContext.readRelayList,
+    relaysContext.relayList,
   ]);
+
+  useEffect(() => {
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker
+          .register("/service-worker.js")
+          .catch((registrationError) => {
+            console.error(
+              "Service Worker registration failed: ",
+              registrationError
+            );
+          });
+      });
+    }
+  }, []);
 
   return (
     <>
@@ -629,7 +1027,10 @@ function Shopstr({ props }: { props: AppProps }) {
         productEvents={productContext.productEvents}
         shopEvents={shopContext.shopData}
         profileData={profileContext.profileData}
+        ssrOgMeta={pageProps.ogMeta ?? null}
       />
+      <StructuredData />
+      <PageLoadingBar />
       <CommunityContext.Provider value={communityContext}>
         <RelaysContext.Provider value={relaysContext}>
           <BlossomContext.Provider value={blossomContext}>
@@ -637,40 +1038,49 @@ function Shopstr({ props }: { props: AppProps }) {
               <FollowsContext.Provider value={followsContext}>
                 <ProductContext.Provider value={productContext}>
                   <ReviewsContext.Provider value={reviewsContext}>
-                    <ProfileMapContext.Provider value={profileContext}>
-                      <ShopMapContext.Provider value={shopContext}>
-                        <ChatsContext.Provider
-                          value={
-                            {
-                              chatsMap: chatsMap,
-                              isLoading: isChatLoading,
-                              addNewlyCreatedMessageEvent:
-                                addNewlyCreatedMessageEvent,
-                              markAllMessagesAsRead: markAllMessagesAsRead,
-                              newOrderIds: newOrderIds,
-                            } as ChatsContextInterface
-                          }
-                        >
-                          {router.pathname !== "/" && (
-                            <TopNav
-                              setFocusedPubkey={setFocusedPubkey}
-                              setSelectedSection={setSelectedSection}
-                            />
-                          )}
-                          <div className="flex">
-                            <main className="flex-1">
-                              <Component
-                                {...pageProps}
-                                focusedPubkey={focusedPubkey}
+                    <ReportsContext.Provider value={reportsContext}>
+                      <ProfileMapContext.Provider value={profileContext}>
+                        <ShopMapContext.Provider value={shopContext}>
+                          <ChatsContext.Provider
+                            value={
+                              {
+                                chatsMap: chatsMap,
+                                isLoading: isChatLoading,
+                                addNewlyCreatedMessageEvent:
+                                  addNewlyCreatedMessageEvent,
+                                markAllMessagesAsRead: markAllMessagesAsRead,
+                                newOrderIds: newOrderIds,
+                              } as ChatsContextInterface
+                            }
+                          >
+                            {![
+                              "/",
+                              "/about",
+                              "/contact",
+                              "/faq",
+                              "/terms",
+                              "/privacy",
+                            ].includes(router.pathname) && (
+                              <TopNav
                                 setFocusedPubkey={setFocusedPubkey}
-                                selectedSection={selectedSection}
                                 setSelectedSection={setSelectedSection}
                               />
-                            </main>
-                          </div>
-                        </ChatsContext.Provider>
-                      </ShopMapContext.Provider>
-                    </ProfileMapContext.Provider>
+                            )}
+                            <div className="flex">
+                              <main className="flex-1">
+                                <Component
+                                  {...pageProps}
+                                  focusedPubkey={focusedPubkey}
+                                  setFocusedPubkey={setFocusedPubkey}
+                                  selectedSection={selectedSection}
+                                  setSelectedSection={setSelectedSection}
+                                />
+                              </main>
+                            </div>
+                          </ChatsContext.Provider>
+                        </ShopMapContext.Provider>
+                      </ProfileMapContext.Provider>
+                    </ReportsContext.Provider>
                   </ReviewsContext.Provider>
                 </ProductContext.Provider>
               </FollowsContext.Provider>
@@ -685,15 +1095,16 @@ function Shopstr({ props }: { props: AppProps }) {
 function App(props: AppProps) {
   return (
     <>
-      <NextUIProvider>
+      <HeroUIProvider>
         <NextThemesProvider attribute="class">
           <NostrContextProvider>
             <SignerContextProvider>
+              <MintRecoveryBoot />
               <Shopstr props={props} />
             </SignerContextProvider>
           </NostrContextProvider>
         </NextThemesProvider>
-      </NextUIProvider>
+      </HeroUIProvider>
     </>
   );
 }

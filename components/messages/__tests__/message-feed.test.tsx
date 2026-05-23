@@ -19,7 +19,7 @@ jest.mock("@/components/framer", () => ({
   },
 }));
 
-const mockRouterEvents: { [key: string]: jest.Mock } = {
+const mockRouterEvents: { on: jest.Mock; off: jest.Mock } = {
   on: jest.fn(),
   off: jest.fn(),
 };

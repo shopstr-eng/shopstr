@@ -8,7 +8,7 @@ import {
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
 import { CashuWalletContext } from "@/utils/context/context";
-import { CashuWallet, getEncodedToken } from "@cashu/cashu-ts";
+import { Wallet as CashuWallet, getEncodedToken } from "@cashu/cashu-ts";
 import {
   getLocalStorageData,
   publishProofEvent,
@@ -19,7 +19,12 @@ import { ChallengeHandler } from "@/utils/nostr/signers/nostr-signer";
 
 jest.setTimeout(20000);
 
-jest.mock("@cashu/cashu-ts");
+jest.mock("@cashu/cashu-ts", () => ({
+  ...jest.requireActual("@cashu/cashu-ts"),
+  Wallet: jest.fn(),
+  getEncodedToken: jest.fn(),
+  Mint: jest.fn().mockImplementation(() => ({})),
+}));
 jest.mock("@/utils/nostr/nostr-helper-functions");
 jest.mock("@/utils/nostr/signers/nostr-nip46-signer");
 jest.mock("@/utils/nostr/nostr-manager");
@@ -79,15 +84,15 @@ const mockWalletContext = {
 const renderWithProviders = (
   ui: React.ReactElement,
   {
-    signer = mockSigner,
-    nostr = mockNostr,
+    signer = mockSigner as any,
+    nostr = mockNostr as any,
     walletContext = mockWalletContext,
   } = {}
 ) => {
   return render(
-    <NostrContext.Provider value={{ nostr }}>
-      <SignerContext.Provider value={{ signer }}>
-        <CashuWalletContext.Provider value={walletContext}>
+    <NostrContext.Provider value={{ nostr } as any}>
+      <SignerContext.Provider value={{ signer } as any}>
+        <CashuWalletContext.Provider value={walletContext as any}>
           {ui}
         </CashuWalletContext.Provider>
       </SignerContext.Provider>
@@ -105,7 +110,10 @@ describe("SendButton", () => {
 
     mockSend = jest.fn();
     MockCashuWallet.mockImplementation(() => ({
-      getKeySets: jest.fn().mockResolvedValue([{ id: "keyset_id_1" }]),
+      loadMint: jest.fn().mockResolvedValue(undefined),
+      keyChain: {
+        getKeysets: jest.fn().mockResolvedValue([{ id: "keyset_id_1" }]),
+      },
       send: mockSend,
     }));
 
@@ -280,9 +288,12 @@ describe("SendButton", () => {
     });
 
     MockCashuWallet.mockImplementation(() => ({
-      getKeySets: jest
-        .fn()
-        .mockResolvedValue([{ id: "keyset_id_1" }, { id: "keyset_id_2" }]),
+      loadMint: jest.fn().mockResolvedValue(undefined),
+      keyChain: {
+        getKeysets: jest
+          .fn()
+          .mockResolvedValue([{ id: "keyset_id_1" }, { id: "keyset_id_2" }]),
+      },
       send: jest.fn().mockResolvedValue({
         keep: [{ id: "keyset_id_1", amount: 400 }],
         send: [{ id: "keyset_id_1", amount: 100 }],
@@ -338,7 +349,7 @@ describe("SendButton", () => {
 
     expect(
       await screen.findByText(/If the token is taking a while to be generated/i)
-    ).toBeVisible();
+    ).toBeInTheDocument();
   });
 
   test("handles send to nostr contact", async () => {

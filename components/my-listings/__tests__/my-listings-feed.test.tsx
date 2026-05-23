@@ -46,9 +46,7 @@ const renderComponent = (isLoggedIn: boolean, hasQueryParam: boolean) => {
     <SignerContext.Provider
       value={{
         isLoggedIn,
-        login: jest.fn(),
-        logout: jest.fn(),
-        nostrUser: null,
+        pubkey: isLoggedIn ? "test-pubkey" : undefined,
       }}
     >
       <MyListingsFeed />

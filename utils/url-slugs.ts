@@ -1,6 +1,12 @@
-import { ProductData } from "@/utils/parsers/product-parser-functions";
-import { ProfileData } from "@/utils/types/types";
+import type { ProductData } from "@/utils/parsers/product-parser-functions";
+import type { ProfileData } from "@/utils/types/types";
 import { nip19 } from "nostr-tools";
+
+export interface ListingSlugCandidate {
+  id: string;
+  title: string;
+  pubkey: string;
+}
 
 export type ProductSlugIndexes = {
   slugByProductId: Map<string, string>;
@@ -18,14 +24,9 @@ export function titleToSlug(title: string): string {
 }
 
 export function getListingSlug(
-  product: ProductData,
-  allProducts: ProductData[],
-  indexes?: ProductSlugIndexes
+  product: ListingSlugCandidate,
+  allProducts: ListingSlugCandidate[]
 ): string {
-  if (indexes?.slugByProductId.has(product.id)) {
-    return indexes.slugByProductId.get(product.id)!;
-  }
-
   const baseSlug = titleToSlug(product.title);
   if (!baseSlug) {
     return product.id;
@@ -42,15 +43,10 @@ export function getListingSlug(
   return `${baseSlug}-${product.pubkey.substring(0, 8)}`;
 }
 
-export function findProductBySlug(
+export function findListingBySlug<T extends ListingSlugCandidate>(
   slug: string,
-  allProducts: ProductData[],
-  indexes?: ProductSlugIndexes
-): ProductData | undefined {
-  if (indexes?.productBySlug.has(slug)) {
-    return indexes.productBySlug.get(slug);
-  }
-
+  allProducts: T[]
+): T | undefined {
   const pubkeySuffixMatch = slug.match(/^(.+)-([a-f0-9]{8})$/);
   if (pubkeySuffixMatch) {
     const baseSlug = pubkeySuffixMatch[1]!;
@@ -62,16 +58,19 @@ export function findProductBySlug(
     if (match) return match;
   }
 
-  const exactMatches = allProducts.filter((p) => titleToSlug(p.title) === slug);
-  if (exactMatches.length === 1) {
-    return exactMatches[0];
-  }
-
-  if (exactMatches.length > 1) {
-    return exactMatches[0];
+  const plainMatches = allProducts.filter((p) => titleToSlug(p.title) === slug);
+  if (plainMatches.length >= 1) {
+    return plainMatches[0];
   }
 
   return undefined;
+}
+
+export function findProductBySlug(
+  slug: string,
+  allProducts: ProductData[]
+): ProductData | undefined {
+  return findListingBySlug(slug, allProducts);
 }
 
 export function buildProductSlugIndexes(
@@ -82,10 +81,9 @@ export function buildProductSlugIndexes(
   for (const product of allProducts) {
     const baseSlug = titleToSlug(product.title);
     if (!baseSlug) continue;
-    if (!productsByBaseSlug.has(baseSlug)) {
-      productsByBaseSlug.set(baseSlug, []);
-    }
-    productsByBaseSlug.get(baseSlug)!.push(product);
+    const products = productsByBaseSlug.get(baseSlug) || [];
+    products.push(product);
+    productsByBaseSlug.set(baseSlug, products);
   }
 
   const slugByProductId = new Map<string, string>();
@@ -95,9 +93,7 @@ export function buildProductSlugIndexes(
     const baseSlug = titleToSlug(product.title);
     if (!baseSlug) {
       slugByProductId.set(product.id, product.id);
-      if (!productBySlug.has(product.id)) {
-        productBySlug.set(product.id, product);
-      }
+      productBySlug.set(product.id, product);
       continue;
     }
 
@@ -106,8 +102,8 @@ export function buildProductSlugIndexes(
       collisions.length <= 1
         ? baseSlug
         : `${baseSlug}-${product.pubkey.substring(0, 8)}`;
-    slugByProductId.set(product.id, slug);
 
+    slugByProductId.set(product.id, slug);
     if (!productBySlug.has(slug)) {
       productBySlug.set(slug, product);
     }
@@ -116,10 +112,7 @@ export function buildProductSlugIndexes(
     }
   }
 
-  return {
-    slugByProductId,
-    productBySlug,
-  };
+  return { slugByProductId, productBySlug };
 }
 
 export function profileNameToSlug(name: string): string {
@@ -162,6 +155,24 @@ export function findPubkeyByProfileSlug(
   slug: string,
   profileData: Map<string, ProfileData>
 ): string | undefined {
+  const matches: string[] = [];
+  for (const [pubkey, profile] of profileData.entries()) {
+    if (
+      profile.content?.name &&
+      profileNameToSlug(profile.content.name) === slug
+    ) {
+      matches.push(pubkey);
+    }
+  }
+
+  if (matches.length === 1) {
+    return matches[0];
+  }
+
+  if (matches.length > 1) {
+    return undefined;
+  }
+
   const pubkeySuffixMatch = slug.match(/^(.+)-([a-f0-9]{8})$/);
   if (pubkeySuffixMatch) {
     const baseSlug = pubkeySuffixMatch[1]!;
@@ -175,20 +186,6 @@ export function findPubkeyByProfileSlug(
         return pubkey;
       }
     }
-  }
-
-  const matches: string[] = [];
-  for (const [pubkey, profile] of profileData.entries()) {
-    if (
-      profile.content?.name &&
-      profileNameToSlug(profile.content.name) === slug
-    ) {
-      matches.push(pubkey);
-    }
-  }
-
-  if (matches.length >= 1) {
-    return matches[0];
   }
 
   return undefined;

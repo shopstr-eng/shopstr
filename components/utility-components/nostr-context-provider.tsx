@@ -2,40 +2,38 @@ import {
   createContext,
   useCallback,
   useEffect,
+  useRef,
   useState,
   ReactNode,
 } from "react";
-import dynamic from "next/dynamic";
-import type {
+import { nip19 } from "nostr-tools";
+import {
   ChallengeHandler,
   NostrSigner,
 } from "@/utils/nostr/signers/nostr-signer";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
 import { getLocalStorageData } from "@/utils/nostr/nostr-helper-functions";
-
-const PassphraseChallengeModal = dynamic(
-  () => import("@/components/utility-components/request-passphrase-modal"),
-  { ssr: false }
-);
-const AuthUrlChallengeModal = dynamic(
-  () => import("@/components/utility-components/auth-challenge-modal"),
-  { ssr: false }
-);
-const MigrationPromptModal = dynamic(() => import("./migration-prompt-modal"), {
-  ssr: false,
-});
+import PassphraseChallengeModal from "@/components/utility-components/request-passphrase-modal";
+import AuthUrlChallengeModal from "@/components/utility-components/auth-challenge-modal";
+import { NostrNIP07Signer } from "@/utils/nostr/signers/nostr-nip07-signer";
+import { NostrNIP46Signer } from "@/utils/nostr/signers/nostr-nip46-signer";
+import { NostrNSecSigner } from "@/utils/nostr/signers/nostr-nsec-signer";
+import { needsMigration } from "@/utils/nostr/encryption-migration";
+import MigrationPromptModal from "./migration-prompt-modal";
 
 interface SignerContextInterface {
   signer?: NostrSigner;
   isLoggedIn?: boolean;
+  isAuthStateResolved?: boolean;
   pubkey?: string;
   npub?: string;
-  newSigner?: (type: string, args: unknown) => Promise<NostrSigner>;
+  newSigner?: (type: string, args: any) => NostrSigner;
 }
 
 export const SignerContext = createContext({
   signer: {} as NostrSigner,
   isLoggedIn: false,
+  isAuthStateResolved: false,
   pubkey: "",
   npub: "",
   newSigner: {},
@@ -46,10 +44,8 @@ interface NostrContextInterface {
 }
 
 export const NostrContext = createContext({
-  nostr: undefined,
+  nostr: {} as NostrManager,
 } as NostrContextInterface);
-
-type ChallengeResponse = { res: string; remind: boolean };
 
 export function SignerContextProvider({ children }: { children: ReactNode }) {
   const [isPassphraseRequested, setIsPassphraseRequested] = useState(false);
@@ -58,7 +54,7 @@ export function SignerContextProvider({ children }: { children: ReactNode }) {
   const [authUrl, setAuthUrl] = useState("");
 
   const [challengeResolver, setChallengeResolver] = useState<
-    ((res: ChallengeResponse) => void) | undefined
+    ((res: any) => void) | undefined
   >(undefined);
 
   const [signer, setSigner] = useState<NostrSigner | undefined>(undefined);
@@ -66,8 +62,10 @@ export function SignerContextProvider({ children }: { children: ReactNode }) {
   const [abort, setAbort] = useState<() => void>(() => {});
   const [pubkey, setPubKey] = useState<string | undefined>(undefined);
   const [npub, setNPub] = useState<string | undefined>(undefined);
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
+  const [isAuthStateResolved, setIsAuthStateResolved] = useState(false);
   const [showMigrationModal, setShowMigrationModal] = useState(false);
+  const isLoggedIn = !!(signer && pubkey);
+  const lastSuccessfulSignerKeyRef = useRef<string>("");
 
   const challengeHandler: ChallengeHandler = (
     type,
@@ -80,7 +78,7 @@ export function SignerContextProvider({ children }: { children: ReactNode }) {
       setError(error);
       setAbort(() => abort);
       setChallengeResolver(() => {
-        return (res: ChallengeResponse) => {
+        return async (res: any) => {
           resolve(res);
         };
       });
@@ -110,7 +108,6 @@ export function SignerContextProvider({ children }: { children: ReactNode }) {
   const loadKeys = async (signerObject: NostrSigner) => {
     try {
       const pubkey = await signerObject.getPubKey();
-      const { nip19 } = await import("nostr-tools");
       const npub = nip19.npubEncode(pubkey);
       setPubKey(pubkey);
       setNPub(npub);
@@ -121,10 +118,12 @@ export function SignerContextProvider({ children }: { children: ReactNode }) {
       }
       setPubKey(undefined);
       setNPub(undefined);
+    } finally {
+      setIsAuthStateResolved(true);
     }
   };
 
-  const loadSigner = useCallback(async () => {
+  const loadSigner = useCallback((retryCount = 0) => {
     let existingSigner;
     const { signer, signInMethod } = getLocalStorageData();
 
@@ -169,26 +168,41 @@ export function SignerContextProvider({ children }: { children: ReactNode }) {
         }
       }
     } else {
+      lastSuccessfulSignerKeyRef.current = "";
       setSigner(undefined);
       setPubKey(undefined);
       setNPub(undefined);
+      setIsAuthStateResolved(true);
       return;
     }
 
-    const signerData = existingSigner as { [key: string]: unknown };
-    const [{ NostrNIP07Signer }, { NostrNSecSigner }, { NostrNIP46Signer }] =
-      await Promise.all([
-        import("@/utils/nostr/signers/nostr-nip07-signer"),
-        import("@/utils/nostr/signers/nostr-nsec-signer"),
-        import("@/utils/nostr/signers/nostr-nip46-signer"),
-      ]);
+    const signerKey = JSON.stringify(existingSigner);
+    if (signerKey === lastSuccessfulSignerKeyRef.current) {
+      return;
+    }
 
-    const signerObject =
-      NostrNIP07Signer.fromJSON(signerData, challengeHandler) ??
-      NostrNSecSigner.fromJSON(signerData, challengeHandler) ??
-      NostrNIP46Signer.fromJSON(signerData, challengeHandler);
+    setIsAuthStateResolved(false);
+
+    let signerObject: NostrSigner;
+    try {
+      signerObject = NostrManager.signerFrom(existingSigner!, challengeHandler);
+    } catch {
+      const isExtension =
+        existingSigner?.type === "nip07" || signInMethod === "extension";
+      if (isExtension && retryCount < 10) {
+        setTimeout(() => loadSigner(retryCount + 1), 500);
+      } else {
+        setSigner(undefined);
+        setPubKey(undefined);
+        setNPub(undefined);
+        setIsAuthStateResolved(true);
+      }
+      return;
+    }
+
     if (!signerObject) return;
 
+    lastSuccessfulSignerKeyRef.current = signerKey;
     setSigner(signerObject);
     loadKeys(signerObject);
 
@@ -211,11 +225,11 @@ export function SignerContextProvider({ children }: { children: ReactNode }) {
       event: Event & { detail?: { shouldReloadSigner?: boolean } }
     ) => {
       if (event.detail?.shouldReloadSigner === false) return;
-      void loadSigner();
+      loadSigner();
     };
 
     window.addEventListener("storage", handleStorage);
-    void loadSigner();
+    loadSigner();
 
     return () => {
       window.removeEventListener("storage", handleStorage);
@@ -223,59 +237,29 @@ export function SignerContextProvider({ children }: { children: ReactNode }) {
   }, [loadSigner]);
 
   useEffect(() => {
-    setIsLoggedIn(!!(signer && pubkey));
-  }, [signer, pubkey]);
-
-  useEffect(() => {
     if (isLoggedIn) {
-      let cancelled = false;
-      let timer: ReturnType<typeof setTimeout> | undefined;
-
-      void (async () => {
-        const { needsMigration } = await import(
-          "@/utils/nostr/encryption-migration"
-        );
-        if (!cancelled && needsMigration()) {
-          timer = setTimeout(() => {
-            setShowMigrationModal(true);
-          }, 1000);
-        }
-      })();
-
-      return () => {
-        cancelled = true;
-        if (timer) clearTimeout(timer);
-      };
+      const needsKeyMigration = needsMigration();
+      if (needsKeyMigration) {
+        const timer = setTimeout(() => {
+          setShowMigrationModal(true);
+        }, 1000);
+        return () => clearTimeout(timer);
+      }
     }
     return undefined;
   }, [isLoggedIn]);
 
-  const newSigner = useCallback(async (type: string, args: unknown) => {
+  const newSigner = useCallback((type: string, args: any) => {
     switch (type.toLowerCase()) {
       case "nip46": {
-        const { NostrNIP46Signer } = await import(
-          "@/utils/nostr/signers/nostr-nip46-signer"
-        );
-        return new NostrNIP46Signer(
-          args as { bunker: string; appPrivKey?: Uint8Array },
-          challengeHandler
-        );
+        return new NostrNIP46Signer(args, challengeHandler);
       }
       case "nsec": {
-        const { NostrNSecSigner } = await import(
-          "@/utils/nostr/signers/nostr-nsec-signer"
-        );
-        return new NostrNSecSigner(
-          args as { encryptedPrivKey: string; passphrase?: string; pubkey?: string },
-          challengeHandler
-        );
+        return new NostrNSecSigner(args, challengeHandler);
       }
       default:
       case "nip07": {
-        const { NostrNIP07Signer } = await import(
-          "@/utils/nostr/signers/nostr-nip07-signer"
-        );
-        return new NostrNIP07Signer((args ?? {}) as Record<string, never>);
+        return new NostrNIP07Signer(args);
       }
     }
   }, []);
@@ -286,6 +270,7 @@ export function SignerContextProvider({ children }: { children: ReactNode }) {
         value={{
           signer,
           isLoggedIn,
+          isAuthStateResolved,
           pubkey,
           npub,
           newSigner,
@@ -324,7 +309,7 @@ export function SignerContextProvider({ children }: { children: ReactNode }) {
           isOpen={showMigrationModal}
           onClose={() => setShowMigrationModal(false)}
           onSuccess={() => {
-            void loadSigner();
+            loadSigner();
           }}
         />
         {children}
@@ -334,20 +319,18 @@ export function SignerContextProvider({ children }: { children: ReactNode }) {
 }
 
 export function NostrContextProvider({ children }: { children: ReactNode }) {
-  const [nostr] = useState<NostrManager>(() => new NostrManager());
+  const [nostr] = useState<NostrManager>(new NostrManager());
 
   const reload = useCallback(() => {
     const { readRelays, writeRelays, relays } = getLocalStorageData();
     nostr.addRelays([...writeRelays, ...relays, ...readRelays]);
   }, [nostr]);
 
+  reload();
   useEffect(() => {
-    reload();
     window.addEventListener("storage", reload);
-    window.addEventListener("shopstr:storage", reload as EventListener);
     return () => {
       window.removeEventListener("storage", reload);
-      window.removeEventListener("shopstr:storage", reload as EventListener);
     };
   }, [reload]);
 

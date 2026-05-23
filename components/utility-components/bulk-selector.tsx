@@ -1,4 +1,4 @@
-import { Select, SelectItem, SelectSection } from "@nextui-org/react";
+import { Select, SelectItem, SelectSection } from "@heroui/react";
 
 interface BulkSelectorProps {
   bulkPrices: Map<number, number>;
@@ -45,13 +45,12 @@ export default function BulkSelector({
         }
       }}
       isRequired={isRequired}
-      className="mb-4 w-full text-light-text dark:text-dark-text md:w-1/2"
+      className="text-light-text dark:text-dark-text mb-4 w-full md:w-1/2"
     >
       <SelectSection className="text-light-text dark:text-dark-text">
         {[
           <SelectItem
             key="1"
-            value="1"
             textValue={`1 unit - ${basePrice} ${currency}`}
             className="text-light-text dark:text-dark-text"
           >
@@ -63,7 +62,6 @@ export default function BulkSelector({
             return (
               <SelectItem
                 key={units.toString()}
-                value={units.toString()}
                 textValue={`${units} units - ${price} ${currency}${
                   savings > 0 ? ` (Save ${savings}%)` : ""
                 }`}

@@ -18,6 +18,9 @@ jest.mock("next/router", () => ({
 
 jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
   createNostrProfileEvent: jest.fn(),
+  getLocalUserProfileKey: (pubkey: string) => `shopstr:user-profile:${pubkey}`,
+  parseLocalProfileFallback: (raw: string | null) =>
+    raw ? { content: JSON.parse(raw), updatedAt: 0 } : null,
 }));
 const mockCreateNostrProfileEvent = createNostrProfileEvent as jest.Mock;
 
@@ -81,6 +84,7 @@ const renderWithProviders = (
 describe("UserProfileForm", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    localStorage.clear();
   });
 
   test("displays the form after initial data load", async () => {
@@ -93,9 +97,7 @@ describe("UserProfileForm", () => {
     expect(await screen.findByDisplayValue("Test User")).toBeInTheDocument();
     expect(screen.getByDisplayValue("testuser")).toBeInTheDocument();
 
-    const bannerImage = screen.getByAltText("User banner image");
     const profileImage = screen.getByAltText("user profile picture");
-    expect(bannerImage).toHaveAttribute("src", "https://existing.banner/url");
     expect(profileImage).toHaveAttribute("src", "https://existing.picture/url");
   });
 
@@ -139,7 +141,9 @@ describe("UserProfileForm", () => {
     await user.click(screen.getByRole("button", { name: /Save Profile/i }));
 
     await waitFor(() => {
-      expect(mockRouterPush).toHaveBeenCalledWith("/onboarding/shop-profile");
+      expect(mockRouterPush).toHaveBeenCalledWith(
+        "/onboarding/wallet?type=seller"
+      );
     });
   });
 
@@ -156,15 +160,10 @@ describe("UserProfileForm", () => {
     });
   });
 
-  test("updates banner and profile picture via uploader", async () => {
+  test("updates the profile picture via uploader", async () => {
     const user = userEvent.setup();
     renderWithProviders(<UserProfileForm />);
     await screen.findByLabelText("Display name");
-
-    const uploadBannerBtn = screen.getByTestId("upload-banner-btn");
-    await user.click(uploadBannerBtn);
-    const newBannerImage = await screen.findByAltText("User banner image");
-    expect(newBannerImage).toHaveAttribute("src", "https://new.image/url");
 
     const uploadPictureBtn = screen.getByTestId("upload-picture-btn");
     await user.click(uploadPictureBtn);

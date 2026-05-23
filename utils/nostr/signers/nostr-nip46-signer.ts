@@ -6,7 +6,7 @@ import {
   generateSecretKey,
 } from "nostr-tools";
 import { newPromiseWithTimeout } from "@/utils/timeout";
-import { bytesToHex, hexToBytes } from "@noble/hashes/utils";
+import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
 import { NostrEventTemplate, NostrManager } from "@/utils/nostr/nostr-manager";
 import {
   ChallengeHandler,
@@ -80,20 +80,18 @@ export class NostrNIP46Signer implements NostrSigner {
       [
         {
           kinds: [24133],
-          since: Math.floor(Date.now() / 1000),
-          authors: [this.bunker.bunkerPubkey],
           "#p": [this.appPubKey],
         },
       ],
       {
         onevent: (event) => {
-          this.onEvent(event);
+          this.onEvent(event).catch(() => {});
         },
       }
     );
   }
 
-  public toJSON(): { [key: string]: unknown } {
+  public toJSON(): { [key: string]: any } {
     return {
       type: "nip46",
       bunker: this.bunker.url,
@@ -102,36 +100,37 @@ export class NostrNIP46Signer implements NostrSigner {
   }
 
   public static fromJSON(
-    json: { [key: string]: unknown },
+    json: { [key: string]: any },
     challengeHandler: ChallengeHandler
   ): NostrNIP46Signer | undefined {
-    if (json.type !== "nip46" || typeof json.bunker !== "string") return undefined;
+    if (json.type !== "nip46" || !json.bunker) return undefined;
     return new NostrNIP46Signer(
       {
         bunker: json.bunker,
-        appPrivKey:
-          typeof json.appPrivKey === "string"
-            ? hexToBytes(json.appPrivKey)
-            : undefined,
+        appPrivKey: hexToBytes(json.appPrivKey),
       },
       challengeHandler
     );
   }
 
   private async onEvent(event: NostrEvent) {
-    const conversationKey = nip44.getConversationKey(
-      this.appPrivKey,
-      event.pubkey
-    );
-    event.content = nip44.decrypt(event.content, conversationKey);
-    const content = JSON.parse(event.content) as {
-      id?: string;
-      error?: string;
-      result?: string;
-    };
+    let content: any;
+    try {
+      const conversationKey = nip44.getConversationKey(
+        this.appPrivKey,
+        event.pubkey
+      );
+      const decrypted = nip44.decrypt(event.content, conversationKey);
+      content = JSON.parse(decrypted);
+      event.content = decrypted;
+    } catch {
+      return;
+    }
 
-    const { id, error, result } = content;
-    if (!id) throw new Error("invalid event content");
+    const id = content.id;
+    const error = content.error;
+    const result = content.result;
+    if (!id) return;
 
     if (result === "auth_url") {
       const abortController = new AbortController();
@@ -139,7 +138,7 @@ export class NostrNIP46Signer implements NostrSigner {
       this.pendingChallenges.set(id, abortController);
       await this.challengeHandler(
         result,
-        error ?? "",
+        error,
         () => {
           abortController.abort();
           this.pendingChallenges.delete(id);
@@ -170,7 +169,7 @@ export class NostrNIP46Signer implements NostrSigner {
     }
   }
 
-  public async connect(): Promise<string> {
+  public async connect() {
     const args: string[] = [];
     args.push(this.bunker.bunkerPubkey);
     args.push(this.bunker.secret || "");
@@ -222,7 +221,7 @@ export class NostrNIP46Signer implements NostrSigner {
     });
   }
 
-  private async sendRPC(method: string, params: unknown): Promise<string> {
+  private async sendRPC(method: string, params: any): Promise<any> {
     const requestId = this.getNewRequestId();
     const remotePubKey = this.bunker.bunkerPubkey;
 
@@ -254,7 +253,7 @@ export class NostrNIP46Signer implements NostrSigner {
     await this.nostr.publish(signedEvent);
 
     const resp: NostrEvent = await respPromise; // now we wait for the response
-    const content = JSON.parse(resp.content) as { result?: unknown };
-    return typeof content.result === "string" ? content.result : "";
+    const content = JSON.parse(resp.content);
+    return content.result;
   }
 }

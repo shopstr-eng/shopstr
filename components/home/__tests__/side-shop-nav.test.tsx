@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import SideShopNav from "../side-shop-nav";
 import { ShopMapContext } from "@/utils/context/context";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
-import { useDisclosure } from "@nextui-org/react";
+import { useDisclosure } from "@heroui/react";
 import { useRouter } from "next/router";
 
 jest.mock("next/router", () => ({ __esModule: true, useRouter: jest.fn() }));
@@ -13,8 +13,8 @@ jest.mock("@/components/hooks/use-navigation", () => ({
   default: () => ({ isMessagesActive: false }),
 }));
 
-jest.mock("@nextui-org/react", () => ({
-  ...jest.requireActual("@nextui-org/react"),
+jest.mock("@heroui/react", () => ({
+  ...jest.requireActual("@heroui/react"),
   useDisclosure: jest.fn(),
 }));
 
@@ -27,7 +27,7 @@ jest.mock("../../sign-in/SignInModal", () => {
 const renderComponent = ({
   isLoggedIn = false,
   isEditingShop = false,
-  categories = [],
+  categories = [] as string[],
   aboutText = "",
 }) => {
   const MOCK_VALID_PUBKEY = "a1".repeat(32);
@@ -52,9 +52,15 @@ const renderComponent = ({
 
   render(
     <SignerContext.Provider
-      value={{ isLoggedIn, pubkey: isLoggedIn ? "user-pubkey" : null }}
+      value={{ isLoggedIn, pubkey: isLoggedIn ? "user-pubkey" : undefined }}
     >
-      <ShopMapContext.Provider value={{ shopData: mockShopData }}>
+      <ShopMapContext.Provider
+        value={{
+          shopData: mockShopData,
+          isLoading: false,
+          updateShopData: jest.fn(),
+        }}
+      >
         <SideShopNav
           focusedPubkey={MOCK_VALID_PUBKEY}
           categories={categories}
@@ -167,7 +173,7 @@ describe("SideShopNav Component", () => {
 
       await userEvent.click(screen.getByText("Edit Shop"));
 
-      expect(mockRouterPush).toHaveBeenCalledWith("settings/shop-profile");
+      expect(mockRouterPush).toHaveBeenCalledWith("/settings/shop-profile");
     });
   });
 });

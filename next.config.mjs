@@ -1,6 +1,10 @@
 /** @type {import('next').NextConfig} */
 
 import withPWAInit from "@ducanh2912/next-pwa";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const withPWA = withPWAInit({
   dest: "public",
@@ -9,11 +13,7 @@ const withPWA = withPWAInit({
   sw: "service-worker.js",
   disable: process.env.NODE_ENV === "development",
   buildExcludes: [/middleware-manifest\.json$/],
-  publicExcludes: [
-    "!**/*.map",
-    "!payment-confirmed.gif",
-    "!shop-freely-*.png",
-  ],
+  publicExcludes: ["!**/*.map", "!payment-confirmed.gif", "!shop-freely-*.png"],
   runtimeCaching: [
     {
       urlPattern: /^https:\/\/.*\.(png|jpg|jpeg|svg|webp|gif|ico)$/,
@@ -55,8 +55,28 @@ const withPWA = withPWAInit({
 const nextConfig = {
   bundlePagesRouterDependencies: true,
   output: "standalone",
+  // Pin the file tracer to this project root so Next.js bundles only what's
+  // needed into .next/standalone (silences multi-lockfile warnings and keeps
+  // the deployment image lean).
+  outputFileTracingRoot: path.join(__dirname, "."),
   reactStrictMode: true,
+  allowedDevOrigins: process.env.REPLIT_DEV_DOMAIN
+    ? [process.env.REPLIT_DEV_DOMAIN]
+    : [],
+  poweredByHeader: false,
   turbopack: {},
+  async rewrites() {
+    return [
+      {
+        source: "/sitemap.xml",
+        destination: "/api/sitemap.xml",
+      },
+      {
+        source: "/robots.txt",
+        destination: "/api/robots.txt",
+      },
+    ];
+  },
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "www.google.com" },

@@ -1,4 +1,4 @@
-import { Select, SelectItem, SelectSection } from "@nextui-org/react";
+import { Select, SelectItem, SelectSection } from "@heroui/react";
 
 interface VolumeSelectorProps {
   volumes: string[];
@@ -33,7 +33,7 @@ export default function VolumeSelector({
         }
       }}
       isRequired={isRequired}
-      className="mb-4 w-full text-light-text dark:text-dark-text md:w-1/2"
+      className="text-light-text dark:text-dark-text mb-4 w-full md:w-1/2"
     >
       <SelectSection className="text-light-text dark:text-dark-text">
         {volumes.map((volume) => {
@@ -41,7 +41,6 @@ export default function VolumeSelector({
           return (
             <SelectItem
               key={volume}
-              value={volume}
               textValue={`${volume} - ${price} ${currency}`}
               className="text-light-text dark:text-dark-text"
             >

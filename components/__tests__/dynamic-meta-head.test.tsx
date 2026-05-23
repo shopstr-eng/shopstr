@@ -36,8 +36,6 @@ jest.mock("@/utils/parsers/product-parser-functions", () => ({
 const mockParseTags = parseTags as jest.Mock;
 
 describe("DynamicHead", () => {
-  const mockOrigin = "https://test.shopstr.store";
-
   const getMetaContent = (name: string) => {
     const element = document.querySelector(
       `meta[name="${name}"], meta[property="${name}"]`
@@ -45,21 +43,12 @@ describe("DynamicHead", () => {
     return element?.getAttribute("content");
   };
 
-  beforeAll(() => {
-    Object.defineProperty(window, "location", {
-      value: {
-        origin: mockOrigin,
-      },
-      writable: true,
-    });
-  });
-
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
   test("should render default meta tags for a generic page", async () => {
-    mockUseRouter.mockReturnValue({ pathname: "/", query: {} });
+    mockUseRouter.mockReturnValue({ pathname: "/", asPath: "/", query: {} });
     render(
       <DynamicHead
         productEvents={[]}
@@ -68,7 +57,9 @@ describe("DynamicHead", () => {
       />
     );
     await waitFor(() => {
-      expect(document.title).toBe("Shopstr");
+      expect(document.title).toBe(
+        "Shopstr | Bitcoin-Native Nostr Marketplace | Shop Freely"
+      );
     });
   });
 
@@ -84,13 +75,21 @@ describe("DynamicHead", () => {
             content: {
               name: "Nostr Goods",
               about: "The best goods on Nostr.",
-              ui: { picture: "https://shop.com/logo.png" },
+              ui: {
+                picture: "https://shop.com/logo.png",
+                banner: "",
+                theme: "",
+                darkMode: false,
+              },
+              merchants: [],
             },
+            created_at: 0,
           } as ShopProfile,
         ],
       ]);
       mockUseRouter.mockReturnValue({
         pathname: `/marketplace/${shopNpub}`,
+        asPath: `/marketplace/${shopNpub}`,
         query: { npub: [shopNpub] },
       });
       mockNip19.npubEncode.mockReturnValue(shopNpub);
@@ -108,6 +107,7 @@ describe("DynamicHead", () => {
       const shopNpub = "npub1shop_not_found";
       mockUseRouter.mockReturnValue({
         pathname: `/marketplace/${shopNpub}`,
+        asPath: `/marketplace/${shopNpub}`,
         query: { npub: [shopNpub] },
       });
       render(
@@ -123,6 +123,7 @@ describe("DynamicHead", () => {
     test("should render fallback tags if npub is missing from query", async () => {
       mockUseRouter.mockReturnValue({
         pathname: `/marketplace/npub`,
+        asPath: `/marketplace/npub`,
         query: {},
       });
       render(
@@ -132,7 +133,11 @@ describe("DynamicHead", () => {
           profileData={new Map()}
         />
       );
-      await waitFor(() => expect(document.title).toBe("Shopstr"));
+      await waitFor(() =>
+        expect(document.title).toBe(
+          "Shopstr | Bitcoin-Native Nostr Marketplace | Shop Freely"
+        )
+      );
     });
 
     test("should use fallback image for a shop with picture set to null", async () => {
@@ -143,12 +148,19 @@ describe("DynamicHead", () => {
           shopPubkey,
           {
             pubkey: shopPubkey,
-            content: { name: "Test Shop", ui: { picture: null } },
+            content: {
+              name: "Test Shop",
+              about: "",
+              ui: { picture: "", banner: "", theme: "", darkMode: false },
+              merchants: [],
+            },
+            created_at: 0,
           } as ShopProfile,
         ],
       ]);
       mockUseRouter.mockReturnValue({
         pathname: `/marketplace/${shopNpub}`,
+        asPath: `/marketplace/${shopNpub}`,
         query: { npub: [shopNpub] },
       });
       mockNip19.npubEncode.mockReturnValue(shopNpub);
@@ -160,7 +172,9 @@ describe("DynamicHead", () => {
         />
       );
       await waitFor(() =>
-        expect(getMetaContent("og:image")).toBe("/shopstr-2000x2000.png")
+        expect(getMetaContent("og:image")).toBe(
+          "https://shopstr.market/shopstr-2000x2000.png"
+        )
       );
     });
   });
@@ -179,6 +193,7 @@ describe("DynamicHead", () => {
       const naddr = "naddr1product";
       mockUseRouter.mockReturnValue({
         pathname: `/listing/${productId}`,
+        asPath: `/listing/${productId}`,
         query: { productId: [productId] },
       });
       mockNip19.naddrEncode.mockReturnValue(naddr);
@@ -197,6 +212,7 @@ describe("DynamicHead", () => {
       const naddr = "naddr1product";
       mockUseRouter.mockReturnValue({
         pathname: `/listing/${productId}`,
+        asPath: `/listing/${productId}`,
         query: { productId: [productId] },
       });
       mockNip19.naddrEncode.mockReturnValue(naddr);
@@ -209,13 +225,16 @@ describe("DynamicHead", () => {
         />
       );
       await waitFor(() => expect(document.title).toBe("Shopstr Listing"));
-      expect(getMetaContent("og:image")).toBe("/shopstr-2000x2000.png");
+      expect(getMetaContent("og:image")).toBe(
+        "https://shopstr.market/shopstr-2000x2000.png"
+      );
     });
 
     test("should render fallback tags for a listing when parsing fails", async () => {
       const naddr = "naddr1product";
       mockUseRouter.mockReturnValue({
         pathname: `/listing/${productId}`,
+        asPath: `/listing/${productId}`,
         query: { productId: [productId] },
       });
       mockNip19.naddrEncode.mockReturnValue(naddr);

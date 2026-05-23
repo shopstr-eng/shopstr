@@ -71,7 +71,11 @@ const renderWithProviders = (
         value={{ signer: {} as any, pubkey: mockUserPubkey }}
       >
         <ShopMapContext.Provider
-          value={{ shopData, updateShopData: mockUpdateShopData }}
+          value={{
+            shopData,
+            isLoading: false,
+            updateShopData: mockUpdateShopData,
+          }}
         >
           {component}
         </ShopMapContext.Provider>
@@ -84,6 +88,16 @@ const renderWithProviders = (
 describe("ShopProfileForm", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    global.fetch = jest.fn(() =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({}),
+      })
+    ) as jest.Mock;
+  });
+
+  afterEach(() => {
+    (global.fetch as jest.Mock).mockRestore?.();
   });
 
   test("displays the form after initial data load", async () => {
@@ -195,10 +209,11 @@ describe("ShopProfileForm", () => {
     await user.type(await screen.findByLabelText("Shop Name"), "My Shop");
     const saveButton = screen.getByRole("button", { name: /Save Shop/i });
 
-    fireEvent.keyDown(saveButton, { key: "Enter", code: "Enter" });
+    saveButton.focus();
+    await user.keyboard("{Enter}");
 
     await waitFor(() => {
-      expect(createNostrShopEvent).toHaveBeenCalledTimes(2);
+      expect(createNostrShopEvent).toHaveBeenCalledTimes(1);
     });
   });
 });

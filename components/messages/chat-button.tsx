@@ -30,7 +30,7 @@ const ChatButton = ({
   return (
     <div
       key={pubkeyOfChat}
-      className={`mx-3 mb-2 flex cursor-pointer items-center gap-4 rounded-md border-2 border-light-fg px-3 py-2 hover:opacity-70 dark:border-dark-fg ${
+      className={`border-light-fg dark:border-dark-fg mx-3 mb-2 flex cursor-pointer items-center gap-4 rounded-md border-2 px-3 py-2 hover:opacity-70 ${
         pubkeyOfChat === openedChatPubkey ? "bg-[#ccccccb9]" : ""
       }`}
       onClick={() => handleClickChat(pubkeyOfChat)}
@@ -43,10 +43,10 @@ const ChatButton = ({
         baseClassname="justify-start w-4/5"
         wrapperClassname="w-4/5 h-full"
       />
-      <div className="flex flex-shrink-0 flex-grow flex-col text-right text-light-text dark:text-dark-text">
+      <div className="text-light-text dark:text-dark-text flex flex-shrink-0 flex-grow flex-col text-right">
         <div className="h-1/2">
           {unreadCount > 0 ? (
-            <span className="ml-2 rounded-full bg-shopstr-purple-light p-1 text-xs text-light-bg dark:bg-shopstr-yellow-light dark:text-dark-bg">
+            <span className="bg-shopstr-purple-light text-light-bg dark:bg-shopstr-yellow-light dark:text-dark-bg ml-2 rounded-full p-1 text-xs">
               {unreadCount}
             </span>
           ) : (

@@ -28,8 +28,8 @@ export default function CompactPriceDisplay({
     compactDisplay: "short",
   });
   return (
-    <div className=" inline-block h-[30px] max-w-[70%] overflow-hidden text-ellipsis whitespace-nowrap rounded-md bg-black px-3 text-cyan-50 opacity-50">
-      <span className="font-semibold ">
+    <div className="inline-block h-[30px] max-w-[70%] overflow-hidden rounded-md bg-black px-3 text-ellipsis whitespace-nowrap text-cyan-50 opacity-50">
+      <span className="font-semibold">
         {formatter.format(Number(price))} {currency}{" "}
         {monetaryInfo.shippingType ? getShippingLabel() : ""}{" "}
       </span>
@@ -48,11 +48,11 @@ export function DisplayCheckoutCost({
 
   return (
     <div>
-      <p className="text-lg font-semibold text-light-text dark:text-dark-text">
+      <p className="text-light-text dark:text-dark-text text-lg font-semibold">
         {formattedPrice}
       </p>
       {shippingType && (
-        <p className="mb-4 text-sm text-light-text dark:text-dark-text">
+        <p className="text-light-text dark:text-dark-text mb-4 text-sm">
           Shipping: {shippingType}
         </p>
       )}

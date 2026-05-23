@@ -1,6 +1,6 @@
 import { useState, useEffect, useContext } from "react";
-import { Button } from "@nextui-org/react";
-import { Slider } from "@nextui-org/react";
+import { Button } from "@heroui/react";
+import { Slider } from "@heroui/react";
 import { useTheme } from "next-themes";
 import { FollowsContext } from "../../utils/context/context";
 import { getLocalStorageData } from "@/utils/nostr/nostr-helper-functions";
@@ -11,8 +11,13 @@ const ShopstrSlider = () => {
 
   const followsContext = useContext(FollowsContext);
 
-  const [wot, setWot] = useState(getLocalStorageData().wot);
+  const [wot, setWot] = useState(3);
   const [wotIsChanged, setWotIsChanged] = useState(false);
+
+  useEffect(() => {
+    const savedWot = getLocalStorageData().wot;
+    setWot(savedWot);
+  }, []);
 
   useEffect(() => {
     localStorage.setItem("wot", String(wot));
@@ -38,8 +43,8 @@ const ShopstrSlider = () => {
               : wot
           }
           minValue={1}
-          defaultValue={wot}
-          className="max-w-md text-light-text dark:text-dark-text"
+          value={wot}
+          className="text-light-text dark:text-dark-text max-w-md"
           onChangeEnd={(value) => {
             if (Array.isArray(value)) {
               setWot(value[0]!);
@@ -51,7 +56,7 @@ const ShopstrSlider = () => {
         />
       </div>
       {wotIsChanged && (
-        <div className="flex h-fit flex-row justify-between bg-light-bg px-3 py-[15px] dark:bg-dark-bg">
+        <div className="bg-light-bg dark:bg-dark-bg flex h-fit flex-row justify-between px-3 py-[15px]">
           <Button className={SHOPSTRBUTTONCLASSNAMES} onClick={refreshPage}>
             Refresh to Apply
           </Button>

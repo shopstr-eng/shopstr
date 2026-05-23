@@ -1,5 +1,6 @@
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, within } from "@testing-library/react";
 import "@testing-library/jest-dom";
+import type { ComponentProps } from "react";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import { ShopMapContext } from "@/utils/context/context";
 import { ShopProfile } from "@/utils/types/types";
@@ -15,8 +16,8 @@ import router from "next/router";
 const mockRouterPush = router.push as jest.Mock;
 
 const mockOnOpen = jest.fn();
-jest.mock("@nextui-org/react", () => ({
-  ...jest.requireActual("@nextui-org/react"),
+jest.mock("@heroui/react", () => ({
+  ...jest.requireActual("@heroui/react"),
   useDisclosure: () => ({
     isOpen: false,
     onOpen: mockOnOpen,
@@ -55,19 +56,42 @@ jest.mock("@heroicons/react/24/outline", () => ({
 import MyListingsPage from "../my-listings";
 
 const loggedInUser = { pubkey: "user-pubkey-123" };
-const loggedOutUser = { pubkey: null };
+const loggedOutUser = { pubkey: undefined };
 const shopProfile: ShopProfile = {
+  pubkey: loggedInUser.pubkey,
   content: {
-    ui: { banner: "http://example.com/banner.jpg" },
+    name: "Test Shop",
     about: "This is the test shop about section.",
+    ui: {
+      picture: "",
+      banner: "http://example.com/banner.jpg",
+      theme: "",
+      darkMode: false,
+    },
+    merchants: [],
   },
+  created_at: 0,
 };
 const mockShopDataContextWithProfile = {
   shopData: new Map([[loggedInUser.pubkey, shopProfile]]),
+  isLoading: false,
+  updateShopData: jest.fn(),
 };
-const mockShopDataContextEmpty = { shopData: new Map() };
+const mockShopDataContextEmpty = {
+  shopData: new Map(),
+  isLoading: false,
+  updateShopData: jest.fn(),
+};
 
-const renderComponent = (signerContextValue: any, shopContextValue: any) => {
+type SignerContextValue = ComponentProps<
+  typeof SignerContext.Provider
+>["value"];
+type ShopContextValue = ComponentProps<typeof ShopMapContext.Provider>["value"];
+
+const renderComponent = (
+  signerContextValue: SignerContextValue,
+  shopContextValue: ShopContextValue
+) => {
   return render(
     <SignerContext.Provider value={signerContextValue}>
       <ShopMapContext.Provider value={shopContextValue}>
@@ -98,13 +122,13 @@ describe("MyListingsPage", () => {
     });
 
     test('opens sign-in modal when trying to "Add Listing"', () => {
-      fireEvent.click(screen.getAllByText("Add Listing")[0]);
+      fireEvent.click(screen.getAllByText("Add Listing")[0]!);
       expect(mockOnOpen).toHaveBeenCalledTimes(1);
       expect(mockRouterPush).not.toHaveBeenCalled();
     });
 
     test('opens sign-in modal when trying to "Edit Shop"', () => {
-      fireEvent.click(screen.getAllByText("Edit Shop")[0]);
+      fireEvent.click(screen.getAllByText("Edit Shop")[0]!);
       expect(mockOnOpen).toHaveBeenCalledTimes(1);
       expect(mockRouterPush).not.toHaveBeenCalled();
     });
@@ -112,7 +136,7 @@ describe("MyListingsPage", () => {
     test('opens sign-in modal when trying to view "Orders"', () => {
       const desktopOrdersButton = screen.getAllByRole("button", {
         name: "Orders",
-      })[0];
+      })[0]!;
       fireEvent.click(desktopOrdersButton);
       expect(mockOnOpen).toHaveBeenCalledTimes(1);
       expect(mockRouterPush).not.toHaveBeenCalled();
@@ -132,7 +156,7 @@ describe("MyListingsPage", () => {
           shopProfile.content.ui.banner
         );
 
-        fireEvent.click(screen.getAllByRole("button", { name: "About" })[0]);
+        fireEvent.click(screen.getAllByRole("button", { name: "About" })[0]!);
         expect(
           screen.getByRole("heading", { name: /about/i, level: 2 })
         ).toBeInTheDocument();
@@ -142,6 +166,73 @@ describe("MyListingsPage", () => {
       test("renders Listings section by default", () => {
         expect(screen.getByTestId("display-products-mock")).toBeInTheDocument();
         expect(screen.getByTestId("side-shop-nav-mock")).toBeInTheDocument();
+      });
+
+      test("updates the About section when the shop profile changes but the banner stays the same", () => {
+        const sharedBanner = "http://example.com/banner.jpg";
+        const initialShopContext = {
+          ...mockShopDataContextWithProfile,
+          shopData: new Map([
+            [
+              loggedInUser.pubkey,
+              {
+                ...shopProfile,
+                content: {
+                  ...shopProfile.content,
+                  about: "Initial about text",
+                  ui: {
+                    ...shopProfile.content.ui,
+                    banner: sharedBanner,
+                  },
+                },
+              },
+            ],
+          ]),
+        };
+
+        const { container, rerender } = renderComponent(
+          loggedInUser,
+          initialShopContext
+        );
+        const currentView = within(container);
+
+        fireEvent.click(
+          currentView.getAllByRole("button", { name: "About" })[0]!
+        );
+        expect(currentView.getByText("Initial about text")).toBeInTheDocument();
+
+        const updatedShopContext = {
+          ...initialShopContext,
+          shopData: new Map([
+            [
+              loggedInUser.pubkey,
+              {
+                ...shopProfile,
+                content: {
+                  ...shopProfile.content,
+                  about: "Updated about text",
+                  ui: {
+                    ...shopProfile.content.ui,
+                    banner: sharedBanner,
+                  },
+                },
+              },
+            ],
+          ]),
+        };
+
+        rerender(
+          <SignerContext.Provider value={loggedInUser}>
+            <ShopMapContext.Provider value={updatedShopContext}>
+              <MyListingsPage />
+            </ShopMapContext.Provider>
+          </SignerContext.Provider>
+        );
+
+        expect(currentView.getByText("Updated about text")).toBeInTheDocument();
+        expect(
+          currentView.queryByText("Initial about text")
+        ).not.toBeInTheDocument();
       });
     });
 
@@ -155,24 +246,43 @@ describe("MyListingsPage", () => {
       });
 
       test('shows "Nothing here" message in About section', () => {
-        fireEvent.click(screen.getAllByRole("button", { name: "About" })[0]);
+        fireEvent.click(screen.getAllByRole("button", { name: "About" })[0]!);
         expect(screen.getByText("Nothing here . . . yet!")).toBeInTheDocument();
         expect(
           screen.getByText("Set up your shop in settings!")
         ).toBeInTheDocument();
+      });
+
+      test("clears stale shop banner when shop data is removed after render", () => {
+        const { rerender } = renderComponent(
+          loggedInUser,
+          mockShopDataContextWithProfile
+        );
+
+        expect(screen.getByAltText("Shop Banner")).toBeInTheDocument();
+
+        rerender(
+          <SignerContext.Provider value={loggedInUser}>
+            <ShopMapContext.Provider value={mockShopDataContextEmpty}>
+              <MyListingsPage />
+            </ShopMapContext.Provider>
+          </SignerContext.Provider>
+        );
+
+        expect(screen.queryByAltText("Shop Banner")).not.toBeInTheDocument();
       });
     });
 
     test("navigates correctly when clicking action buttons", () => {
       renderComponent(loggedInUser, mockShopDataContextEmpty);
 
-      fireEvent.click(screen.getAllByText("Add Listing")[0]);
+      fireEvent.click(screen.getAllByText("Add Listing")[0]!);
       expect(mockRouterPush).toHaveBeenCalledWith("?addNewListing");
 
-      fireEvent.click(screen.getAllByText("Edit Shop")[0]);
-      expect(mockRouterPush).toHaveBeenCalledWith("settings/shop-profile");
+      fireEvent.click(screen.getAllByText("Edit Shop")[0]!);
+      expect(mockRouterPush).toHaveBeenCalledWith("/settings/shop-profile");
 
-      fireEvent.click(screen.getAllByRole("button", { name: "Orders" })[0]);
+      fireEvent.click(screen.getAllByRole("button", { name: "Orders" })[0]!);
       expect(mockRouterPush).toHaveBeenCalledWith("/orders");
     });
   });
@@ -188,7 +298,7 @@ describe("MyListingsPage", () => {
         screen.queryByText(shopProfile.content.about)
       ).not.toBeInTheDocument();
 
-      fireEvent.click(screen.getAllByRole("button", { name: "About" })[0]);
+      fireEvent.click(screen.getAllByRole("button", { name: "About" })[0]!);
       expect(
         screen.queryByTestId("display-products-mock")
       ).not.toBeInTheDocument();
@@ -197,7 +307,7 @@ describe("MyListingsPage", () => {
       ).toBeInTheDocument();
       expect(screen.getByText(shopProfile.content.about)).toBeInTheDocument();
 
-      fireEvent.click(screen.getAllByRole("button", { name: "Listings" })[0]);
+      fireEvent.click(screen.getAllByRole("button", { name: "Listings" })[0]!);
       expect(screen.getByTestId("display-products-mock")).toBeInTheDocument();
       expect(
         screen.queryByText(shopProfile.content.about)
@@ -206,7 +316,7 @@ describe("MyListingsPage", () => {
 
     test("mobile menu opens and closes on click", () => {
       const menuButton = screen
-        .getAllByTestId("bars3-icon-mock")[0]
+        .getAllByTestId("bars3-icon-mock")[0]!
         .closest("button");
       expect(menuButton).toBeInTheDocument();
 
@@ -230,7 +340,7 @@ describe("MyListingsPage", () => {
 
     test("mobile menu closes on outside click", () => {
       const menuButton = screen
-        .getAllByTestId("bars3-icon-mock")[0]
+        .getAllByTestId("bars3-icon-mock")[0]!
         .closest("button");
       fireEvent.click(menuButton!);
       expect(

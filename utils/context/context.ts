@@ -1,5 +1,5 @@
 import { createContext } from "react";
-import type {
+import {
   NostrEvent,
   NostrMessageEvent,
   ProfileData,
@@ -7,22 +7,16 @@ import type {
   Community,
   CommunityPost,
 } from "../types/types";
-import type { Proof } from "@cashu/cashu-ts";
-
-export interface CashuProofEvent {
-  id: string;
-  proofs: Proof[];
-  [key: string]: unknown;
-}
+import { Proof } from "@cashu/cashu-ts";
 
 export interface ProfileContextInterface {
-  profileData: Map<string, ProfileData>;
+  profileData: Map<string, any>;
   isLoading: boolean;
   updateProfileData: (profileData: ProfileData) => void;
 }
 
 export const ProfileMapContext = createContext({
-  profileData: new Map<string, ProfileData>(),
+  profileData: new Map(),
   isLoading: true,
 } as ProfileContextInterface);
 
@@ -45,7 +39,7 @@ export interface ProductContextInterface {
 }
 
 export const ProductContext = createContext({
-  productEvents: [] as NostrEvent[],
+  productEvents: [],
   isLoading: true,
   addNewlyCreatedProductEvent: (_productEvent: NostrEvent) => {},
   removeDeletedProductEvent: (_productId: string) => {},
@@ -81,18 +75,30 @@ export const ReviewsContext = createContext({
   ) => {},
 } as ReviewsContextInterface);
 
+export interface ReportsContextInterface {
+  reportEvents: NostrEvent[];
+  isLoading: boolean;
+  addReportEvent: (reportEvent: NostrEvent) => void;
+}
+
+export const ReportsContext = createContext({
+  reportEvents: [],
+  isLoading: true,
+  addReportEvent: (_reportEvent: NostrEvent) => {},
+} as ReportsContextInterface);
+
 export interface CartContextInterface {
   cartAddresses: string[][];
   isLoading: boolean;
-  addProductToCart: (productData: unknown) => void;
-  removeProductFromCart: (productData: unknown) => void;
+  addProductToCart: (productData: any) => void;
+  removeProductFromCart: (productData: any) => void;
 }
 
 export const CartContext = createContext({
   cartAddresses: [],
   isLoading: true,
-  addProductToCart: (_productData: unknown) => {},
-  removeProductFromCart: (_productData: unknown) => {},
+  addProductToCart: (_productData: any) => {},
+  removeProductFromCart: (_productData: any) => {},
 } as CartContextInterface);
 
 export type ChatsMap = Map<string, NostrMessageEvent[]>;
@@ -156,14 +162,14 @@ export const BlossomContext = createContext({
 } as BlossomContextInterface);
 
 export interface CashuWalletContextInterface {
-  proofEvents: CashuProofEvent[];
+  proofEvents: any[];
   cashuMints: string[];
   cashuProofs: Proof[];
   isLoading: boolean;
 }
 
 export const CashuWalletContext = createContext({
-  proofEvents: [] as CashuProofEvent[],
+  proofEvents: [],
   cashuMints: [],
   cashuProofs: [],
   isLoading: true,

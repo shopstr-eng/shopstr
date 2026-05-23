@@ -1,15 +1,14 @@
 import type { NextApiRequest, NextApiResponse } from "next";
+import { getFailedRelayPublishesForOwner } from "@/utils/db/db-service";
+import { applyRateLimit } from "@/utils/rate-limit";
 import {
-  ensureFailedRelayPublishesTable,
-  getDbPool,
-} from "@/utils/db/db-service";
+  buildListFailedRelayPublishesProof,
+  extractSignedEventFromRequest,
+  verifySignedHttpRequestProof,
+} from "@/utils/nostr/request-auth";
 
-interface FailedRelayPublishRow {
-  event_id: string;
-  event_data: string | null;
-  relays: string;
-  retry_count: number;
-}
+// Polled by background retry loops; once-per-minute is plenty per client.
+const RATE_LIMIT = { limit: 120, windowMs: 60 * 1000 };
 
 export default async function handler(
   req: NextApiRequest,
@@ -19,50 +18,28 @@ export default async function handler(
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const dbPool = getDbPool();
-  let client;
+  if (!applyRateLimit(req, res, "get-failed-publishes", RATE_LIMIT)) return;
 
   try {
-    client = await dbPool.connect();
-    await ensureFailedRelayPublishesTable(client);
-
-    // Get all failed publishes with retry count < 5 (limit retries)
-    const result = await client.query<FailedRelayPublishRow>(
-      `SELECT event_id, event_data, relays, retry_count
-       FROM failed_relay_publishes
-       WHERE retry_count < 5
-         AND event_data IS NOT NULL
-       ORDER BY created_at ASC
-       LIMIT 50`
+    const signedEvent = extractSignedEventFromRequest(req);
+    const verification = verifySignedHttpRequestProof(
+      signedEvent,
+      buildListFailedRelayPublishesProof(signedEvent?.pubkey || "")
     );
 
-    const failedPublishes = result.rows
-      .filter(
-        (row): row is FailedRelayPublishRow & { event_data: string } =>
-          Boolean(row.event_data)
-      )
-      .map((row) => {
-        try {
-          return {
-            eventId: row.event_id,
-            relays: JSON.parse(row.relays),
-            event: JSON.parse(row.event_data),
-            retryCount: row.retry_count,
-          };
-        } catch (parseError) {
-          console.error("Failed to parse row:", row.event_id, parseError);
-          return null;
-        }
-      })
-      .filter(Boolean);
+    if (!verification.ok) {
+      return res
+        .status(verification.status)
+        .json({ error: verification.error });
+    }
+
+    const failedPublishes = await getFailedRelayPublishesForOwner(
+      signedEvent!.pubkey
+    );
 
     return res.status(200).json(failedPublishes);
   } catch (error) {
     console.error("Error getting failed relay publishes:", error);
     return res.status(500).json({ error: "Internal server error" });
-  } finally {
-    if (client) {
-      client.release();
-    }
   }
 }

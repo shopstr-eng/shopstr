@@ -42,5 +42,11 @@ export const SHIPPING_OPTIONS = [
 export const SHOPSTRBUTTONCLASSNAMES =
   "text-dark-text dark:text-light-text shadow-lg bg-gradient-to-tr from-shopstr-purple via-shopstr-purple-light to-shopstr-purple min-w-fit dark:from-shopstr-yellow dark:via-shopstr-yellow-light dark:to-shopstr-yellow";
 
+export const WHITEBUTTONCLASSNAMES =
+  "bg-white border-2 border-black text-black font-bold hover:bg-gray-100 transition-colors";
+
+export const BLUEBUTTONCLASSNAMES =
+  "bg-primary-blue border-2 border-black text-white font-bold hover:opacity-90 transition-opacity";
+
 export const PREVNEXTBUTTONSTYLES =
   "absolute z-10 top-1/2 transform -translate-y-1/2 p-2 bg-white dark:bg-neutral-800 bg-opacity-60 rounded-full shadow-md hover:bg-opacity-90 transition duration-200";

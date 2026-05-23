@@ -88,10 +88,18 @@ This application requires a PostgreSQL database. You can run it locally using Do
 1. Start PostgreSQL:
 
    ```bash
-   docker-compose up -d
+   docker compose up -d
    ```
 
-2. Create a `.env` file in the root directory with the following:
+2. Create a `.env` file in the root directory. If the repository includes an environment template, copy whichever template file exists:
+
+   ```bash
+   cp .env.example .env
+   # or, in some setups:
+   cp env.example .env
+   ```
+
+   Or create it manually with:
 
    ```
    DATABASE_URL=postgresql://shopstr:shopstr@localhost:5432/shopstr
@@ -102,19 +110,19 @@ This application requires a PostgreSQL database. You can run it locally using Do
 4. To stop the database:
 
    ```bash
-   docker-compose down
+   docker compose down
    ```
 
 5. To remove all data and start fresh:
    ```bash
-   docker-compose down -v
+   docker compose down -v
    ```
 
-The application will be available at `http://localhost:3000`
+The application will be available at `http://localhost:5000`
 
 ### 4. Verify Installation
 
-- Open your browser to `http://localhost:3000`
+- Open your browser to `http://localhost:5000`
 - Check that the application loads without errors
 - Check the browser console for any warnings or errors
 
@@ -198,22 +206,39 @@ npm run lint-all
 
 ## Testing
 
-### 1. Run Tests
+Jest CI runs on every PR with coverage thresholds for the high-risk modules
+called out in `TESTING.md`, including Nostr helpers, fetch/cache behavior,
+cache policy, and parser logic.
+
+To find and run tests near what you changed:
 
 ```bash
-# Run all tests
+# Run everything
 npm test
+
+# Run the CI test command locally
+npm run test:ci
+
+# Run tests with coverage thresholds
+npm run test:coverage
 
 # Run tests in watch mode during development
 npm run test:watch
-```
 
-### 2. Writing Tests
+# Run one file to stay focused
+npx jest utils/nostr/__tests__/fetch-service.test.ts --runInBand
+npx jest utils/parsers/__tests__/product-parser-functions.test.ts --runInBand
+
+# See what's not covered
+npm test -- --coverage
+```
 
 - Write tests for new features and bug fixes
 - Place test files next to the components they test or in a `__tests__` directory
 - Use descriptive test names
 - Follow existing test patterns
+- See `TESTING.md` for CI coverage expectations and the high-risk modules that
+  currently define the enforced threshold.
 
 ## Creating a Pull Request
 
@@ -227,7 +252,7 @@ npm run build
 npm run lint-all
 
 # Run tests
-npm test
+npm run test:coverage
 
 # Format code
 npx prettier --write .

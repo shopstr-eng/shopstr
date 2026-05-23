@@ -17,7 +17,7 @@ import {
   Chip,
   Image,
   Switch,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -41,6 +41,10 @@ import LocationDropdown from "./utility-components/dropdowns/location-dropdown";
 import ConfirmActionDropdown from "./utility-components/dropdowns/confirm-action-dropdown";
 import { ProductContext, ProfileMapContext } from "../utils/context/context";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
+import {
+  formatCurrentDateTimeLocalValue,
+  formatUnixTimestampAsDateTimeLocalValue,
+} from "@/utils/datetime-local";
 import { buildSrcSet } from "@/utils/images";
 import { FileUploaderButton } from "./utility-components/file-uploader";
 import currencySelection from "../public/currencySelection.json";
@@ -108,6 +112,10 @@ export default function ProductForm({
           "Volume Prices": oldValues.volumePrices
             ? oldValues.volumePrices
             : new Map<string, number>(),
+          Weights: oldValues.weights ? oldValues.weights.join(",") : "",
+          "Weight Prices": oldValues.weightPrices
+            ? oldValues.weightPrices
+            : new Map<string, number>(),
           "Bulk Pricing Enabled": oldValues.bulkPrices
             ? oldValues.bulkPrices.size > 0
             : false,
@@ -119,7 +127,7 @@ export default function ProductForm({
           Required: oldValues.required ? oldValues.required : "",
           Restrictions: oldValues.restrictions ? oldValues.restrictions : "",
           Expiration: oldValues.expiration
-            ? new Date(oldValues.expiration * 1000).toISOString().slice(0, 16)
+            ? formatUnixTimestampAsDateTimeLocalValue(oldValues.expiration)
             : "",
         }
       : {
@@ -220,6 +228,17 @@ export default function ProductForm({
         const price =
           (data["Volume Prices"] as Map<string, number>).get(volume) || 0;
         tags.push(["volume", volume, price.toString()]);
+      });
+    }
+
+    if (data["Weights"]) {
+      const weightsArray = Array.isArray(data["Weights"])
+        ? data["Weights"]
+        : (data["Weights"] as string).split(",").filter(Boolean);
+      weightsArray.forEach((weight) => {
+        const price =
+          (data["Weight Prices"] as Map<string, number>).get(weight) || 0;
+        tags.push(["weight", weight, price.toString()]);
       });
     }
 
@@ -356,7 +375,7 @@ export default function ProductForm({
       size="2xl"
     >
       <ModalContent>
-        <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
+        <ModalHeader className="text-light-text dark:text-dark-text flex flex-col gap-1">
           Add New Product Listing
         </ModalHeader>
         <form
@@ -384,8 +403,8 @@ export default function ProductForm({
                 return (
                   <Input
                     className="text-light-text dark:text-dark-text"
-                    autoFocus
                     variant="bordered"
+                    autoFocus
                     fullWidth={true}
                     label="Product name"
                     labelPlacement="inside"
@@ -476,7 +495,7 @@ export default function ProductForm({
                       className="relative flex h-full w-full items-center justify-center p-4"
                       onClick={(e) => e.preventDefault()}
                     >
-                      <div className="absolute right-4 top-4 z-20">
+                      <div className="absolute top-4 right-4 z-20">
                         {" "}
                         {/* Increased spacing */}
                         <ConfirmActionDropdown
@@ -512,7 +531,6 @@ export default function ProductForm({
                     <div
                       key="placeholder"
                       className="flex h-full w-full items-center justify-center p-4"
-                      onClick={(e) => e.preventDefault()}
                     >
                       <FileUploaderButton
                         isPlaceholder={true}
@@ -593,7 +611,6 @@ export default function ProductForm({
                   <Input
                     className="text-light-text dark:text-dark-text"
                     type="number"
-                    autoFocus
                     variant="flat"
                     label="Price"
                     labelPlacement="inside"
@@ -614,7 +631,7 @@ export default function ProductForm({
                           return (
                             <div className="flex items-center">
                               <select
-                                className="border-0 bg-transparent text-small text-default-400 outline-none"
+                                className="text-small text-default-400 border-0 bg-transparent outline-none"
                                 key={"currency"}
                                 id="currency"
                                 name="currency"
@@ -642,8 +659,8 @@ export default function ProductForm({
             />
 
             <div className="mx-4 my-2 flex items-center justify-center text-center">
-              <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
-              <p className="ml-2 text-xs text-light-text dark:text-dark-text">
+              <InformationCircleIcon className="text-light-text dark:text-dark-text h-6 w-6" />
+              <p className="text-light-text dark:text-dark-text ml-2 text-xs">
                 Your donation rate on sales is set to{" "}
                 {profileContext.profileData.get(pubkey)?.content
                   ?.shopstr_donation || 2.1}
@@ -674,7 +691,6 @@ export default function ProductForm({
                   : "";
                 return (
                   <LocationDropdown
-                    autoFocus
                     variant="bordered"
                     aria-label="Select Location"
                     label="Location"
@@ -707,7 +723,6 @@ export default function ProductForm({
                 return (
                   <Select
                     className="text-light-text dark:text-dark-text"
-                    autoFocus
                     variant="bordered"
                     aria-label="Shipping Option"
                     label="Shipping option"
@@ -764,7 +779,7 @@ export default function ProductForm({
                       endContent={
                         <div className="flex items-center">
                           <select
-                            className="border-0 bg-transparent text-small text-default-400 outline-none"
+                            className="text-small text-default-400 border-0 bg-transparent outline-none"
                             key={"currency"}
                             id="currency"
                             name="currency"
@@ -791,7 +806,7 @@ export default function ProductForm({
             {(watchShippingOption === "Pickup" ||
               watchShippingOption === "Free/Pickup") && (
               <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-light-text dark:text-dark-text">
+                <h3 className="text-light-text dark:text-dark-text text-lg font-semibold">
                   Pickup Locations
                 </h3>
                 <p className="text-sm text-gray-600 dark:text-gray-400">
@@ -808,7 +823,7 @@ export default function ProductForm({
                       {value.map((location: string, index: number) => (
                         <div key={index} className="flex items-center gap-2">
                           <Input
-                            className="flex-1 text-light-text dark:text-dark-text"
+                            className="text-light-text dark:text-dark-text flex-1"
                             variant="bordered"
                             placeholder={`Pickup location ${
                               index + 1
@@ -888,7 +903,6 @@ export default function ProductForm({
                   <Select
                     variant="bordered"
                     isMultiline={true}
-                    autoFocus
                     aria-label="Category"
                     label="Categories"
                     labelPlacement="inside"
@@ -920,9 +934,7 @@ export default function ProductForm({
                   >
                     <SelectSection className="text-light-text dark:text-dark-text">
                       {CATEGORIES.map((category) => (
-                        <SelectItem key={category} value={category}>
-                          {category}
-                        </SelectItem>
+                        <SelectItem key={category}>{category}</SelectItem>
                       ))}
                     </SelectSection>
                   </Select>
@@ -936,7 +948,7 @@ export default function ProductForm({
               render={({ field: { onChange, value } }) => (
                 <div className="mt-4 flex items-center justify-between rounded-lg border border-gray-200 p-3 dark:border-gray-700">
                   <div className="flex flex-col">
-                    <span className="text-sm font-semibold text-light-text dark:text-dark-text">
+                    <span className="text-light-text dark:text-dark-text text-sm font-semibold">
                       Bulk/Bundle Pricing
                     </span>
                     <span className="text-tiny text-gray-500">
@@ -1075,7 +1087,7 @@ export default function ProductForm({
                       </Button>
                     )}
                     {entries.length > 0 && (
-                      <div className="w-full text-xs text-light-text opacity-75 dark:text-dark-text">
+                      <div className="text-light-text dark:text-dark-text w-full text-xs opacity-75">
                         Note: Bulk prices override the single-unit price when a
                         buyer selects a bundle option.
                       </div>
@@ -1088,7 +1100,7 @@ export default function ProductForm({
             {/* --- Flash Sale Toggle --- */}
             <div className="mt-4 flex items-center justify-between rounded-lg border border-gray-200 p-3 dark:border-gray-700">
               <div className="flex flex-col">
-                <span className="text-sm font-semibold text-light-text dark:text-dark-text">
+                <span className="text-light-text dark:text-dark-text text-sm font-semibold">
                   Post as Flash Sale
                 </span>
                 <span className="text-tiny text-gray-500">
@@ -1107,7 +1119,7 @@ export default function ProductForm({
 
             <div className="w-full max-w-xs">
               <Button
-                className="mb-2 mt-4 w-full justify-start rounded-md pl-2 text-shopstr-purple-light dark:text-shopstr-yellow-light"
+                className="text-shopstr-purple-light dark:text-shopstr-yellow-light mt-4 mb-2 w-full justify-start rounded-md pl-2"
                 variant="light"
                 onClick={() => setShowOptionalTags(!showOptionalTags)}
               >
@@ -1199,24 +1211,12 @@ export default function ProductForm({
                         }}
                       >
                         <SelectSection className="text-light-text dark:text-dark-text">
-                          <SelectItem key="XS" value="XS">
-                            XS
-                          </SelectItem>
-                          <SelectItem key="SM" value="SM">
-                            SM
-                          </SelectItem>
-                          <SelectItem key="MD" value="MD">
-                            MD
-                          </SelectItem>
-                          <SelectItem key="LG" value="LG">
-                            LG
-                          </SelectItem>
-                          <SelectItem key="XL" value="XL">
-                            XL
-                          </SelectItem>
-                          <SelectItem key="XXL" value="XXL">
-                            XXL
-                          </SelectItem>
+                          <SelectItem key="XS">XS</SelectItem>
+                          <SelectItem key="SM">SM</SelectItem>
+                          <SelectItem key="MD">MD</SelectItem>
+                          <SelectItem key="LG">LG</SelectItem>
+                          <SelectItem key="XL">XL</SelectItem>
+                          <SelectItem key="XXL">XXL</SelectItem>
                         </SelectSection>
                       </Select>
                     );
@@ -1269,21 +1269,11 @@ export default function ProductForm({
                         }}
                       >
                         <SelectSection className="text-light-text dark:text-dark-text">
-                          <SelectItem key="Half-pint" value="Half-pint">
-                            Half-pint
-                          </SelectItem>
-                          <SelectItem key="Pint" value="Pint">
-                            Pint
-                          </SelectItem>
-                          <SelectItem key="Quart" value="Quart">
-                            Quart
-                          </SelectItem>
-                          <SelectItem key="Half-gallon" value="Half-gallon">
-                            Half-gallon
-                          </SelectItem>
-                          <SelectItem key="Gallon" value="Gallon">
-                            Gallon
-                          </SelectItem>
+                          <SelectItem key="Half-pint">Half-pint</SelectItem>
+                          <SelectItem key="Pint">Pint</SelectItem>
+                          <SelectItem key="Quart">Quart</SelectItem>
+                          <SelectItem key="Half-gallon">Half-gallon</SelectItem>
+                          <SelectItem key="Gallon">Gallon</SelectItem>
                         </SelectSection>
                       </Select>
                     );
@@ -1319,7 +1309,7 @@ export default function ProductForm({
                       <div className="mt-4 flex flex-wrap gap-4">
                         {volumeArray.map((volume: string) => (
                           <div key={volume} className="flex items-center">
-                            <span className="mr-2 text-light-text dark:text-dark-text">
+                            <span className="text-light-text dark:text-dark-text mr-2">
                               {volume}:
                             </span>
                             <Input
@@ -1345,8 +1335,135 @@ export default function ProductForm({
                           </div>
                         ))}
                         {volumeArray.length > 0 && (
-                          <div className="w-full text-xs text-light-text opacity-75 dark:text-dark-text">
+                          <div className="text-light-text dark:text-dark-text w-full text-xs opacity-75">
                             Note: Volume prices will override the main product
+                            price when selected.
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }}
+                />
+
+                <Controller
+                  name="Weights"
+                  control={control}
+                  render={({
+                    field: { onChange, onBlur, value },
+                    fieldState: { error },
+                  }) => {
+                    const isErrored = error !== undefined;
+                    const errorMessage = error?.message || "";
+
+                    const selectedWeights = Array.isArray(value)
+                      ? value
+                      : typeof value === "string"
+                        ? value.split(",").filter(Boolean)
+                        : [];
+
+                    const handleWeightChange = (
+                      newValue: string | string[]
+                    ) => {
+                      const newWeights = Array.isArray(newValue)
+                        ? newValue
+                        : newValue.split(",").filter(Boolean);
+                      onChange(newWeights);
+                    };
+
+                    return (
+                      <Select
+                        variant="bordered"
+                        isMultiline={true}
+                        autoFocus
+                        aria-label="Weights"
+                        label="Weights"
+                        labelPlacement="inside"
+                        selectionMode="multiple"
+                        isInvalid={isErrored}
+                        errorMessage={errorMessage}
+                        onChange={(e) => handleWeightChange(e.target.value)}
+                        onBlur={onBlur}
+                        value={selectedWeights}
+                        defaultSelectedKeys={new Set(selectedWeights)}
+                        classNames={{
+                          base: "mt-4",
+                          trigger: "min-h-unit-12 py-2",
+                        }}
+                      >
+                        <SelectSection className="text-light-text dark:text-dark-text">
+                          <SelectItem key="1 oz">1 oz</SelectItem>
+                          <SelectItem key="2 oz">2 oz</SelectItem>
+                          <SelectItem key="4 oz">4 oz</SelectItem>
+                          <SelectItem key="8 oz">8 oz</SelectItem>
+                          <SelectItem key="12 oz">12 oz</SelectItem>
+                          <SelectItem key="1 lb">1 lb</SelectItem>
+                          <SelectItem key="2 lb">2 lb</SelectItem>
+                          <SelectItem key="5 lb">5 lb</SelectItem>
+                          <SelectItem key="10 lb">10 lb</SelectItem>
+                          <SelectItem key="25 lb">25 lb</SelectItem>
+                        </SelectSection>
+                      </Select>
+                    );
+                  }}
+                />
+
+                <Controller
+                  name="Weight Prices"
+                  control={control}
+                  render={({
+                    field: { onChange, value = new Map<string, number>() },
+                  }) => {
+                    const handlePriceChange = (
+                      weight: string,
+                      price: number
+                    ) => {
+                      const newPrices = new Map(value);
+                      newPrices.set(weight, price);
+                      onChange(newPrices);
+                    };
+
+                    const weights = watch("Weights");
+                    const weightArray = Array.isArray(weights)
+                      ? weights
+                      : typeof weights === "string"
+                        ? weights
+                            .split(",")
+                            .filter(Boolean)
+                            .map((w) => w.trim())
+                        : [];
+
+                    return (
+                      <div className="mt-4 flex flex-wrap gap-4">
+                        {weightArray.map((weight: string) => (
+                          <div key={weight} className="flex items-center">
+                            <span className="text-light-text dark:text-dark-text mr-2">
+                              {weight}:
+                            </span>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={(value.get(weight) || 0).toString()}
+                              onChange={(e) =>
+                                handlePriceChange(
+                                  weight,
+                                  parseFloat(e.target.value) || 0
+                                )
+                              }
+                              className="w-32"
+                              endContent={
+                                <div className="flex items-center">
+                                  <span className="text-small text-default-400">
+                                    {watchCurrency}
+                                  </span>
+                                </div>
+                              }
+                            />
+                          </div>
+                        ))}
+                        {weightArray.length > 0 && (
+                          <div className="text-light-text dark:text-dark-text w-full text-xs opacity-75">
+                            Note: Weight prices will override the main product
                             price when selected.
                           </div>
                         )}
@@ -1379,7 +1496,7 @@ export default function ProductForm({
                       <div className="mt-4 flex flex-wrap gap-4">
                         {sizeArray.map((size: string) => (
                           <div key={size} className="flex items-center">
-                            <span className="mr-2 text-light-text dark:text-dark-text">
+                            <span className="text-light-text dark:text-dark-text mr-2">
                               {size}:
                             </span>
                             <Input
@@ -1429,31 +1546,16 @@ export default function ProductForm({
                         selectedKeys={[value as string]}
                       >
                         <SelectSection className="text-light-text dark:text-dark-text">
-                          <SelectItem key="New" value="New">
-                            New
-                          </SelectItem>
-                          <SelectItem key="Renewed" value="Renewed">
-                            Renewed
-                          </SelectItem>
-                          <SelectItem
-                            key="Used - Like New"
-                            value="Used - Like New"
-                          >
+                          <SelectItem key="New">New</SelectItem>
+                          <SelectItem key="Renewed">Renewed</SelectItem>
+                          <SelectItem key="Used - Like New">
                             Used - Like New
                           </SelectItem>
-                          <SelectItem
-                            key="Used - Very Good"
-                            value="Used - Very Good"
-                          >
+                          <SelectItem key="Used - Very Good">
                             Used - Very Good
                           </SelectItem>
-                          <SelectItem key="Used - Good" value="Used - Good">
-                            Used - Good
-                          </SelectItem>
-                          <SelectItem
-                            key="Used - Acceptable"
-                            value="Used - Acceptable"
-                          >
+                          <SelectItem key="Used - Good">Used - Good</SelectItem>
+                          <SelectItem key="Used - Acceptable">
                             Used - Acceptable
                           </SelectItem>
                         </SelectSection>
@@ -1490,12 +1592,8 @@ export default function ProductForm({
                         selectedKeys={[value as string]}
                       >
                         <SelectSection className="text-light-text dark:text-dark-text">
-                          <SelectItem key="active" value="active">
-                            Active
-                          </SelectItem>
-                          <SelectItem key="sold" value="sold">
-                            Sold
-                          </SelectItem>
+                          <SelectItem key="active">Active</SelectItem>
+                          <SelectItem key="sold">Sold</SelectItem>
                         </SelectSection>
                       </Select>
                     );
@@ -1580,7 +1678,7 @@ export default function ProductForm({
                     <div className="mt-4">
                       <Input
                         type="datetime-local"
-                        min={new Date().toISOString().slice(0, 16)}
+                        min={formatCurrentDateTimeLocalValue()}
                         variant="bordered"
                         label="Valid Until (Optional)"
                         labelPlacement="inside"
@@ -1592,7 +1690,7 @@ export default function ProductForm({
                         value={value as string}
                         className="text-light-text dark:text-dark-text"
                       />
-                      <p className="mt-1 text-tiny text-gray-500">
+                      <p className="text-tiny mt-1 text-gray-500">
                         Listing will remain visible but marked as
                         &quot;Outdated&quot; after this date. Leave empty if
                         product has no expiration. Buyers won&apos;t be able to
@@ -1605,8 +1703,8 @@ export default function ProductForm({
             )}
 
             <div className="mx-4 my-2 flex items-center justify-center text-center">
-              <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
-              <p className="ml-2 text-xs text-light-text dark:text-dark-text">
+              <InformationCircleIcon className="text-light-text dark:text-dark-text h-6 w-6" />
+              <p className="text-light-text dark:text-dark-text ml-2 text-xs">
                 Your payment preference is set to{" "}
                 {profileContext.profileData.get(pubkey)?.content
                   ?.payment_preference === "lightning"

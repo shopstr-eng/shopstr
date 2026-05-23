@@ -1,23 +1,18 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
-import dynamic from "next/dynamic";
+import { useEffect, useState } from "react";
 import { useTabs } from "@/components/hooks/use-tabs";
 import { Framer } from "@/components/framer";
+import Messages from "./messages";
+import OrdersDashboard from "./orders-dashboard";
 import { useRouter } from "next/router";
-
-const Messages = dynamic(() => import("./messages"), {
-  ssr: false,
-});
-const OrdersDashboard = dynamic(() => import("./orders-dashboard"), {
-  ssr: false,
-});
 
 const MessageFeed = ({ isInquiry = false }) => {
   const router = useRouter();
+  const [showSpinner, setShowSpinner] = useState(false);
 
-  const tabs = useMemo(
-    () => [
+  const [hookProps] = useState({
+    tabs: [
       {
         label: "Orders",
         children: <OrdersDashboard />,
@@ -29,20 +24,28 @@ const MessageFeed = ({ isInquiry = false }) => {
         id: "inquiries",
       },
     ],
-    []
-  );
+    initialTabId: "orders",
+  });
 
   const framer = useTabs({
-    tabs,
+    tabs: hookProps.tabs,
     initialTabId: isInquiry ? "inquiries" : "orders",
   });
 
   useEffect(() => {
-      const handleRouteChange = (url: string) => {
+    setShowSpinner(true);
+    const timeout = setTimeout(() => {
+      setShowSpinner(false);
+    }, 1);
+    return () => clearTimeout(timeout);
+  }, [framer.selectedTab]);
+
+  useEffect(() => {
+    const handleRouteChange = (url: string) => {
       const isInquiryTab = url.includes("isInquiry=true");
       const newTab = isInquiryTab ? "inquiries" : "orders";
 
-      const newIndex = tabs.findIndex((tab) => tab.id === newTab);
+      const newIndex = hookProps.tabs.findIndex((tab) => tab.id === newTab);
       if (newIndex !== -1 && framer.tabProps.selectedTabIndex !== newIndex) {
         framer.tabProps.setSelectedTab([newIndex, 0]);
       }
@@ -53,7 +56,7 @@ const MessageFeed = ({ isInquiry = false }) => {
     return () => {
       router.events.off("routeChangeComplete", handleRouteChange);
     };
-  }, [router, framer, tabs]);
+  }, [router, framer]);
 
   return (
     <div className="flex w-full min-w-0 flex-1 flex-col">
@@ -65,8 +68,8 @@ const MessageFeed = ({ isInquiry = false }) => {
         </div>
       </div>
 
-      <div className="flex w-full min-w-0 flex-1 flex-col overflow-x-auto bg-light-bg pt-4 dark:bg-dark-bg">
-        {framer.selectedTab?.children}
+      <div className="bg-light-bg dark:bg-dark-bg flex w-full min-w-0 flex-1 flex-col overflow-x-auto pt-4">
+        {showSpinner ? null : framer.selectedTab!.children}
       </div>
     </div>
   );

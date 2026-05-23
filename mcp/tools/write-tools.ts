@@ -7,8 +7,25 @@ import {
 } from "@/utils/mcp/nostr-signing";
 import { ApiKeyRecord, getAgentSigner } from "@/utils/mcp/auth";
 import { EventTemplate } from "nostr-tools";
-import { cacheEvent } from "@/utils/db/db-service";
+import { cacheEvent, getDbPool } from "@/utils/db/db-service";
 import { v4 as uuidv4 } from "uuid";
+import dns from "dns";
+import { promisify } from "util";
+import { registerTool } from "./register-tool";
+import {
+  canActorSendShippingUpdate,
+  canActorUpdateMcpOrderStatus,
+} from "./order-status-auth";
+import {
+  buildDiscountCodeCreateProof,
+  buildDiscountCodeDeleteProof,
+  buildDiscountCodesListProof,
+  buildSignedHttpRequestProofTemplate,
+  SIGNED_EVENT_HEADER,
+} from "@/utils/nostr/request-auth";
+
+const resolveCname = promisify(dns.resolveCname);
+const resolve4 = promisify(dns.resolve4);
 
 function noSignerError() {
   return {
@@ -89,8 +106,15 @@ async function getSigner(apiKey: ApiKeyRecord): Promise<McpNostrSigner | null> {
 
 export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
   const baseUrl = `http://localhost:${process.env.PORT || 5000}`;
+  const context = { apiKeyId: apiKey.id, pubkey: apiKey.pubkey };
+  const reg = (
+    name: string,
+    description: string,
+    inputSchema: any,
+    cb: (args: any, extra: any) => any
+  ) => registerTool(server, name, description, inputSchema, cb, context);
 
-  server.tool(
+  reg(
     "set_user_profile",
     "Create or update your Nostr user profile (kind 0). Sets metadata like name, about, picture, lightning address, etc.",
     {
@@ -108,6 +132,16 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         .optional()
         .describe("NIP-05 identifier (e.g. user@domain.com)"),
       website: z.string().optional().describe("Website URL"),
+      fiat_options: z
+        .record(z.string(), z.string())
+        .optional()
+        .describe(
+          "Fiat payment handles — object mapping method names (venmo, cashapp, zelle, etc.) to usernames/handles"
+        ),
+      payment_preference: z
+        .enum(["ecash", "lightning", "fiat"])
+        .optional()
+        .describe("Preferred payment method (ecash, lightning, or fiat)"),
     },
     async (params) => {
       const startTime = Date.now();
@@ -116,7 +150,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
       if (!signer) return noSignerError();
 
       try {
-        const content: Record<string, string> = {};
+        const content: Record<string, any> = {};
         if (params.name) content.name = params.name;
         if (params.display_name) content.display_name = params.display_name;
         if (params.about) content.about = params.about;
@@ -125,6 +159,9 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         if (params.lud16) content.lud16 = params.lud16;
         if (params.nip05) content.nip05 = params.nip05;
         if (params.website) content.website = params.website;
+        if (params.fiat_options) content.fiat_options = params.fiat_options;
+        if (params.payment_preference)
+          content.payment_preference = params.payment_preference;
 
         const eventTemplate: EventTemplate = {
           created_at: Math.floor(Date.now() / 1000),
@@ -152,9 +189,9 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  server.tool(
+  reg(
     "set_shop_profile",
-    "Create or update your shop profile (kind 30019). Sets shop metadata like name, about, picture, banner, and settings.",
+    "Create or update your shop profile (kind 30019). Sets shop metadata like name, about, picture, banner, settings, and storefront configuration.",
     {
       name: z.string().optional().describe("Shop name"),
       about: z.string().optional().describe("Shop description"),
@@ -174,6 +211,235 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         .array(z.string())
         .optional()
         .describe("Array of merchant pubkeys associated with this shop"),
+      paymentMethodDiscounts: z
+        .record(z.string(), z.number())
+        .optional()
+        .describe(
+          "Per-method discount percentages — object mapping method keys (bitcoin, stripe, venmo, cash, etc.) to discount percentages"
+        ),
+      storefrontColorScheme: z
+        .object({
+          primary: z.string().describe("Primary color hex (e.g. '#4a7c59')"),
+          secondary: z.string().describe("Secondary color hex"),
+          accent: z.string().describe("Accent color hex"),
+          background: z.string().describe("Background color hex"),
+          text: z.string().describe("Text color hex"),
+        })
+        .optional()
+        .describe("Custom color scheme for the seller's storefront page"),
+      storefrontProductLayout: z
+        .enum(["grid", "list", "featured"])
+        .optional()
+        .describe(
+          "Product layout style for the storefront: grid, list, or featured"
+        ),
+      storefrontLandingPageStyle: z
+        .enum(["classic", "hero", "minimal"])
+        .optional()
+        .describe(
+          "Landing page style for the storefront: classic, hero, or minimal"
+        ),
+      shopSlug: z
+        .string()
+        .optional()
+        .describe(
+          "URL slug for the storefront (e.g. 'fresh-farm' for milk.market/shop/fresh-farm). Must be lowercase alphanumeric with hyphens."
+        ),
+      storefrontFontHeading: z
+        .string()
+        .optional()
+        .describe("Google Font name for headings (e.g. 'Playfair Display')"),
+      storefrontFontBody: z
+        .string()
+        .optional()
+        .describe("Google Font name for body text (e.g. 'Inter')"),
+      storefrontSections: z
+        .array(
+          z.object({
+            id: z.string().describe("Unique section ID"),
+            type: z
+              .enum([
+                "hero",
+                "about",
+                "story",
+                "products",
+                "testimonials",
+                "faq",
+                "ingredients",
+                "comparison",
+                "text",
+                "image",
+                "contact",
+                "reviews",
+              ])
+              .describe("Section type"),
+            enabled: z
+              .boolean()
+              .optional()
+              .describe("Whether section is visible"),
+            heading: z.string().optional().describe("Section heading"),
+            subheading: z.string().optional().describe("Section subheading"),
+            body: z.string().optional().describe("Section body text"),
+            image: z.string().optional().describe("Section image URL"),
+            imagePosition: z
+              .enum(["left", "right"])
+              .optional()
+              .describe("Image position for about sections"),
+            fullWidth: z
+              .boolean()
+              .optional()
+              .describe("Full-width toggle for image sections"),
+            ctaText: z
+              .string()
+              .optional()
+              .describe("Call-to-action button text"),
+            ctaLink: z
+              .string()
+              .optional()
+              .describe("Call-to-action button link"),
+            overlayOpacity: z
+              .number()
+              .optional()
+              .describe("Hero overlay opacity 0-1"),
+            items: z
+              .array(z.object({ question: z.string(), answer: z.string() }))
+              .optional()
+              .describe("FAQ items"),
+            testimonials: z
+              .array(
+                z.object({
+                  quote: z.string(),
+                  author: z.string(),
+                  image: z.string().optional(),
+                  rating: z.number().optional(),
+                })
+              )
+              .optional()
+              .describe("Testimonial items"),
+            ingredientItems: z
+              .array(
+                z.object({
+                  name: z.string(),
+                  description: z.string().optional(),
+                  image: z.string().optional(),
+                })
+              )
+              .optional()
+              .describe("Ingredient items"),
+            comparisonFeatures: z
+              .array(z.string())
+              .optional()
+              .describe("Comparison row labels"),
+            comparisonColumns: z
+              .array(
+                z.object({ heading: z.string(), values: z.array(z.string()) })
+              )
+              .optional()
+              .describe("Comparison columns"),
+            timelineItems: z
+              .array(
+                z.object({
+                  year: z.string().optional(),
+                  heading: z.string(),
+                  body: z.string(),
+                  image: z.string().optional(),
+                })
+              )
+              .optional()
+              .describe("Timeline items for story sections"),
+            productLayout: z
+              .enum(["grid", "list", "featured"])
+              .optional()
+              .describe("Product layout for product sections"),
+            productLimit: z
+              .number()
+              .optional()
+              .describe("Max products to show"),
+            email: z.string().optional().describe("Contact email"),
+            phone: z.string().optional().describe("Contact phone"),
+            address: z.string().optional().describe("Contact address"),
+            caption: z.string().optional().describe("Image caption"),
+          })
+        )
+        .optional()
+        .describe("Ordered array of homepage sections for the page builder"),
+      storefrontPages: z
+        .array(
+          z.object({
+            id: z.string().describe("Page ID"),
+            title: z.string().describe("Page title"),
+            slug: z.string().describe("URL slug for the page"),
+            sections: z
+              .array(z.any())
+              .describe(
+                "Array of sections (same schema as storefrontSections)"
+              ),
+          })
+        )
+        .optional()
+        .describe("Additional storefront pages (About, Contact, etc.)"),
+      storefrontFooter: z
+        .object({
+          text: z.string().optional().describe("Footer text"),
+          socialLinks: z
+            .array(
+              z.object({
+                platform: z.enum([
+                  "instagram",
+                  "x",
+                  "facebook",
+                  "youtube",
+                  "tiktok",
+                  "telegram",
+                  "website",
+                  "email",
+                  "other",
+                ]),
+                url: z.string(),
+                label: z.string().optional(),
+              })
+            )
+            .optional()
+            .describe("Social media links"),
+          navLinks: z
+            .array(
+              z.object({
+                label: z.string(),
+                href: z.string(),
+                isPage: z.boolean().optional(),
+              })
+            )
+            .optional()
+            .describe("Footer navigation links"),
+          showPoweredBy: z
+            .boolean()
+            .optional()
+            .describe("Show 'Powered by Shopstr' in footer"),
+        })
+        .optional()
+        .describe("Footer configuration"),
+      storefrontNavLinks: z
+        .array(
+          z.object({
+            label: z.string(),
+            href: z.string(),
+            isPage: z.boolean().optional(),
+          })
+        )
+        .optional()
+        .describe("Top navigation bar links"),
+      showCommunityPage: z
+        .boolean()
+        .optional()
+        .describe(
+          "Enable a community page on the storefront. When true, a 'Community' link is auto-added to the nav and /shop/{slug}/community shows the seller's community feed."
+        ),
+      showWalletPage: z
+        .boolean()
+        .optional()
+        .describe(
+          "Enable a Bitcoin wallet page on the storefront for Cashu ecash payments. When true, a 'Wallet' link is auto-added to the nav and /shop/{slug}/wallet shows the wallet UI."
+        ),
     },
     async (params) => {
       const startTime = Date.now();
@@ -187,6 +453,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         if (params.name) content.name = params.name;
         if (params.about) content.about = params.about;
         if (params.merchants) content.merchants = params.merchants;
+        if (params.paymentMethodDiscounts)
+          content.paymentMethodDiscounts = params.paymentMethodDiscounts;
         const ui: Record<string, any> = {};
         if (params.picture) ui.picture = params.picture;
         if (params.banner) ui.banner = params.banner;
@@ -197,6 +465,31 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           content.freeShippingThreshold = params.freeShippingThreshold;
         if (params.freeShippingCurrency)
           content.freeShippingCurrency = params.freeShippingCurrency;
+
+        const storefront: Record<string, any> = {};
+        if (params.storefrontColorScheme)
+          storefront.colorScheme = params.storefrontColorScheme;
+        if (params.storefrontProductLayout)
+          storefront.productLayout = params.storefrontProductLayout;
+        if (params.storefrontLandingPageStyle)
+          storefront.landingPageStyle = params.storefrontLandingPageStyle;
+        if (params.shopSlug) storefront.shopSlug = params.shopSlug;
+        if (params.storefrontFontHeading)
+          storefront.fontHeading = params.storefrontFontHeading;
+        if (params.storefrontFontBody)
+          storefront.fontBody = params.storefrontFontBody;
+        if (params.storefrontSections)
+          storefront.sections = params.storefrontSections;
+        if (params.storefrontPages) storefront.pages = params.storefrontPages;
+        if (params.storefrontFooter)
+          storefront.footer = params.storefrontFooter;
+        if (params.storefrontNavLinks)
+          storefront.navLinks = params.storefrontNavLinks;
+        if (params.showCommunityPage !== undefined)
+          storefront.showCommunityPage = params.showCommunityPage;
+        if (params.showWalletPage !== undefined)
+          storefront.showWalletPage = params.showWalletPage;
+        if (Object.keys(storefront).length > 0) content.storefront = storefront;
 
         const eventTemplate: EventTemplate = {
           created_at: Math.floor(Date.now() / 1000),
@@ -226,7 +519,131 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  server.tool(
+  reg(
+    "register_shop_slug",
+    "Register, update, or delete your shop's URL slug for the storefront. The slug becomes part of your shop URL (e.g. milk.market/shop/your-slug). Slug must be lowercase alphanumeric with hyphens, 3-50 characters. Reserved words (shop, admin, api, etc.) are not allowed. To delete, set action to 'delete'.",
+    {
+      slug: z
+        .string()
+        .optional()
+        .describe(
+          "URL slug for the storefront (e.g. 'fresh-farm'). Must be lowercase, alphanumeric with hyphens, 3-50 characters. Required for register/update, not needed for delete."
+        ),
+      action: z
+        .enum(["register", "delete"])
+        .optional()
+        .describe(
+          "Action to perform: 'register' (default) to create/update the slug, 'delete' to remove the slug and any associated custom domain."
+        ),
+    },
+    async (params) => {
+      const startTime = Date.now();
+      if (apiKey.permissions !== "full_access") return permissionError();
+      const signer = await getSigner(apiKey);
+      if (!signer) return noSignerError();
+
+      try {
+        const pubkey = signer.getPubKey();
+
+        if (params.action === "delete") {
+          const dbPool = getDbPool();
+          await dbPool.query("DELETE FROM shop_slugs WHERE pubkey = $1", [
+            pubkey,
+          ]);
+          await dbPool.query("DELETE FROM custom_domains WHERE pubkey = $1", [
+            pubkey,
+          ]);
+          return successResponse({ deleted: true, pubkey }, startTime);
+        }
+
+        if (!params.slug) {
+          return errorResponse(
+            "Missing slug",
+            "A slug is required when registering. Provide a slug or set action to 'delete'.",
+            startTime
+          );
+        }
+
+        const slug = params.slug.toLowerCase().trim();
+        const slugRegex = /^[a-z0-9][a-z0-9-]*[a-z0-9]$/;
+        if (slug.length < 3 || slug.length > 50 || !slugRegex.test(slug)) {
+          return errorResponse(
+            "Invalid slug",
+            "Slug must be 3-50 characters, lowercase alphanumeric with hyphens, and cannot start or end with a hyphen.",
+            startTime
+          );
+        }
+
+        const reserved = [
+          "shop",
+          "admin",
+          "api",
+          "www",
+          "mail",
+          "ftp",
+          "app",
+          "dashboard",
+          "settings",
+          "marketplace",
+          "login",
+          "signup",
+          "auth",
+          "checkout",
+          "orders",
+          "cart",
+          "help",
+          "support",
+          "about",
+          "contact",
+          "blog",
+          "news",
+          "terms",
+          "privacy",
+          "legal",
+        ];
+        if (reserved.includes(slug)) {
+          return errorResponse(
+            "Reserved slug",
+            `The slug '${slug}' is reserved and cannot be used.`,
+            startTime
+          );
+        }
+
+        const dbPool = getDbPool();
+        const existing = await dbPool.query(
+          "SELECT pubkey FROM shop_slugs WHERE slug = $1 AND pubkey != $2",
+          [slug, pubkey]
+        );
+        if (existing.rows.length > 0) {
+          return errorResponse(
+            "Slug taken",
+            `The slug '${slug}' is already registered to another seller.`,
+            startTime
+          );
+        }
+
+        await dbPool.query(
+          `INSERT INTO shop_slugs (pubkey, slug, created_at)
+           VALUES ($1, $2, NOW())
+           ON CONFLICT (pubkey) DO UPDATE SET slug = $2`,
+          [pubkey, slug]
+        );
+
+        return successResponse(
+          { slug, storefrontUrl: `/shop/${slug}`, pubkey },
+          startTime
+        );
+      } catch (error) {
+        return errorResponse(
+          "Failed to register shop slug",
+          error instanceof Error ? error.message : "Unknown error",
+          startTime
+        );
+      }
+    }
+  );
+
+  reg(
     "create_product_listing",
     "Publish a new product listing (kind 30402) to the marketplace. Creates a classified listing with title, description, price, images, categories, shipping options, and more.",
     {
@@ -288,6 +705,34 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         .describe(
           "Custom d-tag identifier. If omitted, one is generated from the title."
         ),
+      weights: z
+        .array(z.object({ weight: z.string(), price: z.string() }))
+        .optional()
+        .describe("Weight/portion options with prices (e.g. '1 lb' for '$12')"),
+      herdshareAgreement: z
+        .string()
+        .optional()
+        .describe("URL or text of the herdshare agreement document"),
+      requiredCustomerInfo: z
+        .array(z.string())
+        .optional()
+        .describe(
+          "Fields the customer must provide at checkout (e.g. ['name', 'address', 'phone'])"
+        ),
+      subscriptionEnabled: z
+        .boolean()
+        .optional()
+        .describe("Whether this product supports subscriptions"),
+      subscriptionDiscount: z
+        .number()
+        .optional()
+        .describe("Percentage discount applied to subscribers (0-100)"),
+      subscriptionFrequencies: z
+        .array(z.string())
+        .optional()
+        .describe(
+          "Available subscription intervals (e.g. ['weekly', 'biweekly', 'monthly'])"
+        ),
     },
     async (params) => {
       const startTime = Date.now();
@@ -331,7 +776,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
             tags.push(["t", cat]);
           }
         }
-        tags.push(["t", "shopstr"]);
+        tags.push(["t", "MilkMarket"]);
 
         if (params.quantity) {
           tags.push(["quantity", params.quantity]);
@@ -376,6 +821,42 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           }
         }
 
+        if (params.weights) {
+          for (const w of params.weights) {
+            tags.push(["weight", w.weight, w.price]);
+          }
+        }
+
+        if (params.herdshareAgreement) {
+          tags.push(["herdshare_agreement", params.herdshareAgreement]);
+        }
+
+        if (params.requiredCustomerInfo) {
+          for (const field of params.requiredCustomerInfo) {
+            tags.push(["required_customer_info", field]);
+          }
+        }
+
+        if (params.subscriptionEnabled !== undefined) {
+          tags.push([
+            "subscription_enabled",
+            String(params.subscriptionEnabled),
+          ]);
+        }
+
+        if (params.subscriptionDiscount !== undefined) {
+          tags.push([
+            "subscription_discount",
+            String(params.subscriptionDiscount),
+          ]);
+        }
+
+        if (params.subscriptionFrequencies) {
+          for (const freq of params.subscriptionFrequencies) {
+            tags.push(["subscription_frequency", freq]);
+          }
+        }
+
         const created_at = Math.floor(Date.now() / 1000);
         tags.push(["published_at", String(created_at)]);
 
@@ -390,7 +871,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
         const handlerDTag = uuidv4();
         const origin =
-          process.env.NEXT_PUBLIC_BASE_URL || "https://shopstr.store";
+          process.env.NEXT_PUBLIC_BASE_URL || "https://milk.market";
 
         const handlerEvent: EventTemplate = {
           kind: 31990,
@@ -441,7 +922,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  server.tool(
+  reg(
     "update_product_listing",
     "Update an existing product listing by publishing a new event with the same d-tag. All fields are optional — only provided fields will be included.",
     {
@@ -481,6 +962,30 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         .string()
         .optional()
         .describe("Updated expiration date (ISO 8601 format)"),
+      weights: z
+        .array(z.object({ weight: z.string(), price: z.string() }))
+        .optional()
+        .describe("Updated weight/portion options with prices"),
+      herdshareAgreement: z
+        .string()
+        .optional()
+        .describe("Updated herdshare agreement URL or text"),
+      requiredCustomerInfo: z
+        .array(z.string())
+        .optional()
+        .describe("Updated required customer info fields"),
+      subscriptionEnabled: z
+        .boolean()
+        .optional()
+        .describe("Whether this product supports subscriptions"),
+      subscriptionDiscount: z
+        .number()
+        .optional()
+        .describe("Updated subscriber discount percentage (0-100)"),
+      subscriptionFrequencies: z
+        .array(z.string())
+        .optional()
+        .describe("Updated subscription interval options"),
     },
     async (params) => {
       const startTime = Date.now();
@@ -521,7 +1026,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           for (const cat of params.categories) {
             tags.push(["t", cat]);
           }
-          tags.push(["t", "shopstr"]);
+          tags.push(["t", "MilkMarket"]);
         }
         if (params.quantity) {
           tags.push(["quantity", params.quantity]);
@@ -559,6 +1064,42 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           tags.push(["valid_until", unixTime.toString()]);
         }
 
+        if (params.weights) {
+          for (const w of params.weights) {
+            tags.push(["weight", w.weight, w.price]);
+          }
+        }
+
+        if (params.herdshareAgreement) {
+          tags.push(["herdshare_agreement", params.herdshareAgreement]);
+        }
+
+        if (params.requiredCustomerInfo) {
+          for (const field of params.requiredCustomerInfo) {
+            tags.push(["required_customer_info", field]);
+          }
+        }
+
+        if (params.subscriptionEnabled !== undefined) {
+          tags.push([
+            "subscription_enabled",
+            String(params.subscriptionEnabled),
+          ]);
+        }
+
+        if (params.subscriptionDiscount !== undefined) {
+          tags.push([
+            "subscription_discount",
+            String(params.subscriptionDiscount),
+          ]);
+        }
+
+        if (params.subscriptionFrequencies) {
+          for (const freq of params.subscriptionFrequencies) {
+            tags.push(["subscription_frequency", freq]);
+          }
+        }
+
         const created_at = Math.floor(Date.now() / 1000);
         tags.push(["published_at", String(created_at)]);
 
@@ -590,7 +1131,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  server.tool(
+  reg(
     "delete_listing",
     "Delete a product listing or any Nostr event by publishing a deletion event (kind 5).",
     {
@@ -607,7 +1148,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         const eventTemplate: EventTemplate = {
           kind: 5,
           content: params.reason || "Deletion request",
-          tags: params.eventIds.map((id) => ["e", id]),
+          tags: params.eventIds.map((id: string) => ["e", id]),
           created_at: Math.floor(Date.now() / 1000),
         };
 
@@ -630,7 +1171,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  server.tool(
+  reg(
     "publish_review",
     "Publish a review (kind 31555) for a product or seller. Includes content text and ratings.",
     {
@@ -724,7 +1265,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  server.tool(
+  reg(
     "create_community_post",
     "Create a post in a Nostr community (kind 1111). Supports top-level posts and replies.",
     {
@@ -801,7 +1342,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  server.tool(
+  reg(
     "send_direct_message",
     "Send an encrypted direct message using NIP-17 gift wrap (kind 1059/13/14). Supports plain messages, listing inquiries, and order-related messages.",
     {
@@ -861,9 +1402,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         } = await import("nostr-tools");
 
         const senderPubkey = signer.getPubKey();
-        const { getDefaultRelays, withBlastr } = await import(
-          "@/utils/nostr/nostr-helper-functions"
-        );
+        const { getDefaultRelays, withBlastr } =
+          await import("@/utils/nostr/nostr-helper-functions");
 
         const defaultRelays = getDefaultRelays();
         const relayHint = defaultRelays[0] || "wss://relay.damus.io";
@@ -1016,7 +1556,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  server.tool(
+  reg(
     "update_order_address",
     "Update the shipping address for an existing order. Sends an encrypted address change request to the seller via NIP-17 gift-wrapped DM and updates the order record.",
     {
@@ -1037,9 +1577,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
       if (!signer) return noSignerError();
 
       try {
-        const { updateMcpOrderAddress } = await import(
-          "@/mcp/tools/purchase-tools"
-        );
+        const { updateMcpOrderAddress } =
+          await import("@/mcp/tools/purchase-tools");
 
         const updatedOrder = await updateMcpOrderAddress(
           params.orderId,
@@ -1067,9 +1606,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           await import("nostr-tools");
 
         const senderPubkey = signer.getPubKey();
-        const { getDefaultRelays, withBlastr } = await import(
-          "@/utils/nostr/nostr-helper-functions"
-        );
+        const { getDefaultRelays, withBlastr } =
+          await import("@/utils/nostr/nostr-helper-functions");
         const defaultRelays = getDefaultRelays();
 
         const innerEvent = {
@@ -1168,7 +1706,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  server.tool(
+  reg(
     "send_shipping_update",
     "Send a shipping update to a buyer via encrypted NIP-17 gift-wrapped DM. Includes tracking number, carrier, and estimated delivery time. Also updates the order status to 'shipped' in the database.",
     {
@@ -1197,11 +1735,32 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
       if (!signer) return noSignerError();
 
       try {
+        const { getMcpOrder, updateMcpOrderStatus } =
+          await import("@/mcp/tools/purchase-tools");
+        const order = await getMcpOrder(params.orderId);
+
+        if (!order) {
+          return errorResponse(
+            "Order not found",
+            `No order found with ID "${params.orderId}"`,
+            startTime
+          );
+        }
+
+        if (
+          !canActorSendShippingUpdate(order, apiKey.pubkey, params.buyerPubkey)
+        ) {
+          return errorResponse(
+            "Unauthorized order update",
+            "Only the seller for this order can send shipping updates to the recorded buyer.",
+            startTime
+          );
+        }
+
         const { generateSecretKey, finalizeEvent, getEventHash, nip44 } =
           await import("nostr-tools");
-        const { getDefaultRelays, withBlastr } = await import(
-          "@/utils/nostr/nostr-helper-functions"
-        );
+        const { getDefaultRelays, withBlastr } =
+          await import("@/utils/nostr/nostr-helper-functions");
 
         const senderPubkey = signer.getPubKey();
         const defaultRelays = getDefaultRelays();
@@ -1229,10 +1788,10 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           : `Your order is expected to arrive on ${humanReadableDate}. Your ${params.shippingCarrier} tracking number is: ${params.trackingNumber}`;
 
         const innerTags: string[][] = [
-          ["p", params.buyerPubkey, relayHint],
+          ["p", order.buyer_pubkey, relayHint],
           ["subject", "shipping-info"],
           ["order", params.orderId],
-          ["b", params.buyerPubkey],
+          ["b", order.buyer_pubkey],
           ["type", "4"],
           ["status", "shipped"],
           ["tracking", params.trackingNumber],
@@ -1299,7 +1858,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           );
         }
 
-        const buyerWrap = await createWrap(params.buyerPubkey);
+        const buyerWrap = await createWrap(order.buyer_pubkey);
 
         const relayManager = new McpRelayManager(withBlastr(defaultRelays));
 
@@ -1310,17 +1869,24 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           relayManager.close();
         }
 
-        const { updateMcpOrderStatus } = await import(
-          "@/mcp/tools/purchase-tools"
+        const updatedOrder = await updateMcpOrderStatus(
+          params.orderId,
+          "shipped",
+          apiKey.pubkey
         );
-        await updateMcpOrderStatus(params.orderId, "shipped").catch(
-          console.error
-        );
+
+        if (!updatedOrder) {
+          return errorResponse(
+            "Unauthorized order update",
+            "Unable to mark this order as shipped for your account.",
+            startTime
+          );
+        }
 
         return successResponse(
           {
             orderId: params.orderId,
-            buyerPubkey: params.buyerPubkey,
+            buyerPubkey: order.buyer_pubkey,
             trackingNumber: params.trackingNumber,
             carrier: params.shippingCarrier,
             estimatedDelivery: humanReadableDate,
@@ -1340,7 +1906,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  server.tool(
+  reg(
     "update_order_status",
     "Update the status of an order and optionally notify the buyer via encrypted DM. Sellers can confirm, ship, or complete orders. Buyers can cancel orders.",
     {
@@ -1372,15 +1938,11 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
       if (!signer) return noSignerError();
 
       try {
-        const { updateMcpOrderStatus } = await import(
-          "@/mcp/tools/purchase-tools"
-        );
-        const updatedOrder = await updateMcpOrderStatus(
-          params.orderId,
-          params.status
-        );
+        const { getMcpOrder, updateMcpOrderStatus } =
+          await import("@/mcp/tools/purchase-tools");
+        const order = await getMcpOrder(params.orderId);
 
-        if (!updatedOrder) {
+        if (!order) {
           return errorResponse(
             "Order not found",
             `No order found with ID "${params.orderId}"`,
@@ -1388,15 +1950,49 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           );
         }
 
+        if (
+          !canActorUpdateMcpOrderStatus(order, params.status, apiKey.pubkey)
+        ) {
+          return errorResponse(
+            "Unauthorized order update",
+            params.status === "cancelled"
+              ? "Only the buyer for this order can cancel it."
+              : `Only the seller for this order can mark it as ${params.status}.`,
+            startTime
+          );
+        }
+
+        if (params.buyerPubkey && params.buyerPubkey !== order.buyer_pubkey) {
+          return errorResponse(
+            "Buyer mismatch",
+            `Provided buyer pubkey does not match order "${params.orderId}"`,
+            startTime
+          );
+        }
+
+        const updatedOrder = await updateMcpOrderStatus(
+          params.orderId,
+          params.status,
+          apiKey.pubkey
+        );
+
+        if (!updatedOrder) {
+          return errorResponse(
+            "Unauthorized order update",
+            `Unable to update order "${params.orderId}" for your account`,
+            startTime
+          );
+        }
+
         let notificationSent = false;
+        const buyerPubkey = order.buyer_pubkey;
 
         if (params.buyerPubkey && params.message) {
           try {
             const { generateSecretKey, finalizeEvent, getEventHash, nip44 } =
               await import("nostr-tools");
-            const { getDefaultRelays, withBlastr } = await import(
-              "@/utils/nostr/nostr-helper-functions"
-            );
+            const { getDefaultRelays, withBlastr } =
+              await import("@/utils/nostr/nostr-helper-functions");
 
             const senderPubkey = signer.getPubKey();
             const defaultRelays = getDefaultRelays();
@@ -1414,11 +2010,11 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
             };
 
             const innerTags: string[][] = [
-              ["p", params.buyerPubkey, relayHint],
+              ["p", order.buyer_pubkey, relayHint],
               ["subject", subjectMap[params.status] || "order-info"],
               ["order", params.orderId],
               ["status", params.status],
-              ["b", params.buyerPubkey],
+              ["b", order.buyer_pubkey],
             ];
             if (params.productAddress) {
               innerTags.push(["item", params.productAddress, "1"]);
@@ -1441,7 +2037,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
             const stringifiedInner = JSON.stringify(fullInnerEvent);
             const conversationKey = nip44.getConversationKey(
               randomPrivKey,
-              params.buyerPubkey
+              buyerPubkey
             );
             const encryptedContent = nip44.encrypt(
               stringifiedInner,
@@ -1460,7 +2056,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
             const wrapPrivKey = generateSecretKey();
             const wrapConversationKey = nip44.getConversationKey(
               wrapPrivKey,
-              params.buyerPubkey
+              buyerPubkey
             );
             const wrapContent = nip44.encrypt(
               JSON.stringify(signedSeal),
@@ -1471,7 +2067,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
               {
                 created_at: now - Math.floor(Math.random() * 172800),
                 kind: 1059,
-                tags: [["p", params.buyerPubkey]],
+                tags: [["p", buyerPubkey]],
                 content: wrapContent,
               },
               wrapPrivKey
@@ -1509,7 +2105,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  server.tool(
+  reg(
     "list_messages",
     "Fetch and decrypt your incoming messages (NIP-17 gift-wrapped DMs). Returns decrypted message content, sender, subject, and read status. Use to check inquiries, order messages, address changes, and other DMs.",
     {
@@ -1539,9 +2135,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
       if (!signer) return noSignerError();
 
       try {
-        const { fetchAllMessagesFromDb } = await import(
-          "@/utils/db/db-service"
-        );
+        const { fetchAllMessagesFromDb } =
+          await import("@/utils/db/db-service");
 
         const allMessages = await fetchAllMessagesFromDb(apiKey.pubkey);
 
@@ -1633,7 +2228,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  server.tool(
+  reg(
     "mark_messages_read",
     "Mark specific messages as read by their event IDs.",
     {
@@ -1676,7 +2271,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  server.tool(
+  reg(
     "set_relay_list",
     "Publish your relay list (kind 10002, NIP-65). Configures which relays you read from and write to.",
     {
@@ -1738,7 +2333,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  server.tool(
+  reg(
     "set_blossom_servers",
     "Publish your Blossom media server list (kind 10063). Configures which servers to use for media uploads.",
     {
@@ -1751,7 +2346,10 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
       if (!signer) return noSignerError();
 
       try {
-        const tags: string[][] = params.servers.map((s) => ["server", s]);
+        const tags: string[][] = params.servers.map((s: string) => [
+          "server",
+          s,
+        ]);
 
         const eventTemplate: EventTemplate = {
           kind: 10063,
@@ -1781,7 +2379,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  server.tool(
+  reg(
     "upload_media",
     "Upload media to a Blossom server. Creates a signed authorization event (kind 24242) and uploads the file. Returns the URL of the uploaded media.",
     {
@@ -1805,9 +2403,14 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
       try {
         const fileBuffer = Buffer.from(params.fileBase64, "base64");
-        const { createHash: cryptoCreateHash } = await import("crypto");
+        const binaryData = new Uint8Array(
+          fileBuffer.buffer as ArrayBuffer,
+          fileBuffer.byteOffset,
+          fileBuffer.byteLength
+        );
+        const { createHash: cryptoCreateHash } = await import("node:crypto");
         const hash = cryptoCreateHash("sha256")
-          .update(fileBuffer)
+          .update(binaryData)
           .digest("hex");
 
         const authEvent: EventTemplate = {
@@ -1817,7 +2420,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           tags: [
             ["t", "upload"],
             ["x", hash],
-            ["size", fileBuffer.length.toString()],
+            ["size", binaryData.length.toString()],
             [
               "expiration",
               Math.floor((Date.now() + 24 * 60 * 60 * 1000) / 1000).toString(),
@@ -1836,7 +2439,9 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
         const response = await fetch(uploadUrl.toString(), {
           method: "PUT",
-          body: fileBuffer,
+          body: new Blob([binaryData], {
+            type: params.mimeType,
+          }),
           headers: {
             authorization,
             "content-type": params.mimeType,
@@ -1858,7 +2463,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           {
             url: result.url,
             sha256: result.sha256 || hash,
-            size: result.size || fileBuffer.length,
+            size: result.size || binaryData.length,
             serverUrl,
           },
           startTime
@@ -1873,7 +2478,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  server.tool(
+  reg(
     "create_discount_code",
     "Create a discount code for your shop. Codes are percentage-based and can have optional expiration dates.",
     {
@@ -1892,9 +2497,22 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
       try {
         const pubkey = signer.getPubKey();
+        const signedEvent = signer.sign(
+          buildSignedHttpRequestProofTemplate(
+            buildDiscountCodeCreateProof({
+              code: params.code,
+              pubkey,
+              discountPercentage: params.discountPercentage,
+              expiration: params.expiration,
+            })
+          )
+        );
         const res = await fetch(`${baseUrl}/api/db/discount-codes`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            [SIGNED_EVENT_HEADER]: JSON.stringify(signedEvent),
+          },
           body: JSON.stringify({
             code: params.code,
             pubkey,
@@ -1928,7 +2546,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  server.tool(
+  reg(
     "delete_discount_code",
     "Delete one of your discount codes.",
     {
@@ -1942,9 +2560,20 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
       try {
         const pubkey = signer.getPubKey();
+        const signedEvent = signer.sign(
+          buildSignedHttpRequestProofTemplate(
+            buildDiscountCodeDeleteProof({
+              code: params.code,
+              pubkey,
+            })
+          )
+        );
         const res = await fetch(`${baseUrl}/api/db/discount-codes`, {
           method: "DELETE",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            [SIGNED_EVENT_HEADER]: JSON.stringify(signedEvent),
+          },
           body: JSON.stringify({ code: params.code, pubkey }),
         });
         const data = await res.json();
@@ -1966,7 +2595,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  server.tool(
+  reg(
     "list_discount_codes",
     "List your shop's discount codes.",
     {},
@@ -1978,8 +2607,18 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
       try {
         const pubkey = signer.getPubKey();
+        const signedEvent = signer.sign(
+          buildSignedHttpRequestProofTemplate(
+            buildDiscountCodesListProof(pubkey)
+          )
+        );
         const res = await fetch(
-          `${baseUrl}/api/db/discount-codes?pubkey=${pubkey}`
+          `${baseUrl}/api/db/discount-codes?pubkey=${pubkey}`,
+          {
+            headers: {
+              [SIGNED_EVENT_HEADER]: JSON.stringify(signedEvent),
+            },
+          }
         );
         const data = await res.json();
         return successResponse(
@@ -1999,7 +2638,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  server.tool(
+  reg(
     "get_cashu_balance",
     "Check your Cashu wallet balance by querying stored proof events.",
     {
@@ -2061,7 +2700,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  server.tool(
+  reg(
     "receive_cashu_tokens",
     "Receive Cashu tokens and store them as a proof event (kind 7375). Publishes the encrypted proof event to your Nostr relays.",
     {
@@ -2075,7 +2714,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
       try {
         const { getDecodedToken } = await import("@cashu/cashu-ts");
-        const decoded = getDecodedToken(params.token);
+        const decoded = getDecodedToken(params.token, []);
         const mintUrl = decoded.mint;
         const proofs = decoded.proofs;
         const totalAmount = proofs.reduce(
@@ -2091,9 +2730,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         });
         const encryptedContent = signer.encrypt(pubkey, proofData);
 
-        const { getDefaultRelays, withBlastr } = await import(
-          "@/utils/nostr/nostr-helper-functions"
-        );
+        const { getDefaultRelays, withBlastr } =
+          await import("@/utils/nostr/nostr-helper-functions");
 
         const relays = withBlastr(getDefaultRelays());
         const tags: string[][] = [["mint", mintUrl]];
@@ -2129,7 +2767,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  server.tool(
+  reg(
     "set_cashu_mints",
     "Configure your Cashu wallet mints by publishing a wallet configuration event (kind 17375).",
     {
@@ -2147,15 +2785,14 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
       try {
         const pubkey = signer.getPubKey();
-        const mintTags = params.mints.map((m) => ["mint", m]);
+        const mintTags = params.mints.map((m: string) => ["mint", m]);
         const encryptedContent = signer.encrypt(
           pubkey,
           JSON.stringify(mintTags)
         );
 
-        const { getDefaultRelays, withBlastr } = await import(
-          "@/utils/nostr/nostr-helper-functions"
-        );
+        const { getDefaultRelays, withBlastr } =
+          await import("@/utils/nostr/nostr-helper-functions");
 
         const relays = withBlastr(getDefaultRelays());
         const tags: string[][] = [["d", pubkey]];
@@ -2190,7 +2827,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  server.tool(
+  reg(
     "send_cashu_payment",
     "Send a Cashu payment by melting tokens to pay a Lightning invoice. Uses proofs from your stored Cashu wallet.",
     {
@@ -2209,11 +2846,12 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
       if (!signer) return noSignerError();
 
       try {
-        const { CashuMint, CashuWallet } = await import("@cashu/cashu-ts");
+        const { Mint: CashuMint, Wallet: CashuWallet } =
+          await import("@cashu/cashu-ts");
         const mintUrl = params.mintUrl || "https://mint.minibits.cash/Bitcoin";
         const mint = new CashuMint(mintUrl);
-        const keys = await mint.getKeys();
-        const wallet = new CashuWallet(mint, { keys: keys.keysets[0] as any });
+        const wallet = new CashuWallet(mint);
+        await wallet.loadMint();
 
         const { fetchCachedEvents } = await import("@/utils/db/db-service");
         const pubkey = signer.getPubKey();
@@ -2222,7 +2860,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           (e: any) => e.pubkey === pubkey
         );
 
-        let availableProofs: any[] = [];
+        const availableProofs: any[] = [];
         for (const event of myProofEvents) {
           try {
             const decryptedContent = signer.decrypt(pubkey, event.content);
@@ -2243,8 +2881,17 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           );
         }
 
-        const meltQuote = await wallet.createMeltQuote(params.invoice);
-        const totalNeeded = meltQuote.amount + (meltQuote.fee_reserve || 0);
+        const { withMintRetry } =
+          await import("@/utils/cashu/mint-retry-service");
+        const { safeMeltProofs } =
+          await import("@/utils/cashu/melt-retry-service");
+        const meltQuote = await withMintRetry(
+          () => wallet.createMeltQuoteBolt11(params.invoice),
+          { maxAttempts: 4, perAttemptTimeoutMs: 15000, totalTimeoutMs: 60000 }
+        );
+        const totalNeeded =
+          meltQuote.amount.toNumber() +
+          (meltQuote.fee_reserve?.toNumber() || 0);
         const totalAvailable = availableProofs.reduce(
           (sum: number, p: any) => sum + (p.amount || 0),
           0
@@ -2258,26 +2905,182 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           );
         }
 
-        const meltResult = await wallet.meltProofs(meltQuote, availableProofs);
+        const meltOutcome = await safeMeltProofs(
+          wallet,
+          meltQuote,
+          availableProofs
+        );
+        if (meltOutcome.status !== "paid") {
+          return errorResponse(
+            meltOutcome.status === "pending"
+              ? "Mint payment pending"
+              : meltOutcome.status === "unknown"
+                ? "Cashu payment outcome unknown"
+                : "Cashu payment failed",
+            meltOutcome.errorMessage ??
+              `Mint reported melt status: ${meltOutcome.status}`,
+            startTime
+          );
+        }
 
         return successResponse(
           {
-            paid: (meltResult as any).quote?.paid || true,
+            paid: true,
             amount: meltQuote.amount,
             fee: meltQuote.fee_reserve || 0,
             mintUrl,
-            change: meltResult.change
-              ? meltResult.change.reduce(
-                  (sum: number, p: any) => sum + (p.amount || 0),
-                  0
-                )
-              : 0,
+            change: meltOutcome.changeProofs.reduce(
+              (sum: number, p: any) =>
+                sum + (p.amount?.toNumber?.() ?? p.amount ?? 0),
+              0
+            ),
           },
           startTime
         );
       } catch (error) {
         return errorResponse(
           "Failed to send Cashu payment",
+          error instanceof Error ? error.message : "Unknown error",
+          startTime
+        );
+      }
+    }
+  );
+
+  reg(
+    "manage_custom_domain",
+    "Verify and register a custom domain for your Milk Market storefront. Checks that the domain's CNAME or A record points to milk.market, then records the mapping in the database.",
+    {
+      domain: z
+        .string()
+        .describe(
+          "Custom domain to verify and register (e.g. 'shop.myfarm.com')"
+        ),
+      action: z
+        .enum(["verify", "register", "remove"])
+        .describe(
+          "'verify' checks DNS records, 'register' verifies and saves the mapping, 'remove' deletes the mapping"
+        ),
+      shopSlug: z
+        .string()
+        .optional()
+        .describe("Your shop slug (required for register action)"),
+    },
+    async (params) => {
+      const startTime = Date.now();
+      if (apiKey.permissions !== "full_access") return permissionError();
+      const signer = await getSigner(apiKey);
+      if (!signer) return noSignerError();
+
+      const TARGET_CNAME = "milk.market";
+      const TARGET_IPS = ["75.2.60.5"];
+
+      try {
+        const pubkey = signer.getPubKey();
+
+        if (params.action === "remove") {
+          const pool = await getDbPool();
+          await pool.query(
+            `DELETE FROM custom_domains WHERE pubkey = $1 AND domain = $2`,
+            [pubkey, params.domain]
+          );
+          return successResponse(
+            { domain: params.domain, removed: true },
+            startTime
+          );
+        }
+
+        let cnameOk = false;
+        let aOk = false;
+        let resolvedCname: string | null = null;
+        let resolvedIps: string[] = [];
+
+        try {
+          const cnames = await resolveCname(params.domain);
+          resolvedCname = cnames[0] || null;
+          cnameOk =
+            !!resolvedCname &&
+            (resolvedCname === TARGET_CNAME ||
+              resolvedCname.endsWith("." + TARGET_CNAME));
+        } catch {}
+
+        if (!cnameOk) {
+          try {
+            resolvedIps = await resolve4(params.domain);
+            aOk = resolvedIps.some((ip) => TARGET_IPS.includes(ip));
+          } catch {}
+        }
+
+        const dnsOk = cnameOk || aOk;
+
+        if (params.action === "verify") {
+          return successResponse(
+            {
+              domain: params.domain,
+              dnsOk,
+              cnameOk,
+              aOk,
+              resolvedCname,
+              resolvedIps,
+              instructions: dnsOk
+                ? "DNS is correctly configured."
+                : `Please add a CNAME record pointing ${params.domain} to ${TARGET_CNAME}, or an A record pointing to ${TARGET_IPS[0]}.`,
+            },
+            startTime
+          );
+        }
+
+        if (params.action === "register") {
+          if (!dnsOk) {
+            return errorResponse(
+              "DNS verification failed",
+              `Domain ${params.domain} does not point to ${TARGET_CNAME}. Please configure your DNS first.`,
+              startTime
+            );
+          }
+          if (!params.shopSlug) {
+            return errorResponse(
+              "Missing shopSlug",
+              "shopSlug is required for the register action",
+              startTime
+            );
+          }
+          const pool = await getDbPool();
+          const result = await pool.query(
+            `INSERT INTO custom_domains (pubkey, domain, shop_slug, verified_at)
+             VALUES ($1, $2, $3, NOW())
+             ON CONFLICT (domain) DO UPDATE
+               SET shop_slug = EXCLUDED.shop_slug,
+                   verified_at = NOW()
+             WHERE custom_domains.pubkey = EXCLUDED.pubkey`,
+            [pubkey, params.domain, params.shopSlug]
+          );
+          if (result.rowCount === 0) {
+            return errorResponse(
+              "Domain already registered",
+              `Domain ${params.domain} is already registered to another account.`,
+              startTime
+            );
+          }
+          return successResponse(
+            {
+              domain: params.domain,
+              shopSlug: params.shopSlug,
+              registered: true,
+              dnsOk,
+            },
+            startTime
+          );
+        }
+
+        return errorResponse(
+          "Invalid action",
+          `Unknown action: ${params.action}`,
+          startTime
+        );
+      } catch (error) {
+        return errorResponse(
+          "Failed to manage custom domain",
           error instanceof Error ? error.message : "Unknown error",
           startTime
         );

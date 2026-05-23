@@ -42,12 +42,12 @@ const HomeFeed = ({
       }
     }
     setIsFetchingShop(false);
-  }, [focusedPubkey, shopMapContext, shopBannerURL, router.pathname]);
+  }, [focusedPubkey, shopMapContext, router.pathname]);
 
   return (
     <>
       {focusedPubkey && shopBannerURL && !isFetchingShop && (
-        <div className="flex h-auto w-full items-center justify-center bg-light-bg bg-cover bg-center dark:bg-dark-bg">
+        <div className="bg-light-bg dark:bg-dark-bg flex h-auto w-full items-center justify-center bg-cover bg-center">
           <img
             src={sanitizeUrl(shopBannerURL)}
             alt="Shop Banner"

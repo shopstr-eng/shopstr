@@ -5,7 +5,7 @@ import {
   NostrEvent,
   finalizeEvent,
 } from "nostr-tools";
-import { hexToBytes } from "@noble/hashes/utils";
+import { hexToBytes } from "@noble/hashes/utils.js";
 import CryptoJS from "crypto-js";
 import { NostrEventTemplate } from "@/utils/nostr/nostr-manager";
 import {
@@ -90,7 +90,8 @@ export class NostrNSecSigner implements NostrSigner {
     return new NostrNSecSigner(
       {
         encryptedPrivKey: json.encryptedPrivKey,
-        passphrase: typeof json.passphrase === "string" ? json.passphrase : undefined,
+        passphrase:
+          typeof json.passphrase === "string" ? json.passphrase : undefined,
         pubkey: typeof json.pubkey === "string" ? json.pubkey : undefined,
       },
       challengeHandler
@@ -103,6 +104,10 @@ export class NostrNSecSigner implements NostrSigner {
       encryptedPrivKey: this.encryptedPrivKey,
       pubkey: this.pubkey,
     };
+  }
+
+  public getEncryptedPrivKey(): string {
+    return this.encryptedPrivKey;
   }
 
   public async connect(): Promise<string> {

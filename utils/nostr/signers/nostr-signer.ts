@@ -1,4 +1,7 @@
-import type { NostrEventTemplate, NostrEvent } from "@/utils/nostr/nostr-manager";
+import type {
+  NostrEventTemplate,
+  NostrEvent,
+} from "@/utils/nostr/nostr-manager";
 
 export interface NostrSigner {
   connect(): Promise<string>;

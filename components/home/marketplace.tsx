@@ -1,4 +1,7 @@
-import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
+import {
+  MagnifyingGlassIcon,
+  InformationCircleIcon,
+} from "@heroicons/react/24/outline";
 import {
   Button,
   Chip,
@@ -6,12 +9,13 @@ import {
   SelectItem,
   SelectSection,
   Input,
+  Tooltip,
   useDisclosure,
   Dropdown,
   DropdownTrigger,
   DropdownMenu,
   DropdownItem,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import {
   FaceFrownIcon,
   FaceSmileIcon,
@@ -51,6 +55,28 @@ import {
   isNpub,
   buildProductSlugIndexes,
 } from "@/utils/url-slugs";
+import { useDebounce } from "@/utils/hooks/useDebounce";
+
+export function normalizeNpub(
+  npub: string | string[] | undefined
+): string | null {
+  if (typeof npub === "string") {
+    const normalized = npub.trim();
+    return normalized.length > 0 ? normalized : null;
+  }
+
+  if (Array.isArray(npub)) {
+    const firstValue = npub[0];
+    if (typeof firstValue !== "string") {
+      return null;
+    }
+
+    const normalized = firstValue.trim();
+    return normalized.length > 0 ? normalized : null;
+  }
+
+  return null;
+}
 
 function MarketplacePage({
   focusedPubkey,
@@ -69,6 +95,7 @@ function MarketplacePage({
   );
   const [selectedLocation, setSelectedLocation] = useState("");
   const [selectedSearch, setSelectedSearch] = useState("");
+  const debouncedSearch = useDebounce(selectedSearch, 300);
   const { isOpen, onOpen, onClose } = useDisclosure();
 
   const [wotFilter, setWotFilter] = useState(false);
@@ -112,26 +139,30 @@ function MarketplacePage({
   }, [productEventContext.productEvents]);
 
   useEffect(() => {
-    const npub = router.query.npub;
-    if (npub && typeof npub[0] === "string") {
-      const slug = npub[0];
-      let pubkey: string | undefined;
+    const slug = normalizeNpub(router.query.npub);
 
-      if (isNpub(slug)) {
-        try {
-          const { data } = nip19.decode(slug);
-          pubkey = data as string;
-        } catch {
+    if (!slug) return;
+
+    let pubkey: string | undefined;
+
+    if (isNpub(slug)) {
+      try {
+        const decoded = nip19.decode(slug);
+        if (decoded.type === "npub" && typeof decoded.data === "string") {
+          pubkey = decoded.data;
+        } else {
           return;
         }
-      } else {
-        pubkey = findPubkeyByProfileSlug(slug, profileMapContext.profileData);
+      } catch {
+        return;
       }
+    } else {
+      pubkey = findPubkeyByProfileSlug(slug, profileMapContext.profileData);
+    }
 
-      if (pubkey) {
-        setFocusedPubkey(pubkey);
-        setSelectedSection("shop");
-      }
+    if (pubkey) {
+      setFocusedPubkey(pubkey);
+      setSelectedSection("shop");
     }
   }, [
     router.query.npub,
@@ -141,27 +172,26 @@ function MarketplacePage({
   ]);
 
   useEffect(() => {
-    if (
-      focusedPubkey &&
-      !profileMapContext.isLoading &&
-      router.query.npub?.[0]
-    ) {
-      const currentSlug = router.query.npub[0] as string;
-      const canonicalSlug = getProfileSlug(
-        focusedPubkey,
-        profileMapContext.profileData
-      );
-      if (canonicalSlug && currentSlug !== canonicalSlug) {
-        router.replace(`/marketplace/${canonicalSlug}`, undefined, {
-          shallow: true,
-        });
-      }
+    const currentSlug = normalizeNpub(router.query.npub);
+
+    if (!focusedPubkey || profileMapContext.isLoading || !currentSlug) return;
+
+    const canonicalSlug = getProfileSlug(
+      focusedPubkey,
+      profileMapContext.profileData
+    );
+
+    if (canonicalSlug && currentSlug !== canonicalSlug) {
+      router.replace(`/marketplace/${canonicalSlug}`, undefined, {
+        shallow: true,
+      });
     }
   }, [
     router,
     focusedPubkey,
     profileMapContext.isLoading,
     profileMapContext.profileData,
+    router.query.npub,
   ]);
 
   useEffect(() => {
@@ -253,18 +283,21 @@ function MarketplacePage({
     }
   };
 
-  const handleTitleClick = (product: ProductData) => {
+  const getProductHref = (product: ProductData) => {
     if (product.d === "zapsnag" || product.categories?.includes("zapsnag")) {
-      router.push(`/listing/${product.id}`);
-      return;
+      return `/listing/${product.id}`;
     }
 
     const slug = listingSlugIndexes.slugByProductId.get(product.id);
     if (slug) {
-      router.push(`/listing/${slug}`);
-    } else {
-      router.push(`/listing/${product.id}`);
+      return `/listing/${slug}`;
     }
+
+    return `/listing/${product.id}`;
+  };
+
+  const handleTitleClick = (product: ProductData) => {
+    router.push(getProductHref(product));
   };
 
   const renderProductScores = () => {
@@ -282,7 +315,7 @@ function MarketplacePage({
 
           return (
             <div key={product.id} className="mt-4 p-4 pt-4">
-              <h3 className="mb-3 text-lg font-semibold text-light-text dark:text-dark-text">
+              <h3 className="text-light-text dark:text-dark-text mb-3 text-lg font-semibold">
                 <div
                   onClick={() => handleTitleClick(product)}
                   className="cursor-pointer hover:underline"
@@ -313,7 +346,12 @@ function MarketplacePage({
                           dropDownKeys={
                             reviewerPubkey === userPubkey
                               ? ["shop_profile"]
-                              : ["shop", "inquiry", "copy_npub"]
+                              : [
+                                  "shop",
+                                  "inquiry",
+                                  "copy_npub",
+                                  "report_profile",
+                                ]
                           }
                         />
                       </div>
@@ -358,7 +396,7 @@ function MarketplacePage({
                             return (
                               <p
                                 key={index}
-                                className="italic text-light-text dark:text-dark-text"
+                                className="text-light-text dark:text-dark-text italic"
                               >
                                 &ldquo;{value}&rdquo;
                               </p>
@@ -380,15 +418,24 @@ function MarketplacePage({
 
   return (
     <div className="mx-auto w-full">
-      <div className="flex max-w-[100%] flex-col bg-light-bg px-3 pb-2 dark:bg-dark-bg">
+      <div className="bg-light-bg dark:bg-dark-bg flex max-w-[100%] flex-col px-3 pb-2">
         {shopBannerURL != "" && focusedPubkey != "" && !isFetchingShop ? (
           <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div ref={searchBarRef} className="w-full sm:order-2 sm:w-auto">
               <Input
                 className="text-light-text dark:text-dark-text"
-                placeholder="Listing title, naddr1..., npub..."
+                isClearable
+                placeholder="Search by name, price, or seller"
                 value={selectedSearch}
                 startContent={<MagnifyingGlassIcon height={"1em"} />}
+                endContent={
+                  <Tooltip
+                    content="You can also search by Nostr identifier (naddr1… or npub1…)"
+                    placement="bottom"
+                  >
+                    <InformationCircleIcon className="h-4 w-4 cursor-default text-gray-400" />
+                  </Tooltip>
+                }
                 onChange={(event) => {
                   const value = event.target.value;
                   setSelectedSearch(value);
@@ -399,7 +446,7 @@ function MarketplacePage({
 
             <div className="flex gap-1 sm:order-1">
               <Button
-                className="bg-transparent text-lg text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text sm:text-xl"
+                className="text-light-text dark:text-dark-text dark:hover:text-accent-dark-text bg-transparent text-lg hover:text-purple-700 sm:text-xl"
                 onClick={() => {
                   setSelectedCategories(new Set<string>([]));
                   setSelectedLocation("");
@@ -410,7 +457,7 @@ function MarketplacePage({
                 Shop
               </Button>
               <Button
-                className="bg-transparent text-lg text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text sm:text-xl"
+                className="text-light-text dark:text-dark-text dark:hover:text-accent-dark-text bg-transparent text-lg hover:text-purple-700 sm:text-xl"
                 onClick={() => {
                   setSelectedSection("reviews");
                 }}
@@ -418,7 +465,7 @@ function MarketplacePage({
                 Reviews
               </Button>
               <Button
-                className="bg-transparent text-lg text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text sm:text-xl"
+                className="text-light-text dark:text-dark-text dark:hover:text-accent-dark-text bg-transparent text-lg hover:text-purple-700 sm:text-xl"
                 onClick={() => {
                   setSelectedSection("about");
                 }}
@@ -426,7 +473,7 @@ function MarketplacePage({
                 About
               </Button>
               <Button
-                className="bg-transparent text-lg text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text sm:text-xl"
+                className="text-light-text dark:text-dark-text dark:hover:text-accent-dark-text bg-transparent text-lg hover:text-purple-700 sm:text-xl"
                 onClick={() => handleSendMessage(focusedPubkey)}
               >
                 Message
@@ -437,7 +484,7 @@ function MarketplacePage({
                     <Button
                       isIconOnly
                       variant="light"
-                      className="text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+                      className="text-light-text dark:text-dark-text dark:hover:text-accent-dark-text hover:text-purple-700"
                     >
                       <EllipsisVerticalIcon className="h-6 w-6" />
                     </Button>
@@ -464,21 +511,29 @@ function MarketplacePage({
           <div className="flex flex-col gap-2 pb-3 sm:flex-row">
             <div ref={searchBarRef} className="w-full">
               <Input
-                className="mt-2 text-light-text dark:text-dark-text"
+                className="text-light-text dark:text-dark-text mt-2"
                 isClearable
-                placeholder="Listing title, naddr1..., npub..."
+                placeholder="Search by name, price, or seller"
                 value={selectedSearch}
                 startContent={<MagnifyingGlassIcon height={"1em"} />}
+                endContent={
+                  <Tooltip
+                    content="You can also search by Nostr identifier (naddr1… or npub1…)"
+                    placement="bottom"
+                  >
+                    <InformationCircleIcon className="h-4 w-4 cursor-default text-gray-400" />
+                  </Tooltip>
+                }
                 onChange={(event) => {
                   const value = event.target.value;
                   setSelectedSearch(value);
                 }}
                 onClear={() => setSelectedSearch("")}
-              ></Input>
+              />
             </div>
             <div className="flex w-full flex-row gap-2 pb-3">
               <Select
-                className="mt-2 text-light-text dark:text-dark-text"
+                className="text-light-text dark:text-dark-text mt-2"
                 label="Categories"
                 placeholder="All"
                 selectedKeys={selectedCategories}
@@ -495,9 +550,7 @@ function MarketplacePage({
               >
                 <SelectSection className="text-light-text dark:text-dark-text">
                   {CATEGORIES.map((category) => (
-                    <SelectItem value={category} key={category}>
-                      {category}
-                    </SelectItem>
+                    <SelectItem key={category}>{category}</SelectItem>
                   ))}
                 </SelectSection>
               </Select>
@@ -534,7 +587,7 @@ function MarketplacePage({
             focusedPubkey={focusedPubkey}
             selectedCategories={selectedCategories}
             selectedLocation={selectedLocation}
-            selectedSearch={selectedSearch}
+            selectedSearch={debouncedSearch}
             wotFilter={wotFilter}
             setCategories={setCategories}
             onFilteredProductsChange={handleFilteredProductsChange}
@@ -542,17 +595,17 @@ function MarketplacePage({
           />
         )}
         {selectedSection === "about" && shopAbout && (
-          <div className="flex w-full flex-col justify-start bg-transparent px-4 py-8 text-light-text dark:text-dark-text">
+          <div className="text-light-text dark:text-dark-text flex w-full flex-col justify-start bg-transparent px-4 py-8">
             <h2 className="pb-2 text-2xl font-bold">About</h2>
             <p className="text-base">{shopAbout}</p>
           </div>
         )}
         {selectedSection === "reviews" && !isFetchingReviews && (
-          <div className="flex w-full flex-col justify-start bg-transparent px-4 py-8 text-light-text dark:text-dark-text">
+          <div className="text-light-text dark:text-dark-text flex w-full flex-col justify-start bg-transparent px-4 py-8">
             <h2 className="pb-2 text-2xl font-bold">Reviews</h2>
             {merchantQuality !== "" ? (
               <div className="mt-4 p-4 pt-4">
-                <h3 className="mb-3 text-lg font-semibold text-light-text dark:text-dark-text">
+                <h3 className="text-light-text dark:text-dark-text mb-3 text-lg font-semibold">
                   Merchant Quality
                 </h3>
                 <div className="inline-flex items-center gap-1 rounded-lg border-2 border-black px-2 dark:border-white">
@@ -565,7 +618,7 @@ function MarketplacePage({
                             : "text-green-300"
                         }`}
                       />
-                      <span className="mr-2 whitespace-nowrap text-sm text-light-text dark:text-dark-text">
+                      <span className="text-light-text dark:text-dark-text mr-2 text-sm whitespace-nowrap">
                         {merchantQuality}
                       </span>
                     </>
@@ -578,7 +631,7 @@ function MarketplacePage({
                             : "text-red-500"
                         }`}
                       />
-                      <span className="mr-2 whitespace-nowrap text-sm text-light-text dark:text-dark-text">
+                      <span className="text-light-text dark:text-dark-text mr-2 text-sm whitespace-nowrap">
                         {merchantQuality}
                       </span>
                     </>
@@ -587,11 +640,11 @@ function MarketplacePage({
               </div>
             ) : (
               <div className="mt-10 flex flex-grow items-center justify-center py-10">
-                <div className="w-full max-w-xl rounded-lg bg-light-fg p-10 text-center shadow-lg dark:bg-dark-fg">
-                  <p className="text-3xl font-semibold text-light-text dark:text-dark-text">
+                <div className="bg-light-fg dark:bg-dark-fg w-full max-w-xl rounded-lg p-10 text-center shadow-lg">
+                  <p className="text-light-text dark:text-dark-text text-3xl font-semibold">
                     No reviews . . . yet!
                   </p>
-                  <p className="mt-4 text-lg text-light-text dark:text-dark-text">
+                  <p className="text-light-text dark:text-dark-text mt-4 text-lg">
                     Seems there aren&apos;t any reviews for this shop yet.
                   </p>
                 </div>
@@ -602,10 +655,10 @@ function MarketplacePage({
         )}
       </div>
       {router.pathname.includes("marketplace") &&
-        !router.asPath.includes("npub") && (
+        !router.asPath.includes("npub1") && (
           <Button
             radius="full"
-            className={`${SHOPSTRBUTTONCLASSNAMES} fixed bottom-24 right-8 z-50 h-16 w-16`}
+            className={`${SHOPSTRBUTTONCLASSNAMES} fixed right-8 bottom-24 z-50 h-16 w-16`}
             onClick={() => handleAddNewListing()}
           >
             <PlusIcon />

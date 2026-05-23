@@ -19,12 +19,7 @@ jest.mock("@heroicons/react/24/outline", () => ({
 const mockedGetLocalStorageData = getLocalStorageData as jest.Mock;
 
 describe("Transactions", () => {
-  beforeEach(() => {
-    jest.useFakeTimers();
-  });
-
   afterEach(() => {
-    jest.useRealTimers();
     jest.clearAllMocks();
   });
 
@@ -70,7 +65,7 @@ describe("Transactions", () => {
     expect(screen.getByTestId("icon-purchase")).toBeInTheDocument();
   });
 
-  it("should poll for new transactions and update the view", async () => {
+  it("should refresh transactions when local storage changes", async () => {
     const initialHistory: Transaction[] = [
       { type: 1, amount: 100, date: 1721915400 },
     ];
@@ -87,7 +82,7 @@ describe("Transactions", () => {
     mockedGetLocalStorageData.mockReturnValue({ history: updatedHistory });
 
     act(() => {
-      jest.advanceTimersByTime(2100);
+      window.dispatchEvent(new Event("shopstr:storage"));
     });
 
     await waitFor(() => {
@@ -96,13 +91,24 @@ describe("Transactions", () => {
     expect(mockedGetLocalStorageData).toHaveBeenCalledTimes(2);
   });
 
-  it("should clean up the interval on component unmount", () => {
-    const clearIntervalSpy = jest.spyOn(global, "clearInterval");
+  it("should clean up storage refresh listeners on component unmount", () => {
+    const removeEventListenerSpy = jest.spyOn(window, "removeEventListener");
 
     const { unmount } = render(<Transactions />);
 
     unmount();
 
-    expect(clearIntervalSpy).toHaveBeenCalledTimes(1);
+    expect(removeEventListenerSpy).toHaveBeenCalledWith(
+      "storage",
+      expect.any(Function)
+    );
+    expect(removeEventListenerSpy).toHaveBeenCalledWith(
+      "shopstr:storage",
+      expect.any(Function)
+    );
+    expect(removeEventListenerSpy).toHaveBeenCalledWith(
+      "focus",
+      expect.any(Function)
+    );
   });
 });

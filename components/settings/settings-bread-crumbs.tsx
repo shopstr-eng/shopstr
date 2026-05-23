@@ -1,4 +1,4 @@
-import { Breadcrumbs, BreadcrumbItem, Divider } from "@nextui-org/react";
+import { Breadcrumbs, BreadcrumbItem, Divider } from "@heroui/react";
 import { useRouter } from "next/router";
 
 const pathMap: { [key: string]: string } = {

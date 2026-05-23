@@ -1,7 +1,7 @@
-import { useState, useEffect, useContext, useCallback } from "react";
+import { useState, useEffect, useContext } from "react";
 import { nip19 } from "nostr-tools";
 import { useRouter } from "next/router";
-import { Button, useDisclosure } from "@nextui-org/react";
+import { Button, useDisclosure } from "@heroui/react";
 import {
   constructGiftWrappedEvent,
   constructMessageSeal,
@@ -23,6 +23,7 @@ import {
 } from "@/components/utility-components/nostr-context-provider";
 import SignInModal from "../sign-in/SignInModal";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import { createNip98AuthorizationHeader } from "@/utils/nostr/nip98-auth";
 
 const Messages = ({ isPayment }: { isPayment: boolean }) => {
   const router = useRouter();
@@ -47,6 +48,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
 
   const [showFailureModal, setShowFailureModal] = useState(false);
   const [failureText, setFailureText] = useState("");
+  const [initialMessage, setInitialMessage] = useState("");
 
   const [randomNpubForSender, setRandomNpubForSender] = useState<string>("");
   const [randomNsecForSender, setRandomNsecForSender] = useState<string>("");
@@ -73,108 +75,6 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
     setIsClient(true);
   }, []);
 
-  const getDecryptedChatsFromContext = useCallback(async (): Promise<
-    Map<string, ChatObject>
-  > => {
-    const decryptedChats: Map<string, ChatObject> = new Map(); //  entry: [chatPubkey, chat]
-    if (!chatsContext?.chatsMap) {
-      return decryptedChats;
-    }
-
-    for (const entry of chatsContext.chatsMap) {
-      const chatPubkey = entry[0] as string;
-      const chat = entry[1] as NostrMessageEvent[];
-      const decryptedChat: NostrMessageEvent[] = [];
-      const unreadCount = 0;
-
-      for (const messageEvent of chat) {
-        let plainText;
-        let tagsMap: Map<string, string> = new Map();
-        if (messageEvent.kind === 14) {
-          plainText = messageEvent.content;
-          tagsMap = new Map(
-            messageEvent.tags
-              .filter((tag): tag is [string, string] => tag.length === 2)
-              .map(([k, v]) => [k, v])
-          );
-        }
-        const subject = tagsMap.get("subject") ? tagsMap.get("subject") : null;
-        if (
-          (isPayment &&
-            subject &&
-            (subject === "order-payment" ||
-              subject === "order-info" ||
-              subject === "payment-change" ||
-              subject === "order-receipt" ||
-              subject === "shipping-info" ||
-              subject === "zapsnag-order")) ||
-          (!isPayment && subject && subject === "listing-inquiry")
-        ) {
-          plainText &&
-            decryptedChat.push({ ...messageEvent, content: plainText });
-        }
-      }
-      if (decryptedChat.length > 0) {
-        decryptedChats.set(chatPubkey, { unreadCount, decryptedChat });
-      }
-    }
-    return decryptedChats;
-  }, [chatsContext, isPayment]);
-
-  const markAllMessagesAsReadInChatRoom = useCallback(
-    (pubkeyOfChat: string) => {
-      if (!chatsContext?.chatsMap) return;
-
-      setChatsMap((prevChatMap) => {
-        const updatedChat = prevChatMap.get(pubkeyOfChat) as ChatObject;
-        if (updatedChat) {
-          updatedChat.unreadCount = 0;
-          const encryptedChat = chatsContext.chatsMap.get(
-            pubkeyOfChat
-          ) as NostrMessageEvent[];
-          if (!encryptedChat) return prevChatMap;
-          const wrappedIdsToMark: string[] = [];
-          encryptedChat.forEach((message) => {
-            if (!message.read) {
-              message.read = true;
-              if (message.wrappedEventId) {
-                wrappedIdsToMark.push(message.wrappedEventId);
-              }
-            }
-          });
-          if (wrappedIdsToMark.length > 0) {
-            fetch("/api/db/mark-messages-read", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ messageIds: wrappedIdsToMark }),
-            }).catch((err) =>
-              console.error("Failed to mark messages as read:", err)
-            );
-          }
-          const newChatMap = new Map(prevChatMap);
-          newChatMap.set(pubkeyOfChat, updatedChat);
-          return newChatMap;
-        }
-        return prevChatMap;
-      });
-    },
-    [chatsContext]
-  );
-
-  const enterChat = useCallback(
-    (pubkeyOfChat: string) => {
-      setCurrentChatPubkey(pubkeyOfChat as string);
-      // mark all messages in chat as read
-      markAllMessagesAsReadInChatRoom(pubkeyOfChat as string);
-    },
-    [markAllMessagesAsReadInChatRoom]
-  );
-
-  const goBackFromChatRoom = useCallback(() => {
-    // used when in chatroom on smaller devices
-    setCurrentChatPubkey("");
-  }, []);
-
   useEffect(() => {
     async function loadChats() {
       if (!chatsContext) {
@@ -186,14 +86,26 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
         const decryptedChats = await getDecryptedChatsFromContext();
         const passedNPubkey = router.query.pk ? router.query.pk : null;
         if (passedNPubkey) {
-          const pubkey = decryptNpub(passedNPubkey as string) as string;
-          if (!decryptedChats.has(pubkey)) {
-            decryptedChats.set(pubkey as string, {
-              unreadCount: 0,
-              decryptedChat: [],
-            });
+          const pubkey = decryptNpub(passedNPubkey as string);
+          if (pubkey) {
+            if (!decryptedChats.has(pubkey)) {
+              decryptedChats.set(pubkey, {
+                unreadCount: 0,
+                decryptedChat: [],
+              });
+            }
+            enterChat(pubkey);
+            const productTitle = router.query.productTitle as
+              | string
+              | undefined;
+            const productUrl = router.query.productUrl as string | undefined;
+            if (productTitle) {
+              const draftText = productUrl
+                ? `Re: "${productTitle}" — ${productUrl}\n\n`
+                : `Re: "${productTitle}"\n\n`;
+              setInitialMessage(draftText);
+            }
           }
-          enterChat(pubkey);
         }
         setChatsMap(decryptedChats);
         if (currentChatPubkey) {
@@ -205,15 +117,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
       }
     }
     loadChats();
-  }, [
-    chatsContext,
-    isPayment,
-    currentChatPubkey,
-    enterChat,
-    getDecryptedChatsFromContext,
-    markAllMessagesAsReadInChatRoom,
-    router.query.pk,
-  ]);
+  }, [chatsContext, isPayment]);
 
   useEffect(() => {
     const sortedChatsByLastMessage = Array.from(chatsMap.entries()).sort(
@@ -260,17 +164,111 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
     if (escapePressed) {
       goBackFromChatRoom();
     }
-  }, [
-    arrowUpPressed,
-    arrowDownPressed,
-    escapePressed,
-    chatsMap.size,
-    currentChatPubkey,
-    enterChat,
-    isChatsLoading,
-    sortedChatsByLastMessage,
-    goBackFromChatRoom,
-  ]);
+  }, [arrowUpPressed, arrowDownPressed, escapePressed]);
+
+  const getDecryptedChatsFromContext: () => Promise<
+    Map<string, ChatObject>
+  > = async () => {
+    const decryptedChats: Map<string, ChatObject> = new Map(); //  entry: [chatPubkey, chat]
+    for (const entry of chatsContext.chatsMap) {
+      const chatPubkey = entry[0] as string;
+      const chat = entry[1] as NostrMessageEvent[];
+      const decryptedChat: NostrMessageEvent[] = [];
+      const unreadCount = 0;
+
+      for (const messageEvent of chat) {
+        let plainText;
+        let tagsMap: Map<string, string> = new Map();
+        if (messageEvent.kind === 14) {
+          plainText = messageEvent.content;
+          tagsMap = new Map(
+            messageEvent.tags
+              .filter((tag): tag is [string, string] => tag.length === 2)
+              .map(([k, v]) => [k, v])
+          );
+        }
+        const subject = tagsMap.get("subject") ? tagsMap.get("subject") : null;
+        if (
+          (isPayment &&
+            subject &&
+            (subject === "order-payment" ||
+              subject === "order-info" ||
+              subject === "payment-change" ||
+              subject === "order-receipt" ||
+              subject === "shipping-info" ||
+              subject === "zapsnag-order")) ||
+          (!isPayment && subject && subject === "listing-inquiry")
+        ) {
+          if (plainText) {
+            decryptedChat.push({ ...messageEvent, content: plainText });
+          }
+        }
+      }
+      if (decryptedChat.length > 0) {
+        decryptedChats.set(chatPubkey, { unreadCount, decryptedChat });
+      }
+    }
+    return decryptedChats;
+  };
+
+  const markAllMessagesAsReadInChatRoom = (pubkeyOfChat: string) => {
+    setChatsMap((prevChatMap) => {
+      const updatedChat = prevChatMap.get(pubkeyOfChat) as ChatObject;
+      if (updatedChat) {
+        updatedChat.unreadCount = 0;
+        const encryptedChat = chatsContext.chatsMap.get(
+          pubkeyOfChat
+        ) as NostrMessageEvent[];
+        if (!encryptedChat) return prevChatMap;
+        const wrappedIdsToMark: string[] = [];
+        encryptedChat.forEach((message) => {
+          if (!message.read) {
+            message.read = true;
+            if (message.wrappedEventId) {
+              wrappedIdsToMark.push(message.wrappedEventId);
+            }
+          }
+        });
+        if (wrappedIdsToMark.length > 0) {
+          const body = JSON.stringify({ messageIds: wrappedIdsToMark });
+          createNip98AuthorizationHeader(
+            signer!,
+            `${window.location.origin}/api/db/mark-messages-read`,
+            "POST",
+            body
+          )
+            .then((authHeader) =>
+              fetch("/api/db/mark-messages-read", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: authHeader,
+                },
+                body,
+              })
+            )
+            .catch((err) =>
+              console.error("Failed to mark messages as read:", err)
+            );
+        }
+        const newChatMap = new Map(prevChatMap);
+        newChatMap.set(pubkeyOfChat, updatedChat);
+        return newChatMap;
+      }
+      return prevChatMap;
+    });
+  };
+
+  const enterChat = (pubkeyOfChat: string) => {
+    setCurrentChatPubkey(pubkeyOfChat as string);
+    // mark all messages in chat as read
+    markAllMessagesAsReadInChatRoom(pubkeyOfChat as string);
+  };
+
+  const goBackFromChatRoom = () => {
+    // used when in chatroom on smaller devices
+    setCurrentChatPubkey("");
+  };
 
   const handleSendGiftWrappedMessage = async (message: string) => {
     setIsSendingDMLoading(true);
@@ -313,8 +311,12 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
         decodedRandomPrivkeyForReceiver.data as Uint8Array,
         currentChatPubkey
       );
-      await sendGiftWrappedMessageEvent(nostr!, senderGiftWrappedEvent);
-      await sendGiftWrappedMessageEvent(nostr!, receiverGiftWrappedEvent);
+      await sendGiftWrappedMessageEvent(nostr!, senderGiftWrappedEvent, signer);
+      await sendGiftWrappedMessageEvent(
+        nostr!,
+        receiverGiftWrappedEvent,
+        signer
+      );
       chatsContext.addNewlyCreatedMessageEvent(
         {
           ...giftWrappedMessageEvent,
@@ -325,7 +327,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
       );
 
       setIsSendingDMLoading(false);
-    } catch (_) {
+    } catch {
       setFailureText("Error sending inquiry.");
       setShowFailureModal(true);
       setIsSendingDMLoading(false);
@@ -338,7 +340,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
   };
 
   return (
-    <div className="min-h-screen bg-light-bg text-gray-800 dark:bg-dark-bg dark:text-gray-200">
+    <div className="bg-light-bg dark:bg-dark-bg min-h-screen text-gray-800 dark:text-gray-200">
       <div className="container mx-auto px-4 py-10">
         {chatsMap.size === 0 ? (
           <div className="flex h-[66vh] items-center justify-center">
@@ -390,7 +392,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
           </div>
         ) : (
           <div className="flex flex-row">
-            <div className="h-[85vh] w-full overflow-y-auto rounded-md pb-12 dark:bg-dark-bg md:w-[450px] md:max-w-[33%] md:flex-shrink-0 md:pb-0 lg:pb-0">
+            <div className="dark:bg-dark-bg h-[85vh] w-full overflow-y-auto rounded-md pb-12 md:w-[450px] md:max-w-[33%] md:flex-shrink-0 md:pb-0 lg:pb-0">
               {sortedChatsByLastMessage.map(
                 ([pubkeyOfChat, chatObject]: [string, ChatObject]) => {
                   return (
@@ -412,6 +414,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
               isSendingDMLoading={isSendingDMLoading}
               handleSendMessage={handleSendGiftWrappedMessage}
               isPayment={isPayment}
+              initialMessage={initialMessage}
             />
           </div>
         )}

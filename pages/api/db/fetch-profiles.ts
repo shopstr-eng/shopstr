@@ -1,5 +1,10 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { fetchAllProfilesFromDb } from "@/utils/db/db-service";
+import { applyRateLimit } from "@/utils/rate-limit";
+
+// Returns the full profile set; bigger payload than fetch-profile so the
+// per-IP ceiling is somewhat tighter.
+const RATE_LIMIT = { limit: 300, windowMs: 60 * 1000 };
 
 export default async function handler(
   req: NextApiRequest,
@@ -9,37 +14,10 @@ export default async function handler(
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  try {
-    const parseCsv = (value: string | string[] | undefined): string[] => {
-      if (!value) return [];
-      const joined = Array.isArray(value) ? value.join(",") : value;
-      return joined
-        .split(",")
-        .map((v) => v.trim())
-        .filter(Boolean);
-    };
-    const parseNumber = (
-      value: string | string[] | undefined
-    ): number | undefined => {
-      if (!value) return undefined;
-      const raw = Array.isArray(value) ? value[0] : value;
-      const parsed = Number(raw);
-      return Number.isFinite(parsed) ? parsed : undefined;
-    };
-    const parseNumberList = (
-      value: string | string[] | undefined
-    ): number[] => {
-      return parseCsv(value)
-        .map((item) => Number(item))
-        .filter((item) => Number.isFinite(item));
-    };
+  if (!applyRateLimit(req, res, "fetch-profiles", RATE_LIMIT)) return;
 
-    const profiles = await fetchAllProfilesFromDb({
-      pubkeys: parseCsv(req.query.pubkeys),
-      kinds: parseNumberList(req.query.kinds),
-      since: parseNumber(req.query.since),
-      limit: parseNumber(req.query.limit),
-    });
+  try {
+    const profiles = await fetchAllProfilesFromDb();
     res.status(200).json(profiles);
   } catch (error) {
     console.error("Failed to fetch profiles from database:", error);

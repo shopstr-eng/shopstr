@@ -6,6 +6,14 @@ import {
   verifyEvent,
 } from "nostr-tools";
 import { SubscribeManyParams, SubCloser } from "nostr-tools/abstract-pool";
+
+import { NostrNIP46Signer } from "@/utils/nostr/signers/nostr-nip46-signer";
+import {
+  ChallengeHandler,
+  NostrSigner,
+} from "@/utils/nostr/signers/nostr-signer";
+import { NostrNSecSigner } from "@/utils/nostr/signers/nostr-nsec-signer";
+import { NostrNIP07Signer } from "@/utils/nostr/signers/nostr-nip07-signer";
 import { newPromiseWithTimeout } from "../timeout";
 
 export type NostrRelay = {
@@ -37,7 +45,7 @@ export class NostrManager {
   private readonly pool: SimplePool;
   private readonly params: NostrManagerParams;
   private readonly relays: Array<NostrRelay> = [];
-  private gcTimeout: ReturnType<typeof setTimeout> | undefined;
+  private gcTimeout: any;
 
   constructor(relays: Array<string> = [], params?: NostrManagerParams) {
     const {
@@ -62,18 +70,32 @@ export class NostrManager {
     this.gc().catch(console.error);
   }
 
-  private keepAlive(relays: NostrRelay[]) {
-    for (const relay of relays) {
-      if (relay.sleeping) {
-        try {
-          relay.connect();
-          relay.sleeping = false;
-        } catch (e) {
-          console.error(e);
+  public static signerFrom(
+    args: { [key: string]: string },
+    challengeHandler: ChallengeHandler
+  ): NostrSigner {
+    const signer =
+      NostrNIP07Signer.fromJSON(args, challengeHandler) ??
+      NostrNSecSigner.fromJSON(args, challengeHandler) ??
+      NostrNIP46Signer.fromJSON(args, challengeHandler);
+    if (!signer) throw new Error("Invalid signer type " + JSON.stringify(args));
+    return signer;
+  }
+
+  private async keepAlive(relays: NostrRelay[]) {
+    await Promise.all(
+      relays.map(async (relay) => {
+        if (relay.sleeping) {
+          try {
+            await relay.connect();
+            relay.sleeping = false;
+          } catch (e) {
+            console.error(e);
+          }
         }
-      }
-      relay.lastActive = Date.now();
-    }
+        relay.lastActive = Date.now();
+      })
+    );
   }
 
   private async gc() {
@@ -124,12 +146,11 @@ export class NostrManager {
     const relays = relayUrls
       ? this.relays.filter((r) => relayUrls.includes(r.url))
       : this.relays;
+    const requests = relays.flatMap((r) =>
+      filters.map((f) => ({ url: r.url, filter: f }))
+    );
     const sub: NostrSub = {
-      _sub: this.pool.subscribeMany(
-        relays.map((r) => r.url),
-        filters,
-        params ?? {}
-      ),
+      _sub: this.pool.subscribeMap(requests, params ?? {}),
       close: async () => {
         sub._sub.close();
         for (const relay of relays) {
@@ -142,7 +163,7 @@ export class NostrManager {
     for (const relay of relays) {
       relay.activeSubs.push(sub);
     }
-    this.keepAlive(relays);
+    await this.keepAlive(relays);
     return sub;
   }
 
@@ -167,6 +188,15 @@ export class NostrManager {
       const onEvent = params.onevent;
       const onEose = params.oneose;
       const fetchedEvents: Array<NostrEvent> = [];
+      let sub: NostrSub | undefined;
+      let didCloseSub = false;
+      let didResolve = false;
+
+      const closeSubIfNeeded = async () => {
+        if (!sub || didCloseSub) return;
+        didCloseSub = true;
+        await sub.close();
+      };
 
       params.onevent = (event: NostrEvent) => {
         fetchedEvents.push(event);
@@ -174,12 +204,15 @@ export class NostrManager {
       };
 
       params.oneose = () => {
-        sub!.close();
-        resolve(fetchedEvents);
+        closeSubIfNeeded().catch(console.error);
+        if (!didResolve) {
+          didResolve = true;
+          resolve(fetchedEvents);
+        }
         return onEose!();
       };
 
-      const sub = await this.subscribe(filters, params, relayUrls);
+      sub = await this.subscribe(filters, params, relayUrls);
     });
   }
 
@@ -194,7 +227,7 @@ export class NostrManager {
     const relays = relayUrls
       ? this.relays.filter((r) => relayUrls.includes(r.url))
       : this.relays;
-    this.keepAlive(relays);
+    await this.keepAlive(relays);
     await Promise.allSettled(
       this.pool.publish(
         relays.map((r) => r.url),
