@@ -68,7 +68,7 @@ export function loadConfig(
   env: NodeJS.ProcessEnv = process.env
 ): ShopstrMcpConfig {
   return {
-    version: "0.1.0",
+    version: env.npm_package_version ?? "0.1.0",
     relays: parseRelayList(env.SHOPSTR_MCP_RELAYS),
     logLevel: parseLogLevel(env.SHOPSTR_MCP_LOG_LEVEL),
     defaultToolTimeoutMs: parsePositiveInteger(

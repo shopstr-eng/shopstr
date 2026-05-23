@@ -11,6 +11,8 @@ import {
   validateRelayUrl,
 } from "../dist/config.js";
 
+const packageVersion = process.env.npm_package_version;
+
 test("validates relay URLs without credentials", () => {
   assert.equal(validateRelayUrl("wss://relay.example.com"), true);
   assert.equal(validateRelayUrl("ws://localhost:7777"), true);
@@ -48,6 +50,7 @@ test("loads config from environment overrides", () => {
   });
 
   assert.deepEqual(config.relays, ["wss://relay.example.com"]);
+  assert.equal(config.version, packageVersion);
   assert.equal(config.logLevel, "warn");
   assert.equal(config.defaultToolTimeoutMs, 1500);
   assert.equal(config.relayConnectTimeoutMs, 2500);
