@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useContext } from "react";
+import { useEffect, useState, useContext } from "react";
 import { useRouter } from "next/router";
 import { ShopMapContext } from "@/utils/context/context";
 import StorefrontLayout from "@/components/storefront/storefront-layout";
@@ -71,20 +71,26 @@ export default function ShopSubPage() {
   const [initialCreatedAt, setInitialCreatedAt] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
-  const resolvedRef = useRef(false);
 
   const pathParts = Array.isArray(shopPath) ? shopPath : [];
   const slug = pathParts[0] || "";
   const subPage = pathParts[1] || "";
 
   useEffect(() => {
-    if (!slug || resolvedRef.current) return;
+    if (!slug) return;
+    let isActive = true;
+
+    setIsLoading(true);
+    setNotFound(false);
+    setShopPubkey("");
+    setInitialShopConfig(null);
+    setInitialCreatedAt(0);
 
     const lookupBySlug = async () => {
       if (!shopMapContext.isLoading) {
         for (const [pubkey, shop] of shopMapContext.shopData.entries()) {
           if (shop?.content?.storefront?.shopSlug === slug) {
-            resolvedRef.current = true;
+            if (!isActive) return;
             setShopPubkey(pubkey);
             setIsLoading(false);
             return;
@@ -96,10 +102,11 @@ export default function ShopSubPage() {
         const res = await fetch(
           `/api/storefront/lookup?slug=${encodeURIComponent(slug)}`
         );
+        if (!isActive) return;
         if (res.ok) {
           const data = await res.json();
+          if (!isActive) return;
           if (data.pubkey) {
-            resolvedRef.current = true;
             setShopPubkey(data.pubkey);
             if (data.shopConfig) setInitialShopConfig(data.shopConfig);
             if (data.createdAt) setInitialCreatedAt(Number(data.createdAt));
@@ -109,7 +116,7 @@ export default function ShopSubPage() {
         }
       } catch {}
 
-      if (shopMapContext.isLoading) return;
+      if (!isActive || shopMapContext.isLoading) return;
 
       for (const [pubkey, shop] of shopMapContext.shopData.entries()) {
         const shopName = shop?.content?.name;
@@ -120,7 +127,7 @@ export default function ShopSubPage() {
             .replace(/-+/g, "-")
             .replace(/^-|-$/g, "");
           if (generatedSlug === slug) {
-            resolvedRef.current = true;
+            if (!isActive) return;
             setShopPubkey(pubkey);
             setIsLoading(false);
             return;
@@ -133,6 +140,9 @@ export default function ShopSubPage() {
     };
 
     lookupBySlug();
+    return () => {
+      isActive = false;
+    };
   }, [slug, shopMapContext.shopData, shopMapContext.isLoading]);
 
   if (isLoading) {
