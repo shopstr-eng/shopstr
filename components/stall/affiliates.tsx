@@ -8,9 +8,22 @@ import {
   Chip,
   Select,
   SelectItem,
-  Tabs,
-  Tab,
 } from "@heroui/react";
+
+type AffiliateSubTab =
+  | "affiliates"
+  | "codes"
+  | "balances"
+  | "payouts"
+  | "analytics";
+
+const AFFILIATE_SUB_TABS: { key: AffiliateSubTab; label: string }[] = [
+  { key: "affiliates", label: "Affiliates" },
+  { key: "codes", label: "Codes" },
+  { key: "balances", label: "Balances" },
+  { key: "payouts", label: "Payouts" },
+  { key: "analytics", label: "Analytics" },
+];
 import { TrashIcon, ClipboardDocumentIcon } from "@heroicons/react/24/outline";
 import { BLUEBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
@@ -120,6 +133,8 @@ export default function Affiliates() {
   const [ytdRows, setYtdRows] = useState<YtdRow[]>([]);
   const [reverseOrderId, setReverseOrderId] = useState("");
   const [loading, setLoading] = useState(false);
+  const [selectedSubTab, setSelectedSubTab] =
+    useState<AffiliateSubTab>("affiliates");
 
   // New affiliate form
   const [newName, setNewName] = useState("");
@@ -511,535 +526,538 @@ export default function Affiliates() {
         </p>
       </div>
 
-      <Tabs
+      <div
+        role="tablist"
         aria-label="Affiliate tabs"
-        classNames={{
-          base: "w-full max-w-full",
-          tabList: "max-w-full",
-        }}
-        className="text-black"
+        className="-mx-4 mb-4 flex gap-2 overflow-x-auto border-b-4 border-black px-4 pb-2"
       >
-        <Tab key="affiliates" title="Affiliates">
-          <div className="space-y-4">
-            <Card className="bg-white">
-              <CardHeader>
-                <h3 className="text-lg font-semibold text-black">
-                  Add affiliate
-                </h3>
-              </CardHeader>
-              <CardBody className="space-y-3">
-                <Input
-                  label="Name"
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                />
-                <Input
-                  label="Email (optional)"
-                  value={newEmail}
-                  onChange={(e) => setNewEmail(e.target.value)}
-                />
-                <Input
-                  label="Lightning address (optional)"
-                  placeholder="alice@getalby.com"
-                  value={newLightning}
-                  onChange={(e) => setNewLightning(e.target.value)}
-                />
-                <Input
-                  label="Stripe Connect account id (optional)"
-                  placeholder="acct_..."
-                  value={newStripeAcct}
-                  onChange={(e) => setNewStripeAcct(e.target.value)}
-                />
-                <Button
-                  className={BLUEBUTTONCLASSNAMES}
-                  onClick={createAffiliate}
-                  isDisabled={!newName}
-                >
-                  Add affiliate
-                </Button>
-              </CardBody>
-            </Card>
+        {AFFILIATE_SUB_TABS.map((t) => (
+          <Button
+            key={t.key}
+            role="tab"
+            aria-selected={selectedSubTab === t.key}
+            className={`shrink-0 bg-transparent px-2 text-base font-bold ${
+              selectedSubTab === t.key
+                ? "border-b-4 border-black text-black"
+                : "text-gray-500 hover:text-black"
+            }`}
+            onClick={() => setSelectedSubTab(t.key)}
+          >
+            {t.label}
+          </Button>
+        ))}
+      </div>
 
-            {loading ? (
-              <p className="text-black">Loading...</p>
-            ) : (
-              affiliates.map((a) => {
-                const inviteUrl =
-                  typeof window !== "undefined"
-                    ? `${window.location.origin}/affiliate/${a.invite_token}`
-                    : `/affiliate/${a.invite_token}`;
-                return (
-                  <Card key={a.id} className="bg-white">
-                    <CardBody>
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="min-w-0 flex-1 space-y-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="text-lg font-semibold text-black">
-                              {a.name}
-                            </span>
-                            {a.invite_claimed_at ? (
-                              <Chip color="success" size="sm">
-                                Claimed
-                              </Chip>
-                            ) : (
-                              <Chip color="warning" size="sm">
-                                Invite pending
-                              </Chip>
-                            )}
-                            {a.payouts_enabled === false && (
-                              <Chip color="danger" size="sm">
-                                Payouts disabled
-                              </Chip>
-                            )}
-                          </div>
-                          {a.last_payout_failure_reason && (
-                            <p className="text-xs text-red-600">
-                              Last payout error: {a.last_payout_failure_reason}
-                            </p>
+      {selectedSubTab === "affiliates" && (
+        <div className="space-y-4">
+          <Card className="bg-white">
+            <CardHeader>
+              <h3 className="text-lg font-semibold text-black">
+                Add affiliate
+              </h3>
+            </CardHeader>
+            <CardBody className="space-y-3">
+              <Input
+                label="Name"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+              />
+              <Input
+                label="Email (optional)"
+                value={newEmail}
+                onChange={(e) => setNewEmail(e.target.value)}
+              />
+              <Input
+                label="Lightning address (optional)"
+                placeholder="alice@getalby.com"
+                value={newLightning}
+                onChange={(e) => setNewLightning(e.target.value)}
+              />
+              <Input
+                label="Stripe Connect account id (optional)"
+                placeholder="acct_..."
+                value={newStripeAcct}
+                onChange={(e) => setNewStripeAcct(e.target.value)}
+              />
+              <Button
+                className={BLUEBUTTONCLASSNAMES}
+                onClick={createAffiliate}
+                isDisabled={!newName}
+              >
+                Add affiliate
+              </Button>
+            </CardBody>
+          </Card>
+
+          {loading ? (
+            <p className="text-black">Loading...</p>
+          ) : (
+            affiliates.map((a) => {
+              const inviteUrl =
+                typeof window !== "undefined"
+                  ? `${window.location.origin}/affiliate/${a.invite_token}`
+                  : `/affiliate/${a.invite_token}`;
+              return (
+                <Card key={a.id} className="bg-white">
+                  <CardBody>
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-lg font-semibold text-black">
+                            {a.name}
+                          </span>
+                          {a.invite_claimed_at ? (
+                            <Chip color="success" size="sm">
+                              Claimed
+                            </Chip>
+                          ) : (
+                            <Chip color="warning" size="sm">
+                              Invite pending
+                            </Chip>
                           )}
-                          {a.email && (
-                            <p className="text-xs text-gray-500">{a.email}</p>
+                          {a.payouts_enabled === false && (
+                            <Chip color="danger" size="sm">
+                              Payouts disabled
+                            </Chip>
                           )}
-                          {a.lightning_address && (
-                            <p className="text-xs text-gray-500">
-                              ⚡ {a.lightning_address}
-                            </p>
-                          )}
-                          {a.stripe_account_id && (
-                            <p className="text-xs break-all text-gray-500">
-                              Stripe: {a.stripe_account_id}
-                            </p>
-                          )}
-                          <div className="mt-2 flex items-center gap-2">
-                            <Input
-                              size="sm"
-                              value={inviteUrl}
-                              readOnly
-                              className="min-w-0 flex-1 text-black"
-                            />
+                        </div>
+                        {a.last_payout_failure_reason && (
+                          <p className="text-xs text-red-600">
+                            Last payout error: {a.last_payout_failure_reason}
+                          </p>
+                        )}
+                        {a.email && (
+                          <p className="text-xs text-gray-500">{a.email}</p>
+                        )}
+                        {a.lightning_address && (
+                          <p className="text-xs text-gray-500">
+                            ⚡ {a.lightning_address}
+                          </p>
+                        )}
+                        {a.stripe_account_id && (
+                          <p className="text-xs break-all text-gray-500">
+                            Stripe: {a.stripe_account_id}
+                          </p>
+                        )}
+                        <div className="mt-2 flex items-center gap-2">
+                          <Input
+                            size="sm"
+                            value={inviteUrl}
+                            readOnly
+                            className="min-w-0 flex-1 text-black"
+                          />
+                          <Button
+                            isIconOnly
+                            size="sm"
+                            variant="light"
+                            onClick={() => copy(inviteUrl)}
+                          >
+                            <ClipboardDocumentIcon className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <Button
+                            size="sm"
+                            variant="bordered"
+                            className="text-black"
+                            onClick={() => regenerateInviteToken(a.id)}
+                          >
+                            Regenerate invite link
+                          </Button>
+                          {a.payouts_enabled === false ? (
                             <Button
-                              isIconOnly
                               size="sm"
-                              variant="light"
-                              onClick={() => copy(inviteUrl)}
+                              color="primary"
+                              onClick={() => setPayoutsEnabled(a.id, true)}
                             >
-                              <ClipboardDocumentIcon className="h-4 w-4" />
+                              Re-enable payouts
                             </Button>
-                          </div>
-                          <div className="mt-2 flex flex-wrap gap-2">
+                          ) : (
                             <Button
                               size="sm"
                               variant="bordered"
                               className="text-black"
-                              onClick={() => regenerateInviteToken(a.id)}
+                              onClick={() => setPayoutsEnabled(a.id, false)}
                             >
-                              Regenerate invite link
+                              Pause payouts
                             </Button>
-                            {a.payouts_enabled === false ? (
-                              <Button
-                                size="sm"
-                                color="primary"
-                                onClick={() => setPayoutsEnabled(a.id, true)}
-                              >
-                                Re-enable payouts
-                              </Button>
-                            ) : (
-                              <Button
-                                size="sm"
-                                variant="bordered"
-                                className="text-black"
-                                onClick={() => setPayoutsEnabled(a.id, false)}
-                              >
-                                Pause payouts
-                              </Button>
-                            )}
-                          </div>
+                          )}
                         </div>
-                        <ConfirmActionDropdown
-                          helpText="Delete this affiliate? Their codes and referral history will also be removed."
-                          buttonLabel="Delete"
-                          onConfirm={() => deleteAffiliate(a.id)}
-                        >
-                          <Button
-                            isIconOnly
-                            color="danger"
-                            variant="light"
-                            size="sm"
-                          >
-                            <TrashIcon className="h-5 w-5" />
-                          </Button>
-                        </ConfirmActionDropdown>
                       </div>
-                    </CardBody>
-                  </Card>
-                );
-              })
-            )}
-          </div>
-        </Tab>
+                      <ConfirmActionDropdown
+                        helpText="Delete this affiliate? Their codes and referral history will also be removed."
+                        buttonLabel="Delete"
+                        onConfirm={() => deleteAffiliate(a.id)}
+                      >
+                        <Button
+                          isIconOnly
+                          color="danger"
+                          variant="light"
+                          size="sm"
+                        >
+                          <TrashIcon className="h-5 w-5" />
+                        </Button>
+                      </ConfirmActionDropdown>
+                    </div>
+                  </CardBody>
+                </Card>
+              );
+            })
+          )}
+        </div>
+      )}
 
-        <Tab key="codes" title="Codes">
-          <div className="space-y-4">
-            <Card className="bg-white">
-              <CardHeader>
-                <h3 className="text-lg font-semibold text-black">Add code</h3>
-              </CardHeader>
-              <CardBody className="space-y-3">
+      {selectedSubTab === "codes" && (
+        <div className="space-y-4">
+          <Card className="bg-white">
+            <CardHeader>
+              <h3 className="text-lg font-semibold text-black">Add code</h3>
+            </CardHeader>
+            <CardBody className="space-y-3">
+              <Select
+                label="Affiliate"
+                selectedKeys={codeAffiliateId ? [codeAffiliateId] : []}
+                onChange={(e) => setCodeAffiliateId(e.target.value)}
+              >
+                {affiliates.map((a) => (
+                  <SelectItem key={String(a.id)}>{a.name}</SelectItem>
+                ))}
+              </Select>
+              <Input
+                label="Code"
+                placeholder="ALICE10"
+                value={codeText}
+                onChange={(e) => setCodeText(e.target.value.toUpperCase())}
+              />
+              <div className="grid grid-cols-2 gap-3">
                 <Select
-                  label="Affiliate"
-                  selectedKeys={codeAffiliateId ? [codeAffiliateId] : []}
-                  onChange={(e) => setCodeAffiliateId(e.target.value)}
+                  label="Rebate type"
+                  selectedKeys={[rebateType]}
+                  onChange={(e) =>
+                    setRebateType(e.target.value as "percent" | "fixed")
+                  }
                 >
-                  {affiliates.map((a) => (
-                    <SelectItem key={String(a.id)}>{a.name}</SelectItem>
-                  ))}
+                  <SelectItem key="percent">Percent</SelectItem>
+                  <SelectItem key="fixed">Fixed</SelectItem>
                 </Select>
                 <Input
-                  label="Code"
-                  placeholder="ALICE10"
-                  value={codeText}
-                  onChange={(e) => setCodeText(e.target.value.toUpperCase())}
+                  label={`Rebate value (${
+                    rebateType === "percent" ? "%" : "amount"
+                  })`}
+                  type="number"
+                  value={rebateValue}
+                  onChange={(e) => setRebateValue(e.target.value)}
                 />
-                <div className="grid grid-cols-2 gap-3">
-                  <Select
-                    label="Rebate type"
-                    selectedKeys={[rebateType]}
-                    onChange={(e) =>
-                      setRebateType(e.target.value as "percent" | "fixed")
-                    }
-                  >
-                    <SelectItem key="percent">Percent</SelectItem>
-                    <SelectItem key="fixed">Fixed</SelectItem>
-                  </Select>
-                  <Input
-                    label={`Rebate value (${
-                      rebateType === "percent" ? "%" : "amount"
-                    })`}
-                    type="number"
-                    value={rebateValue}
-                    onChange={(e) => setRebateValue(e.target.value)}
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <Select
-                    label="Shopper discount type"
-                    selectedKeys={[buyerDiscountType]}
-                    onChange={(e) =>
-                      setBuyerDiscountType(
-                        e.target.value as "percent" | "fixed"
-                      )
-                    }
-                  >
-                    <SelectItem key="percent">Percent</SelectItem>
-                    <SelectItem key="fixed">Fixed</SelectItem>
-                  </Select>
-                  <Input
-                    label={`Shopper discount (${
-                      buyerDiscountType === "percent" ? "%" : "amount"
-                    })`}
-                    type="number"
-                    value={buyerDiscountValue}
-                    onChange={(e) => setBuyerDiscountValue(e.target.value)}
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <Input
-                    label="Currency"
-                    value={codeCurrency}
-                    onChange={(e) =>
-                      setCodeCurrency(e.target.value.toLowerCase())
-                    }
-                  />
-                  <Select
-                    label="Payout schedule"
-                    selectedKeys={[payoutSchedule]}
-                    onChange={(e) =>
-                      setPayoutSchedule(
-                        e.target.value as "weekly" | "biweekly" | "monthly"
-                      )
-                    }
-                  >
-                    <SelectItem key="weekly">Weekly</SelectItem>
-                    <SelectItem key="biweekly">Biweekly</SelectItem>
-                    <SelectItem key="monthly">Monthly (default)</SelectItem>
-                  </Select>
-                </div>
-                <Button
-                  className={BLUEBUTTONCLASSNAMES}
-                  onClick={createCode}
-                  isDisabled={!codeAffiliateId || !codeText || !rebateValue}
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <Select
+                  label="Shopper discount type"
+                  selectedKeys={[buyerDiscountType]}
+                  onChange={(e) =>
+                    setBuyerDiscountType(e.target.value as "percent" | "fixed")
+                  }
                 >
-                  Add code
-                </Button>
+                  <SelectItem key="percent">Percent</SelectItem>
+                  <SelectItem key="fixed">Fixed</SelectItem>
+                </Select>
+                <Input
+                  label={`Shopper discount (${
+                    buyerDiscountType === "percent" ? "%" : "amount"
+                  })`}
+                  type="number"
+                  value={buyerDiscountValue}
+                  onChange={(e) => setBuyerDiscountValue(e.target.value)}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <Input
+                  label="Currency"
+                  value={codeCurrency}
+                  onChange={(e) =>
+                    setCodeCurrency(e.target.value.toLowerCase())
+                  }
+                />
+                <Select
+                  label="Payout schedule"
+                  selectedKeys={[payoutSchedule]}
+                  onChange={(e) =>
+                    setPayoutSchedule(
+                      e.target.value as "weekly" | "biweekly" | "monthly"
+                    )
+                  }
+                >
+                  <SelectItem key="weekly">Weekly</SelectItem>
+                  <SelectItem key="biweekly">Biweekly</SelectItem>
+                  <SelectItem key="monthly">Monthly (default)</SelectItem>
+                </Select>
+              </div>
+              <Button
+                className={BLUEBUTTONCLASSNAMES}
+                onClick={createCode}
+                isDisabled={!codeAffiliateId || !codeText || !rebateValue}
+              >
+                Add code
+              </Button>
+            </CardBody>
+          </Card>
+
+          {codes.map((c) => (
+            <Card key={c.id} className="bg-white">
+              <CardBody>
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-mono text-lg font-bold break-all text-black">
+                        {c.code}
+                      </span>
+                      <Chip size="sm" color="primary">
+                        {c.affiliate_name}
+                      </Chip>
+                      {!c.is_active && (
+                        <Chip size="sm" color="default">
+                          Inactive
+                        </Chip>
+                      )}
+                    </div>
+                    <p className="text-sm text-black">
+                      Rebate:{" "}
+                      {c.rebate_type === "percent"
+                        ? `${c.rebate_value}%`
+                        : `${c.rebate_value} ${(c.currency || "").toUpperCase()}`}{" "}
+                      · Shopper discount:{" "}
+                      {c.buyer_discount_type === "percent"
+                        ? `${c.buyer_discount_value}%`
+                        : `${c.buyer_discount_value} ${(
+                            c.currency || ""
+                          ).toUpperCase()}`}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      Schedule: {c.payout_schedule.replace("_", " ")} · Used:{" "}
+                      {c.times_used}
+                      {c.max_uses ? ` / ${c.max_uses}` : ""}
+                    </p>
+                  </div>
+                  <ConfirmActionDropdown
+                    helpText="Delete this code? Existing referral history is preserved but new orders cannot use it."
+                    buttonLabel="Delete"
+                    onConfirm={() => deleteCode(c.id)}
+                  >
+                    <Button isIconOnly color="danger" variant="light" size="sm">
+                      <TrashIcon className="h-5 w-5" />
+                    </Button>
+                  </ConfirmActionDropdown>
+                </div>
               </CardBody>
             </Card>
+          ))}
+        </div>
+      )}
 
-            {codes.map((c) => (
-              <Card key={c.id} className="bg-white">
+      {selectedSubTab === "balances" && (
+        <div className="space-y-3">
+          {balances.length === 0 ? (
+            <p className="text-gray-500">No referrals yet.</p>
+          ) : (
+            balances.map((b) => (
+              <Card
+                key={`${b.affiliate_id}-${b.currency}`}
+                className="bg-white"
+              >
                 <CardBody>
-                  <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-center justify-between gap-4">
                     <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-mono text-lg font-bold break-all text-black">
-                          {c.code}
+                      <p className="text-lg font-semibold text-black">
+                        {b.affiliate_name}{" "}
+                        <span className="text-sm text-gray-500">
+                          ({b.currency.toUpperCase()})
                         </span>
-                        <Chip size="sm" color="primary">
-                          {c.affiliate_name}
-                        </Chip>
-                        {!c.is_active && (
-                          <Chip size="sm" color="default">
-                            Inactive
-                          </Chip>
-                        )}
-                      </div>
+                      </p>
                       <p className="text-sm text-black">
-                        Rebate:{" "}
-                        {c.rebate_type === "percent"
-                          ? `${c.rebate_value}%`
-                          : `${c.rebate_value} ${(c.currency || "").toUpperCase()}`}{" "}
-                        · Shopper discount:{" "}
-                        {c.buyer_discount_type === "percent"
-                          ? `${c.buyer_discount_value}%`
-                          : `${c.buyer_discount_value} ${(
-                              c.currency || ""
-                            ).toUpperCase()}`}
+                        Pending: {formatAmount(b.pending_smallest, b.currency)}{" "}
+                        · Payable now:{" "}
+                        {formatAmount(b.payable_smallest, b.currency)} ·
+                        Lifetime paid:{" "}
+                        {formatAmount(b.paid_smallest, b.currency)}
                       </p>
                       <p className="text-xs text-gray-500">
-                        Schedule: {c.payout_schedule.replace("_", " ")} · Used:{" "}
-                        {c.times_used}
-                        {c.max_uses ? ` / ${c.max_uses}` : ""}
+                        {b.referral_count} referrals
                       </p>
                     </div>
-                    <ConfirmActionDropdown
-                      helpText="Delete this code? Existing referral history is preserved but new orders cannot use it."
-                      buttonLabel="Delete"
-                      onConfirm={() => deleteCode(c.id)}
+                    <Button
+                      className={BLUEBUTTONCLASSNAMES}
+                      size="sm"
+                      onClick={() => markPaid(b)}
+                      isDisabled={Number(b.payable_smallest) <= 0}
                     >
-                      <Button
-                        isIconOnly
-                        color="danger"
-                        variant="light"
-                        size="sm"
-                      >
-                        <TrashIcon className="h-5 w-5" />
-                      </Button>
-                    </ConfirmActionDropdown>
+                      Mark paid
+                    </Button>
                   </div>
                 </CardBody>
               </Card>
-            ))}
-          </div>
-        </Tab>
+            ))
+          )}
+        </div>
+      )}
 
-        <Tab key="balances" title="Balances">
-          <div className="space-y-3">
-            {balances.length === 0 ? (
-              <p className="text-gray-500">No referrals yet.</p>
-            ) : (
-              balances.map((b) => (
-                <Card
-                  key={`${b.affiliate_id}-${b.currency}`}
-                  className="bg-white"
-                >
-                  <CardBody>
-                    <div className="flex items-center justify-between gap-4">
-                      <div className="min-w-0 flex-1">
-                        <p className="text-lg font-semibold text-black">
-                          {b.affiliate_name}{" "}
-                          <span className="text-sm text-gray-500">
-                            ({b.currency.toUpperCase()})
-                          </span>
+      {selectedSubTab === "payouts" && (
+        <div className="space-y-3">
+          {payouts.length === 0 ? (
+            <p className="text-gray-500">No payouts recorded yet.</p>
+          ) : (
+            payouts.map((p) => (
+              <Card key={p.id} className="bg-white">
+                <CardBody>
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-black">
+                        {p.affiliate_name} ·{" "}
+                        {formatAmount(p.amount_smallest, p.currency)}
+                      </p>
+                      <p className="text-xs break-all text-gray-500">
+                        {p.method} · {new Date(p.paid_at).toLocaleString()}
+                        {p.external_ref ? ` · ${p.external_ref}` : ""}
+                      </p>
+                      {p.note && (
+                        <p className="text-xs break-words text-gray-500">
+                          {p.note}
                         </p>
-                        <p className="text-sm text-black">
-                          Pending:{" "}
-                          {formatAmount(b.pending_smallest, b.currency)} ·
-                          Payable now:{" "}
-                          {formatAmount(b.payable_smallest, b.currency)} ·
-                          Lifetime paid:{" "}
-                          {formatAmount(b.paid_smallest, b.currency)}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          {b.referral_count} referrals
-                        </p>
-                      </div>
-                      <Button
-                        className={BLUEBUTTONCLASSNAMES}
-                        size="sm"
-                        onClick={() => markPaid(b)}
-                        isDisabled={Number(b.payable_smallest) <= 0}
-                      >
-                        Mark paid
-                      </Button>
+                      )}
                     </div>
-                  </CardBody>
-                </Card>
-              ))
-            )}
-          </div>
-        </Tab>
-
-        <Tab key="payouts" title="Payouts">
-          <div className="space-y-3">
-            {payouts.length === 0 ? (
-              <p className="text-gray-500">No payouts recorded yet.</p>
-            ) : (
-              payouts.map((p) => (
-                <Card key={p.id} className="bg-white">
-                  <CardBody>
-                    <div className="flex items-center justify-between gap-4">
-                      <div className="min-w-0 flex-1">
-                        <p className="font-semibold text-black">
-                          {p.affiliate_name} ·{" "}
-                          {formatAmount(p.amount_smallest, p.currency)}
-                        </p>
-                        <p className="text-xs break-all text-gray-500">
-                          {p.method} · {new Date(p.paid_at).toLocaleString()}
-                          {p.external_ref ? ` · ${p.external_ref}` : ""}
-                        </p>
-                        {p.note && (
-                          <p className="text-xs break-words text-gray-500">
-                            {p.note}
-                          </p>
-                        )}
-                      </div>
-                      <Chip
-                        size="sm"
-                        color={p.status === "paid" ? "success" : "danger"}
-                      >
-                        {p.status}
-                      </Chip>
-                    </div>
-                  </CardBody>
-                </Card>
-              ))
-            )}
-          </div>
-        </Tab>
-
-        <Tab key="analytics" title="Analytics">
-          <div className="space-y-4">
-            <Card className="bg-white">
-              <CardHeader className="font-semibold text-black">
-                Clicks &amp; conversions (last 30 days)
-              </CardHeader>
-              <CardBody>
-                {clickStats.length === 0 ? (
-                  <p className="text-sm text-gray-500">
-                    No tracked clicks yet. Once buyers visit a{" "}
-                    <code>?ref=CODE</code> link the data will appear here.
-                  </p>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead className="text-left text-gray-500">
-                        <tr>
-                          <th className="py-1 pr-3">Code</th>
-                          <th className="py-1 pr-3">Affiliate</th>
-                          <th className="py-1 pr-3 text-right">Clicks</th>
-                          <th className="py-1 pr-3 text-right">Conversions</th>
-                          <th className="py-1 pr-3 text-right">Rate</th>
-                        </tr>
-                      </thead>
-                      <tbody className="text-black">
-                        {clickStats.map((s) => (
-                          <tr key={`${s.code}-${s.affiliate_id ?? "x"}`}>
-                            <td className="py-1 pr-3 font-mono">{s.code}</td>
-                            <td className="py-1 pr-3">
-                              {s.affiliate_name ?? (
-                                <span className="text-gray-400">
-                                  (no matching code)
-                                </span>
-                              )}
-                            </td>
-                            <td className="py-1 pr-3 text-right">{s.clicks}</td>
-                            <td className="py-1 pr-3 text-right">
-                              {s.conversions}
-                            </td>
-                            <td className="py-1 pr-3 text-right">
-                              {(s.conversion_rate * 100).toFixed(1)}%
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                    <Chip
+                      size="sm"
+                      color={p.status === "paid" ? "success" : "danger"}
+                    >
+                      {p.status}
+                    </Chip>
                   </div>
-                )}
-              </CardBody>
-            </Card>
+                </CardBody>
+              </Card>
+            ))
+          )}
+        </div>
+      )}
 
-            <Card className="bg-white">
-              <CardHeader className="font-semibold text-black">
-                Year-to-date paid out
-              </CardHeader>
-              <CardBody>
-                {ytdRows.length === 0 ? (
-                  <p className="text-sm text-gray-500">
-                    No payouts so far this year.
-                  </p>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead className="text-left text-gray-500">
-                        <tr>
-                          <th className="py-1 pr-3">Affiliate</th>
-                          <th className="py-1 pr-3">Currency</th>
-                          <th className="py-1 pr-3 text-right">Paid</th>
-                          <th className="py-1 pr-3 text-right">Payouts</th>
-                        </tr>
-                      </thead>
-                      <tbody className="text-black">
-                        {ytdRows.map((r) => (
-                          <tr key={`${r.affiliate_id}-${r.currency}`}>
-                            <td className="py-1 pr-3">{r.affiliate_name}</td>
-                            <td className="py-1 pr-3 uppercase">
-                              {r.currency}
-                            </td>
-                            <td className="py-1 pr-3 text-right">
-                              {formatAmount(r.paid_smallest, r.currency)}
-                            </td>
-                            <td className="py-1 pr-3 text-right">
-                              {r.payout_count}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </CardBody>
-            </Card>
-
-            <Card className="bg-white">
-              <CardHeader className="font-semibold text-black">
-                Reverse a referral (Lightning / Cashu refunds)
-              </CardHeader>
-              <CardBody className="space-y-2">
-                <p className="text-xs text-gray-500">
-                  Stripe refunds reverse referrals automatically. For Lightning
-                  or Cashu refunds, paste the order ID here to cancel pending
-                  rebates and flag any already-paid rebates for clawback.
+      {selectedSubTab === "analytics" && (
+        <div className="space-y-4">
+          <Card className="bg-white">
+            <CardHeader className="font-semibold text-black">
+              Clicks &amp; conversions (last 30 days)
+            </CardHeader>
+            <CardBody>
+              {clickStats.length === 0 ? (
+                <p className="text-sm text-gray-500">
+                  No tracked clicks yet. Once buyers visit a{" "}
+                  <code>?ref=CODE</code> link the data will appear here.
                 </p>
-                <div className="flex gap-2">
-                  <Input
-                    aria-label="Order ID"
-                    placeholder="order_… or invoice ID"
-                    value={reverseOrderId}
-                    onValueChange={setReverseOrderId}
-                    className="min-w-0 flex-1"
-                  />
-                  <Button
-                    className={BLUEBUTTONCLASSNAMES}
-                    isDisabled={!reverseOrderId.trim()}
-                    onClick={reverseReferralByOrder}
-                  >
-                    Reverse
-                  </Button>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="text-left text-gray-500">
+                      <tr>
+                        <th className="py-1 pr-3">Code</th>
+                        <th className="py-1 pr-3">Affiliate</th>
+                        <th className="py-1 pr-3 text-right">Clicks</th>
+                        <th className="py-1 pr-3 text-right">Conversions</th>
+                        <th className="py-1 pr-3 text-right">Rate</th>
+                      </tr>
+                    </thead>
+                    <tbody className="text-black">
+                      {clickStats.map((s) => (
+                        <tr key={`${s.code}-${s.affiliate_id ?? "x"}`}>
+                          <td className="py-1 pr-3 font-mono">{s.code}</td>
+                          <td className="py-1 pr-3">
+                            {s.affiliate_name ?? (
+                              <span className="text-gray-400">
+                                (no matching code)
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-1 pr-3 text-right">{s.clicks}</td>
+                          <td className="py-1 pr-3 text-right">
+                            {s.conversions}
+                          </td>
+                          <td className="py-1 pr-3 text-right">
+                            {(s.conversion_rate * 100).toFixed(1)}%
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
-              </CardBody>
-            </Card>
-          </div>
-        </Tab>
-      </Tabs>
+              )}
+            </CardBody>
+          </Card>
+
+          <Card className="bg-white">
+            <CardHeader className="font-semibold text-black">
+              Year-to-date paid out
+            </CardHeader>
+            <CardBody>
+              {ytdRows.length === 0 ? (
+                <p className="text-sm text-gray-500">
+                  No payouts so far this year.
+                </p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="text-left text-gray-500">
+                      <tr>
+                        <th className="py-1 pr-3">Affiliate</th>
+                        <th className="py-1 pr-3">Currency</th>
+                        <th className="py-1 pr-3 text-right">Paid</th>
+                        <th className="py-1 pr-3 text-right">Payouts</th>
+                      </tr>
+                    </thead>
+                    <tbody className="text-black">
+                      {ytdRows.map((r) => (
+                        <tr key={`${r.affiliate_id}-${r.currency}`}>
+                          <td className="py-1 pr-3">{r.affiliate_name}</td>
+                          <td className="py-1 pr-3 uppercase">{r.currency}</td>
+                          <td className="py-1 pr-3 text-right">
+                            {formatAmount(r.paid_smallest, r.currency)}
+                          </td>
+                          <td className="py-1 pr-3 text-right">
+                            {r.payout_count}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardBody>
+          </Card>
+
+          <Card className="bg-white">
+            <CardHeader className="font-semibold text-black">
+              Reverse a referral (Lightning / Cashu refunds)
+            </CardHeader>
+            <CardBody className="space-y-2">
+              <p className="text-xs text-gray-500">
+                Stripe refunds reverse referrals automatically. For Lightning or
+                Cashu refunds, paste the order ID here to cancel pending rebates
+                and flag any already-paid rebates for clawback.
+              </p>
+              <div className="flex gap-2">
+                <Input
+                  aria-label="Order ID"
+                  placeholder="order_… or invoice ID"
+                  value={reverseOrderId}
+                  onValueChange={setReverseOrderId}
+                  className="min-w-0 flex-1"
+                />
+                <Button
+                  className={BLUEBUTTONCLASSNAMES}
+                  isDisabled={!reverseOrderId.trim()}
+                  onClick={reverseReferralByOrder}
+                >
+                  Reverse
+                </Button>
+              </div>
+            </CardBody>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }
