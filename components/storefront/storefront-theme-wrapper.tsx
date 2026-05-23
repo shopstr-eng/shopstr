@@ -18,6 +18,7 @@ import {
 } from "@/utils/types/types";
 import StorefrontFooterComponent from "./storefront-footer";
 import { getNavTextColor } from "@/utils/storefront-colors";
+import { getStorefrontCartQuantity } from "@/utils/storefront-cart";
 
 const DEFAULT_COLORS: StorefrontColorScheme = {
   primary: "#a438ba",
@@ -90,17 +91,7 @@ export default function StorefrontThemeWrapper({
 
   useEffect(() => {
     const sync = () => {
-      const cart = localStorage.getItem("cart");
-      if (!cart) {
-        setCartQuantity(0);
-        return;
-      }
-      const items = JSON.parse(cart) as { pubkey?: string }[];
-      setCartQuantity(
-        sellerPubkey
-          ? items.filter((p) => p.pubkey === sellerPubkey).length
-          : items.length
-      );
+      setCartQuantity(getStorefrontCartQuantity(sellerPubkey));
     };
     sync();
     const interval = setInterval(sync, 1000);

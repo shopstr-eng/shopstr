@@ -28,6 +28,11 @@ const PER_KEY_LIMIT = { limit: 30, windowMs: 60 * 1000 };
 
 const DEFAULT_MINT_URL = "https://mint.minibits.cash/Bitcoin";
 
+// Server-controlled allowlist of Cashu mints the backend will trust for both
+// Lightning invoice creation and Cashu token redemption.  Buyer-supplied mint
+// URLs that are not in this set are rejected before any network call is made.
+const ALLOWED_MINT_URLS: ReadonlySet<string> = new Set([DEFAULT_MINT_URL]);
+
 const pendingLightningPayments = new Map<
   string,
   { quote: string; mintUrl: string; amount: number; orderId: string }
@@ -374,7 +379,15 @@ async function handleLightningPayment(
   pricingBlock: any,
   mintUrl?: string
 ) {
-  const mint = mintUrl || DEFAULT_MINT_URL;
+  // Ignore any caller-supplied mintUrl entirely: the buyer must not be able to
+  // choose which mint the server trusts for Lightning invoice settlement.
+  if (mintUrl && !ALLOWED_MINT_URLS.has(mintUrl)) {
+    return res.status(400).json({
+      error:
+        "The requested mint is not supported. Omit mintUrl to use the default mint.",
+    });
+  }
+  const mint = DEFAULT_MINT_URL;
 
   let amountInSats: number;
   if (currency.toLowerCase() === "sats" || currency.toLowerCase() === "sat") {
@@ -500,27 +513,36 @@ async function handleCashuPayment(
     }
 
     const tokenMintUrl = decoded.mint;
-    if (tokenMintUrl) {
-      try {
-        const cashuMint = new CashuMint(tokenMintUrl);
-        const wallet = new CashuWallet(cashuMint);
-        await wallet.loadMint();
-        await withMintRetry(() => wallet.receive(cashuToken), {
-          maxAttempts: 4,
-          perAttemptTimeoutMs: 20000,
-          totalTimeoutMs: 90000,
-        });
-      } catch (redeemError) {
-        console.error("Cashu token redemption failed:", redeemError);
-        return res.status(400).json({
-          error:
-            "Failed to redeem Cashu token. It may be invalid or already spent.",
-          details:
-            redeemError instanceof Error
-              ? redeemError.message
-              : "Unknown error",
-        });
-      }
+
+    // The token's embedded mint URL must be on the server-controlled allowlist.
+    // Accepting a buyer-chosen mint would let an attacker point the server at a
+    // fake mint that always reports redemption success, creating fraudulent paid
+    // orders and opening SSRF to arbitrary internal endpoints.
+    if (!tokenMintUrl || !ALLOWED_MINT_URLS.has(tokenMintUrl)) {
+      return res.status(400).json({
+        error:
+          "Cashu token issuer is not a supported mint. Only tokens from trusted mints are accepted.",
+        supportedMints: Array.from(ALLOWED_MINT_URLS),
+      });
+    }
+
+    try {
+      const cashuMint = new CashuMint(tokenMintUrl);
+      const wallet = new CashuWallet(cashuMint);
+      await wallet.loadMint();
+      await withMintRetry(() => wallet.receive(cashuToken), {
+        maxAttempts: 4,
+        perAttemptTimeoutMs: 20000,
+        totalTimeoutMs: 90000,
+      });
+    } catch (redeemError) {
+      console.error("Cashu token redemption failed:", redeemError);
+      return res.status(400).json({
+        error:
+          "Failed to redeem Cashu token. It may be invalid or already spent.",
+        details:
+          redeemError instanceof Error ? redeemError.message : "Unknown error",
+      });
     }
 
     const order = await createMcpOrder(

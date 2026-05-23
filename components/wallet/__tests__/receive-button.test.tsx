@@ -31,6 +31,7 @@ jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
 jest.mock("@cashu/cashu-ts", () => ({
   ...jest.requireActual("@cashu/cashu-ts"),
   getDecodedToken: jest.fn(),
+  Mint: jest.fn().mockImplementation(() => ({})),
   Wallet: jest.fn().mockImplementation(() => ({
     loadMint: jest.fn().mockResolvedValue(undefined),
     checkProofsStates: jest.fn(),
@@ -133,7 +134,14 @@ describe("ReceiveButton", () => {
 
   test("successfully receives a valid token and closes the success modal", async () => {
     const user = userEvent.setup();
-    const mockProofs = [{ id: "test", amount: 10, secret: "secret", C: "C1" }];
+    const mockProofs = [
+      {
+        id: "test",
+        amount: { toNumber: () => 10 },
+        secret: "secret",
+        C: "C1",
+      },
+    ];
     mockGetDecodedToken.mockReturnValue({
       mint: "https://testmint.com",
       proofs: mockProofs,
@@ -174,7 +182,14 @@ describe("ReceiveButton", () => {
     const user = userEvent.setup();
     mockGetDecodedToken.mockReturnValue({
       mint: "https://testmint.com",
-      proofs: [{ id: "test", amount: 10 }],
+      proofs: [
+        {
+          id: "test",
+          amount: { toNumber: () => 10 },
+          secret: "secret",
+          C: "C1",
+        },
+      ],
     });
     MockCashuWallet.mockImplementation(() => ({
       loadMint: jest.fn().mockResolvedValue(undefined),
@@ -207,7 +222,12 @@ describe("ReceiveButton", () => {
 
   test("shows an error modal for duplicate tokens and closes it", async () => {
     const user = userEvent.setup();
-    const mockProof = { id: "test", amount: 10, secret: "secret", C: "C1" };
+    const mockProof = {
+      id: "test",
+      amount: { toNumber: () => 10 },
+      secret: "secret",
+      C: "C1",
+    };
     mockGetLocalStorageData.mockReturnValue({
       mints: [],
       tokens: [mockProof],
