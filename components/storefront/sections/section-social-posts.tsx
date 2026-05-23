@@ -281,7 +281,7 @@ export default function SectionSocialPosts({
 
   return (
     <div
-      className="w-full max-w-full overflow-x-hidden px-4 py-16 md:px-6"
+      className="w-full max-w-[100vw] overflow-x-hidden px-4 py-16 md:px-6"
       style={{ backgroundColor: colors.secondary + "08" }}
     >
       <div className="mx-auto w-full max-w-6xl">
@@ -310,7 +310,7 @@ export default function SectionSocialPosts({
           </div>
         ) : (
           <div
-            className={`storefront-social-carousel relative w-full max-w-full ${
+            className={`storefront-social-carousel relative mx-auto w-full max-w-[calc(100vw-2rem)] md:max-w-[calc(100vw-3rem)] ${
               autoplay ? "overflow-hidden" : "overflow-x-auto pb-2"
             }`}
             style={{ minWidth: 0 }}
@@ -329,7 +329,7 @@ export default function SectionSocialPosts({
               {(autoplay ? [...posts, ...posts] : posts).map((post, idx) => (
                 <div
                   key={idx}
-                  className="w-[340px] flex-shrink-0"
+                  className="storefront-social-carousel-item flex-shrink-0"
                   style={{ scrollSnapAlign: "start" }}
                 >
                   <PostCard post={post} colors={colors} />
@@ -359,6 +359,15 @@ export default function SectionSocialPosts({
           .storefront-social-carousel-track {
             animation: none;
             overflow-x: auto;
+          }
+        }
+        .storefront-social-carousel-item {
+          width: 340px;
+          max-width: calc(100vw - 3rem);
+        }
+        @media (max-width: 480px) {
+          .storefront-social-carousel-item {
+            width: calc(100vw - 3rem);
           }
         }
         .storefront-social-card {
