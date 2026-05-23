@@ -281,10 +281,10 @@ export default function SectionSocialPosts({
 
   return (
     <div
-      className="px-4 py-16 md:px-6"
+      className="w-full max-w-full overflow-x-hidden px-4 py-16 md:px-6"
       style={{ backgroundColor: colors.secondary + "08" }}
     >
-      <div className="mx-auto max-w-6xl">
+      <div className="mx-auto w-full max-w-6xl">
         {section.heading && (
           <FormattedText
             text={section.heading}
@@ -310,9 +310,10 @@ export default function SectionSocialPosts({
           </div>
         ) : (
           <div
-            className={`storefront-social-carousel relative ${
+            className={`storefront-social-carousel relative w-full max-w-full ${
               autoplay ? "overflow-hidden" : "overflow-x-auto pb-2"
             }`}
+            style={{ minWidth: 0 }}
             onMouseEnter={() => setPaused(true)}
             onMouseLeave={() => setPaused(false)}
           >
@@ -367,6 +368,24 @@ export default function SectionSocialPosts({
         }
         .storefront-social-card-media {
           contain: layout paint;
+          border-radius: 12px;
+          -webkit-mask-image: linear-gradient(
+            to bottom,
+            black 0%,
+            black 85%,
+            transparent 100%
+          );
+          mask-image: linear-gradient(
+            to bottom,
+            black 0%,
+            black 85%,
+            transparent 100%
+          );
+        }
+        .storefront-social-card-media,
+        .storefront-social-card-media > * {
+          max-width: 100% !important;
+          min-width: 0 !important;
         }
         .storefront-social-card-media iframe,
         .storefront-social-card-media .instagram-media,
@@ -376,7 +395,8 @@ export default function SectionSocialPosts({
         .storefront-social-card-media .fb-post > span,
         .storefront-social-card-media .fb-video,
         .storefront-social-card-media .fb-video > span,
-        .storefront-social-card-media .tiktok-embed {
+        .storefront-social-card-media .tiktok-embed,
+        .storefront-social-card-media .tiktok-embed iframe {
           max-width: 100% !important;
           min-width: 0 !important;
           width: 100% !important;
