@@ -60,6 +60,7 @@
     "uuid": "14.0.0"
   },
   "devDependencies": {
+    "@testcontainers/postgresql": "12.0.0",
     "@testing-library/dom": "10.4.1",
     "@testing-library/jest-dom": "6.9.1",
     "@testing-library/react": "16.3.2",
@@ -80,7 +81,6 @@
     "pg-mem": "3.0.14",
     "prettier": "3.8.3",
     "prettier-plugin-tailwindcss": "0.8.0",
-    "testcontainers": "12.0.0",
     "typescript": "6.0.3"
   },
   "overrides": {
