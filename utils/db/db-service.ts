@@ -962,7 +962,7 @@ async function initializeTables(): Promise<void> {
 }
 
 // Map event kinds to table names
-function getTableForKind(kind: number): string | null {
+export function getTableForKind(kind: number): string | null {
   // Products
   if (kind === 30402) return "product_events";
 
@@ -1005,14 +1005,14 @@ function getTableForEvent(event: NostrEvent): string | null {
 }
 
 // Helper function to check if event kind should only keep latest per pubkey
-function shouldKeepOnlyLatest(kind: number): boolean {
+export function shouldKeepOnlyLatest(kind: number): boolean {
   // Wallet config (17375), wallet state (37375), relay list (10002), blossom servers (10063)
   // User profile (0), shop profile (30019), community definition (34550)
   return [17375, 37375, 10002, 10063, 0, 30019, 34550].includes(kind);
 }
 
 // Helper function to check if event is a review (needs special handling per product)
-function isReviewEvent(kind: number): boolean {
+export function isReviewEvent(kind: number): boolean {
   return kind === 31555;
 }
 
@@ -1498,30 +1498,35 @@ export async function deleteCachedEventsByIds(
     // version that may already exist (e.g. an edit published before the old
     // one was explicitly removed).
     await client.query(
-      `DELETE FROM product_events
-       WHERE id = ANY($1)
-          OR (
-            kind = 30402
-            AND EXISTS (
-              SELECT 1
-              FROM product_events ref,
-              LATERAL (
-                SELECT elem->>'1' AS d_tag
-                FROM jsonb_array_elements(ref.tags) elem
-                WHERE elem->>'0' = 'd'
-                LIMIT 1
-              ) ref_d
-              WHERE ref.id = ANY($1)
-                AND ref.pubkey = product_events.pubkey
-                AND product_events.created_at < ref.created_at
-                AND EXISTS (
-                  SELECT 1
-                  FROM jsonb_array_elements(product_events.tags) elem
-                  WHERE elem->>'0' = 'd'
-                    AND elem->>'1' = ref_d.d_tag
-                )
-            )
-          )`,
+      `WITH refs AS (
+         SELECT
+           ref.pubkey,
+           ref.created_at,
+           d.d_tag
+         FROM product_events ref
+         CROSS JOIN LATERAL (
+           SELECT elem->>1 AS d_tag
+           FROM jsonb_array_elements(ref.tags) elem
+           WHERE elem->>0 = 'd'
+           LIMIT 1
+         ) d
+         WHERE ref.id = ANY($1)
+       )
+       DELETE FROM product_events pe
+       WHERE pe.id = ANY($1)
+         OR EXISTS (
+           SELECT 1
+           FROM refs
+           WHERE pe.kind = 30402
+             AND pe.pubkey = refs.pubkey
+             AND pe.created_at < refs.created_at
+             AND EXISTS (
+               SELECT 1
+               FROM jsonb_array_elements(pe.tags) elem
+               WHERE elem->>0 = 'd'
+                 AND elem->>1 = refs.d_tag
+             )
+         )`,
       [eventIds]
     );
 
@@ -2470,7 +2475,7 @@ export async function addDiscountCode(
         code,
         pubkey,
         discountPercentage,
-        expiration || null,
+        expiration ?? null,
         maxUses ?? null,
       ] as any[],
     };
@@ -2504,7 +2509,11 @@ export async function getDiscountCodesByPubkey(pubkey: string): Promise<
       `SELECT code, discount_percentage, expiration, max_uses, times_used FROM discount_codes WHERE pubkey = $1 ORDER BY created_at DESC`,
       [pubkey]
     );
-    return result.rows;
+    return result.rows.map((row) => ({
+      code: row.code,
+      discount_percentage: Number(row.discount_percentage),
+      expiration: row.expiration === null ? null : Number(row.expiration),
+    }));
   } catch (error) {
     console.error("Failed to fetch discount codes:", error);
     return [];
@@ -2545,7 +2554,7 @@ export async function validateDiscountCode(
       return { valid: false };
     }
 
-    return { valid: true, discount_percentage };
+    return { valid: true, discount_percentage: Number(discount_percentage) };
   } catch (error) {
     console.error("Failed to validate discount code:", error);
     return { valid: false };
@@ -3901,7 +3910,7 @@ export async function closeDbPool(): Promise<void> {
   }
 }
 
-function profileNameToSlug(name: string): string {
+export function profileNameToSlug(name: string): string {
   if (!name) return "";
   return name
     .trim()

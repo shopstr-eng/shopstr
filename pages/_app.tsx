@@ -889,6 +889,19 @@ function MilkMarket({ props }: { props: AppProps }) {
         }
 
         // Full parallelized load (non-storefront path, or storefront with fullLoadComplete)
+        const initialUserProfileFetch =
+          isLoggedIn && userPubkey
+            ? fetchProfile(
+                nostr!,
+                allRelays,
+                [userPubkey],
+                guardedEditProfileContext,
+                profileContext.profileData
+              ).catch((error) => {
+                console.error("Error fetching current user profile:", error);
+              })
+            : Promise.resolve();
+
         // We just fire them and not await them so that they just update their context and not block others
         const blossomPromise = runTask(
           "fetching blossom servers",
@@ -981,6 +994,8 @@ function MilkMarket({ props }: { props: AppProps }) {
         }
 
         const pubkeysToFetchProfilesFor = Array.from(pubkeySet);
+
+        await initialUserProfileFetch;
 
         // These start immediately — no waiting for wallet, blossom, follows, or communities.
         await Promise.all([
@@ -1451,10 +1466,10 @@ function MilkMarket({ props }: { props: AppProps }) {
                                     }
                                   >
                                     {/* Stable key on both branches so if
-                                        the wrapper ever flips in/out
-                                        (e.g. _error.tsx paths) React
-                                        treats the page as the same
-                                        element instead of remounting. */}
+                                                  the wrapper ever flips in/out
+                                                  (e.g. _error.tsx paths) React
+                                                  treats the page as the same
+                                                  element instead of remounting. */}
                                     <Component
                                       key="page"
                                       {...pageProps}

@@ -287,9 +287,15 @@ function pageConfigToTag(
 
 export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
   const baseUrl = `http://localhost:${process.env.PORT || 5000}`;
+  const context = { apiKeyId: apiKey.id, pubkey: apiKey.pubkey };
+  const reg = (
+    name: string,
+    description: string,
+    inputSchema: any,
+    cb: (args: any, extra: any) => any
+  ) => registerTool(server, name, description, inputSchema, cb, context);
 
-  registerTool(
-    server,
+  reg(
     "set_user_profile",
     "Create or update your Nostr user profile (kind 0). Sets metadata like name, about, picture, lightning address, etc.",
     {
@@ -376,8 +382,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  registerTool(
-    server,
+  reg(
     "set_shop_profile",
     "Create or update your shop profile (kind 30019). Sets shop metadata like name, about, picture, banner, and settings.",
     {
@@ -732,8 +737,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  registerTool(
-    server,
+  reg(
     "register_shop_slug",
     "Register, update, or delete your shop's URL slug for the storefront. The slug becomes part of your shop URL (e.g. milk.market/stall/your-slug). Slug must be lowercase alphanumeric with hyphens, 3-50 characters. Reserved words (stall, admin, api, etc.) are not allowed. To delete, set action to 'delete'.",
     {
@@ -863,8 +867,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  registerTool(
-    server,
+  reg(
     "create_product_listing",
     "Publish a new product listing (kind 30402) to the marketplace. Creates a classified listing with title, description, price, images, categories, shipping options, and more.",
     {
@@ -1157,8 +1160,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  registerTool(
-    server,
+  reg(
     "update_product_listing",
     "Update an existing product listing by publishing a new event with the same d-tag. Fetches the current event first and merges in only the fields you provide, so unspecified fields keep their existing values. Multi-value fields (images, categories, sizes, volumes, bulk, weights, pickupLocations) are fully replaced when supplied.",
     {
@@ -1445,8 +1447,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  registerTool(
-    server,
+  reg(
     "delete_listing",
     "Delete a product listing or any Nostr event by publishing a deletion event (kind 5).",
     {
@@ -1486,8 +1487,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  registerTool(
-    server,
+  reg(
     "publish_review",
     "Publish a review (kind 31555) for a product or seller. Includes content text and ratings.",
     {
@@ -1768,8 +1768,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  registerTool(
-    server,
+  reg(
     "send_direct_message",
     "Send an encrypted direct message using NIP-17 gift wrap (kind 1059/13/14). Supports plain messages, listing inquiries, and order-related messages.",
     {
@@ -1983,8 +1982,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  registerTool(
-    server,
+  reg(
     "update_order_address",
     "Update the shipping address for an existing order. Sends an encrypted address change request to the seller via NIP-17 gift-wrapped DM and updates the order record.",
     {
@@ -2134,8 +2132,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  registerTool(
-    server,
+  reg(
     "send_shipping_update",
     "Send a shipping update to a buyer via encrypted NIP-17 gift-wrapped DM. Includes tracking number, carrier, and estimated delivery time. Also updates the order status to 'shipped' in the database.",
     {
@@ -2335,8 +2332,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  registerTool(
-    server,
+  reg(
     "update_order_status",
     "Update the status of an order and optionally notify the buyer via encrypted DM. Sellers can confirm, ship, or complete orders. Buyers can cancel orders.",
     {
@@ -2535,8 +2531,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  registerTool(
-    server,
+  reg(
     "list_messages",
     "Fetch and decrypt your incoming messages (NIP-17 gift-wrapped DMs). Returns decrypted message content, sender, subject, and read status. Use to check inquiries, order messages, address changes, and other DMs.",
     {
@@ -2659,8 +2654,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  registerTool(
-    server,
+  reg(
     "mark_messages_read",
     "Mark specific messages as read by their event IDs.",
     {
@@ -2703,8 +2697,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  registerTool(
-    server,
+  reg(
     "set_relay_list",
     "Publish your relay list (kind 10002, NIP-65). Configures which relays you read from and write to.",
     {
@@ -2766,8 +2759,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  registerTool(
-    server,
+  reg(
     "set_blossom_servers",
     "Publish your Blossom media server list (kind 10063). Configures which servers to use for media uploads.",
     {
@@ -2813,8 +2805,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  registerTool(
-    server,
+  reg(
     "upload_media",
     "Upload media to a Blossom server. Creates a signed authorization event (kind 24242) and uploads the file. Returns the URL of the uploaded media.",
     {
@@ -2915,8 +2906,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  registerTool(
-    server,
+  reg(
     "create_discount_code",
     "Create a discount code for your shop. Codes are percentage-based and can have optional expiration dates.",
     {
@@ -2984,8 +2974,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  registerTool(
-    server,
+  reg(
     "delete_discount_code",
     "Delete one of your discount codes.",
     {
@@ -3034,8 +3023,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  registerTool(
-    server,
+  reg(
     "list_discount_codes",
     "List your shop's discount codes.",
     {},
@@ -3078,8 +3066,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  registerTool(
-    server,
+  reg(
     "get_cashu_balance",
     "Check your Cashu wallet balance by querying stored proof events.",
     {
@@ -3141,8 +3128,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  registerTool(
-    server,
+  reg(
     "receive_cashu_tokens",
     "Receive Cashu tokens and store them as a proof event (kind 7375). Publishes the encrypted proof event to your Nostr relays.",
     {
@@ -3209,8 +3195,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  registerTool(
-    server,
+  reg(
     "set_cashu_mints",
     "Configure your Cashu wallet mints by publishing a wallet configuration event (kind 17375).",
     {
@@ -3270,8 +3255,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
     }
   );
 
-  registerTool(
-    server,
+  reg(
     "send_cashu_payment",
     "Send a Cashu payment by melting tokens to pay a Lightning invoice. Uses proofs from your stored Cashu wallet.",
     {

@@ -1,6 +1,6 @@
 # Contributing to Milk Market
 
-Welcome to Milk Market! 🛒⚡ We're excited to have you contribute to our global, permissionless marketplace for milk-first commerce.
+Welcome to Milk Market! 🥛⚡ We're excited to have you contribute to our global, permissionless marketplace for milk-first commerce.
 
 ## Table of Contents
 
@@ -235,7 +235,11 @@ pnpm run lint-all
 
 ## Testing
 
-### 1. Run Tests
+Jest CI runs on every PR with coverage thresholds for the high-risk modules
+called out in `TESTING.md`, including Nostr helpers, fetch/cache behavior,
+cache policy, and parser logic.
+
+To find and run tests near what you changed:
 
 ```bash
 # Run website tests
@@ -244,16 +248,32 @@ pnpm run test:web
 # Run all tests across the monorepo
 pnpm run test:all
 
+# Run the CI test command locally
+pnpm run test:ci
+
+# Run tests with coverage thresholds
+pnpm run test:coverage
+
+# Run integration tests (requires Docker for testcontainers)
+pnpm run test:integration
+
 # Run tests in watch mode during development
 pnpm run test:watch
-```
 
-### 2. Writing Tests
+# Run one file to stay focused
+npx jest utils/nostr/__tests__/fetch-service.test.ts --runInBand
+npx jest utils/parsers/__tests__/product-parser-functions.test.ts --runInBand
+
+# See what's not covered
+pnpm test -- --coverage
+```
 
 - Write tests for new features and bug fixes
 - Place test files next to the components they test or in a `__tests__` directory
 - Use descriptive test names
 - Follow existing test patterns
+- See `TESTING.md` for CI coverage expectations and the high-risk modules that
+  currently define the enforced threshold.
 
 ## Creating a Pull Request
 
@@ -271,6 +291,9 @@ pnpm run typecheck
 
 # Run all tests across the monorepo
 pnpm run test:all
+
+# Run with coverage thresholds
+pnpm run test:coverage
 
 # Format code
 npx prettier --write .

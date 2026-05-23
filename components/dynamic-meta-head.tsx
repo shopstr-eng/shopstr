@@ -30,8 +30,27 @@ function ensureAbsoluteUrl(url: string, base: string): string {
   return `${base}${url.startsWith("/") ? "" : "/"}${url}`;
 }
 
+const STATIC_PAGE_META: Record<string, { title: string; description: string }> =
+  {
+    "/about": {
+      title: "About Milk Market | Bitcoin-Native Nostr Marketplace",
+      description:
+        "Milk Market is a global, permissionless marketplace built on the Nostr protocol. Learn about our mission to enable censorship-resistant Bitcoin commerce worldwide.",
+    },
+    "/contact": {
+      title: "Contact Milk Market | Get in Touch via Nostr & GitHub",
+      description:
+        "Contact the Milk Market team via Nostr, GitHub, or X. We are a decentralized open-source project — all communication happens on open protocols.",
+    },
+    "/faq": {
+      title: "FAQ | Milk Market — Bitcoin Nostr Marketplace Help",
+      description:
+        "Answers to common questions about Milk Market — the permissionless Bitcoin marketplace on Nostr. Learn about payments, Lightning Network, selling, privacy, and more.",
+    },
+  };
+
 const getMetaTags = (
-  windowOrigin: string,
+  canonicalOrigin: string,
   pathname: string,
   asPath: string,
   query: { productId?: string[]; npub?: string[] },
@@ -39,16 +58,27 @@ const getMetaTags = (
   shopEvents: Map<string, ShopProfile>,
   profileData: Map<string, ProfileData>
 ): MetaTagsType => {
-  // Strip query string and hash from asPath so the canonical is the
-  // bare page URL (Lighthouse flags canonical pointing to "/" for
-  // non-root pages, and we don't want tracking params in canonicals).
+  // Strip query string and hash from asPath so the canonical is the bare page
+  // URL (Lighthouse flags canonicals pointing to "/" for non-root pages, and
+  // we don't want tracking params in canonicals). Canonical URL must always
+  // point to the production domain (canonicalOrigin), regardless of which
+  // host the page is currently being served from (e.g. a *.replit.app preview).
   const cleanPath = (asPath || "/").split("?")[0]!.split("#")[0] || "/";
   const defaultTags = {
     title: DEFAULT_OG.title,
     description: DEFAULT_OG.description,
-    image: ensureAbsoluteUrl("/milk-market.png", BASE_URL),
-    url: `${windowOrigin}${cleanPath === "/" ? "" : cleanPath}`,
+    image: ensureAbsoluteUrl("/milk-market.png", canonicalOrigin),
+    url: `${canonicalOrigin}${cleanPath === "/" ? "" : cleanPath}`,
   };
+
+  const staticMeta = STATIC_PAGE_META[pathname];
+  if (staticMeta) {
+    return {
+      ...defaultTags,
+      title: staticMeta.title,
+      description: staticMeta.description,
+    };
+  }
 
   if (pathname.startsWith("/listing/")) {
     const productId = query.productId?.[0];
@@ -97,9 +127,9 @@ const getMetaTags = (
           productData.summary || "Check out this product on Milk Market!",
         image: ensureAbsoluteUrl(
           productData.images?.[0] || "/milk-market.png",
-          BASE_URL
+          canonicalOrigin
         ),
-        url: `${windowOrigin}/listing/${slug || productId}`,
+        url: `${canonicalOrigin}/listing/${slug || productId}`,
       };
     }
 
@@ -131,9 +161,9 @@ const getMetaTags = (
           shopInfo.content.about || "Check out this shop on Milk Market!",
         image: ensureAbsoluteUrl(
           shopInfo.content.ui.picture || "/milk-market.png",
-          BASE_URL
+          canonicalOrigin
         ),
-        url: `${windowOrigin}/marketplace/${profileSlug}`,
+        url: `${canonicalOrigin}/marketplace/${profileSlug}`,
       };
     }
     return {
@@ -171,7 +201,7 @@ const DynamicHead = ({
   // Canonical/og:url should always point to the production domain
   // (https://milk.market) regardless of which origin (replit.app preview,
   // localhost, etc.) the page was actually served from. Lighthouse flags
-  // mismatched canonicals as conflicting otherwise.
+  // mismatched/cross-origin canonicals as conflicting otherwise.
   const canonicalOrigin = BASE_URL;
   // Display origin (used only for the twitter:domain meta) can fall back
   // to the live request origin when available.
@@ -212,7 +242,7 @@ const DynamicHead = ({
       />
       <title>{metaTags.title}</title>
       <meta name="description" content={metaTags.description} />
-      <link rel="canonical" href={metaTags.url} />
+      <link rel="canonical" href={metaTags.url} key="canonical" />
       <link rel="icon" key="favicon" href={faviconUrl} />
       <link
         rel="apple-touch-icon"
@@ -231,7 +261,7 @@ const DynamicHead = ({
         sizes="180x180"
         href={appleTouchIconUrl}
       />
-      <meta property="og:url" content={metaTags.url} />
+      <meta property="og:url" content={metaTags.url} key="og:url" />
       <meta property="og:type" content="website" />
       <meta property="og:title" content={metaTags.title} />
       <meta property="og:description" content={metaTags.description} />

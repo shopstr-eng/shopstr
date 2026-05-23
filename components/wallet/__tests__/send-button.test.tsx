@@ -19,7 +19,12 @@ import { ChallengeHandler } from "@/utils/nostr/signers/nostr-signer";
 
 jest.setTimeout(20000);
 
-jest.mock("@cashu/cashu-ts");
+jest.mock("@cashu/cashu-ts", () => ({
+  ...jest.requireActual("@cashu/cashu-ts"),
+  Wallet: jest.fn(),
+  getEncodedToken: jest.fn(),
+  Mint: jest.fn().mockImplementation(() => ({})),
+}));
 jest.mock("@/utils/nostr/nostr-helper-functions");
 jest.mock("@/utils/nostr/signers/nostr-nip46-signer");
 jest.mock("@/utils/nostr/nostr-manager");
