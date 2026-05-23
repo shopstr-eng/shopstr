@@ -7,6 +7,7 @@ import {
 } from "@/utils/types/types";
 import FormattedText from "../formatted-text";
 import { sanitizeStorefrontSocialLink } from "@/utils/storefront-links";
+import { getSocialEmbed, SocialEmbedInfo } from "@/utils/social-embed";
 
 interface SectionSocialPostsProps {
   section: StorefrontSection;
@@ -38,7 +39,39 @@ const PLATFORM_LABEL: Record<string, string> = {
   other: "Link",
 };
 
-function PostCard({
+function EmbedFrame({
+  embed,
+  title,
+  colors,
+}: {
+  embed: SocialEmbedInfo;
+  title: string;
+  colors: StorefrontColorScheme;
+}) {
+  return (
+    <div
+      className="relative w-full overflow-hidden rounded-xl border"
+      style={{
+        aspectRatio: embed.aspectRatio,
+        borderColor: colors.primary + "22",
+        backgroundColor: colors.background,
+      }}
+    >
+      <iframe
+        src={embed.src}
+        title={title}
+        loading="lazy"
+        className="absolute inset-0 h-full w-full"
+        allow={embed.allow}
+        allowFullScreen={embed.allowFullScreen}
+        scrolling={embed.scrolling}
+        referrerPolicy="strict-origin-when-cross-origin"
+      />
+    </div>
+  );
+}
+
+function FallbackCard({
   post,
   colors,
 }: {
@@ -111,6 +144,49 @@ function PostCard({
   );
 }
 
+function PostCard({
+  post,
+  colors,
+}: {
+  post: StorefrontSocialPost;
+  colors: StorefrontColorScheme;
+}) {
+  const embed = getSocialEmbed(post.platform, post.url);
+  if (!embed) {
+    return <FallbackCard post={post} colors={colors} />;
+  }
+  const title =
+    post.caption ||
+    post.author ||
+    PLATFORM_LABEL[post.platform] ||
+    "Social post";
+  const hasCaption = Boolean(post.caption || post.author);
+  return (
+    <div className="flex h-full w-full flex-col gap-3">
+      <EmbedFrame embed={embed} title={title} colors={colors} />
+      {hasCaption && (
+        <div className="flex flex-col gap-1 px-1">
+          {post.author && (
+            <span
+              className="font-heading text-xs font-bold tracking-wide uppercase opacity-70"
+              style={{ color: colors.text }}
+            >
+              {post.author}
+            </span>
+          )}
+          {post.caption && (
+            <FormattedText
+              as="p"
+              text={post.caption}
+              className="font-body line-clamp-3 text-sm opacity-80"
+            />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function SectionSocialPosts({
   section,
   colors,
@@ -156,7 +232,7 @@ export default function SectionSocialPosts({
         )}
 
         {layout === "grid" ? (
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 items-start gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {posts.map((post, idx) => (
               <PostCard key={idx} post={post} colors={colors} />
             ))}
@@ -171,7 +247,7 @@ export default function SectionSocialPosts({
           >
             <div
               ref={trackRef}
-              className={`flex gap-6 ${
+              className={`flex items-start gap-6 ${
                 autoplay ? "storefront-social-carousel-track" : ""
               }`}
               style={{
