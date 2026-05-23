@@ -26,6 +26,7 @@ const config: Config = {
         "shopstr-purple-light": "#a655f7",
         "shopstr-yellow": "#fcd34d",
         "shopstr-yellow-light": "#fef08a",
+        "shopstr-yellow-dark": "#534e3c",
         "dark-text": "#e8e8e8",
         "accent-dark-text": "#fef08a",
         "light-text": "#212121",
