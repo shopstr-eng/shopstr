@@ -231,10 +231,12 @@ function PostCard({
   }
 
   return (
-    <div className="flex h-full w-full flex-col gap-3">
-      {primary}
+    <div className="storefront-social-card flex w-full flex-col gap-3">
+      <div className="storefront-social-card-media relative min-h-0 w-full flex-1 overflow-hidden">
+        {primary}
+      </div>
       {hasCaption && (
-        <div className="flex flex-col gap-1 px-1">
+        <div className="flex shrink-0 flex-col gap-1 px-1">
           {post.author && (
             <span
               className="font-heading text-xs font-bold tracking-wide uppercase opacity-70"
@@ -247,7 +249,7 @@ function PostCard({
             <FormattedText
               as="p"
               text={post.caption}
-              className="font-body line-clamp-3 text-sm opacity-80"
+              className="font-body line-clamp-2 text-sm opacity-80"
             />
           )}
         </div>
@@ -301,7 +303,7 @@ export default function SectionSocialPosts({
         )}
 
         {layout === "grid" ? (
-          <div className="grid grid-cols-1 items-start gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 items-stretch gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {posts.map((post, idx) => (
               <PostCard key={idx} post={post} colors={colors} />
             ))}
@@ -316,7 +318,7 @@ export default function SectionSocialPosts({
           >
             <div
               ref={trackRef}
-              className={`flex items-start gap-6 ${
+              className={`flex items-stretch gap-6 ${
                 autoplay ? "storefront-social-carousel-track" : ""
               }`}
               style={{
@@ -326,7 +328,7 @@ export default function SectionSocialPosts({
               {(autoplay ? [...posts, ...posts] : posts).map((post, idx) => (
                 <div
                   key={idx}
-                  className="w-72 flex-shrink-0 sm:w-80"
+                  className="w-[340px] flex-shrink-0"
                   style={{ scrollSnapAlign: "start" }}
                 >
                   <PostCard post={post} colors={colors} />
@@ -337,7 +339,7 @@ export default function SectionSocialPosts({
         )}
       </div>
 
-      <style jsx>{`
+      <style jsx global>{`
         @keyframes storefront-social-scroll {
           0% {
             transform: translateX(0);
@@ -357,6 +359,32 @@ export default function SectionSocialPosts({
             animation: none;
             overflow-x: auto;
           }
+        }
+        .storefront-social-card {
+          height: 600px;
+          max-width: 100%;
+          min-width: 0;
+        }
+        .storefront-social-card-media {
+          contain: layout paint;
+        }
+        .storefront-social-card-media iframe,
+        .storefront-social-card-media .instagram-media,
+        .storefront-social-card-media .twitter-tweet,
+        .storefront-social-card-media .twitter-tweet-rendered,
+        .storefront-social-card-media .fb-post,
+        .storefront-social-card-media .fb-post > span,
+        .storefront-social-card-media .fb-video,
+        .storefront-social-card-media .fb-video > span,
+        .storefront-social-card-media .tiktok-embed {
+          max-width: 100% !important;
+          min-width: 0 !important;
+          width: 100% !important;
+          box-sizing: border-box;
+        }
+        .storefront-social-card-media .instagram-media,
+        .storefront-social-card-media .twitter-tweet {
+          margin: 0 !important;
         }
       `}</style>
     </div>
