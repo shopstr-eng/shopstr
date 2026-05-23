@@ -269,8 +269,6 @@ async function initializeTables(): Promise<void> {
 
       CREATE INDEX IF NOT EXISTS idx_message_events_pubkey ON message_events(pubkey);
       CREATE INDEX IF NOT EXISTS idx_message_events_created_at ON message_events(created_at DESC);
-      CREATE INDEX IF NOT EXISTS idx_message_events_is_read ON message_events(is_read);
-      CREATE INDEX IF NOT EXISTS idx_message_events_order_id ON message_events(order_id);
       CREATE INDEX IF NOT EXISTS idx_message_events_tags_p ON message_events USING gin (tags jsonb_path_ops);
 
       -- Profile events (kind 0 - user profile, kind 30019 - shop profile)
@@ -1087,9 +1085,9 @@ export async function fetchAllProductsFromDb(
          FROM product_events p,
          LATERAL (
            SELECT COALESCE(
-             (SELECT elem->>'1'
+             (SELECT elem->>1
               FROM jsonb_array_elements(p.tags) elem
-              WHERE elem->>'0' = 'd'
+              WHERE elem->>0 = 'd'
               LIMIT 1),
              p.id
            ) AS d_tag
