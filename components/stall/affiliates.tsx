@@ -501,7 +501,7 @@ export default function Affiliates() {
   }
 
   return (
-    <div className="w-full space-y-6 p-4">
+    <div className="w-full max-w-full min-w-0 space-y-6 overflow-x-hidden p-4">
       <div className="mb-2">
         <h2 className="mb-2 text-2xl font-bold text-black">Affiliates</h2>
         <p className="text-sm text-gray-600">
@@ -702,7 +702,7 @@ export default function Affiliates() {
                   value={codeText}
                   onChange={(e) => setCodeText(e.target.value.toUpperCase())}
                 />
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <Select
                     label="Rebate type"
                     selectedKeys={[rebateType]}
@@ -722,7 +722,7 @@ export default function Affiliates() {
                     onChange={(e) => setRebateValue(e.target.value)}
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <Select
                     label="Shopper discount type"
                     selectedKeys={[buyerDiscountType]}
@@ -744,7 +744,7 @@ export default function Affiliates() {
                     onChange={(e) => setBuyerDiscountValue(e.target.value)}
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <Input
                     label="Currency"
                     value={codeCurrency}
