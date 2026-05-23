@@ -546,7 +546,7 @@ export default function StorefrontLayout({
         <style>{themedCss}</style>
       </Head>
       <div
-        className={`sf-layout min-h-screen ${storefront.neoShadows ? "sf-neo" : ""}`}
+        className={`sf-layout min-h-screen w-full max-w-full overflow-x-hidden ${storefront.neoShadows ? "sf-neo" : ""}`}
         style={{
           ...cssVars,
           ...fontStyles,
