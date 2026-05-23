@@ -30,6 +30,7 @@ function getYouTubeEmbed(url: string): SocialEmbedInfo | null {
   if (!parsed) return null;
   const host = parsed.hostname.replace(/^www\./, "");
   let videoId: string | null = null;
+  let isShort = false;
 
   if (host === "youtu.be") {
     videoId = parsed.pathname.split("/").filter(Boolean)[0] || null;
@@ -48,6 +49,7 @@ function getYouTubeEmbed(url: string): SocialEmbedInfo | null {
         parts[0] === "v"
       ) {
         videoId = parts[1] || null;
+        if (parts[0] === "shorts") isShort = true;
       }
     }
   }
@@ -56,14 +58,19 @@ function getYouTubeEmbed(url: string): SocialEmbedInfo | null {
 
   return {
     src: `https://www.youtube-nocookie.com/embed/${videoId}`,
-    aspectRatio: "16 / 9",
+    aspectRatio: isShort ? "9 / 16" : "16 / 9",
     allow:
       "accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share",
     allowFullScreen: true,
   };
 }
 
-function getTwitterEmbed(url: string): SocialEmbedInfo | null {
+export interface TwitterPostRef {
+  id: string;
+  url: string;
+}
+
+export function parseTwitterUrl(url: string): TwitterPostRef | null {
   const parsed = safeUrl(url);
   if (!parsed) return null;
   const host = parsed.hostname.replace(/^www\./, "");
@@ -77,17 +84,34 @@ function getTwitterEmbed(url: string): SocialEmbedInfo | null {
   const parts = parsed.pathname.split("/").filter(Boolean);
   const statusIdx = parts.findIndex((p) => p === "status" || p === "statuses");
   if (statusIdx === -1) return null;
+  const handle = parts[statusIdx - 1];
   const tweetId = parts[statusIdx + 1];
-  if (!tweetId || !/^\d{6,}$/.test(tweetId)) return null;
+  if (!handle || !tweetId || !/^\d{6,}$/.test(tweetId)) return null;
   return {
-    src: `https://platform.twitter.com/embed/Tweet.html?id=${tweetId}&dnt=true`,
+    id: tweetId,
+    url: `https://twitter.com/${handle}/status/${tweetId}`,
+  };
+}
+
+function getTwitterEmbed(url: string): SocialEmbedInfo | null {
+  const ref = parseTwitterUrl(url);
+  if (!ref) return null;
+  return {
+    src: `https://platform.twitter.com/embed/Tweet.html?id=${ref.id}&dnt=true`,
     aspectRatio: "3 / 4",
     allowFullScreen: true,
     scrolling: "auto",
   };
 }
 
-function getInstagramEmbed(url: string): SocialEmbedInfo | null {
+export interface InstagramPostRef {
+  kind: "p" | "reel" | "tv";
+  id: string;
+  permalink: string;
+  isVertical: boolean;
+}
+
+export function parseInstagramUrl(url: string): InstagramPostRef | null {
   const parsed = safeUrl(url);
   if (!parsed) return null;
   const host = parsed.hostname.replace(/^www\./, "");
@@ -100,18 +124,33 @@ function getInstagramEmbed(url: string): SocialEmbedInfo | null {
   const rawKind = parts[kindIdx];
   const id = parts[kindIdx + 1];
   if (!id || !/^[A-Za-z0-9_-]+$/.test(id)) return null;
-  const isVertical =
-    rawKind === "reel" || rawKind === "reels" || rawKind === "tv";
-  const embedKind = rawKind === "reels" ? "reel" : rawKind;
+  const kind: InstagramPostRef["kind"] =
+    rawKind === "reels" ? "reel" : (rawKind as InstagramPostRef["kind"]);
   return {
-    src: `https://www.instagram.com/${embedKind}/${id}/embed/`,
-    aspectRatio: isVertical ? "9 / 16" : "1 / 1.4",
+    kind,
+    id,
+    permalink: `https://www.instagram.com/${kind}/${id}/`,
+    isVertical: kind === "reel" || kind === "tv",
+  };
+}
+
+function getInstagramEmbed(url: string): SocialEmbedInfo | null {
+  const ref = parseInstagramUrl(url);
+  if (!ref) return null;
+  return {
+    src: `https://www.instagram.com/${ref.kind}/${ref.id}/embed/captioned/`,
+    aspectRatio: ref.isVertical ? "1 / 2.2" : "1 / 1.6",
     scrolling: "auto",
     allowFullScreen: true,
   };
 }
 
-function getTikTokEmbed(url: string): SocialEmbedInfo | null {
+export interface TikTokPostRef {
+  id: string;
+  url: string;
+}
+
+export function parseTikTokUrl(url: string): TikTokPostRef | null {
   const parsed = safeUrl(url);
   if (!parsed) return null;
   const host = parsed.hostname.replace(/^www\./, "");
@@ -119,21 +158,39 @@ function getTikTokEmbed(url: string): SocialEmbedInfo | null {
   const parts = parsed.pathname.split("/").filter(Boolean);
   const videoIdx = parts.findIndex((p) => p === "video");
   let videoId: string | null = null;
+  let handle: string | null = null;
   if (videoIdx !== -1) {
     videoId = parts[videoIdx + 1] || null;
+    handle = parts[videoIdx - 1] || null;
   } else if (host === "vm.tiktok.com" || host === "vt.tiktok.com") {
     return null;
   }
   if (!videoId || !/^\d{6,}$/.test(videoId)) return null;
+  const cleanHandle =
+    handle && /^@[A-Za-z0-9._]+$/.test(handle) ? handle : "@_";
   return {
-    src: `https://www.tiktok.com/embed/v2/${videoId}`,
+    id: videoId,
+    url: `https://www.tiktok.com/${cleanHandle}/video/${videoId}`,
+  };
+}
+
+function getTikTokEmbed(url: string): SocialEmbedInfo | null {
+  const ref = parseTikTokUrl(url);
+  if (!ref) return null;
+  return {
+    src: `https://www.tiktok.com/embed/v2/${ref.id}`,
     aspectRatio: "9 / 16",
     allowFullScreen: true,
     scrolling: "auto",
   };
 }
 
-function getFacebookEmbed(url: string): SocialEmbedInfo | null {
+export interface FacebookPostRef {
+  url: string;
+  isVideo: boolean;
+}
+
+export function parseFacebookUrl(url: string): FacebookPostRef | null {
   const parsed = safeUrl(url);
   if (!parsed) return null;
   const host = parsed.hostname.replace(/^www\./, "");
@@ -142,6 +199,13 @@ function getFacebookEmbed(url: string): SocialEmbedInfo | null {
     parsed.pathname.includes("/videos/") ||
     parsed.pathname.startsWith("/watch") ||
     host === "fb.watch";
+  return { url, isVideo };
+}
+
+function getFacebookEmbed(url: string): SocialEmbedInfo | null {
+  const ref = parseFacebookUrl(url);
+  if (!ref) return null;
+  const { isVideo } = ref;
   const plugin = isVideo ? "video.php" : "post.php";
   const encoded = encodeURIComponent(url);
   return {

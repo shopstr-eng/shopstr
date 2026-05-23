@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { ReactNode, useEffect, useRef, useState } from "react";
 import { sanitizeUrl } from "@braintree/sanitize-url";
 import {
   StorefrontColorScheme,
@@ -7,7 +7,20 @@ import {
 } from "@/utils/types/types";
 import FormattedText from "../formatted-text";
 import { sanitizeStorefrontSocialLink } from "@/utils/storefront-links";
-import { getSocialEmbed, SocialEmbedInfo } from "@/utils/social-embed";
+import {
+  getSocialEmbed,
+  parseFacebookUrl,
+  parseInstagramUrl,
+  parseTikTokUrl,
+  parseTwitterUrl,
+  SocialEmbedInfo,
+} from "@/utils/social-embed";
+import {
+  FacebookScriptEmbed,
+  InstagramScriptEmbed,
+  TikTokScriptEmbed,
+  TwitterScriptEmbed,
+} from "./platform-script-embeds";
 
 interface SectionSocialPostsProps {
   section: StorefrontSection;
@@ -152,18 +165,74 @@ function PostCard({
   colors: StorefrontColorScheme;
 }) {
   const embed = getSocialEmbed(post.platform, post.url);
-  if (!embed) {
+  const instagramRef =
+    post.platform === "instagram" ? parseInstagramUrl(post.url) : null;
+  const twitterRef = post.platform === "x" ? parseTwitterUrl(post.url) : null;
+  const tiktokRef =
+    post.platform === "tiktok" ? parseTikTokUrl(post.url) : null;
+  const facebookRef =
+    post.platform === "facebook" ? parseFacebookUrl(post.url) : null;
+
+  const hasScriptEmbed = instagramRef || twitterRef || tiktokRef || facebookRef;
+
+  if (!hasScriptEmbed && !embed) {
     return <FallbackCard post={post} colors={colors} />;
   }
+
   const title =
     post.caption ||
     post.author ||
     PLATFORM_LABEL[post.platform] ||
     "Social post";
   const hasCaption = Boolean(post.caption || post.author);
+
+  const iframeFallback = embed ? (
+    <EmbedFrame embed={embed} title={title} colors={colors} />
+  ) : (
+    <FallbackCard post={post} colors={colors} />
+  );
+
+  let primary: ReactNode;
+  if (instagramRef) {
+    primary = (
+      <InstagramScriptEmbed
+        permalink={instagramRef.permalink}
+        colors={colors}
+        fallback={iframeFallback}
+      />
+    );
+  } else if (twitterRef) {
+    primary = (
+      <TwitterScriptEmbed
+        tweetUrl={twitterRef.url}
+        colors={colors}
+        fallback={iframeFallback}
+      />
+    );
+  } else if (tiktokRef) {
+    primary = (
+      <TikTokScriptEmbed
+        videoUrl={tiktokRef.url}
+        videoId={tiktokRef.id}
+        colors={colors}
+        fallback={iframeFallback}
+      />
+    );
+  } else if (facebookRef) {
+    primary = (
+      <FacebookScriptEmbed
+        postUrl={facebookRef.url}
+        colors={colors}
+        fallback={iframeFallback}
+      />
+    );
+  } else {
+    primary = iframeFallback;
+  }
+
   return (
     <div className="flex h-full w-full flex-col gap-3">
-      <EmbedFrame embed={embed} title={title} colors={colors} />
+      {primary}
       {hasCaption && (
         <div className="flex flex-col gap-1 px-1">
           {post.author && (
