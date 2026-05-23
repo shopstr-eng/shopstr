@@ -511,7 +511,14 @@ export default function Affiliates() {
         </p>
       </div>
 
-      <Tabs aria-label="Affiliate tabs" className="text-black">
+      <Tabs
+        aria-label="Affiliate tabs"
+        classNames={{
+          base: "w-full max-w-full",
+          tabList: "max-w-full",
+        }}
+        className="text-black"
+      >
         <Tab key="affiliates" title="Affiliates">
           <div className="space-y-4">
             <Card className="bg-white">
