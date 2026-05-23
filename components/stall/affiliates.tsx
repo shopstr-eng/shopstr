@@ -565,7 +565,7 @@ export default function Affiliates() {
                   <Card key={a.id} className="bg-white">
                     <CardBody>
                       <div className="flex items-start justify-between gap-4">
-                        <div className="flex-1 space-y-1">
+                        <div className="min-w-0 flex-1 space-y-1">
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="text-lg font-semibold text-black">
                               {a.name}
@@ -599,7 +599,7 @@ export default function Affiliates() {
                             </p>
                           )}
                           {a.stripe_account_id && (
-                            <p className="text-xs text-gray-500">
+                            <p className="text-xs break-all text-gray-500">
                               Stripe: {a.stripe_account_id}
                             </p>
                           )}
@@ -608,7 +608,7 @@ export default function Affiliates() {
                               size="sm"
                               value={inviteUrl}
                               readOnly
-                              className="text-black"
+                              className="min-w-0 flex-1 text-black"
                             />
                             <Button
                               isIconOnly
@@ -771,9 +771,9 @@ export default function Affiliates() {
               <Card key={c.id} className="bg-white">
                 <CardBody>
                   <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-lg font-bold text-black">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-mono text-lg font-bold break-all text-black">
                           {c.code}
                         </span>
                         <Chip size="sm" color="primary">
@@ -835,8 +835,8 @@ export default function Affiliates() {
                   className="bg-white"
                 >
                   <CardBody>
-                    <div className="flex items-center justify-between">
-                      <div>
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="min-w-0 flex-1">
                         <p className="text-lg font-semibold text-black">
                           {b.affiliate_name}{" "}
                           <span className="text-sm text-gray-500">
@@ -879,18 +879,20 @@ export default function Affiliates() {
               payouts.map((p) => (
                 <Card key={p.id} className="bg-white">
                   <CardBody>
-                    <div className="flex items-center justify-between">
-                      <div>
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="min-w-0 flex-1">
                         <p className="font-semibold text-black">
                           {p.affiliate_name} ·{" "}
                           {formatAmount(p.amount_smallest, p.currency)}
                         </p>
-                        <p className="text-xs text-gray-500">
+                        <p className="text-xs break-all text-gray-500">
                           {p.method} · {new Date(p.paid_at).toLocaleString()}
                           {p.external_ref ? ` · ${p.external_ref}` : ""}
                         </p>
                         {p.note && (
-                          <p className="text-xs text-gray-500">{p.note}</p>
+                          <p className="text-xs break-words text-gray-500">
+                            {p.note}
+                          </p>
                         )}
                       </div>
                       <Chip
@@ -1016,6 +1018,7 @@ export default function Affiliates() {
                     placeholder="order_… or invoice ID"
                     value={reverseOrderId}
                     onValueChange={setReverseOrderId}
+                    className="min-w-0 flex-1"
                   />
                   <Button
                     className={BLUEBUTTONCLASSNAMES}
