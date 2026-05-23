@@ -86,21 +86,23 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
         const decryptedChats = await getDecryptedChatsFromContext();
         const passedNPubkey = router.query.pk ? router.query.pk : null;
         if (passedNPubkey) {
-          const pubkey = decryptNpub(passedNPubkey as string) as string;
-          if (!decryptedChats.has(pubkey)) {
-            decryptedChats.set(pubkey as string, {
-              unreadCount: 0,
-              decryptedChat: [],
-            });
-          }
-          enterChat(pubkey);
-          const productTitle = router.query.productTitle as string | undefined;
-          const productUrl = router.query.productUrl as string | undefined;
-          if (productTitle) {
-            const draftText = productUrl
-              ? `Re: "${productTitle}" — ${productUrl}\n\n`
-              : `Re: "${productTitle}"\n\n`;
-            setInitialMessage(draftText);
+          const pubkey = decryptNpub(passedNPubkey as string);
+          if (pubkey) {
+            if (!decryptedChats.has(pubkey)) {
+              decryptedChats.set(pubkey, {
+                unreadCount: 0,
+                decryptedChat: [],
+              });
+            }
+            enterChat(pubkey);
+            const productTitle = router.query.productTitle as string | undefined;
+            const productUrl = router.query.productUrl as string | undefined;
+            if (productTitle) {
+              const draftText = productUrl
+                ? `Re: "${productTitle}" — ${productUrl}\n\n`
+                : `Re: "${productTitle}"\n\n`;
+              setInitialMessage(draftText);
+            }
           }
         }
         setChatsMap(decryptedChats);
