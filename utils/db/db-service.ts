@@ -820,9 +820,9 @@ async function initializeTables(): Promise<void> {
           -- VALID the ALTER aborts the entire init script, the
           -- shipping_discount_type column never gets added, and every popup
           -- submission then 500s with "column does not exist". Grandfathering
-          -- those rows is the right call — the popup capture endpoint won't
-          -- ever read them, and a future cleanup can `VALIDATE CONSTRAINT
-          -- discount_codes_has_discount;` after the bad rows are reconciled.
+          -- those rows is the right call: the popup capture endpoint won't
+          -- ever read them, and a future cleanup can run VALIDATE CONSTRAINT
+          -- discount_codes_has_discount after the bad rows are reconciled.
           ALTER TABLE discount_codes
             ADD CONSTRAINT discount_codes_has_discount CHECK (
               discount_percentage > 0 OR shipping_discount_type <> 'none'
