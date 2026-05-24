@@ -1126,6 +1126,7 @@ export default function CartInvoiceCard({
     products,
     quantities,
     appliedDiscounts,
+    appliedShippingDiscounts,
     cartCurrency,
     formType,
     shippingPickupPreference,
@@ -2143,6 +2144,78 @@ export default function CartInvoiceCard({
       }
     }
   };
+
+  // Reactively recompute totalCost (sats) whenever inputs that affect the
+  // shipping math change AFTER the buyer has already picked an order type.
+  // handleOrderTypeSelection runs once on click and sets totalCost; without
+  // this effect, applying/changing a shipping discount code after that point
+  // would leave totalCost stale and the buyer would be charged the
+  // un-discounted shipping. Mirrors the per-seller logic in
+  // handleOrderTypeSelection — consolidated shipping, free-shipping
+  // threshold, and applyShippingDiscount in the same order.
+  useEffect(() => {
+    let cancelled = false;
+    const recompute = async () => {
+      if (formType !== "shipping" && formType !== "combined") {
+        if (!cancelled) setTotalCost(subtotalCost);
+        return;
+      }
+      let shippingTotal = 0;
+      const processedSellers = new Set<string>();
+      for (const product of products) {
+        const sellerPubkey = product.pubkey;
+        if (sellerFreeShippingStatus[sellerPubkey]?.qualifies) continue;
+        if (formType === "combined") {
+          const st = shippingTypes[product.id];
+          if (st !== "Added Cost" && st !== "Free") continue;
+        }
+        if (processedSellers.has(sellerPubkey)) continue;
+        processedSellers.add(sellerPubkey);
+        const sellerProducts = products.filter(
+          (p) =>
+            p.pubkey === sellerPubkey &&
+            (formType !== "combined" ||
+              shippingTypes[p.id] === "Added Cost" ||
+              shippingTypes[p.id] === "Free")
+        );
+        if (sellerProducts.length > 1) {
+          const { highestShippingProduct } =
+            getConsolidatedShippingForSeller(sellerPubkey);
+          if (highestShippingProduct) {
+            const shippingCostInSats = await convertShippingToSats(
+              highestShippingProduct
+            );
+            shippingTotal += Math.ceil(
+              applyShippingDiscount(shippingCostInSats, sellerPubkey)
+            );
+          }
+        } else if (sellerProducts.length === 1) {
+          const shippingCostInSats = await convertShippingToSats(
+            sellerProducts[0]!
+          );
+          const quantity = quantities[sellerProducts[0]!.id] || 1;
+          shippingTotal += Math.ceil(
+            applyShippingDiscount(shippingCostInSats * quantity, sellerPubkey)
+          );
+        }
+      }
+      if (!cancelled) setTotalCost(subtotalCost + shippingTotal);
+    };
+    recompute();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    appliedShippingDiscounts,
+    formType,
+    shippingPickupPreference,
+    subtotalCost,
+    products,
+    quantities,
+    shippingTypes,
+    sellerFreeShippingStatus,
+  ]);
 
   const handleNWCError = (error: any) => {
     console.error("NWC Payment failed:", error);
@@ -5599,6 +5672,12 @@ export default function CartInvoiceCard({
                           const sellerProducts = products.filter(
                             (p) => p.pubkey === product.pubkey
                           );
+                          // Honor any per-seller shipping discount tied to the
+                          // redeemed code. 'free' wipes the seller's shipping
+                          // entirely; 'percent'/'fixed' reduce it.
+                          const shipDisc =
+                            appliedShippingDiscounts?.[product.pubkey];
+                          const shipIsFree = shipDisc?.type === "free";
                           if (sellerProducts.length > 1) {
                             const {
                               highestShippingCost,
@@ -5607,32 +5686,43 @@ export default function CartInvoiceCard({
                               product.pubkey
                             );
                             if (highestShippingCost > 0) {
+                              const discounted = applyShippingDiscount(
+                                highestShippingCost,
+                                product.pubkey
+                              );
                               shippingLines.push({
                                 pubkey: product.pubkey,
                                 name:
                                   shopProfiles?.get(product.pubkey)?.content
                                     ?.name || product.pubkey.substring(0, 8),
-                                cost: highestShippingCost,
+                                cost: shipIsFree
+                                  ? highestShippingCost
+                                  : discounted,
                                 currency:
                                   highestShippingProduct?.currency ||
                                   product.currency,
-                                isFree: false,
+                                isFree: shipIsFree,
                               });
                             }
                           } else if (
                             product.shippingCost &&
                             product.shippingCost > 0
                           ) {
+                            const rawCost =
+                              product.shippingCost *
+                              (quantities[product.id] || 1);
+                            const discounted = applyShippingDiscount(
+                              rawCost,
+                              product.pubkey
+                            );
                             shippingLines.push({
                               pubkey: product.pubkey,
                               name:
                                 shopProfiles?.get(product.pubkey)?.content
                                   ?.name || product.pubkey.substring(0, 8),
-                              cost:
-                                product.shippingCost *
-                                (quantities[product.id] || 1),
+                              cost: shipIsFree ? rawCost : discounted,
                               currency: product.currency,
-                              isFree: false,
+                              isFree: shipIsFree,
                             });
                           }
                         }
@@ -6090,38 +6180,55 @@ export default function CartInvoiceCard({
                         const sellerProducts = products.filter(
                           (p) => p.pubkey === product.pubkey
                         );
+                        // Honor any per-seller shipping discount tied to the
+                        // redeemed code. 'free' wipes the seller's shipping
+                        // entirely; 'percent'/'fixed' reduce it.
+                        const shipDisc2 =
+                          appliedShippingDiscounts?.[product.pubkey];
+                        const shipIsFree2 = shipDisc2?.type === "free";
                         if (sellerProducts.length > 1) {
                           const {
                             highestShippingCost,
                             highestShippingProduct,
                           } = getConsolidatedShippingForSeller(product.pubkey);
                           if (highestShippingCost > 0) {
+                            const discounted2 = applyShippingDiscount(
+                              highestShippingCost,
+                              product.pubkey
+                            );
                             shippingLines2.push({
                               pubkey: product.pubkey,
                               name:
                                 shopProfiles?.get(product.pubkey)?.content
                                   ?.name || product.pubkey.substring(0, 8),
-                              cost: highestShippingCost,
+                              cost: shipIsFree2
+                                ? highestShippingCost
+                                : discounted2,
                               currency:
                                 highestShippingProduct?.currency ||
                                 product.currency,
-                              isFree: false,
+                              isFree: shipIsFree2,
                             });
                           }
                         } else if (
                           product.shippingCost &&
                           product.shippingCost > 0
                         ) {
+                          const rawCost2 =
+                            product.shippingCost *
+                            (quantities[product.id] || 1);
+                          const discounted2 = applyShippingDiscount(
+                            rawCost2,
+                            product.pubkey
+                          );
                           shippingLines2.push({
                             pubkey: product.pubkey,
                             name:
                               shopProfiles?.get(product.pubkey)?.content
                                 ?.name || product.pubkey.substring(0, 8),
-                            cost:
-                              product.shippingCost *
-                              (quantities[product.id] || 1),
+                            cost: shipIsFree2 ? rawCost2 : discounted2,
                             currency: product.currency,
-                            isFree: false,
+                            isFree: shipIsFree2,
                           });
                         }
                       }

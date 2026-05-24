@@ -138,6 +138,12 @@ export default function StorefrontEmailPopupComponent({
       if (!res.ok) {
         setErrorMsg(data.error || "Something went wrong");
         setStatus("error");
+        // On a duplicate-contact 409, remember the dismissal so the popup
+        // stops nagging on every page load now that we've told the buyer
+        // their contact info has already been used.
+        if (res.status === 409 || data.alreadyCaptured) {
+          localStorage.setItem(`popup_dismissed_${shopPubkey}`, "1");
+        }
         return;
       }
 

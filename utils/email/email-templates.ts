@@ -777,6 +777,30 @@ export function popupDiscountEmail(params: {
     parts.push(`<strong>${params.shippingDiscountValue} off shipping</strong>`);
   }
   const benefit = parts.length > 0 ? parts.join(" and ") : "a discount";
+
+  // Subject mirrors the body's benefit string so a shipping-only welcome
+  // code doesn't read as "Your 0% Off Discount Code". Plain-text variant
+  // (no <strong> tags) because subject lines don't render HTML.
+  const subjectParts: string[] = [];
+  if (params.discountPercentage > 0) {
+    subjectParts.push(`${params.discountPercentage}% Off`);
+  }
+  if (params.shippingDiscountType === "free") {
+    subjectParts.push(`Free Shipping`);
+  } else if (
+    params.shippingDiscountType === "percent" &&
+    (params.shippingDiscountValue ?? 0) > 0
+  ) {
+    subjectParts.push(`${params.shippingDiscountValue}% Off Shipping`);
+  } else if (
+    params.shippingDiscountType === "fixed" &&
+    (params.shippingDiscountValue ?? 0) > 0
+  ) {
+    subjectParts.push(`${params.shippingDiscountValue} Off Shipping`);
+  }
+  const subjectBenefit =
+    subjectParts.length > 0 ? subjectParts.join(" + ") : "Discount";
+
   const body = `
     <h2 style="margin:0 0 16px;color:#111827;font-size:20px;">Welcome! Here's your discount code</h2>
     <p style="margin:0 0 24px;color:#374151;font-size:15px;line-height:1.6;">
@@ -801,9 +825,7 @@ export function popupDiscountEmail(params: {
     </p>`;
 
   return {
-    subject: `Your ${params.discountPercentage}% Off Discount Code from ${esc(
-      params.shopName
-    )}`,
+    subject: `Your ${subjectBenefit} Code from ${esc(params.shopName)}`,
     html: baseTemplate("Your Discount Code", body),
   };
 }

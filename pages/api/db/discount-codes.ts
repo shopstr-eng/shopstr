@@ -58,11 +58,9 @@ export default async function handler(
           .json({ error: "discountPercentage must be between 0 and 100" });
       }
       if (shipType === "percent" && (shipValRaw <= 0 || shipValRaw > 100)) {
-        return res
-          .status(400)
-          .json({
-            error: "Percent shipping discount must be between 0 and 100",
-          });
+        return res.status(400).json({
+          error: "Percent shipping discount must be between 0 and 100",
+        });
       }
       if (shipType === "fixed" && shipValRaw <= 0) {
         return res

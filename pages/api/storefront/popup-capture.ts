@@ -3,6 +3,7 @@ import {
   savePopupEmailCapture,
   addDiscountCode,
   getPopupEmailCapture,
+  getPopupEmailCaptureByPhone,
 } from "@/utils/db/db-service";
 import { getUncachableSendGridClient } from "@/utils/email/sendgrid-client";
 import { popupDiscountEmail } from "@/utils/email/email-templates";
@@ -83,11 +84,20 @@ export default async function handler(
   }
 
   try {
-    const existing = await getPopupEmailCapture(sellerPubkey, email);
-    if (existing) {
-      return res.status(200).json({
-        discountCode: existing.discount_code,
-        discountPercentage: existing.discount_percentage,
+    // Reject duplicate submissions instead of silently re-issuing the existing
+    // welcome code. The popup is meant for FIRST-TIME contact capture only;
+    // returning the same code to a repeat submission both undermines the
+    // "welcome" framing and lets one buyer farm the same incentive across
+    // sessions. We check email AND phone (when provided) so a buyer can't
+    // dodge by re-entering with a different email but the same phone.
+    const existingByEmail = await getPopupEmailCapture(sellerPubkey, email);
+    const existingByPhone = phone
+      ? await getPopupEmailCaptureByPhone(sellerPubkey, phone)
+      : null;
+    if (existingByEmail || existingByPhone) {
+      return res.status(409).json({
+        error:
+          "This contact info has already been used to claim a welcome offer. Please sign in or create an account to continue.",
         alreadyCaptured: true,
       });
     }

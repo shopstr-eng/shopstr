@@ -2844,6 +2844,31 @@ export async function getPopupEmailCapture(
   }
 }
 
+// Lookup an existing popup capture by phone number so the welcome-code
+// endpoint can also block buyers who already redeemed using the same phone
+// (even if they enter a different email address). Returns null on miss or
+// query error so callers can fail open and still validate by email.
+export async function getPopupEmailCaptureByPhone(
+  sellerPubkey: string,
+  phone: string
+): Promise<{ discount_code: string; discount_percentage: number } | null> {
+  const dbPool = getDbPool();
+  let client;
+  try {
+    client = await dbPool.connect();
+    const result = await client.query(
+      `SELECT discount_code, discount_percentage FROM popup_email_captures WHERE seller_pubkey = $1 AND phone = $2 LIMIT 1`,
+      [sellerPubkey, phone]
+    );
+    return result.rows.length > 0 ? result.rows[0] : null;
+  } catch (error) {
+    console.error("Failed to get popup email capture by phone:", error);
+    return null;
+  } finally {
+    if (client) client.release();
+  }
+}
+
 // Get Stripe Connect account by pubkey
 export async function getStripeConnectAccount(pubkey: string): Promise<{
   stripe_account_id: string;
