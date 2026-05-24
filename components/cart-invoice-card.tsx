@@ -925,6 +925,112 @@ export default function CartInvoiceCard({
     return amount;
   };
 
+  // Build the per-seller shipping rows the cost breakdown renders. Used by
+  // both the pre-payment summary and the in-payment summary, so the two
+  // views stay in sync. Each row carries the price the buyer is actually
+  // charged (`cost`), the pre-discount price for strike-through display
+  // (`originalCost`), and a label that names the discount (`discountBadge`,
+  // null when shipping is not discounted). Three discount paths can mark a
+  // row as discounted: (1) freeShippingThreshold met → "Free", (2) a
+  // redeemed code with type === 'free' → "Free", (3) a redeemed code with
+  // percent/fixed → "X% off" or "$X off". The numeric `cost` value is
+  // derived from `applyShippingDiscount`, which is the same helper the
+  // shippingTotal accumulator uses to compute `totalCost`, so the
+  // displayed shipping number always matches what Bitcoin / Lightning /
+  // Cashu / Stripe / fiat invoices ultimately charge.
+  type ShippingLine = {
+    pubkey: string;
+    name: string;
+    cost: number;
+    originalCost: number;
+    currency: string;
+    discountBadge: string | null;
+  };
+  const buildShippingLines = (sellersSeen: Set<string>): ShippingLine[] => {
+    const lines: ShippingLine[] = [];
+    products.forEach((product) => {
+      if (sellersSeen.has(product.pubkey)) return;
+      sellersSeen.add(product.pubkey);
+      const freeStatus = sellerFreeShippingStatus[product.pubkey];
+      const shipDisc = appliedShippingDiscounts?.[product.pubkey];
+      const shipType = shipDisc?.type || "none";
+      const shipVal = shipDisc?.value || 0;
+      if (freeStatus?.qualifies) {
+        const { highestShippingCost, highestShippingProduct } =
+          getConsolidatedShippingForSeller(product.pubkey);
+        // Shipping prices are denominated in the shipping-tag currency
+        // (which may differ from the product currency, e.g. USD shipping
+        // on a sats-priced product). Match that label here so the row's
+        // formatted amount agrees with what charge accumulators use.
+        lines.push({
+          pubkey: product.pubkey,
+          name: freeStatus.sellerName,
+          cost: 0,
+          originalCost: highestShippingCost,
+          currency:
+            highestShippingProduct?.shippingCurrency ||
+            highestShippingProduct?.currency ||
+            product.currency,
+          discountBadge: "Free",
+        });
+        return;
+      }
+      const sellerProducts = products.filter(
+        (p) => p.pubkey === product.pubkey
+      );
+      const buildBadge = (curr: string): string | null => {
+        if (shipType === "free") return "Free";
+        if (shipType === "percent") {
+          const pct = Math.max(0, Math.min(100, shipVal));
+          return pct > 0 ? `${pct}% off` : null;
+        }
+        if (shipType === "fixed" && shipVal > 0) {
+          return `${formatWithCommas(shipVal, curr)} off`;
+        }
+        return null;
+      };
+      if (sellerProducts.length > 1) {
+        const { highestShippingCost, highestShippingProduct } =
+          getConsolidatedShippingForSeller(product.pubkey);
+        if (highestShippingCost > 0) {
+          const discounted = applyShippingDiscount(
+            highestShippingCost,
+            product.pubkey
+          );
+          const curr =
+            highestShippingProduct?.shippingCurrency ||
+            highestShippingProduct?.currency ||
+            product.currency;
+          lines.push({
+            pubkey: product.pubkey,
+            name:
+              shopProfiles?.get(product.pubkey)?.content?.name ||
+              product.pubkey.substring(0, 8),
+            cost: discounted,
+            originalCost: highestShippingCost,
+            currency: curr,
+            discountBadge: buildBadge(curr),
+          });
+        }
+      } else if (product.shippingCost && product.shippingCost > 0) {
+        const rawCost = product.shippingCost * (quantities[product.id] || 1);
+        const discounted = applyShippingDiscount(rawCost, product.pubkey);
+        const curr = product.shippingCurrency || product.currency;
+        lines.push({
+          pubkey: product.pubkey,
+          name:
+            shopProfiles?.get(product.pubkey)?.content?.name ||
+            product.pubkey.substring(0, 8),
+          cost: discounted,
+          originalCost: rawCost,
+          currency: curr,
+          discountBadge: buildBadge(curr),
+        });
+      }
+    });
+    return lines;
+  };
+
   const sellerFreeShippingStatus = useMemo(() => {
     const statusMap: {
       [pubkey: string]: {
@@ -5673,91 +5779,7 @@ export default function CartInvoiceCard({
                     formType === "shipping") &&
                     (() => {
                       const sellersSeen = new Set<string>();
-                      const shippingLines: {
-                        pubkey: string;
-                        name: string;
-                        cost: number;
-                        currency: string;
-                        isFree: boolean;
-                      }[] = [];
-                      products.forEach((product) => {
-                        if (sellersSeen.has(product.pubkey)) return;
-                        sellersSeen.add(product.pubkey);
-                        const freeStatus =
-                          sellerFreeShippingStatus[product.pubkey];
-                        if (freeStatus?.qualifies) {
-                          const {
-                            highestShippingCost,
-                            highestShippingProduct,
-                          } = getConsolidatedShippingForSeller(product.pubkey);
-                          shippingLines.push({
-                            pubkey: product.pubkey,
-                            name: freeStatus.sellerName,
-                            cost: highestShippingCost,
-                            currency:
-                              highestShippingProduct?.currency ||
-                              product.currency,
-                            isFree: true,
-                          });
-                        } else {
-                          const sellerProducts = products.filter(
-                            (p) => p.pubkey === product.pubkey
-                          );
-                          // Honor any per-seller shipping discount tied to the
-                          // redeemed code. 'free' wipes the seller's shipping
-                          // entirely; 'percent'/'fixed' reduce it.
-                          const shipDisc =
-                            appliedShippingDiscounts?.[product.pubkey];
-                          const shipIsFree = shipDisc?.type === "free";
-                          if (sellerProducts.length > 1) {
-                            const {
-                              highestShippingCost,
-                              highestShippingProduct,
-                            } = getConsolidatedShippingForSeller(
-                              product.pubkey
-                            );
-                            if (highestShippingCost > 0) {
-                              const discounted = applyShippingDiscount(
-                                highestShippingCost,
-                                product.pubkey
-                              );
-                              shippingLines.push({
-                                pubkey: product.pubkey,
-                                name:
-                                  shopProfiles?.get(product.pubkey)?.content
-                                    ?.name || product.pubkey.substring(0, 8),
-                                cost: shipIsFree
-                                  ? highestShippingCost
-                                  : discounted,
-                                currency:
-                                  highestShippingProduct?.currency ||
-                                  product.currency,
-                                isFree: shipIsFree,
-                              });
-                            }
-                          } else if (
-                            product.shippingCost &&
-                            product.shippingCost > 0
-                          ) {
-                            const rawCost =
-                              product.shippingCost *
-                              (quantities[product.id] || 1);
-                            const discounted = applyShippingDiscount(
-                              rawCost,
-                              product.pubkey
-                            );
-                            shippingLines.push({
-                              pubkey: product.pubkey,
-                              name:
-                                shopProfiles?.get(product.pubkey)?.content
-                                  ?.name || product.pubkey.substring(0, 8),
-                              cost: shipIsFree ? rawCost : discounted,
-                              currency: product.currency,
-                              isFree: shipIsFree,
-                            });
-                          }
-                        }
-                      });
+                      const shippingLines = buildShippingLines(sellersSeen);
                       if (shippingLines.length === 0) return null;
                       return (
                         <div className="mt-3 space-y-2 border-t border-gray-100 pt-3">
@@ -5772,13 +5794,25 @@ export default function CartInvoiceCard({
                               <span className="ml-2">
                                 Shipping ({line.name}):
                               </span>
-                              {line.isFree ? (
+                              {line.discountBadge ? (
                                 <span className="flex items-center gap-2">
                                   <span className="text-gray-400 line-through">
-                                    {formatWithCommas(line.cost, line.currency)}
+                                    {formatWithCommas(
+                                      line.originalCost,
+                                      line.currency
+                                    )}
                                   </span>
+                                  {line.discountBadge !== "Free" &&
+                                    line.cost > 0 && (
+                                      <span className="font-medium">
+                                        {formatWithCommas(
+                                          line.cost,
+                                          line.currency
+                                        )}
+                                      </span>
+                                    )}
                                   <span className="rounded-full border border-green-300 bg-green-100 px-2 py-0.5 text-xs font-bold text-green-700">
-                                    Free
+                                    {line.discountBadge}
                                   </span>
                                 </span>
                               ) : (
@@ -6183,87 +6217,7 @@ export default function CartInvoiceCard({
                   formType === "shipping") &&
                   (() => {
                     const sellersSeen2 = new Set<string>();
-                    const shippingLines2: {
-                      pubkey: string;
-                      name: string;
-                      cost: number;
-                      currency: string;
-                      isFree: boolean;
-                    }[] = [];
-                    products.forEach((product) => {
-                      if (sellersSeen2.has(product.pubkey)) return;
-                      sellersSeen2.add(product.pubkey);
-                      const freeStatus =
-                        sellerFreeShippingStatus[product.pubkey];
-                      if (freeStatus?.qualifies) {
-                        const { highestShippingCost, highestShippingProduct } =
-                          getConsolidatedShippingForSeller(product.pubkey);
-                        shippingLines2.push({
-                          pubkey: product.pubkey,
-                          name: freeStatus.sellerName,
-                          cost: highestShippingCost,
-                          currency:
-                            highestShippingProduct?.currency ||
-                            product.currency,
-                          isFree: true,
-                        });
-                      } else {
-                        const sellerProducts = products.filter(
-                          (p) => p.pubkey === product.pubkey
-                        );
-                        // Honor any per-seller shipping discount tied to the
-                        // redeemed code. 'free' wipes the seller's shipping
-                        // entirely; 'percent'/'fixed' reduce it.
-                        const shipDisc2 =
-                          appliedShippingDiscounts?.[product.pubkey];
-                        const shipIsFree2 = shipDisc2?.type === "free";
-                        if (sellerProducts.length > 1) {
-                          const {
-                            highestShippingCost,
-                            highestShippingProduct,
-                          } = getConsolidatedShippingForSeller(product.pubkey);
-                          if (highestShippingCost > 0) {
-                            const discounted2 = applyShippingDiscount(
-                              highestShippingCost,
-                              product.pubkey
-                            );
-                            shippingLines2.push({
-                              pubkey: product.pubkey,
-                              name:
-                                shopProfiles?.get(product.pubkey)?.content
-                                  ?.name || product.pubkey.substring(0, 8),
-                              cost: shipIsFree2
-                                ? highestShippingCost
-                                : discounted2,
-                              currency:
-                                highestShippingProduct?.currency ||
-                                product.currency,
-                              isFree: shipIsFree2,
-                            });
-                          }
-                        } else if (
-                          product.shippingCost &&
-                          product.shippingCost > 0
-                        ) {
-                          const rawCost2 =
-                            product.shippingCost *
-                            (quantities[product.id] || 1);
-                          const discounted2 = applyShippingDiscount(
-                            rawCost2,
-                            product.pubkey
-                          );
-                          shippingLines2.push({
-                            pubkey: product.pubkey,
-                            name:
-                              shopProfiles?.get(product.pubkey)?.content
-                                ?.name || product.pubkey.substring(0, 8),
-                            cost: shipIsFree2 ? rawCost2 : discounted2,
-                            currency: product.currency,
-                            isFree: shipIsFree2,
-                          });
-                        }
-                      }
-                    });
+                    const shippingLines2 = buildShippingLines(sellersSeen2);
                     if (shippingLines2.length === 0) return null;
                     return (
                       <div className="mt-3 space-y-2 border-t border-gray-100 pt-3">
@@ -6278,13 +6232,25 @@ export default function CartInvoiceCard({
                             <span className="ml-2">
                               Shipping ({line.name}):
                             </span>
-                            {line.isFree ? (
+                            {line.discountBadge ? (
                               <span className="flex items-center gap-2">
                                 <span className="text-gray-400 line-through">
-                                  {formatWithCommas(line.cost, line.currency)}
+                                  {formatWithCommas(
+                                    line.originalCost,
+                                    line.currency
+                                  )}
                                 </span>
+                                {line.discountBadge !== "Free" &&
+                                  line.cost > 0 && (
+                                    <span className="font-medium">
+                                      {formatWithCommas(
+                                        line.cost,
+                                        line.currency
+                                      )}
+                                    </span>
+                                  )}
                                 <span className="rounded-full border border-green-300 bg-green-100 px-2 py-0.5 text-xs font-bold text-green-700">
-                                  Free
+                                  {line.discountBadge}
                                 </span>
                               </span>
                             ) : (

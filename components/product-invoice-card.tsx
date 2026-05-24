@@ -4384,18 +4384,6 @@ export default function ProductInvoiceCard({
                             )}
                           </span>
                         </div>
-                        {productData.shippingCost! > 0 &&
-                          formType === "shipping" && (
-                            <div className="flex justify-between text-sm">
-                              <span className="ml-2">Shipping cost:</span>
-                              <span>
-                                {formatWithCommas(
-                                  productData.shippingCost!,
-                                  productData.currency
-                                )}
-                              </span>
-                            </div>
-                          )}
                         <div className="flex justify-between text-sm text-green-600">
                           <span className="ml-2">
                             {discountCode || "Discount"} ({appliedDiscount}%):
@@ -4427,17 +4415,79 @@ export default function ProductInvoiceCard({
                       </div>
                     )}
                     {formType === "shipping" &&
-                      productData.shippingCost! > 0 && (
-                        <div className="flex justify-between text-sm">
-                          <span className="ml-2">Shipping cost:</span>
-                          <span>
-                            {formatWithCommas(
-                              productData.shippingCost!,
-                              productData.currency
+                      rawShippingCostToAdd > 0 &&
+                      (() => {
+                        // Use the SAME values the payment rails see:
+                        // `rawShippingCostToAdd` is the pre-discount shipping
+                        // in the cart currency (FX-converted from the
+                        // shipping-tag currency by the effect that updates
+                        // `convertedShippingCost`), and `shippingCostToAdd`
+                        // already applies the redeemed code's percent/fixed
+                        // /free reduction with the same ceil() rounding used
+                        // by `discountedTotal`. Deriving the display from
+                        // these two values guarantees that what the buyer
+                        // sees struck-through + what they see as discounted
+                        // shipping match the Bitcoin / Lightning / Cashu /
+                        // Stripe / fiat totals to the cent.
+                        const rawShip = rawShippingCostToAdd;
+                        const discShip = shippingCostToAdd;
+                        const t = shippingDiscountType || "none";
+                        const v = shippingDiscountValue || 0;
+                        if (t === "none") {
+                          return (
+                            <div className="flex justify-between text-sm">
+                              <span className="ml-2">Shipping cost:</span>
+                              <span>
+                                {formatWithCommas(
+                                  rawShip,
+                                  productData.currency
+                                )}
+                              </span>
+                            </div>
+                          );
+                        }
+                        const pct = Math.max(0, Math.min(100, v));
+                        const badgeLabel =
+                          t === "free"
+                            ? "Free"
+                            : t === "percent"
+                              ? `${pct}% off`
+                              : `${formatWithCommas(
+                                  Math.max(0, v),
+                                  productData.currency
+                                )} off`;
+                        return (
+                          <>
+                            <div className="flex justify-between text-sm">
+                              <span className="ml-2">Shipping cost:</span>
+                              <span className="flex items-center gap-2">
+                                <span className="text-gray-400 line-through">
+                                  {formatWithCommas(
+                                    rawShip,
+                                    productData.currency
+                                  )}
+                                </span>
+                                <span className="rounded-full border border-green-300 bg-green-100 px-2 py-0.5 text-xs font-bold text-green-700">
+                                  {badgeLabel}
+                                </span>
+                              </span>
+                            </div>
+                            {t !== "free" && (
+                              <div className="flex justify-between text-sm font-medium">
+                                <span className="ml-2">
+                                  Discounted shipping:
+                                </span>
+                                <span>
+                                  {formatWithCommas(
+                                    discShip,
+                                    productData.currency
+                                  )}
+                                </span>
+                              </div>
                             )}
-                          </span>
-                        </div>
-                      )}
+                          </>
+                        );
+                      })()}
                   </div>
                   {(salesTaxNative > 0 || isCalculatingTax) && (
                     <div className="mt-2 flex justify-between border-t pt-2 text-sm">
@@ -4681,17 +4731,67 @@ export default function ProductInvoiceCard({
                       </span>
                     </div>
                   )}
-                  {productData.shippingCost! > 0 && formType === "shipping" && (
-                    <div className="flex justify-between text-sm">
-                      <span className="ml-2">Shipping cost:</span>
-                      <span>
-                        {formatWithCommas(
-                          productData.shippingCost!,
-                          productData.currency
-                        )}
-                      </span>
-                    </div>
-                  )}
+                  {rawShippingCostToAdd > 0 &&
+                    formType === "shipping" &&
+                    (() => {
+                      // Mirror the SAME math the patched in-payment branch
+                      // uses so both summary views render identical numbers
+                      // and both match the charged total. See the larger
+                      // comment near the in-payment Shipping row.
+                      const rawShip = rawShippingCostToAdd;
+                      const discShip = shippingCostToAdd;
+                      const t = shippingDiscountType || "none";
+                      const v = shippingDiscountValue || 0;
+                      if (t === "none") {
+                        return (
+                          <div className="flex justify-between text-sm">
+                            <span className="ml-2">Shipping cost:</span>
+                            <span>
+                              {formatWithCommas(rawShip, productData.currency)}
+                            </span>
+                          </div>
+                        );
+                      }
+                      const pct = Math.max(0, Math.min(100, v));
+                      const badgeLabel =
+                        t === "free"
+                          ? "Free"
+                          : t === "percent"
+                            ? `${pct}% off`
+                            : `${formatWithCommas(
+                                Math.max(0, v),
+                                productData.currency
+                              )} off`;
+                      return (
+                        <>
+                          <div className="flex justify-between text-sm">
+                            <span className="ml-2">Shipping cost:</span>
+                            <span className="flex items-center gap-2">
+                              <span className="text-gray-400 line-through">
+                                {formatWithCommas(
+                                  rawShip,
+                                  productData.currency
+                                )}
+                              </span>
+                              <span className="rounded-full border border-green-300 bg-green-100 px-2 py-0.5 text-xs font-bold text-green-700">
+                                {badgeLabel}
+                              </span>
+                            </span>
+                          </div>
+                          {t !== "free" && (
+                            <div className="flex justify-between text-sm font-medium">
+                              <span className="ml-2">Discounted shipping:</span>
+                              <span>
+                                {formatWithCommas(
+                                  discShip,
+                                  productData.currency
+                                )}
+                              </span>
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
                 </div>
                 {(salesTaxNative > 0 || isCalculatingTax) && (
                   <div className="mt-2 flex justify-between border-t pt-2 text-sm">
