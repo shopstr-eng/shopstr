@@ -51,6 +51,13 @@ const CUSTOM_DOMAIN_API_ALLOWLIST = [
   "/api/db/fetch-profiles",
   "/api/db/fetch-reviews",
   "/api/db/fetch-communities",
+  // Discount code validation + usage tracking. The buyer cart on a custom
+  // domain calls these to apply a copy/pasted welcome (or seller-issued)
+  // code at checkout. Without them gated in, the proxy returns 403 and the
+  // cart surfaces a generic "Failed to validate discount code" error even
+  // though the code itself is valid.
+  "/api/db/discount-codes",
+  "/api/db/discount-code-used",
   "/api/nostr/",
   "/api/lightning/",
   "/api/cashu/",

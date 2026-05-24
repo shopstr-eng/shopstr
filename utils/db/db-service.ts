@@ -2544,6 +2544,17 @@ export async function getDiscountCodesByPubkey(pubkey: string): Promise<
   }
 }
 
+// Strip Unicode invisibles that Postgres BTRIM doesn't catch — NBSP, the
+// narrow/figure no-break spaces, zero-width spaces/joiners, word joiner,
+// and BOM. These routinely slip in when a buyer copy/pastes a welcome code
+// out of an email or popup, and otherwise cause the case-insensitive
+// trim-tolerant lookup below to silently miss. Exported for parity with
+// any future call sites that look codes up by `code`.
+export function normalizeDiscountCode(code: string): string {
+  if (typeof code !== "string") return code;
+  return code.replace(/[\u00A0\u2007\u202F\u200B-\u200D\u2060\uFEFF]/g, "");
+}
+
 // Validate and get discount code
 export async function validateDiscountCode(
   code: string,
@@ -2558,11 +2569,12 @@ export async function validateDiscountCode(
     // mixed case (e.g. WELCOMEABC123) and buyers often type them with
     // different casing or with stray spaces. Comparing on UPPER(TRIM(...))
     // on both sides avoids false "invalid code" failures.
+    const normalizedCode = normalizeDiscountCode(code);
     const result = await client.query(
       `SELECT discount_percentage, expiration, max_uses, times_used
        FROM discount_codes
        WHERE UPPER(BTRIM(code)) = UPPER(BTRIM($1)) AND pubkey = $2`,
-      [code, pubkey]
+      [normalizedCode, pubkey]
     );
 
     if (result.rows.length === 0) {
@@ -2599,10 +2611,14 @@ export async function markDiscountCodeUsed(
   let client;
   try {
     client = await dbPool.connect();
+    // Use the same invisibles-stripping normalization that validation uses
+    // so a copy/pasted code that validated successfully also consumes a use.
+    // Otherwise a single-use code with NBSP/zero-width chars would validate
+    // but never decrement `times_used`, letting the same code be reused.
     await client.query(
       `UPDATE discount_codes SET times_used = times_used + 1
        WHERE UPPER(BTRIM(code)) = UPPER(BTRIM($1)) AND pubkey = $2`,
-      [code, pubkey]
+      [normalizeDiscountCode(code), pubkey]
     );
   } catch (error) {
     console.error("Failed to mark discount code used:", error);

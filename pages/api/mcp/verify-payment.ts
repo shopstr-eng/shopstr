@@ -9,6 +9,7 @@ import { getMcpOrder, updateMcpOrderPayment } from "@/mcp/tools/purchase-tools";
 import { recordRequest } from "@/utils/mcp/metrics";
 import { pendingLightningPayments } from "./create-order";
 import { deductStock } from "@/utils/db/inventory-service";
+import { markDiscountCodeUsed } from "@/utils/db/db-service";
 import { applyRateLimit } from "@/utils/rate-limit";
 
 // Polled by clients waiting for invoice settlement; the cap is generous
@@ -128,6 +129,24 @@ export default async function handler(
       quoteStatus.state === MintQuoteState.ISSUED
     ) {
       await updateMcpOrderPayment(orderId, `ln_${pending.quote}`, "paid");
+
+      // Lightning invoice has settled — only now do we consume the discount
+      // code. If the buyer never paid (or the quote expired), this branch
+      // never runs, so the code's max_uses stays intact and the buyer can
+      // reapply it on a fresh order.
+      if (pending.discountCode && pending.sellerPubkey) {
+        try {
+          await markDiscountCodeUsed(
+            pending.discountCode,
+            pending.sellerPubkey
+          );
+        } catch (markErr) {
+          console.error(
+            "Failed to mark discount code used (lightning verify):",
+            markErr
+          );
+        }
+      }
 
       try {
         await deductStock(

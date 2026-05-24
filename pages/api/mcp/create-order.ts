@@ -41,6 +41,11 @@ const pendingLightningPayments = new Map<
     productId: string;
     quantity: number;
     inventoryVariantKey: string;
+    // Captured at order-create time so we can mark the discount code used
+    // ONLY when the Lightning invoice is actually settled (see verify-payment).
+    // If the buyer abandons before paying, the code stays available.
+    discountCode?: string;
+    sellerPubkey?: string;
   }
 >();
 
@@ -333,6 +338,7 @@ async function handleCreateOrder(
     }
 
     let discountPercentage = 0;
+    let validatedDiscountCode: string | null = null;
 
     if (discountCode) {
       const discountResult = await validateDiscountCode(
@@ -342,7 +348,15 @@ async function handleCreateOrder(
       if (discountResult.valid && discountResult.discount_percentage) {
         discountPercentage = discountResult.discount_percentage;
         subtotal = subtotal * (1 - discountPercentage / 100);
-        await markDiscountCodeUsed(discountCode, product.pubkey);
+        // NOTE: We do NOT call markDiscountCodeUsed here. A discount code is
+        // only consumed when the payment actually succeeds — otherwise a buyer
+        // who validates a code but abandons checkout would burn a use against
+        // a code's max_uses limit. The code is plumbed through to each
+        // payment path and marked used at the moment the order transitions
+        // to "paid" (verify-payment for Lightning, post-redeem for Cashu).
+        // Stripe/fiat MCP paths have no automatic confirmation today, so the
+        // code stays unconsumed until those flows gain a confirmation hook.
+        validatedDiscountCode = discountCode;
       }
     }
 
@@ -422,7 +436,8 @@ async function handleCreateOrder(
         pricingBlock,
         mintUrl,
         inventoryVariantKey,
-        emailOptions
+        emailOptions,
+        validatedDiscountCode
       );
     }
 
@@ -442,7 +457,8 @@ async function handleCreateOrder(
         pricingBlock,
         cashuToken,
         inventoryVariantKey,
-        emailOptions
+        emailOptions,
+        validatedDiscountCode
       );
     }
 
@@ -507,7 +523,8 @@ async function handleLightningPayment(
   pricingBlock: any,
   mintUrl?: string,
   inventoryVariantKey?: string,
-  emailOptions?: Record<string, any>
+  emailOptions?: Record<string, any>,
+  discountCode?: string | null
 ) {
   const mint = mintUrl || DEFAULT_MINT_URL;
 
@@ -549,6 +566,8 @@ async function handleLightningPayment(
       productId,
       quantity,
       inventoryVariantKey: inventoryVariantKey || "_default",
+      ...(discountCode ? { discountCode } : {}),
+      sellerPubkey: product.pubkey,
     });
 
     await sendOrderEmail(
@@ -608,7 +627,8 @@ async function handleCashuPayment(
   pricingBlock: any,
   cashuToken?: string,
   inventoryVariantKey?: string,
-  emailOptions?: Record<string, any>
+  emailOptions?: Record<string, any>,
+  discountCode?: string | null
 ) {
   if (!cashuToken) {
     return res.status(400).json({
@@ -694,6 +714,21 @@ async function handleCashuPayment(
     );
 
     await updateOrderPaymentStatus(orderId, "paid");
+
+    // Discount code is consumed only now that the Cashu token has been
+    // redeemed and the order is marked paid. If redemption above failed we
+    // returned early without ever reaching this point, so an unpaid order
+    // never burns a use against the code's max_uses limit.
+    if (discountCode) {
+      try {
+        await markDiscountCodeUsed(discountCode, product.pubkey);
+      } catch (markErr) {
+        console.error(
+          "Failed to mark discount code used (cashu, post-paid):",
+          markErr
+        );
+      }
+    }
 
     try {
       await deductStock(
