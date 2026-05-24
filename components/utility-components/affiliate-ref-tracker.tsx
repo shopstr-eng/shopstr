@@ -60,12 +60,40 @@ export function getAffiliateRefCookie(
   return map["*"] ?? null;
 }
 
+function resolveFallbackSeller(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const stored =
+      window.sessionStorage?.getItem("sf_seller_pubkey") ||
+      window.localStorage?.getItem("sf_seller_pubkey");
+    if (stored && /^[0-9a-f]{64}$/i.test(stored)) return stored.toLowerCase();
+  } catch {
+    // storage unavailable; ignore
+  }
+  return null;
+}
+
+interface AffiliateRefTrackerProps {
+  /**
+   * Pubkey of the storefront the viewer is currently on (custom domain or
+   * /stall/[slug]). When provided, a `?ref=CODE` without an explicit
+   * `ref_seller` will be auto-bound to this seller, so codes set up in the
+   * seller's settings apply on their own stall + custom domain — not just the
+   * generic marketplace.
+   */
+  storefrontPubkey?: string | null;
+}
+
 /**
  * Listens for `?ref=CODE` on every route change and stashes the value in a
  * 30-day cookie. If `?ref_seller=PUBKEY` is also present we bind the code to
- * that seller; otherwise we store under the wildcard slot.
+ * that seller; otherwise we fall back to the active storefront pubkey (when
+ * the viewer is on a custom domain or /stall/* route) and finally to the
+ * wildcard slot.
  */
-export default function AffiliateRefTracker() {
+export default function AffiliateRefTracker({
+  storefrontPubkey,
+}: AffiliateRefTrackerProps = {}) {
   const router = useRouter();
   useEffect(() => {
     const code = router.query.ref;
@@ -73,10 +101,17 @@ export default function AffiliateRefTracker() {
     if (typeof code !== "string" || code.length === 0 || code.length >= 256) {
       return;
     }
-    const seller =
+    const explicitSeller =
       typeof sellerRaw === "string" && /^[0-9a-f]{64}$/i.test(sellerRaw)
         ? sellerRaw.toLowerCase()
         : null;
+    const storefrontSeller =
+      typeof storefrontPubkey === "string" &&
+      /^[0-9a-f]{64}$/i.test(storefrontPubkey)
+        ? storefrontPubkey.toLowerCase()
+        : null;
+    const seller =
+      explicitSeller || storefrontSeller || resolveFallbackSeller();
     const trimmed = code.trim();
     setRefForSeller(trimmed, seller);
 

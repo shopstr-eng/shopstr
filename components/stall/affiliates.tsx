@@ -511,7 +511,7 @@ export default function Affiliates() {
         </p>
       </div>
 
-      <div className="w-full max-w-full min-w-0 overflow-x-auto">
+      <div className="w-full max-w-[84vw] min-w-0 overflow-x-auto sm:max-w-full">
         <Tabs
           aria-label="Affiliate tabs"
           classNames={{

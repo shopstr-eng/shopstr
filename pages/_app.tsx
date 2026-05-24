@@ -1402,7 +1402,7 @@ function MilkMarket({ props }: { props: AppProps }) {
       />
       <StructuredData />
       <PageLoadingBar />
-      <AffiliateRefTracker />
+      <AffiliateRefTracker storefrontPubkey={storefrontLoadPubkey} />
       <RelaysContext.Provider value={relaysContext}>
         <BlossomContext.Provider value={blossomContext}>
           <CashuWalletContext.Provider value={cashuWalletContext}>
