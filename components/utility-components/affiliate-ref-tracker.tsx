@@ -35,6 +35,69 @@ function writeMap(map: RefMap) {
   document.cookie = `${COOKIE_NAME}=${value}; max-age=${max}; path=/; SameSite=Lax`;
 }
 
+/**
+ * Bind the current `?ref=CODE` from the cookie (per-seller or wildcard) to a
+ * newly-known seller pubkey. Used by pages that resolve their seller after
+ * the URL has been processed (e.g. /listing/[id], where the product's pubkey
+ * is only known once the matching event is found).
+ *
+ * Fires a one-time `record-click` for that (seller, code) pair so analytics
+ * attribution lines up with the actual seller, not the wildcard slot.
+ */
+export function bindAffiliateRefToSeller(
+  sellerPubkey: string | null | undefined,
+  landingPath?: string | null
+): void {
+  if (typeof document === "undefined") return;
+  if (
+    !sellerPubkey ||
+    typeof sellerPubkey !== "string" ||
+    !/^[0-9a-f]{64}$/i.test(sellerPubkey)
+  ) {
+    return;
+  }
+  const normalizedSeller = sellerPubkey.toLowerCase();
+  const map = readMap();
+  const existing = map[normalizedSeller] ?? map["*"];
+  if (!existing) return;
+  // Already bound — nothing to do.
+  if (map[normalizedSeller] === existing) {
+    // Still fire click record once per session for analytics.
+  } else {
+    setRefForSeller(existing, normalizedSeller);
+  }
+  try {
+    const marker = `${normalizedSeller}:${existing}`;
+    const seen =
+      typeof window !== "undefined" && window.sessionStorage
+        ? window.sessionStorage.getItem(SESSION_KEY)
+        : null;
+    const seenSet = new Set(seen ? seen.split("|") : []);
+    if (seenSet.has(marker)) return;
+    seenSet.add(marker);
+    if (typeof window !== "undefined" && window.sessionStorage) {
+      window.sessionStorage.setItem(
+        SESSION_KEY,
+        Array.from(seenSet).slice(-64).join("|")
+      );
+    }
+    void fetch("/api/affiliates/record-click", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sellerPubkey: normalizedSeller,
+        code: existing,
+        landingPath: (landingPath ?? "").slice(0, 512) || null,
+      }),
+      keepalive: true,
+    }).catch(() => {
+      // best-effort; don't surface analytics errors to the user
+    });
+  } catch {
+    // sessionStorage unavailable; skip silently.
+  }
+}
+
 function setRefForSeller(code: string, sellerPubkey: string | null) {
   const map = readMap();
   const key = sellerPubkey || "*";

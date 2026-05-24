@@ -39,6 +39,7 @@ import {
 } from "@/utils/db/db-service";
 import { NostrEvent } from "@/utils/types/types";
 import MilkMarketSpinner from "@/components/utility-components/mm-spinner";
+import { bindAffiliateRefToSeller } from "@/components/utility-components/affiliate-ref-tracker";
 
 type ListingPageProps = {
   ogMeta: OgMetaProps;
@@ -401,6 +402,26 @@ const Listing = ({ initialProductEvent }: ListingPageProps) => {
           sessionStorage.removeItem("sf_shop_slug");
           localStorage.removeItem("sf_seller_pubkey");
           localStorage.removeItem("sf_shop_slug");
+        }
+        // Bind any pending `?ref=CODE` to the actual product seller now that
+        // we know who they are. This catches direct listing visits (including
+        // from custom domains) where the affiliate tracker only had the
+        // wildcard slot to work with at first paint.
+        bindAffiliateRefToSeller(matchingEvent.pubkey, router.asPath);
+        // Also seed sf_seller_pubkey so the cart / checkout pick up the
+        // seller for per-seller cookie + affiliate lookups.
+        try {
+          if (typeof window !== "undefined" && window.sessionStorage) {
+            const existing = window.sessionStorage.getItem("sf_seller_pubkey");
+            if (!existing) {
+              window.sessionStorage.setItem(
+                "sf_seller_pubkey",
+                matchingEvent.pubkey
+              );
+            }
+          }
+        } catch {
+          // sessionStorage unavailable; ignore.
         }
         const resolvedListing = resolveListingStateFromEvent(matchingEvent);
         if (resolvedListing) {
