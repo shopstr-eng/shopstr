@@ -812,10 +812,21 @@ async function initializeTables(): Promise<void> {
           SELECT 1 FROM pg_constraint
           WHERE conname = 'discount_codes_has_discount'
         ) THEN
+          -- NOT VALID: enforce the "must discount something" rule for every
+          -- INSERT/UPDATE going forward, but skip the one-time scan of
+          -- existing rows. Production has pre-existing rows that predate this
+          -- composite constraint (e.g. an early WELCOME* row that was written
+          -- before the popup learned about shipping discounts); without NOT
+          -- VALID the ALTER aborts the entire init script, the
+          -- shipping_discount_type column never gets added, and every popup
+          -- submission then 500s with "column does not exist". Grandfathering
+          -- those rows is the right call — the popup capture endpoint won't
+          -- ever read them, and a future cleanup can `VALIDATE CONSTRAINT
+          -- discount_codes_has_discount;` after the bad rows are reconciled.
           ALTER TABLE discount_codes
             ADD CONSTRAINT discount_codes_has_discount CHECK (
               discount_percentage > 0 OR shipping_discount_type <> 'none'
-            );
+            ) NOT VALID;
         END IF;
       END $$;
     `);
