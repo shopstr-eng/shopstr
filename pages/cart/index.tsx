@@ -1350,48 +1350,97 @@ export default function Component() {
                           ) : (
                             <>
                               <div className="flex gap-2">
-                                <Input
-                                  label="Discount Code"
-                                  placeholder="Enter code"
-                                  value={discountCodes[sellerPubkey] || ""}
-                                  onChange={(e) =>
-                                    setDiscountCodes({
-                                      ...discountCodes,
-                                      [sellerPubkey]:
-                                        e.target.value.toUpperCase(),
-                                    })
-                                  }
-                                  className="flex-1 text-white"
-                                  disabled={appliedDiscounts[sellerPubkey]! > 0}
-                                  isInvalid={!!discountErrors[sellerPubkey]}
-                                  errorMessage={discountErrors[sellerPubkey]}
-                                />
-                                {appliedDiscounts[sellerPubkey]! > 0 ? (
-                                  <Button
-                                    color="warning"
-                                    onClick={() =>
-                                      handleRemoveDiscount(sellerPubkey)
-                                    }
-                                  >
-                                    Remove
-                                  </Button>
-                                ) : (
-                                  <Button
-                                    className={BLUEBUTTONCLASSNAMES}
-                                    onClick={() =>
-                                      handleApplyDiscount(sellerPubkey)
-                                    }
-                                  >
-                                    Apply
-                                  </Button>
-                                )}
+                                {(() => {
+                                  // A code is "active" if EITHER a product
+                                  // percent discount OR a shipping discount
+                                  // applies. The previous check only looked
+                                  // at the product percent, so shipping-only
+                                  // welcome codes validated successfully but
+                                  // never flipped the UI to Applied/Remove —
+                                  // the buyer mashed Apply and assumed
+                                  // nothing happened.
+                                  const pct =
+                                    appliedDiscounts[sellerPubkey] || 0;
+                                  const shipType =
+                                    appliedShippingDiscounts[sellerPubkey]
+                                      ?.type || "none";
+                                  const isApplied =
+                                    pct > 0 || shipType !== "none";
+                                  return (
+                                    <>
+                                      <Input
+                                        label="Discount Code"
+                                        placeholder="Enter code"
+                                        value={
+                                          discountCodes[sellerPubkey] || ""
+                                        }
+                                        onChange={(e) =>
+                                          setDiscountCodes({
+                                            ...discountCodes,
+                                            [sellerPubkey]:
+                                              e.target.value.toUpperCase(),
+                                          })
+                                        }
+                                        className="flex-1 text-white"
+                                        disabled={isApplied}
+                                        isInvalid={
+                                          !!discountErrors[sellerPubkey]
+                                        }
+                                        errorMessage={
+                                          discountErrors[sellerPubkey]
+                                        }
+                                      />
+                                      {isApplied ? (
+                                        <Button
+                                          color="warning"
+                                          onClick={() =>
+                                            handleRemoveDiscount(sellerPubkey)
+                                          }
+                                        >
+                                          Remove
+                                        </Button>
+                                      ) : (
+                                        <Button
+                                          className={BLUEBUTTONCLASSNAMES}
+                                          onClick={() =>
+                                            handleApplyDiscount(sellerPubkey)
+                                          }
+                                        >
+                                          Apply
+                                        </Button>
+                                      )}
+                                    </>
+                                  );
+                                })()}
                               </div>
-                              {appliedDiscounts[sellerPubkey]! > 0 && (
-                                <p className="mt-2 text-sm text-green-600">
-                                  {appliedDiscounts[sellerPubkey]}% discount
-                                  applied to all items from this seller!
-                                </p>
-                              )}
+                              {(() => {
+                                const pct = appliedDiscounts[sellerPubkey] || 0;
+                                const ship =
+                                  appliedShippingDiscounts[sellerPubkey];
+                                const shipType = ship?.type || "none";
+                                if (pct <= 0 && shipType === "none")
+                                  return null;
+                                const shipVal = ship?.value || 0;
+                                const shipLabel =
+                                  shipType === "free"
+                                    ? "free shipping"
+                                    : shipType === "percent"
+                                      ? `${shipVal}% off shipping`
+                                      : shipType === "fixed"
+                                        ? `${shipVal} off shipping`
+                                        : "";
+                                const msg =
+                                  pct > 0 && shipType !== "none"
+                                    ? `${pct}% discount + ${shipLabel} applied to this seller!`
+                                    : pct > 0
+                                      ? `${pct}% discount applied to all items from this seller!`
+                                      : `${shipLabel.charAt(0).toUpperCase()}${shipLabel.slice(1)} applied to this seller!`;
+                                return (
+                                  <p className="mt-2 text-sm text-green-600">
+                                    {msg}
+                                  </p>
+                                );
+                              })()}
                             </>
                           )}
                         </div>

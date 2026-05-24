@@ -572,6 +572,20 @@ export default function ProductInvoiceCard({
 
   // Extract discount and current price from props
   const appliedDiscount = discountPercentage || 0;
+
+  // Decides whether to consume a use of the buyer's discount code on this
+  // order. A SHIPPING-ONLY code (product percent == 0) only consumes when
+  // shipping was actually charged. If the buyer picked pickup (formType
+  // !== "shipping"), no shipping cost was added (`shippingCostToAdd` is 0
+  // for non-shipping flows), so the code extracted no value and should
+  // stay available for a future order. Codes that carry a product percent
+  // always consume because the product discount was applied regardless.
+  const shouldRedeemDiscountCode = (): boolean => {
+    if (appliedDiscount > 0) return true;
+    const t = shippingDiscountType || "none";
+    if (t === "none") return true;
+    return formType === "shipping";
+  };
   const currentPrice =
     originalPrice !== undefined ? originalPrice : productData.price;
 
@@ -1929,7 +1943,11 @@ export default function ProductInvoiceCard({
               flushPendingOrderEmail();
               setPaymentConfirmed(true);
               setQrCodeUrl(null);
-              if (discountCode && productData.pubkey) {
+              if (
+                discountCode &&
+                productData.pubkey &&
+                shouldRedeemDiscountCode()
+              ) {
                 fetch("/api/db/discount-code-used", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
@@ -3507,7 +3525,7 @@ export default function ProductInvoiceCard({
       );
     }
 
-    if (discountCode && productData.pubkey) {
+    if (discountCode && productData.pubkey && shouldRedeemDiscountCode()) {
       fetch("/api/db/discount-code-used", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

@@ -876,6 +876,37 @@ export default function CartInvoiceCard({
     return uniqueShippingTypes.length > 1 && hasShippingPickupProducts;
   }, [uniqueShippingTypes, hasShippingPickupProducts]);
 
+  // Returns true if a redemption POST should be sent for this seller's
+  // discount code on the current order. Rule (per spec): a SHIPPING-ONLY
+  // code (product percent == 0) must only consume a use when the buyer
+  // actually paid for shipping for that seller — pickup orders extract no
+  // value from the code, so it stays available for later. Codes that carry
+  // a product percent (with or without a shipping discount) always consume
+  // because the product discount was applied regardless of fulfillment.
+  const shouldRedeemCodeForSeller = (pubkey: string): boolean => {
+    const pct = appliedDiscounts[pubkey] || 0;
+    if (pct > 0) return true;
+    const shipType = appliedShippingDiscounts[pubkey]?.type || "none";
+    if (shipType === "none") return true;
+    // Shipping-only code → only consume if shipping was actually charged
+    // for at least one of this seller's products. The cart's formType is
+    // "shipping" | "contact" | "combined" | null. "contact" is the
+    // pickup-only flow (no shipping), "shipping" always charges shipping,
+    // and "combined" carries a per-product decision recorded in
+    // shippingTypes.
+    if (!formType || formType === "contact") return false;
+    if (formType === "shipping") return true;
+    if (formType === "combined") {
+      return products.some(
+        (p) =>
+          p.pubkey === pubkey &&
+          (shippingTypes[p.id] === "Added Cost" ||
+            shippingTypes[p.id] === "Free")
+      );
+    }
+    return true;
+  };
+
   // Apply the per-seller shipping discount to a shipping `amount`. The
   // `amount` may be sats or native currency — the helper treats the value
   // in the same unit. Returns a non-negative number; callers are
@@ -2876,7 +2907,7 @@ export default function CartInvoiceCard({
     setOrderConfirmed(true);
     if (discountCodes) {
       Object.entries(discountCodes).forEach(([pubkey, code]) => {
-        if (code) {
+        if (code && shouldRedeemCodeForSeller(pubkey)) {
           fetch("/api/db/discount-code-used", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -3312,7 +3343,7 @@ export default function CartInvoiceCard({
       setOrderConfirmed(true);
       if (discountCodes) {
         Object.entries(discountCodes).forEach(([pubkey, code]) => {
-          if (code) {
+          if (code && shouldRedeemCodeForSeller(pubkey)) {
             fetch("/api/db/discount-code-used", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -3438,7 +3469,7 @@ export default function CartInvoiceCard({
               setPaymentConfirmed(true);
               if (discountCodes) {
                 Object.entries(discountCodes).forEach(([pubkey, code]) => {
-                  if (code) {
+                  if (code && shouldRedeemCodeForSeller(pubkey)) {
                     fetch("/api/db/discount-code-used", {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },

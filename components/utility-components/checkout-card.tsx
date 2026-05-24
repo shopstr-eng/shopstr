@@ -963,46 +963,69 @@ export default function CheckoutCard({
                   </div>
                 ) : (
                   <>
-                    {productData.pubkey !== userPubkey && (
-                      <div className="mt-4 space-y-2">
-                        <div className="flex gap-2">
-                          <Input
-                            label="Discount Code"
-                            placeholder="Enter code"
-                            value={discountCode}
-                            onChange={(e) =>
-                              setDiscountCode(e.target.value.toUpperCase())
-                            }
-                            className="flex-1 text-white"
-                            disabled={appliedDiscount > 0}
-                            isInvalid={!!discountError}
-                            errorMessage={discountError}
-                          />
-                          {appliedDiscount > 0 ? (
-                            <Button
-                              color="warning"
-                              onClick={handleRemoveDiscount}
-                            >
-                              Remove
-                            </Button>
-                          ) : (
-                            <Button
-                              className={BLUEBUTTONCLASSNAMES}
-                              onClick={handleApplyDiscount}
-                            >
-                              Apply
-                            </Button>
-                          )}
-                        </div>
-                        {appliedDiscount > 0 && (
-                          <p className="text-sm text-green-600">
-                            {appliedDiscount}% discount applied! You save{" "}
-                            {currentPrice - discountedPrice}{" "}
-                            {productData.currency}
-                          </p>
-                        )}
-                      </div>
-                    )}
+                    {productData.pubkey !== userPubkey &&
+                      (() => {
+                        // A code is "active" when it carries EITHER a product
+                        // percent discount OR a shipping discount (free /
+                        // percent / fixed). Gating purely on appliedDiscount
+                        // > 0 hid the Applied/Remove UI for shipping-only
+                        // welcome codes — the buyer would hit Apply, the
+                        // code validated, but nothing visibly changed.
+                        const shipType = appliedShippingDiscount.type;
+                        const shipVal = appliedShippingDiscount.value;
+                        const hasShip = shipType !== "none";
+                        const isApplied = appliedDiscount > 0 || hasShip;
+                        const shipLabel =
+                          shipType === "free"
+                            ? "free shipping"
+                            : shipType === "percent"
+                              ? `${shipVal}% off shipping`
+                              : shipType === "fixed"
+                                ? `${shipVal} off shipping`
+                                : "";
+                        return (
+                          <div className="mt-4 space-y-2">
+                            <div className="flex gap-2">
+                              <Input
+                                label="Discount Code"
+                                placeholder="Enter code"
+                                value={discountCode}
+                                onChange={(e) =>
+                                  setDiscountCode(e.target.value.toUpperCase())
+                                }
+                                className="flex-1 text-white"
+                                disabled={isApplied}
+                                isInvalid={!!discountError}
+                                errorMessage={discountError}
+                              />
+                              {isApplied ? (
+                                <Button
+                                  color="warning"
+                                  onClick={handleRemoveDiscount}
+                                >
+                                  Remove
+                                </Button>
+                              ) : (
+                                <Button
+                                  className={BLUEBUTTONCLASSNAMES}
+                                  onClick={handleApplyDiscount}
+                                >
+                                  Apply
+                                </Button>
+                              )}
+                            </div>
+                            {isApplied && (
+                              <p className="text-sm text-green-600">
+                                {appliedDiscount > 0 && hasShip
+                                  ? `${appliedDiscount}% discount + ${shipLabel} applied!`
+                                  : appliedDiscount > 0
+                                    ? `${appliedDiscount}% discount applied! You save ${currentPrice - discountedPrice} ${productData.currency}`
+                                    : `${shipLabel.charAt(0).toUpperCase()}${shipLabel.slice(1)} applied!`}
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })()}
 
                     {/* Location Chip */}
                     <div className="flex items-center gap-2">
