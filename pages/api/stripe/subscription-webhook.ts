@@ -12,6 +12,12 @@ import {
 } from "@/utils/email/email-service";
 import { sendServerSideNostrDM } from "@/utils/nostr/server-nostr-helpers";
 import { loadStorefrontBranding } from "@/utils/email/storefront-branding";
+import {
+  computeRebateSmallest,
+  isAffiliateCodeValid,
+  lookupAffiliateCode,
+  recordReferral,
+} from "@/utils/db/affiliates";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
   apiVersion: "2025-09-30.clover",
@@ -180,6 +186,73 @@ export default async function handler(
         const stripeSubscription = (await stripe.subscriptions.retrieve(
           paidSubscriptionId
         )) as any;
+
+        // Affiliate referral: record ONLY on the first invoice that creates
+        // the subscription. `billing_reason === "subscription_create"`
+        // distinguishes the initial charge from recurring renewals, so
+        // affiliates are credited (and the buyer only sees the affiliate
+        // discount) on the very first payment.
+        const subMeta = (stripeSubscription.metadata || {}) as Record<
+          string,
+          string
+        >;
+        // The metadata is only stamped by create-subscription.ts when a
+        // coupon was actually attached, so its presence is the signal that
+        // a discount was applied. We trust the metadata's
+        // affiliateBuyerDiscountSmallest as the actual discount (matches
+        // what the buyer was charged) and recompute the rebate from that.
+        if (
+          invoicePaid.billing_reason === "subscription_create" &&
+          subMeta.affiliateCode &&
+          subMeta.affiliateBuyerDiscountSmallest &&
+          subscription.seller_pubkey
+        ) {
+          try {
+            const found = await lookupAffiliateCode(
+              subscription.seller_pubkey,
+              subMeta.affiliateCode
+            );
+            if (found && (await isAffiliateCodeValid(found))) {
+              const gross = Number(
+                subMeta.affiliateGrossSubtotalSmallest ?? "0"
+              );
+              const buyerDiscountSmallest = Number(
+                subMeta.affiliateBuyerDiscountSmallest
+              );
+              if (
+                Number.isFinite(gross) &&
+                gross > 0 &&
+                Number.isFinite(buyerDiscountSmallest) &&
+                buyerDiscountSmallest > 0
+              ) {
+                const net = Math.max(gross - buyerDiscountSmallest, 0);
+                const rebateSmallest = computeRebateSmallest(
+                  net,
+                  found.rebate_type,
+                  Number(found.rebate_value)
+                );
+                await recordReferral({
+                  affiliateId: found.affiliate_id,
+                  codeId: found.id,
+                  sellerPubkey: subscription.seller_pubkey,
+                  orderId: paidSubscriptionId,
+                  paymentRail: "stripe",
+                  grossSubtotalSmallest: gross,
+                  buyerDiscountSmallest,
+                  rebateSmallest,
+                  currency: subscription.currency,
+                  initialStatus: "pending",
+                  realtimeTransferRef: null,
+                });
+              }
+            }
+          } catch (refErr) {
+            console.error(
+              "Failed to record affiliate referral for subscription:",
+              refErr
+            );
+          }
+        }
 
         const nextBillingDate = new Date(
           stripeSubscription.current_period_end * 1000

@@ -367,6 +367,8 @@ async function initializeTables(): Promise<void> {
           pubkey TEXT NOT NULL,
           discount_percentage DECIMAL(5,2) NOT NULL CHECK (discount_percentage > 0 AND discount_percentage <= 100),
           expiration BIGINT,
+          max_uses INTEGER,
+          times_used INTEGER NOT NULL DEFAULT 0,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           UNIQUE(code, pubkey)
       );
@@ -747,6 +749,24 @@ async function initializeTables(): Promise<void> {
         ) THEN
           ALTER TABLE community_events DROP CONSTRAINT community_events_kind_check;
           ALTER TABLE community_events ADD CONSTRAINT community_events_kind_check CHECK (kind IN (34550, 1111, 4550));
+        END IF;
+      END $$;
+    `);
+
+    await client.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'discount_codes' AND column_name = 'max_uses'
+        ) THEN
+          ALTER TABLE discount_codes ADD COLUMN max_uses INTEGER;
+        END IF;
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'discount_codes' AND column_name = 'times_used'
+        ) THEN
+          ALTER TABLE discount_codes ADD COLUMN times_used INTEGER NOT NULL DEFAULT 0;
         END IF;
       END $$;
     `);
@@ -2534,8 +2554,14 @@ export async function validateDiscountCode(
 
   try {
     client = await dbPool.connect();
+    // Case-insensitive + whitespace-tolerant match: sellers issue codes in
+    // mixed case (e.g. WELCOMEABC123) and buyers often type them with
+    // different casing or with stray spaces. Comparing on UPPER(TRIM(...))
+    // on both sides avoids false "invalid code" failures.
     const result = await client.query(
-      `SELECT discount_percentage, expiration, max_uses, times_used FROM discount_codes WHERE code = $1 AND pubkey = $2`,
+      `SELECT discount_percentage, expiration, max_uses, times_used
+       FROM discount_codes
+       WHERE UPPER(BTRIM(code)) = UPPER(BTRIM($1)) AND pubkey = $2`,
       [code, pubkey]
     );
 
@@ -2574,7 +2600,8 @@ export async function markDiscountCodeUsed(
   try {
     client = await dbPool.connect();
     await client.query(
-      `UPDATE discount_codes SET times_used = times_used + 1 WHERE code = $1 AND pubkey = $2`,
+      `UPDATE discount_codes SET times_used = times_used + 1
+       WHERE UPPER(BTRIM(code)) = UPPER(BTRIM($1)) AND pubkey = $2`,
       [code, pubkey]
     );
   } catch (error) {

@@ -43,6 +43,7 @@ import {
   applyStripeFloor,
   isAtStripeFloor,
   STRIPE_MINIMUM_CHARGE_USD,
+  ZERO_DECIMAL_CURRENCIES,
 } from "@/utils/stripe/currency";
 import {
   recordPendingMintQuote,
@@ -99,6 +100,7 @@ export default function ProductInvoiceCard({
   subscriptionFrequency,
   subscriptionDiscount,
   originalPrice,
+  affiliateMeta,
 }: {
   productData: ProductData;
   setIsBeingPaid: (isBeingPaid: boolean) => void;
@@ -118,6 +120,15 @@ export default function ProductInvoiceCard({
   subscriptionFrequency?: string;
   subscriptionDiscount?: number;
   originalPrice?: number;
+  affiliateMeta?: {
+    code: string;
+    codeId: number;
+    affiliateId: number;
+    buyerDiscountType: "percent" | "fixed";
+    buyerDiscountValue: number;
+    rebateType: "percent" | "fixed";
+    rebateValue: number;
+  } | null;
 }) {
   const { mints, tokens, history } = getLocalStorageData();
   const {
@@ -659,6 +670,76 @@ export default function ProductInvoiceCard({
   const [stripeSubscriptionId, setStripeSubscriptionId] = useState<
     string | null
   >(null);
+
+  // Tracks the gross subtotal (smallest units) of the in-flight order so we
+  // can record the affiliate referral after a Lightning or Cashu payment
+  // confirms (those success callbacks live deep inside polling closures and
+  // don't have orderId/gross in their own scope).
+  const pendingAffiliateOrderRef = useRef<{
+    orderId: string;
+    grossSmallest: number;
+    currency: string;
+  } | null>(null);
+
+  // Convert a native-unit amount to the currency's smallest unit, mirroring
+  // the helpers in utils/stripe/currency.ts. BTC has 8 decimals (1 sat =
+  // 1e-8 BTC), sats / zero-decimal fiats are whole-unit, all other fiats
+  // are 2 decimals.
+  const computeAffiliateGrossSmallest = (
+    nativeAmount: number,
+    cur: string
+  ): number => {
+    const c = (cur || "").toLowerCase();
+    if (c === "btc") return Math.ceil(nativeAmount * 100000000);
+    if (
+      c === "sat" ||
+      c === "sats" ||
+      c === "satoshi" ||
+      ZERO_DECIMAL_CURRENCIES.has(c)
+    ) {
+      return Math.ceil(nativeAmount);
+    }
+    return Math.ceil(nativeAmount * 100);
+  };
+
+  const recordAffiliateReferral = async (
+    orderId: string,
+    paymentRail: "stripe" | "lightning" | "cashu",
+    grossSmallest: number,
+    currency: string
+  ) => {
+    if (!affiliateMeta?.code) return;
+    try {
+      await fetch("/api/affiliates/record-referral", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderId,
+          sellerPubkey: productData.pubkey,
+          code: affiliateMeta.code,
+          grossSmallest,
+          currency,
+          paymentRail,
+        }),
+      });
+    } catch (e) {
+      console.error("record-referral failed:", e);
+    }
+  };
+
+  const recordPendingAffiliateReferral = (
+    paymentRail: "lightning" | "cashu"
+  ) => {
+    const pending = pendingAffiliateOrderRef.current;
+    if (!pending) return;
+    pendingAffiliateOrderRef.current = null;
+    void recordAffiliateReferral(
+      pending.orderId,
+      paymentRail,
+      pending.grossSmallest,
+      pending.currency
+    );
+  };
 
   const sendPaymentAndContactMessage = async (
     pubkeyToReceiveMessage: string,
@@ -1218,6 +1299,19 @@ export default function ProductInvoiceCard({
         !pendingOrderEmailRef.current.orderId
       ) {
         pendingOrderEmailRef.current.orderId = orderId;
+      }
+
+      // Stash affiliate context for this LN order so the success callback
+      // (deep inside invoiceHasBeenPaid polling) can record the referral.
+      if (affiliateMeta) {
+        pendingAffiliateOrderRef.current = {
+          orderId,
+          grossSmallest: computeAffiliateGrossSmallest(
+            currentPrice + shippingCostToAdd,
+            productData.currency
+          ),
+          currency: productData.currency,
+        };
       }
 
       // Construct address tag early so it can be passed to all messages
@@ -1839,6 +1933,7 @@ export default function ProductInvoiceCard({
                   }),
                 }).catch(() => {});
               }
+              recordPendingAffiliateReferral("lightning");
               setInvoiceIsPaid(true);
               break;
             }
@@ -2016,6 +2111,17 @@ export default function ProductInvoiceCard({
 
     if (pendingOrderEmailRef.current && !pendingOrderEmailRef.current.orderId) {
       pendingOrderEmailRef.current.orderId = orderId;
+    }
+
+    if (affiliateMeta) {
+      pendingAffiliateOrderRef.current = {
+        orderId,
+        grossSmallest: computeAffiliateGrossSmallest(
+          currentPrice + shippingCostToAdd,
+          productData.currency
+        ),
+        currency: productData.currency,
+      };
     }
 
     const paymentPreference =
@@ -2879,6 +2985,7 @@ export default function ProductInvoiceCard({
         price.toString(),
         deletedEventIds
       );
+      recordPendingAffiliateReferral("cashu");
       setCashuPaymentSent(true);
       flushPendingOrderEmail();
       setPaymentConfirmed(true);
@@ -2958,6 +3065,25 @@ export default function ProductInvoiceCard({
               }
             : undefined;
 
+        // For subscriptions with an affiliate code, send the BASE amount
+        // (no affiliate discount baked in) so the server can keep the
+        // recurring price at the regular subscribe-and-save rate and apply
+        // the affiliate discount only to the first invoice via a one-time
+        // Stripe coupon. Without this, the affiliate discount would persist
+        // on every renewal forever.
+        const baseAmountForSubscription =
+          affiliateMeta && currentPrice > 0
+            ? currentPrice + shippingCostToAdd
+            : stripeAmount;
+
+        // The server re-validates the affiliate code and recomputes the
+        // buyer discount from the authoritative code config, so the values
+        // we send here are advisory only (gross is used as a hint).
+        const grossSubtotalSmallest = computeAffiliateGrossSmallest(
+          baseAmountForSubscription,
+          stripeCurrency || productData.currency
+        );
+
         const response = await fetch("/api/stripe/create-subscription", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -2970,7 +3096,7 @@ export default function ProductInvoiceCard({
                     selectedVolume ? ` Volume: ${selectedVolume}` : ""
                   }${selectedWeight ? ` Weight: ${selectedWeight}` : ""}`
                 : undefined,
-            amount: stripeAmount,
+            amount: baseAmountForSubscription,
             currency: stripeCurrency,
             frequency: subscriptionFrequency,
             discountPercent: subscriptionDiscount || 0,
@@ -2991,6 +3117,10 @@ export default function ProductInvoiceCard({
                   }
                 : undefined,
             shippingAddress: shippingAddressObj,
+            ...(affiliateMeta && {
+              affiliateCode: affiliateMeta.code,
+              affiliateGrossSubtotalSmallest: grossSubtotalSmallest,
+            }),
           }),
         });
 
@@ -3380,6 +3510,23 @@ export default function ProductInvoiceCard({
           pubkey: productData.pubkey,
         }),
       }).catch(() => {});
+    }
+
+    // Record the affiliate referral for one-time Stripe payments only.
+    // Stripe subscriptions are recorded server-side via the subscription
+    // webhook (on billing_reason === "subscription_create") so we don't
+    // double-record here.
+    if (affiliateMeta && !(isSubscription && subscriptionFrequency)) {
+      const grossSmallestAff = computeAffiliateGrossSmallest(
+        currentPrice + shippingCostToAdd,
+        productData.currency
+      );
+      void recordAffiliateReferral(
+        orderId,
+        "stripe",
+        grossSmallestAff,
+        productData.currency
+      );
     }
 
     setInvoiceIsPaid(true);

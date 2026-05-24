@@ -49,6 +49,7 @@ import SubscriptionPricingCards from "./subscription-pricing-cards";
 import SellerReviewReply from "./seller-review-reply";
 import { getLocalStorageJson } from "@/utils/safe-json";
 import { CartDiscountsMap, isCartDiscountsMap } from "@/utils/cart-discounts";
+import { getAffiliateRefCookie } from "./affiliate-ref-tracker";
 
 const SUMMARY_CHARACTER_LIMIT = 200;
 
@@ -112,6 +113,15 @@ export default function CheckoutCard({
   const [discountCode, setDiscountCode] = useState("");
   const [appliedDiscount, setAppliedDiscount] = useState<number>(0);
   const [discountError, setDiscountError] = useState("");
+  const [affiliateMeta, setAffiliateMeta] = useState<{
+    code: string;
+    codeId: number;
+    affiliateId: number;
+    buyerDiscountType: "percent" | "fixed";
+    buyerDiscountValue: number;
+    rebateType: "percent" | "fixed";
+    rebateValue: number;
+  } | null>(null);
   const [satsEstimate, setSatsEstimate] = useState<number | null>(null);
 
   const hasSubscription = !!(
@@ -360,7 +370,18 @@ export default function CheckoutCard({
     setCart(updatedCart);
     localStorage.setItem("cart", JSON.stringify(updatedCart));
 
-    if (appliedDiscount > 0 && discountCode) {
+    // Affiliate codes and regular discount codes live in different tables, so
+    // they need to be persisted under different keys — otherwise the cart
+    // would revalidate an affiliate code against the regular discount-code
+    // endpoint, treat it as invalid, and silently drop it at checkout.
+    if (affiliateMeta && affiliateMeta.code) {
+      try {
+        const stored = localStorage.getItem("cartAffiliates");
+        const affs = stored ? JSON.parse(stored) : {};
+        affs[productData.pubkey] = { code: affiliateMeta.code };
+        localStorage.setItem("cartAffiliates", JSON.stringify(affs));
+      } catch {}
+    } else if (appliedDiscount > 0 && discountCode) {
       const storedDiscounts = localStorage.getItem("cartDiscounts");
       const discounts = storedDiscounts ? JSON.parse(storedDiscounts) : {};
       discounts[productData.pubkey] = {
@@ -377,8 +398,16 @@ export default function CheckoutCard({
     ) {
       setShowFreeShippingNotification(true);
 
-      // Store discount code if applied
-      if (appliedDiscount > 0 && discountCode) {
+      // Store discount code if applied — affiliate codes go to a separate
+      // key so the cart's regular-discount revalidator doesn't drop them.
+      if (affiliateMeta && affiliateMeta.code) {
+        try {
+          const stored = localStorage.getItem("cartAffiliates");
+          const affs = stored ? JSON.parse(stored) : {};
+          affs[productData.pubkey] = { code: affiliateMeta.code };
+          localStorage.setItem("cartAffiliates", JSON.stringify(affs));
+        } catch {}
+      } else if (appliedDiscount > 0 && discountCode) {
         const discounts = getLocalStorageJson<CartDiscountsMap>(
           "cartDiscounts",
           {},
@@ -447,6 +476,64 @@ export default function CheckoutCard({
     }
   };
 
+  // Auto-apply affiliate code from the ?ref= cookie when the buyer lands on
+  // a listing (custom domain or marketplace). Mirrors the cart's auto-apply
+  // behavior so single-product checkouts also pick up the referral.
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    if (!productData?.pubkey) return;
+    if (productData.pubkey === userPubkey) return; // never self-attribute
+    // Allow a re-run if we previously stored affiliateMeta but couldn't
+    // compute a visible percent (fixed-amount codes when currentPrice was
+    // still 0 on first paint). Otherwise, once applied we leave it alone.
+    if (appliedDiscount > 0) return;
+    if (affiliateMeta && affiliateMeta.buyerDiscountType !== "fixed") return;
+    if (affiliateMeta && currentPrice <= 0) return;
+    const code =
+      (affiliateMeta && affiliateMeta.code) ||
+      getAffiliateRefCookie(productData.pubkey);
+    if (!code) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(
+          `/api/affiliates/validate?sellerPubkey=${productData.pubkey}&code=${encodeURIComponent(
+            code
+          )}&currency=${encodeURIComponent(productData.currency || "usd")}`
+        );
+        if (!res.ok) return;
+        const aff = await res.json();
+        if (cancelled || !aff?.valid) return;
+        let percent = 0;
+        if (aff.buyerDiscountType === "percent") {
+          percent = Number(aff.buyerDiscountValue) || 0;
+        } else if (aff.buyerDiscountType === "fixed") {
+          if (currentPrice > 0) {
+            percent = Math.min(
+              100,
+              (Number(aff.buyerDiscountValue) / currentPrice) * 100
+            );
+          }
+        }
+        if (cancelled) return;
+        setDiscountCode(code);
+        setAppliedDiscount(percent);
+        setAffiliateMeta({
+          code,
+          codeId: aff.codeId,
+          affiliateId: aff.affiliateId,
+          buyerDiscountType: aff.buyerDiscountType,
+          buyerDiscountValue: Number(aff.buyerDiscountValue) || 0,
+          rebateType: aff.rebateType,
+          rebateValue: Number(aff.rebateValue) || 0,
+        });
+      } catch {}
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [productData?.pubkey, productData?.currency, currentPrice, userPubkey]);
+
   const handleApplyDiscount = async () => {
     if (!discountCode.trim()) {
       setDiscountError("Please enter a discount code");
@@ -485,6 +572,7 @@ export default function CheckoutCard({
     setDiscountCode("");
     setAppliedDiscount(0);
     setDiscountError("");
+    setAffiliateMeta(null);
   };
 
   const renderSizeGrid = () => {
@@ -1109,6 +1197,7 @@ export default function CheckoutCard({
               discountPercentage={
                 appliedDiscount > 0 ? appliedDiscount : undefined
               }
+              affiliateMeta={affiliateMeta}
               originalPrice={currentPrice}
               isSubscription={hasSubscription && isSubscriptionSelected}
               subscriptionFrequency={

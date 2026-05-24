@@ -59,6 +59,12 @@ export default async function handler(
       return res.status(400).json({ error: "Missing required fields" });
     }
 
+    // Normalize the payment rail to the values the DB CHECK constraint
+    // allows. Bitcoin rails (Lightning + Cashu) all map to 'bitcoin'.
+    const railRaw = String(paymentRail).toLowerCase();
+    const normalizedRail: "stripe" | "bitcoin" =
+      railRaw === "stripe" ? "stripe" : "bitcoin";
+
     const found = await lookupAffiliateCode(sellerPubkey, code);
     if (!found || !(await isAffiliateCodeValid(found))) {
       return res.status(400).json({ error: "Invalid affiliate code" });
@@ -107,7 +113,7 @@ export default async function handler(
         codeId: found.id,
         sellerPubkey,
         orderId: String(orderId),
-        paymentRail,
+        paymentRail: normalizedRail,
         grossSubtotalSmallest: gross,
         buyerDiscountSmallest,
         rebateSmallest,

@@ -8,6 +8,12 @@ import {
   ZERO_DECIMAL_CURRENCIES,
   convertToSmallestUnit,
 } from "@/utils/stripe/currency";
+import {
+  computeBuyerDiscountSmallest,
+  isAffiliateCodeValid,
+  isSelfReferral,
+  lookupAffiliateCode,
+} from "@/utils/db/affiliates";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
   apiVersion: "2025-09-30.clover",
@@ -65,6 +71,17 @@ export default async function handler(
       quantity,
       variantInfo,
       shippingAddress,
+      // Affiliate fields — when present, the affiliate's buyer discount is
+      // applied via a Stripe Coupon with `duration: "once"` so it only
+      // reduces the FIRST invoice (the immediate charge that creates the
+      // subscription). Renewals continue at the full subscribe-and-save
+      // price. The webhook calls record-referral only on the first
+      // invoice via `billing_reason === "subscription_create"`. The server
+      // re-validates the code and recomputes the discount from the
+      // authoritative code config — client-supplied discount values are
+      // ignored to prevent unauthorized discounting.
+      affiliateCode,
+      affiliateGrossSubtotalSmallest,
     } = req.body;
 
     if (!customerEmail) {
@@ -166,6 +183,97 @@ export default async function handler(
       stripeOptions
     );
 
+    // Server-side affiliate validation: look up the code, verify it's
+    // valid + not self-referral, recompute the buyer discount from the
+    // authoritative code config (NEVER trust client-supplied amounts), and
+    // create a `duration: "once"` Stripe Coupon so the discount applies
+    // only to the first invoice.
+    let affiliateCouponId: string | null = null;
+    let validatedAffiliate: Awaited<
+      ReturnType<typeof lookupAffiliateCode>
+    > | null = null;
+    let affiliateDiscountAmount = 0;
+    let affiliateGrossSmallestValidated = 0;
+    let affiliateCodeIdValidated: number | null = null;
+    let affiliateIdValidated: number | null = null;
+
+    if (affiliateCode && sellerPubkey) {
+      try {
+        const found = await lookupAffiliateCode(
+          sellerPubkey,
+          String(affiliateCode)
+        );
+        if (
+          found &&
+          (await isAffiliateCodeValid(found)) &&
+          !(
+            found.affiliate &&
+            isSelfReferral(sellerPubkey, found.affiliate.affiliate_pubkey)
+          )
+        ) {
+          // Fixed-currency codes must match the order currency; otherwise
+          // skip the discount silently (the order still goes through).
+          const currencyMatches =
+            !found.currency ||
+            String(stripeCurrency).toLowerCase() ===
+              found.currency.toLowerCase() ||
+            (found.buyer_discount_type !== "fixed" &&
+              found.rebate_type !== "fixed");
+          if (currencyMatches) {
+            // Use ONLY the server-authoritative subscription charge as
+            // gross. Never trust client-supplied gross hints — a tampered
+            // value could inflate the discount and the referral rebate.
+            const grossForDiscount = subscriptionAmountSmallest;
+            const serverDiscount = computeBuyerDiscountSmallest(
+              grossForDiscount,
+              found.buyer_discount_type,
+              Number(found.buyer_discount_value)
+            );
+            affiliateDiscountAmount = Math.min(
+              serverDiscount,
+              Math.max(subscriptionAmountSmallest - 50, 0)
+            );
+            affiliateGrossSmallestValidated = grossForDiscount;
+            affiliateCodeIdValidated = found.id;
+            affiliateIdValidated = found.affiliate_id;
+            validatedAffiliate = found;
+          }
+        }
+      } catch (lookupErr) {
+        console.warn(
+          "Affiliate code lookup failed; subscription will be billed at full price:",
+          lookupErr
+        );
+      }
+    }
+
+    if (validatedAffiliate && affiliateDiscountAmount > 0) {
+      try {
+        const coupon = await withStripeRetry(() =>
+          stripe.coupons.create(
+            {
+              amount_off: affiliateDiscountAmount,
+              currency: stripeCurrency,
+              duration: "once",
+              name: `Affiliate ${String(affiliateCode).slice(0, 32)} (first payment)`,
+              metadata: {
+                affiliateCode: String(affiliateCode),
+                affiliateCodeId: String(affiliateCodeIdValidated),
+                affiliateId: String(affiliateIdValidated),
+              },
+            },
+            stripeOptions
+          )
+        );
+        affiliateCouponId = coupon.id;
+      } catch (couponErr) {
+        console.warn(
+          "Failed to create affiliate coupon; subscription will be billed at full price:",
+          couponErr
+        );
+      }
+    }
+
     const subscriptionIdempotencyKey = stableIdempotencyKey("sub", {
       customerId: customer.id,
       priceId: price.id,
@@ -202,6 +310,9 @@ export default async function handler(
           ...(applicationFeePercent > 0 && {
             application_fee_percent: applicationFeePercent,
           }),
+          ...(affiliateCouponId && {
+            discounts: [{ coupon: affiliateCouponId }],
+          }),
           metadata: {
             productEventId,
             sellerPubkey,
@@ -213,6 +324,20 @@ export default async function handler(
             ...(applicationFeePercent > 0 && {
               mmDonationPercent: applicationFeePercent.toString(),
             }),
+            // Only stamp affiliate metadata when a coupon was actually
+            // attached to the subscription. The webhook keys off this
+            // metadata to record the referral on the first invoice — if no
+            // discount was applied, no referral should be recorded.
+            ...(affiliateCouponId &&
+              validatedAffiliate && {
+                affiliateCode: String(affiliateCode),
+                affiliateCodeId: String(affiliateCodeIdValidated),
+                affiliateId: String(affiliateIdValidated),
+                affiliateGrossSubtotalSmallest: String(
+                  affiliateGrossSmallestValidated
+                ),
+                affiliateBuyerDiscountSmallest: String(affiliateDiscountAmount),
+              }),
           },
         },
         { ...(stripeOptions ?? {}), idempotencyKey: subscriptionIdempotencyKey }

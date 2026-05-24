@@ -649,13 +649,34 @@ export default function Component() {
     if (uniqueSellerPubkeys.length === 0) return;
     let cancelled = false;
     (async () => {
+      // Load any affiliate codes that were attached at add-to-cart time
+      // (persisted by checkout-card.tsx under `cartAffiliates`). This is
+      // the durable attribution path — even if the ?ref= cookie has been
+      // cleared or expired, the affiliate code stays bound to the cart
+      // item the buyer added under that referral.
+      let persistedAffiliates: Record<string, { code?: string }> = {};
+      try {
+        const raw = localStorage.getItem("cartAffiliates");
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && typeof parsed === "object")
+            persistedAffiliates = parsed;
+        }
+      } catch {}
+
       for (const pubkey of uniqueSellerPubkeys) {
         if (cancelled) return;
+        // Strict mutual exclusion: if anything is already attached to this
+        // seller (regular discount OR affiliate), don't auto-apply on top.
         if (discountCodes[pubkey] || affiliateMetaBySeller[pubkey]) continue;
-        // Prefer a code that was set on this seller's storefront over the
-        // wildcard slot, so a code captured on seller A doesn't leak onto
-        // seller B at multi-seller checkout.
-        const code = getAffiliateRefCookie(pubkey);
+        // Prefer the per-cart persisted code (set when the item was added),
+        // then fall back to the cookie. The cookie path also prefers a code
+        // bound to this seller over the wildcard slot, so a code captured
+        // on seller A doesn't leak onto seller B at multi-seller checkout.
+        const code =
+          persistedAffiliates[pubkey]?.code ||
+          getAffiliateRefCookie(pubkey) ||
+          null;
         if (!code) continue;
         try {
           const res = await fetch(
