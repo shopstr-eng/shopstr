@@ -13,12 +13,16 @@ import {
 } from "@/utils/nostr/request-auth";
 import ConfirmActionDropdown from "../utility-components/dropdowns/confirm-action-dropdown";
 
+type ShippingDiscountType = "none" | "free" | "percent" | "fixed";
+
 interface DiscountCode {
   code: string;
   discount_percentage: number;
   expiration: number | null;
   max_uses: number | null;
   times_used: number;
+  shipping_discount_type: ShippingDiscountType;
+  shipping_discount_value: number;
 }
 
 export default function DiscountCodes() {
@@ -28,6 +32,9 @@ export default function DiscountCodes() {
   const [newDiscount, setNewDiscount] = useState("");
   const [newExpiration, setNewExpiration] = useState("");
   const [newMaxUses, setNewMaxUses] = useState("");
+  const [newShippingType, setNewShippingType] =
+    useState<ShippingDiscountType>("none");
+  const [newShippingValue, setNewShippingValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -62,11 +69,29 @@ export default function DiscountCodes() {
   };
 
   const handleAddCode = async () => {
-    if (!pubkey || !signer || !newCode || !newDiscount) return;
+    if (!pubkey || !signer || !newCode) return;
 
-    const discount = parseFloat(newDiscount);
-    if (discount <= 0 || discount > 100) {
-      alert("Discount must be between 0 and 100");
+    const discount = parseFloat(newDiscount) || 0;
+    const shipVal =
+      newShippingType === "free" ? 0 : parseFloat(newShippingValue) || 0;
+
+    // A code must offer something — either a product percentage or a shipping
+    // discount. Mirrors the API-side check so the seller sees the error
+    // immediately rather than after a round-trip.
+    if (discount <= 0 && newShippingType === "none") {
+      alert("Set a product discount or a shipping discount.");
+      return;
+    }
+    if (discount < 0 || discount > 100) {
+      alert("Product discount must be between 0 and 100.");
+      return;
+    }
+    if (newShippingType === "percent" && (shipVal <= 0 || shipVal > 100)) {
+      alert("Shipping % off must be between 0 and 100.");
+      return;
+    }
+    if (newShippingType === "fixed" && shipVal <= 0) {
+      alert("Flat shipping discount must be greater than 0.");
       return;
     }
 
@@ -83,6 +108,12 @@ export default function DiscountCodes() {
             pubkey,
             discountPercentage: discount,
             expiration,
+            shippingDiscountType:
+              newShippingType === "none" ? undefined : newShippingType,
+            shippingDiscountValue:
+              newShippingType === "percent" || newShippingType === "fixed"
+                ? shipVal
+                : undefined,
           })
         )
       );
@@ -101,6 +132,8 @@ export default function DiscountCodes() {
           discountPercentage: discount,
           expiration,
           maxUses,
+          shippingDiscountType: newShippingType,
+          shippingDiscountValue: shipVal,
         }),
       });
 
@@ -109,6 +142,8 @@ export default function DiscountCodes() {
         setNewDiscount("");
         setNewExpiration("");
         setNewMaxUses("");
+        setNewShippingType("none");
+        setNewShippingValue("");
         await fetchCodes();
       } else {
         alert("Failed to add discount code");
@@ -155,13 +190,24 @@ export default function DiscountCodes() {
     return Date.now() / 1000 > expiration;
   };
 
+  const describeShipping = (
+    type: ShippingDiscountType,
+    value: number
+  ): string | null => {
+    if (type === "free") return "Free shipping";
+    if (type === "percent" && value > 0) return `${value}% off shipping`;
+    if (type === "fixed" && value > 0)
+      return `${value} off shipping (in buyer's cart currency)`;
+    return null;
+  };
+
   return (
     <div className="w-full space-y-6 p-4">
       <div className="mb-6">
         <h2 className="mb-2 text-2xl font-bold text-black">Discount Codes</h2>
         <p className="text-sm text-gray-600">
-          Create discount codes that customers can use at checkout to reduce the
-          price of all products in their order.
+          Create discount codes that customers can use at checkout. A code can
+          give a percentage off products, a shipping discount, or both.
         </p>
       </div>
 
@@ -181,16 +227,69 @@ export default function DiscountCodes() {
           />
           <Input
             type="number"
-            label="Discount Percentage"
+            label="Product Discount Percentage"
             placeholder="10"
-            min="0.01"
+            min="0"
             max="100"
             step="0.01"
             value={newDiscount}
             onChange={(e) => setNewDiscount(e.target.value)}
             endContent={<span className="text-default-400">%</span>}
+            description="Set to 0 if this code only discounts shipping."
             className="text-white"
           />
+
+          <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+            <label className="flex items-center gap-3 text-sm font-semibold text-black">
+              <input
+                type="checkbox"
+                checked={newShippingType !== "none"}
+                onChange={(e) => {
+                  setNewShippingType(e.target.checked ? "free" : "none");
+                  if (!e.target.checked) setNewShippingValue("");
+                }}
+                className="h-4 w-4 rounded border-gray-300"
+              />
+              Also discount shipping
+            </label>
+            {newShippingType !== "none" && (
+              <div className="mt-3 ml-7 flex flex-wrap items-center gap-2">
+                <select
+                  className="rounded border border-gray-300 bg-white px-2 py-1 text-sm text-black"
+                  value={newShippingType}
+                  onChange={(e) => {
+                    const next = e.target.value as ShippingDiscountType;
+                    setNewShippingType(next);
+                    if (next === "free") setNewShippingValue("");
+                  }}
+                >
+                  <option value="free">Free shipping</option>
+                  <option value="percent">% off shipping</option>
+                  <option value="fixed">Flat amount off shipping</option>
+                </select>
+                {newShippingType !== "free" && (
+                  <>
+                    <Input
+                      type="number"
+                      min="0"
+                      max={newShippingType === "percent" ? 100 : undefined}
+                      step={newShippingType === "fixed" ? 0.01 : 1}
+                      placeholder={newShippingType === "percent" ? "50" : "5"}
+                      value={newShippingValue}
+                      onChange={(e) => setNewShippingValue(e.target.value)}
+                      className="w-32 text-white"
+                    />
+                    <span className="text-sm text-gray-600">
+                      {newShippingType === "percent"
+                        ? "% off shipping"
+                        : "off shipping (in buyer's cart currency)"}
+                    </span>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+
           <Input
             type="datetime-local"
             label="Expiration (Optional)"
@@ -214,7 +313,11 @@ export default function DiscountCodes() {
           <Button
             className={BLUEBUTTONCLASSNAMES}
             onClick={handleAddCode}
-            isDisabled={!newCode || !newDiscount || isSaving}
+            isDisabled={
+              !newCode ||
+              (!(parseFloat(newDiscount) > 0) && newShippingType === "none") ||
+              isSaving
+            }
             isLoading={isSaving}
           >
             Add Code
@@ -235,58 +338,74 @@ export default function DiscountCodes() {
             </CardBody>
           </Card>
         ) : (
-          codes.map((code) => (
-            <Card key={code.code} className="bg-white">
-              <CardBody>
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-lg font-bold text-black">
-                        {code.code}
-                      </span>
-                      {isExpired(code.expiration) && (
-                        <Chip color="warning" size="sm">
-                          Expired
-                        </Chip>
-                      )}
-                      {code.max_uses !== null &&
-                        code.times_used >= code.max_uses && (
-                          <Chip color="danger" size="sm">
-                            Fully Used
+          codes.map((code) => {
+            const shipDesc = describeShipping(
+              code.shipping_discount_type,
+              code.shipping_discount_value
+            );
+            return (
+              <Card key={code.code} className="bg-white">
+                <CardBody>
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-lg font-bold text-black">
+                          {code.code}
+                        </span>
+                        {isExpired(code.expiration) && (
+                          <Chip color="warning" size="sm">
+                            Expired
                           </Chip>
                         )}
-                    </div>
-                    <p className="text-sm text-black">
-                      {code.discount_percentage}% off
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      Used: {code.times_used}
-                      {code.max_uses !== null
-                        ? ` / ${code.max_uses}`
-                        : " (unlimited)"}
-                    </p>
-                    {code.expiration && (
+                        {code.max_uses !== null &&
+                          code.times_used >= code.max_uses && (
+                            <Chip color="danger" size="sm">
+                              Fully Used
+                            </Chip>
+                          )}
+                      </div>
+                      {code.discount_percentage > 0 && (
+                        <p className="text-sm text-black">
+                          {code.discount_percentage}% off products
+                        </p>
+                      )}
+                      {shipDesc && (
+                        <p className="text-sm text-black">{shipDesc}</p>
+                      )}
                       <p className="text-xs text-gray-500">
-                        {isExpired(code.expiration)
-                          ? "Expired on: "
-                          : "Expires: "}
-                        {new Date(code.expiration * 1000).toLocaleString()}
+                        Used: {code.times_used}
+                        {code.max_uses !== null
+                          ? ` / ${code.max_uses}`
+                          : " (unlimited)"}
                       </p>
-                    )}
+                      {code.expiration && (
+                        <p className="text-xs text-gray-500">
+                          {isExpired(code.expiration)
+                            ? "Expired on: "
+                            : "Expires: "}
+                          {new Date(code.expiration * 1000).toLocaleString()}
+                        </p>
+                      )}
+                    </div>
+                    <ConfirmActionDropdown
+                      helpText="Are you sure you want to delete this discount code?"
+                      buttonLabel="Delete Code"
+                      onConfirm={() => handleDeleteCode(code.code)}
+                    >
+                      <Button
+                        isIconOnly
+                        color="danger"
+                        variant="light"
+                        size="sm"
+                      >
+                        <TrashIcon className="h-5 w-5" />
+                      </Button>
+                    </ConfirmActionDropdown>
                   </div>
-                  <ConfirmActionDropdown
-                    helpText="Are you sure you want to delete this discount code?"
-                    buttonLabel="Delete Code"
-                    onConfirm={() => handleDeleteCode(code.code)}
-                  >
-                    <Button isIconOnly color="danger" variant="light" size="sm">
-                      <TrashIcon className="h-5 w-5" />
-                    </Button>
-                  </ConfirmActionDropdown>
-                </div>
-              </CardBody>
-            </Card>
-          ))
+                </CardBody>
+              </Card>
+            );
+          })
         )}
       </div>
     </div>

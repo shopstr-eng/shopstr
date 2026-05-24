@@ -112,6 +112,13 @@ export default function CheckoutCard({
   const [currentPrice, setCurrentPrice] = useState(productData.price);
   const [discountCode, setDiscountCode] = useState("");
   const [appliedDiscount, setAppliedDiscount] = useState<number>(0);
+  // Shipping discount tied to the same redeemed code. Independent from the
+  // product percentage — a welcome code can be shipping-only (e.g. free
+  // shipping with 0% product discount).
+  const [appliedShippingDiscount, setAppliedShippingDiscount] = useState<{
+    type: "none" | "free" | "percent" | "fixed";
+    value: number;
+  }>({ type: "none", value: 0 });
   const [discountError, setDiscountError] = useState("");
   const [affiliateMeta, setAffiliateMeta] = useState<{
     code: string;
@@ -554,23 +561,38 @@ export default function CheckoutCard({
 
       const result = await response.json();
 
-      if (result.valid && result.discount_percentage) {
-        setAppliedDiscount(result.discount_percentage);
+      const shipType = (result.shipping_discount_type || "none") as
+        | "none"
+        | "free"
+        | "percent"
+        | "fixed";
+      const shipVal = Number(result.shipping_discount_value) || 0;
+      const hasShipping = shipType !== "none";
+
+      if (
+        result.valid &&
+        (Number(result.discount_percentage) > 0 || hasShipping)
+      ) {
+        setAppliedDiscount(Number(result.discount_percentage) || 0);
+        setAppliedShippingDiscount({ type: shipType, value: shipVal });
         setDiscountError("");
       } else {
         setDiscountError("Invalid or expired discount code");
         setAppliedDiscount(0);
+        setAppliedShippingDiscount({ type: "none", value: 0 });
       }
     } catch (error) {
       console.error("Failed to apply discount:", error);
       setDiscountError("Failed to apply discount code");
       setAppliedDiscount(0);
+      setAppliedShippingDiscount({ type: "none", value: 0 });
     }
   };
 
   const handleRemoveDiscount = () => {
     setDiscountCode("");
     setAppliedDiscount(0);
+    setAppliedShippingDiscount({ type: "none", value: 0 });
     setDiscountError("");
     setAffiliateMeta(null);
   };
@@ -1193,10 +1215,16 @@ export default function CheckoutCard({
               selectedBulkOption={
                 selectedBulkOption ? parseInt(selectedBulkOption) : undefined
               }
-              discountCode={appliedDiscount > 0 ? discountCode : undefined}
+              discountCode={
+                appliedDiscount > 0 || appliedShippingDiscount.type !== "none"
+                  ? discountCode
+                  : undefined
+              }
               discountPercentage={
                 appliedDiscount > 0 ? appliedDiscount : undefined
               }
+              shippingDiscountType={appliedShippingDiscount.type}
+              shippingDiscountValue={appliedShippingDiscount.value}
               affiliateMeta={affiliateMeta}
               originalPrice={currentPrice}
               isSubscription={hasSubscription && isSubscriptionSelected}

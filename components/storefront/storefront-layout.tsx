@@ -979,7 +979,9 @@ export default function StorefrontLayout({
       </div>
       <SignInModal isOpen={isOpen} onClose={onClose} />
       {storefront.emailPopup?.enabled &&
-        storefront.emailPopup.discountPercentage > 0 && (
+        (storefront.emailPopup.discountPercentage > 0 ||
+          (storefront.emailPopup.shippingDiscountType &&
+            storefront.emailPopup.shippingDiscountType !== "none")) && (
           <StorefrontEmailPopupComponent
             config={storefront.emailPopup}
             colors={colors}

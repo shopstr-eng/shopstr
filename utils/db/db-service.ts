@@ -361,16 +361,24 @@ async function initializeTables(): Promise<void> {
       CREATE INDEX IF NOT EXISTS idx_config_events_pubkey ON config_events(pubkey);
 
       -- Discount codes table
+      -- discount_percentage may be 0 when the code only offers a shipping
+      -- discount (shipping_discount_type != 'none'). The composite "must
+      -- discount something" check is enforced below.
       CREATE TABLE IF NOT EXISTS discount_codes (
           id SERIAL PRIMARY KEY,
           code TEXT NOT NULL,
           pubkey TEXT NOT NULL,
-          discount_percentage DECIMAL(5,2) NOT NULL CHECK (discount_percentage > 0 AND discount_percentage <= 100),
+          discount_percentage DECIMAL(5,2) NOT NULL DEFAULT 0 CHECK (discount_percentage >= 0 AND discount_percentage <= 100),
+          shipping_discount_type TEXT NOT NULL DEFAULT 'none' CHECK (shipping_discount_type IN ('none','percent','fixed','free')),
+          shipping_discount_value DECIMAL(12,2) NOT NULL DEFAULT 0 CHECK (shipping_discount_value >= 0),
           expiration BIGINT,
           max_uses INTEGER,
           times_used INTEGER NOT NULL DEFAULT 0,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          UNIQUE(code, pubkey)
+          UNIQUE(code, pubkey),
+          CONSTRAINT discount_codes_has_discount CHECK (
+            discount_percentage > 0 OR shipping_discount_type <> 'none'
+          )
       );
 
       CREATE INDEX IF NOT EXISTS idx_discount_codes_pubkey ON discount_codes(pubkey);
@@ -767,6 +775,47 @@ async function initializeTables(): Promise<void> {
           WHERE table_name = 'discount_codes' AND column_name = 'times_used'
         ) THEN
           ALTER TABLE discount_codes ADD COLUMN times_used INTEGER NOT NULL DEFAULT 0;
+        END IF;
+        -- Shipping discount columns (free / percent-off / fixed-amount-off
+        -- shipping, layered on top of the existing product percentage).
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'discount_codes' AND column_name = 'shipping_discount_type'
+        ) THEN
+          ALTER TABLE discount_codes
+            ADD COLUMN shipping_discount_type TEXT NOT NULL DEFAULT 'none'
+            CHECK (shipping_discount_type IN ('none','percent','fixed','free'));
+        END IF;
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'discount_codes' AND column_name = 'shipping_discount_value'
+        ) THEN
+          ALTER TABLE discount_codes
+            ADD COLUMN shipping_discount_value DECIMAL(12,2) NOT NULL DEFAULT 0
+            CHECK (shipping_discount_value >= 0);
+        END IF;
+        -- Relax the original "discount_percentage > 0" CHECK so a code can
+        -- exist as shipping-discount-only (0% product, free/discounted
+        -- shipping). The composite "must discount something" constraint is
+        -- enforced by discount_codes_has_discount below.
+        IF EXISTS (
+          SELECT 1 FROM pg_constraint
+          WHERE conname = 'discount_codes_discount_percentage_check'
+        ) THEN
+          ALTER TABLE discount_codes
+            DROP CONSTRAINT discount_codes_discount_percentage_check;
+          ALTER TABLE discount_codes
+            ADD CONSTRAINT discount_codes_discount_percentage_check
+            CHECK (discount_percentage >= 0 AND discount_percentage <= 100);
+        END IF;
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint
+          WHERE conname = 'discount_codes_has_discount'
+        ) THEN
+          ALTER TABLE discount_codes
+            ADD CONSTRAINT discount_codes_has_discount CHECK (
+              discount_percentage > 0 OR shipping_discount_type <> 'none'
+            );
         END IF;
       END $$;
     `);
@@ -2471,13 +2520,23 @@ export async function fetchBlossomConfigFromDb(
   return fetchCachedEvents(10063, { pubkey });
 }
 
+// Shipping discount type — see `discount_codes.shipping_discount_type` CHECK.
+//   - 'none'    : code has no shipping discount (regular product-only code)
+//   - 'free'    : shipping is waived for that seller's portion of the order
+//   - 'percent' : `shipping_discount_value` % off shipping (0-100)
+//   - 'fixed'   : `shipping_discount_value` units off shipping, denominated
+//                 in the cart's display currency (or sats for sats carts)
+export type ShippingDiscountType = "none" | "free" | "percent" | "fixed";
+
 // Add discount code
 export async function addDiscountCode(
   code: string,
   pubkey: string,
   discountPercentage: number,
   expiration?: number,
-  maxUses?: number
+  maxUses?: number,
+  shippingDiscountType: ShippingDiscountType = "none",
+  shippingDiscountValue: number = 0
 ): Promise<void> {
   const dbPool = getDbPool();
   let client;
@@ -2485,18 +2544,26 @@ export async function addDiscountCode(
   try {
     client = await dbPool.connect();
     const query = {
-      text: `INSERT INTO discount_codes (code, pubkey, discount_percentage, expiration, max_uses)
-             VALUES ($1, $2, $3, $4, $5)
+      text: `INSERT INTO discount_codes (
+               code, pubkey, discount_percentage, expiration, max_uses,
+               shipping_discount_type, shipping_discount_value
+             )
+             VALUES ($1, $2, $3, $4, $5, $6, $7)
              ON CONFLICT (code, pubkey) DO UPDATE SET
                discount_percentage = EXCLUDED.discount_percentage,
                expiration = EXCLUDED.expiration,
-               max_uses = EXCLUDED.max_uses`,
+               max_uses = EXCLUDED.max_uses,
+               shipping_discount_type = EXCLUDED.shipping_discount_type,
+               shipping_discount_value = EXCLUDED.shipping_discount_value`,
       values: [
         code,
         pubkey,
         discountPercentage,
         expiration ?? null,
         maxUses ?? null,
+        shippingDiscountType,
+        // 'free' codes ignore value; normalize to 0 so the row is consistent.
+        shippingDiscountType === "free" ? 0 : shippingDiscountValue,
       ] as any[],
     };
     await client.query(query);
@@ -2518,6 +2585,8 @@ export async function getDiscountCodesByPubkey(pubkey: string): Promise<
     expiration: number | null;
     max_uses: number | null;
     times_used: number;
+    shipping_discount_type: ShippingDiscountType;
+    shipping_discount_value: number;
   }>
 > {
   const dbPool = getDbPool();
@@ -2526,13 +2595,22 @@ export async function getDiscountCodesByPubkey(pubkey: string): Promise<
   try {
     client = await dbPool.connect();
     const result = await client.query(
-      `SELECT code, discount_percentage, expiration, max_uses, times_used FROM discount_codes WHERE pubkey = $1 ORDER BY created_at DESC`,
+      `SELECT code, discount_percentage, expiration, max_uses, times_used,
+              shipping_discount_type, shipping_discount_value
+         FROM discount_codes
+        WHERE pubkey = $1
+        ORDER BY created_at DESC`,
       [pubkey]
     );
     return result.rows.map((row) => ({
       code: row.code,
       discount_percentage: Number(row.discount_percentage),
       expiration: row.expiration === null ? null : Number(row.expiration),
+      max_uses: row.max_uses === null ? null : Number(row.max_uses),
+      times_used: Number(row.times_used ?? 0),
+      shipping_discount_type:
+        (row.shipping_discount_type as ShippingDiscountType) || "none",
+      shipping_discount_value: Number(row.shipping_discount_value ?? 0),
     }));
   } catch (error) {
     console.error("Failed to fetch discount codes:", error);
@@ -2559,7 +2637,12 @@ export function normalizeDiscountCode(code: string): string {
 export async function validateDiscountCode(
   code: string,
   pubkey: string
-): Promise<{ valid: boolean; discount_percentage?: number }> {
+): Promise<{
+  valid: boolean;
+  discount_percentage?: number;
+  shipping_discount_type?: ShippingDiscountType;
+  shipping_discount_value?: number;
+}> {
   const dbPool = getDbPool();
   let client;
 
@@ -2571,7 +2654,8 @@ export async function validateDiscountCode(
     // on both sides avoids false "invalid code" failures.
     const normalizedCode = normalizeDiscountCode(code);
     const result = await client.query(
-      `SELECT discount_percentage, expiration, max_uses, times_used
+      `SELECT discount_percentage, expiration, max_uses, times_used,
+              shipping_discount_type, shipping_discount_value
        FROM discount_codes
        WHERE UPPER(BTRIM(code)) = UPPER(BTRIM($1)) AND pubkey = $2`,
       [normalizedCode, pubkey]
@@ -2581,8 +2665,14 @@ export async function validateDiscountCode(
       return { valid: false };
     }
 
-    const { discount_percentage, expiration, max_uses, times_used } =
-      result.rows[0];
+    const {
+      discount_percentage,
+      expiration,
+      max_uses,
+      times_used,
+      shipping_discount_type,
+      shipping_discount_value,
+    } = result.rows[0];
 
     if (expiration && Date.now() / 1000 > expiration) {
       return { valid: false };
@@ -2592,7 +2682,13 @@ export async function validateDiscountCode(
       return { valid: false };
     }
 
-    return { valid: true, discount_percentage: Number(discount_percentage) };
+    return {
+      valid: true,
+      discount_percentage: Number(discount_percentage),
+      shipping_discount_type:
+        (shipping_discount_type as ShippingDiscountType) || "none",
+      shipping_discount_value: Number(shipping_discount_value ?? 0),
+    };
   } catch (error) {
     console.error("Failed to validate discount code:", error);
     return { valid: false };

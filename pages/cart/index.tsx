@@ -190,6 +190,17 @@ export default function Component() {
   const [appliedDiscounts, setAppliedDiscounts] = useState<{
     [pubkey: string]: number;
   }>({});
+  // Per-seller shipping discount captured from the same discount-code
+  // validation as `appliedDiscounts`. Codes may carry a shipping discount
+  // in addition to (or instead of) a product percentage, so we track it
+  // separately and pass it to CartInvoiceCard to apply at shipping math
+  // time. Affiliate codes never carry shipping discounts.
+  const [appliedShippingDiscounts, setAppliedShippingDiscounts] = useState<{
+    [pubkey: string]: {
+      type: "none" | "free" | "percent" | "fixed";
+      value: number;
+    };
+  }>({});
   const [discountErrors, setDiscountErrors] = useState<{
     [pubkey: string]: string;
   }>({});
@@ -457,12 +468,31 @@ export default function Component() {
             }
 
             const result = await response.json();
+            // A code is considered "valid for this cart" if it carries a
+            // product percentage OR a shipping discount. A welcome code can
+            // be shipping-only, so we don't gate on discount_percentage > 0.
+            const shipType = (result.shipping_discount_type || "none") as
+              | "none"
+              | "free"
+              | "percent"
+              | "fixed";
+            const shipVal = Number(result.shipping_discount_value) || 0;
+            const hasShipping = shipType !== "none";
             if (
               result.valid &&
-              typeof result.discount_percentage === "number" &&
-              result.discount_percentage > 0
+              ((typeof result.discount_percentage === "number" &&
+                result.discount_percentage > 0) ||
+                hasShipping)
             ) {
-              return { pubkey, code, percentage: result.discount_percentage };
+              return {
+                pubkey,
+                code,
+                percentage:
+                  typeof result.discount_percentage === "number"
+                    ? result.discount_percentage
+                    : 0,
+                shipping: { type: shipType, value: shipVal },
+              };
             }
 
             return null;
@@ -471,7 +501,12 @@ export default function Component() {
               `Network error revalidating discount code for ${pubkey}; keeping for next load.`,
               error
             );
-            return { pubkey, code, percentage: null as null };
+            return {
+              pubkey,
+              code,
+              percentage: null as null,
+              shipping: null as null,
+            };
           }
         })
       );
@@ -482,6 +517,12 @@ export default function Component() {
 
       const codes: { [pubkey: string]: string } = {};
       const applied: { [pubkey: string]: number } = {};
+      const appliedShipping: {
+        [pubkey: string]: {
+          type: "none" | "free" | "percent" | "fixed";
+          value: number;
+        };
+      } = {};
       const refreshedDiscounts: CartDiscountsMap = {};
 
       validatedDiscounts.forEach((entry) => {
@@ -492,11 +533,15 @@ export default function Component() {
         if (entry.percentage !== null) {
           codes[entry.pubkey] = entry.code;
           applied[entry.pubkey] = entry.percentage;
+          if (entry.shipping && entry.shipping.type !== "none") {
+            appliedShipping[entry.pubkey] = entry.shipping;
+          }
         }
       });
 
       setDiscountCodes(codes);
       setAppliedDiscounts(applied);
+      setAppliedShippingDiscounts(appliedShipping);
       setIsValidatingDiscounts(false);
 
       if (Object.keys(refreshedDiscounts).length > 0) {
@@ -815,7 +860,18 @@ export default function Component() {
 
       const result = await response.json();
 
-      if (result.valid && result.discount_percentage) {
+      const resultShipType = (result.shipping_discount_type || "none") as
+        | "none"
+        | "free"
+        | "percent"
+        | "fixed";
+      const resultShipVal = Number(result.shipping_discount_value) || 0;
+      const resultHasShipping = resultShipType !== "none";
+
+      if (
+        result.valid &&
+        (result.discount_percentage > 0 || resultHasShipping)
+      ) {
         // A regular discount won — clear any previous affiliate attribution
         // so the order doesn't mistakenly send a rebate to an affiliate.
         if (affiliateMetaBySeller[pubkey]) {
@@ -824,7 +880,15 @@ export default function Component() {
         }
         setAppliedDiscounts({
           ...appliedDiscounts,
-          [pubkey]: result.discount_percentage,
+          [pubkey]: Number(result.discount_percentage) || 0,
+        });
+        // Mirror the seller's shipping discount into the per-pubkey state
+        // so CartInvoiceCard can apply it at shipping math time. Always
+        // assign — even "none" — so re-applying a code that *removed* a
+        // prior shipping discount overwrites the previous entry.
+        setAppliedShippingDiscounts({
+          ...appliedShippingDiscounts,
+          [pubkey]: { type: resultShipType, value: resultShipVal },
         });
         setDiscountErrors({ ...discountErrors, [pubkey]: "" });
 
@@ -868,6 +932,14 @@ export default function Component() {
             }
           }
           setAppliedDiscounts({ ...appliedDiscounts, [pubkey]: percent });
+          // Affiliate codes never carry shipping discounts; clear any
+          // previous shipping discount that was on this seller from a
+          // prior (non-affiliate) code.
+          setAppliedShippingDiscounts((prev) => {
+            const next = { ...prev };
+            delete next[pubkey];
+            return next;
+          });
           setAffiliateMetaBySeller({
             ...affiliateMetaBySeller,
             [pubkey]: {
@@ -897,6 +969,14 @@ export default function Component() {
           [pubkey]: "Invalid or expired discount code",
         });
         setAppliedDiscounts({ ...appliedDiscounts, [pubkey]: 0 });
+        // Also drop any stale shipping discount tied to this seller so an
+        // expired/exhausted code can't keep waiving shipping after it stops
+        // discounting the product subtotal.
+        setAppliedShippingDiscounts((prev) => {
+          const next = { ...prev };
+          delete next[pubkey];
+          return next;
+        });
       }
     } catch (error) {
       console.error("Failed to apply discount:", error);
@@ -905,12 +985,22 @@ export default function Component() {
         [pubkey]: "Failed to apply discount code",
       });
       setAppliedDiscounts({ ...appliedDiscounts, [pubkey]: 0 });
+      setAppliedShippingDiscounts((prev) => {
+        const next = { ...prev };
+        delete next[pubkey];
+        return next;
+      });
     }
   };
 
   const handleRemoveDiscount = (pubkey: string) => {
     setDiscountCodes({ ...discountCodes, [pubkey]: "" });
     setAppliedDiscounts({ ...appliedDiscounts, [pubkey]: 0 });
+    setAppliedShippingDiscounts((prev) => {
+      const next = { ...prev };
+      delete next[pubkey];
+      return next;
+    });
     setDiscountErrors({ ...discountErrors, [pubkey]: "" });
     setAffiliateMetaBySeller((prev) => {
       const next = { ...prev };
@@ -1495,6 +1585,7 @@ export default function Component() {
                 totalCostsInSats={totalCostsInSats}
                 subtotalCost={subtotal}
                 appliedDiscounts={appliedDiscounts}
+                appliedShippingDiscounts={appliedShippingDiscounts}
                 discountCodes={discountCodes}
                 affiliateMetaBySeller={affiliateMetaBySeller}
                 shopProfiles={shopContext.shopData}

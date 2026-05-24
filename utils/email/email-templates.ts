@@ -752,13 +752,35 @@ export function popupDiscountEmail(params: {
   discountCode: string;
   discountPercentage: number;
   shopName: string;
+  shippingDiscountType?: "none" | "free" | "percent" | "fixed";
+  shippingDiscountValue?: number;
 }): { subject: string; html: string } {
+  // Build a human-readable benefit string that may combine product and
+  // shipping discounts ("15% off + free shipping", "free shipping", etc.).
+  const parts: string[] = [];
+  if (params.discountPercentage > 0) {
+    parts.push(`<strong>${params.discountPercentage}% off</strong>`);
+  }
+  if (params.shippingDiscountType === "free") {
+    parts.push(`<strong>free shipping</strong>`);
+  } else if (
+    params.shippingDiscountType === "percent" &&
+    (params.shippingDiscountValue ?? 0) > 0
+  ) {
+    parts.push(
+      `<strong>${params.shippingDiscountValue}% off shipping</strong>`
+    );
+  } else if (
+    params.shippingDiscountType === "fixed" &&
+    (params.shippingDiscountValue ?? 0) > 0
+  ) {
+    parts.push(`<strong>${params.shippingDiscountValue} off shipping</strong>`);
+  }
+  const benefit = parts.length > 0 ? parts.join(" and ") : "a discount";
   const body = `
     <h2 style="margin:0 0 16px;color:#111827;font-size:20px;">Welcome! Here's your discount code</h2>
     <p style="margin:0 0 24px;color:#374151;font-size:15px;line-height:1.6;">
-      Thanks for signing up! Use the code below to get <strong>${
-        params.discountPercentage
-      }% off</strong> your next order at <strong>${esc(
+      Thanks for signing up! Use the code below to get ${benefit} on your next order at <strong>${esc(
         params.shopName
       )}</strong>.
     </p>

@@ -209,11 +209,15 @@ export function buildDiscountCodeCreateProof({
   pubkey,
   discountPercentage,
   expiration,
+  shippingDiscountType,
+  shippingDiscountValue,
 }: {
   code: string;
   pubkey: string;
   discountPercentage: number;
   expiration?: number;
+  shippingDiscountType?: "none" | "free" | "percent" | "fixed";
+  shippingDiscountValue?: number;
 }): SignedHttpRequestProof {
   return {
     action: "create_discount_code",
@@ -224,6 +228,11 @@ export function buildDiscountCodeCreateProof({
       code,
       discountPercentage,
       expiration,
+      // Optional — older clients that don't sign these will produce a proof
+      // identical to a body that also omits them, so legacy product-only
+      // codes keep working without a forced client upgrade.
+      shippingDiscountType,
+      shippingDiscountValue,
     },
   };
 }

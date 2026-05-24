@@ -2070,7 +2070,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                               <div className="flex items-center gap-2">
                                 <Input
                                   type="number"
-                                  min={1}
+                                  min={0}
                                   max={100}
                                   classNames={{
                                     inputWrapper:
@@ -2085,17 +2085,129 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                                       discountPercentage: Math.min(
                                         100,
                                         Math.max(
-                                          1,
-                                          parseInt(e.target.value) || 1
+                                          0,
+                                          parseInt(e.target.value) || 0
                                         )
                                       ),
                                     })
                                   }
                                 />
                                 <span className="text-sm font-medium text-gray-600">
-                                  % off
+                                  % off products
                                 </span>
                               </div>
+                              <p className="mt-1 text-xs text-gray-500">
+                                Set to 0 if you only want this welcome code to
+                                discount shipping.
+                              </p>
+                            </div>
+
+                            <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                              <label className="flex items-center gap-3 text-sm font-semibold text-black">
+                                <input
+                                  type="checkbox"
+                                  checked={
+                                    (emailPopup.shippingDiscountType ||
+                                      "none") !== "none"
+                                  }
+                                  onChange={(e) =>
+                                    setEmailPopup({
+                                      ...emailPopup,
+                                      shippingDiscountType: e.target.checked
+                                        ? "free"
+                                        : "none",
+                                      shippingDiscountValue: e.target.checked
+                                        ? emailPopup.shippingDiscountValue || 0
+                                        : 0,
+                                    })
+                                  }
+                                  className="h-4 w-4 rounded border-gray-300"
+                                />
+                                Also discount shipping
+                              </label>
+                              {(emailPopup.shippingDiscountType || "none") !==
+                                "none" && (
+                                <div className="mt-3 ml-7 space-y-2">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <select
+                                      className="rounded border border-gray-300 bg-white px-2 py-1 text-sm text-black"
+                                      value={
+                                        emailPopup.shippingDiscountType ||
+                                        "free"
+                                      }
+                                      onChange={(e) =>
+                                        setEmailPopup({
+                                          ...emailPopup,
+                                          shippingDiscountType: e.target
+                                            .value as
+                                            | "free"
+                                            | "percent"
+                                            | "fixed",
+                                          shippingDiscountValue:
+                                            e.target.value === "free"
+                                              ? 0
+                                              : emailPopup.shippingDiscountValue ||
+                                                0,
+                                        })
+                                      }
+                                    >
+                                      <option value="free">
+                                        Free shipping
+                                      </option>
+                                      <option value="percent">
+                                        % off shipping
+                                      </option>
+                                      <option value="fixed">
+                                        Flat amount off shipping
+                                      </option>
+                                    </select>
+                                    {emailPopup.shippingDiscountType !==
+                                      "free" && (
+                                      <>
+                                        <Input
+                                          type="number"
+                                          min={0}
+                                          max={
+                                            emailPopup.shippingDiscountType ===
+                                            "percent"
+                                              ? 100
+                                              : undefined
+                                          }
+                                          step={
+                                            emailPopup.shippingDiscountType ===
+                                            "fixed"
+                                              ? 0.01
+                                              : 1
+                                          }
+                                          classNames={{
+                                            inputWrapper:
+                                              "border-3 border-black rounded-lg bg-white shadow-none w-28",
+                                            input: "text-base !text-black",
+                                          }}
+                                          variant="bordered"
+                                          value={String(
+                                            emailPopup.shippingDiscountValue ||
+                                              ""
+                                          )}
+                                          onChange={(e) =>
+                                            setEmailPopup({
+                                              ...emailPopup,
+                                              shippingDiscountValue:
+                                                parseFloat(e.target.value) || 0,
+                                            })
+                                          }
+                                        />
+                                        <span className="text-sm text-gray-600">
+                                          {emailPopup.shippingDiscountType ===
+                                          "percent"
+                                            ? "% off shipping"
+                                            : "off shipping (in buyer's cart currency)"}
+                                        </span>
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
                             </div>
 
                             <div>

@@ -93,6 +93,7 @@ export default function CartInvoiceCard({
   totalCostsInSats,
   subtotalCost,
   appliedDiscounts = {},
+  appliedShippingDiscounts = {},
   discountCodes = {},
   affiliateMetaBySeller = {},
   shopProfiles,
@@ -109,6 +110,17 @@ export default function CartInvoiceCard({
   totalCostsInSats: { [key: string]: number };
   subtotalCost: number;
   appliedDiscounts?: { [key: string]: number };
+  // Per-seller shipping discount carried by the buyer's redeemed discount
+  // code. Applied at every per-seller shipping accumulator below. 'free'
+  // zeroes shipping, 'percent' multiplies, 'fixed' subtracts (treated as
+  // the same unit as the accumulator — for sats accumulators this means
+  // the value is in sats).
+  appliedShippingDiscounts?: {
+    [key: string]: {
+      type: "none" | "free" | "percent" | "fixed";
+      value: number;
+    };
+  };
   discountCodes?: { [key: string]: string };
   affiliateMetaBySeller?: {
     [pubkey: string]: {
@@ -864,6 +876,24 @@ export default function CartInvoiceCard({
     return uniqueShippingTypes.length > 1 && hasShippingPickupProducts;
   }, [uniqueShippingTypes, hasShippingPickupProducts]);
 
+  // Apply the per-seller shipping discount to a shipping `amount`. The
+  // `amount` may be sats or native currency — the helper treats the value
+  // in the same unit. Returns a non-negative number; callers are
+  // responsible for any final `Math.ceil` rounding.
+  const applyShippingDiscount = (amount: number, pubkey: string): number => {
+    const d = appliedShippingDiscounts[pubkey];
+    if (!d || d.type === "none") return amount;
+    if (d.type === "free") return 0;
+    if (d.type === "percent") {
+      const pct = Math.max(0, Math.min(100, d.value));
+      return Math.max(0, amount * (1 - pct / 100));
+    }
+    if (d.type === "fixed") {
+      return Math.max(0, amount - Math.max(0, d.value));
+    }
+    return amount;
+  };
+
   const sellerFreeShippingStatus = useMemo(() => {
     const statusMap: {
       [pubkey: string]: {
@@ -1039,6 +1069,15 @@ export default function CartInvoiceCard({
             shippingProductCurrency =
               product.shippingCurrency || product.currency;
           }
+          // Apply any per-seller shipping discount carried by the redeemed
+          // discount code, in the seller's shipping-currency units. For
+          // 'fixed' codes this treats `value` as the same unit (best-effort
+          // when the code's denomination differs from the seller's
+          // shipping currency).
+          shippingForSeller = applyShippingDiscount(
+            shippingForSeller,
+            product.pubkey
+          );
           // Shipping is denominated in the seller's product currency. Convert
           // it to the cart's display currency before adding — otherwise a
           // sats-priced product's shipping (e.g. 38000 sats) added to a USD
@@ -2010,7 +2049,9 @@ export default function CartInvoiceCard({
               const shippingCostInSats = await convertShippingToSats(
                 highestShippingProduct
               );
-              shippingTotal += Math.ceil(shippingCostInSats);
+              shippingTotal += Math.ceil(
+                applyShippingDiscount(shippingCostInSats, sellerPubkey)
+              );
             }
             sellerProducts.forEach((sp) => {
               updatedTotalCostsInSats[sp.id] = totalCostsInSats[sp.id] || 0;
@@ -2019,7 +2060,7 @@ export default function CartInvoiceCard({
             const shippingCostInSats = await convertShippingToSats(product);
             const quantity = quantities[product.id] || 1;
             const productShippingCost = Math.ceil(
-              shippingCostInSats * quantity
+              applyShippingDiscount(shippingCostInSats * quantity, sellerPubkey)
             );
             shippingTotal += productShippingCost;
             updatedTotalCostsInSats[product.id] =
@@ -2071,7 +2112,9 @@ export default function CartInvoiceCard({
                   const shippingCostInSats = await convertShippingToSats(
                     highestShippingProduct
                   );
-                  shippingTotal += Math.ceil(shippingCostInSats);
+                  shippingTotal += Math.ceil(
+                    applyShippingDiscount(shippingCostInSats, sellerPubkey)
+                  );
                 }
                 sellerProducts.forEach((sp) => {
                   updatedTotalCostsInSats[sp.id] = totalCostsInSats[sp.id] || 0;
@@ -2080,7 +2123,10 @@ export default function CartInvoiceCard({
                 const shippingCostInSats = await convertShippingToSats(product);
                 const quantity = quantities[product.id] || 1;
                 const productShippingCost = Math.ceil(
-                  shippingCostInSats * quantity
+                  applyShippingDiscount(
+                    shippingCostInSats * quantity,
+                    sellerPubkey
+                  )
                 );
                 shippingTotal += productShippingCost;
                 updatedTotalCostsInSats[product.id] =
@@ -2323,10 +2369,17 @@ export default function CartInvoiceCard({
               }
               const { highestShippingCost } =
                 getConsolidatedShippingForSeller(pubkey);
-              if (highestShippingCost > 0) {
+              // Apply per-seller shipping discount (free / % / fixed) before
+              // converting to Stripe's smallest-unit so the buyer is charged
+              // the discounted amount.
+              const discountedSellerShipping = applyShippingDiscount(
+                highestShippingCost,
+                pubkey
+              );
+              if (discountedSellerShipping > 0) {
                 sellerSmallest += sellerIsZeroDecimal
-                  ? Math.ceil(highestShippingCost)
-                  : Math.ceil(highestShippingCost * 100);
+                  ? Math.ceil(discountedSellerShipping)
+                  : Math.ceil(discountedSellerShipping * 100);
               }
               const aff = affiliateMetaBySeller[pubkey];
               let affiliateRebateSmallest: number | undefined;
@@ -4606,15 +4659,20 @@ export default function CartInvoiceCard({
           const sellerProducts = products.filter(
             (p) => p.pubkey === product.pubkey
           );
+          let sellerShipping: number;
           if (sellerProducts.length > 1) {
             const { highestShippingCost } = getConsolidatedShippingForSeller(
               product.pubkey
             );
-            nativeShipping += highestShippingCost;
+            sellerShipping = highestShippingCost;
           } else {
-            nativeShipping +=
+            sellerShipping =
               (product.shippingCost || 0) * (quantities[product.id] || 1);
           }
+          nativeShipping += applyShippingDiscount(
+            sellerShipping,
+            product.pubkey
+          );
         });
       }
     }
@@ -6267,14 +6325,22 @@ export default function CartInvoiceCard({
                                 await convertShippingToSats(
                                   highestShippingProduct
                                 );
-                              shippingTotal += Math.ceil(shippingCostInSats);
+                              shippingTotal += Math.ceil(
+                                applyShippingDiscount(
+                                  shippingCostInSats,
+                                  sellerPubkey
+                                )
+                              );
                             }
                           } else {
                             const shippingCostInSats =
                               await convertShippingToSats(product);
                             const quantity = quantities[product.id] || 1;
                             shippingTotal += Math.ceil(
-                              shippingCostInSats * quantity
+                              applyShippingDiscount(
+                                shippingCostInSats * quantity,
+                                sellerPubkey
+                              )
                             );
                           }
                         }
@@ -6326,14 +6392,22 @@ export default function CartInvoiceCard({
                                 await convertShippingToSats(
                                   highestShippingProduct
                                 );
-                              shippingTotal += Math.ceil(shippingCostInSats);
+                              shippingTotal += Math.ceil(
+                                applyShippingDiscount(
+                                  shippingCostInSats,
+                                  sellerPubkey
+                                )
+                              );
                             }
                           } else {
                             const shippingCostInSats =
                               await convertShippingToSats(product);
                             const quantity = quantities[product.id] || 1;
                             shippingTotal += Math.ceil(
-                              shippingCostInSats * quantity
+                              applyShippingDiscount(
+                                shippingCostInSats * quantity,
+                                sellerPubkey
+                              )
                             );
                           }
                         }

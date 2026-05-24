@@ -215,6 +215,13 @@ export interface PopupStyle {
 export interface StorefrontEmailPopup {
   enabled: boolean;
   discountPercentage: number;
+  // Optional shipping discount layered on top of the product percentage.
+  // 'none' (or omitted) preserves the legacy product-only welcome code.
+  // 'free' waives shipping; 'percent' is `shippingDiscountValue` % off
+  // shipping; 'fixed' is `shippingDiscountValue` units off shipping
+  // (denominated in the buyer's cart display currency at checkout).
+  shippingDiscountType?: "none" | "free" | "percent" | "fixed";
+  shippingDiscountValue?: number;
   headline?: string;
   subtext?: string;
   collectPhone?: boolean;

@@ -96,6 +96,8 @@ export default function ProductInvoiceCard({
   selectedBulkOption,
   discountCode,
   discountPercentage,
+  shippingDiscountType,
+  shippingDiscountValue,
   isSubscription,
   subscriptionFrequency,
   subscriptionDiscount,
@@ -116,6 +118,10 @@ export default function ProductInvoiceCard({
   selectedBulkOption?: number;
   discountCode?: string;
   discountPercentage?: number;
+  // Shipping discount carried by the redeemed code. Applied below to the
+  // FX-converted shipping cost before it's added to the total.
+  shippingDiscountType?: "none" | "free" | "percent" | "fixed";
+  shippingDiscountValue?: number;
   isSubscription?: boolean;
   subscriptionFrequency?: string;
   subscriptionDiscount?: number;
@@ -3550,7 +3556,33 @@ export default function ProductInvoiceCard({
   // currency (e.g. USD product with sats shipping). Use the FX-converted
   // value computed in the effect below so we never add raw sats to a USD
   // price (which would inflate a $30 order to ~$38,030).
-  const shippingCostToAdd = formType === "shipping" ? convertedShippingCost : 0;
+  //
+  // If the redeemed discount code carries a shipping discount, apply it
+  // here on the FX-converted shipping cost so it discounts the *displayed*
+  // shipping in the cart's currency. For 'fixed' codes this treats the
+  // value as the same unit as the converted shipping cost (best-effort
+  // when the code's denomination differs).
+  const rawShippingCostToAdd =
+    formType === "shipping" ? convertedShippingCost : 0;
+  const shippingCostToAdd = (() => {
+    if (rawShippingCostToAdd <= 0) return 0;
+    const t = shippingDiscountType || "none";
+    if (t === "none") return rawShippingCostToAdd;
+    if (t === "free") return 0;
+    if (t === "percent") {
+      const pct = Math.max(0, Math.min(100, shippingDiscountValue || 0));
+      return _isSatsCur
+        ? Math.ceil(rawShippingCostToAdd * (1 - pct / 100))
+        : Math.ceil(rawShippingCostToAdd * (1 - pct / 100) * 100) / 100;
+    }
+    if (t === "fixed") {
+      return Math.max(
+        0,
+        rawShippingCostToAdd - Math.max(0, shippingDiscountValue || 0)
+      );
+    }
+    return rawShippingCostToAdd;
+  })();
 
   const discountedTotal = discountedPrice + shippingCostToAdd;
 

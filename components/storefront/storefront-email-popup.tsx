@@ -126,6 +126,8 @@ export default function StorefrontEmailPopupComponent({
           email,
           phone: phone || undefined,
           discountPercentage: config.discountPercentage,
+          shippingDiscountType: config.shippingDiscountType,
+          shippingDiscountValue: config.shippingDiscountValue,
           shopName,
           flowAnswers:
             Object.keys(flowAnswers).length > 0 ? flowAnswers : undefined,
@@ -148,8 +150,34 @@ export default function StorefrontEmailPopupComponent({
     }
   };
 
-  const headline =
-    config.headline || `Get ${config.discountPercentage}% Off Your First Order`;
+  // Build a short benefit label that may combine product percent + shipping
+  // discount ("15% OFF + FREE SHIPPING", "FREE SHIPPING", etc.). Used by
+  // the hero badge and the default headline so a shipping-only welcome code
+  // doesn't display "0% OFF".
+  const shipType = config.shippingDiscountType || "none";
+  const shipVal = config.shippingDiscountValue || 0;
+  const benefitParts: string[] = [];
+  if (config.discountPercentage > 0) {
+    benefitParts.push(`${config.discountPercentage}% OFF`);
+  }
+  if (shipType === "free") benefitParts.push("FREE SHIPPING");
+  else if (shipType === "percent" && shipVal > 0)
+    benefitParts.push(`${shipVal}% OFF SHIPPING`);
+  else if (shipType === "fixed" && shipVal > 0)
+    benefitParts.push(`${shipVal} OFF SHIPPING`);
+  const benefitLabel =
+    benefitParts.length > 0 ? benefitParts.join(" + ") : "DISCOUNT";
+  const headlineDefault =
+    config.discountPercentage > 0
+      ? `Get ${config.discountPercentage}% Off Your First Order`
+      : shipType === "free"
+        ? "Get Free Shipping On Your First Order"
+        : shipType === "percent" && shipVal > 0
+          ? `Get ${shipVal}% Off Shipping On Your First Order`
+          : shipType === "fixed" && shipVal > 0
+            ? `Get ${shipVal} Off Shipping On Your First Order`
+            : "Get a Discount On Your First Order";
+  const headline = config.headline || headlineDefault;
   const subtext =
     config.subtext || "Sign up to receive an exclusive discount code.";
   const buttonText = config.buttonText || "Get My Discount";
@@ -219,7 +247,7 @@ export default function StorefrontEmailPopupComponent({
                   className="text-4xl font-bold"
                   style={{ color: btnText, ...headingFontStyles }}
                 >
-                  {config.discountPercentage}% OFF
+                  {benefitLabel}
                 </div>
               </div>
 
