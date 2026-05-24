@@ -1,0 +1,1474 @@
+/**
+ * @jest-environment node
+ */
+
+jest.setTimeout(180000);
+
+import {
+  getTableForKind,
+  shouldKeepOnlyLatest,
+  isReviewEvent,
+  buildReviewDTagFilter,
+  profileNameToSlug,
+} from "../db-service";
+import type { NostrEvent } from "../../types/types";
+
+type DbServiceModule = typeof import("../db-service");
+
+type SharedPostgresContainer = {
+  getHost(): string;
+  getMappedPort(port: number): number;
+  stop(): Promise<unknown>;
+};
+
+type QueryInput = string | { text?: string };
+
+type MockDbClient = {
+  query: jest.Mock;
+  release: jest.Mock;
+};
+
+type MockDbPool = {
+  connect: jest.Mock;
+  on: jest.Mock;
+  end?: jest.Mock;
+};
+
+type FakePoolOptions = {
+  connectionString: string;
+  [key: string]: unknown;
+};
+
+let sharedPostgresContainer: SharedPostgresContainer | null = null;
+let sharedPostgresHost = "";
+let sharedPostgresPort = 0;
+
+async function ensureSharedPostgresContainer(): Promise<void> {
+  if (sharedPostgresContainer) return;
+  const { PostgreSqlContainer } = await import("@testcontainers/postgresql");
+  const container = await new PostgreSqlContainer("postgres:15-alpine")
+    .withDatabase("shopstr")
+    .withUsername("shopstr")
+    .withPassword("shopstr")
+    .start();
+  sharedPostgresContainer = container;
+
+  sharedPostgresHost = container.getHost();
+  sharedPostgresPort = container.getMappedPort(5432);
+}
+
+function getDatabaseUrl(dbName: string): string {
+  return `postgres://shopstr:shopstr@${sharedPostgresHost}:${sharedPostgresPort}/${dbName}`;
+}
+
+function quoteIdentifier(identifier: string): string {
+  return `"${identifier.replace(/"/g, '""')}"`;
+}
+
+async function withIsolatedDatabase<T>(
+  callback: (databaseUrl: string) => Promise<T>
+): Promise<T> {
+  await ensureSharedPostgresContainer();
+
+  // Unit tests in this file mock `pg`; ensure admin DB operations always use
+  // the real driver.
+  jest.unmock("pg");
+
+  const dbName = `shopstr_test_${Date.now()}_${Math.floor(
+    Math.random() * 1_000_000
+  )}`;
+  const adminUrl = getDatabaseUrl("postgres");
+  const testDbUrl = getDatabaseUrl(dbName);
+
+  const { Pool } = await import("pg");
+  const adminPool = new Pool({ connectionString: adminUrl });
+  const adminClient = await adminPool.connect();
+
+  try {
+    await adminClient.query(`CREATE DATABASE ${quoteIdentifier(dbName)}`);
+  } finally {
+    adminClient.release();
+    await adminPool.end();
+  }
+
+  try {
+    return await callback(testDbUrl);
+  } finally {
+    const cleanupPool = new Pool({ connectionString: adminUrl });
+    const cleanupClient = await cleanupPool.connect();
+    try {
+      await cleanupClient.query(
+        `SELECT pg_terminate_backend(pid)
+         FROM pg_stat_activity
+         WHERE datname = $1 AND pid <> pg_backend_pid()`,
+        [dbName]
+      );
+      await cleanupClient.query(
+        `DROP DATABASE IF EXISTS ${quoteIdentifier(dbName)}`
+      );
+    } finally {
+      cleanupClient.release();
+      await cleanupPool.end();
+    }
+  }
+}
+
+async function withPostgresTestContainer<T>(
+  callback: (databaseUrl: string) => Promise<T>
+): Promise<T> {
+  return withIsolatedDatabase(callback);
+}
+
+async function withPostgresDbService<T>(
+  callback: (db: DbServiceModule) => Promise<T>
+): Promise<T> {
+  return withPostgresTestContainer(async (databaseUrl) => {
+    const prev = process.env.DATABASE_URL;
+    process.env.DATABASE_URL = databaseUrl;
+
+    try {
+      let result: T | undefined;
+      await jest.isolateModulesAsync(async () => {
+        jest.resetModules();
+        jest.unmock("pg");
+        const db = await import("../db-service");
+
+        try {
+          result = await callback(db);
+        } finally {
+          await db.closeDbPool();
+        }
+      });
+
+      return result as T;
+    } finally {
+      process.env.DATABASE_URL = prev;
+    }
+  });
+}
+
+async function waitForTables(
+  db: DbServiceModule,
+  tableNames: string[]
+): Promise<void> {
+  const deadline = Date.now() + 10000;
+  const pool = db.getDbPool();
+
+  while (Date.now() < deadline) {
+    const client = await pool.connect();
+    try {
+      const result = await client.query<{ tablename: string }>(
+        `SELECT tablename
+         FROM pg_tables
+         WHERE schemaname = 'public'
+           AND tablename = ANY($1::text[])`,
+        [tableNames]
+      );
+
+      if (result.rows.length === tableNames.length) {
+        return;
+      }
+    } finally {
+      client.release();
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+
+  throw new Error(`Timed out waiting for tables: ${tableNames.join(", ")}`);
+}
+
+async function waitForColumns(
+  db: DbServiceModule,
+  tableName: string,
+  columnNames: string[]
+): Promise<void> {
+  const deadline = Date.now() + 10000;
+  const pool = db.getDbPool();
+
+  while (Date.now() < deadline) {
+    const client = await pool.connect();
+    try {
+      const result = await client.query<{ column_name: string }>(
+        `SELECT column_name
+         FROM information_schema.columns
+         WHERE table_schema = 'public'
+           AND table_name = $1
+           AND column_name = ANY($2::text[])`,
+        [tableName, columnNames]
+      );
+
+      if (result.rows.length === columnNames.length) {
+        return;
+      }
+    } finally {
+      client.release();
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+
+  throw new Error(
+    `Timed out waiting for columns on ${tableName}: ${columnNames.join(", ")}`
+  );
+}
+
+async function withLegacyPostgresDbService<T>(
+  callback: (db: DbServiceModule) => Promise<T>
+): Promise<T> {
+  return withPostgresTestContainer(async (databaseUrl) => {
+    const prev = process.env.DATABASE_URL;
+    process.env.DATABASE_URL = databaseUrl;
+
+    try {
+      const { Pool } = await import("pg");
+      const setupPool = new Pool({ connectionString: databaseUrl });
+      const client = await setupPool.connect();
+
+      try {
+        await client.query(`
+          CREATE TABLE message_events (
+              id TEXT PRIMARY KEY,
+              pubkey TEXT NOT NULL,
+              created_at BIGINT NOT NULL,
+              kind INTEGER NOT NULL,
+              tags JSONB NOT NULL,
+              content TEXT NOT NULL,
+              sig TEXT NOT NULL,
+              cached_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          );
+
+          CREATE TABLE failed_relay_publishes (
+              event_id TEXT PRIMARY KEY,
+              event_data TEXT NOT NULL,
+              relays TEXT NOT NULL,
+              created_at BIGINT NOT NULL,
+              retry_count INTEGER DEFAULT 0
+          );
+
+          INSERT INTO failed_relay_publishes (
+            event_id,
+            event_data,
+            relays,
+            created_at,
+            retry_count
+          ) VALUES (
+            'legacy-failed',
+            '{}',
+            '[]',
+            1,
+            0
+          );
+        `);
+      } finally {
+        client.release();
+        await setupPool.end();
+      }
+
+      try {
+        let result: T | undefined;
+
+        await jest.isolateModulesAsync(async () => {
+          jest.resetModules();
+          jest.unmock("pg");
+
+          const db = await import("../db-service");
+
+          try {
+            result = await callback(db);
+          } finally {
+            await db.closeDbPool();
+          }
+        });
+
+        return result as T;
+      } finally {
+        process.env.DATABASE_URL = prev;
+      }
+    } catch (error) {
+      process.env.DATABASE_URL = prev;
+      throw error;
+    }
+  });
+}
+
+function productEvent(overrides: Partial<NostrEvent>): NostrEvent {
+  return {
+    id: "product-event",
+    pubkey: "seller",
+    created_at: 1,
+    kind: 30402,
+    tags: [],
+    content: "content",
+    sig: "sig",
+    ...overrides,
+  };
+}
+
+function latestOnlyEvent(overrides: Partial<NostrEvent>): NostrEvent {
+  return {
+    id: "latest-only-event",
+    pubkey: "latest-owner",
+    created_at: 1,
+    kind: 17375,
+    tags: [],
+    content: "content",
+    sig: "sig",
+    ...overrides,
+  };
+}
+
+function reviewEvent(overrides: Partial<NostrEvent>): NostrEvent {
+  return {
+    id: "review-event",
+    pubkey: "review-owner",
+    created_at: 1,
+    kind: 31555,
+    tags: [["d", "listing-1"]],
+    content: "content",
+    sig: "sig",
+    ...overrides,
+  };
+}
+
+describe("db-service helpers", () => {
+  afterAll(async () => {
+    if (sharedPostgresContainer) {
+      await sharedPostgresContainer.stop();
+      sharedPostgresContainer = null;
+      sharedPostgresHost = "";
+      sharedPostgresPort = 0;
+    }
+  });
+
+  test("getTableForKind maps known kinds and returns null for unknown", () => {
+    expect(getTableForKind(30402)).toBe("product_events");
+    expect(getTableForKind(31555)).toBe("review_events");
+    expect(getTableForKind(1059)).toBe("message_events");
+    expect(getTableForKind(0)).toBe("profile_events");
+    expect(getTableForKind(999999)).toBeNull();
+  });
+
+  const maybeItTc = process.env.RUN_TESTCONTAINERS === "1" ? test : test.skip;
+
+  maybeItTc("testcontainers: initialize + failed publish flow", async () => {
+    await withPostgresTestContainer(async (databaseUrl) => {
+      const prev = process.env.DATABASE_URL;
+      process.env.DATABASE_URL = databaseUrl;
+
+      try {
+        const { Pool } = await import("pg");
+        const prepPool = new Pool({
+          connectionString: process.env.DATABASE_URL,
+        });
+        const client = await prepPool.connect();
+        try {
+          // Use the inline ensure function exported from db-service to prepare table
+          const dbSvc = await import("../db-service");
+          await dbSvc.ensureFailedRelayPublishesTable(client);
+        } finally {
+          client.release();
+          await prepPool.end();
+        }
+
+        const db = await import("../db-service");
+
+        const event: NostrEvent = {
+          id: `tc-${Date.now()}`,
+          pubkey: "owner-tc",
+          created_at: Math.floor(Date.now() / 1000),
+          kind: 0,
+          tags: [],
+          content: "x",
+          sig: "s",
+        };
+
+        const inserted = await db.trackFailedRelayPublishRecord({
+          eventId: event.id,
+          ownerPubkey: "owner-tc",
+          event,
+          relays: ["tc-relay"],
+        });
+        expect(inserted).toBe(true);
+
+        const rows = await db.getFailedRelayPublishesForOwner("owner-tc");
+        expect(rows.length).toBeGreaterThanOrEqual(1);
+        expect(rows.some((r) => r?.eventId === event.id)).toBe(true);
+
+        await db.closeDbPool();
+      } finally {
+        process.env.DATABASE_URL = prev;
+      }
+    });
+  });
+
+  maybeItTc(
+    "initializeTables creates tables and applies message/relay migrations",
+    async () => {
+      await withLegacyPostgresDbService(async (db) => {
+        await waitForTables(db, ["product_events", "discount_codes"]);
+        await waitForColumns(db, "message_events", [
+          "is_read",
+          "order_status",
+          "order_id",
+        ]);
+        await waitForColumns(db, "failed_relay_publishes", ["owner_pubkey"]);
+
+        const pool = db.getDbPool();
+        const client = await pool.connect();
+
+        try {
+          const messageColumns = await client.query<{ column_name: string }>(
+            `SELECT column_name
+             FROM information_schema.columns
+             WHERE table_schema = 'public'
+               AND table_name = 'message_events'
+               AND column_name IN ('is_read', 'order_id', 'order_status')
+             ORDER BY column_name`
+          );
+
+          expect(messageColumns.rows.map((row) => row.column_name)).toEqual([
+            "is_read",
+            "order_id",
+            "order_status",
+          ]);
+
+          const legacyRows = await client.query<{ count: string }>(
+            `SELECT COUNT(*) AS count
+             FROM failed_relay_publishes
+             WHERE owner_pubkey IS NULL`
+          );
+
+          expect(Number(legacyRows.rows[0]?.count ?? 0)).toBe(0);
+
+          const productColumns = await client.query<{ table_name: string }>(
+            `SELECT table_name
+             FROM information_schema.tables
+             WHERE table_schema = 'public'
+               AND table_name = 'product_events'`
+          );
+
+          expect(productColumns.rows).toHaveLength(1);
+        } finally {
+          client.release();
+        }
+      });
+    }
+  );
+
+  test("shouldKeepOnlyLatest returns true for configured kinds", () => {
+    const trueKinds = [17375, 37375, 10002, 10063, 0, 30019, 34550];
+    for (const k of trueKinds) {
+      expect(shouldKeepOnlyLatest(k)).toBe(true);
+    }
+
+    expect(shouldKeepOnlyLatest(30402)).toBe(false);
+    expect(shouldKeepOnlyLatest(31555)).toBe(false);
+  });
+
+  test("isReviewEvent identifies review kind", () => {
+    expect(isReviewEvent(31555)).toBe(true);
+    expect(isReviewEvent(30402)).toBe(false);
+  });
+
+  test("buildReviewDTagFilter returns JSON array filter for d tag", () => {
+    const json = buildReviewDTagFilter("my-d-tag");
+    expect(json).toBe(JSON.stringify([["d", "my-d-tag"]]));
+  });
+
+  test("profileNameToSlug sanitizes and slugifies names", () => {
+    expect(profileNameToSlug("")).toBe("");
+    expect(profileNameToSlug("   Hello   World  ")).toBe("Hello-World");
+    expect(profileNameToSlug("Shop #1 / Best!!")).toBe("Shop-1-Best");
+    expect(profileNameToSlug("--Leading and trailing--")).toBe(
+      "Leading-and-trailing"
+    );
+    expect(profileNameToSlug("Multiple   spaces")).toBe("Multiple-spaces");
+    // Removes many special characters
+    expect(profileNameToSlug("Name@with*weird^chars%and+symbols")).toBe(
+      "Namewithweirdcharsandsymbols"
+    );
+  });
+
+  test("profileNameToSlug returns empty for only-special-chars names", () => {
+    expect(profileNameToSlug("!!!@@@###")).toBe("");
+  });
+
+  test("cacheEvents short-circuits on empty input (no DB calls)", async () => {
+    await jest.isolateModulesAsync(async () => {
+      const prev = process.env.DATABASE_URL;
+      process.env.DATABASE_URL = "postgres://test@localhost/testdb";
+      try {
+        let connectCalled = false;
+        const pool: MockDbPool = {
+          connect: jest.fn(async () => {
+            connectCalled = true;
+            return { query: jest.fn(), release: jest.fn() };
+          }),
+          on: jest.fn(),
+        };
+
+        jest.doMock("pg", () => ({
+          Pool: class {
+            constructor() {
+              return pool;
+            }
+          },
+        }));
+
+        const mod = await import("../db-service");
+        await mod.cacheEvents([]);
+        expect(connectCalled).toBe(false);
+      } finally {
+        process.env.DATABASE_URL = prev;
+      }
+    });
+  });
+
+  test("cacheEvent returns early for unknown kind (no DB calls)", async () => {
+    await jest.isolateModulesAsync(async () => {
+      const prev = process.env.DATABASE_URL;
+      process.env.DATABASE_URL = "postgres://test@localhost/testdb";
+      try {
+        let connectCalled = false;
+        const pool: MockDbPool = {
+          connect: jest.fn(async () => {
+            connectCalled = true;
+            return { query: jest.fn(), release: jest.fn() };
+          }),
+          on: jest.fn(),
+        };
+
+        jest.doMock("pg", () => ({
+          Pool: class {
+            constructor() {
+              return pool;
+            }
+          },
+        }));
+
+        const mod = await import("../db-service");
+        await mod.cacheEvent({
+          id: "e1",
+          pubkey: "p1",
+          created_at: Date.now(),
+          kind: 999999,
+          tags: [],
+          content: "x",
+          sig: "s",
+        } as NostrEvent);
+        expect(connectCalled).toBe(false);
+      } finally {
+        process.env.DATABASE_URL = prev;
+      }
+    });
+  });
+
+  test("cacheEvent upserts regular events with ON CONFLICT", async () => {
+    await jest.isolateModulesAsync(async () => {
+      const prev = process.env.DATABASE_URL;
+      process.env.DATABASE_URL = "postgres://test@localhost/testdb";
+
+      let mod: typeof import("../db-service") | undefined;
+
+      try {
+        const queries: Array<string | { text?: string }> = [];
+        const client: MockDbClient = {
+          query: jest.fn(async (q: QueryInput) => {
+            queries.push(q);
+            return { rows: [], rowCount: 1 };
+          }),
+          release: jest.fn(),
+        };
+
+        const pool: MockDbPool = {
+          connect: jest.fn(async () => client),
+          on: jest.fn(),
+          end: jest.fn(async () => undefined),
+        };
+
+        jest.doMock("pg", () => ({
+          Pool: class {
+            constructor() {
+              return pool;
+            }
+          },
+        }));
+
+        mod = await import("../db-service");
+
+        const event = {
+          id: "regular-1",
+          pubkey: "seller-1",
+          created_at: 123,
+          kind: 30402,
+          tags: [["d", "listing-1"]],
+          content: "regular content",
+          sig: "regular-sig",
+        } as NostrEvent;
+
+        await mod.cacheEvent(event);
+
+        expect(pool.connect).toHaveBeenCalled();
+        expect(
+          queries.some(
+            (query) =>
+              typeof query === "object" &&
+              typeof query.text === "string" &&
+              query.text.includes("ON CONFLICT (id) DO UPDATE SET")
+          )
+        ).toBe(true);
+        expect(client.query).toHaveBeenCalledWith(
+          expect.objectContaining({
+            text: expect.stringContaining("INSERT INTO product_events"),
+          })
+        );
+      } finally {
+        if (mod) {
+          await mod.closeDbPool();
+        }
+        process.env.DATABASE_URL = prev;
+      }
+    });
+  });
+
+  test("cacheEvents retries once after a synthetic deadlock and then succeeds", async () => {
+    await jest.isolateModulesAsync(async () => {
+      const prev = process.env.DATABASE_URL;
+      process.env.DATABASE_URL = "postgres://test@localhost/testdb";
+
+      let mod: typeof import("../db-service") | undefined;
+      let insertAttempts = 0;
+
+      try {
+        const client: MockDbClient = {
+          query: jest.fn(async (q: QueryInput) => {
+            const text = typeof q === "string" ? q : q.text || q;
+
+            if (text === "BEGIN" || text === "COMMIT" || text === "ROLLBACK") {
+              return { rows: [], rowCount: 1 };
+            }
+
+            if (
+              typeof text === "string" &&
+              text.includes("INSERT INTO product_events")
+            ) {
+              insertAttempts += 1;
+              if (insertAttempts === 1) {
+                const error = new Error("synthetic deadlock") as Error & {
+                  code: string;
+                };
+                error.code = "40P01";
+                throw error;
+              }
+            }
+
+            return { rows: [], rowCount: 1 };
+          }),
+          release: jest.fn(),
+        };
+
+        const pool: MockDbPool = {
+          connect: jest.fn(async () => client),
+          on: jest.fn(),
+          end: jest.fn(async () => undefined),
+        };
+
+        jest.doMock("pg", () => ({
+          Pool: class {
+            constructor() {
+              return pool;
+            }
+          },
+        }));
+
+        mod = await import("../db-service");
+
+        await mod.cacheEvents([
+          productEvent({
+            id: "retry-product-1",
+            pubkey: "retry-seller",
+            created_at: 10,
+          }),
+        ]);
+
+        expect(pool.connect).toHaveBeenCalledTimes(3);
+        expect(insertAttempts).toBe(2);
+      } finally {
+        if (mod) {
+          await mod.closeDbPool();
+        }
+        process.env.DATABASE_URL = prev;
+      }
+    });
+  });
+
+  test("cacheEvents groups events and runs transaction (calls BEGIN)", async () => {
+    // Use isolated module loading so we can mock 'pg.Pool' before the module is imported
+    const queries: string[] = [];
+    const client: MockDbClient & { on: jest.Mock } = {
+      query: jest.fn(async (q: QueryInput) => {
+        const text = typeof q === "string" ? q : q.text || "";
+        queries.push(text.trim().split("\n")[0] ?? "");
+        return { rows: [], rowCount: 1 };
+      }),
+      release: jest.fn(),
+      on: jest.fn(),
+    };
+
+    const pool: MockDbPool = {
+      connect: jest.fn(async () => client),
+      on: jest.fn(),
+    };
+
+    await jest.isolateModulesAsync(async () => {
+      const prev = process.env.DATABASE_URL;
+      process.env.DATABASE_URL = "postgres://test@localhost/testdb";
+      try {
+        jest.doMock("pg", () => ({
+          Pool: class {
+            constructor() {
+              return pool;
+            }
+          },
+        }));
+        const mod = await import("../db-service");
+
+        const events = [
+          {
+            id: "a1",
+            pubkey: "u1",
+            created_at: 1,
+            kind: 17375,
+            tags: [],
+            content: "",
+            sig: "",
+          },
+          {
+            id: "r1",
+            pubkey: "u1",
+            created_at: 2,
+            kind: 31555,
+            tags: [["d", "prod1"]],
+            content: "",
+            sig: "",
+          },
+          {
+            id: "p1",
+            pubkey: "u2",
+            created_at: 3,
+            kind: 30402,
+            tags: [],
+            content: "",
+            sig: "",
+          },
+        ];
+
+        await mod.cacheEvents(events as NostrEvent[]);
+
+        // Expect that a transaction was started
+        expect(queries.some((q) => /BEGIN/i.test(q))).toBe(true);
+        expect(queries.some((q) => /COMMIT/i.test(q))).toBe(true);
+      } finally {
+        process.env.DATABASE_URL = prev;
+      }
+    });
+  });
+
+  describe("getDbPool / closeDbPool (unit)", () => {
+    test("getDbPool constructs pg.Pool and closeDbPool ends it", async () => {
+      await jest.isolateModulesAsync(async () => {
+        const prev = process.env.DATABASE_URL;
+        process.env.DATABASE_URL = "postgres://test@localhost/testdb";
+        try {
+          let constructed = false;
+          const client = {
+            query: jest.fn(async () => ({ rows: [], rowCount: 1 })),
+            release: jest.fn(),
+          };
+          class FakePool {
+            opts: FakePoolOptions;
+            ended = false;
+            constructor(opts: FakePoolOptions) {
+              constructed = true;
+              this.opts = opts;
+            }
+            async connect() {
+              return client;
+            }
+            on() {
+              return;
+            }
+            async end() {
+              this.ended = true;
+            }
+          }
+
+          jest.doMock("pg", () => ({ Pool: FakePool }));
+
+          const mod = await import("../db-service");
+          const pool = mod.getDbPool();
+          expect(constructed).toBe(true);
+          expect(pool).toBeInstanceOf(FakePool);
+
+          // close should call end() and allow recreation on next getDbPool
+          await mod.closeDbPool();
+
+          const pool2 = mod.getDbPool();
+          expect(pool2).toBeInstanceOf(FakePool);
+        } finally {
+          process.env.DATABASE_URL = prev;
+        }
+      });
+    });
+
+    test("deleteCachedEvent issues DELETE for known kind and is no-op for unknown kind", async () => {
+      const prev = process.env.DATABASE_URL;
+      try {
+        // First: known kind, ensure DELETE is issued
+        await jest.isolateModulesAsync(async () => {
+          process.env.DATABASE_URL = "postgres://test@localhost/testdb";
+
+          const client: MockDbClient = {
+            query: jest.fn(async () => ({ rowCount: 1 })),
+            release: jest.fn(),
+          };
+
+          const pool: MockDbPool = {
+            connect: jest.fn(async () => client),
+            on: jest.fn(),
+          };
+
+          jest.doMock("pg", () => ({
+            Pool: class {
+              constructor() {
+                return pool;
+              }
+            },
+          }));
+
+          const mod = await import("../db-service");
+          await mod.deleteCachedEvent("evt-123", 30402);
+          expect(pool.connect).toHaveBeenCalled();
+          expect(client.query).toHaveBeenCalledWith(
+            expect.stringContaining("DELETE FROM product_events"),
+            ["evt-123"]
+          );
+        });
+
+        // Second: unknown kind should not call DB (fresh module to avoid init side-effects)
+        await jest.isolateModulesAsync(async () => {
+          process.env.DATABASE_URL = "postgres://test@localhost/testdb";
+
+          const client2: MockDbClient = {
+            query: jest.fn(async () => ({ rowCount: 1 })),
+            release: jest.fn(),
+          };
+
+          const pool2: MockDbPool = {
+            connect: jest.fn(async () => client2),
+            on: jest.fn(),
+          };
+
+          jest.doMock("pg", () => ({
+            Pool: class {
+              constructor() {
+                return pool2;
+              }
+            },
+          }));
+
+          const mod2 = await import("../db-service");
+          await mod2.deleteCachedEvent("evt-999", 999999);
+          expect(pool2.connect).not.toHaveBeenCalled();
+          expect(client2.query).not.toHaveBeenCalled();
+        });
+      } finally {
+        process.env.DATABASE_URL = prev;
+      }
+    });
+  });
+
+  describe("db-service with Testcontainers (discounts, stats, cached events)", () => {
+    maybeItTc(
+      "read helpers fetch reviews/messages/profiles/wallet/communities/relay/blossom",
+      async () => {
+        await withPostgresDbService(async (db) => {
+          await waitForTables(db, [
+            "review_events",
+            "message_events",
+            "profile_events",
+            "wallet_events",
+            "community_events",
+            "config_events",
+          ]);
+
+          await db.cacheEvents([
+            {
+              id: "review-old",
+              pubkey: "reviewer-1",
+              created_at: 100,
+              kind: 31555,
+              tags: [["d", "listing-a"]],
+              content: "old review",
+              sig: "sig-review-old",
+            },
+            {
+              id: "review-new",
+              pubkey: "reviewer-1",
+              created_at: 200,
+              kind: 31555,
+              tags: [["d", "listing-a"]],
+              content: "new review",
+              sig: "sig-review-new",
+            },
+            {
+              id: "message-1",
+              pubkey: "buyer-1",
+              created_at: 110,
+              kind: 1059,
+              tags: [["p", "recipient-1"]],
+              content: "message one",
+              sig: "sig-message-1",
+            },
+            {
+              id: "message-2",
+              pubkey: "buyer-2",
+              created_at: 210,
+              kind: 1059,
+              tags: [["p", "recipient-2"]],
+              content: "message two",
+              sig: "sig-message-2",
+            },
+            {
+              id: "profile-1",
+              pubkey: "profile-1",
+              created_at: 120,
+              kind: 0,
+              tags: [],
+              content: '{"name":"Alice"}',
+              sig: "sig-profile-1",
+            },
+            {
+              id: "profile-2",
+              pubkey: "profile-2",
+              created_at: 220,
+              kind: 30019,
+              tags: [],
+              content: '{"name":"Alice Shop"}',
+              sig: "sig-profile-2",
+            },
+            {
+              id: "wallet-1",
+              pubkey: "wallet-owner",
+              created_at: 130,
+              kind: 7375,
+              tags: [],
+              content: "wallet one",
+              sig: "sig-wallet-1",
+            },
+            {
+              id: "wallet-2",
+              pubkey: "wallet-owner",
+              created_at: 230,
+              kind: 7376,
+              tags: [],
+              content: "wallet two",
+              sig: "sig-wallet-2",
+            },
+            {
+              id: "community-1",
+              pubkey: "community-owner-1",
+              created_at: 140,
+              kind: 34550,
+              tags: [["d", "community-a"]],
+              content: "community one",
+              sig: "sig-community-1",
+            },
+            {
+              id: "community-2",
+              pubkey: "community-owner-2",
+              created_at: 240,
+              kind: 34550,
+              tags: [["d", "community-b"]],
+              content: "community two",
+              sig: "sig-community-2",
+            },
+            {
+              id: "relay-1",
+              pubkey: "config-owner",
+              created_at: 150,
+              kind: 10002,
+              tags: [],
+              content: "relay old",
+              sig: "sig-relay-1",
+            },
+            {
+              id: "relay-2",
+              pubkey: "config-owner",
+              created_at: 250,
+              kind: 10002,
+              tags: [],
+              content: "relay new",
+              sig: "sig-relay-2",
+            },
+            {
+              id: "blossom-1",
+              pubkey: "config-owner",
+              created_at: 160,
+              kind: 10063,
+              tags: [],
+              content: "blossom old",
+              sig: "sig-blossom-1",
+            },
+            {
+              id: "blossom-2",
+              pubkey: "config-owner",
+              created_at: 260,
+              kind: 10063,
+              tags: [],
+              content: "blossom new",
+              sig: "sig-blossom-2",
+            },
+          ]);
+
+          const reviews = await db.fetchAllReviewsFromDb();
+          expect(reviews.map((event) => event.id)).toEqual(["review-new"]);
+
+          const messages = await db.fetchAllMessagesFromDb();
+          expect(messages.map((event) => event.id)).toEqual([
+            "message-2",
+            "message-1",
+          ]);
+
+          const filteredMessages =
+            await db.fetchAllMessagesFromDb("recipient-2");
+          expect(filteredMessages.map((event) => event.id)).toEqual([
+            "message-2",
+          ]);
+
+          const profiles = await db.fetchAllProfilesFromDb();
+          expect(profiles.map((event) => event.id)).toEqual([
+            "profile-2",
+            "profile-1",
+          ]);
+
+          const wallet = await db.fetchAllWalletEventsFromDb("wallet-owner");
+          expect(wallet.map((event) => event.id)).toEqual([
+            "wallet-2",
+            "wallet-1",
+          ]);
+
+          const communities = await db.fetchAllCommunitiesFromDb();
+          expect(communities.map((event) => event.id)).toEqual([
+            "community-2",
+            "community-1",
+          ]);
+
+          const relayConfig = await db.fetchRelayConfigFromDb("config-owner");
+          expect(relayConfig.map((event) => event.id)).toEqual(["relay-2"]);
+
+          const blossomConfig =
+            await db.fetchBlossomConfigFromDb("config-owner");
+          expect(blossomConfig.map((event) => event.id)).toEqual(["blossom-2"]);
+        });
+      }
+    );
+
+    maybeItTc(
+      "fetchAllProductsFromDb returns only the latest row per pubkey and d tag",
+      async () => {
+        await withPostgresDbService(async (db) => {
+          await waitForTables(db, ["product_events"]);
+
+          await db.cacheEvents([
+            productEvent({
+              id: "product-old-a",
+              pubkey: "seller-1",
+              created_at: 100,
+              tags: [
+                ["title", "Listing A"],
+                ["price", "10"],
+                ["d", "listing-a"],
+              ],
+              content: "old listing a",
+              sig: "sig-old-a",
+            }),
+            productEvent({
+              id: "product-new-a",
+              pubkey: "seller-1",
+              created_at: 200,
+              tags: [
+                ["price", "15"],
+                ["title", "Listing A"],
+                ["d", "listing-a"],
+              ],
+              content: "new listing a",
+              sig: "sig-new-a",
+            }),
+            productEvent({
+              id: "product-b",
+              pubkey: "seller-1",
+              created_at: 150,
+              tags: [
+                ["title", "Listing B"],
+                ["d", "listing-b"],
+              ],
+              content: "listing b",
+              sig: "sig-b",
+            }),
+            productEvent({
+              id: "product-no-d",
+              pubkey: "seller-2",
+              created_at: 50,
+              tags: [
+                ["title", "Listing No D"],
+                ["price", "30"],
+              ],
+              content: "no d listing",
+              sig: "sig-no-d",
+            }),
+          ]);
+
+          const products = await db.fetchAllProductsFromDb();
+
+          expect(products.map((event) => event.id)).toEqual([
+            "product-new-a",
+            "product-b",
+            "product-no-d",
+          ]);
+          expect(products[0]).toMatchObject({
+            id: "product-new-a",
+            pubkey: "seller-1",
+            content: "new listing a",
+          });
+          expect(products[1]).toMatchObject({
+            id: "product-b",
+            pubkey: "seller-1",
+            content: "listing b",
+          });
+          expect(products[2]).toMatchObject({
+            id: "product-no-d",
+            pubkey: "seller-2",
+            content: "no d listing",
+          });
+        });
+      }
+    );
+
+    maybeItTc("discount code CRUD using Postgres", async () => {
+      await withPostgresDbService(async (db) => {
+        await waitForTables(db, ["discount_codes"]);
+
+        const expiration = Math.floor(Date.now() / 1000) + 3600;
+        await db.addDiscountCode("CODE1", "pk1", 25, expiration);
+
+        const inserted = await db.getDiscountCodesByPubkey("pk1");
+        expect(inserted).toHaveLength(1);
+        const insertedCode = inserted[0]!;
+        expect(insertedCode.code).toBe("CODE1");
+        expect(insertedCode.discount_percentage).toBeCloseTo(25);
+        expect(insertedCode.expiration).toBe(expiration);
+
+        const valid = await db.validateDiscountCode("CODE1", "pk1");
+        expect(valid.valid).toBe(true);
+        expect(valid.discount_percentage).toBeCloseTo(25);
+
+        await db.addDiscountCode("CODE1", "pk1", 30, expiration);
+        const updated = await db.validateDiscountCode("CODE1", "pk1");
+        expect(updated.valid).toBe(true);
+        expect(updated.discount_percentage).toBeCloseTo(30);
+
+        await db.deleteDiscountCode("CODE1", "pk1");
+        await expect(db.getDiscountCodesByPubkey("pk1")).resolves.toHaveLength(
+          0
+        );
+        await expect(db.validateDiscountCode("CODE1", "pk1")).resolves.toEqual({
+          valid: false,
+        });
+      });
+    });
+
+    maybeItTc(
+      "fetchMarketplaceStats returns correct listing and seller counts",
+      async () => {
+        await withPostgresDbService(async (db) => {
+          await waitForTables(db, ["product_events"]);
+
+          await db.cacheEvent(productEvent({ id: "p1", pubkey: "seller1" }));
+          await db.cacheEvent(productEvent({ id: "p2", pubkey: "seller2" }));
+          await db.cacheEvent(productEvent({ id: "p3", pubkey: "seller1" }));
+
+          await expect(db.fetchMarketplaceStats()).resolves.toEqual({
+            listingCount: 3,
+            sellerCount: 2,
+          });
+        });
+      }
+    );
+
+    maybeItTc(
+      "fetchCachedEvents supports pubkey/limit/offset/since/until filters",
+      async () => {
+        await withPostgresDbService(async (db) => {
+          await waitForTables(db, ["product_events"]);
+
+          await db.cacheEvent(
+            productEvent({
+              id: "e1",
+              pubkey: "alice",
+              created_at: 10,
+              content: "c1",
+              sig: "s1",
+            })
+          );
+          await db.cacheEvent(
+            productEvent({
+              id: "e2",
+              pubkey: "bob",
+              created_at: 20,
+              content: "c2",
+              sig: "s2",
+            })
+          );
+          await db.cacheEvent(
+            productEvent({
+              id: "e3",
+              pubkey: "alice",
+              created_at: 30,
+              content: "c3",
+              sig: "s3",
+            })
+          );
+
+          const all = await db.fetchCachedEvents(30402);
+          expect(all.map((event) => event.id)).toEqual(["e3", "e2", "e1"]);
+
+          const alice = await db.fetchCachedEvents(30402, { pubkey: "alice" });
+          expect(alice.map((event) => event.id)).toEqual(["e3", "e1"]);
+
+          const between = await db.fetchCachedEvents(30402, {
+            since: 15,
+            until: 30,
+          });
+          expect(between.map((event) => event.id)).toEqual(["e3", "e2"]);
+
+          const limited = await db.fetchCachedEvents(30402, {
+            limit: 1,
+            offset: 1,
+          });
+          expect(limited.map((event) => event.id)).toEqual(["e2"]);
+        });
+      }
+    );
+
+    maybeItTc(
+      "cacheEvent keeps only the latest-only event per pubkey",
+      async () => {
+        await withPostgresDbService(async (db) => {
+          await waitForTables(db, ["wallet_events"]);
+
+          const first = {
+            id: "wallet-1",
+            pubkey: "wallet-owner",
+            created_at: 100,
+            kind: 17375,
+            tags: [],
+            content: "first",
+            sig: "sig-1",
+          } as NostrEvent;
+
+          const second = {
+            ...first,
+            id: "wallet-2",
+            created_at: 200,
+            content: "second",
+            sig: "sig-2",
+          } as NostrEvent;
+
+          await db.cacheEvent(first);
+          await db.cacheEvent(second);
+
+          const walletEvents =
+            await db.fetchAllWalletEventsFromDb("wallet-owner");
+          expect(walletEvents).toHaveLength(1);
+          expect(walletEvents[0]?.id).toBe("wallet-2");
+          expect(walletEvents[0]?.content).toBe("second");
+        });
+      }
+    );
+
+    maybeItTc(
+      "cacheEvent keeps only the latest review per pubkey and d tag",
+      async () => {
+        await withPostgresDbService(async (db) => {
+          await waitForTables(db, ["review_events"]);
+
+          const first = {
+            id: "review-1",
+            pubkey: "reviewer-1",
+            created_at: 100,
+            kind: 31555,
+            tags: [["d", "listing-1"]],
+            content: "first review",
+            sig: "sig-1",
+          } as NostrEvent;
+
+          const second = {
+            ...first,
+            id: "review-2",
+            created_at: 200,
+            content: "second review",
+            sig: "sig-2",
+          } as NostrEvent;
+
+          await db.cacheEvent(first);
+          await db.cacheEvent(second);
+
+          const reviews = await db.fetchAllReviewsFromDb();
+          expect(reviews).toHaveLength(1);
+          expect(reviews[0]?.id).toBe("review-2");
+          expect(reviews[0]?.content).toBe("second review");
+        });
+      }
+    );
+
+    maybeItTc(
+      "cacheEventsTransaction keeps latest-only and review rows deduped within one batch",
+      async () => {
+        await withPostgresDbService(async (db) => {
+          await waitForTables(db, ["wallet_events", "review_events"]);
+
+          await db.cacheEvents([
+            latestOnlyEvent({
+              id: "wallet-old",
+              pubkey: "wallet-owner",
+              created_at: 100,
+              content: "old wallet",
+              sig: "wallet-sig-1",
+            }),
+            latestOnlyEvent({
+              id: "wallet-new",
+              pubkey: "wallet-owner",
+              created_at: 200,
+              content: "new wallet",
+              sig: "wallet-sig-2",
+            }),
+            latestOnlyEvent({
+              id: "wallet-other",
+              pubkey: "wallet-other-owner",
+              created_at: 150,
+              content: "other wallet",
+              sig: "wallet-sig-3",
+            }),
+            reviewEvent({
+              id: "review-old",
+              pubkey: "reviewer-1",
+              created_at: 100,
+              tags: [["d", "listing-a"]],
+              content: "old review",
+              sig: "review-sig-1",
+            }),
+            reviewEvent({
+              id: "review-new",
+              pubkey: "reviewer-1",
+              created_at: 200,
+              tags: [["d", "listing-a"]],
+              content: "new review",
+              sig: "review-sig-2",
+            }),
+            reviewEvent({
+              id: "review-other",
+              pubkey: "reviewer-1",
+              created_at: 150,
+              tags: [["d", "listing-b"]],
+              content: "other review",
+              sig: "review-sig-3",
+            }),
+          ]);
+
+          const walletEvents =
+            await db.fetchAllWalletEventsFromDb("wallet-owner");
+          expect(walletEvents).toHaveLength(1);
+          expect(walletEvents[0]?.id).toBe("wallet-new");
+
+          const otherWalletEvents =
+            await db.fetchAllWalletEventsFromDb("wallet-other-owner");
+          expect(otherWalletEvents).toHaveLength(1);
+          expect(otherWalletEvents[0]?.id).toBe("wallet-other");
+
+          const reviews = await db.fetchAllReviewsFromDb();
+          expect(reviews.map((event) => event.id)).toEqual([
+            "review-new",
+            "review-other",
+          ]);
+        });
+      }
+    );
+
+    maybeItTc(
+      "deleteCachedEventsByIds removes a product event and older same-d-tag versions only",
+      async () => {
+        await withPostgresDbService(async (db) => {
+          await waitForTables(db, ["product_events"]);
+
+          await db.cacheEvents([
+            productEvent({
+              id: "product-a1",
+              pubkey: "seller-1",
+              created_at: 100,
+              tags: [["d", "listing-a"]],
+              content: "old listing a",
+              sig: "sig-a1",
+            }),
+            productEvent({
+              id: "product-a2",
+              pubkey: "seller-1",
+              created_at: 200,
+              tags: [["d", "listing-a"]],
+              content: "middle listing a",
+              sig: "sig-a2",
+            }),
+            productEvent({
+              id: "product-a3",
+              pubkey: "seller-1",
+              created_at: 300,
+              tags: [["d", "listing-a"]],
+              content: "new listing a",
+              sig: "sig-a3",
+            }),
+            productEvent({
+              id: "product-b1",
+              pubkey: "seller-1",
+              created_at: 150,
+              tags: [["d", "listing-b"]],
+              content: "listing b",
+              sig: "sig-b1",
+            }),
+          ]);
+
+          await db.deleteCachedEventsByIds(["product-a2"]);
+
+          await expect(
+            db.fetchProductByIdFromDb("product-a1")
+          ).resolves.toBeNull();
+          await expect(
+            db.fetchProductByIdFromDb("product-a2")
+          ).resolves.toBeNull();
+          await expect(
+            db.fetchProductByIdFromDb("product-a3")
+          ).resolves.toMatchObject({
+            id: "product-a3",
+            content: "new listing a",
+          });
+          await expect(
+            db.fetchProductByIdFromDb("product-b1")
+          ).resolves.toMatchObject({
+            id: "product-b1",
+            content: "listing b",
+          });
+        });
+      }
+    );
+  });
+});

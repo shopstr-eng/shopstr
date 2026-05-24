@@ -10,6 +10,7 @@ import {
   DropdownMenu,
   DropdownItem,
   Button,
+  useDisclosure,
 } from "@heroui/react";
 import { XCircleIcon, EllipsisVerticalIcon } from "@heroicons/react/24/outline";
 import parseTags, {
@@ -34,6 +35,9 @@ import {
   fetchProductByListingSlug,
 } from "@/utils/db/db-service";
 import { NostrEvent } from "@/utils/types/types";
+import { SignerContext } from "@/components/utility-components/nostr-context-provider";
+import SignInModal from "@/components/sign-in/SignInModal";
+import useReportEventFlow from "@/components/utility-components/use-report-event-flow";
 import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
 
 type ListingPageProps = {
@@ -181,6 +185,7 @@ export const getServerSideProps: GetServerSideProps<ListingPageProps> = async (
 
 const Listing = ({ initialProductEvent }: ListingPageProps) => {
   const router = useRouter();
+  const { pubkey: userPubkey } = useContext(SignerContext);
   const seededListing = useMemo(
     () => resolveListingStateFromEvent(initialProductEvent),
     [initialProductEvent]
@@ -202,6 +207,7 @@ const Listing = ({ initialProductEvent }: ListingPageProps) => {
   const [invoiceGenerationFailed, setInvoiceGenerationFailed] = useState(false);
   const [cashuPaymentSent, setCashuPaymentSent] = useState(false);
   const [cashuPaymentFailed, setCashuPaymentFailed] = useState(false);
+  const { isOpen, onOpen, onClose } = useDisclosure();
 
   // Once payment lands, let the inline "Payment confirmed!" GIF play through
   // once and then push straight to the order summary page. Avoids the prior
@@ -217,6 +223,12 @@ const Listing = ({ initialProductEvent }: ListingPageProps) => {
   }, [invoiceIsPaid, cashuPaymentSent, router]);
 
   const productContext = useContext(ProductContext);
+  const { openReportFlow, reportFlowUi } = useReportEventFlow({
+    targetLabel: "listing",
+    reportedPubkey: productData?.pubkey,
+    reportedEventId: productData?.id,
+    onRequireLogin: onOpen,
+  });
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -406,18 +418,32 @@ const Listing = ({ initialProductEvent }: ListingPageProps) => {
                           </Button>
                         </DropdownTrigger>
                         <DropdownMenu aria-label="Event Actions">
-                          <DropdownItem
-                            key="view-raw"
-                            onPress={() => setShowRawEventModal(true)}
-                          >
-                            View Raw Event
-                          </DropdownItem>
-                          <DropdownItem
-                            key="view-id"
-                            onPress={() => setShowEventIdModal(true)}
-                          >
-                            View Event ID
-                          </DropdownItem>
+                          {[
+                            <DropdownItem
+                              key="view-raw"
+                              onPress={() => setShowRawEventModal(true)}
+                            >
+                              View Raw Event
+                            </DropdownItem>,
+                            <DropdownItem
+                              key="view-id"
+                              onPress={() => setShowEventIdModal(true)}
+                            >
+                              View Event ID
+                            </DropdownItem>,
+                            ...(productData.pubkey !== userPubkey
+                              ? [
+                                  <DropdownItem
+                                    key="report-listing"
+                                    color="danger"
+                                    className="text-danger"
+                                    onPress={openReportFlow}
+                                  >
+                                    Report Listing
+                                  </DropdownItem>,
+                                ]
+                              : []),
+                          ]}
                         </DropdownMenu>
                       </Dropdown>
                     )}
@@ -440,6 +466,8 @@ const Listing = ({ initialProductEvent }: ListingPageProps) => {
                 onClose={() => setShowEventIdModal(false)}
                 rawEvent={rawEvent}
               />
+              {reportFlowUi}
+              <SignInModal isOpen={isOpen} onClose={onClose} />
             </div>
           ) : (
             <CheckoutCard

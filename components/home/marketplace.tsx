@@ -134,6 +134,10 @@ function MarketplacePage({
     isLoading: isFollowActionLoading,
     toggle: handleFollowToggle,
   } = useFollowToggle(focusedPubkey, { onRequireSignIn: onOpen });
+  const hasTrustGraph =
+    Boolean(loggedIn) &&
+    !followsContext.isLoading &&
+    followsContext.firstDegreeFollowsLength > 0;
 
   useEffect(() => {
     const slug = normalizeNpub(router.query.npub);
@@ -248,6 +252,12 @@ function MarketplacePage({
     setIsFetchingFollows(followsContext.isLoading);
   }, [followsContext.isLoading]);
 
+  useEffect(() => {
+    if (!hasTrustGraph && wotFilter) {
+      setWotFilter(false);
+    }
+  }, [hasTrustGraph, wotFilter]);
+
   const handleFilteredProductsChange = (products: ProductData[]) => {
     setFilteredProducts(products);
   };
@@ -339,7 +349,13 @@ function MarketplacePage({
                           dropDownKeys={
                             reviewerPubkey === userPubkey
                               ? ["shop_profile"]
-                              : ["shop", "inquiry", "follow", "copy_npub"]
+                              : [
+                                  "shop",
+                                  "inquiry",
+                                  "copy_npub",
+                                  "report_profile",
+                                  "follow"
+                                ]
                           }
                         />
                       </div>
@@ -565,7 +581,7 @@ function MarketplacePage({
                   setSelectedLocation(event.target.value);
                 }}
               />
-              {!isFetchingFollows ? (
+              {!isFetchingFollows && hasTrustGraph ? (
                 <ShopstrSwitch
                   wotFilter={wotFilter}
                   setWotFilter={setWotFilter}
