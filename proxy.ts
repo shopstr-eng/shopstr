@@ -58,6 +58,13 @@ const CUSTOM_DOMAIN_API_ALLOWLIST = [
   // though the code itself is valid.
   "/api/db/discount-codes",
   "/api/db/discount-code-used",
+  // Affiliate validate / click tracking / referral recording. The buyer
+  // checkout on a custom domain calls /api/affiliates/validate to apply a
+  // code, /api/affiliates/record-click on landing, and
+  // /api/affiliates/record-referral after a successful payment. Without
+  // these gated in, the proxy returns 403 and affiliate codes silently
+  // fail to validate on custom stalls/domains.
+  "/api/affiliates/",
   "/api/nostr/",
   "/api/lightning/",
   "/api/cashu/",
