@@ -1,0 +1,2 @@
+- [Lightning invoice polling loop](lightning-invoice-polling.md) — every branch inside the polling while-loop must advance retryCount and back off, and the loop must surface a terminal UI even when it exits naturally.
+- [Lightning mint amount source](lightning-mint-amount-source.md) — mintProofsBolt11 amount must come from the exact value used to create the quote, not from a separate price state variable that can diverge under payment-method discounts.

@@ -39,6 +39,10 @@ import { safeSwap } from "@/utils/cashu/swap-retry-service";
 import { safeMeltProofs } from "@/utils/cashu/melt-retry-service";
 import { stashProofsLocally } from "@/utils/cashu/local-wallet-stash";
 import {
+  RecoverableProofTracker,
+  SendTokensRecoverableError,
+} from "@/utils/cashu/recoverable-proof-tracker";
+import {
   recordPendingMintQuote,
   markMintQuotePaid,
   markMintQuoteClaimed,
@@ -1619,6 +1623,9 @@ export default function CartInvoiceCard({
     }
   };
 
+  // Returns true iff a delivery attempt to the recipient succeeded. Callers
+  // that pass a cashu token in the message gate proof-tracker consumption on
+  // this so that proofs in a fully-failed send remain recoverable.
   const sendPaymentAndContactMessage = async (
     pubkeyToReceiveMessage: string,
     message: string,
@@ -1645,15 +1652,15 @@ export default function CartInvoiceCard({
       stripeSubscriptionId: string;
     },
     orderCurrency?: string
-  ) => {
+  ): Promise<boolean> => {
     if (!pubkeyToReceiveMessage) {
-      return;
+      return false;
     }
     const newKeys = await generateNewKeys();
     if (!newKeys) {
       setFailureText("Failed to generate new keys for messages!");
       setShowFailureModal(true);
-      return;
+      return false;
     }
 
     for (let attempt = 0; attempt < retryCount; attempt++) {
@@ -1682,7 +1689,7 @@ export default function CartInvoiceCard({
           orderCurrency
         );
         // If we get here, the message was sent successfully
-        return;
+        return true;
       } catch (error) {
         console.warn(
           `Attempt ${attempt + 1} failed for message sending:`,
@@ -1690,9 +1697,11 @@ export default function CartInvoiceCard({
         );
 
         if (attempt === retryCount - 1) {
-          // This was the last attempt, log the error but don't throw
+          // This was the last attempt, log the error but don't throw.
+          // Returning `false` lets proof-carrying callers keep the
+          // associated proofs in the recoverable-tracker.
           console.error("Failed to send message after all retries:", error);
-          return; // Continue with the flow instead of breaking it
+          return false;
         }
 
         // Wait before retrying (exponential backoff)
@@ -1701,6 +1710,7 @@ export default function CartInvoiceCard({
         );
       }
     }
+    return false;
   };
 
   const sendPaymentAndContactMessageWithKeys = async (
@@ -2408,7 +2418,7 @@ export default function CartInvoiceCard({
       await nwc.enable();
 
       await nwc.sendPayment(pr);
-      await invoiceHasBeenPaid(wallet, totalCost, hash, data);
+      await invoiceHasBeenPaid(wallet, convertedPrice, hash, data);
     } catch (error: any) {
       handleNWCError(error);
     } finally {
@@ -3513,7 +3523,7 @@ export default function CartInvoiceCard({
           console.error(e);
         }
       }
-      await invoiceHasBeenPaid(wallet, totalCost, hash, data);
+      await invoiceHasBeenPaid(wallet, convertedPrice, hash, data);
     } catch {
       if (setInvoiceGenerationFailed) {
         setInvoiceGenerationFailed(true);
@@ -3536,6 +3546,7 @@ export default function CartInvoiceCard({
   ) {
     let retryCount = 0;
     const maxRetries = 30; // Maximum 30 retries (about 1 minute)
+    let handledTerminalOutcome = false;
 
     while (retryCount < maxRetries) {
       try {
@@ -3547,6 +3558,15 @@ export default function CartInvoiceCard({
           // Quote is paid, try to mint proofs
           try {
             const proofs = await wallet.mintProofsBolt11(convertedPrice, hash);
+            if (!proofs || proofs.length === 0) {
+              // Mint returned no proofs without throwing — treat as a
+              // transient state and back off, otherwise we'd spin in this
+              // branch and never advance the retry counter (the outer
+              // else only catches UNPAID).
+              retryCount++;
+              await new Promise((resolve) => setTimeout(resolve, 2100));
+              continue;
+            }
             if (proofs && proofs.length > 0) {
               try {
                 await sendTokens(wallet, proofs, data);
@@ -3555,18 +3575,32 @@ export default function CartInvoiceCard({
                   "sendTokens failed after Lightning mint; stashing proofs locally:",
                   sendErr
                 );
-                const stashed = stashProofsLocally(proofs, mints[0]!, {
-                  note: "Recovered from failed cart Lightning payment",
-                });
+                // Prefer the live recoverable-proofs set computed inside
+                // sendTokens — the original `proofs` array is mostly SPENT
+                // on the mint by the time sendTokens fails partway through.
+                const recoverableProofs =
+                  sendErr instanceof SendTokensRecoverableError
+                    ? sendErr.recoverableProofs
+                    : proofs;
+                const recoveryMintUrl =
+                  sendErr instanceof SendTokensRecoverableError
+                    ? sendErr.mintUrl
+                    : mints[0]!;
+                const stashed = stashProofsLocally(
+                  recoverableProofs,
+                  recoveryMintUrl,
+                  { note: "Recovered from failed cart Lightning payment" }
+                );
                 markMintQuoteClaimed(hash);
                 setWalletRecovery({
                   isOpen: true,
                   amountSats: stashed,
-                  mintUrl: mints[0],
+                  mintUrl: recoveryMintUrl,
                 });
                 setShowInvoiceCard(false);
                 setInvoice("");
                 setQrCodeUrl(null);
+                handledTerminalOutcome = true;
                 return;
               }
               markMintQuoteClaimed(hash);
@@ -3607,15 +3641,11 @@ export default function CartInvoiceCard({
                 "Payment was received but your connection dropped! Please check your wallet balance."
               );
               setShowFailureModal(true);
+              handledTerminalOutcome = true;
               break;
             }
             throw mintError;
           }
-        } else if (quoteState.state === "UNPAID") {
-          // Quote not paid yet, continue waiting
-          retryCount++;
-          await new Promise((resolve) => setTimeout(resolve, 2100));
-          continue;
         } else if (quoteState.state === "ISSUED") {
           // Quote was already processed successfully (likely on another tab/device).
           removePendingMintQuote(hash);
@@ -3627,7 +3657,17 @@ export default function CartInvoiceCard({
             "Payment was received but your connection dropped! Please check your wallet balance."
           );
           setShowFailureModal(true);
+          handledTerminalOutcome = true;
           break;
+        } else {
+          // Quote not paid yet (UNPAID), or PAID but mintProofsBolt11
+          // returned an empty array without throwing — in either case we
+          // need to advance the retry counter and back off, otherwise we
+          // tight-loop or silently fall out of the while when the counter
+          // is exhausted.
+          retryCount++;
+          await new Promise((resolve) => setTimeout(resolve, 2100));
+          continue;
         }
       } catch (error) {
         retryCount++;
@@ -3644,6 +3684,7 @@ export default function CartInvoiceCard({
             );
             setShowFailureModal(true);
           }
+          handledTerminalOutcome = true;
           break;
         }
 
@@ -3660,11 +3701,31 @@ export default function CartInvoiceCard({
             mintUrl: mints[0],
             pendingRecovery: true,
           });
+          handledTerminalOutcome = true;
           break;
         }
 
         await new Promise((resolve) => setTimeout(resolve, 2100));
       }
+    }
+
+    // Safety net: if the while loop exited naturally (e.g. retryCount hit
+    // maxRetries on the UNPAID branch with no exception ever thrown), the
+    // QR card would otherwise stay on screen forever with no success or
+    // failure surfaced. Mirror the in-catch maxRetries handler so the
+    // buyer always sees an outcome and any settled LN payment can be
+    // recovered on next sign-in via MintRecoveryBoot. Skip if an in-loop
+    // terminal branch already opened a modal so we don't double-fire.
+    if (!handledTerminalOutcome && retryCount >= maxRetries) {
+      setShowInvoiceCard(false);
+      setInvoice("");
+      setQrCodeUrl(null);
+      setWalletRecovery({
+        isOpen: true,
+        amountSats: convertedPrice,
+        mintUrl: mints[0],
+        pendingRecovery: true,
+      });
     }
   }
 
@@ -3674,453 +3735,341 @@ export default function CartInvoiceCard({
     data: any
   ) => {
     let remainingProofs = proofs;
+    // Track which proofs the buyer can still recover at any point. The
+    // original `proofs` array is mutated through swaps/melts across each
+    // product iteration; on failure we need to stash what's *currently*
+    // unspent + untransmitted, not the original mint outputs (most of
+    // which are already spent on the mint).
+    const __recoverableTracker = new RecoverableProofTracker(proofs);
+    try {
+      // Construct address tag early so it can be passed to all messages
+      // Handle both form field naming conventions
+      const hasShippingInfo = data.shippingName || data.Name;
+      const shippingAddressTag = hasShippingInfo
+        ? data.shippingName
+          ? data.shippingUnitNo
+            ? `${data.shippingName}, ${data.shippingAddress}, ${data.shippingUnitNo}, ${data.shippingCity}, ${data.shippingState}, ${data.shippingPostalCode}, ${data.shippingCountry}`
+            : `${data.shippingName}, ${data.shippingAddress}, ${data.shippingCity}, ${data.shippingState}, ${data.shippingPostalCode}, ${data.shippingCountry}`
+          : data.Unit
+            ? `${data.Name}, ${data.Address}, ${data.Unit}, ${data.City}, ${data["State/Province"]}, ${data["Postal Code"]}, ${data.Country}`
+            : `${data.Name}, ${data.Address}, ${data.City}, ${data["State/Province"]}, ${data["Postal Code"]}, ${data.Country}`
+        : undefined;
 
-    // Construct address tag early so it can be passed to all messages
-    // Handle both form field naming conventions
-    const hasShippingInfo = data.shippingName || data.Name;
-    const shippingAddressTag = hasShippingInfo
-      ? data.shippingName
-        ? data.shippingUnitNo
-          ? `${data.shippingName}, ${data.shippingAddress}, ${data.shippingUnitNo}, ${data.shippingCity}, ${data.shippingState}, ${data.shippingPostalCode}, ${data.shippingCountry}`
-          : `${data.shippingName}, ${data.shippingAddress}, ${data.shippingCity}, ${data.shippingState}, ${data.shippingPostalCode}, ${data.shippingCountry}`
-        : data.Unit
-          ? `${data.Name}, ${data.Address}, ${data.Unit}, ${data.City}, ${data["State/Province"]}, ${data["Postal Code"]}, ${data.Country}`
-          : `${data.Name}, ${data.Address}, ${data.City}, ${data["State/Province"]}, ${data["Postal Code"]}, ${data.Country}`
-      : undefined;
+      const orderId = uuidv4();
 
-    const orderId = uuidv4();
-
-    if (pendingOrderEmailRef.current) {
-      pendingOrderEmailRef.current.forEach((entry) => {
-        if (!entry.orderId) entry.orderId = orderId;
-      });
-    }
-
-    for (const product of products) {
-      const title = product.title;
-      const pubkey = product.pubkey;
-      const required = product.required;
-      const tokenAmount = totalCostsInSats[pubkey];
-      let sellerToken;
-      let donationToken;
-      let beefDonationToken;
-      const sellerProfile = profileContext.profileData.get(pubkey);
-      const donationPercentage = sellerProfile?.content?.mm_donation ?? 0;
-      const beefDonationPercentage = product.beefinit_donation_percentage || 0;
-
-      const donationAmount = Math.ceil(
-        (tokenAmount! * donationPercentage) / 100
-      );
-      const beefDonationAmount =
-        beefDonationPercentage > 0
-          ? Math.ceil((tokenAmount! * beefDonationPercentage) / 100)
-          : 0;
-
-      const sellerAmount = tokenAmount! - donationAmount - beefDonationAmount;
-      let sellerProofs: Proof[] = [];
-      let beefDonationProofs: Proof[] = [];
-
-      let shippingData = data; // Assume data contains shipping info
-      if (formType === "shipping") {
-        shippingData = {
-          Name: data.Name,
-          Address: data.Address,
-          Unit: data.Unit,
-          City: data.City,
-          "State/Province": data["State/Province"],
-          "Postal Code": data["Postal Code"],
-          Country: data.Country,
-        };
-      } else if (formType === "combined") {
-        shippingData = {
-          Name: data.Name,
-          Address: data.Address,
-          Unit: data.Unit,
-          City: data.City,
-          "State/Province": data["State/Province"],
-          "Postal Code": data["Postal Code"],
-          Country: data.Country,
-        };
-      }
-
-      // Generate keys once per order to ensure consistent sender pubkey
-      const orderKeys = await generateNewKeys();
-      if (!orderKeys) {
-        setFailureText("Failed to generate new keys for messages!");
-        setShowFailureModal(true);
-        return;
-      }
-      const paymentPreference =
-        sellerProfile?.content?.payment_preference || "ecash";
-      const lnurl = sellerProfile?.content?.lud16 || "";
-
-      // Construct address string for order-info type
-      const addressString = shippingData.Name
-        ? `${shippingData.Name}, ${shippingData.Address}${
-            shippingData.Unit ? `, ${shippingData.Unit}` : ""
-          }, ${shippingData.City}, ${shippingData["State/Province"]}, ${
-            shippingData["Postal Code"]
-          }, ${shippingData.Country}`
-        : "";
-
-      // Construct order-info message with address tag
-      const orderInfoMessage = await constructMessageGiftWrap(
-        pubkey as any,
-        "", // Placeholder for seal
-        orderKeys.receiverNsec as any, // Placeholder for keypair
-        pubkey // Recipient pubkey
-      );
-      const orderInfoTags: string[][] = [
-        ["type", "1"],
-        ["subject", "order-info"],
-        ["order", orderId],
-        ["item", product.id],
-        ["shipping", shippingTypes[product.id] || ""], // Assuming shippingId can be derived from shippingTypes
-      ];
-      if (addressString) {
-        orderInfoTags.push(["address", addressString]);
-      }
-      if (tokenAmount) {
-        orderInfoTags.push(["amount", tokenAmount.toString()]);
-      }
-      if (donationAmount > 0) {
-        orderInfoTags.push([
-          "donation_amount",
-          donationAmount.toString(),
-          donationPercentage.toString(),
-        ]);
-      }
-      orderInfoMessage.tags = orderInfoTags;
-
-      // Construct payment message with cashu token tag
-      let paymentMessageText;
-      let paymentTags;
-
-      if (sellerAmount > 0) {
-        const __swapOutcomeA_0 = await safeSwap(
-          wallet,
-          sellerAmount,
-          remainingProofs,
-          { sendConfig: { includeFees: true } }
-        );
-        if (__swapOutcomeA_0.status !== "swapped") {
-          throw new Error(
-            __swapOutcomeA_0.errorMessage ??
-              `Swap did not complete (${__swapOutcomeA_0.status})`
-          );
-        }
-        const { keep, send } = __swapOutcomeA_0;
-        sellerProofs = send;
-        sellerToken = getEncodedToken({
-          mint: mints[0]!,
-          proofs: send,
+      if (pendingOrderEmailRef.current) {
+        pendingOrderEmailRef.current.forEach((entry) => {
+          if (!entry.orderId) entry.orderId = orderId;
         });
-        remainingProofs = keep;
+      }
 
-        // Construct payment message with cashu token tag
-        paymentMessageText = await constructMessageGiftWrap(
+      for (const product of products) {
+        const title = product.title;
+        const pubkey = product.pubkey;
+        const required = product.required;
+        const tokenAmount = totalCostsInSats[pubkey];
+        let sellerToken;
+        let donationToken;
+        let beefDonationToken;
+        const sellerProfile = profileContext.profileData.get(pubkey);
+        const donationPercentage = sellerProfile?.content?.mm_donation ?? 0;
+        const beefDonationPercentage =
+          product.beefinit_donation_percentage || 0;
+
+        const donationAmount = Math.ceil(
+          (tokenAmount! * donationPercentage) / 100
+        );
+        const beefDonationAmount =
+          beefDonationPercentage > 0
+            ? Math.ceil((tokenAmount! * beefDonationPercentage) / 100)
+            : 0;
+
+        const sellerAmount = tokenAmount! - donationAmount - beefDonationAmount;
+        let sellerProofs: Proof[] = [];
+        let donationProofs: Proof[] = [];
+        let beefDonationProofs: Proof[] = [];
+
+        let shippingData = data; // Assume data contains shipping info
+        if (formType === "shipping") {
+          shippingData = {
+            Name: data.Name,
+            Address: data.Address,
+            Unit: data.Unit,
+            City: data.City,
+            "State/Province": data["State/Province"],
+            "Postal Code": data["Postal Code"],
+            Country: data.Country,
+          };
+        } else if (formType === "combined") {
+          shippingData = {
+            Name: data.Name,
+            Address: data.Address,
+            Unit: data.Unit,
+            City: data.City,
+            "State/Province": data["State/Province"],
+            "Postal Code": data["Postal Code"],
+            Country: data.Country,
+          };
+        }
+
+        // Generate keys once per order to ensure consistent sender pubkey
+        const orderKeys = await generateNewKeys();
+        if (!orderKeys) {
+          setFailureText("Failed to generate new keys for messages!");
+          setShowFailureModal(true);
+          // Throw so the outer try/catch wraps as SendTokensRecoverableError
+          // and the caller stashes the (still-untouched) minted proofs. A
+          // silent return here would mark the order as success and lose funds.
+          throw new Error("Failed to generate new keys for messages");
+        }
+        const paymentPreference =
+          sellerProfile?.content?.payment_preference || "ecash";
+        const lnurl = sellerProfile?.content?.lud16 || "";
+
+        // Construct address string for order-info type
+        const addressString = shippingData.Name
+          ? `${shippingData.Name}, ${shippingData.Address}${
+              shippingData.Unit ? `, ${shippingData.Unit}` : ""
+            }, ${shippingData.City}, ${shippingData["State/Province"]}, ${
+              shippingData["Postal Code"]
+            }, ${shippingData.Country}`
+          : "";
+
+        // Construct order-info message with address tag
+        const orderInfoMessage = await constructMessageGiftWrap(
           pubkey as any,
           "", // Placeholder for seal
           orderKeys.receiverNsec as any, // Placeholder for keypair
           pubkey // Recipient pubkey
         );
-        paymentTags = [
-          ["type", "2"],
-          ["subject", "order-payment"],
+        const orderInfoTags: string[][] = [
+          ["type", "1"],
+          ["subject", "order-info"],
           ["order", orderId],
-          ["payment", "ecash", sellerToken],
+          ["item", product.id],
+          ["shipping", shippingTypes[product.id] || ""], // Assuming shippingId can be derived from shippingTypes
         ];
-        if (sellerAmount) {
-          paymentTags.push(["amount", sellerAmount.toString()]);
+        if (addressString) {
+          orderInfoTags.push(["address", addressString]);
+        }
+        if (tokenAmount) {
+          orderInfoTags.push(["amount", tokenAmount.toString()]);
         }
         if (donationAmount > 0) {
-          paymentTags.push([
+          orderInfoTags.push([
             "donation_amount",
             donationAmount.toString(),
             donationPercentage.toString(),
           ]);
         }
-        paymentMessageText.tags = paymentTags;
-      }
+        orderInfoMessage.tags = orderInfoTags;
 
-      // Handle donation if applicable
-      if (donationAmount > 0) {
-        const __swapOutcomeA_1 = await safeSwap(
-          wallet,
-          donationAmount,
-          remainingProofs,
-          { sendConfig: { includeFees: true } }
-        );
-        if (__swapOutcomeA_1.status !== "swapped") {
-          throw new Error(
-            __swapOutcomeA_1.errorMessage ??
-              `Swap did not complete (${__swapOutcomeA_1.status})`
-          );
-        }
-        const { keep, send } = __swapOutcomeA_1;
-        donationToken = getEncodedToken({
-          mint: mints[0]!,
-          proofs: send,
-        });
-        remainingProofs = keep;
-      }
+        // Construct payment message with cashu token tag
+        let paymentMessageText;
+        let paymentTags;
 
-      if (beefDonationAmount > 0) {
-        const __swapOutcomeA_2 = await safeSwap(
-          wallet,
-          beefDonationAmount,
-          remainingProofs,
-          { sendConfig: { includeFees: true } }
-        );
-        if (__swapOutcomeA_2.status !== "swapped") {
-          throw new Error(
-            __swapOutcomeA_2.errorMessage ??
-              `Swap did not complete (${__swapOutcomeA_2.status})`
-          );
-        }
-        const { keep, send } = __swapOutcomeA_2;
-        beefDonationProofs = send;
-        beefDonationToken = getEncodedToken({
-          mint: mints[0]!,
-          proofs: send,
-        });
-        remainingProofs = keep;
-      }
-
-      // Step 1: Send payment message (if applicable)
-      if (
-        paymentPreference === "lightning" &&
-        lnurl &&
-        lnurl !== "" &&
-        !lnurl.includes("@zeuspay.com") &&
-        sellerProofs
-      ) {
-        const newAmount = Math.floor(sellerAmount * 0.98 - 2);
-        const ln = new LightningAddress(lnurl);
-        await wallet.loadMint();
-        await ln.fetch();
-        const invoice = await ln.requestInvoice({ satoshi: newAmount });
-        const invoicePaymentRequest = invoice.paymentRequest;
-        const meltQuote = await wallet.createMeltQuoteBolt11(
-          invoicePaymentRequest
-        );
-        if (meltQuote) {
-          const meltQuoteTotal =
-            meltQuote.amount.toNumber() + meltQuote.fee_reserve.toNumber();
-          const __swapOutcomeA_3 = await safeSwap(
+        if (sellerAmount > 0) {
+          const __swapOutcomeA_0 = await safeSwap(
             wallet,
-            meltQuoteTotal,
-            sellerProofs,
+            sellerAmount,
+            remainingProofs,
             { sendConfig: { includeFees: true } }
           );
-          if (__swapOutcomeA_3.status !== "swapped") {
+          if (__swapOutcomeA_0.status !== "swapped") {
             throw new Error(
-              __swapOutcomeA_3.errorMessage ??
-                `Swap did not complete (${__swapOutcomeA_3.status})`
+              __swapOutcomeA_0.errorMessage ??
+                `Swap did not complete (${__swapOutcomeA_0.status})`
             );
           }
-          const { keep, send } = __swapOutcomeA_3;
-          const __meltOutcome_0 = await safeMeltProofs(wallet, meltQuote, send);
-          if (__meltOutcome_0.status !== "paid") {
+          const { keep, send } = __swapOutcomeA_0;
+          __recoverableTracker.replaceFromSwap(remainingProofs, keep, send);
+          sellerProofs = send;
+          sellerToken = getEncodedToken({
+            mint: mints[0]!,
+            proofs: send,
+          });
+          remainingProofs = keep;
+
+          // Construct payment message with cashu token tag
+          paymentMessageText = await constructMessageGiftWrap(
+            pubkey as any,
+            "", // Placeholder for seal
+            orderKeys.receiverNsec as any, // Placeholder for keypair
+            pubkey // Recipient pubkey
+          );
+          paymentTags = [
+            ["type", "2"],
+            ["subject", "order-payment"],
+            ["order", orderId],
+            ["payment", "ecash", sellerToken],
+          ];
+          if (sellerAmount) {
+            paymentTags.push(["amount", sellerAmount.toString()]);
+          }
+          if (donationAmount > 0) {
+            paymentTags.push([
+              "donation_amount",
+              donationAmount.toString(),
+              donationPercentage.toString(),
+            ]);
+          }
+          paymentMessageText.tags = paymentTags;
+        }
+
+        // Handle donation if applicable
+        if (donationAmount > 0) {
+          const __swapOutcomeA_1 = await safeSwap(
+            wallet,
+            donationAmount,
+            remainingProofs,
+            { sendConfig: { includeFees: true } }
+          );
+          if (__swapOutcomeA_1.status !== "swapped") {
             throw new Error(
-              __meltOutcome_0.errorMessage ??
-                `Melt outcome ${__meltOutcome_0.status}`
+              __swapOutcomeA_1.errorMessage ??
+                `Swap did not complete (${__swapOutcomeA_1.status})`
             );
           }
-          const meltResponse = {
-            change: __meltOutcome_0.changeProofs,
-            quote: meltQuote,
-          };
-          if (meltResponse.quote) {
-            const meltAmount = meltResponse.quote.amount.toNumber();
-            const changeProofs = [...keep, ...meltResponse.change];
-            const changeAmount =
-              Array.isArray(changeProofs) && changeProofs.length > 0
-                ? changeProofs.reduce(
-                    (acc, current: Proof) => acc + current.amount.toNumber(),
-                    0
-                  )
-                : 0;
-            let productDetails = "";
-            if (product.selectedSize) {
-              productDetails += " in size " + product.selectedSize;
-            }
-            if (product.selectedVolume) {
-              if (productDetails) {
-                productDetails += " and a " + product.selectedVolume;
-              } else {
-                productDetails += " in a " + product.selectedVolume;
-              }
-            }
-            if (product.selectedWeight) {
-              if (productDetails) {
-                productDetails += " and weighing " + product.selectedWeight;
-              } else {
-                productDetails += " weighing " + product.selectedWeight;
-              }
-            }
-            if (product.selectedBulkOption) {
-              if (productDetails) {
-                productDetails +=
-                  " (bulk: " + product.selectedBulkOption + " units)";
-              } else {
-                productDetails +=
-                  " (bulk: " + product.selectedBulkOption + " units)";
-              }
-            }
+          const { keep, send } = __swapOutcomeA_1;
+          __recoverableTracker.replaceFromSwap(remainingProofs, keep, send);
+          donationProofs = send;
+          donationToken = getEncodedToken({
+            mint: mints[0]!,
+            proofs: send,
+          });
+          remainingProofs = keep;
+        }
 
-            // Add pickup location if available for this specific product
-            const pickupLocation =
-              selectedPickupLocations[product.id] ||
-              data[`pickupLocation_${product.id}`];
-            if (pickupLocation) {
-              if (productDetails) {
-                productDetails += " (pickup at: " + pickupLocation + ")";
-              } else {
-                productDetails += " (pickup at: " + pickupLocation + ")";
-              }
-            }
-
-            let paymentMessage = "";
-            if (quantities[product.id] && quantities[product.id]! > 1) {
-              paymentMessage =
-                "You have received a payment from " +
-                (userNPub || "a guest buyer") +
-                " for " +
-                quantities[product.id] +
-                " of your " +
-                title +
-                " listing" +
-                productDetails +
-                " on Milk Market! Check your Lightning address (" +
-                lnurl +
-                ") for your sats.";
-            } else {
-              paymentMessage =
-                "You have received a payment from " +
-                (userNPub || "a guest buyer") +
-                " for your " +
-                title +
-                " listing" +
-                productDetails +
-                " on Milk Market! Check your Lightning address (" +
-                lnurl +
-                ") for your sats.";
-            }
-            const pickupLocationForLightning =
-              selectedPickupLocations[product.id] ||
-              data[`pickupLocation_${product.id}`];
-            await sendPaymentAndContactMessageWithKeys(
-              pubkey,
-              paymentMessage,
-              product,
-              true,
-              false,
-              false,
-              false,
-              orderId,
-              "lightning",
-              lnurl,
-              undefined,
-              meltAmount,
-              quantities[product.id] && quantities[product.id]! > 1
-                ? quantities[product.id]
-                : 1,
-              orderKeys,
-              undefined,
-              shippingAddressTag,
-              pickupLocationForLightning || undefined
+        if (beefDonationAmount > 0) {
+          const __swapOutcomeA_2 = await safeSwap(
+            wallet,
+            beefDonationAmount,
+            remainingProofs,
+            { sendConfig: { includeFees: true } }
+          );
+          if (__swapOutcomeA_2.status !== "swapped") {
+            throw new Error(
+              __swapOutcomeA_2.errorMessage ??
+                `Swap did not complete (${__swapOutcomeA_2.status})`
             );
+          }
+          const { keep, send } = __swapOutcomeA_2;
+          __recoverableTracker.replaceFromSwap(remainingProofs, keep, send);
+          beefDonationProofs = send;
+          beefDonationToken = getEncodedToken({
+            mint: mints[0]!,
+            proofs: send,
+          });
+          remainingProofs = keep;
+        }
 
-            if (changeAmount >= 1 && changeProofs && changeProofs.length > 0) {
-              // Add delay between messages to prevent browser throttling
-              await new Promise((resolve) => setTimeout(resolve, 500));
+        // Step 1: Send payment message (if applicable)
+        if (
+          paymentPreference === "lightning" &&
+          lnurl &&
+          lnurl !== "" &&
+          !lnurl.includes("@zeuspay.com") &&
+          sellerProofs
+        ) {
+          const newAmount = Math.floor(sellerAmount * 0.98 - 2);
+          const ln = new LightningAddress(lnurl);
+          await wallet.loadMint();
+          await ln.fetch();
+          const invoice = await ln.requestInvoice({ satoshi: newAmount });
+          const invoicePaymentRequest = invoice.paymentRequest;
+          const meltQuote = await wallet.createMeltQuoteBolt11(
+            invoicePaymentRequest
+          );
+          if (meltQuote) {
+            const meltQuoteTotal =
+              meltQuote.amount.toNumber() + meltQuote.fee_reserve.toNumber();
+            const __swapOutcomeA_3 = await safeSwap(
+              wallet,
+              meltQuoteTotal,
+              sellerProofs,
+              { sendConfig: { includeFees: true } }
+            );
+            if (__swapOutcomeA_3.status !== "swapped") {
+              throw new Error(
+                __swapOutcomeA_3.errorMessage ??
+                  `Swap did not complete (${__swapOutcomeA_3.status})`
+              );
+            }
+            const { keep, send } = __swapOutcomeA_3;
+            __recoverableTracker.replaceFromSwap(sellerProofs, keep, send);
+            const __meltOutcome_0 = await safeMeltProofs(
+              wallet,
+              meltQuote,
+              send
+            );
+            if (__meltOutcome_0.status !== "paid") {
+              throw new Error(
+                __meltOutcome_0.errorMessage ??
+                  `Melt outcome ${__meltOutcome_0.status}`
+              );
+            }
+            __recoverableTracker.replaceFromMelt(
+              send,
+              __meltOutcome_0.changeProofs
+            );
+            const meltResponse = {
+              change: __meltOutcome_0.changeProofs,
+              quote: meltQuote,
+            };
+            if (meltResponse.quote) {
+              const meltAmount = meltResponse.quote.amount.toNumber();
+              const changeProofs = [...keep, ...meltResponse.change];
+              const changeAmount =
+                Array.isArray(changeProofs) && changeProofs.length > 0
+                  ? changeProofs.reduce(
+                      (acc, current: Proof) => acc + current.amount.toNumber(),
+                      0
+                    )
+                  : 0;
+              let productDetails = "";
+              if (product.selectedSize) {
+                productDetails += " in size " + product.selectedSize;
+              }
+              if (product.selectedVolume) {
+                if (productDetails) {
+                  productDetails += " and a " + product.selectedVolume;
+                } else {
+                  productDetails += " in a " + product.selectedVolume;
+                }
+              }
+              if (product.selectedWeight) {
+                if (productDetails) {
+                  productDetails += " and weighing " + product.selectedWeight;
+                } else {
+                  productDetails += " weighing " + product.selectedWeight;
+                }
+              }
+              if (product.selectedBulkOption) {
+                if (productDetails) {
+                  productDetails +=
+                    " (bulk: " + product.selectedBulkOption + " units)";
+                } else {
+                  productDetails +=
+                    " (bulk: " + product.selectedBulkOption + " units)";
+                }
+              }
 
-              const encodedChange = getEncodedToken({
-                mint: mints[0]!,
-                proofs: changeProofs,
-              });
-              const changeMessage = "Overpaid fee change: " + encodedChange;
-              try {
-                await sendPaymentAndContactMessageWithKeys(
-                  pubkey,
-                  changeMessage,
-                  product,
-                  true,
-                  false,
-                  false,
-                  false,
-                  orderId,
-                  "ecash",
-                  encodedChange,
-                  undefined,
-                  changeAmount,
-                  undefined,
-                  orderKeys
-                );
-                await new Promise((resolve) => setTimeout(resolve, 500));
-              } catch (error) {
-                console.error("Failed to send change message:", error);
+              // Add pickup location if available for this specific product
+              const pickupLocation =
+                selectedPickupLocations[product.id] ||
+                data[`pickupLocation_${product.id}`];
+              if (pickupLocation) {
+                if (productDetails) {
+                  productDetails += " (pickup at: " + pickupLocation + ")";
+                } else {
+                  productDetails += " (pickup at: " + pickupLocation + ")";
+                }
               }
-            }
-          } else {
-            const unusedProofs = [...keep, ...send, ...meltResponse.change];
-            const unusedAmount =
-              Array.isArray(unusedProofs) && unusedProofs.length > 0
-                ? unusedProofs.reduce(
-                    (acc, current: Proof) => acc + current.amount.toNumber(),
-                    0
-                  )
-                : 0;
-            const unusedToken = getEncodedToken({
-              mint: mints[0]!,
-              proofs: unusedProofs,
-            });
-            let productDetails = "";
-            if (product.selectedSize) {
-              productDetails += " in size " + product.selectedSize;
-            }
-            if (product.selectedVolume) {
-              if (productDetails) {
-                productDetails += " and a " + product.selectedVolume;
-              } else {
-                productDetails += " in a " + product.selectedVolume;
-              }
-            }
-            if (product.selectedWeight) {
-              if (productDetails) {
-                productDetails += " and weighing " + product.selectedWeight;
-              } else {
-                productDetails += " weighing " + product.selectedWeight;
-              }
-            }
-            if (product.selectedBulkOption) {
-              if (productDetails) {
-                productDetails +=
-                  " (bulk: " + product.selectedBulkOption + " units)";
-              } else {
-                productDetails +=
-                  " (bulk: " + product.selectedBulkOption + " units)";
-              }
-            }
 
-            // Add pickup location if available for this specific product
-            const pickupLocation =
-              selectedPickupLocations[product.id] ||
-              data[`pickupLocation_${product.id}`];
-            if (pickupLocation) {
-              if (productDetails) {
-                productDetails += " (pickup at: " + pickupLocation + ")";
-              } else {
-                productDetails += " (pickup at: " + pickupLocation + ")";
-              }
-            }
-
-            let paymentMessage = "";
-            if (unusedToken && unusedProofs) {
+              let paymentMessage = "";
               if (quantities[product.id] && quantities[product.id]! > 1) {
                 paymentMessage =
-                  "This is a Cashu token payment from " +
+                  "You have received a payment from " +
                   (userNPub || "a guest buyer") +
                   " for " +
                   quantities[product.id] +
@@ -4128,19 +4077,24 @@ export default function CartInvoiceCard({
                   title +
                   " listing" +
                   productDetails +
-                  " on Milk Market: " +
-                  unusedToken;
+                  " on Milk Market! Check your Lightning address (" +
+                  lnurl +
+                  ") for your sats.";
               } else {
                 paymentMessage =
-                  "This is a Cashu token payment from " +
+                  "You have received a payment from " +
                   (userNPub || "a guest buyer") +
                   " for your " +
                   title +
                   " listing" +
                   productDetails +
-                  " on Milk Market: " +
-                  unusedToken;
+                  " on Milk Market! Check your Lightning address (" +
+                  lnurl +
+                  ") for your sats.";
               }
+              const pickupLocationForLightning =
+                selectedPickupLocations[product.id] ||
+                data[`pickupLocation_${product.id}`];
               await sendPaymentAndContactMessageWithKeys(
                 pubkey,
                 paymentMessage,
@@ -4150,334 +4104,159 @@ export default function CartInvoiceCard({
                 false,
                 false,
                 orderId,
-                "ecash",
-                unusedToken,
+                "lightning",
+                lnurl,
                 undefined,
-                unusedAmount,
+                meltAmount,
                 quantities[product.id] && quantities[product.id]! > 1
                   ? quantities[product.id]
                   : 1,
                 orderKeys,
                 undefined,
                 shippingAddressTag,
-                pickupLocation || undefined
+                pickupLocationForLightning || undefined
               );
-            }
-          }
-        }
-      } else {
-        let productDetails = "";
-        if (product.selectedSize) {
-          productDetails += " in size " + product.selectedSize;
-        }
-        if (product.selectedVolume) {
-          if (productDetails) {
-            productDetails += " and a " + product.selectedVolume;
-          } else {
-            productDetails += " in a " + product.selectedVolume;
-          }
-        }
-        if (product.selectedWeight) {
-          if (productDetails) {
-            productDetails += " and weighing " + product.selectedWeight;
-          } else {
-            productDetails += " weighing " + product.selectedWeight;
-          }
-        }
-        if (product.selectedBulkOption) {
-          if (productDetails) {
-            productDetails +=
-              " (bulk: " + product.selectedBulkOption + " units)";
-          } else {
-            productDetails +=
-              " (bulk: " + product.selectedBulkOption + " units)";
-          }
-        }
 
-        // Add pickup location if available for this specific product
-        const pickupLocation =
-          selectedPickupLocations[product.id] ||
-          data[`pickupLocation_${product.id}`];
-        if (pickupLocation) {
-          if (productDetails) {
-            productDetails += " (pickup at: " + pickupLocation + ")";
-          } else {
-            productDetails += " (pickup at: " + pickupLocation + ")";
-          }
-        }
+              if (
+                changeAmount >= 1 &&
+                changeProofs &&
+                changeProofs.length > 0
+              ) {
+                // Add delay between messages to prevent browser throttling
+                await new Promise((resolve) => setTimeout(resolve, 500));
 
-        let paymentMessage = "";
-        if (sellerToken && sellerProofs) {
-          if (quantities[product.id] && quantities[product.id]! > 1) {
-            paymentMessage =
-              "This is a Cashu token payment from " +
-              (userNPub || "a guest buyer") +
-              " for " +
-              quantities[product.id] +
-              " of your " +
-              title +
-              " listing" +
-              productDetails +
-              " on Milk Market: " +
-              sellerToken;
-          } else {
-            paymentMessage =
-              "This is a Cashu token payment from " +
-              (userNPub || "a guest buyer") +
-              " for your " +
-              title +
-              " listing" +
-              productDetails +
-              " on Milk Market: " +
-              sellerToken;
-          }
-          await sendPaymentAndContactMessageWithKeys(
-            pubkey,
-            paymentMessage,
-            product,
-            true,
-            false,
-            false,
-            false,
-            orderId,
-            "ecash",
-            sellerToken,
-            undefined,
-            sellerAmount,
-            quantities[product.id] && quantities[product.id]! > 1
-              ? quantities[product.id]
-              : 1,
-            orderKeys,
-            undefined,
-            shippingAddressTag,
-            pickupLocation || undefined,
-            undefined,
-            undefined,
-            undefined,
-            !isSatsCart && cartCurrency ? cartCurrency : undefined
-          );
-        }
-      }
-
-      // Step 2: Send donation message
-      if (donationToken) {
-        const donationMessage = "Sale donation: " + donationToken;
-        const donationRecipient = process.env.NEXT_PUBLIC_MILK_MARKET_PK;
-        if (donationRecipient) {
-          try {
-            await sendPaymentAndContactMessage(
-              donationRecipient,
-              donationMessage,
-              product,
-              false,
-              false,
-              true
-            );
-            await new Promise((resolve) => setTimeout(resolve, 500));
-          } catch (error) {
-            console.error("Failed to send donation message:", error);
-          }
-        } else {
-          console.warn(
-            "NEXT_PUBLIC_MILK_MARKET_PK not set; skipping donation message."
-          );
-        }
-      }
-
-      // Step 2.5: Send beef donation if applicable
-      if (beefDonationToken && beefDonationAmount > 0) {
-        const beefInitNpub = process.env.NEXT_PUBLIC_BEEF_INITIATIVE_NPUB || "";
-        let beefInitHex = "";
-        try {
-          beefInitHex = nip19.decode(beefInitNpub).data as string;
-        } catch {
-          console.error("Invalid NEXT_PUBLIC_BEEF_INITIATIVE_NPUB");
-        }
-        if (beefInitHex) {
-          let beefPaidViaLightning = false;
-          const beefProfile = profileContext.profileData.get(beefInitHex);
-          const beefLnAddress = beefProfile?.content?.lud16 || "";
-
-          if (
-            beefLnAddress &&
-            beefLnAddress !== "" &&
-            beefDonationProofs.length > 0
-          ) {
-            try {
-              const beefLnAmount = Math.floor(beefDonationAmount * 0.98 - 2);
-              if (beefLnAmount > 0) {
-                const ln = new LightningAddress(beefLnAddress);
-                await wallet.loadMint();
-                await ln.fetch();
-                const invoice = await ln.requestInvoice({
-                  satoshi: beefLnAmount,
+                const encodedChange = getEncodedToken({
+                  mint: mints[0]!,
+                  proofs: changeProofs,
                 });
-                const meltQuote = await wallet.createMeltQuoteBolt11(
-                  invoice.paymentRequest
-                );
-                if (meltQuote) {
-                  const meltQuoteTotal =
-                    meltQuote.amount.toNumber() +
-                    meltQuote.fee_reserve.toNumber();
-                  const __swapOutcomeB_0 = await safeSwap(
-                    wallet,
-                    meltQuoteTotal,
-                    beefDonationProofs,
-                    { sendConfig: { includeFees: true } }
+                const changeMessage = "Overpaid fee change: " + encodedChange;
+                try {
+                  await sendPaymentAndContactMessageWithKeys(
+                    pubkey,
+                    changeMessage,
+                    product,
+                    true,
+                    false,
+                    false,
+                    false,
+                    orderId,
+                    "ecash",
+                    encodedChange,
+                    undefined,
+                    changeAmount,
+                    undefined,
+                    orderKeys
                   );
-                  if (__swapOutcomeB_0.status !== "swapped") {
-                    throw new Error(
-                      __swapOutcomeB_0.errorMessage ??
-                        `Swap did not complete (${__swapOutcomeB_0.status})`
-                    );
-                  }
-                  const { send } = __swapOutcomeB_0;
-                  const __meltOutcome_1 = await safeMeltProofs(
-                    wallet,
-                    meltQuote,
-                    send
-                  );
-                  if (__meltOutcome_1.status !== "paid") {
-                    throw new Error(
-                      __meltOutcome_1.errorMessage ??
-                        `Melt outcome ${__meltOutcome_1.status}`
-                    );
-                  }
-                  void __meltOutcome_1;
-                  beefPaidViaLightning = true;
+                  __recoverableTracker.consume(changeProofs);
+                  await new Promise((resolve) => setTimeout(resolve, 500));
+                } catch (error) {
+                  console.error("Failed to send change message:", error);
                 }
               }
-            } catch (error) {
-              console.error(
-                "Failed to pay beef donation via Lightning, falling back to ecash:",
-                error
-              );
+            } else {
+              const unusedProofs = [...keep, ...send, ...meltResponse.change];
+              const unusedAmount =
+                Array.isArray(unusedProofs) && unusedProofs.length > 0
+                  ? unusedProofs.reduce(
+                      (acc, current: Proof) => acc + current.amount.toNumber(),
+                      0
+                    )
+                  : 0;
+              const unusedToken = getEncodedToken({
+                mint: mints[0]!,
+                proofs: unusedProofs,
+              });
+              let productDetails = "";
+              if (product.selectedSize) {
+                productDetails += " in size " + product.selectedSize;
+              }
+              if (product.selectedVolume) {
+                if (productDetails) {
+                  productDetails += " and a " + product.selectedVolume;
+                } else {
+                  productDetails += " in a " + product.selectedVolume;
+                }
+              }
+              if (product.selectedWeight) {
+                if (productDetails) {
+                  productDetails += " and weighing " + product.selectedWeight;
+                } else {
+                  productDetails += " weighing " + product.selectedWeight;
+                }
+              }
+              if (product.selectedBulkOption) {
+                if (productDetails) {
+                  productDetails +=
+                    " (bulk: " + product.selectedBulkOption + " units)";
+                } else {
+                  productDetails +=
+                    " (bulk: " + product.selectedBulkOption + " units)";
+                }
+              }
+
+              // Add pickup location if available for this specific product
+              const pickupLocation =
+                selectedPickupLocations[product.id] ||
+                data[`pickupLocation_${product.id}`];
+              if (pickupLocation) {
+                if (productDetails) {
+                  productDetails += " (pickup at: " + pickupLocation + ")";
+                } else {
+                  productDetails += " (pickup at: " + pickupLocation + ")";
+                }
+              }
+
+              let paymentMessage = "";
+              if (unusedToken && unusedProofs) {
+                if (quantities[product.id] && quantities[product.id]! > 1) {
+                  paymentMessage =
+                    "This is a Cashu token payment from " +
+                    (userNPub || "a guest buyer") +
+                    " for " +
+                    quantities[product.id] +
+                    " of your " +
+                    title +
+                    " listing" +
+                    productDetails +
+                    " on Milk Market: " +
+                    unusedToken;
+                } else {
+                  paymentMessage =
+                    "This is a Cashu token payment from " +
+                    (userNPub || "a guest buyer") +
+                    " for your " +
+                    title +
+                    " listing" +
+                    productDetails +
+                    " on Milk Market: " +
+                    unusedToken;
+                }
+                await sendPaymentAndContactMessageWithKeys(
+                  pubkey,
+                  paymentMessage,
+                  product,
+                  true,
+                  false,
+                  false,
+                  false,
+                  orderId,
+                  "ecash",
+                  unusedToken,
+                  undefined,
+                  unusedAmount,
+                  quantities[product.id] && quantities[product.id]! > 1
+                    ? quantities[product.id]
+                    : 1,
+                  orderKeys,
+                  undefined,
+                  shippingAddressTag,
+                  pickupLocation || undefined
+                );
+                __recoverableTracker.consume(unusedProofs);
+              }
             }
           }
-
-          if (!beefPaidViaLightning) {
-            const beefDonationMessage =
-              "Beef Initiative donation (" +
-              beefDonationPercentage +
-              "%) from purchase of " +
-              title +
-              " by " +
-              (userNPub || "a guest buyer") +
-              " on milk.market: " +
-              beefDonationToken;
-            try {
-              await sendPaymentAndContactMessage(
-                beefInitHex,
-                beefDonationMessage,
-                product,
-                false,
-                false,
-                true
-              );
-              await new Promise((resolve) => setTimeout(resolve, 500));
-            } catch (error) {
-              console.error("Failed to send beef donation message:", error);
-            }
-          }
-        }
-      }
-
-      // Step 3: Send additional info message
-      if (required && required !== "" && data.additionalInfo) {
-        // Add delay before additional info message
-        await new Promise((resolve) => setTimeout(resolve, 500));
-
-        const additionalMessage =
-          "Additional customer information: " + data.additionalInfo;
-        try {
-          await sendPaymentAndContactMessageWithKeys(
-            pubkey,
-            additionalMessage,
-            product,
-            false,
-            false,
-            false,
-            false,
-            orderId,
-            undefined,
-            undefined,
-            undefined,
-            undefined,
-            undefined,
-            orderKeys,
-            undefined,
-            undefined,
-            undefined,
-            donationAmount,
-            donationPercentage
-          );
-          await new Promise((resolve) => setTimeout(resolve, 500));
-        } catch (error) {
-          console.error("Failed to send additional info message:", error);
-        }
-      }
-
-      // Send herdshare agreement if product has one
-      if (product.herdshareAgreement) {
-        // Add delay before herdshare message
-        await new Promise((resolve) => setTimeout(resolve, 500));
-
-        const herdshareMessage =
-          "To finalize your purchase, sign and send the following herdshare agreement for the dairy: " +
-          product.herdshareAgreement;
-        await sendPaymentAndContactMessageWithKeys(
-          userPubkey!,
-          herdshareMessage,
-          product,
-          false,
-          false,
-          false,
-          true,
-          orderId,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          orderKeys
-        );
-      }
-
-      // Step 4: Handle shipping and contact information
-      const productShippingType = shippingTypes[product.id];
-      const shouldUseShipping =
-        formType === "shipping" ||
-        (formType === "combined" &&
-          (productShippingType !== "Free/Pickup" ||
-            ((productShippingType === "Free/Pickup" ||
-              productShippingType === "Added Cost/Pickup") &&
-              shippingPickupPreference === "shipping")));
-
-      const shouldUseContact =
-        formType === "contact" ||
-        (formType === "combined" &&
-          (productShippingType === "N/A" ||
-            productShippingType === "Pickup" ||
-            ((productShippingType === "Free/Pickup" ||
-              productShippingType === "Added Cost/Pickup") &&
-              shippingPickupPreference === "contact")));
-
-      if (
-        shouldUseShipping &&
-        data.shippingName &&
-        data.shippingAddress &&
-        data.shippingCity &&
-        data.shippingPostalCode &&
-        data.shippingState &&
-        data.shippingCountry
-      ) {
-        // Shipping information provided
-        if (
-          productShippingType === "Added Cost" ||
-          productShippingType === "Free" ||
-          productShippingType === "Free/Pickup" ||
-          productShippingType === "Added Cost/Pickup"
-        ) {
+        } else {
           let productDetails = "";
           if (product.selectedSize) {
             productDetails += " in size " + product.selectedSize;
@@ -4518,68 +4297,477 @@ export default function CartInvoiceCard({
             }
           }
 
-          let contactMessage = "";
-          if (!data.shippingUnitNo) {
-            contactMessage =
-              "Please ship the product" +
-              productDetails +
-              " to " +
-              data.shippingName +
-              " at " +
-              data.shippingAddress +
-              ", " +
-              data.shippingCity +
-              ", " +
-              data.shippingPostalCode +
-              ", " +
-              data.shippingState +
-              ", " +
-              data.shippingCountry +
-              ".";
-          } else {
-            contactMessage =
-              "Please ship the product" +
-              productDetails +
-              " to " +
-              data.shippingName +
-              " at " +
-              data.shippingAddress +
-              " " +
-              data.shippingUnitNo +
-              ", " +
-              data.shippingCity +
-              ", " +
-              data.shippingPostalCode +
-              ", " +
-              data.shippingState +
-              ", " +
-              data.shippingCountry +
-              ".";
+          let paymentMessage = "";
+          if (sellerToken && sellerProofs) {
+            if (quantities[product.id] && quantities[product.id]! > 1) {
+              paymentMessage =
+                "This is a Cashu token payment from " +
+                (userNPub || "a guest buyer") +
+                " for " +
+                quantities[product.id] +
+                " of your " +
+                title +
+                " listing" +
+                productDetails +
+                " on Milk Market: " +
+                sellerToken;
+            } else {
+              paymentMessage =
+                "This is a Cashu token payment from " +
+                (userNPub || "a guest buyer") +
+                " for your " +
+                title +
+                " listing" +
+                productDetails +
+                " on Milk Market: " +
+                sellerToken;
+            }
+            await sendPaymentAndContactMessageWithKeys(
+              pubkey,
+              paymentMessage,
+              product,
+              true,
+              false,
+              false,
+              false,
+              orderId,
+              "ecash",
+              sellerToken,
+              undefined,
+              sellerAmount,
+              quantities[product.id] && quantities[product.id]! > 1
+                ? quantities[product.id]
+                : 1,
+              orderKeys,
+              undefined,
+              shippingAddressTag,
+              pickupLocation || undefined,
+              undefined,
+              undefined,
+              undefined,
+              !isSatsCart && cartCurrency ? cartCurrency : undefined
+            );
+            __recoverableTracker.consume(sellerProofs);
           }
-          const addressTagForShipping = data.shippingUnitNo
-            ? `${data.shippingName}, ${data.shippingAddress}, ${data.shippingUnitNo}, ${data.shippingCity}, ${data.shippingState}, ${data.shippingPostalCode}, ${data.shippingCountry}`
-            : `${data.shippingName}, ${data.shippingAddress}, ${data.shippingCity}, ${data.shippingState}, ${data.shippingPostalCode}, ${data.shippingCountry}`;
+        }
+
+        // Step 2: Send donation message
+        if (donationToken) {
+          const donationMessage = "Sale donation: " + donationToken;
+          const donationRecipient = process.env.NEXT_PUBLIC_MILK_MARKET_PK;
+          if (donationRecipient) {
+            try {
+              const __donationOk = await sendPaymentAndContactMessage(
+                donationRecipient,
+                donationMessage,
+                product,
+                false,
+                false,
+                true
+              );
+              if (__donationOk) __recoverableTracker.consume(donationProofs);
+              await new Promise((resolve) => setTimeout(resolve, 500));
+            } catch (error) {
+              console.error("Failed to send donation message:", error);
+            }
+          } else {
+            console.warn(
+              "NEXT_PUBLIC_MILK_MARKET_PK not set; skipping donation message."
+            );
+          }
+        }
+
+        // Step 2.5: Send beef donation if applicable
+        if (beefDonationToken && beefDonationAmount > 0) {
+          const beefInitNpub =
+            process.env.NEXT_PUBLIC_BEEF_INITIATIVE_NPUB || "";
+          let beefInitHex = "";
+          try {
+            beefInitHex = nip19.decode(beefInitNpub).data as string;
+          } catch {
+            console.error("Invalid NEXT_PUBLIC_BEEF_INITIATIVE_NPUB");
+          }
+          if (beefInitHex) {
+            let beefPaidViaLightning = false;
+            const beefProfile = profileContext.profileData.get(beefInitHex);
+            const beefLnAddress = beefProfile?.content?.lud16 || "";
+
+            if (
+              beefLnAddress &&
+              beefLnAddress !== "" &&
+              beefDonationProofs.length > 0
+            ) {
+              try {
+                const beefLnAmount = Math.floor(beefDonationAmount * 0.98 - 2);
+                if (beefLnAmount > 0) {
+                  const ln = new LightningAddress(beefLnAddress);
+                  await wallet.loadMint();
+                  await ln.fetch();
+                  const invoice = await ln.requestInvoice({
+                    satoshi: beefLnAmount,
+                  });
+                  const meltQuote = await wallet.createMeltQuoteBolt11(
+                    invoice.paymentRequest
+                  );
+                  if (meltQuote) {
+                    const meltQuoteTotal =
+                      meltQuote.amount.toNumber() +
+                      meltQuote.fee_reserve.toNumber();
+                    const __swapOutcomeB_0 = await safeSwap(
+                      wallet,
+                      meltQuoteTotal,
+                      beefDonationProofs,
+                      { sendConfig: { includeFees: true } }
+                    );
+                    if (__swapOutcomeB_0.status !== "swapped") {
+                      throw new Error(
+                        __swapOutcomeB_0.errorMessage ??
+                          `Swap did not complete (${__swapOutcomeB_0.status})`
+                      );
+                    }
+                    const { keep, send } = __swapOutcomeB_0;
+                    __recoverableTracker.replaceFromSwap(
+                      beefDonationProofs,
+                      keep,
+                      send
+                    );
+                    const __meltOutcome_1 = await safeMeltProofs(
+                      wallet,
+                      meltQuote,
+                      send
+                    );
+                    if (__meltOutcome_1.status !== "paid") {
+                      throw new Error(
+                        __meltOutcome_1.errorMessage ??
+                          `Melt outcome ${__meltOutcome_1.status}`
+                      );
+                    }
+                    __recoverableTracker.replaceFromMelt(
+                      send,
+                      __meltOutcome_1.changeProofs
+                    );
+                    beefPaidViaLightning = true;
+                  }
+                }
+              } catch (error) {
+                console.error(
+                  "Failed to pay beef donation via Lightning, falling back to ecash:",
+                  error
+                );
+              }
+            }
+
+            if (!beefPaidViaLightning) {
+              const beefDonationMessage =
+                "Beef Initiative donation (" +
+                beefDonationPercentage +
+                "%) from purchase of " +
+                title +
+                " by " +
+                (userNPub || "a guest buyer") +
+                " on milk.market: " +
+                beefDonationToken;
+              try {
+                const __beefOk = await sendPaymentAndContactMessage(
+                  beefInitHex,
+                  beefDonationMessage,
+                  product,
+                  false,
+                  false,
+                  true
+                );
+                if (__beefOk) __recoverableTracker.consume(beefDonationProofs);
+                await new Promise((resolve) => setTimeout(resolve, 500));
+              } catch (error) {
+                console.error("Failed to send beef donation message:", error);
+              }
+            }
+          }
+        }
+
+        // Step 3: Send additional info message
+        if (required && required !== "" && data.additionalInfo) {
+          // Add delay before additional info message
+          await new Promise((resolve) => setTimeout(resolve, 500));
+
+          const additionalMessage =
+            "Additional customer information: " + data.additionalInfo;
+          try {
+            await sendPaymentAndContactMessageWithKeys(
+              pubkey,
+              additionalMessage,
+              product,
+              false,
+              false,
+              false,
+              false,
+              orderId,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              orderKeys,
+              undefined,
+              undefined,
+              undefined,
+              donationAmount,
+              donationPercentage
+            );
+            await new Promise((resolve) => setTimeout(resolve, 500));
+          } catch (error) {
+            console.error("Failed to send additional info message:", error);
+          }
+        }
+
+        // Send herdshare agreement if product has one
+        if (product.herdshareAgreement) {
+          // Add delay before herdshare message
+          await new Promise((resolve) => setTimeout(resolve, 500));
+
+          const herdshareMessage =
+            "To finalize your purchase, sign and send the following herdshare agreement for the dairy: " +
+            product.herdshareAgreement;
           await sendPaymentAndContactMessageWithKeys(
-            pubkey,
-            contactMessage,
+            userPubkey!,
+            herdshareMessage,
             product,
             false,
             false,
             false,
-            false,
+            true,
             orderId,
             undefined,
             undefined,
             undefined,
             undefined,
             undefined,
-            orderKeys,
-            undefined,
-            addressTagForShipping,
-            pickupLocation || undefined,
-            donationAmount,
-            donationPercentage
+            orderKeys
           );
+        }
+
+        // Step 4: Handle shipping and contact information
+        const productShippingType = shippingTypes[product.id];
+        const shouldUseShipping =
+          formType === "shipping" ||
+          (formType === "combined" &&
+            (productShippingType !== "Free/Pickup" ||
+              ((productShippingType === "Free/Pickup" ||
+                productShippingType === "Added Cost/Pickup") &&
+                shippingPickupPreference === "shipping")));
+
+        const shouldUseContact =
+          formType === "contact" ||
+          (formType === "combined" &&
+            (productShippingType === "N/A" ||
+              productShippingType === "Pickup" ||
+              ((productShippingType === "Free/Pickup" ||
+                productShippingType === "Added Cost/Pickup") &&
+                shippingPickupPreference === "contact")));
+
+        if (
+          shouldUseShipping &&
+          data.shippingName &&
+          data.shippingAddress &&
+          data.shippingCity &&
+          data.shippingPostalCode &&
+          data.shippingState &&
+          data.shippingCountry
+        ) {
+          // Shipping information provided
+          if (
+            productShippingType === "Added Cost" ||
+            productShippingType === "Free" ||
+            productShippingType === "Free/Pickup" ||
+            productShippingType === "Added Cost/Pickup"
+          ) {
+            let productDetails = "";
+            if (product.selectedSize) {
+              productDetails += " in size " + product.selectedSize;
+            }
+            if (product.selectedVolume) {
+              if (productDetails) {
+                productDetails += " and a " + product.selectedVolume;
+              } else {
+                productDetails += " in a " + product.selectedVolume;
+              }
+            }
+            if (product.selectedWeight) {
+              if (productDetails) {
+                productDetails += " and weighing " + product.selectedWeight;
+              } else {
+                productDetails += " weighing " + product.selectedWeight;
+              }
+            }
+            if (product.selectedBulkOption) {
+              if (productDetails) {
+                productDetails +=
+                  " (bulk: " + product.selectedBulkOption + " units)";
+              } else {
+                productDetails +=
+                  " (bulk: " + product.selectedBulkOption + " units)";
+              }
+            }
+
+            // Add pickup location if available for this specific product
+            const pickupLocation =
+              selectedPickupLocations[product.id] ||
+              data[`pickupLocation_${product.id}`];
+            if (pickupLocation) {
+              if (productDetails) {
+                productDetails += " (pickup at: " + pickupLocation + ")";
+              } else {
+                productDetails += " (pickup at: " + pickupLocation + ")";
+              }
+            }
+
+            let contactMessage = "";
+            if (!data.shippingUnitNo) {
+              contactMessage =
+                "Please ship the product" +
+                productDetails +
+                " to " +
+                data.shippingName +
+                " at " +
+                data.shippingAddress +
+                ", " +
+                data.shippingCity +
+                ", " +
+                data.shippingPostalCode +
+                ", " +
+                data.shippingState +
+                ", " +
+                data.shippingCountry +
+                ".";
+            } else {
+              contactMessage =
+                "Please ship the product" +
+                productDetails +
+                " to " +
+                data.shippingName +
+                " at " +
+                data.shippingAddress +
+                " " +
+                data.shippingUnitNo +
+                ", " +
+                data.shippingCity +
+                ", " +
+                data.shippingPostalCode +
+                ", " +
+                data.shippingState +
+                ", " +
+                data.shippingCountry +
+                ".";
+            }
+            const addressTagForShipping = data.shippingUnitNo
+              ? `${data.shippingName}, ${data.shippingAddress}, ${data.shippingUnitNo}, ${data.shippingCity}, ${data.shippingState}, ${data.shippingPostalCode}, ${data.shippingCountry}`
+              : `${data.shippingName}, ${data.shippingAddress}, ${data.shippingCity}, ${data.shippingState}, ${data.shippingPostalCode}, ${data.shippingCountry}`;
+            await sendPaymentAndContactMessageWithKeys(
+              pubkey,
+              contactMessage,
+              product,
+              false,
+              false,
+              false,
+              false,
+              orderId,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              orderKeys,
+              undefined,
+              addressTagForShipping,
+              pickupLocation || undefined,
+              donationAmount,
+              donationPercentage
+            );
+
+            if (userPubkey) {
+              const receiptMessage =
+                "Your order for " +
+                title +
+                productDetails +
+                " was processed successfully! If applicable, you should be receiving delivery information from " +
+                nip19.npubEncode(product.pubkey) +
+                " as soon as they review your order.";
+
+              // Add delay between messages
+              await new Promise((resolve) => setTimeout(resolve, 500));
+
+              await sendPaymentAndContactMessageWithKeys(
+                userPubkey,
+                receiptMessage,
+                product,
+                false,
+                true,
+                false,
+                false,
+                orderId,
+                undefined,
+                undefined,
+                undefined,
+                sellerAmount,
+                quantities[product.id] || 1,
+                orderKeys,
+                undefined,
+                shippingAddressTag,
+                pickupLocation || undefined,
+                donationAmount,
+                donationPercentage,
+                undefined,
+                !isSatsCart && cartCurrency ? cartCurrency : undefined
+              );
+            }
+          }
+        } else if (
+          shouldUseContact &&
+          (productShippingType === "N/A" ||
+            productShippingType === "Pickup" ||
+            productShippingType === "Free/Pickup" ||
+            productShippingType === "Added Cost/Pickup")
+        ) {
+          await sendInquiryDM(pubkey, title);
+
+          let productDetails = "";
+          if (product.selectedSize) {
+            productDetails += " in size " + product.selectedSize;
+          }
+          if (product.selectedVolume) {
+            if (productDetails) {
+              productDetails += " and a " + product.selectedVolume;
+            } else {
+              productDetails += " in a " + product.selectedVolume;
+            }
+          }
+          if (product.selectedWeight) {
+            if (productDetails) {
+              productDetails += " and weighing " + product.selectedWeight;
+            } else {
+              productDetails += " weighing " + product.selectedWeight;
+            }
+          }
+          if (product.selectedBulkOption) {
+            if (productDetails) {
+              productDetails +=
+                " (bulk: " + product.selectedBulkOption + " units)";
+            } else {
+              productDetails +=
+                " (bulk: " + product.selectedBulkOption + " units)";
+            }
+          }
+
+          const pickupLocation =
+            selectedPickupLocations[product.id] ||
+            data[`pickupLocation_${product.id}`];
+          if (pickupLocation) {
+            if (productDetails) {
+              productDetails += " (pickup at: " + pickupLocation + ")";
+            } else {
+              productDetails += " (pickup at: " + pickupLocation + ")";
+            }
+          }
 
           if (userPubkey) {
             const receiptMessage =
@@ -4617,69 +4805,57 @@ export default function CartInvoiceCard({
               !isSatsCart && cartCurrency ? cartCurrency : undefined
             );
           }
-        }
-      } else if (
-        shouldUseContact &&
-        (productShippingType === "N/A" ||
-          productShippingType === "Pickup" ||
-          productShippingType === "Free/Pickup" ||
-          productShippingType === "Added Cost/Pickup")
-      ) {
-        await sendInquiryDM(pubkey, title);
+        } else {
+          // Step 5: Always send final receipt message
+          let productDetails = "";
+          if (product.selectedSize) {
+            productDetails += " in size " + product.selectedSize;
+          }
+          if (product.selectedVolume) {
+            if (productDetails) {
+              productDetails += " and a " + product.selectedVolume;
+            } else {
+              productDetails += " in a " + product.selectedVolume;
+            }
+          }
+          if (product.selectedWeight) {
+            if (productDetails) {
+              productDetails += " and weighing " + product.selectedWeight;
+            } else {
+              productDetails += " weighing " + product.selectedWeight;
+            }
+          }
+          if (product.selectedBulkOption) {
+            if (productDetails) {
+              productDetails +=
+                " (bulk: " + product.selectedBulkOption + " units)";
+            } else {
+              productDetails +=
+                " (bulk: " + product.selectedBulkOption + " units)";
+            }
+          }
 
-        let productDetails = "";
-        if (product.selectedSize) {
-          productDetails += " in size " + product.selectedSize;
-        }
-        if (product.selectedVolume) {
-          if (productDetails) {
-            productDetails += " and a " + product.selectedVolume;
-          } else {
-            productDetails += " in a " + product.selectedVolume;
+          // Add pickup location if available for this specific product
+          const pickupLocation =
+            selectedPickupLocations[product.id] ||
+            data[`pickupLocation_${product.id}`];
+          if (pickupLocation) {
+            if (productDetails) {
+              productDetails += " (pickup at: " + pickupLocation + ")";
+            } else {
+              productDetails += " (pickup at: " + pickupLocation + ")";
+            }
           }
-        }
-        if (product.selectedWeight) {
-          if (productDetails) {
-            productDetails += " and weighing " + product.selectedWeight;
-          } else {
-            productDetails += " weighing " + product.selectedWeight;
-          }
-        }
-        if (product.selectedBulkOption) {
-          if (productDetails) {
-            productDetails +=
-              " (bulk: " + product.selectedBulkOption + " units)";
-          } else {
-            productDetails +=
-              " (bulk: " + product.selectedBulkOption + " units)";
-          }
-        }
 
-        const pickupLocation =
-          selectedPickupLocations[product.id] ||
-          data[`pickupLocation_${product.id}`];
-        if (pickupLocation) {
-          if (productDetails) {
-            productDetails += " (pickup at: " + pickupLocation + ")";
-          } else {
-            productDetails += " (pickup at: " + pickupLocation + ")";
-          }
-        }
-
-        if (userPubkey) {
           const receiptMessage =
-            "Your order for " +
+            "Thank you for your purchase of " +
             title +
             productDetails +
-            " was processed successfully! If applicable, you should be receiving delivery information from " +
+            " from " +
             nip19.npubEncode(product.pubkey) +
-            " as soon as they review your order.";
-
-          // Add delay between messages
-          await new Promise((resolve) => setTimeout(resolve, 500));
-
+            ".";
           await sendPaymentAndContactMessageWithKeys(
-            userPubkey,
+            userPubkey!,
             receiptMessage,
             product,
             false,
@@ -4702,79 +4878,14 @@ export default function CartInvoiceCard({
             !isSatsCart && cartCurrency ? cartCurrency : undefined
           );
         }
-      } else {
-        // Step 5: Always send final receipt message
-        let productDetails = "";
-        if (product.selectedSize) {
-          productDetails += " in size " + product.selectedSize;
-        }
-        if (product.selectedVolume) {
-          if (productDetails) {
-            productDetails += " and a " + product.selectedVolume;
-          } else {
-            productDetails += " in a " + product.selectedVolume;
-          }
-        }
-        if (product.selectedWeight) {
-          if (productDetails) {
-            productDetails += " and weighing " + product.selectedWeight;
-          } else {
-            productDetails += " weighing " + product.selectedWeight;
-          }
-        }
-        if (product.selectedBulkOption) {
-          if (productDetails) {
-            productDetails +=
-              " (bulk: " + product.selectedBulkOption + " units)";
-          } else {
-            productDetails +=
-              " (bulk: " + product.selectedBulkOption + " units)";
-          }
-        }
-
-        // Add pickup location if available for this specific product
-        const pickupLocation =
-          selectedPickupLocations[product.id] ||
-          data[`pickupLocation_${product.id}`];
-        if (pickupLocation) {
-          if (productDetails) {
-            productDetails += " (pickup at: " + pickupLocation + ")";
-          } else {
-            productDetails += " (pickup at: " + pickupLocation + ")";
-          }
-        }
-
-        const receiptMessage =
-          "Thank you for your purchase of " +
-          title +
-          productDetails +
-          " from " +
-          nip19.npubEncode(product.pubkey) +
-          ".";
-        await sendPaymentAndContactMessageWithKeys(
-          userPubkey!,
-          receiptMessage,
-          product,
-          false,
-          true,
-          false,
-          false,
-          orderId,
-          undefined,
-          undefined,
-          undefined,
-          sellerAmount,
-          quantities[product.id] || 1,
-          orderKeys,
-          undefined,
-          shippingAddressTag,
-          pickupLocation || undefined,
-          donationAmount,
-          donationPercentage,
-          undefined,
-          !isSatsCart && cartCurrency ? cartCurrency : undefined
-        );
       }
+    } catch (err) {
+      throw new SendTokensRecoverableError(
+        err instanceof Error ? err.message : "sendTokens failed",
+        __recoverableTracker.getProofs(),
+        mints[0]!,
+        err
+      );
     }
   };
 
