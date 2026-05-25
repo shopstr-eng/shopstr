@@ -1,8 +1,5 @@
 import { LogOut } from "@/utils/nostr/nostr-helper-functions";
-import {
-  ProfileMapContext,
-  ShopMapContext,
-} from "@/utils/context/context";
+import { ProfileMapContext, ShopMapContext } from "@/utils/context/context";
 import {
   Dropdown,
   DropdownItem,
@@ -126,21 +123,24 @@ export const ProfileWithDropdown = ({
     closeDropdown();
     void action();
   };
-  
+
   const { openReportFlow, reportFlowUi } = useReportEventFlow({
     targetLabel: "profile",
     reportedPubkey: pubkey,
     onRequireLogin: onOpen,
   });
 
-  const { isFollowing, isLoading: isFollowLoading, toggle: toggleFollow } =
-    useFollowToggle(pubkey, {
-      onRequireSignIn: () => {
-        closeDropdown();
-        onOpen();
-      },
-      onSuccess: closeDropdown,
-    });
+  const {
+    isFollowing,
+    isLoading: isFollowLoading,
+    toggle: toggleFollow,
+  } = useFollowToggle(pubkey, {
+    onRequireSignIn: () => {
+      closeDropdown();
+      onOpen();
+    },
+    onSuccess: closeDropdown,
+  });
 
   useEffect(() => {
     let isCancelled = false;
@@ -200,14 +200,13 @@ export const ProfileWithDropdown = ({
     name = name.length > 15 ? name.slice(0, 15) + "..." : name;
     return name;
   })();
-  const showFollowingIndicator =
-    dropDownKeys.includes("follow") && isFollowing;
+  const showFollowingIndicator = dropDownKeys.includes("follow") && isFollowing;
   const displayNameContent = showFollowingIndicator ? (
     <span className="flex min-w-0 items-center gap-1.5">
       <span className="overflow-hidden text-ellipsis whitespace-nowrap">
         {displayName}
       </span>
-      <span className="inline-flex shrink-0 items-center gap-1 text-[10px] font-medium text-shopstr-purple dark:text-shopstr-yellow">
+      <span className="text-shopstr-purple dark:text-shopstr-yellow inline-flex shrink-0 items-center gap-1 text-[10px] font-medium">
         <span
           aria-hidden="true"
           className="h-1.5 w-1.5 rounded-full bg-current"

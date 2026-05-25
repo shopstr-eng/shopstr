@@ -206,7 +206,13 @@ describe("ProductCard", () => {
       );
       const dropdown = screen.getByTestId("profile-dropdown");
       const keys = JSON.parse(dropdown.getAttribute("data-keys")!);
-      expect(keys).toEqual(["shop", "inquiry", "copy_npub", "report_profile", "follow"]);
+      expect(keys).toEqual([
+        "shop",
+        "inquiry",
+        "copy_npub",
+        "report_profile",
+        "follow",
+      ]);
     });
 
     it("shows sold status correctly", () => {

@@ -354,7 +354,7 @@ function MarketplacePage({
                                   "inquiry",
                                   "copy_npub",
                                   "report_profile",
-                                  "follow"
+                                  "follow",
                                 ]
                           }
                         />

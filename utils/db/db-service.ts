@@ -493,7 +493,7 @@ async function initializeTables(): Promise<void> {
 }
 
 // Map event kinds to table names
-function getTableForKind(kind: number): string | null {
+export function getTableForKind(kind: number): string | null {
   // Contact list
   if (kind === 3) return "contact_list_events";
 
@@ -770,9 +770,7 @@ async function cacheEventsTransaction(events: NostrEvent[]): Promise<void> {
         const existing = latestByPubkeyKind.get(key);
         latestByPubkeyKind.set(
           key,
-          existing
-            ? selectPreferredReplaceableEvent(event, existing)
-            : event
+          existing ? selectPreferredReplaceableEvent(event, existing) : event
         );
       }
 

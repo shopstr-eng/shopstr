@@ -140,10 +140,10 @@ const renderComponent = ({
           >
             <FollowsContext.Provider
               value={{
-                directFollowList: [],
-                followList: [],
-                firstDegreeFollowsLength: 0,
-                isLoading: false,
+                directFollowList: followList,
+                followList,
+                firstDegreeFollowsLength,
+                isLoading: isFollowsLoading,
                 addFollow: jest.fn(),
                 removeFollow: jest.fn(),
               }}

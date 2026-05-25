@@ -1090,9 +1090,11 @@ export const fetchAllFollows = async (
   const wot = getLocalStorageData().wot;
 
   if (!userPubkey) {
-    editFollowsContext([], 0, false);
+    editFollowsContext([], [], 0, false);
     return {
+      directFollowList: [],
       followList: [],
+      firstDegreeFollowsLength: 0,
     };
   }
 
@@ -1237,14 +1239,6 @@ export const fetchAllFollows = async (
   let directFollowList = userFollows.directFollowList;
   let followsArrayFromRelay = userFollows.followsArrayFromRelay;
   let firstDegreeFollowsLength = userFollows.firstDegreeFollowsLength;
-
-  if (!followsArrayFromRelay?.length) {
-    const defaultFollows = await fetchFollows(defaultAuthor);
-    followsArrayFromRelay = defaultFollows.followsArrayFromRelay;
-    if (!userPubkey) {
-      firstDegreeFollowsLength = defaultFollows.firstDegreeFollowsLength;
-    }
-  }
 
   editFollowsContext(
     directFollowList,

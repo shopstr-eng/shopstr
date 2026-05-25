@@ -1092,11 +1092,13 @@ async function fetchLatestContactListEvent(
 
   const relayEvents =
     relayResult.status === "fulfilled" ? relayResult.value : [];
-  const dbEvent =
-    dbResult.status === "fulfilled" ? dbResult.value : null;
+  const dbEvent = dbResult.status === "fulfilled" ? dbResult.value : null;
 
   if (dbResult.status === "rejected") {
-    console.error("Failed to fetch contact list from DB cache:", dbResult.reason);
+    console.error(
+      "Failed to fetch contact list from DB cache:",
+      dbResult.reason
+    );
   }
 
   // Merge all sources and pick the latest
