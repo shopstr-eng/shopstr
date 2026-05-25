@@ -1633,6 +1633,7 @@ export default function CartInvoiceCard({
 
       // Step 1: Send payment message (if applicable)
       if (
+        !isSellerP2pkEscrowActive(sellerProfile?.content?.p2pk) &&
         paymentPreference === "lightning" &&
         lnurl &&
         lnurl !== "" &&

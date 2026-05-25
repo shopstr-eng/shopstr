@@ -30,7 +30,10 @@ import {
 } from "@cashu/cashu-ts";
 import { safeMeltProofs } from "@/utils/cashu/melt-retry-service";
 import { safeSwap } from "@/utils/cashu/swap-retry-service";
-import { buildP2pkOutputConfig } from "@/utils/cashu/p2pk-checkout";
+import {
+  buildP2pkOutputConfig,
+  isSellerP2pkEscrowActive,
+} from "@/utils/cashu/p2pk-checkout";
 import { withMintRetry } from "@/utils/cashu/mint-retry-service";
 import {
   recordPendingMintQuote,
@@ -1279,6 +1282,7 @@ export default function ProductInvoiceCard({
 
     // Step 1: Send payment message
     if (
+      !isSellerP2pkEscrowActive(sellerProfile?.content?.p2pk) &&
       paymentPreference === "lightning" &&
       lnurl &&
       lnurl !== "" &&
