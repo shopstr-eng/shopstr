@@ -42,6 +42,8 @@ import {
   NostrContext,
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
+import { parseP2PK } from "@/utils/cashu/p2pk-checkout";
+import { ParsedP2PK } from "@/utils/types/types";
 
 export default function ClaimButton({ token }: { token: string }) {
   const [lnurl, setLnurl] = useState("");
@@ -66,10 +68,21 @@ export default function ClaimButton({ token }: { token: string }) {
   const [isSpent, setIsSpent] = useState(false);
   const [isInvalidToken, setIsInvalidToken] = useState(false);
   const [isDuplicateToken, setIsDuplicateToken] = useState(false);
-
+  const [p2pk, setP2PK] = useState<ParsedP2PK | null>(null);
   const { mints, tokens, history } = getLocalStorageData();
 
   const { theme } = useTheme();
+
+  useEffect(() => {
+    if (proofs.length > 0) {
+      const parsedP2pk = parseP2PK(proofs[0] as Proof);
+      if (parsedP2pk) {
+        setP2PK(parsedP2pk);
+      } else {
+        setP2PK(null);
+      }
+    }
+  }, [proofs]);
 
   const [randomNpubForSender, setRandomNpubForSender] = useState<string>("");
   const [randomNsecForSender, setRandomNsecForSender] = useState<string>("");
@@ -159,6 +172,12 @@ export default function ClaimButton({ token }: { token: string }) {
   }, [profileContext, tokenMint, userPubkey]);
 
   const handleClaimType = async (type: string) => {
+    // let spendableProofs: Proof[] = [];
+    if (p2pk) {
+      // Todo after i learn about seller private key: we need to sign the proofs with the signer and return the signed proofs
+      // const signedProofs = await signP2PKProofs(proofs, sellerPrivateKey );
+      // spendableProofs = (here we will most probable send the signed proofs to the mint and if p2pk.pubkey verifies the signed proofs of the sellerPrivateKey then it will return the spendable proofs);
+    }
     if (type === "receive") {
       await receive(false);
     } else if (type === "redeem") {

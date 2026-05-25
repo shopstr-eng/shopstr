@@ -1,4 +1,12 @@
-import type { ProfileData } from "@/utils/types/types";
+import type { ParsedP2PK, ProfileData } from "@/utils/types/types";
+import {
+  getSecretKind,
+  getTags,
+  getTagInt,
+  P2PKTag,
+  Proof,
+  getDataField,
+} from "@cashu/cashu-ts";
 
 export type P2pkProfileSettings = NonNullable<ProfileData["content"]["p2pk"]>;
 
@@ -53,4 +61,36 @@ export function isSellerP2pkEscrowActive(
     sellerP2pk.refundDelayDays &&
     sellerP2pk.refundDelayDays > 0
   );
+}
+
+export function parseP2PK(proof: Proof): ParsedP2PK | null {
+  try {
+    const kind = getSecretKind(proof.secret);
+
+    if (kind !== "P2PK") {
+      return null;
+    }
+
+    const pubkey = getDataField(proof.secret);
+
+    const tags = getTags(proof.secret) as P2PKTag[];
+
+    const locktime = getTagInt(proof.secret, "locktime") ?? 0;
+
+    const refundKeys = tags
+      .filter((tag) => tag[0] === "refund" && typeof tag[1] === "string")
+      .map((tag) => tag[1] as string);
+
+    const now = Math.floor(Date.now() / 1000);
+
+    return {
+      pubkey,
+      locktime,
+      refundKeys,
+      expired: locktime > 0 ? now >= locktime : false,
+      rawTags: tags,
+    };
+  } catch {
+    return null;
+  }
 }

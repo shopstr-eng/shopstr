@@ -287,6 +287,14 @@ export interface SavedAddress {
   isDefault: boolean;
 }
 
+export interface ParsedP2PK {
+  pubkey: string;
+  locktime: number;
+  refundKeys: string[];
+  expired: boolean;
+  rawTags: any[];
+}
+
 declare global {
   interface Window {
     nostr: {
