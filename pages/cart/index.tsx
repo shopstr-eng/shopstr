@@ -1726,7 +1726,7 @@ export default function Component() {
 
   if (sfSellerPubkey) {
     return (
-      <StorefrontThemeWrapper sellerPubkey={sfSellerPubkey}>
+      <StorefrontThemeWrapper sellerPubkey={sfSellerPubkey} renderChrome={true}>
         {cartContent}
       </StorefrontThemeWrapper>
     );

@@ -76,7 +76,11 @@ export async function upsertPendingDomain(params: {
       params.verificationToken,
     ]
   );
-  return r.rows[0];
+  // INSERT ... ON CONFLICT DO UPDATE ... RETURNING * is guaranteed to
+  // return exactly one row in either branch, so the non-null assertion is
+  // safe here and lets the function preserve its `CustomDomainRow` return
+  // type for callers.
+  return r.rows[0]!;
 }
 
 export async function markVerified(pubkey: string): Promise<void> {

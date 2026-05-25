@@ -744,7 +744,7 @@ const Listing = ({ initialProductEvent }: ListingPageProps) => {
 
   if (sellerPubkey) {
     return (
-      <StorefrontThemeWrapper sellerPubkey={sellerPubkey}>
+      <StorefrontThemeWrapper sellerPubkey={sellerPubkey} renderChrome={true}>
         {listingContent}
       </StorefrontThemeWrapper>
     );

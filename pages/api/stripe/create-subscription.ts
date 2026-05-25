@@ -81,7 +81,10 @@ export default async function handler(
       // authoritative code config — client-supplied discount values are
       // ignored to prevent unauthorized discounting.
       affiliateCode,
-      affiliateGrossSubtotalSmallest,
+      // `affiliateGrossSubtotalSmallest` is intentionally NOT destructured
+      // from the request body: the server recomputes the gross subtotal
+      // itself (`affiliateGrossSmallestValidated`) so a malicious client
+      // can't inflate the affiliate-referral basis.
     } = req.body;
 
     if (!customerEmail) {

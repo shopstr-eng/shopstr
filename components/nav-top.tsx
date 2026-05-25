@@ -117,15 +117,6 @@ const TopNav = ({
     }
   }, [router.pathname, shopMapContext, userPubkey]);
 
-  const handleRoute = (path: string) => {
-    if (signedIn) {
-      router.push(path);
-      setIsMobileMenuOpen(false);
-    } else {
-      onOpen();
-    }
-  };
-
   const handleHomeClick = () => {
     setFocusedPubkey("");
     setSelectedSection("");

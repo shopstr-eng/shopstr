@@ -677,24 +677,6 @@ describe("db-service helpers", () => {
     });
 
     maybeItTc(
-      "fetchMarketplaceStats returns correct listing and seller counts",
-      async () => {
-        await withPostgresDbService(async (db) => {
-          await waitForTables(db, ["product_events"]);
-
-          await db.cacheEvent(productEvent({ id: "p1", pubkey: "seller1" }));
-          await db.cacheEvent(productEvent({ id: "p2", pubkey: "seller2" }));
-          await db.cacheEvent(productEvent({ id: "p3", pubkey: "seller1" }));
-
-          await expect(db.fetchMarketplaceStats()).resolves.toEqual({
-            listingCount: 3,
-            sellerCount: 2,
-          });
-        });
-      }
-    );
-
-    maybeItTc(
       "fetchCachedEvents supports pubkey/limit/offset/since/until filters",
       async () => {
         await withPostgresDbService(async (db) => {

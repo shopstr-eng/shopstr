@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { applyRateLimit } from "@/utils/rate-limit";
 import { listDomains } from "@/utils/db/custom-domains";
-import { isAdminPubkey, requireAdmin } from "@/utils/admin/auth";
+import { isAdminPubkey } from "@/utils/admin/auth";
 import { verifyNostrAuth } from "@/utils/stripe/verify-nostr-auth";
 
 const RATE_LIMIT = { limit: 60, windowMs: 60 * 1000 };
