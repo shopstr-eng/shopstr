@@ -42,9 +42,12 @@ const DEFAULT_SWAP_OPTS: Required<
     "maxAttempts" | "perAttemptTimeoutMs" | "totalTimeoutMs"
   >
 > = {
-  maxAttempts: 3,
-  perAttemptTimeoutMs: 30000,
-  totalTimeoutMs: 90000,
+  // Bumped from 3 / 30s / 90s → 4 / 45s / 180s so flaky mints get a few more
+  // shots before we surface a recovery error. 3 minutes total still keeps the
+  // direct-Cashu checkout responsive while absorbing typical mint hiccups.
+  maxAttempts: 4,
+  perAttemptTimeoutMs: 45000,
+  totalTimeoutMs: 180000,
 };
 
 const DEFAULT_CHECK_OPTS: Required<
@@ -53,9 +56,11 @@ const DEFAULT_CHECK_OPTS: Required<
     "maxAttempts" | "perAttemptTimeoutMs" | "totalTimeoutMs"
   >
 > = {
-  maxAttempts: 4,
-  perAttemptTimeoutMs: 10000,
-  totalTimeoutMs: 60000,
+  // State-check is cheap; give it a wider window so a brief mint hiccup
+  // doesn't turn an ambiguous swap into a forced recovery path.
+  maxAttempts: 5,
+  perAttemptTimeoutMs: 15000,
+  totalTimeoutMs: 90000,
 };
 
 /**

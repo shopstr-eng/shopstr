@@ -47,9 +47,13 @@ const DEFAULT_MELT_OPTS: Required<
     "maxAttempts" | "perAttemptTimeoutMs" | "totalTimeoutMs"
   >
 > = {
-  maxAttempts: 3,
-  perAttemptTimeoutMs: 30000,
-  totalTimeoutMs: 90000,
+  // Bumped from 3 / 30s / 90s → 4 / 45s / 180s so Lightning routing retries
+  // inside the mint get more headroom before we surface a recovery error.
+  // 3 minutes total still keeps the UI responsive while absorbing the worst
+  // realistic LN payment paths.
+  maxAttempts: 4,
+  perAttemptTimeoutMs: 45000,
+  totalTimeoutMs: 180000,
 };
 
 const DEFAULT_CHECK_OPTS: Required<
@@ -58,9 +62,11 @@ const DEFAULT_CHECK_OPTS: Required<
     "maxAttempts" | "perAttemptTimeoutMs" | "totalTimeoutMs"
   >
 > = {
-  maxAttempts: 4,
-  perAttemptTimeoutMs: 10000,
-  totalTimeoutMs: 60000,
+  // Quote-state check is cheap; widen the window so a brief mint hiccup
+  // doesn't force ambiguous melts into pending/quarantine state.
+  maxAttempts: 5,
+  perAttemptTimeoutMs: 15000,
+  totalTimeoutMs: 90000,
 };
 
 /**

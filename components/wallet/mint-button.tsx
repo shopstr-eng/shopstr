@@ -33,6 +33,7 @@ import { Mint as CashuMint, Wallet as CashuWallet } from "@cashu/cashu-ts";
 import QRCode from "qrcode";
 import { copyToClipboard } from "@/utils/clipboard";
 import FailureModal from "@/components/utility-components/failure-modal";
+import { PaymentCountdown } from "@/components/utility-components/payment-countdown";
 import {
   NostrContext,
   SignerContext,
@@ -60,6 +61,10 @@ const MintButton = () => {
 
   const [showFailureModal, setShowFailureModal] = useState(false);
   const [failureText, setFailureText] = useState("");
+  // Wall-clock deadline (ms) the mint polling loop will give up at; null when
+  // no poll is in flight. Drives the visible countdown so the user can see
+  // we're still actively watching for their Lightning payment.
+  const [pollDeadlineMs, setPollDeadlineMs] = useState<number | null>(null);
 
   const { signer } = useContext(SignerContext);
   const { nostr } = useContext(NostrContext);
@@ -145,123 +150,61 @@ const MintButton = () => {
     numSats: number,
     hash: string
   ) {
-    const pollMaxRounds = 30; // ~1 minute of UNPAID polling
+    // ~2.1s per round * 150 ≈ 5 minutes of UNPAID polling. Matches the cart
+    // and product Lightning flows so the user gets the same headroom for
+    // routing retries / sender wallet delays everywhere.
+    const pollMaxRounds = 150;
+    const pollIntervalMs = 2100;
+    setPollDeadlineMs(Date.now() + pollMaxRounds * pollIntervalMs);
     let roundsConsumed = 0;
     let claimDone = false;
 
-    while (roundsConsumed < pollMaxRounds && !claimDone) {
-      let quoteState:
-        | Awaited<ReturnType<typeof wallet.checkMintQuoteBolt11>>
-        | undefined;
-      try {
-        quoteState = await withMintRetry(
-          () => wallet.checkMintQuoteBolt11(hash),
-          { maxAttempts: 3, perAttemptTimeoutMs: 10000, totalTimeoutMs: 25000 }
-        );
-      } catch (error) {
-        console.warn("Invoice check warning:", error);
-        const checkCause =
-          error instanceof MintOperationError ? error.cause : error;
-        if (error instanceof TypeError || checkCause instanceof TypeError) {
-          setShowInvoiceCard(false);
-          setInvoice("");
-          setQrCodeUrl(null);
-          setFailureText(
-            "Failed to validate invoice! Change your mint in settings and/or please try again."
+    try {
+      while (roundsConsumed < pollMaxRounds && !claimDone) {
+        let quoteState:
+          | Awaited<ReturnType<typeof wallet.checkMintQuoteBolt11>>
+          | undefined;
+        try {
+          quoteState = await withMintRetry(
+            () => wallet.checkMintQuoteBolt11(hash),
+            {
+              maxAttempts: 3,
+              perAttemptTimeoutMs: 10000,
+              totalTimeoutMs: 25000,
+            }
           );
-          setShowFailureModal(true);
-          return;
+        } catch (error) {
+          console.warn("Invoice check warning:", error);
+          const checkCause =
+            error instanceof MintOperationError ? error.cause : error;
+          if (error instanceof TypeError || checkCause instanceof TypeError) {
+            setShowInvoiceCard(false);
+            setInvoice("");
+            setQrCodeUrl(null);
+            setFailureText(
+              "Failed to validate invoice! Change your mint in settings and/or please try again."
+            );
+            setShowFailureModal(true);
+            return;
+          }
+          roundsConsumed++;
+          await new Promise((resolve) => setTimeout(resolve, 2100));
+          continue;
         }
-        roundsConsumed++;
-        await new Promise((resolve) => setTimeout(resolve, 2100));
-        continue;
-      }
 
-      if (quoteState.state === "UNPAID") {
-        roundsConsumed++;
-        await new Promise((resolve) => setTimeout(resolve, 2100));
-        continue;
-      }
-
-      if (quoteState.state === "ISSUED") {
-        // Mint says these proofs were already minted (likely from a prior
-        // session where the local persist step lost the proofs). Mark the
-        // pending record terminal and surface the dropped-connection notice.
-        updatePendingMintQuote(hash, {
-          status: "failed_terminal",
-          lastErrorMessage: "Quote ISSUED before local claim recorded proofs",
-        });
-        setPaymentConfirmed(true);
-        setQrCodeUrl(null);
-        setFailureText(
-          "Payment was received but your connection dropped! Please check your wallet balance."
-        );
-        setShowFailureModal(true);
-        setTimeout(() => {
-          handleToggleMintModal();
-        }, 1900);
-        return;
-      }
-
-      // Money is on the mint (PAID). Mark the durable record before claiming.
-      markMintQuotePaid(hash);
-
-      try {
-        const proofs = await withMintRetry(
-          () => wallet.mintProofsBolt11(numSats, hash),
-          { maxAttempts: 5, perAttemptTimeoutMs: 15000, totalTimeoutMs: 60000 }
-        );
-        if (proofs && proofs.length > 0) {
-          // Promote the active mint to default so the freshly-minted balance
-          // is visible immediately under the correct keysets.
-          persistReceivedTokens(proofs, mints[0]!);
-          localStorage.setItem(
-            "history",
-            JSON.stringify([
-              {
-                type: 3,
-                amount: numSats,
-                date: Math.floor(Date.now() / 1000),
-              },
-              ...history,
-            ])
-          );
-          await publishProofEvent(
-            nostr!,
-            signer!,
-            mints[0]!,
-            proofs,
-            "in",
-            numSats.toString()
-          );
-          markMintQuoteClaimed(hash);
-          setPaymentConfirmed(true);
-          setQrCodeUrl(null);
-          setTimeout(() => {
-            handleToggleMintModal();
-          }, 1900);
-          claimDone = true;
-          break;
+        if (quoteState.state === "UNPAID") {
+          roundsConsumed++;
+          await new Promise((resolve) => setTimeout(resolve, 2100));
+          continue;
         }
-      } catch (mintError) {
-        const cause =
-          mintError instanceof MintOperationError ? mintError.cause : mintError;
-        const message =
-          cause instanceof Error
-            ? cause.message
-            : mintError instanceof Error
-              ? mintError.message
-              : String(mintError);
 
-        if (
-          message.toLowerCase().includes("issued") ||
-          message.toLowerCase().includes("already")
-        ) {
-          // Mint already issued these proofs and we have no record of receiving
-          // them — funds are unrecoverable client-side.
+        if (quoteState.state === "ISSUED") {
+          // Mint says these proofs were already minted (likely from a prior
+          // session where the local persist step lost the proofs). Mark the
+          // pending record terminal and surface the dropped-connection notice.
           updatePendingMintQuote(hash, {
             status: "failed_terminal",
-            lastErrorMessage: message,
+            lastErrorMessage: "Quote ISSUED before local claim recorded proofs",
           });
           setPaymentConfirmed(true);
           setQrCodeUrl(null);
@@ -275,28 +218,115 @@ const MintButton = () => {
           return;
         }
 
-        // Transient claim failure. Pending record is preserved so the
-        // boot-time recovery hook can finish the claim on next visit.
-        console.warn("Mint claim failed; will retry on next session:", message);
+        // Money is on the mint (PAID). Mark the durable record before claiming.
+        markMintQuotePaid(hash);
+
+        try {
+          const proofs = await withMintRetry(
+            () => wallet.mintProofsBolt11(numSats, hash),
+            {
+              maxAttempts: 5,
+              perAttemptTimeoutMs: 15000,
+              totalTimeoutMs: 60000,
+            }
+          );
+          if (proofs && proofs.length > 0) {
+            // Promote the active mint to default so the freshly-minted balance
+            // is visible immediately under the correct keysets.
+            persistReceivedTokens(proofs, mints[0]!);
+            localStorage.setItem(
+              "history",
+              JSON.stringify([
+                {
+                  type: 3,
+                  amount: numSats,
+                  date: Math.floor(Date.now() / 1000),
+                },
+                ...history,
+              ])
+            );
+            await publishProofEvent(
+              nostr!,
+              signer!,
+              mints[0]!,
+              proofs,
+              "in",
+              numSats.toString()
+            );
+            markMintQuoteClaimed(hash);
+            setPaymentConfirmed(true);
+            setQrCodeUrl(null);
+            setTimeout(() => {
+              handleToggleMintModal();
+            }, 1900);
+            claimDone = true;
+            break;
+          }
+        } catch (mintError) {
+          const cause =
+            mintError instanceof MintOperationError
+              ? mintError.cause
+              : mintError;
+          const message =
+            cause instanceof Error
+              ? cause.message
+              : mintError instanceof Error
+                ? mintError.message
+                : String(mintError);
+
+          if (
+            message.toLowerCase().includes("issued") ||
+            message.toLowerCase().includes("already")
+          ) {
+            // Mint already issued these proofs and we have no record of receiving
+            // them — funds are unrecoverable client-side.
+            updatePendingMintQuote(hash, {
+              status: "failed_terminal",
+              lastErrorMessage: message,
+            });
+            setPaymentConfirmed(true);
+            setQrCodeUrl(null);
+            setFailureText(
+              "Payment was received but your connection dropped! Please check your wallet balance."
+            );
+            setShowFailureModal(true);
+            setTimeout(() => {
+              handleToggleMintModal();
+            }, 1900);
+            return;
+          }
+
+          // Transient claim failure. Pending record is preserved so the
+          // boot-time recovery hook can finish the claim on next visit.
+          console.warn(
+            "Mint claim failed; will retry on next session:",
+            message
+          );
+          setShowInvoiceCard(false);
+          setInvoice("");
+          setQrCodeUrl(null);
+          setFailureText(
+            "Payment received but the mint is unreachable. We'll automatically retry the claim the next time you open the app."
+          );
+          setShowFailureModal(true);
+          return;
+        }
+      }
+
+      if (!claimDone) {
         setShowInvoiceCard(false);
         setInvoice("");
         setQrCodeUrl(null);
         setFailureText(
-          "Payment received but the mint is unreachable. We'll automatically retry the claim the next time you open the app."
+          "Payment timed out! Please check your wallet balance or try again."
         );
         setShowFailureModal(true);
-        return;
       }
-    }
-
-    if (!claimDone) {
-      setShowInvoiceCard(false);
-      setInvoice("");
-      setQrCodeUrl(null);
-      setFailureText(
-        "Payment timed out! Please check your wallet balance or try again."
-      );
-      setShowFailureModal(true);
+    } finally {
+      // Polling done (success, failure, early return, or thrown) — always
+      // clear the countdown so stale deadline state can't bleed into a later
+      // session if the component is reused.
+      setPollDeadlineMs(null);
     }
   }
 
@@ -405,6 +435,10 @@ const MintButton = () => {
                       <div className="flex flex-col items-center justify-center">
                         {qrCodeUrl ? (
                           <>
+                            <PaymentCountdown
+                              deadlineMs={pollDeadlineMs}
+                              className="mb-3 text-center text-sm font-medium text-black tabular-nums"
+                            />
                             <Image
                               alt="Lightning invoice"
                               className="rounded-md border-2 border-black object-cover"
