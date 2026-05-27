@@ -961,8 +961,51 @@ describe("db-service helpers", () => {
           const mod = await import("../db-service");
           await expect(mod.getUnreadMessageCount("buyer-1")).resolves.toBe(4);
           expect(client.query).toHaveBeenCalledWith(
-            expect.stringContaining("FROM message_events WHERE pubkey = $1"),
+            expect.stringContaining("jsonb_array_elements(tags)"),
             ["buyer-1"]
+          );
+        } finally {
+          process.env.DATABASE_URL = prev;
+        }
+      });
+    });
+
+    test("getUnreadMessageCount counts unread messages where the user is the recipient", async () => {
+      await jest.isolateModulesAsync(async () => {
+        const prev = process.env.DATABASE_URL;
+        process.env.DATABASE_URL = "postgres://test@localhost/testdb";
+        try {
+          const client: MockDbClient = {
+            query: jest.fn(async (queryText: string) => {
+              if (queryText.includes("jsonb_array_elements(tags)")) {
+                return { rows: [{ count: "2" }] };
+              }
+
+              return { rows: [{ count: "0" }] };
+            }),
+            release: jest.fn(),
+          };
+
+          const pool: MockDbPool = {
+            connect: jest.fn(async () => client),
+            on: jest.fn(),
+          };
+
+          jest.doMock("pg", () => ({
+            Pool: class {
+              constructor() {
+                return pool;
+              }
+            },
+          }));
+
+          const mod = await import("../db-service");
+          await expect(mod.getUnreadMessageCount("recipient-1")).resolves.toBe(
+            2
+          );
+          expect(client.query).toHaveBeenCalledWith(
+            expect.stringContaining("OR EXISTS"),
+            ["recipient-1"]
           );
         } finally {
           process.env.DATABASE_URL = prev;
