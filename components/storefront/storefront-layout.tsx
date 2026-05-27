@@ -546,9 +546,22 @@ export default function StorefrontLayout({
           .sf-layout p, .sf-layout span, .sf-layout li, .sf-layout a,
           .sf-layout td, .sf-layout th, .sf-layout dt, .sf-layout dd,
           .sf-layout blockquote, .sf-layout figcaption, .sf-layout label {
-            overflow-wrap: anywhere;
-            word-break: break-word;
+            overflow-wrap: anywhere !important;
+            word-break: break-word !important;
             min-width: 0;
+            max-width: 100%;
+            white-space: normal;
+          }
+          /* Flex/grid children default to min-width: auto and, inside
+             `items-center` flex columns, size themselves to max-content of
+             their text instead of the parent width. That makes long headings
+             render on one line wider than the viewport. Force every flex/grid
+             item inside a storefront to shrink to 0 and cap at 100% of its
+             parent so the wrapping rules above can take effect. */
+          .sf-layout :where(:is([class*="flex"], [class*="grid"]) > *) {
+            min-width: 0;
+            min-height: 0;
+            max-width: 100%;
           }
           .sf-layout img, .sf-layout video, .sf-layout iframe, .sf-layout svg, .sf-layout canvas {
             max-width: 100%;

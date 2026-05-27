@@ -128,7 +128,10 @@ export default function StorefrontProductGrid({
             const slug = getListingSlug(product, products);
             const href = buildListingHref(slug, shopSlug);
             return (
-              <div key={product.id || product.d}>
+              <div
+                key={product.id || product.d}
+                className="flex max-w-full min-w-0 justify-center overflow-hidden"
+              >
                 <ProductCard productData={product} href={href} />
               </div>
             );

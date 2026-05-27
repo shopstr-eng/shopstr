@@ -31,18 +31,23 @@ export default function SectionFaq({ section, colors }: SectionFaqProps) {
             style={{ borderColor: colors.primary + "22" }}
           >
             <button
-              className="flex w-full min-w-0 items-center justify-between gap-4 px-6 py-4 text-left font-bold transition-colors"
+              className="grid w-full items-center gap-4 px-6 py-4 text-left font-bold transition-colors"
               style={{
                 backgroundColor:
                   openIndex === idx ? colors.primary + "11" : "transparent",
+                gridTemplateColumns: "minmax(0, 1fr) auto",
               }}
               onClick={() => setOpenIndex(openIndex === idx ? null : idx)}
             >
               <FormattedText
                 text={item.question || ""}
                 as="span"
-                className="font-heading min-w-0 flex-1 break-words"
-                style={{ overflowWrap: "anywhere" }}
+                className="font-heading block break-words"
+                style={{
+                  overflowWrap: "anywhere",
+                  minWidth: 0,
+                  maxWidth: "100%",
+                }}
               />
               <span
                 className="flex-shrink-0 text-xl transition-transform"
@@ -59,10 +64,12 @@ export default function SectionFaq({ section, colors }: SectionFaqProps) {
               <FormattedText
                 text={item.answer || ""}
                 as="div"
-                className="font-body border-t px-6 py-4 break-words whitespace-pre-line opacity-80"
+                className="font-body block border-t px-6 py-4 break-words whitespace-pre-line opacity-80"
                 style={{
                   borderColor: colors.primary + "11",
                   overflowWrap: "anywhere",
+                  minWidth: 0,
+                  maxWidth: "100%",
                 }}
               />
             )}
