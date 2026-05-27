@@ -27,6 +27,10 @@ import { NostrManager } from "@/utils/nostr/nostr-manager";
 import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 import { cacheEventsToDatabase } from "@/utils/db/db-client";
 import {
+  filterUnrequestedEventIds,
+  markEventsRequestedForDeletion,
+} from "@/utils/cashu/deleted-event-tracker";
+import {
   buildMessagesListProof,
   buildSignedHttpRequestProofTemplate,
   SIGNED_EVENT_HEADER,
@@ -1838,16 +1842,23 @@ export const fetchCashuWallet = async (
         console.error("Failed to process spending history:", error);
       }
 
-      // Delete spent events
+      // Delete spent events — but only those we haven't already asked the
+      // signer to delete in a prior boot. Without this guard, every page
+      // refresh re-issues a deletion request for the same SPENT kind:7375
+      // events (relays may not honor the deletion, or a remote signer like
+      // NIP-46 requires per-event approval), which surfaces as an endless
+      // "approve this deletion" prompt loop after the recent wallet recovery
+      // work added more spent events to history.
       if (eventsToDelete.length > 0) {
-        try {
-          await deleteEvent(
-            nostr,
-            signer!,
-            Array.from(new Set(eventsToDelete))
-          );
-        } catch (error) {
-          console.error("Failed to delete spent events:", error);
+        const uniqueIds = Array.from(new Set(eventsToDelete));
+        const newIds = filterUnrequestedEventIds(uniqueIds);
+        if (newIds.length > 0) {
+          try {
+            await deleteEvent(nostr, signer!, newIds);
+            markEventsRequestedForDeletion(newIds);
+          } catch (error) {
+            console.error("Failed to delete spent events:", error);
+          }
         }
       }
 

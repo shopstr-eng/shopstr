@@ -84,9 +84,11 @@ export function persistMints(orderedMints: string[]): string[] {
  *
  * Returns the count and total sats restored (newly added secrets only).
  */
-export function restoreTokensFromProofEvents(
-  proofEvents: ProofEventLike[]
-): { restoredCount: number; restoredSats: number; mints: string[] } {
+export function restoreTokensFromProofEvents(proofEvents: ProofEventLike[]): {
+  restoredCount: number;
+  restoredSats: number;
+  mints: string[];
+} {
   if (typeof window === "undefined")
     return { restoredCount: 0, restoredSats: 0, mints: [] };
 

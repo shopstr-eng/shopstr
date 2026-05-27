@@ -10,9 +10,10 @@ Any recovery path that stashes cashu proofs into `localStorage["tokens"]` (faile
 **Why auto-pruning is banned:** A first attempt that auto-pruned on wallet mount silently deleted a user's full balance — root cause was either a mint mis-reporting state or our probe matching proofs we shouldn't have. Spent-proof pruning of locally-stored cashu funds is irreversible from local state alone; the user has no undo. Treat it as a destructive operation and require explicit user opt-in (a button + confirmation) before running. Do **not** wire it into a `useEffect` on mount, and do **not** fire-and-forget it from recovery stash paths.
 
 **How to apply (if you do build an opt-in sweep button):**
+
 - Only probe proofs whose keyset id belongs to the mint being asked. `checkProofsStates` on foreign proofs is invalid.
 - On any probe error, leave proofs intact — a transient mint outage must never delete user funds.
-- **Merge-safe write**: probe a snapshot, but at write time *re-read* the latest tokens and remove only confirmed-spent secrets. Never write the snapshot back wholesale — overlapping receives/mints/stashes would be clobbered.
+- **Merge-safe write**: probe a snapshot, but at write time _re-read_ the latest tokens and remove only confirmed-spent secrets. Never write the snapshot back wholesale — overlapping receives/mints/stashes would be clobbered.
 - Hold a per-tab in-flight lock so overlapping sweep calls serialize on one probe + write.
 - Quarantine pruned proofs to a separate `localStorage` key (don't truly delete) so the user can roll back if the mint was wrong.
 

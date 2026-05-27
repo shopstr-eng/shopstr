@@ -3149,11 +3149,11 @@ export default function ProductInvoiceCard({
       const recoveryProofs =
         err instanceof SendTokensRecoverableError
           ? err.recoverableProofs
-          : postSwapRecovery?.proofs ?? [];
+          : (postSwapRecovery?.proofs ?? []);
       const recoveryMint =
         err instanceof SendTokensRecoverableError
           ? err.mintUrl
-          : postSwapRecovery?.mintUrl ?? mints?.[0];
+          : (postSwapRecovery?.mintUrl ?? mints?.[0]);
       if (recoveryProofs.length > 0 && recoveryMint) {
         try {
           const stashed = stashProofsLocally(recoveryProofs, recoveryMint, {
