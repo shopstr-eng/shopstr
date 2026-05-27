@@ -553,7 +553,7 @@ export default function StorefrontLayout({
             white-space: normal;
           }
           /* Flex/grid children default to min-width: auto and, inside
-             `items-center` flex columns, size themselves to max-content of
+             items-center flex columns, size themselves to max-content of
              their text instead of the parent width. That makes long headings
              render on one line wider than the viewport. Force every flex/grid
              item inside a storefront to shrink to 0 and cap at 100% of its
