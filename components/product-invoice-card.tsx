@@ -1928,6 +1928,11 @@ export default function ProductInvoiceCard({
                   wallet,
                   proofs,
                   newPrice,
+                  // Lightning-mint path constructs `wallet` against mints[0]
+                  // (the buyer's default receiving mint); pass that
+                  // explicitly so recovery stashes proofs against the
+                  // correct mint.
+                  mints[0]!,
                   shippingName ? shippingName : undefined,
                   shippingAddress ? shippingAddress : undefined,
                   shippingUnitNo ? shippingUnitNo : undefined,
@@ -2091,6 +2096,7 @@ export default function ProductInvoiceCard({
     wallet: CashuWallet,
     proofs: Proof[],
     totalPrice: number,
+    spendMint: string,
     shippingName?: string,
     shippingAddress?: string,
     shippingUnitNo?: string,
@@ -2966,10 +2972,14 @@ export default function ProductInvoiceCard({
         );
       }
     } catch (err) {
+      // Use the actual mint we swapped/melted against, not mints[0]. In
+      // multi-mint wallets the spend mint may differ from the default, and
+      // stashing recovered proofs under the wrong mint would mis-attribute
+      // their keysets and they'd present as an unusable balance.
       throw new SendTokensRecoverableError(
         err instanceof Error ? err.message : "sendTokens failed",
         __recoverableTracker.getProofs(),
-        mints[0]!,
+        spendMint || mints[0]!,
         err
       );
     }
@@ -2984,6 +2994,13 @@ export default function ProductInvoiceCard({
   };
 
   const handleCashuPayment = async (price: number, data: any) => {
+    // Track recoverable proofs after the mint swap. If sendTokens or any
+    // downstream step throws, we stash these instead of letting the buyer's
+    // wallet keep showing SPENT inputs with no replacement outputs.
+    let postSwapRecovery: {
+      mintUrl: string;
+      proofs: Proof[];
+    } | null = null;
     try {
       if (!mints || mints.length === 0) {
         throw new Error("No Cashu mint available");
@@ -3045,6 +3062,7 @@ export default function ProductInvoiceCard({
         );
       }
       const { keep, send } = __swapOutcomeA_4;
+      postSwapRecovery = { mintUrl: payMint, proofs: [...keep, ...send] };
       const deletedEventIds = [
         ...new Set([
           ...walletContext.proofEvents
@@ -3077,6 +3095,7 @@ export default function ProductInvoiceCard({
         wallet,
         send,
         price,
+        payMint,
         data.shippingName ? data.shippingName : undefined,
         data.shippingAddress ? data.shippingAddress : undefined,
         data.shippingUnitNo ? data.shippingUnitNo : undefined,
@@ -3086,6 +3105,9 @@ export default function ProductInvoiceCard({
         data.shippingCountry ? data.shippingCountry : undefined,
         data.additionalInfo ? data.additionalInfo : undefined
       );
+      // sendTokens succeeded — `send` is now in flight to the recipient.
+      // Narrow recovery to just `keep`, which the next write commits.
+      postSwapRecovery = { mintUrl: payMint, proofs: keep };
       const changeProofs = keep;
       const remainingProofs = tokens.filter(
         (p: Proof) =>
@@ -3098,6 +3120,7 @@ export default function ProductInvoiceCard({
         proofArray = [...remainingProofs];
       }
       localStorage.setItem("tokens", JSON.stringify(proofArray));
+      postSwapRecovery = null;
       localStorage.setItem(
         "history",
         JSON.stringify([
@@ -3121,7 +3144,33 @@ export default function ProductInvoiceCard({
       setCashuPaymentSent(true);
       flushPendingOrderEmail();
       setPaymentConfirmed(true);
-    } catch {
+    } catch (err) {
+      console.error("Product cashu payment failed:", err);
+      const recoveryProofs =
+        err instanceof SendTokensRecoverableError
+          ? err.recoverableProofs
+          : postSwapRecovery?.proofs ?? [];
+      const recoveryMint =
+        err instanceof SendTokensRecoverableError
+          ? err.mintUrl
+          : postSwapRecovery?.mintUrl ?? mints?.[0];
+      if (recoveryProofs.length > 0 && recoveryMint) {
+        try {
+          const stashed = stashProofsLocally(recoveryProofs, recoveryMint, {
+            note: "Recovered from failed product cashu payment",
+          });
+          setWalletRecovery({
+            isOpen: true,
+            amountSats: stashed,
+            mintUrl: recoveryMint,
+          });
+        } catch (stashErr) {
+          console.error(
+            "Failed to stash post-swap proofs after product cashu failure:",
+            stashErr
+          );
+        }
+      }
       setCashuPaymentFailed(true);
     }
   };

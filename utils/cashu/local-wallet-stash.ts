@@ -1,9 +1,5 @@
 import type { Proof } from "@cashu/cashu-ts";
-import {
-  getStoredMints,
-  persistReceivedTokens,
-  sweepSpentProofs,
-} from "@/utils/cashu/wallet-mint-sync";
+import { persistReceivedTokens } from "@/utils/cashu/wallet-mint-sync";
 
 export interface StashedHistoryEntry {
   type: number;
@@ -68,16 +64,6 @@ export function stashProofsLocally(
   } catch {
     /* ignore history write errors — proofs are the source of truth */
   }
-
-  // Recovery paths sometimes hand us proofs that turn out to be SPENT at the
-  // mint (e.g. the seller's tooling already redeemed them, or the original
-  // melt actually paid). Sweep asynchronously so any spent proofs we just
-  // stashed are pruned before the wallet UI tries to spend them and surfaces
-  // a misleading "insufficient balance" / "proofs already spent" error.
-  const mintsForSweep = Array.from(
-    new Set([mintUrl, ...getStoredMints()].filter(Boolean))
-  );
-  void sweepSpentProofs(mintsForSweep).catch(() => {});
 
   return amount;
 }

@@ -38,6 +38,7 @@ import {
   Proof,
 } from "@cashu/cashu-ts";
 import { safeSwap } from "@/utils/cashu/swap-retry-service";
+import { stashProofsLocally } from "@/utils/cashu/local-wallet-stash";
 import { copyToClipboard } from "@/utils/clipboard";
 import { CashuWalletContext } from "../../utils/context/context";
 import {
@@ -87,6 +88,15 @@ const SendButton = () => {
 
   const handleSend = async (numSats: number) => {
     setSendFailed(false);
+    // Track post-swap state so that if anything throws after the mint has
+    // already swapped the inputs (which makes them SPENT), we can still
+    // stash the new `keep` + `send` outputs back into local storage. Without
+    // this, a throw between safeSwap and the localStorage write would leave
+    // the user with spent inputs in their wallet and no replacement proofs.
+    let postSwapRecovery: {
+      mintUrl: string;
+      proofs: Proof[];
+    } | null = null;
     try {
       // Pick the mint that actually holds enough proofs for this send —
       // multi-mint wallets used to fail here when funds lived on a
@@ -111,6 +121,7 @@ const SendButton = () => {
         );
       }
       const { keep, send } = swapOutcome;
+      postSwapRecovery = { mintUrl: sendMint, proofs: [...keep, ...send] };
 
       const deletedEventIds = [
         ...new Set([
@@ -140,12 +151,11 @@ const SendButton = () => {
         ]),
       ];
 
-      const encodedSendToken = getEncodedToken({
-        mint: sendMint,
-        proofs: send,
-      });
-      setShowTokenCard(true);
-      setNewToken(encodedSendToken);
+      // Persist change BEFORE showing the encoded token to the user. The
+      // encoded token contains the `send` proofs; once the user has it in
+      // their clipboard, those proofs are their responsibility. The `keep`
+      // change must be in localStorage before that point so any post-swap
+      // throw doesn't lose change.
       const changeProofs = keep;
       const remainingProofs = tokens.filter(
         (p: Proof) =>
@@ -158,6 +168,21 @@ const SendButton = () => {
         proofArray = [...remainingProofs];
       }
       localStorage.setItem("tokens", JSON.stringify(proofArray));
+      // Change is safe now. Only the `send` proofs remain "in flight" via the
+      // encoded token shown to the user — the recovery path only needs to
+      // re-stash `send` if a later throw prevents the user from seeing it.
+      postSwapRecovery = { mintUrl: sendMint, proofs: send };
+
+      const encodedSendToken = getEncodedToken({
+        mint: sendMint,
+        proofs: send,
+      });
+      setShowTokenCard(true);
+      setNewToken(encodedSendToken);
+      // Token has been shown to the user — they own the `send` proofs now.
+      // Clear the recovery slot so we don't re-credit them on a downstream
+      // throw (e.g. publishProofEvent failing).
+      postSwapRecovery = null;
       localStorage.setItem(
         "history",
         JSON.stringify([
@@ -174,7 +199,22 @@ const SendButton = () => {
         sendTotal.toString(),
         deletedEventIds
       );
-    } catch {
+    } catch (err) {
+      console.error("Wallet send failed:", err);
+      if (postSwapRecovery) {
+        try {
+          stashProofsLocally(
+            postSwapRecovery.proofs,
+            postSwapRecovery.mintUrl,
+            { note: "Recovered from failed wallet send" }
+          );
+        } catch (stashErr) {
+          console.error(
+            "Failed to stash post-swap proofs after wallet send failure:",
+            stashErr
+          );
+        }
+      }
       setSendFailed(true);
     }
   };

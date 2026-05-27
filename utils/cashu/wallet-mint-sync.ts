@@ -75,6 +75,89 @@ export function persistMints(orderedMints: string[]): string[] {
  * claim-button, failed-payment recovery, post-mint claim, etc. It enforces
  * the rule "latest tokens added switch the default mint to their mint".
  */
+/**
+ * Rebuild `localStorage["tokens"]` from the user's kind-7375 proof events
+ * (the independent nostr-relay/Postgres backup of every "in" we've ever
+ * published). Used as a manual recovery when local tokens have been lost or
+ * mis-pruned. Merges by secret with whatever is already in localStorage —
+ * never deletes existing proofs.
+ *
+ * Returns the count and total sats restored (newly added secrets only).
+ */
+export function restoreTokensFromProofEvents(
+  proofEvents: ProofEventLike[]
+): { restoredCount: number; restoredSats: number; mints: string[] } {
+  if (typeof window === "undefined")
+    return { restoredCount: 0, restoredSats: 0, mints: [] };
+
+  const existing = getStoredTokens();
+  const seen = new Set<string>(existing.map((p) => p.secret));
+  const additions: Proof[] = [];
+  const mintsSeen: string[] = [];
+  const mintsSeenSet = new Set<string>();
+
+  for (const ev of proofEvents || []) {
+    if (!ev || !Array.isArray(ev.proofs)) continue;
+    if (ev.mint && !mintsSeenSet.has(ev.mint)) {
+      mintsSeenSet.add(ev.mint);
+      mintsSeen.push(ev.mint);
+    }
+    for (const p of ev.proofs) {
+      if (!p || !p.secret) continue;
+      if (seen.has(p.secret)) continue;
+      seen.add(p.secret);
+      additions.push(p);
+    }
+  }
+
+  if (additions.length === 0)
+    return { restoredCount: 0, restoredSats: 0, mints: getStoredMints() };
+
+  const merged = [...existing, ...additions];
+  localStorage.setItem(TOKENS_KEY, JSON.stringify(merged));
+
+  // Make sure every mint that contributed proofs is in the configured list
+  // so the wallet UI can attribute and spend them.
+  const currentMints = getStoredMints();
+  const mergedMints = [
+    ...currentMints,
+    ...mintsSeen.filter((m) => !currentMints.includes(m)),
+  ];
+  const finalMints = persistMints(mergedMints);
+
+  dispatchStorageChange();
+  const restoredSats = additions.reduce(
+    (acc, p) => acc + proofAmountToNumber(p),
+    0
+  );
+  try {
+    const history = JSON.parse(
+      localStorage.getItem("history") || "[]"
+    ) as Array<Record<string, unknown>>;
+    localStorage.setItem(
+      "history",
+      JSON.stringify([
+        {
+          type: 5,
+          amount: restoredSats,
+          date: Math.floor(Date.now() / 1000),
+          note: `Restored ${additions.length} proof${
+            additions.length === 1 ? "" : "s"
+          } from nostr backup`,
+        },
+        ...history,
+      ])
+    );
+  } catch {
+    /* ignore history write errors */
+  }
+  return {
+    restoredCount: additions.length,
+    restoredSats,
+    mints: finalMints,
+  };
+}
+
 export function persistReceivedTokens(
   newProofs: Proof[],
   mintUrl: string

@@ -33,6 +33,7 @@ import {
 } from "@cashu/cashu-ts";
 import { safeMeltProofs } from "@/utils/cashu/melt-retry-service";
 import { safeSwap } from "@/utils/cashu/swap-retry-service";
+import { stashProofsLocally } from "@/utils/cashu/local-wallet-stash";
 import { proofAmountToNumber } from "@/utils/cashu/proof-amount";
 import { formatWithCommas } from "../utility-components/display-monetary-info";
 import { CashuWalletContext } from "../../utils/context/context";
@@ -107,6 +108,14 @@ const PayButton = () => {
     setIsPaid(false);
     setPaymentFailed(false);
     setIsRedeeming(true);
+    // Track recoverable proofs across the swap/melt pipeline. The mint
+    // moves through states where some proofs are SPENT and replacements are
+    // UNSPENT; if we throw without writing those replacements to local
+    // storage, the user's balance silently evaporates.
+    let postSwapRecovery: {
+      mintUrl: string;
+      proofs: Proof[];
+    } | null = null;
     try {
       // Pick the mint that actually holds the most for this payment —
       // multi-mint wallets used to fail here with "insufficient" even when
@@ -141,6 +150,10 @@ const PayButton = () => {
         );
       }
       const { keep, send } = swapOutcome;
+      // Swap inputs are now SPENT; `keep` and `send` are the new UNSPENT
+      // proofs. Stash both if the melt fails or anything else throws before
+      // the happy-path localStorage write.
+      postSwapRecovery = { mintUrl: payMint, proofs: [...keep, ...send] };
       const deletedEventIds = [
         ...new Set([
           ...walletContext.proofEvents
@@ -190,8 +203,16 @@ const PayButton = () => {
         ) as Proof[];
         const quarantineProofArray = [...remainingProofsAfterMelt, ...keep];
         localStorage.setItem("tokens", JSON.stringify(quarantineProofArray));
+        // `keep` is already written above; no need to re-stash it on catch.
+        postSwapRecovery = null;
         throw new Error(meltOutcome.errorMessage ?? "Melt outcome ambiguous");
       }
+      // Melt paid. `send` is SPENT for real; only `keep` + change remain
+      // recoverable client-side. The happy-path write below stores them.
+      postSwapRecovery = {
+        mintUrl: payMint,
+        proofs: [...keep, ...meltOutcome.changeProofs],
+      };
       const changeProofs = [...keep, ...meltOutcome.changeProofs];
       const changeAmount =
         Array.isArray(changeProofs) && changeProofs.length > 0
@@ -211,6 +232,8 @@ const PayButton = () => {
         proofArray = [...remainingProofs];
       }
       localStorage.setItem("tokens", JSON.stringify(proofArray));
+      // Wallet is now in-sync with the mint; nothing further to recover.
+      postSwapRecovery = null;
       const filteredTokenAmount = filteredProofs.reduce(
         (acc, token: Proof) => acc + proofAmountToNumber(token),
         0
@@ -239,7 +262,22 @@ const PayButton = () => {
       setIsPaid(true);
       setIsRedeeming(false);
       handleTogglePayModal();
-    } catch {
+    } catch (err) {
+      console.error("Wallet pay failed:", err);
+      if (postSwapRecovery) {
+        try {
+          stashProofsLocally(
+            postSwapRecovery.proofs,
+            postSwapRecovery.mintUrl,
+            { note: "Recovered from failed Lightning pay" }
+          );
+        } catch (stashErr) {
+          console.error(
+            "Failed to stash post-swap proofs after wallet pay failure:",
+            stashErr
+          );
+        }
+      }
       setPaymentFailed(true);
       setIsRedeeming(false);
     }

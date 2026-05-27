@@ -3570,7 +3570,10 @@ export default function CartInvoiceCard({
             }
             if (proofs && proofs.length > 0) {
               try {
-                await sendTokens(wallet, proofs, data);
+                // Lightning-mint path constructs `wallet` against mints[0]
+                // (the buyer's default receiving mint); pass that explicitly
+                // so recovery stashes proofs against the correct mint.
+                await sendTokens(wallet, proofs, data, mints[0]!);
               } catch (sendErr) {
                 console.warn(
                   "sendTokens failed after Lightning mint; stashing proofs locally:",
@@ -3733,7 +3736,8 @@ export default function CartInvoiceCard({
   const sendTokens = async (
     wallet: CashuWallet,
     proofs: Proof[],
-    data: any
+    data: any,
+    spendMint: string
   ) => {
     let remainingProofs = proofs;
     // Track which proofs the buyer can still recover at any point. The
@@ -4881,10 +4885,14 @@ export default function CartInvoiceCard({
         }
       }
     } catch (err) {
+      // Use the actual mint we swapped/melted against, not mints[0]. In
+      // multi-mint wallets the spend mint may differ from the default, and
+      // stashing recovered proofs under the wrong mint would mis-attribute
+      // their keysets and they'd present as an unusable balance.
       throw new SendTokensRecoverableError(
         err instanceof Error ? err.message : "sendTokens failed",
         __recoverableTracker.getProofs(),
-        mints[0]!,
+        spendMint || mints[0]!,
         err
       );
     }
@@ -5213,6 +5221,14 @@ export default function CartInvoiceCard({
   };
 
   const handleCashuPayment = async (price: number, data: any) => {
+    // Track recoverable proofs from the moment the mint swaps the buyer's
+    // inputs. If `sendTokens` (or anything after the swap) throws, we stash
+    // these so the buyer's wallet doesn't lose the new outputs while still
+    // showing the now-SPENT inputs as a phantom balance.
+    let postSwapRecovery: {
+      mintUrl: string;
+      proofs: Proof[];
+    } | null = null;
     try {
       if (!mints || mints.length === 0) {
         throw new Error("No Cashu mint available");
@@ -5247,6 +5263,7 @@ export default function CartInvoiceCard({
         );
       }
       const { keep, send } = __swapOutcomeA_4;
+      postSwapRecovery = { mintUrl: payMint, proofs: [...keep, ...send] };
       const deletedEventIds = [
         ...new Set([
           ...walletContext.proofEvents
@@ -5274,7 +5291,12 @@ export default function CartInvoiceCard({
             .map((event) => event.id),
         ]),
       ];
-      await sendTokens(wallet, send, data);
+      await sendTokens(wallet, send, data, payMint);
+      // sendTokens returned without throwing — `send` is now in flight to
+      // the seller / donation recipient(s). Narrow recovery to just `keep`
+      // (still in the buyer's wallet), which the localStorage write below
+      // commits.
+      postSwapRecovery = { mintUrl: payMint, proofs: keep };
       const changeProofs = keep;
       const remainingProofs = tokens.filter(
         (p: Proof) =>
@@ -5287,6 +5309,8 @@ export default function CartInvoiceCard({
         proofArray = [...remainingProofs];
       }
       localStorage.setItem("tokens", JSON.stringify(proofArray));
+      // Change is committed; nothing left to recover from this flow.
+      postSwapRecovery = null;
       localStorage.setItem(
         "history",
         JSON.stringify([
@@ -5314,7 +5338,37 @@ export default function CartInvoiceCard({
       if (setCashuPaymentSent) {
         setCashuPaymentSent(true);
       }
-    } catch {
+    } catch (err) {
+      console.error("Cart cashu payment failed:", err);
+      // Prefer the live recoverable-proofs set the tracker inside sendTokens
+      // computed; the original swap outputs are mostly SPENT by the time
+      // sendTokens fails partway through. Fall back to keep+send when the
+      // throw happened outside sendTokens (pre-melt, swap stage, etc.).
+      const recoveryProofs =
+        err instanceof SendTokensRecoverableError
+          ? err.recoverableProofs
+          : postSwapRecovery?.proofs ?? [];
+      const recoveryMint =
+        err instanceof SendTokensRecoverableError
+          ? err.mintUrl
+          : postSwapRecovery?.mintUrl ?? mints?.[0];
+      if (recoveryProofs.length > 0 && recoveryMint) {
+        try {
+          const stashed = stashProofsLocally(recoveryProofs, recoveryMint, {
+            note: "Recovered from failed cart cashu payment",
+          });
+          setWalletRecovery({
+            isOpen: true,
+            amountSats: stashed,
+            mintUrl: recoveryMint,
+          });
+        } catch (stashErr) {
+          console.error(
+            "Failed to stash post-swap proofs after cart cashu failure:",
+            stashErr
+          );
+        }
+      }
       if (setCashuPaymentFailed) {
         setCashuPaymentFailed(true);
       } else {

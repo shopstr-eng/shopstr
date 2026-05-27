@@ -18,7 +18,7 @@ import {
   buildSecretToMintMap,
   getStoredMints,
   getStoredTokens,
-  sweepSpentProofs,
+  restoreTokensFromProofEvents,
   syncMintsFromTokens,
 } from "@/utils/cashu/wallet-mint-sync";
 import { CashuWalletContext } from "@/utils/context/context";
@@ -116,26 +116,6 @@ export default function StorefrontWallet({ colors }: StorefrontWalletProps) {
     return () => clearTimeout(t);
   }, [mints, mintKeySetIds]);
 
-  // Self-heal: ask each mint which locally-held proofs are already SPENT and
-  // prune them from localStorage. Without this, a failed-payment recovery can
-  // leave stale spent proofs in the wallet, which present as a phantom
-  // balance that fails every send with "insufficient" / "already spent".
-  // Runs once per configured-mint-set; the storage poll picks up the prune.
-  useEffect(() => {
-    if (!mints.length) return;
-    let cancelled = false;
-    const t = setTimeout(() => {
-      if (cancelled) return;
-      sweepSpentProofs(mints).catch((err) => {
-        console.warn("Storefront wallet spent-proof sweep failed:", err);
-      });
-    }, 1200);
-    return () => {
-      cancelled = true;
-      clearTimeout(t);
-    };
-  }, [mints]);
-
   // Total = every proof in the wallet. Active-mint balance = proofs whose
   // kind-7375 mapping points at mints[0], plus any unmapped proofs that
   // belong to mints[0] by keyset id (fallback for proofs the user has but
@@ -200,6 +180,30 @@ export default function StorefrontWallet({ colors }: StorefrontWalletProps) {
 
   const handleMintClick = () => {
     router.push("/settings/account");
+  };
+
+  const [restoreStatus, setRestoreStatus] = useState<string | null>(null);
+  const handleRestore = () => {
+    try {
+      const { restoredCount, restoredSats } = restoreTokensFromProofEvents(
+        walletContext.proofEvents || []
+      );
+      if (restoredCount === 0) {
+        setRestoreStatus(
+          "Nothing to restore — your local wallet already matches your nostr backup."
+        );
+      } else {
+        setRestoreStatus(
+          `Restored ${restoredCount} proof${
+            restoredCount === 1 ? "" : "s"
+          } (${restoredSats} sats) from nostr backup.`
+        );
+      }
+    } catch (err) {
+      console.error("Restore failed:", err);
+      setRestoreStatus("Restore failed — see console for details.");
+    }
+    setTimeout(() => setRestoreStatus(null), 6000);
   };
 
   if (!isLoggedIn) {
@@ -267,6 +271,25 @@ export default function StorefrontWallet({ colors }: StorefrontWalletProps) {
               <PayButton />
             </div>
           </div>
+        </div>
+
+        <div className="flex flex-col items-center gap-2">
+          <button
+            type="button"
+            onClick={handleRestore}
+            className="rounded-md border-2 border-black bg-white px-4 py-2 text-sm font-bold text-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:bg-gray-100"
+            style={{ color: colors.text, borderColor: colors.text }}
+          >
+            Restore wallet from nostr backup
+          </button>
+          {restoreStatus ? (
+            <p
+              className="text-center text-xs"
+              style={{ color: colors.background }}
+            >
+              {restoreStatus}
+            </p>
+          ) : null}
         </div>
 
         <div
