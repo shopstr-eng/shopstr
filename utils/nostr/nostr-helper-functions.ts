@@ -1098,53 +1098,56 @@ async function fetchLatestContactListEvent(
   const localEvent = latestLocalContactListEvents.get(userPubkey) ?? null;
 
   // Fetch from relays and DB cache in parallel
-  const [relayResult, dbResult] = await Promise.allSettled([
-    withContactListFetchTimeout(
-      () =>
-        nostr.fetch(
-          [{ kinds: [3], authors: [userPubkey] }],
-          {},
-          getContactListRelays()
-        ),
-      [] as NostrEvent[]
-    ),
-    withContactListFetchTimeout(
-      async () => {
-        if (typeof fetch !== "function") return null;
+  const relays = getContactListRelays();
+  const relayFetchPromise = Promise.all(
+    relays.map(async (relay) => {
+      const result = await withContactListFetchTimeout(
+        () => nostr.fetch([{ kinds: [3], authors: [userPubkey] }], {}, [relay]),
+        [] as NostrEvent[]
+      );
+
+      console.log(
+        `[follows] contact-list relay ${relay} responded=${result.didRespond} events=${result.value.length}`
+      );
+
+      return result;
+    })
+  );
+
+  const dbFetchPromise = withContactListFetchTimeout(
+    async () => {
+      if (typeof fetch !== "function") return null;
+      try {
         const response = await fetch(
           `/api/db/fetch-contacts?pubkey=${encodeURIComponent(userPubkey)}`
         );
-        if (!response.ok) return null;
+        if (!response.ok) {
+          throw new Error(`DB fetch failed with status ${response.status}`);
+        }
         const data = await response.json();
         return (data?.contactList as NostrEvent) ?? null;
-      },
-      null as NostrEvent | null
-    ),
+      } catch (error) {
+        console.error("Failed to fetch contact list from DB cache:", error);
+        throw error;
+      }
+    },
+    null as NostrEvent | null
+  );
+
+  const [relayResults, dbFetch] = await Promise.all([
+    relayFetchPromise,
+    dbFetchPromise,
   ]);
 
-  const relayFetch =
-    relayResult.status === "fulfilled"
-      ? relayResult.value
-      : { value: [] as NostrEvent[], didRespond: false };
-  const dbFetch =
-    dbResult.status === "fulfilled"
-      ? dbResult.value
-      : { value: null as NostrEvent | null, didRespond: false };
+  const relayEvents = relayResults.flatMap((result) => result.value);
+  const relayDidRespond = relayResults.some((result) => result.didRespond);
 
   // A source "responded" if relay or DB actually returned (not timed out),
   // or if we have a local event from a prior mutation this session.
   const anySourceResponded =
-    relayFetch.didRespond || dbFetch.didRespond || localEvent !== null;
+    relayDidRespond || dbFetch.didRespond || localEvent !== null;
 
-  const relayEvents = relayFetch.value;
   const dbEvent = dbFetch.value;
-
-  if (dbResult.status === "rejected") {
-    console.error(
-      "Failed to fetch contact list from DB cache:",
-      dbResult.reason
-    );
-  }
 
   // Merge external sources first, then prefer the local signed event on ties so
   // queued user actions build from the latest local intent.

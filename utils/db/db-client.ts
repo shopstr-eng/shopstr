@@ -29,6 +29,7 @@ async function buildSignedRequestHeader(
 }
 
 export async function cacheEventToDatabase(event: NostrEvent): Promise<void> {
+  console.log("Within DB client cache function");
   try {
     const response = await fetch("/api/db/cache-event", {
       method: "POST",
@@ -37,6 +38,10 @@ export async function cacheEventToDatabase(event: NostrEvent): Promise<void> {
     });
     if (!response.ok) {
       console.error("Failed to cache event to database");
+    } else {
+      console.log(
+        `Successfully cached event to database: ${JSON.stringify(event)}`
+      );
     }
   } catch (error) {
     console.error("Failed to cache event to database:", error);

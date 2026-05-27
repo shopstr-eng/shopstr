@@ -218,6 +218,7 @@ export class NostrManager {
 
   public async publish(event: NostrEvent, relayUrls?: string[]): Promise<void> {
     if (!this.params.writable) throw new Error("not writable");
+
     if (relayUrls) {
       for (const relayUrl of relayUrls) {
         this.addRelay(relayUrl);
@@ -227,13 +228,27 @@ export class NostrManager {
     const relays = relayUrls
       ? this.relays.filter((r) => relayUrls.includes(r.url))
       : this.relays;
+
     await this.keepAlive(relays);
-    await Promise.allSettled(
-      this.pool.publish(
-        relays.map((r) => r.url),
-        event
-      )
-    );
+
+    const targetUrls = relays.map((r) => r.url);
+
+    const publishPromises = this.pool.publish(targetUrls, event);
+
+    const results = await Promise.allSettled(publishPromises);
+
+    results.forEach((result, index) => {
+      const relayUrl = targetUrls[index];
+
+      if (result.status === "fulfilled") {
+        console.log(`✅ Successfully published to: ${relayUrl}`);
+      } else {
+        console.log(
+          `❌ Failed to publish to: ${relayUrl} | Reason:`,
+          result.reason
+        );
+      }
+    });
   }
 
   public addRelay(
