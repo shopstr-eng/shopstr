@@ -281,10 +281,13 @@ export default function SectionSocialPosts({
 
   return (
     <div
-      className="w-full min-w-0 overflow-hidden px-4 py-16 md:px-6"
-      style={{ backgroundColor: colors.secondary + "08" }}
+      className="box-border w-full min-w-0 overflow-hidden px-3 py-16 sm:px-4 md:px-6"
+      style={{
+        backgroundColor: colors.secondary + "08",
+        maxWidth: "100vw",
+      }}
     >
-      <div className="mx-auto w-full max-w-6xl min-w-0">
+      <div className="mx-auto box-border w-full max-w-6xl min-w-0">
         {section.heading && (
           <FormattedText
             text={section.heading}
@@ -362,16 +365,17 @@ export default function SectionSocialPosts({
           }
         }
         .storefront-social-carousel-item {
-          width: 340px;
-          max-width: calc(100vw - 3rem);
+          width: min(340px, calc(100vw - 2rem));
+          max-width: calc(100vw - 2rem);
         }
-        @media (max-width: 480px) {
+        @media (max-width: 640px) {
           .storefront-social-carousel-item {
-            width: calc(100vw - 3rem);
+            width: calc(100vw - 2rem);
           }
         }
         .storefront-social-card {
           height: 600px;
+          width: 100%;
           max-width: 100%;
           min-width: 0;
         }

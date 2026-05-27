@@ -62,17 +62,30 @@ export default function SectionProducts({
     : orderedProducts;
 
   return (
-    <div className="mx-auto w-full max-w-6xl min-w-0 overflow-hidden px-4 py-16 md:px-6">
+    <div
+      className="mx-auto box-border w-full max-w-6xl min-w-0 px-3 py-16 sm:px-4 md:px-6"
+      style={{ maxWidth: "100vw" }}
+    >
       {section.heading && (
         <h2
-          className="font-heading mb-8 text-3xl font-bold"
-          style={{ color: "var(--sf-text)" }}
+          className="font-heading mb-4 max-w-full min-w-0 text-2xl font-bold break-words sm:text-3xl"
+          style={{
+            color: "var(--sf-text)",
+            overflowWrap: "anywhere",
+            wordBreak: "break-word",
+          }}
         >
           {section.heading}
         </h2>
       )}
       {section.subheading && (
-        <p className="font-body mb-8 text-lg opacity-70">
+        <p
+          className="font-body mb-8 max-w-full min-w-0 text-base break-words opacity-70 sm:text-lg"
+          style={{
+            overflowWrap: "anywhere",
+            wordBreak: "break-word",
+          }}
+        >
           {section.subheading}
         </p>
       )}

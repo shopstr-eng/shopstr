@@ -14,20 +14,27 @@ export default function SectionFaq({ section, colors }: SectionFaqProps) {
   if (items.length === 0) return null;
 
   return (
-    <div className="mx-auto w-full max-w-3xl min-w-0 overflow-hidden px-4 py-16 md:px-6">
+    <div
+      className="mx-auto box-border w-full max-w-3xl min-w-0 px-3 py-16 sm:px-4 md:px-6"
+      style={{ maxWidth: "100vw" }}
+    >
       {section.heading && (
         <FormattedText
           text={section.heading}
           as="h2"
-          className="font-heading mb-8 text-center text-3xl font-bold break-words"
-          style={{ color: "var(--sf-text)", overflowWrap: "anywhere" }}
+          className="font-heading mb-8 max-w-full min-w-0 text-center text-2xl font-bold break-words sm:text-3xl"
+          style={{
+            color: "var(--sf-text)",
+            overflowWrap: "anywhere",
+            wordBreak: "break-word",
+          }}
         />
       )}
       <div className="space-y-3">
         {items.map((item, idx) => (
           <div
             key={idx}
-            className="w-full overflow-hidden rounded-lg border"
+            className="box-border w-full max-w-full min-w-0 overflow-hidden rounded-lg border"
             style={{ borderColor: colors.primary + "22" }}
           >
             <button

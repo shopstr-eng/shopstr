@@ -130,7 +130,7 @@ export default function StorefrontProductGrid({
             return (
               <div
                 key={product.id || product.d}
-                className="flex max-w-full min-w-0 justify-center overflow-hidden"
+                className="flex w-full max-w-full min-w-0 justify-center"
               >
                 <ProductCard productData={product} href={href} />
               </div>

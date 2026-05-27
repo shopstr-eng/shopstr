@@ -572,6 +572,24 @@ export default function StorefrontLayout({
             word-break: break-word;
             max-width: 100%;
           }
+          /* Hard viewport clamp: nothing inside a storefront may exceed the
+             screen width on mobile. This is the safety net for fixed-px
+             widths (e.g. social cards, product cards with max-w-sm) and
+             third-party embeds that ignore parent constraints. */
+          .sf-layout, .sf-layout * {
+            box-sizing: border-box;
+          }
+          .sf-layout > *,
+          .sf-layout > * > *,
+          .sf-layout section,
+          .sf-layout [class*="storefront-"] {
+            max-width: 100vw;
+          }
+          @media (max-width: 640px) {
+            .sf-layout :where(.shadow-neo, [class*="shadow-["]) {
+              max-width: calc(100vw - 1rem);
+            }
+          }
         `}</style>
         <style>{themedCss}</style>
       </Head>
