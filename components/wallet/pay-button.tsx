@@ -20,6 +20,7 @@ import {
   getLocalStorageData,
   publishProofEvent,
 } from "@/utils/nostr/nostr-helper-functions";
+import { pickMintForPayment } from "@/utils/cashu/wallet-mint-sync";
 import {
   WHITEBUTTONCLASSNAMES,
   BLUEBUTTONCLASSNAMES,
@@ -78,7 +79,15 @@ const PayButton = () => {
   const calculateFee = async (invoice: string) => {
     setFeeReserveAmount("");
     if (invoice && /^lnbc/.test(invoice)) {
-      const mint = new CashuMint(mints[0]!);
+      // Use the same mint we'll actually pay from so the fee preview matches
+      // the real melt quote. We don't decode the invoice here (would add a
+      // bolt11 parsing dependency just for an estimate); instead we pick the
+      // mint with the largest balance — pickMintForPayment falls back to
+      // that when no single mint covers the requested amount.
+      const quoteMint =
+        (await pickMintForPayment(Number.MAX_SAFE_INTEGER, mints, tokens)) ??
+        mints[0]!;
+      const mint = new CashuMint(quoteMint);
       const wallet = new CashuWallet(mint);
       await wallet.loadMint();
       const meltQuote = await wallet?.createMeltQuoteBolt11(invoice);
@@ -99,7 +108,17 @@ const PayButton = () => {
     setPaymentFailed(false);
     setIsRedeeming(true);
     try {
-      const mint = new CashuMint(mints[0]!);
+      // Pick the mint that actually holds the most for this payment —
+      // multi-mint wallets used to fail here with "insufficient" even when
+      // the funds existed on a non-default mint. Without decoding the
+      // invoice amount here, the richest-mint fallback inside
+      // pickMintForPayment is the right choice; createMeltQuoteBolt11 will
+      // surface the true amount, and safeSwap will fail loudly if even
+      // that mint can't cover the quote.
+      const payMint =
+        (await pickMintForPayment(Number.MAX_SAFE_INTEGER, mints, tokens)) ??
+        mints[0]!;
+      const mint = new CashuMint(payMint);
       const wallet = new CashuWallet(mint);
       await wallet.loadMint();
       const mintKeySetIds = await wallet.keyChain.getKeysets();
@@ -211,7 +230,7 @@ const PayButton = () => {
       await publishProofEvent(
         nostr!,
         signer!,
-        mints[0]!,
+        payMint,
         changeProofs && changeProofs.length >= 1 ? changeProofs : [],
         "out",
         transactionAmount.toString(),

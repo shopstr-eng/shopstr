@@ -36,6 +36,7 @@ import {
   Keyset as MintKeyset,
 } from "@cashu/cashu-ts";
 import { safeSwap } from "@/utils/cashu/swap-retry-service";
+import { pickMintForPayment } from "@/utils/cashu/wallet-mint-sync";
 import { safeMeltProofs } from "@/utils/cashu/melt-retry-service";
 import { stashProofsLocally } from "@/utils/cashu/local-wallet-stash";
 import {
@@ -5223,7 +5224,13 @@ export default function CartInvoiceCard({
 
       validatePaymentData(price, data);
 
-      const mint = new CashuMint(mints[0]!);
+      // Pick the mint that actually holds enough proofs to cover `price`
+      // instead of blindly using mints[0]. Without this, a stale or wrongly-
+      // ordered default mint surfaces a misleading "not enough funds" error
+      // even though the buyer's wallet has the sats under another mint.
+      const payMint =
+        (await pickMintForPayment(price, mints, tokens)) ?? mints[0]!;
+      const mint = new CashuMint(payMint);
       const wallet = new CashuWallet(mint);
       await wallet.loadMint();
       const mintKeySetIds = await wallet.keyChain.getKeysets();
@@ -5287,10 +5294,13 @@ export default function CartInvoiceCard({
           ...history,
         ])
       );
+      // Tag the proof event with the mint we actually spent from, otherwise
+      // the syncMintsFromTokens reverse-lookup will mis-attribute future
+      // change proofs to mints[0] and corrupt the mint-order/default logic.
       await publishProofEvent(
         nostr!,
         signer!,
-        mints[0]!,
+        payMint,
         changeProofs && changeProofs.length >= 1 ? changeProofs : [],
         "out",
         price.toString(),

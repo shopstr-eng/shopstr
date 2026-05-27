@@ -1,8 +1,6 @@
 import { Proof } from "@cashu/cashu-ts";
-import {
-  getLocalStorageData,
-  publishProofEvent,
-} from "@/utils/nostr/nostr-helper-functions";
+import { publishProofEvent } from "@/utils/nostr/nostr-helper-functions";
+import { persistReceivedTokens } from "@/utils/cashu/wallet-mint-sync";
 
 type Nostr = Parameters<typeof publishProofEvent>[0];
 type Signer = Parameters<typeof publishProofEvent>[1];
@@ -28,9 +26,16 @@ export async function recoverProofsToBuyerWallet(
   if (typeof window === "undefined") return;
   if (!proofs || proofs.length === 0) return;
 
-  const { tokens, history } = getLocalStorageData();
-  const proofArray = [...tokens, ...proofs];
-  window.localStorage.setItem("tokens", JSON.stringify(proofArray));
+  // Persist proofs AND promote `mintUrl` to the default mint so the wallet
+  // immediately recognizes the recovered balance against the right keysets.
+  persistReceivedTokens(proofs, mintUrl);
+
+  let history: unknown[] = [];
+  try {
+    history = JSON.parse(window.localStorage.getItem("history") || "[]");
+  } catch {
+    history = [];
+  }
   window.localStorage.setItem(
     "history",
     JSON.stringify([

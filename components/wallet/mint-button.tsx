@@ -28,6 +28,7 @@ import {
   getLocalStorageData,
   publishProofEvent,
 } from "@/utils/nostr/nostr-helper-functions";
+import { persistReceivedTokens } from "@/utils/cashu/wallet-mint-sync";
 import { Mint as CashuMint, Wallet as CashuWallet } from "@cashu/cashu-ts";
 import QRCode from "qrcode";
 import { copyToClipboard } from "@/utils/clipboard";
@@ -63,7 +64,7 @@ const MintButton = () => {
   const { signer } = useContext(SignerContext);
   const { nostr } = useContext(NostrContext);
 
-  const { mints, tokens, history } = getLocalStorageData();
+  const { mints, history } = getLocalStorageData();
 
   const {
     handleSubmit: handleMintSubmit,
@@ -211,8 +212,9 @@ const MintButton = () => {
           { maxAttempts: 5, perAttemptTimeoutMs: 15000, totalTimeoutMs: 60000 }
         );
         if (proofs && proofs.length > 0) {
-          const proofArray = [...tokens, ...proofs];
-          localStorage.setItem("tokens", JSON.stringify(proofArray));
+          // Promote the active mint to default so the freshly-minted balance
+          // is visible immediately under the correct keysets.
+          persistReceivedTokens(proofs, mints[0]!);
           localStorage.setItem(
             "history",
             JSON.stringify([

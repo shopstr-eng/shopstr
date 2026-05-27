@@ -1,4 +1,5 @@
 import type { Proof } from "@cashu/cashu-ts";
+import { persistReceivedTokens } from "@/utils/cashu/wallet-mint-sync";
 
 export interface StashedHistoryEntry {
   type: number;
@@ -41,19 +42,9 @@ export function stashProofsLocally(
     return acc + (Number.isFinite(v) ? v : 0);
   }, 0);
 
-  try {
-    const existingTokens = JSON.parse(
-      localStorage.getItem("tokens") || "[]"
-    ) as Proof[];
-    const seenSecrets = new Set(existingTokens.map((t) => t.secret));
-    const merged = [
-      ...existingTokens,
-      ...proofs.filter((p) => !seenSecrets.has(p.secret)),
-    ];
-    localStorage.setItem("tokens", JSON.stringify(merged));
-  } catch {
-    localStorage.setItem("tokens", JSON.stringify(proofs));
-  }
+  // Merge proofs into the wallet AND promote `mintUrl` to default so the
+  // wallet UI recognizes the recovered balance against the right keysets.
+  persistReceivedTokens(proofs, mintUrl);
 
   try {
     const existingHistory = JSON.parse(

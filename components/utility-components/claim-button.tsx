@@ -39,6 +39,7 @@ import {
 } from "@cashu/cashu-ts";
 import { safeMeltProofs } from "@/utils/cashu/melt-retry-service";
 import { safeSwap } from "@/utils/cashu/swap-retry-service";
+import { persistReceivedTokens } from "@/utils/cashu/wallet-mint-sync";
 import { formatWithCommas } from "./display-monetary-info";
 import {
   NostrContext,
@@ -206,11 +207,12 @@ export default function ClaimButton({ token }: { token: string }) {
           "in",
           tokenAmount.toString()
         );
-        const tokenArray = [...tokens, ...uniqueProofs];
-        localStorage.setItem("tokens", JSON.stringify(tokenArray));
-        if (!mints.includes(tokenMint)) {
-          const updatedMints = [...mints, tokenMint];
-          localStorage.setItem("mints", JSON.stringify(updatedMints));
+        // Adds proofs and promotes `tokenMint` to the default mint so the
+        // claimed balance is recognized against the right keysets — this is
+        // the most common path users hit when reclaiming a failed payment.
+        const wasNewMint = !mints.includes(tokenMint);
+        persistReceivedTokens(uniqueProofs, tokenMint);
+        if (wasNewMint) {
           await publishWalletEvent(nostr!, signer!);
         }
         if (isInvalid) {

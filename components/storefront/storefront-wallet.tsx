@@ -1,7 +1,6 @@
-import { useContext, useEffect, useMemo, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import { StorefrontColorScheme } from "@/utils/types/types";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
-import { getLocalStorageData } from "@/utils/nostr/nostr-helper-functions";
 import MintButton from "@/components/wallet/mint-button";
 import ReceiveButton from "@/components/wallet/receive-button";
 import SendButton from "@/components/wallet/send-button";
@@ -15,6 +14,13 @@ import {
 } from "@cashu/cashu-ts";
 import { useRouter } from "next/router";
 import { proofAmountToNumber } from "@/utils/cashu/proof-amount";
+import {
+  buildSecretToMintMap,
+  getStoredMints,
+  getStoredTokens,
+  syncMintsFromTokens,
+} from "@/utils/cashu/wallet-mint-sync";
+import { CashuWalletContext } from "@/utils/context/context";
 
 interface StorefrontWalletProps {
   colors: StorefrontColorScheme;
@@ -22,100 +28,154 @@ interface StorefrontWalletProps {
 
 export default function StorefrontWallet({ colors }: StorefrontWalletProps) {
   const { isLoggedIn } = useContext(SignerContext);
+  const walletContext = useContext(CashuWalletContext);
   const router = useRouter();
 
   const [totalBalance, setTotalBalance] = useState(0);
   const [walletBalance, setWalletBalance] = useState(0);
   const [mint, setMint] = useState("");
-  const [wallet, setWallet] = useState<CashuWallet>();
   const [mintKeySetIds, setMintKeySetIds] = useState<MintKeyset[]>([]);
+  const [mints, setMints] = useState<string[]>([]);
+  const [tokens, setTokens] = useState<Proof[]>([]);
+  // Bumped to force a keyset reload — used both for periodic retry after a
+  // failed loadMint and to re-attribute proofs after spend/receive activity
+  // (token count change), so the multi-mint balance cannot stay stale.
+  const [keysetRetryTick, setKeysetRetryTick] = useState(0);
 
-  const localStorageData = useMemo(() => getLocalStorageData(), []);
-  const { mints, tokens } = localStorageData;
-
+  // Reactive view of localStorage — re-read on any storage event (which the
+  // wallet writers fire) and on a slow poll as a safety net for same-tab
+  // writes that some older code paths may still emit without an event.
+  //
+  // We compare the parsed values against the previous state by JSON identity
+  // before calling the setters so the poll cannot trigger needless re-renders
+  // (which previously caused mints/keysets to be reloaded every 2.1s and led
+  // to transient wrong balances while keysets were being re-fetched).
   useEffect(() => {
-    if (mints && mints[0]) {
-      const currentMint = new CashuMint(mints[0]);
-      setMint(mints[0]);
-      const cashuWallet = new CashuWallet(currentMint);
-      cashuWallet.loadMint().catch((err) => {
-        console.warn("Storefront wallet loadMint failed:", err);
-      });
-      setWallet(cashuWallet);
-    }
-  }, [mints]);
-
-  useEffect(() => {
-    const fetchLocalKeySet = async () => {
-      if (wallet) {
-        const mintKeySetIdsArray = await wallet.keyChain.getKeysets();
-        if (mintKeySetIdsArray) {
-          setMintKeySetIds(mintKeySetIdsArray);
-        }
+    let lastMintsJson = "";
+    let lastTokensJson = "";
+    const reload = () => {
+      const syncedMints = syncMintsFromTokens(walletContext.proofEvents || []);
+      const nextMints = syncedMints.length ? syncedMints : getStoredMints();
+      const nextTokens = getStoredTokens();
+      const mintsJson = JSON.stringify(nextMints);
+      const tokensJson = JSON.stringify(nextTokens);
+      if (mintsJson !== lastMintsJson) {
+        lastMintsJson = mintsJson;
+        setMints(nextMints);
+      }
+      if (tokensJson !== lastTokensJson) {
+        lastTokensJson = tokensJson;
+        setTokens(nextTokens);
       }
     };
-    fetchLocalKeySet();
-  }, [wallet]);
+    reload();
+    window.addEventListener("storage", reload);
+    const interval = setInterval(reload, 2100);
+    return () => {
+      window.removeEventListener("storage", reload);
+      clearInterval(interval);
+    };
+  }, [walletContext.proofEvents]);
 
-  const filteredProofs = useMemo(() => {
-    if (mints && tokens && mintKeySetIds) {
-      return tokens.filter((p: Proof) =>
-        mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
-      );
-    }
-    return [];
-  }, [mintKeySetIds, mints, tokens]);
-
+  // Load keysets for the active default mint so we can attribute proofs to it.
+  // Re-runs when the default mint changes, when token activity occurs (so a
+  // spend/receive forces a fresh attribution), and on a periodic retry tick
+  // when a previous loadMint attempt failed.
   useEffect(() => {
-    if (tokens) {
-      const tokensTotal =
-        tokens.length >= 1
-          ? tokens.reduce(
-              (acc: number, token: Proof) => acc + proofAmountToNumber(token),
-              0
-            )
-          : 0;
-      setTotalBalance(tokensTotal);
+    if (!mints || !mints[0]) {
+      setMint("");
+      setMintKeySetIds([]);
+      return;
     }
-    const walletTotal =
-      filteredProofs.length >= 1
-        ? filteredProofs.reduce(
-            (acc: number, p: Proof) => acc + proofAmountToNumber(p),
-            0
-          )
-        : 0;
-    setWalletBalance(walletTotal);
-  }, [tokens, filteredProofs]);
+    let cancelled = false;
+    const activeMint = mints[0];
+    setMint(activeMint);
+    const cashuWallet = new CashuWallet(new CashuMint(activeMint));
+    cashuWallet
+      .loadMint()
+      .then(() => cashuWallet.keyChain.getKeysets())
+      .then((keysets) => {
+        if (!cancelled && keysets) setMintKeySetIds(keysets);
+      })
+      .catch((err) => {
+        console.warn("Storefront wallet loadMint failed:", err);
+        if (!cancelled) setMintKeySetIds([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [mints, tokens.length, keysetRetryTick]);
 
+  // Periodic retry while keysets are missing — guards against a single
+  // loadMint failure leaving the multi-mint wallet stuck on a stale balance
+  // (since dedup removed the accidental retry we used to get from re-renders).
   useEffect(() => {
-    const interval = setInterval(() => {
-      const { tokens: newTokens } = getLocalStorageData();
-      if (newTokens) {
-        const tokensTotal =
-          newTokens.length >= 1
-            ? newTokens.reduce(
-                (acc: number, token: Proof) => acc + proofAmountToNumber(token),
-                0
-              )
-            : 0;
-        setTotalBalance(tokensTotal);
-        if (mintKeySetIds) {
-          const newFilteredProofs = newTokens.filter((p: Proof) =>
-            mintKeySetIds.some((keysetId: MintKeyset) => keysetId.id === p.id)
-          );
-          const newWalletTotal =
-            newFilteredProofs.length >= 1
-              ? newFilteredProofs.reduce(
-                  (acc: number, p: Proof) => acc + proofAmountToNumber(p),
-                  0
-                )
-              : 0;
-          setWalletBalance(newWalletTotal);
-        }
+    if (!mints[0] || mintKeySetIds.length > 0) return;
+    const t = setTimeout(() => setKeysetRetryTick((n) => n + 1), 5000);
+    return () => clearTimeout(t);
+  }, [mints, mintKeySetIds]);
+
+  // Total = every proof in the wallet. Active-mint balance = proofs whose
+  // kind-7375 mapping points at mints[0], plus any unmapped proofs that
+  // belong to mints[0] by keyset id (fallback for proofs the user has but
+  // hasn't published a proof event for yet).
+  useEffect(() => {
+    const total = tokens.reduce(
+      (acc: number, p: Proof) => acc + proofAmountToNumber(p),
+      0
+    );
+    setTotalBalance(total);
+
+    const activeMint = mints[0];
+    if (!activeMint) {
+      setWalletBalance(0);
+      return;
+    }
+
+    const secretToMint = buildSecretToMintMap(walletContext.proofEvents || []);
+    let fromMapping = 0;
+    let unattributedTotal = 0;
+    const unattributedProofs: Proof[] = [];
+    for (const p of tokens) {
+      const m = p?.secret ? secretToMint.get(p.secret) : undefined;
+      const amt = proofAmountToNumber(p);
+      if (m === activeMint) fromMapping += amt;
+      else if (!m) {
+        unattributedTotal += amt;
+        unattributedProofs.push(p);
       }
-    }, 2100);
-    return () => clearInterval(interval);
-  }, [mintKeySetIds]);
+    }
+
+    // Unattributed proofs (no mint mapping yet) get resolved by keyset id
+    // when keysets are loaded. While keysets are loading we optimistically
+    // credit them to the active mint when it is the only one configured.
+    let fromUnattributed = 0;
+    if (unattributedTotal > 0) {
+      if (mintKeySetIds.length > 0) {
+        fromUnattributed = unattributedProofs
+          .filter((p) => mintKeySetIds.some((k: MintKeyset) => k.id === p.id))
+          .reduce((acc, p) => acc + proofAmountToNumber(p), 0);
+      } else if (mints.length === 1) {
+        fromUnattributed = unattributedTotal;
+      }
+    }
+
+    const computed = fromMapping + fromUnattributed;
+    // Avoid flashing 0 in the multi-mint window where proof events are
+    // still loading and keysets haven't returned yet — keep the last known
+    // balance until we have something to attribute. Only release the guard
+    // when there are no tokens at all (truly empty wallet).
+    if (
+      computed === 0 &&
+      total > 0 &&
+      mints.length > 1 &&
+      mintKeySetIds.length === 0 &&
+      (walletContext.proofEvents?.length ?? 0) === 0
+    ) {
+      return;
+    }
+    setWalletBalance(computed);
+  }, [tokens, mintKeySetIds, mints, walletContext.proofEvents]);
 
   const handleMintClick = () => {
     router.push("/settings/account");

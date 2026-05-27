@@ -24,6 +24,7 @@ import {
   publishProofEvent,
   publishWalletEvent,
 } from "@/utils/nostr/nostr-helper-functions";
+import { persistReceivedTokens } from "@/utils/cashu/wallet-mint-sync";
 import {
   Mint as CashuMint,
   Wallet as CashuWallet,
@@ -92,11 +93,10 @@ const ReceiveButton = () => {
           setIsDuplicateToken(true);
           return;
         }
-        const tokenArray = [...tokens, ...uniqueProofs];
-        localStorage.setItem("tokens", JSON.stringify(tokenArray));
+        // Adds proofs and promotes `tokenMint` to the default mint so the
+        // freshly-received balance is visible against the right keysets.
+        persistReceivedTokens(uniqueProofs, tokenMint);
         if (!mints.includes(tokenMint)) {
-          const updatedMints = [...mints, tokenMint];
-          localStorage.setItem("mints", JSON.stringify(updatedMints));
           await publishWalletEvent(nostr!, signer!);
         }
         setIsClaimed(true);

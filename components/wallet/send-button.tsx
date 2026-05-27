@@ -29,6 +29,7 @@ import {
   getLocalStorageData,
   publishProofEvent,
 } from "@/utils/nostr/nostr-helper-functions";
+import { pickMintForPayment } from "@/utils/cashu/wallet-mint-sync";
 import {
   Mint as CashuMint,
   Wallet as CashuWallet,
@@ -87,7 +88,12 @@ const SendButton = () => {
   const handleSend = async (numSats: number) => {
     setSendFailed(false);
     try {
-      const mint = new CashuMint(mints[0]!);
+      // Pick the mint that actually holds enough proofs for this send —
+      // multi-mint wallets used to fail here when funds lived on a
+      // non-default mint, even though the balance was correct overall.
+      const sendMint =
+        (await pickMintForPayment(numSats, mints, tokens)) ?? mints[0]!;
+      const mint = new CashuMint(sendMint);
       const wallet = new CashuWallet(mint);
       await wallet.loadMint();
       const mintKeySetIds = await wallet.keyChain.getKeysets();
@@ -135,7 +141,7 @@ const SendButton = () => {
       ];
 
       const encodedSendToken = getEncodedToken({
-        mint: mints[0]!,
+        mint: sendMint,
         proofs: send,
       });
       setShowTokenCard(true);
@@ -162,7 +168,7 @@ const SendButton = () => {
       await publishProofEvent(
         nostr!,
         signer!,
-        mints[0]!,
+        sendMint,
         changeProofs && changeProofs.length >= 1 ? changeProofs : [],
         "out",
         sendTotal.toString(),
