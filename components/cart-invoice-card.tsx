@@ -1790,7 +1790,14 @@ export default function CartInvoiceCard({
       messageOptions = {
         isOrder: true,
         type: 2,
-        orderAmount: messageAmount ? messageAmount : totalCost,
+        // Only emit an amount when the caller explicitly passed one. The old
+        // `messageAmount || totalCost` fallback paired a sats-denominated
+        // totalCost with whatever orderCurrency the caller passed (e.g. USD),
+        // which the orders dashboard would render as ~1500x the real amount.
+        // We also treat 0 as "no amount" so the dashboard can fall back to
+        // productPrice * quantity in the product's own currency.
+        orderAmount:
+          messageAmount && messageAmount > 0 ? messageAmount : undefined,
         orderCurrency: orderCurrency || undefined,
         orderId,
         productData: product,
@@ -1815,7 +1822,10 @@ export default function CartInvoiceCard({
       messageOptions = {
         isOrder: true,
         type: 4,
-        orderAmount: messageAmount ? messageAmount : totalCost,
+        // See note on order-payment above — don't fall back to sats totalCost
+        // when the caller's orderCurrency may be a fiat currency.
+        orderAmount:
+          messageAmount && messageAmount > 0 ? messageAmount : undefined,
         orderCurrency: orderCurrency || undefined,
         orderId,
         productData: product,
@@ -1840,7 +1850,8 @@ export default function CartInvoiceCard({
       messageOptions = {
         isOrder: true,
         type: 1,
-        orderAmount: messageAmount ? messageAmount : undefined,
+        orderAmount:
+          messageAmount && messageAmount > 0 ? messageAmount : undefined,
         orderCurrency: orderCurrency || undefined,
         orderId,
         productData: product,
@@ -1851,7 +1862,10 @@ export default function CartInvoiceCard({
       messageOptions = {
         isOrder: true,
         type: 1,
-        orderAmount: messageAmount ? messageAmount : totalCost,
+        // See note on order-payment above — don't fall back to sats totalCost
+        // when the caller's orderCurrency may be a fiat currency.
+        orderAmount:
+          messageAmount && messageAmount > 0 ? messageAmount : undefined,
         orderCurrency: orderCurrency || undefined,
         orderId,
         productData: product,
@@ -2828,12 +2842,27 @@ export default function CartInvoiceCard({
               }
             : undefined;
 
-        const productAmount =
-          !isSatsCart && nativeCostsPerProduct
-            ? nativeCostsPerProduct[product.id] || product.price
-            : totalCostsInSats[product.pubkey];
-        const productCurrency =
-          !isSatsCart && cartCurrency ? cartCurrency : "sats";
+        // The native and sats branches must be gated by the same condition,
+        // otherwise we can pick the sats value (from totalCostsInSats) while
+        // still tagging it as the cart's native currency (e.g. USD) — which
+        // renders as ~1500x the actual amount in the orders dashboard. We
+        // also intentionally do NOT fall back to product.price, because for
+        // a product priced in a currency that differs from the cart's
+        // native currency, product.price would be in the wrong unit.
+        const nativeAmt = nativeCostsPerProduct?.[product.id];
+        const useNativeForMsg =
+          !isSatsCart &&
+          !!cartCurrency &&
+          typeof nativeAmt === "number" &&
+          nativeAmt > 0;
+        const productAmount = useNativeForMsg
+          ? nativeAmt
+          : totalCostsInSats[product.id] ||
+            totalCostsInSats[product.pubkey] ||
+            0;
+        const productCurrency = useNativeForMsg
+          ? (cartCurrency as string)
+          : "sats";
 
         const sellerProfileForDonation = profileContext.profileData.get(
           product.pubkey
@@ -2968,14 +2997,22 @@ export default function CartInvoiceCard({
         .map((pk) => nip19.npubEncode(pk))
         .join(", ");
       for (const product of products) {
-        const productAmount =
-          !isSatsCart && nativeCostsPerProduct
-            ? nativeCostsPerProduct[product.id] || product.price
-            : totalCostsInSats[product.id] ||
-              totalCostsInSats[product.pubkey] ||
-              0;
-        const productCurrency =
-          !isSatsCart && cartCurrency ? cartCurrency : "sats";
+        // Keep amount and currency tags in the same unit — see the matching
+        // comment on the seller-side stripe payment message above.
+        const nativeAmt = nativeCostsPerProduct?.[product.id];
+        const useNativeForMsg =
+          !isSatsCart &&
+          !!cartCurrency &&
+          typeof nativeAmt === "number" &&
+          nativeAmt > 0;
+        const productAmount = useNativeForMsg
+          ? nativeAmt
+          : totalCostsInSats[product.id] ||
+            totalCostsInSats[product.pubkey] ||
+            0;
+        const productCurrency = useNativeForMsg
+          ? (cartCurrency as string)
+          : "sats";
         const qty = quantities[product.id] || 1;
         const sel = subscriptionSelections[product.id];
         const subInfo =
@@ -3104,6 +3141,22 @@ export default function CartInvoiceCard({
             " account for the payment.";
 
           for (const product of sellerProducts) {
+            // Keep amount and currency tags in the same unit — see the
+            // matching comment on the stripe payment message above.
+            const nativeAmt = nativeCostsPerProduct?.[product.id];
+            const useNativeForMsg =
+              !isSatsCart &&
+              !!cartCurrency &&
+              typeof nativeAmt === "number" &&
+              nativeAmt > 0;
+            const fiatAmount = useNativeForMsg
+              ? nativeAmt
+              : totalCostsInSats[product.id] ||
+                totalCostsInSats[product.pubkey] ||
+                0;
+            const fiatCurrency = useNativeForMsg
+              ? (cartCurrency as string)
+              : "sats";
             await sendPaymentAndContactMessage(
               sellerPubkey,
               paymentMessage,
@@ -3116,11 +3169,7 @@ export default function CartInvoiceCard({
               sellerFiatOption,
               sellerFiatHandle,
               sellerFiatHandle,
-              !isSatsCart && nativeCostsPerProduct
-                ? nativeCostsPerProduct[product.id] || product.price
-                : totalCostsInSats[product.id] ||
-                    totalCostsInSats[product.pubkey] ||
-                    0,
+              fiatAmount,
               quantities[product.id] || 1,
               undefined,
               addressTag,
@@ -3129,7 +3178,7 @@ export default function CartInvoiceCard({
               undefined,
               undefined,
               undefined,
-              !isSatsCart && cartCurrency ? cartCurrency : "sats"
+              fiatCurrency
             );
           }
 
@@ -3200,14 +3249,22 @@ export default function CartInvoiceCard({
 
             await new Promise((resolve) => setTimeout(resolve, 500));
             for (const product of sellerProducts) {
-              const productAmount =
-                !isSatsCart && nativeCostsPerProduct
-                  ? nativeCostsPerProduct[product.id] || product.price
-                  : totalCostsInSats[product.id] ||
-                    totalCostsInSats[product.pubkey] ||
-                    0;
-              const productCurrency =
-                !isSatsCart && cartCurrency ? cartCurrency : "sats";
+              // Keep amount and currency tags in the same unit — see the
+              // matching comment on the stripe payment message above.
+              const nativeAmt = nativeCostsPerProduct?.[product.id];
+              const useNativeForMsg =
+                !isSatsCart &&
+                !!cartCurrency &&
+                typeof nativeAmt === "number" &&
+                nativeAmt > 0;
+              const productAmount = useNativeForMsg
+                ? nativeAmt
+                : totalCostsInSats[product.id] ||
+                  totalCostsInSats[product.pubkey] ||
+                  0;
+              const productCurrency = useNativeForMsg
+                ? (cartCurrency as string)
+                : "sats";
               const qty = quantities[product.id] || 1;
               const receiptMessage =
                 "Your cart order (" +
@@ -3256,6 +3313,22 @@ export default function CartInvoiceCard({
           " account for the payment.";
 
         for (const product of products) {
+          // Keep amount and currency tags in the same unit — see the
+          // matching comment on the stripe payment message above.
+          const nativeAmt = nativeCostsPerProduct?.[product.id];
+          const useNativeForMsg =
+            !isSatsCart &&
+            !!cartCurrency &&
+            typeof nativeAmt === "number" &&
+            nativeAmt > 0;
+          const fiatAmount = useNativeForMsg
+            ? nativeAmt
+            : totalCostsInSats[product.id] ||
+              totalCostsInSats[product.pubkey] ||
+              0;
+          const fiatCurrency = useNativeForMsg
+            ? (cartCurrency as string)
+            : "sats";
           await sendPaymentAndContactMessage(
             sellerPubkey,
             paymentMessage,
@@ -3268,9 +3341,7 @@ export default function CartInvoiceCard({
             selectedFiatOption,
             (fiatPaymentOptions as any)[selectedFiatOption] || "",
             (fiatPaymentOptions as any)[selectedFiatOption] || "",
-            !isSatsCart && nativeCostsPerProduct
-              ? nativeCostsPerProduct[product.id] || product.price
-              : totalCostsInSats[product.pubkey],
+            fiatAmount,
             quantities[product.id] || 1,
             undefined,
             addressTag,
@@ -3279,7 +3350,7 @@ export default function CartInvoiceCard({
             undefined,
             undefined,
             undefined,
-            !isSatsCart && cartCurrency ? cartCurrency : "sats"
+            fiatCurrency
           );
         }
 
@@ -3350,14 +3421,22 @@ export default function CartInvoiceCard({
 
           await new Promise((resolve) => setTimeout(resolve, 500));
           for (const product of products) {
-            const productAmount =
-              !isSatsCart && nativeCostsPerProduct
-                ? nativeCostsPerProduct[product.id] || product.price
-                : totalCostsInSats[product.id] ||
-                  totalCostsInSats[product.pubkey] ||
-                  0;
-            const productCurrency =
-              !isSatsCart && cartCurrency ? cartCurrency : "sats";
+            // Keep amount and currency tags in the same unit — see the
+            // matching comment on the stripe payment message above.
+            const nativeAmt = nativeCostsPerProduct?.[product.id];
+            const useNativeForMsg =
+              !isSatsCart &&
+              !!cartCurrency &&
+              typeof nativeAmt === "number" &&
+              nativeAmt > 0;
+            const productAmount = useNativeForMsg
+              ? nativeAmt
+              : totalCostsInSats[product.id] ||
+                totalCostsInSats[product.pubkey] ||
+                0;
+            const productCurrency = useNativeForMsg
+              ? (cartCurrency as string)
+              : "sats";
             const qty = quantities[product.id] || 1;
             const receiptMessage =
               "Your cart order (" +
@@ -4147,7 +4226,14 @@ export default function CartInvoiceCard({
                 orderKeys,
                 undefined,
                 shippingAddressTag,
-                pickupLocationForLightning || undefined
+                pickupLocationForLightning || undefined,
+                undefined,
+                undefined,
+                undefined,
+                // meltAmount is always in sats — tag it as such so the
+                // orders dashboard doesn't fall back to the product's
+                // listed currency (which would render sats as USD).
+                "sats"
               );
 
               if (
@@ -4178,7 +4264,16 @@ export default function CartInvoiceCard({
                     undefined,
                     changeAmount,
                     undefined,
-                    orderKeys
+                    orderKeys,
+                    undefined,
+                    undefined,
+                    undefined,
+                    undefined,
+                    undefined,
+                    undefined,
+                    // changeAmount is in sats — tag it so the dashboard
+                    // doesn't fall back to the product's listed currency.
+                    "sats"
                   );
                   __recoverableTracker.consume(changeProofs);
                   await new Promise((resolve) => setTimeout(resolve, 500));
@@ -4283,7 +4378,13 @@ export default function CartInvoiceCard({
                   orderKeys,
                   undefined,
                   shippingAddressTag,
-                  pickupLocation || undefined
+                  pickupLocation || undefined,
+                  undefined,
+                  undefined,
+                  undefined,
+                  // unusedAmount is in sats — tag it so the dashboard
+                  // doesn't fall back to the product's listed currency.
+                  "sats"
                 );
                 __recoverableTracker.consume(unusedProofs);
               }
@@ -4378,7 +4479,11 @@ export default function CartInvoiceCard({
               undefined,
               undefined,
               undefined,
-              !isSatsCart && cartCurrency ? cartCurrency : undefined
+              // sellerAmount is in sats (Cashu proofs are denominated in
+              // sats), so the currency tag must be "sats". Previously
+              // this used cartCurrency, which tagged a sats value as USD
+              // and rendered as ~1500x in the orders dashboard.
+              "sats"
             );
             __recoverableTracker.consume(sellerProofs);
           }
@@ -4750,7 +4855,10 @@ export default function CartInvoiceCard({
                 donationAmount,
                 donationPercentage,
                 undefined,
-                !isSatsCart && cartCurrency ? cartCurrency : undefined
+                // sellerAmount is in sats — see matching comment on the cashu
+                // payment message above. Tagging this as cartCurrency rendered
+                // sats as USD (~1500x) in the orders dashboard.
+                "sats"
               );
             }
           }
@@ -4835,7 +4943,10 @@ export default function CartInvoiceCard({
               donationAmount,
               donationPercentage,
               undefined,
-              !isSatsCart && cartCurrency ? cartCurrency : undefined
+              // sellerAmount is in sats — see matching comment on the cashu
+              // payment message above. Tagging this as cartCurrency rendered
+              // sats as USD (~1500x) in the orders dashboard.
+              "sats"
             );
           }
         } else {
@@ -4908,7 +5019,10 @@ export default function CartInvoiceCard({
             donationAmount,
             donationPercentage,
             undefined,
-            !isSatsCart && cartCurrency ? cartCurrency : undefined
+            // sellerAmount is in sats — see matching comment on the cashu
+            // payment message above. Tagging this as cartCurrency rendered
+            // sats as USD (~1500x) in the orders dashboard.
+            "sats"
           );
         }
       }

@@ -801,7 +801,12 @@ export default function ProductInvoiceCard({
       enabled: boolean;
       frequency: string;
       stripeSubscriptionId?: string;
-    }
+    },
+    // Optional override for the currency tag on the resulting order
+    // event. Callers paying with Cashu/Lightning must pass "sats" so the
+    // orders dashboard doesn't render a sats amount as the product's
+    // listed fiat currency (~1500x). Defaults to productData.currency.
+    orderCurrencyOverride?: string
   ): Promise<boolean> => {
     // Guard: a recipient pubkey is required. Guest checkouts have no
     // userPubkey, so receipt-to-self calls would otherwise pass `undefined`
@@ -831,12 +836,20 @@ export default function ProductInvoiceCard({
       messageOptions = {
         isOrder: true,
         type: 2,
-        orderAmount: messageAmount
-          ? messageAmount
-          : formType === "shipping"
-            ? productData.totalCost
-            : productData.price,
-        orderCurrency: productData.currency || undefined,
+        // If a caller supplies orderCurrencyOverride (e.g. "sats"), do NOT
+        // fall back to productData.totalCost/price — those values are in
+        // productData.currency, so combining them with an override would
+        // re-introduce the amount/currency mismatch bug.
+        orderAmount:
+          messageAmount && messageAmount > 0
+            ? messageAmount
+            : orderCurrencyOverride
+              ? undefined
+              : formType === "shipping"
+                ? productData.totalCost
+                : productData.price,
+        orderCurrency:
+          orderCurrencyOverride || productData.currency || undefined,
         orderId,
         productData: {
           ...productData,
@@ -866,8 +879,16 @@ export default function ProductInvoiceCard({
       messageOptions = {
         isOrder: true,
         type: 4,
-        orderAmount: messageAmount ? messageAmount : productData.totalCost,
-        orderCurrency: productData.currency || undefined,
+        // See note on order-payment above — don't substitute the fiat
+        // productData.totalCost when the caller has overridden currency.
+        orderAmount:
+          messageAmount && messageAmount > 0
+            ? messageAmount
+            : orderCurrencyOverride
+              ? undefined
+              : productData.totalCost,
+        orderCurrency:
+          orderCurrencyOverride || productData.currency || undefined,
         orderId,
         productData: {
           ...productData,
@@ -898,8 +919,16 @@ export default function ProductInvoiceCard({
       messageOptions = {
         isOrder: true,
         type: 1,
-        orderAmount: messageAmount ? messageAmount : productData.totalCost,
-        orderCurrency: productData.currency || undefined,
+        // See note on order-payment above — don't substitute the fiat
+        // productData.totalCost when the caller has overridden currency.
+        orderAmount:
+          messageAmount && messageAmount > 0
+            ? messageAmount
+            : orderCurrencyOverride
+              ? undefined
+              : productData.totalCost,
+        orderCurrency:
+          orderCurrencyOverride || productData.currency || undefined,
         orderId,
         productData: {
           ...productData,
@@ -2369,7 +2398,14 @@ export default function ProductInvoiceCard({
               meltAmount,
               undefined,
               undefined,
-              selectedPickupLocation || undefined
+              selectedPickupLocation || undefined,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              // meltAmount is in sats — tag accordingly so the orders
+              // dashboard doesn't render it as the product's fiat currency.
+              "sats"
             );
 
             if (changeAmount >= 1 && changeProofs && changeProofs.length > 0) {
@@ -2393,7 +2429,16 @@ export default function ProductInvoiceCard({
                   "ecash",
                   encodedChange,
                   undefined,
-                  changeAmount
+                  changeAmount,
+                  undefined,
+                  undefined,
+                  undefined,
+                  undefined,
+                  undefined,
+                  undefined,
+                  undefined,
+                  // changeAmount is in sats.
+                  "sats"
                 );
                 if (__changeOk) __recoverableTracker.consume(changeProofs);
                 await new Promise((resolve) => setTimeout(resolve, 500));
@@ -2475,7 +2520,11 @@ export default function ProductInvoiceCard({
                 undefined,
                 selectedPickupLocation || undefined,
                 donationAmount,
-                donationPercentage
+                donationPercentage,
+                undefined,
+                undefined,
+                // unusedAmount is in sats.
+                "sats"
               );
               if (__unusedOk) __recoverableTracker.consume(unusedProofs);
             }
@@ -2541,7 +2590,11 @@ export default function ProductInvoiceCard({
             undefined,
             selectedPickupLocation || undefined,
             donationAmount,
-            donationPercentage
+            donationPercentage,
+            undefined,
+            undefined,
+            // sellerAmount is in sats.
+            "sats"
           );
           if (__sellerOk) __recoverableTracker.consume(sellerProofs);
         }
@@ -2644,7 +2697,16 @@ export default function ProductInvoiceCard({
                 "ecash",
                 mints[0],
                 JSON.stringify(beefDonationProofs),
-                beefDonationAmount
+                beefDonationAmount,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                // beefDonationAmount is in sats.
+                "sats"
               );
               if (__beefOk) __recoverableTracker.consume(beefDonationProofs);
             }
