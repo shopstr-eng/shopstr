@@ -365,12 +365,12 @@ export default function SectionSocialPosts({
           }
         }
         .storefront-social-carousel-item {
-          width: min(340px, calc(100vw - 2rem));
+          width: 340px;
           max-width: calc(100vw - 2rem);
         }
         @media (max-width: 640px) {
           .storefront-social-carousel-item {
-            width: calc(100vw - 2rem);
+            width: min(320px, calc(100vw - 4rem));
           }
         }
         .storefront-social-card {

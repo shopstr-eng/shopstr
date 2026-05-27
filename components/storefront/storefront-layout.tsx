@@ -581,9 +581,22 @@ export default function StorefrontLayout({
           }
           .sf-layout > *,
           .sf-layout > * > *,
-          .sf-layout section,
-          .sf-layout [class*="storefront-"] {
+          .sf-layout section {
             max-width: 100vw;
+          }
+          /* Carousel tracks must be allowed to be wider than the viewport so
+             they can scroll horizontally inside their overflow-hidden parent.
+             Re-allow width on track + item, but the outer carousel container
+             itself stays capped via overflow-hidden. */
+          .sf-layout .storefront-social-carousel-track {
+            max-width: none;
+          }
+          /* Round avatars must stay square — flex children get forced to
+             max-width: 100% above, which can squish a fixed h/w image into
+             an oval on narrow screens. Lock their aspect ratio. */
+          .sf-layout img.rounded-full {
+            flex-shrink: 0;
+            aspect-ratio: 1 / 1;
           }
           @media (max-width: 640px) {
             .sf-layout :where(.shadow-neo, [class*="shadow-["]) {
