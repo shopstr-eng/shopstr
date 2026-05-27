@@ -466,7 +466,7 @@ async function initializeTables(): Promise<void> {
           subscription_price NUMERIC(12,2) NOT NULL,
           currency TEXT NOT NULL DEFAULT 'usd',
           shipping_address JSONB,
-          status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'paused', 'canceled')),
+          status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('pending', 'incomplete', 'incomplete_expired', 'trialing', 'active', 'past_due', 'canceled', 'unpaid', 'paused')),
           next_billing_date TIMESTAMP,
           next_shipping_date TIMESTAMP,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -1026,6 +1026,15 @@ async function initializeTables(): Promise<void> {
           ON affiliate_clicks(created_at);
       END
       $aff_migrate_inline$;
+
+      DO $sub_migrate_inline$
+      BEGIN
+        ALTER TABLE subscriptions DROP CONSTRAINT IF EXISTS subscriptions_status_check;
+        ALTER TABLE subscriptions
+          ADD CONSTRAINT subscriptions_status_check
+          CHECK (status IN ('pending', 'incomplete', 'incomplete_expired', 'trialing', 'active', 'past_due', 'canceled', 'unpaid', 'paused'));
+      END
+      $sub_migrate_inline$;
     `);
 
     tablesInitialized = true;

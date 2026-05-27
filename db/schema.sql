@@ -257,7 +257,7 @@ CREATE TABLE IF NOT EXISTS subscriptions (
     subscription_price NUMERIC(12,2) NOT NULL,
     currency TEXT NOT NULL DEFAULT 'usd',
     shipping_address JSONB,
-    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'paused', 'canceled')),
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('pending', 'incomplete', 'incomplete_expired', 'trialing', 'active', 'past_due', 'canceled', 'unpaid', 'paused')),
     next_billing_date TIMESTAMP,
     next_shipping_date TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
