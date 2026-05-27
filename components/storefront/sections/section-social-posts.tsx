@@ -281,10 +281,10 @@ export default function SectionSocialPosts({
 
   return (
     <div
-      className="w-full px-4 py-16 md:px-6"
+      className="w-full min-w-0 overflow-hidden px-4 py-16 md:px-6"
       style={{ backgroundColor: colors.secondary + "08" }}
     >
-      <div className="mx-auto w-full max-w-6xl">
+      <div className="mx-auto w-full max-w-6xl min-w-0">
         {section.heading && (
           <FormattedText
             text={section.heading}

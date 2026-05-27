@@ -62,7 +62,7 @@ export default function SectionProducts({
     : orderedProducts;
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-16 md:px-6">
+    <div className="mx-auto w-full max-w-6xl min-w-0 overflow-hidden px-4 py-16 md:px-6">
       {section.heading && (
         <h2
           className="font-heading mb-8 text-3xl font-bold"

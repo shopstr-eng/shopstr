@@ -14,7 +14,7 @@ export default function SectionFaq({ section, colors }: SectionFaqProps) {
   if (items.length === 0) return null;
 
   return (
-    <div className="mx-auto w-full max-w-3xl overflow-hidden px-4 py-16 md:px-6">
+    <div className="mx-auto w-full max-w-3xl min-w-0 overflow-hidden px-4 py-16 md:px-6">
       {section.heading && (
         <FormattedText
           text={section.heading}
@@ -31,7 +31,7 @@ export default function SectionFaq({ section, colors }: SectionFaqProps) {
             style={{ borderColor: colors.primary + "22" }}
           >
             <button
-              className="grid w-full items-center gap-4 px-6 py-4 text-left font-bold transition-colors"
+              className="grid w-full min-w-0 items-center gap-3 px-4 py-4 text-left font-bold transition-colors sm:gap-4 sm:px-6"
               style={{
                 backgroundColor:
                   openIndex === idx ? colors.primary + "11" : "transparent",
@@ -64,7 +64,7 @@ export default function SectionFaq({ section, colors }: SectionFaqProps) {
               <FormattedText
                 text={item.answer || ""}
                 as="div"
-                className="font-body block border-t px-6 py-4 break-words whitespace-pre-line opacity-80"
+                className="font-body block border-t px-4 py-4 break-words whitespace-pre-line opacity-80 sm:px-6"
                 style={{
                   borderColor: colors.primary + "11",
                   overflowWrap: "anywhere",
