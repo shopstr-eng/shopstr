@@ -822,6 +822,154 @@ describe("db-service helpers", () => {
       });
     });
 
+    test("fetchProductByListingSlug maps JSONB tags to slug candidates and delegates matching", async () => {
+      await jest.isolateModulesAsync(async () => {
+        const prev = process.env.DATABASE_URL;
+        process.env.DATABASE_URL = "postgres://test@localhost/testdb";
+        try {
+          const rows = [
+            {
+              id: "product-1",
+              pubkey: "seller1234abcd",
+              created_at: 123,
+              kind: 30402,
+              tags: [
+                ["title", "Listing A"],
+                ["d", "listing-a"],
+              ],
+              content: "matched content",
+              sig: "sig-1",
+            },
+          ];
+          const matchingCandidate = {
+            row: rows[0],
+            id: "product-1",
+            pubkey: "seller1234abcd",
+            title: "Listing A",
+          };
+
+          const client: MockDbClient = {
+            query: jest.fn(async () => ({ rows, rowCount: 1 })),
+            release: jest.fn(),
+          };
+
+          const pool: MockDbPool = {
+            connect: jest.fn(async () => client),
+            on: jest.fn(),
+            end: jest.fn(async () => undefined),
+          };
+
+          const findListingBySlug = jest.fn(() => matchingCandidate);
+
+          jest.doMock("../../url-slugs", () => ({
+            findListingBySlug,
+          }));
+
+          jest.doMock("pg", () => ({
+            Pool: class {
+              constructor() {
+                return pool;
+              }
+            },
+          }));
+
+          const mod = await import("../db-service");
+          const event =
+            await mod.fetchProductByListingSlug("Listing-A-seller12");
+
+          expect(findListingBySlug).toHaveBeenCalledWith("Listing-A-seller12", [
+            matchingCandidate,
+          ]);
+          expect(event).toEqual({
+            id: "product-1",
+            pubkey: "seller1234abcd",
+            created_at: 123,
+            kind: 30402,
+            tags: [
+              ["title", "Listing A"],
+              ["d", "listing-a"],
+            ],
+            content: "matched content",
+            sig: "sig-1",
+          });
+        } finally {
+          jest.unmock("../../url-slugs");
+          process.env.DATABASE_URL = prev;
+        }
+      });
+    });
+
+    test("markMessagesAsRead updates matching rows for author and recipient", async () => {
+      await jest.isolateModulesAsync(async () => {
+        const prev = process.env.DATABASE_URL;
+        process.env.DATABASE_URL = "postgres://test@localhost/testdb";
+        try {
+          const client: MockDbClient = {
+            query: jest.fn(async () => ({ rowCount: 1 })),
+            release: jest.fn(),
+          };
+
+          const pool: MockDbPool = {
+            connect: jest.fn(async () => client),
+            on: jest.fn(),
+          };
+
+          jest.doMock("pg", () => ({
+            Pool: class {
+              constructor() {
+                return pool;
+              }
+            },
+          }));
+
+          const mod = await import("../db-service");
+          await mod.markMessagesAsRead(["msg-1", "msg-2"], "recipient-1");
+
+          expect(client.query).toHaveBeenCalledWith(
+            expect.stringContaining("UPDATE message_events"),
+            [["msg-1", "msg-2"], "recipient-1"]
+          );
+        } finally {
+          process.env.DATABASE_URL = prev;
+        }
+      });
+    });
+
+    test("getUnreadMessageCount returns the parsed unread count", async () => {
+      await jest.isolateModulesAsync(async () => {
+        const prev = process.env.DATABASE_URL;
+        process.env.DATABASE_URL = "postgres://test@localhost/testdb";
+        try {
+          const client: MockDbClient = {
+            query: jest.fn(async () => ({ rows: [{ count: "4" }] })),
+            release: jest.fn(),
+          };
+
+          const pool: MockDbPool = {
+            connect: jest.fn(async () => client),
+            on: jest.fn(),
+          };
+
+          jest.doMock("pg", () => ({
+            Pool: class {
+              constructor() {
+                return pool;
+              }
+            },
+          }));
+
+          const mod = await import("../db-service");
+          await expect(mod.getUnreadMessageCount("buyer-1")).resolves.toBe(4);
+          expect(client.query).toHaveBeenCalledWith(
+            expect.stringContaining("FROM message_events WHERE pubkey = $1"),
+            ["buyer-1"]
+          );
+        } finally {
+          process.env.DATABASE_URL = prev;
+        }
+      });
+    });
+
     test("deleteCachedEvent issues DELETE for known kind and is no-op for unknown kind", async () => {
       const prev = process.env.DATABASE_URL;
       try {
@@ -1152,6 +1300,345 @@ describe("db-service helpers", () => {
             pubkey: "seller-2",
             content: "no d listing",
           });
+        });
+      }
+    );
+
+    maybeItTc(
+      "fetchProductByListingSlug returns the latest titled product and ignores rows without a title tag",
+      async () => {
+        await withPostgresDbService(async (db) => {
+          await waitForTables(db, ["product_events"]);
+
+          await db.cacheEvents([
+            productEvent({
+              id: "product-no-title",
+              pubkey: "seller-1",
+              created_at: 300,
+              tags: [["price", "999"]],
+              content: "untitled",
+              sig: "sig-untitled",
+            }),
+            productEvent({
+              id: "product-old",
+              pubkey: "seller-1",
+              created_at: 100,
+              tags: [
+                ["title", "Listing A"],
+                ["d", "listing-a"],
+              ],
+              content: "old listing",
+              sig: "sig-old",
+            }),
+            productEvent({
+              id: "product-new",
+              pubkey: "seller-2",
+              created_at: 200,
+              tags: [
+                ["d", "listing-a"],
+                ["title", "Listing A"],
+              ],
+              content: "new listing",
+              sig: "sig-new",
+            }),
+          ]);
+
+          await expect(
+            db.fetchProductByListingSlug("Listing-A")
+          ).resolves.toMatchObject({
+            id: "product-new",
+            pubkey: "seller-2",
+            content: "new listing",
+          });
+
+          await expect(
+            db.fetchProductByListingSlug("Listing-A-seller12")
+          ).resolves.toBeNull();
+        });
+      }
+    );
+
+    maybeItTc(
+      "message flows resolve order participants and latest order statuses",
+      async () => {
+        await withPostgresDbService(async (db) => {
+          await waitForTables(db, ["message_events"]);
+
+          const pool = db.getDbPool();
+          const client = await pool.connect();
+
+          try {
+            await client.query(
+              `INSERT INTO message_events (
+                 id,
+                 pubkey,
+                 created_at,
+                 kind,
+                 tags,
+                 content,
+                 sig,
+                 order_id,
+                 order_status,
+                 is_read
+               ) VALUES
+               ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10),
+               ($11, $12, $13, $14, $15::jsonb, $16, $17, $18, $19, $20),
+               ($21, $22, $23, $24, $25::jsonb, $26, $27, $28, $29, $30),
+               ($31, $32, $33, $34, $35::jsonb, $36, $37, $38, $39, $40),
+               ($41, $42, $43, $44, $45::jsonb, $46, $47, $48, $49, $50)`,
+              [
+                "order-1-old",
+                "buyer-old",
+                100,
+                1059,
+                JSON.stringify([
+                  ["b", "buyer-old"],
+                  ["a", "nostr:seller-new:listing-1"],
+                  ["p", "seller-new"],
+                ]),
+                "old order message",
+                "sig-order-1-old",
+                "order-1",
+                null,
+                false,
+                "order-1-new",
+                "buyer-new",
+                200,
+                1059,
+                JSON.stringify([
+                  ["b", "buyer-new"],
+                  ["item", "nostr:seller-new:listing-2"],
+                  ["p", "seller-new"],
+                ]),
+                "new order message",
+                "sig-order-1-new",
+                "order-1",
+                null,
+                false,
+                "order-2-old",
+                "buyer-2",
+                150,
+                1059,
+                JSON.stringify([
+                  ["p", "seller-2"],
+                  ["a", "nostr:seller-2:listing-2"],
+                ]),
+                "order two old",
+                "sig-order-2-old",
+                "order-2",
+                "pending",
+                false,
+                "order-2-new",
+                "buyer-2",
+                250,
+                1059,
+                JSON.stringify([
+                  ["p", "seller-2"],
+                  ["a", "nostr:seller-2:listing-2"],
+                ]),
+                "order two new",
+                "sig-order-2-new",
+                "order-2",
+                "paid",
+                false,
+                "order-3",
+                "buyer-3",
+                300,
+                1059,
+                JSON.stringify([["p", "seller-3"]]),
+                "order three",
+                "sig-order-3",
+                "order-3",
+                null,
+                false,
+              ]
+            );
+          } finally {
+            client.release();
+          }
+
+          await expect(db.getOrderParticipants("order-1")).resolves.toEqual({
+            buyerPubkey: "buyer-new",
+            sellerPubkey: "seller-new",
+          });
+
+          await db.updateOrderStatus(
+            "order-1",
+            "shipped",
+            "seller-new",
+            "order-1-old"
+          );
+
+          const verifyClient = await db.getDbPool().connect();
+          try {
+            const updatedRows = await verifyClient.query<{
+              id: string;
+              order_status: string | null;
+            }>(
+              `SELECT id, order_status
+               FROM message_events
+               WHERE order_id = 'order-1'
+               ORDER BY created_at DESC`
+            );
+
+            expect(updatedRows.rows.map((row) => row.id)).toEqual([
+              "order-1-new",
+              "order-1-old",
+            ]);
+            expect(updatedRows.rows.map((row) => row.order_status)).toEqual([
+              "shipped",
+              "shipped",
+            ]);
+          } finally {
+            verifyClient.release();
+          }
+
+          await expect(
+            db.getOrderStatuses(["order-1", "order-2", "order-3"])
+          ).resolves.toEqual({
+            "order-1": "shipped",
+            "order-2": "paid",
+          });
+
+          await expect(
+            db.markMessagesAsRead(["order-1-new"], "buyer-new")
+          ).resolves.toBeUndefined();
+          await expect(db.getUnreadMessageCount("buyer-new")).resolves.toBe(0);
+        });
+      }
+    );
+
+    maybeItTc(
+      "cachedEventsBelongToPubkey verifies ownership across all cached tables",
+      async () => {
+        await withPostgresDbService(async (db) => {
+          await waitForTables(db, [
+            "product_events",
+            "review_events",
+            "message_events",
+            "profile_events",
+            "wallet_events",
+            "community_events",
+            "config_events",
+          ]);
+
+          const ownerPubkey = "owner-pubkey-1";
+
+          await db.cacheEvents([
+            productEvent({
+              id: "own-product",
+              pubkey: ownerPubkey,
+              created_at: 100,
+              tags: [["title", "Owned Product"]],
+              content: "owned product",
+              sig: "sig-owned-product",
+            }),
+            {
+              id: "own-review",
+              pubkey: ownerPubkey,
+              created_at: 110,
+              kind: 31555,
+              tags: [["d", "listing-1"]],
+              content: "owned review",
+              sig: "sig-owned-review",
+            } as NostrEvent,
+            {
+              id: "own-message",
+              pubkey: ownerPubkey,
+              created_at: 120,
+              kind: 1059,
+              tags: [["p", "recipient-1"]],
+              content: "owned message",
+              sig: "sig-owned-message",
+            } as NostrEvent,
+            {
+              id: "own-profile",
+              pubkey: ownerPubkey,
+              created_at: 130,
+              kind: 30019,
+              tags: [],
+              content: '{"name":"Owned Shop"}',
+              sig: "sig-owned-profile",
+            } as NostrEvent,
+            latestOnlyEvent({
+              id: "own-wallet",
+              pubkey: ownerPubkey,
+              created_at: 140,
+              content: "owned wallet",
+              sig: "sig-owned-wallet",
+            }),
+            {
+              id: "own-community",
+              pubkey: ownerPubkey,
+              created_at: 150,
+              kind: 34550,
+              tags: [["d", "community-1"]],
+              content: "owned community",
+              sig: "sig-owned-community",
+            } as NostrEvent,
+            {
+              id: "own-config",
+              pubkey: ownerPubkey,
+              created_at: 160,
+              kind: 10002,
+              tags: [],
+              content: "owned config",
+              sig: "sig-owned-config",
+            } as NostrEvent,
+            productEvent({
+              id: "foreign-product",
+              pubkey: "foreign-pubkey",
+              created_at: 200,
+              tags: [["title", "Foreign Product"]],
+              content: "foreign product",
+              sig: "sig-foreign-product",
+            }),
+          ]);
+
+          await expect(
+            db.cachedEventsBelongToPubkey(
+              [
+                "own-product",
+                "own-review",
+                "own-message",
+                "own-profile",
+                "own-wallet",
+                "own-community",
+                "own-config",
+              ],
+              ownerPubkey
+            )
+          ).resolves.toBe(true);
+
+          await expect(
+            db.cachedEventsBelongToPubkey(
+              [
+                "own-product",
+                "own-review",
+                "own-message",
+                "own-profile",
+                "own-wallet",
+                "own-community",
+                "own-config",
+                "foreign-product",
+              ],
+              ownerPubkey
+            )
+          ).resolves.toBe(false);
+
+          await expect(
+            db.cachedEventsBelongToPubkey(
+              ["own-product", "missing-id"],
+              ownerPubkey
+            )
+          ).resolves.toBe(false);
+
+          await expect(
+            db.cachedEventsBelongToPubkey(
+              ["own-product", "own-product"],
+              ownerPubkey
+            )
+          ).resolves.toBe(true);
         });
       }
     );
