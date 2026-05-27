@@ -458,6 +458,7 @@ interface StorefrontPreviewPanelProps {
   shopSlug: string;
   compact?: boolean;
   realProducts?: ProductData[];
+  onSectionClick?: (sectionId: string) => void;
 }
 
 export default function StorefrontPreviewPanel({
@@ -484,6 +485,7 @@ export default function StorefrontPreviewPanel({
   shopSlug,
   compact,
   realProducts,
+  onSectionClick,
 }: StorefrontPreviewPanelProps) {
   const previewProducts: ProductData[] =
     realProducts && realProducts.length > 0 ? realProducts : MOCK_PRODUCTS;
@@ -702,6 +704,17 @@ export default function StorefrontPreviewPanel({
         }
         `
             : ""
+        }
+      `}</style>
+      <style>{`
+        .preview-section-clickable .preview-section-overlay {
+          border: 2px dashed transparent;
+          background-color: transparent;
+        }
+        .preview-section-clickable:hover .preview-section-overlay,
+        .preview-section-clickable:focus-visible .preview-section-overlay {
+          border-color: rgba(59, 130, 246, 0.7);
+          background-color: rgba(59, 130, 246, 0.08);
         }
       `}</style>
 
@@ -948,21 +961,47 @@ export default function StorefrontPreviewPanel({
               {previewPage === STALL_SENTINEL ? null : hasSections &&
                 activeSections.length > 0 ? (
                 <div>
-                  {activeSections.map((section) => (
-                    <SectionRenderer
-                      key={section.id}
-                      section={{
-                        ...section,
-                        productLayout: section.productLayout || productLayout,
-                      }}
-                      colors={colors}
-                      shopName={displayName}
-                      shopPicture={displayPicture}
-                      shopPubkey="preview"
-                      products={previewProducts}
-                      isPreview
-                    />
-                  ))}
+                  {activeSections.map((section) => {
+                    const renderer = (
+                      <SectionRenderer
+                        section={{
+                          ...section,
+                          productLayout: section.productLayout || productLayout,
+                        }}
+                        colors={colors}
+                        shopName={displayName}
+                        shopPicture={displayPicture}
+                        shopPubkey="preview"
+                        products={previewProducts}
+                        isPreview
+                      />
+                    );
+                    if (!onSectionClick) {
+                      return <div key={section.id}>{renderer}</div>;
+                    }
+                    return (
+                      <div
+                        key={section.id}
+                        role="button"
+                        tabIndex={0}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          onSectionClick(section.id);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            onSectionClick(section.id);
+                          }
+                        }}
+                        className="preview-section-clickable relative cursor-pointer outline-none"
+                        title="Click to edit this section"
+                      >
+                        <div className="preview-section-overlay pointer-events-none absolute inset-0 z-10 transition-all" />
+                        {renderer}
+                      </div>
+                    );
+                  })}
                 </div>
               ) : previewPage !== STALL_SENTINEL ? (
                 <div className="mx-auto max-w-6xl px-4 py-8 md:px-6">

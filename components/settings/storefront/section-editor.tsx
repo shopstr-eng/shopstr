@@ -32,6 +32,7 @@ interface SectionEditorProps {
   dragHandleProps?: React.HTMLAttributes<HTMLButtonElement> & {
     draggable?: boolean;
   };
+  focusToken?: number;
 }
 
 const SECTION_LABELS: Record<StorefrontSectionType, string> = {
@@ -80,6 +81,7 @@ export default function SectionEditor({
   isNew,
   onFlashDone,
   dragHandleProps,
+  focusToken,
 }: SectionEditorProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isFlashing, setIsFlashing] = useState(false);
@@ -101,6 +103,17 @@ export default function SectionEditor({
       return undefined;
     }
   }, [isNew]);
+
+  const initialFocusTokenRef = useRef(focusToken);
+  useEffect(() => {
+    if (focusToken === undefined) return undefined;
+    if (focusToken === initialFocusTokenRef.current) return undefined;
+    setIsExpanded(true);
+    setIsFlashing(true);
+    cardRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    const timer = setTimeout(() => setIsFlashing(false), 1500);
+    return () => clearTimeout(timer);
+  }, [focusToken]);
 
   const update = (fields: Partial<StorefrontSection>) => {
     onChange({ ...section, ...fields });

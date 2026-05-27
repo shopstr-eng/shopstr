@@ -281,7 +281,7 @@ export default function SectionSocialPosts({
 
   return (
     <div
-      className="w-full max-w-[100vw] overflow-x-hidden px-4 py-16 md:px-6"
+      className="w-full px-4 py-16 md:px-6"
       style={{ backgroundColor: colors.secondary + "08" }}
     >
       <div className="mx-auto w-full max-w-6xl">
@@ -310,7 +310,7 @@ export default function SectionSocialPosts({
           </div>
         ) : (
           <div
-            className={`storefront-social-carousel relative mx-auto w-full max-w-[calc(100vw-2rem)] md:max-w-[calc(100vw-3rem)] ${
+            className={`storefront-social-carousel relative mx-auto w-full max-w-full ${
               autoplay ? "overflow-hidden" : "overflow-x-auto pb-2"
             }`}
             style={{ minWidth: 0 }}

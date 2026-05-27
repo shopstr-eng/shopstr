@@ -278,6 +278,15 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
   const [sections, setSections] = useState<StorefrontSection[]>([]);
   const sectionsDnd = useDragReorder(sections, setSections);
   const [newSectionId, setNewSectionId] = useState<string | null>(null);
+  const [sectionFocusTokens, setSectionFocusTokens] = useState<
+    Record<string, number>
+  >({});
+  const handlePreviewSectionClick = (sectionId: string) => {
+    setSectionFocusTokens((prev) => ({
+      ...prev,
+      [sectionId]: (prev[sectionId] || 0) + 1,
+    }));
+  };
   const [pages, setPages] = useState<StorefrontPage[]>([]);
   const [footer, setFooter] = useState<StorefrontFooter>({
     showPoweredBy: true,
@@ -3011,6 +3020,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                                   isNew={newSectionId === section.id}
                                   onFlashDone={() => setNewSectionId(null)}
                                   dragHandleProps={drag.handleProps}
+                                  focusToken={sectionFocusTokens[section.id]}
                                 />
                               </div>
                             );
@@ -3220,6 +3230,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                         shopSlug={shopSlug}
                         compact
                         realProducts={sellerProducts}
+                        onSectionClick={handlePreviewSectionClick}
                       />
                     </div>
                   </div>
@@ -3317,6 +3328,10 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                     }
                     shopSlug={shopSlug}
                     realProducts={sellerProducts}
+                    onSectionClick={(sectionId) => {
+                      handlePreviewSectionClick(sectionId);
+                      setIsMobilePreviewClosing(true);
+                    }}
                   />
                 </div>
                 <style>{`

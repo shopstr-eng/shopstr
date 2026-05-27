@@ -174,9 +174,7 @@ const OrdersDashboard = ({
     ])
   );
 
-  const [displayCurrency, setDisplayCurrency] = useState<"sats" | "USD">(
-    "sats"
-  );
+  const [displayCurrency, setDisplayCurrency] = useState<"sats" | "USD">("USD");
   const [currencyRates, setCurrencyRates] = useState<Record<string, number>>(
     {}
   );
