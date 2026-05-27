@@ -542,6 +542,23 @@ export default function StorefrontLayout({
           body.sf-active [data-overlay-container] h6 {
             font-family: var(--font-heading, var(--font-body, inherit));
           }
+          .sf-layout h1, .sf-layout h2, .sf-layout h3, .sf-layout h4, .sf-layout h5, .sf-layout h6,
+          .sf-layout p, .sf-layout span, .sf-layout li, .sf-layout a,
+          .sf-layout td, .sf-layout th, .sf-layout dt, .sf-layout dd,
+          .sf-layout blockquote, .sf-layout figcaption, .sf-layout label {
+            overflow-wrap: anywhere;
+            word-break: break-word;
+            min-width: 0;
+          }
+          .sf-layout img, .sf-layout video, .sf-layout iframe, .sf-layout svg, .sf-layout canvas {
+            max-width: 100%;
+          }
+          .sf-layout pre, .sf-layout code {
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+            max-width: 100%;
+          }
         `}</style>
         <style>{themedCss}</style>
       </Head>
