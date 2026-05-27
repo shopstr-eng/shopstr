@@ -236,6 +236,157 @@ async function probeMint(
  * "not enough funds" when funds actually exist under a different mint in
  * the user's wallet.
  */
+/**
+ * Filter `proofs` down to those that are not SPENT at `mintUrl`. PENDING
+ * proofs are treated as still-recoverable and kept (a melt may still resolve
+ * to UNPAID, returning them). Returns the original list unchanged on probe
+ * failure so a transient mint outage cannot accidentally delete the user's
+ * funds.
+ */
+export async function filterUnspentProofs(
+  mintUrl: string,
+  proofs: Proof[]
+): Promise<{ unspent: Proof[]; spentCount: number; checked: boolean }> {
+  if (!proofs || proofs.length === 0)
+    return { unspent: [], spentCount: 0, checked: true };
+  try {
+    const wallet = new CashuWallet(new CashuMint(mintUrl));
+    await wallet.loadMint();
+    const keysets = await wallet.keyChain.getKeysets();
+    const ids = new Set<string>((keysets || []).map((k: MintKeyset) => k.id));
+    // Only ask the mint about proofs whose keyset id belongs to this mint —
+    // checkProofsStates on foreign proofs will throw or return nonsense.
+    const ourProofs = proofs.filter((p) => ids.has(p.id));
+    const foreignProofs = proofs.filter((p) => !ids.has(p.id));
+    if (ourProofs.length === 0)
+      return { unspent: proofs, spentCount: 0, checked: true };
+    const states = await wallet.checkProofsStates(ourProofs);
+    const spentYs = new Set(
+      (states || [])
+        .filter((s) => s.state === "SPENT")
+        .map((s) => (s as { Y: string }).Y)
+    );
+    if (spentYs.size === 0)
+      return { unspent: proofs, spentCount: 0, checked: true };
+    // We can't compute Y from a Proof client-side without crypto helpers, but
+    // checkProofsStates returns results in the same order as the input, so
+    // we can use indexes to mark which ourProofs are spent.
+    const spentSecrets = new Set<string>();
+    (states || []).forEach((s, i) => {
+      if (s.state === "SPENT" && ourProofs[i]) {
+        spentSecrets.add(ourProofs[i]!.secret);
+      }
+    });
+    const survivors = ourProofs.filter((p) => !spentSecrets.has(p.secret));
+    return {
+      unspent: [...foreignProofs, ...survivors],
+      spentCount: spentSecrets.size,
+      checked: true,
+    };
+  } catch (err) {
+    console.warn(
+      `[wallet-mint-sync] filterUnspentProofs(${mintUrl}) probe failed; leaving proofs intact:`,
+      err
+    );
+    return { unspent: proofs, spentCount: 0, checked: false };
+  }
+}
+
+/**
+ * Walk every configured mint, ask the mint which of the user's locally-held
+ * proofs are SPENT, and remove those from `localStorage["tokens"]`. Writes a
+ * history entry summarizing the cleanup so the user can see why their
+ * balance changed. Returns the total sats removed across all mints.
+ *
+ * This guards against the wallet getting stuck on stale spent proofs after
+ * a failed-payment recovery that stashed proofs which were actually already
+ * spent at the mint (or after any other path that left spent proofs in
+ * localStorage). Safe to call repeatedly; no-ops when there's nothing to
+ * prune. Skips silently when no mint can be probed (network down).
+ */
+// Per-tab lock so overlapping sweep() calls (page mount + stash-triggered)
+// can't both probe + write at the same time and clobber each other.
+let sweepInFlight: Promise<{
+  removedSats: number;
+  removedCount: number;
+}> | null = null;
+
+export async function sweepSpentProofs(
+  mints: string[]
+): Promise<{ removedSats: number; removedCount: number }> {
+  if (typeof window === "undefined") return { removedSats: 0, removedCount: 0 };
+  if (sweepInFlight) return sweepInFlight;
+  sweepInFlight = (async () => {
+    const ordered = (mints || []).filter(Boolean);
+    if (ordered.length === 0) return { removedSats: 0, removedCount: 0 };
+    const snapshot = getStoredTokens();
+    if (snapshot.length === 0) return { removedSats: 0, removedCount: 0 };
+
+    // Probe each mint against the snapshot; accumulate the set of SPENT
+    // proof secrets only. We never write the snapshot back — we re-read the
+    // latest tokens at write time and remove confirmed-spent secrets from
+    // *that* set, so any proofs added by other wallet activity during the
+    // probe (receive/mint/stash) survive the sweep.
+    const confirmedSpentSecrets = new Set<string>();
+    let working = snapshot;
+    for (const m of ordered) {
+      const { unspent, spentCount } = await filterUnspentProofs(m, working);
+      if (spentCount === 0) continue;
+      const survivingSecrets = new Set(unspent.map((p) => p.secret));
+      for (const p of working) {
+        if (!survivingSecrets.has(p.secret))
+          confirmedSpentSecrets.add(p.secret);
+      }
+      working = unspent;
+    }
+    if (confirmedSpentSecrets.size === 0)
+      return { removedSats: 0, removedCount: 0 };
+
+    // Merge-safe write: re-read current tokens and remove only the secrets
+    // we confirmed SPENT. Newly added proofs (e.g. a receive that landed
+    // mid-probe) are preserved untouched.
+    const latest = getStoredTokens();
+    const removed = latest.filter((p) => confirmedSpentSecrets.has(p.secret));
+    if (removed.length === 0) return { removedSats: 0, removedCount: 0 };
+    const survivors = latest.filter(
+      (p) => !confirmedSpentSecrets.has(p.secret)
+    );
+    const removedSats = removed.reduce(
+      (acc, p) => acc + proofAmountToNumber(p),
+      0
+    );
+    const removedCount = removed.length;
+
+    localStorage.setItem(TOKENS_KEY, JSON.stringify(survivors));
+    try {
+      const history = JSON.parse(
+        localStorage.getItem("history") || "[]"
+      ) as Array<Record<string, unknown>>;
+      localStorage.setItem(
+        "history",
+        JSON.stringify([
+          {
+            type: 4,
+            amount: removedSats,
+            date: Math.floor(Date.now() / 1000),
+            note: `Removed ${removedCount} already-spent proof${
+              removedCount === 1 ? "" : "s"
+            } during wallet sync`,
+          },
+          ...history,
+        ])
+      );
+    } catch {
+      /* ignore history write errors — tokens are the source of truth */
+    }
+    dispatchStorageChange();
+    return { removedSats, removedCount };
+  })().finally(() => {
+    sweepInFlight = null;
+  });
+  return sweepInFlight;
+}
+
 export async function pickMintForPayment(
   amount: number,
   mints: string[],

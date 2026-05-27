@@ -17,6 +17,7 @@ import {
   buildSecretToMintMap,
   getStoredMints,
   getStoredTokens,
+  sweepSpentProofs,
   syncMintsFromTokens,
 } from "@/utils/cashu/wallet-mint-sync";
 import { CashuWalletContext } from "@/utils/context/context";
@@ -104,6 +105,26 @@ const Wallet = () => {
     const t = setTimeout(() => setKeysetRetryTick((n) => n + 1), 5000);
     return () => clearTimeout(t);
   }, [mints, mintKeySetIds]);
+
+  // Self-heal: ask each mint which locally-held proofs are already SPENT and
+  // prune them from localStorage. Without this, a failed-payment recovery can
+  // leave stale spent proofs in the wallet, which present as a phantom
+  // balance that fails every send with "insufficient" / "already spent".
+  // Runs once per configured-mint-set; the storage poll picks up the prune.
+  useEffect(() => {
+    if (!mints.length) return;
+    let cancelled = false;
+    const t = setTimeout(() => {
+      if (cancelled) return;
+      sweepSpentProofs(mints).catch((err) => {
+        console.warn("Wallet spent-proof sweep failed:", err);
+      });
+    }, 1200);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [mints]);
 
   // Total = every proof in the wallet. Active-mint balance = proofs whose
   // kind-7375 mapping points at mints[0], plus any unmapped proofs that

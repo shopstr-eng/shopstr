@@ -1,3 +1,4 @@
 - [Lightning invoice polling loop](lightning-invoice-polling.md) — every branch inside the polling while-loop must advance retryCount and back off, and the loop must surface a terminal UI even when it exits naturally.
 - [Lightning mint amount source](lightning-mint-amount-source.md) — mintProofsBolt11 amount must come from the exact value used to create the quote, not from a separate price state variable that can diverge under payment-method discounts.
 - [Multi-mint wallet attribution](multi-mint-wallet-attribution.md) — proofs carry no mint; attribute via keysets, promote receiving mint to default, pick spend mint by probe, dedup reactive reloads, and retry loadMint on failure or balances go stale/zero.
+- [Cashu spent-proof self-heal sweep](spent-proof-self-heal.md) — wallet must periodically checkProofsStates and prune SPENT local proofs, with merge-safe writes and a per-tab lock so it can't delete funds added mid-probe.
