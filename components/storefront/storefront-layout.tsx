@@ -616,13 +616,13 @@ export default function StorefrontLayout({
         }}
       >
         <nav
-          className="fixed top-0 right-0 left-0 z-50 border-b"
+          className="fixed top-0 right-0 left-0 z-50 h-14 border-b"
           style={{
             backgroundColor: navBg,
             borderColor: navAccent + "33",
           }}
         >
-          <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-2 md:px-6">
+          <div className="mx-auto flex h-full max-w-6xl items-center justify-between px-4 md:px-6">
             <Link href={homeHref} className="flex items-center gap-2">
               {pictureUrl && (
                 <img
