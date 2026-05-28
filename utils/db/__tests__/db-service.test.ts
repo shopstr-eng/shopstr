@@ -1738,6 +1738,202 @@ describe("db-service helpers", () => {
     );
 
     maybeItTc(
+      "fetchProductByIdFromDb and fetchProductByDTagAndPubkey return real product rows",
+      async () => {
+        await withPostgresDbService(async (db) => {
+          await waitForTables(db, ["product_events"]);
+
+          await db.cacheEvents([
+            productEvent({
+              id: "product-old",
+              pubkey: "seller-1",
+              created_at: 100,
+              tags: [
+                ["title", "Listing A"],
+                ["d", "listing-a"],
+              ],
+              content: "old listing",
+              sig: "sig-old",
+            }),
+            productEvent({
+              id: "product-new",
+              pubkey: "seller-1",
+              created_at: 200,
+              tags: [
+                ["d", "listing-a"],
+                ["title", "Listing A"],
+              ],
+              content: "new listing",
+              sig: "sig-new",
+            }),
+          ]);
+
+          await expect(
+            db.fetchProductByIdFromDb("product-new")
+          ).resolves.toMatchObject({
+            id: "product-new",
+            pubkey: "seller-1",
+            content: "new listing",
+          });
+
+          await expect(
+            db.fetchProductByDTagAndPubkey("listing-a", "seller-1")
+          ).resolves.toMatchObject({
+            id: "product-new",
+            pubkey: "seller-1",
+            content: "new listing",
+          });
+
+          await expect(
+            db.fetchProductByDTagAndPubkey("missing", "seller-1")
+          ).resolves.toBeNull();
+        });
+      }
+    );
+
+    maybeItTc(
+      "fetchShopProfileByPubkeyFromDb and fetchProfilePubkeyByNameSlug resolve profile rows",
+      async () => {
+        await withPostgresDbService(async (db) => {
+          await waitForTables(db, ["profile_events"]);
+
+          await db.cacheEvents([
+            {
+              id: "profile-unique",
+              pubkey: "user-unique-1",
+              created_at: 100,
+              kind: 0,
+              tags: [],
+              content: '{"name":"Unique Profile"}',
+              sig: "sig-unique",
+            } as NostrEvent,
+            {
+              id: "profile-shop",
+              pubkey: "shop-owner-2",
+              created_at: 150,
+              kind: 30019,
+              tags: [],
+              content: '{"name":"Alice Shop"}',
+              sig: "sig-shop",
+            } as NostrEvent,
+            {
+              id: "profile-shop-old",
+              pubkey: "abcd1234deadbeef0001",
+              created_at: 200,
+              kind: 0,
+              tags: [],
+              content: '{"name":"Alice Shop"}',
+              sig: "sig-shop-old",
+            } as NostrEvent,
+            {
+              id: "profile-shop-new",
+              pubkey: "abcd1234cafebabe0002",
+              created_at: 300,
+              kind: 0,
+              tags: [],
+              content: '{"name":"Alice Shop"}',
+              sig: "sig-shop-new",
+            } as NostrEvent,
+          ]);
+
+          await expect(
+            db.fetchShopProfileByPubkeyFromDb("shop-owner-2")
+          ).resolves.toMatchObject({
+            id: "profile-shop",
+            pubkey: "shop-owner-2",
+            content: '{"name":"Alice Shop"}',
+          });
+
+          await expect(
+            db.fetchProfilePubkeyByNameSlug("Unique-Profile")
+          ).resolves.toBe("user-unique-1");
+
+          await expect(
+            db.fetchProfilePubkeyByNameSlug("Alice-Shop")
+          ).resolves.toBeNull();
+
+          await expect(
+            db.fetchProfilePubkeyByNameSlug("Alice-Shop-abcd1234")
+          ).resolves.toBe("abcd1234cafebabe0002");
+        });
+      }
+    );
+
+    maybeItTc("fetchShopPubkeyBySlug resolves normalized slugs", async () => {
+      await withPostgresDbService(async (db) => {
+        await waitForTables(db, ["shop_slugs"]);
+
+        const pool = db.getDbPool();
+        const client = await pool.connect();
+
+        try {
+          await client.query(
+            `INSERT INTO shop_slugs (pubkey, slug)
+               VALUES ($1, $2), ($3, $4)`,
+            ["shop-owner-1", "my-shop", "shop-owner-2", "another-shop"]
+          );
+        } finally {
+          client.release();
+        }
+
+        await expect(db.fetchShopPubkeyBySlug("  My-Shop  ")).resolves.toBe(
+          "shop-owner-1"
+        );
+        await expect(
+          db.fetchShopPubkeyBySlug("missing-shop")
+        ).resolves.toBeNull();
+      });
+    });
+
+    maybeItTc(
+      "fetchCommunityByPubkeyAndIdentifier returns the latest matching community",
+      async () => {
+        await withPostgresDbService(async (db) => {
+          await waitForTables(db, ["community_events"]);
+
+          await db.cacheEvents([
+            {
+              id: "community-old",
+              pubkey: "community-owner-1",
+              created_at: 100,
+              kind: 34550,
+              tags: [["d", "community-a"]],
+              content: "old community",
+              sig: "sig-community-old",
+            } as NostrEvent,
+            {
+              id: "community-new",
+              pubkey: "community-owner-1",
+              created_at: 200,
+              kind: 34550,
+              tags: [["d", "community-a"]],
+              content: "new community",
+              sig: "sig-community-new",
+            } as NostrEvent,
+          ]);
+
+          await expect(
+            db.fetchCommunityByPubkeyAndIdentifier(
+              "community-owner-1",
+              "community-a"
+            )
+          ).resolves.toMatchObject({
+            id: "community-new",
+            pubkey: "community-owner-1",
+            content: "new community",
+          });
+
+          await expect(
+            db.fetchCommunityByPubkeyAndIdentifier(
+              "community-owner-1",
+              "missing-community"
+            )
+          ).resolves.toBeNull();
+        });
+      }
+    );
+
+    maybeItTc(
       "fetchCachedEvents supports pubkey/limit/offset/since/until filters",
       async () => {
         await withPostgresDbService(async (db) => {
