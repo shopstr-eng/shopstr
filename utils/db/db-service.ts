@@ -1299,7 +1299,17 @@ export async function getUnreadMessageCount(pubkey: string): Promise<number> {
   try {
     client = await dbPool.connect();
     const result = await client.query(
-      `SELECT COUNT(*) FROM message_events WHERE pubkey = $1 AND (is_read = FALSE OR is_read IS NULL)`,
+      `SELECT COUNT(*)
+       FROM message_events
+       WHERE (
+         pubkey = $1
+         OR EXISTS (
+           SELECT 1
+           FROM jsonb_array_elements(tags) elem
+           WHERE elem->>0 = 'p' AND elem->>1 = $1
+         )
+       )
+       AND (is_read = FALSE OR is_read IS NULL)`,
       [pubkey]
     );
     return parseInt(result.rows[0].count, 10);
