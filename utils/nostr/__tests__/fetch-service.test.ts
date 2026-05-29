@@ -1,3 +1,16 @@
+import { NostrEvent, NostrManager } from "../nostr-manager";
+import {
+  buildNip50ProductSearchFilters,
+  dedupeProductEvents,
+  fetchNip50ProductSearch,
+} from "../fetch-service";
+
+jest.mock("@/utils/db/db-client", () => ({
+  cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+}));
+
+const { cacheEventsToDatabase } = jest.requireMock("@/utils/db/db-client");
+
 const makeBaseEvent = (overrides: Record<string, any> = {}) => ({
   id: "event-id",
   pubkey: "pubkey",
@@ -72,7 +85,7 @@ describe("fetchAllPosts - NIP-99 and relay merge behavior", () => {
     expect(profileSetFromProducts).toEqual(new Set(["seller"]));
   });
 
-  it("includes kind 1 zapsnag notes alongside kind 30402 product events and caches both", async () => {
+  it("includes kind 1 zapsnag notes alongside kind 30402 product events and only caches products", async () => {
     const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
 
     jest.doMock("@/utils/db/db-client", () => ({
@@ -118,7 +131,7 @@ describe("fetchAllPosts - NIP-99 and relay merge behavior", () => {
     expect(productEvents).toEqual(
       expect.arrayContaining([product, zapsnagNote])
     );
-    expect(cacheEventsToDatabase).toHaveBeenCalledWith([product, zapsnagNote]);
+    expect(cacheEventsToDatabase).toHaveBeenCalledWith([product]);
     expect(profileSetFromProducts).toEqual(new Set(["seller-p"]));
   });
 
@@ -485,6 +498,225 @@ describe("getUniqueProofs", () => {
     expect(dedupedProofs).toEqual([firstProof, uniqueProof]);
     expect(dedupedProofs).not.toContain(duplicateProof);
     expect(dedupedProofs).toHaveLength(2);
+  });
+});
+
+describe("fetch-service NIP-50 search helpers", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("builds NIP-50 search filters for marketplace listings and flash sales", () => {
+    expect(
+      buildNip50ProductSearchFilters("  cold   brew  ", {
+        authors: ["seller-1"],
+        limit: 25,
+      })
+    ).toEqual([
+      {
+        kinds: [30402],
+        search: "cold brew",
+        limit: 25,
+        authors: ["seller-1"],
+      },
+      {
+        kinds: [1],
+        "#t": ["shopstr-zapsnag", "zapsnag"],
+        search: "cold brew",
+        limit: 25,
+        authors: ["seller-1"],
+      },
+    ]);
+  });
+
+  it("deduplicates replaceable listing events by address and keeps the latest version", () => {
+    const older = {
+      id: "older",
+      pubkey: "seller-1",
+      created_at: 10,
+      kind: 30402,
+      tags: [
+        ["d", "coffee"],
+        ["title", "Coffee Beans"],
+        ["price", "12", "USD"],
+      ],
+      content: "old coffee",
+      sig: "sig-older",
+    };
+    const newer = {
+      ...older,
+      id: "newer",
+      created_at: 20,
+      content: "new coffee",
+      sig: "sig-newer",
+    };
+
+    expect(dedupeProductEvents([older, newer] as NostrEvent[])).toEqual([
+      newer,
+    ]);
+  });
+
+  it("fetches NIP-50 product results, deduplicates them, and caches valid events", async () => {
+    const older = {
+      id: "older",
+      pubkey: "seller-1",
+      created_at: 10,
+      kind: 30402,
+      tags: [
+        ["d", "coffee"],
+        ["title", "Coffee Beans"],
+        ["price", "12", "USD"],
+      ],
+      content: "old coffee",
+      sig: "sig-older",
+    };
+    const newer = {
+      ...older,
+      id: "newer",
+      created_at: 20,
+      content: "new coffee",
+      sig: "sig-newer",
+    };
+    const invalid = {
+      id: "",
+      pubkey: "seller-2",
+      created_at: 30,
+      kind: 30402,
+      tags: [["d", "tea"]],
+      content: "tea",
+      sig: "sig-invalid",
+    };
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([older, newer, invalid]),
+    };
+
+    const result = await fetchNip50ProductSearch(
+      nostr as unknown as NostrManager,
+      ["wss://relay.example"],
+      "coffee"
+    );
+
+    expect(nostr.fetch).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ kinds: [30402], search: "coffee" }),
+        expect.objectContaining({ kinds: [1], search: "coffee" }),
+      ]),
+      {},
+      ["wss://relay.example"]
+    );
+    expect(result.productEvents).toEqual([newer]);
+    expect(cacheEventsToDatabase).toHaveBeenCalledWith([older, newer]);
+  });
+
+  it("waits for relevant kind 30402 search results to be cached before returning them", async () => {
+    const product = {
+      id: "coffee-product",
+      pubkey: "seller-1",
+      created_at: 20,
+      kind: 30402,
+      tags: [
+        ["d", "coffee"],
+        ["title", "Coffee Beans"],
+        ["price", "12", "USD"],
+      ],
+      content: "Fresh roasted coffee",
+      sig: "sig-coffee",
+    };
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([product]),
+    };
+    let resolveCache!: () => void;
+    (cacheEventsToDatabase as jest.Mock).mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveCache = resolve;
+        })
+    );
+
+    let didResolve = false;
+    const searchPromise = fetchNip50ProductSearch(
+      nostr as unknown as NostrManager,
+      ["wss://relay.example"],
+      "coffee"
+    ).then((result) => {
+      didResolve = true;
+      return result;
+    });
+
+    await Promise.resolve();
+    expect(didResolve).toBe(false);
+
+    resolveCache();
+    const result = await searchPromise;
+
+    expect(result.productEvents).toEqual([product]);
+    expect(cacheEventsToDatabase).toHaveBeenCalledWith([product]);
+  });
+
+  it("filters unsupported-relay noise before returning or caching search results", async () => {
+    const relevant = {
+      id: "coffee-product",
+      pubkey: "seller-1",
+      created_at: 20,
+      kind: 30402,
+      tags: [
+        ["d", "coffee"],
+        ["title", "Coffee Beans"],
+        ["price", "12", "USD"],
+      ],
+      content: "Fresh roasted coffee",
+      sig: "sig-coffee",
+    };
+    const unrelated = {
+      id: "tea-product",
+      pubkey: "seller-2",
+      created_at: 30,
+      kind: 30402,
+      tags: [
+        ["d", "tea"],
+        ["title", "Tea Leaves"],
+        ["price", "8", "USD"],
+      ],
+      content: "Green tea",
+      sig: "sig-tea",
+    };
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([unrelated, relevant]),
+    };
+
+    const result = await fetchNip50ProductSearch(
+      nostr as unknown as NostrManager,
+      ["wss://relay.example"],
+      "coffee"
+    );
+
+    expect(result.productEvents).toEqual([relevant]);
+    expect(cacheEventsToDatabase).toHaveBeenCalledWith([relevant]);
+  });
+
+  it("returns matching zapsnag notes from NIP-50 search without caching them as products", async () => {
+    const zapsnagNote = {
+      id: "zapsnag-coffee",
+      pubkey: "seller-1",
+      created_at: 20,
+      kind: 1,
+      tags: [["t", "shopstr-zapsnag"]],
+      content:
+        "Coffee beans price: 100 sats #zapsnag https://example.com/coffee.png",
+      sig: "sig-zapsnag",
+    };
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([zapsnagNote]),
+    };
+
+    const result = await fetchNip50ProductSearch(
+      nostr as unknown as NostrManager,
+      ["wss://relay.example"],
+      "coffee"
+    );
+
+    expect(result.productEvents).toEqual([zapsnagNote]);
+    expect(cacheEventsToDatabase).not.toHaveBeenCalled();
   });
 });
 
@@ -1224,10 +1456,7 @@ describe("fetchAllPosts", () => {
       new Set(["seller", "zapsnag-seller"])
     );
     expect(editProductContext).toHaveBeenLastCalledWith(productEvents, false);
-    expect(cacheEventsToDatabase).toHaveBeenCalledWith([
-      newerRelayListing,
-      relayNoteListing,
-    ]);
+    expect(cacheEventsToDatabase).toHaveBeenCalledWith([newerRelayListing]);
   });
 });
 
