@@ -2625,14 +2625,14 @@ export default function ProductForm({
             <ModalFooter className="border-t-2 border-black bg-white px-6 py-4">
               <ConfirmActionDropdown
                 helpText={
-                  "Are you sure you want to clear this form? You will lose all current progress."
+                  "Are you sure you want to cancel? You will lose all current progress."
                 }
-                buttonLabel={"Clear Form"}
+                buttonLabel={"Cancel"}
                 onConfirm={clear}
               >
                 <Button color="danger" variant="light">
                   <span className="text-base font-semibold text-red-600">
-                    Clear
+                    Cancel
                   </span>
                 </Button>
               </ConfirmActionDropdown>

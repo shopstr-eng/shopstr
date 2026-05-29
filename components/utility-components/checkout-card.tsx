@@ -23,7 +23,6 @@ import {
 import { locationAvatar } from "./dropdowns/location-dropdown";
 import {
   ArrowLongDownIcon,
-  ArrowLongUpIcon,
   EllipsisVerticalIcon,
 } from "@heroicons/react/24/outline";
 import BeefInitiativeBadge from "./beef-initiative-badge";
@@ -85,8 +84,7 @@ export default function CheckoutCard({
 
   const [isExpanded, setIsExpanded] = useState(false);
   const [isBeingPaid, setIsBeingPaid] = useState(false);
-  const [visibleImages, setVisibleImages] = useState<string[]>([]);
-  const [showAllImages, setShowAllImages] = useState(false);
+  const [carouselStart, setCarouselStart] = useState(0);
   const [selectedImage, setSelectedImage] = useState(productData.images[0]);
   const [selectedSize, setSelectedSize] = useState<string | undefined>(
     undefined
@@ -220,28 +218,19 @@ export default function CheckoutCard({
     return `${productData.summary.slice(0, SUMMARY_CHARACTER_LIMIT)}...`;
   };
 
-  const calculateVisibleImages = (containerHeight: number) => {
-    const imageHeight = containerHeight / 3; // You can adjust this '3' if needed
-    const visibleCount = Math.max(3, Math.floor(containerHeight / imageHeight));
-    setVisibleImages(productData.images.slice(0, visibleCount));
+  const VISIBLE_THUMBNAIL_COUNT = 3;
+
+  const carouselThumbnails =
+    productData.images.length <= VISIBLE_THUMBNAIL_COUNT
+      ? productData.images.map((image, index) => ({ image, index }))
+      : Array.from({ length: VISIBLE_THUMBNAIL_COUNT }, (_, i) => {
+          const index = (carouselStart + i) % productData.images.length;
+          return { image: productData.images[index], index };
+        });
+
+  const cycleCarousel = () => {
+    setCarouselStart((prev) => (prev + 1) % productData.images.length);
   };
-
-  useEffect(() => {
-    if (containerRef.current) {
-      const resizeObserver = new ResizeObserver((entries) => {
-        for (const entry of entries) {
-          calculateVisibleImages(entry.contentRect.height);
-        }
-      });
-
-      resizeObserver.observe(containerRef.current);
-
-      return () => {
-        resizeObserver.disconnect();
-      };
-    }
-    return;
-  }, [selectedImage, isBeingPaid]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -706,39 +695,30 @@ export default function CheckoutCard({
                 {/* Vertical Thumbnails */}
                 <div className="flex w-1/4 flex-col gap-2">
                   <div ref={containerRef} className="flex-1 overflow-hidden">
-                    <div
-                      className={`flex flex-col space-y-2 ${
-                        showAllImages ? "overflow-y-auto" : ""
-                      }`}
-                    >
-                      {(showAllImages ? productData.images : visibleImages).map(
-                        (image, index) => (
-                          <img
-                            key={index}
-                            src={image}
-                            alt={`Product image ${index + 1}`}
-                            className={`w-full cursor-pointer rounded-md object-cover ${
-                              image === selectedImage
-                                ? "border-primary-yellow border-2"
-                                : "border-2 border-transparent"
-                            }`}
-                            style={{ aspectRatio: "1 / 1" }}
-                            onClick={() => setSelectedImage(image)}
-                          />
-                        )
-                      )}
+                    <div className="flex flex-col space-y-2">
+                      {carouselThumbnails.map(({ image, index }) => (
+                        <img
+                          key={index}
+                          src={image}
+                          alt={`Product image ${index + 1}`}
+                          className={`w-full cursor-pointer rounded-md object-cover ${
+                            image === selectedImage
+                              ? "border-primary-yellow border-2"
+                              : "border-2 border-transparent"
+                          }`}
+                          style={{ aspectRatio: "1 / 1" }}
+                          onClick={() => setSelectedImage(image)}
+                        />
+                      ))}
                     </div>
                   </div>
                   {productData.images.length > 3 && (
                     <button
-                      onClick={() => setShowAllImages(!showAllImages)}
+                      onClick={cycleCarousel}
+                      aria-label="Show next image"
                       className="shadow-neo flex flex-col items-center rounded-md border-2 border-black bg-white py-1 transition-transform hover:-translate-y-0.5 active:translate-y-0.5"
                     >
-                      {showAllImages ? (
-                        <ArrowLongUpIcon className="h-5 w-5" />
-                      ) : (
-                        <ArrowLongDownIcon className="h-5 w-5" />
-                      )}
+                      <ArrowLongDownIcon className="h-5 w-5" />
                     </button>
                   )}
                 </div>
