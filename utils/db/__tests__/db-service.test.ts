@@ -402,6 +402,73 @@ describe("db-service helpers", () => {
     });
   });
 
+  test("trackFailedRelayPublishRecord returns false when ownership conflict blocks update", async () => {
+    await jest.isolateModulesAsync(async () => {
+      const prev = process.env.DATABASE_URL;
+      process.env.DATABASE_URL = "postgres://test@localhost/testdb";
+
+      try {
+        const queries: Array<string | { text?: string }> = [];
+        const client: MockDbClient = {
+          query: jest.fn(async (q: QueryInput) => {
+            queries.push(q);
+            const text = typeof q === "string" ? q : q.text || "";
+
+            if (text.includes("INSERT INTO failed_relay_publishes")) {
+              return { rows: [], rowCount: 0 };
+            }
+
+            return { rows: [], rowCount: 1 };
+          }),
+          release: jest.fn(),
+        };
+
+        const pool: MockDbPool = {
+          connect: jest.fn(async () => client),
+          on: jest.fn(),
+          end: jest.fn(async () => undefined),
+        };
+
+        jest.doMock("pg", () => ({
+          Pool: class {
+            constructor() {
+              return pool;
+            }
+          },
+        }));
+
+        const db = await import("../db-service");
+
+        const inserted = await db.trackFailedRelayPublishRecord({
+          eventId: "failed-relay-1",
+          ownerPubkey: "owner-a",
+          event: {
+            id: "failed-relay-1",
+            pubkey: "owner-a",
+            created_at: 1,
+            kind: 0,
+            tags: [],
+            content: "x",
+            sig: "s",
+          } as NostrEvent,
+          relays: ["relay-a"],
+        });
+
+        expect(inserted).toBe(false);
+        expect(
+          queries.some((query) =>
+            (typeof query === "string" ? query : query.text || "").includes(
+              "WHERE failed_relay_publishes.owner_pubkey = EXCLUDED.owner_pubkey"
+            )
+          )
+        ).toBe(true);
+        expect(client.release).toHaveBeenCalled();
+      } finally {
+        process.env.DATABASE_URL = prev;
+      }
+    });
+  });
+
   maybeItTc(
     "initializeTables creates tables and applies message/relay migrations",
     async () => {
@@ -894,6 +961,241 @@ describe("db-service helpers", () => {
           });
         } finally {
           jest.unmock("../../url-slugs");
+          process.env.DATABASE_URL = prev;
+        }
+      });
+    });
+
+    test("fetchProductByListingSlug ignores rows without title tags and returns null when nothing matches", async () => {
+      await jest.isolateModulesAsync(async () => {
+        const prev = process.env.DATABASE_URL;
+        process.env.DATABASE_URL = "postgres://test@localhost/testdb";
+        try {
+          const rows = [
+            {
+              id: "product-no-title-1",
+              pubkey: "seller-1",
+              created_at: 123,
+              kind: 30402,
+              tags: [["price", "10"]],
+              content: "untitled-1",
+              sig: "sig-1",
+            },
+            {
+              id: "product-no-title-2",
+              pubkey: "seller-2",
+              created_at: 124,
+              kind: 30402,
+              tags: [["d", "listing-a"]],
+              content: "untitled-2",
+              sig: "sig-2",
+            },
+          ];
+          const client: MockDbClient = {
+            query: jest.fn(async () => ({ rows, rowCount: 2 })),
+            release: jest.fn(),
+          };
+
+          const pool: MockDbPool = {
+            connect: jest.fn(async () => client),
+            on: jest.fn(),
+            end: jest.fn(async () => undefined),
+          };
+
+          const findListingBySlug = jest.fn(() => null);
+
+          jest.doMock("../../url-slugs", () => ({
+            findListingBySlug,
+          }));
+
+          jest.doMock("pg", () => ({
+            Pool: class {
+              constructor() {
+                return pool;
+              }
+            },
+          }));
+
+          const mod = await import("../db-service");
+          await expect(
+            mod.fetchProductByListingSlug("Listing-A")
+          ).resolves.toBeNull();
+          expect(findListingBySlug).toHaveBeenCalledWith("Listing-A", []);
+          expect(client.release).toHaveBeenCalled();
+        } finally {
+          jest.unmock("../../url-slugs");
+          process.env.DATABASE_URL = prev;
+        }
+      });
+    });
+
+    test("fetchMarketplaceStats returns zeros when query fails", async () => {
+      await jest.isolateModulesAsync(async () => {
+        const prev = process.env.DATABASE_URL;
+        process.env.DATABASE_URL = "postgres://test@localhost/testdb";
+        const errorSpy = jest
+          .spyOn(console, "error")
+          .mockImplementation(() => undefined);
+        try {
+          const client: MockDbClient = {
+            query: jest.fn(async () => {
+              throw new Error("stats query failed");
+            }),
+            release: jest.fn(),
+          };
+
+          const pool: MockDbPool = {
+            connect: jest.fn(async () => client),
+            on: jest.fn(),
+            end: jest.fn(async () => undefined),
+          };
+
+          jest.doMock("pg", () => ({
+            Pool: class {
+              constructor() {
+                return pool;
+              }
+            },
+          }));
+
+          const mod = await import("../db-service");
+          await expect(mod.fetchMarketplaceStats()).resolves.toEqual({
+            listingCount: 0,
+            sellerCount: 0,
+          });
+          expect(client.release).toHaveBeenCalled();
+          expect(errorSpy).toHaveBeenCalledWith(
+            "fetchMarketplaceStats error:",
+            expect.any(Error)
+          );
+        } finally {
+          errorSpy.mockRestore();
+          process.env.DATABASE_URL = prev;
+        }
+      });
+    });
+
+    test("fetchMarketplaceStats falls back to zero when aggregate row values are missing", async () => {
+      await jest.isolateModulesAsync(async () => {
+        const prev = process.env.DATABASE_URL;
+        process.env.DATABASE_URL = "postgres://test@localhost/testdb";
+        try {
+          const client: MockDbClient = {
+            query: jest.fn(async () => ({ rows: [{}] })),
+            release: jest.fn(),
+          };
+
+          const pool: MockDbPool = {
+            connect: jest.fn(async () => client),
+            on: jest.fn(),
+            end: jest.fn(async () => undefined),
+          };
+
+          jest.doMock("pg", () => ({
+            Pool: class {
+              constructor() {
+                return pool;
+              }
+            },
+          }));
+
+          const mod = await import("../db-service");
+          await expect(mod.fetchMarketplaceStats()).resolves.toEqual({
+            listingCount: 0,
+            sellerCount: 0,
+          });
+          expect(client.release).toHaveBeenCalled();
+        } finally {
+          process.env.DATABASE_URL = prev;
+        }
+      });
+    });
+
+    test("fetchProductByIdFromDb returns null on query error and releases client", async () => {
+      await jest.isolateModulesAsync(async () => {
+        const prev = process.env.DATABASE_URL;
+        process.env.DATABASE_URL = "postgres://test@localhost/testdb";
+        const errorSpy = jest
+          .spyOn(console, "error")
+          .mockImplementation(() => undefined);
+        try {
+          const client: MockDbClient = {
+            query: jest.fn(async () => {
+              throw new Error("product by id failed");
+            }),
+            release: jest.fn(),
+          };
+
+          const pool: MockDbPool = {
+            connect: jest.fn(async () => client),
+            on: jest.fn(),
+            end: jest.fn(async () => undefined),
+          };
+
+          jest.doMock("pg", () => ({
+            Pool: class {
+              constructor() {
+                return pool;
+              }
+            },
+          }));
+
+          const mod = await import("../db-service");
+          await expect(
+            mod.fetchProductByIdFromDb("product-x")
+          ).resolves.toBeNull();
+          expect(client.release).toHaveBeenCalled();
+          expect(errorSpy).toHaveBeenCalledWith(
+            "Failed to fetch product by id:",
+            expect.any(Error)
+          );
+        } finally {
+          errorSpy.mockRestore();
+          process.env.DATABASE_URL = prev;
+        }
+      });
+    });
+
+    test("fetchProductByDTagAndPubkey returns null on query error and releases client", async () => {
+      await jest.isolateModulesAsync(async () => {
+        const prev = process.env.DATABASE_URL;
+        process.env.DATABASE_URL = "postgres://test@localhost/testdb";
+        const errorSpy = jest
+          .spyOn(console, "error")
+          .mockImplementation(() => undefined);
+        try {
+          const client: MockDbClient = {
+            query: jest.fn(async () => {
+              throw new Error("product by d-tag failed");
+            }),
+            release: jest.fn(),
+          };
+
+          const pool: MockDbPool = {
+            connect: jest.fn(async () => client),
+            on: jest.fn(),
+            end: jest.fn(async () => undefined),
+          };
+
+          jest.doMock("pg", () => ({
+            Pool: class {
+              constructor() {
+                return pool;
+              }
+            },
+          }));
+
+          const mod = await import("../db-service");
+          await expect(
+            mod.fetchProductByDTagAndPubkey("listing-x", "seller-x")
+          ).resolves.toBeNull();
+          expect(client.release).toHaveBeenCalled();
+          expect(errorSpy).toHaveBeenCalledWith(
+            "Failed to fetch product by d-tag and pubkey:",
+            expect.any(Error)
+          );
+        } finally {
+          errorSpy.mockRestore();
           process.env.DATABASE_URL = prev;
         }
       });
@@ -1733,6 +2035,202 @@ describe("db-service helpers", () => {
             listingCount: 3,
             sellerCount: 2,
           });
+        });
+      }
+    );
+
+    maybeItTc(
+      "fetchProductByIdFromDb and fetchProductByDTagAndPubkey return real product rows",
+      async () => {
+        await withPostgresDbService(async (db) => {
+          await waitForTables(db, ["product_events"]);
+
+          await db.cacheEvents([
+            productEvent({
+              id: "product-old",
+              pubkey: "seller-1",
+              created_at: 100,
+              tags: [
+                ["title", "Listing A"],
+                ["d", "listing-a"],
+              ],
+              content: "old listing",
+              sig: "sig-old",
+            }),
+            productEvent({
+              id: "product-new",
+              pubkey: "seller-1",
+              created_at: 200,
+              tags: [
+                ["d", "listing-a"],
+                ["title", "Listing A"],
+              ],
+              content: "new listing",
+              sig: "sig-new",
+            }),
+          ]);
+
+          await expect(
+            db.fetchProductByIdFromDb("product-new")
+          ).resolves.toMatchObject({
+            id: "product-new",
+            pubkey: "seller-1",
+            content: "new listing",
+          });
+
+          await expect(
+            db.fetchProductByDTagAndPubkey("listing-a", "seller-1")
+          ).resolves.toMatchObject({
+            id: "product-new",
+            pubkey: "seller-1",
+            content: "new listing",
+          });
+
+          await expect(
+            db.fetchProductByDTagAndPubkey("missing", "seller-1")
+          ).resolves.toBeNull();
+        });
+      }
+    );
+
+    maybeItTc(
+      "fetchShopProfileByPubkeyFromDb and fetchProfilePubkeyByNameSlug resolve profile rows",
+      async () => {
+        await withPostgresDbService(async (db) => {
+          await waitForTables(db, ["profile_events"]);
+
+          await db.cacheEvents([
+            {
+              id: "profile-unique",
+              pubkey: "user-unique-1",
+              created_at: 100,
+              kind: 0,
+              tags: [],
+              content: '{"name":"Unique Profile"}',
+              sig: "sig-unique",
+            } as NostrEvent,
+            {
+              id: "profile-shop",
+              pubkey: "shop-owner-2",
+              created_at: 150,
+              kind: 30019,
+              tags: [],
+              content: '{"name":"Alice Shop"}',
+              sig: "sig-shop",
+            } as NostrEvent,
+            {
+              id: "profile-shop-old",
+              pubkey: "abcd1234deadbeef0001",
+              created_at: 200,
+              kind: 0,
+              tags: [],
+              content: '{"name":"Alice Shop"}',
+              sig: "sig-shop-old",
+            } as NostrEvent,
+            {
+              id: "profile-shop-new",
+              pubkey: "abcd1234cafebabe0002",
+              created_at: 300,
+              kind: 0,
+              tags: [],
+              content: '{"name":"Alice Shop"}',
+              sig: "sig-shop-new",
+            } as NostrEvent,
+          ]);
+
+          await expect(
+            db.fetchShopProfileByPubkeyFromDb("shop-owner-2")
+          ).resolves.toMatchObject({
+            id: "profile-shop",
+            pubkey: "shop-owner-2",
+            content: '{"name":"Alice Shop"}',
+          });
+
+          await expect(
+            db.fetchProfilePubkeyByNameSlug("Unique-Profile")
+          ).resolves.toBe("user-unique-1");
+
+          await expect(
+            db.fetchProfilePubkeyByNameSlug("Alice-Shop")
+          ).resolves.toBeNull();
+
+          await expect(
+            db.fetchProfilePubkeyByNameSlug("Alice-Shop-abcd1234")
+          ).resolves.toBe("abcd1234cafebabe0002");
+        });
+      }
+    );
+
+    maybeItTc("fetchShopPubkeyBySlug resolves normalized slugs", async () => {
+      await withPostgresDbService(async (db) => {
+        await waitForTables(db, ["shop_slugs"]);
+
+        const pool = db.getDbPool();
+        const client = await pool.connect();
+
+        try {
+          await client.query(
+            `INSERT INTO shop_slugs (pubkey, slug)
+               VALUES ($1, $2), ($3, $4)`,
+            ["shop-owner-1", "my-shop", "shop-owner-2", "another-shop"]
+          );
+        } finally {
+          client.release();
+        }
+
+        await expect(db.fetchShopPubkeyBySlug("  My-Shop  ")).resolves.toBe(
+          "shop-owner-1"
+        );
+        await expect(
+          db.fetchShopPubkeyBySlug("missing-shop")
+        ).resolves.toBeNull();
+      });
+    });
+
+    maybeItTc(
+      "fetchCommunityByPubkeyAndIdentifier returns the latest matching community",
+      async () => {
+        await withPostgresDbService(async (db) => {
+          await waitForTables(db, ["community_events"]);
+
+          await db.cacheEvents([
+            {
+              id: "community-old",
+              pubkey: "community-owner-1",
+              created_at: 100,
+              kind: 34550,
+              tags: [["d", "community-a"]],
+              content: "old community",
+              sig: "sig-community-old",
+            } as NostrEvent,
+            {
+              id: "community-new",
+              pubkey: "community-owner-1",
+              created_at: 200,
+              kind: 34550,
+              tags: [["d", "community-a"]],
+              content: "new community",
+              sig: "sig-community-new",
+            } as NostrEvent,
+          ]);
+
+          await expect(
+            db.fetchCommunityByPubkeyAndIdentifier(
+              "community-owner-1",
+              "community-a"
+            )
+          ).resolves.toMatchObject({
+            id: "community-new",
+            pubkey: "community-owner-1",
+            content: "new community",
+          });
+
+          await expect(
+            db.fetchCommunityByPubkeyAndIdentifier(
+              "community-owner-1",
+              "missing-community"
+            )
+          ).resolves.toBeNull();
         });
       }
     );
