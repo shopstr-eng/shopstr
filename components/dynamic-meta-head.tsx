@@ -224,15 +224,41 @@ const DynamicHead = ({
         profileData
       );
 
-  // On a seller's custom domain, prefer the seller's storefront logo as the
-  // browser tab favicon (and apple-touch-icon) so the tab matches their
+  // For custom stalls and custom domains, prefer the seller's storefront logo
+  // as the browser tab favicon (and apple-touch-icon) so the tab matches their
   // brand instead of showing the Milk Market icon.
+  //
+  // The SSR favicon (from getServerSideProps' ogMeta) is used first so that
+  // search-engine crawlers and social-preview bots — which don't run the
+  // client-side Nostr fetches — see the seller's icon in the initial HTML.
+  // The client-side custom-domain logo is a fallback for routes without SSR
+  // ogMeta (e.g. rewritten /listing or /cart pages on a custom domain).
+  const ssrFavicon = ssrOgMeta?.favicon
+    ? ensureAbsoluteUrl(ssrOgMeta.favicon, canonicalOrigin)
+    : "";
   const customDomainShopLogo =
     isCustomDomain && customDomainShopPubkey
-      ? shopEvents.get(customDomainShopPubkey)?.content?.ui?.picture || ""
+      ? shopEvents.get(customDomainShopPubkey)?.content?.ui?.picture ||
+        profileData.get(customDomainShopPubkey)?.content?.picture ||
+        ""
       : "";
-  const faviconUrl = customDomainShopLogo || "/milk-market.ico";
-  const appleTouchIconUrl = customDomainShopLogo || "/milk-market.png";
+  const faviconUrl = ssrFavicon || customDomainShopLogo || "/milk-market.ico";
+  const appleTouchIconUrl =
+    ssrFavicon || customDomainShopLogo || "/milk-market.png";
+
+  // OG/Twitter facets that describe the storefront itself. When SSR ogMeta is
+  // present (custom stalls + custom domains) these come from the seller's
+  // storefront settings so the social preview reflects the stall, not the
+  // platform defaults.
+  const ogType = ssrOgMeta?.type || "website";
+  const ogSiteName = ssrOgMeta?.siteName || "Milk Market";
+  const ogLocale = ssrOgMeta?.locale || "en_US";
+  const keywords =
+    ssrOgMeta?.keywords ||
+    "milk market, raw dairy, farm-fresh dairy, nostr marketplace, bitcoin payments, lightning network, cashu, peer-to-peer commerce, local farmers, raw milk";
+  const geoRegion = ssrOgMeta?.locationRegion || "";
+  const geoCity = ssrOgMeta?.locationCity || "";
+  const geoPlaceName = [geoCity, geoRegion].filter(Boolean).join(", ");
 
   return (
     <Head>
@@ -262,10 +288,16 @@ const DynamicHead = ({
         href={appleTouchIconUrl}
       />
       <meta property="og:url" content={metaTags.url} key="og:url" />
-      <meta property="og:type" content="website" />
-      <meta property="og:title" content={metaTags.title} />
-      <meta property="og:description" content={metaTags.description} />
-      <meta property="og:image" content={metaTags.image} />
+      <meta property="og:type" content={ogType} key="og:type" />
+      <meta property="og:title" content={metaTags.title} key="og:title" />
+      <meta
+        property="og:description"
+        content={metaTags.description}
+        key="og:description"
+      />
+      <meta property="og:image" content={metaTags.image} key="og:image" />
+      <meta property="og:site_name" content={ogSiteName} key="og:site_name" />
+      <meta property="og:locale" content={ogLocale} key="og:locale" />
       <meta name="twitter:card" content="summary_large_image" />
       <meta
         property="twitter:domain"
@@ -278,10 +310,16 @@ const DynamicHead = ({
       <meta name="twitter:title" content={metaTags.title} />
       <meta name="twitter:description" content={metaTags.description} />
       <meta name="twitter:image" content={metaTags.image} />
-      <meta
-        name="keywords"
-        content="milk market, raw dairy, farm-fresh dairy, nostr marketplace, bitcoin payments, lightning network, cashu, peer-to-peer commerce, local farmers, raw milk"
-      />
+      <meta name="keywords" content={keywords} key="keywords" />
+      {geoRegion && (
+        <meta name="geo.region" content={geoRegion} key="geo.region" />
+      )}
+      {geoCity && (
+        <meta name="geo.placename" content={geoCity} key="geo.placename" />
+      )}
+      {geoPlaceName && (
+        <meta property="og:locality" content={geoPlaceName} key="og:locality" />
+      )}
     </Head>
   );
 };

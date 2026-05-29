@@ -4,3 +4,4 @@
 - [Payment overlay cleanup](payment-overlay-cleanup.md) — long-running payment overlays must clear their visibility flag in `finally`, not `catch`; non-dismissable modals turn asymmetric cleanup into a hard-block.
 - [Multi-mint wallet attribution](multi-mint-wallet-attribution.md) — proofs carry no mint; attribute via keysets, promote receiving mint to default, pick spend mint by probe, dedup reactive reloads, and retry loadMint on failure or balances go stale/zero.
 - [Cashu spent-proof self-heal sweep](spent-proof-self-heal.md) — wallet must periodically checkProofsStates and prune SPENT local proofs, with merge-safe writes and a per-tab lock so it can't delete funds added mid-probe.
+- [Storefront SSR head tags](storefront-ssr-head.md) — seller favicon/OG meta must flow through getServerSideProps ogMeta → DynamicHead; client-only head tags are invisible to crawlers/social bots.

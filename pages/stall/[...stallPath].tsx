@@ -9,7 +9,12 @@ import { OgMetaProps, DEFAULT_OG } from "@/components/og-head";
 import {
   fetchShopPubkeyBySlug,
   fetchShopProfileByPubkeyFromDb,
+  fetchProfileByPubkeyFromDb,
 } from "@/utils/db/db-service";
+import {
+  resolveStallBranding,
+  buildStallOgMeta,
+} from "@/utils/storefront/stall-branding";
 
 type ShopSubPageProps = {
   ogMeta: OgMetaProps;
@@ -31,47 +36,38 @@ export const getServerSideProps: GetServerSideProps<ShopSubPageProps> = async (
   try {
     const pubkey = await fetchShopPubkeyBySlug(slug);
     if (pubkey) {
-      const shopEvent = await fetchShopProfileByPubkeyFromDb(pubkey);
+      const [shopEvent, profileEvent] = await Promise.all([
+        fetchShopProfileByPubkeyFromDb(pubkey),
+        fetchProfileByPubkeyFromDb(pubkey),
+      ]);
       if (shopEvent) {
         const content = JSON.parse(shopEvent.content);
-        const seo = content.storefront?.seoMeta;
-        const shopName = content.name || "Stall";
-        const shopAbout = content.about || "";
+        let profileContent: Record<string, unknown> | null = null;
+        if (profileEvent) {
+          try {
+            profileContent = JSON.parse(profileEvent.content);
+          } catch {
+            profileContent = null;
+          }
+        }
+
+        const branding = resolveStallBranding(content, profileContent);
 
         const pageSuffix = subPage
           ? ` — ${subPage.charAt(0).toUpperCase() + subPage.slice(1)}`
           : "";
-        const autoTitle = `${shopName}${pageSuffix} | Milk Market`;
-        const autoDescription = shopAbout
-          ? shopAbout.length > 160
-            ? shopAbout.slice(0, 157) + "..."
-            : shopAbout
-          : `Shop farm-fresh products from ${shopName} on Milk Market. Direct from the producer to your door.`;
+        const title = branding.seo?.metaTitle
+          ? `${branding.seo.metaTitle}${pageSuffix}`
+          : `${branding.shopName}${pageSuffix} | Milk Market`;
 
         return {
           props: {
-            ogMeta: {
-              title: seo?.metaTitle
-                ? `${seo.metaTitle}${pageSuffix}`
-                : autoTitle,
-              description: seo?.metaDescription || autoDescription,
-              image:
-                seo?.ogImage ||
-                content.ui?.banner ||
-                content.ui?.picture ||
-                "/milk-market.png",
+            ogMeta: buildStallOgMeta({
+              branding,
+              title,
               url: `/stall/${pathParts.join("/")}`,
-              keywords:
-                seo?.keywords ||
-                `${shopName}, farm fresh, raw milk, dairy, local farm, ${slug}`,
-              locale: seo?.locale || "en_US",
-              ...(seo?.locationRegion
-                ? { locationRegion: seo.locationRegion }
-                : {}),
-              ...(seo?.locationCity ? { locationCity: seo.locationCity } : {}),
-              siteName: shopName,
-              type: "business.business",
-            },
+              keywordSeed: slug,
+            }),
           },
         };
       }

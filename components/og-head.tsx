@@ -11,6 +11,7 @@ export type OgMetaProps = {
   locationCity?: string;
   siteName?: string;
   type?: string;
+  favicon?: string;
 };
 
 const BASE_URL = "https://milk.market";
