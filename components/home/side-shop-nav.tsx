@@ -4,6 +4,7 @@ import { useContext, useEffect, useState } from "react";
 import { nip19 } from "nostr-tools";
 
 import useNavigation from "@/components/hooks/use-navigation";
+import { useFollowToggle } from "@/components/hooks/use-follow-toggle";
 
 import { ShopMapContext } from "@/utils/context/context";
 import { Button, useDisclosure } from "@heroui/react";
@@ -40,6 +41,11 @@ const SideShopNav = ({
   const [usersPubkey, setUsersPubkey] = useState<string | null>(null);
 
   const { pubkey: userPubkey, isLoggedIn } = useContext(SignerContext);
+  const {
+    isFollowing: isFollowingFocusedPubkey,
+    isLoading: isFollowActionLoading,
+    toggle: handleFollowToggle,
+  } = useFollowToggle(focusedPubkey, { onRequireSignIn: onOpen });
 
   useEffect(() => {
     if (
@@ -139,6 +145,22 @@ const SideShopNav = ({
                 Message seller
               </span>
             </Button>
+            {focusedPubkey !== userPubkey && (
+              <Button
+                onClick={handleFollowToggle}
+                isLoading={isFollowActionLoading}
+                isDisabled={isFollowActionLoading}
+                className={`${SHOPSTRBUTTONCLASSNAMES} flex flex-row items-center py-7`}
+              >
+                <span className="hidden text-2xl md:flex">
+                  {isFollowActionLoading
+                    ? "Please sign..."
+                    : isFollowingFocusedPubkey
+                      ? "Unfollow"
+                      : "+ Follow"}
+                </span>
+              </Button>
+            )}
             {shopAbout && (
               <div className="text-light-text dark:text-dark-text flex w-full flex-col justify-start bg-transparent py-8">
                 <h2 className="pb-2 text-2xl font-bold">About</h2>

@@ -124,9 +124,10 @@ export function checkRateLimit(
 
 export function getRequestIp(req: NextApiRequest): string {
   const remoteAddress = normalizeIp(req.socket?.remoteAddress);
+  const headers = req.headers ?? {};
 
   if (shouldTrustForwardedFor(remoteAddress)) {
-    const forwardedIp = getForwardedForIp(req.headers["x-forwarded-for"]);
+    const forwardedIp = getForwardedForIp(headers["x-forwarded-for"]);
     if (forwardedIp) return forwardedIp;
   }
 

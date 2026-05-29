@@ -29,6 +29,8 @@ import {
 } from "@/utils/nostr/request-auth";
 import { newPromiseWithTimeout } from "@/utils/timeout";
 import { getLocalStorageJson } from "@/utils/safe-json";
+import { isHexPubkey } from "@/utils/nostr/pubkey";
+import { pickPreferredReplaceableEvent } from "@/utils/nostr/replaceable-events";
 
 export const REPORT_TYPES = [
   "nudity",
@@ -1063,46 +1065,299 @@ export async function retractApproval(
   return await finalizeAndSendNostrEvent(signer, nostr, eventTemplate);
 }
 
+function getContactListRelays(): string[] {
+  const { readRelays, writeRelays, relays } = getLocalStorageData();
+  return [...new Set([...readRelays, ...writeRelays, ...relays])];
+}
+
+const CONTACT_LIST_FETCH_TIMEOUT_MS = 2500;
+const latestLocalContactListEvents = new Map<string, NostrEvent>();
+const contactListMutationQueues = new Map<string, Promise<void>>();
+
+async function withContactListFetchTimeout<T>(
+  task: () => Promise<T>,
+  fallback: T
+): Promise<{ value: T; didRespond: boolean }> {
+  try {
+    const value = await newPromiseWithTimeout<T>(
+      (resolve, reject) => {
+        void task().then(resolve).catch(reject);
+      },
+      { timeout: CONTACT_LIST_FETCH_TIMEOUT_MS }
+    );
+    return { value, didRespond: true };
+  } catch {
+    return { value: fallback, didRespond: false };
+  }
+}
+
+async function fetchLatestContactListEvent(
+  nostr: NostrManager,
+  userPubkey: string
+): Promise<{ event: NostrEvent | null; anySourceResponded: boolean }> {
+  const localEvent = latestLocalContactListEvents.get(userPubkey) ?? null;
+
+  // Fetch from relays and DB cache in parallel
+  const relays = getContactListRelays();
+  const relayFetchPromise = Promise.all(
+    relays.map(async (relay) => {
+      const result = await withContactListFetchTimeout(
+        () => nostr.fetch([{ kinds: [3], authors: [userPubkey] }], {}, [relay]),
+        [] as NostrEvent[]
+      );
+
+      console.log(
+        `[follows] contact-list relay ${relay} responded=${result.didRespond} events=${result.value.length}`
+      );
+
+      return result;
+    })
+  );
+
+  const dbFetchPromise = withContactListFetchTimeout(
+    async () => {
+      if (typeof fetch !== "function") return null;
+      try {
+        const response = await fetch(
+          `/api/db/fetch-contacts?pubkey=${encodeURIComponent(userPubkey)}`
+        );
+        if (!response.ok) {
+          throw new Error(`DB fetch failed with status ${response.status}`);
+        }
+        const data = await response.json();
+        return (data?.contactList as NostrEvent) ?? null;
+      } catch (error) {
+        console.error("Failed to fetch contact list from DB cache:", error);
+        throw error;
+      }
+    },
+    null as NostrEvent | null
+  );
+
+  const [relayResults, dbFetch] = await Promise.all([
+    relayFetchPromise,
+    dbFetchPromise,
+  ]);
+
+  const relayEvents = relayResults.flatMap((result) => result.value);
+  const relayDidRespond = relayResults.some((result) => result.didRespond);
+
+  // A source "responded" if relay or DB actually returned (not timed out),
+  // or if we have a local event from a prior mutation this session.
+  const anySourceResponded =
+    relayDidRespond || dbFetch.didRespond || localEvent !== null;
+
+  const dbEvent = dbFetch.value;
+
+  // Merge external sources first, then prefer the local signed event on ties so
+  // queued user actions build from the latest local intent.
+  const allEvents = [...relayEvents];
+  if (dbEvent && dbEvent.id) {
+    allEvents.push(dbEvent);
+  }
+  const externalEvent = pickPreferredReplaceableEvent(
+    allEvents as NostrEvent[]
+  );
+
+  if (
+    localEvent &&
+    localEvent.id &&
+    (!externalEvent || localEvent.created_at >= externalEvent.created_at)
+  ) {
+    return { event: localEvent, anySourceResponded };
+  }
+
+  return { event: externalEvent, anySourceResponded };
+}
+
+function getNextContactListCreatedAt(latestEvent: NostrEvent | null): number {
+  const now = Math.floor(Date.now() / 1000);
+  return latestEvent ? Math.max(now, latestEvent.created_at + 1) : now;
+}
+
+function enqueueContactListMutation(
+  userPubkey: string,
+  mutation: () => Promise<NostrEvent | null>
+): Promise<NostrEvent | null> {
+  const previous =
+    contactListMutationQueues.get(userPubkey) ?? Promise.resolve();
+  const next = previous.catch(() => undefined).then(mutation);
+  contactListMutationQueues.set(
+    userPubkey,
+    next.then(
+      () => undefined,
+      () => undefined
+    )
+  );
+  return next;
+}
+
+async function mutateContactList(
+  nostr: NostrManager,
+  signer: NostrSigner,
+  targetPubkey: string,
+  action: "follow" | "unfollow"
+): Promise<NostrEvent | null> {
+  if (!isHexPubkey(targetPubkey)) return null;
+
+  const userPubkey = await signer.getPubKey();
+  if (action === "follow" && userPubkey === targetPubkey) return null;
+
+  return enqueueContactListMutation(userPubkey, async () => {
+    const { event: latestEvent, anySourceResponded } =
+      await fetchLatestContactListEvent(nostr, userPubkey);
+
+    // If no source responded (relay timed out, DB timed out, no local cache)
+    // and we have no existing state to build from, refuse the mutation to
+    // avoid creating a fresh contact list that would overwrite the user's
+    // real follows stored on relays.
+    if (!latestEvent && !anySourceResponded) {
+      console.warn(
+        "Contact list mutation refused: could not reach relays or database. " +
+          "Try again when connectivity is restored."
+      );
+      return null;
+    }
+
+    const existingTags = latestEvent?.tags ?? [];
+    const existingContent = latestEvent?.content ?? "";
+    const isFollowing = existingTags.some(
+      (tag) => tag[0] === "p" && tag[1] === targetPubkey
+    );
+
+    if (action === "follow" && isFollowing) {
+      return latestEvent;
+    }
+    if (action === "unfollow" && !isFollowing) {
+      return latestEvent;
+    }
+
+    const nextTags =
+      action === "follow"
+        ? [...existingTags, ["p", targetPubkey]]
+        : existingTags.filter(
+            (tag) => !(tag[0] === "p" && tag[1] === targetPubkey)
+          );
+
+    const eventTemplate: EventTemplate = {
+      kind: 3,
+      created_at: getNextContactListCreatedAt(latestEvent),
+      tags: nextTags,
+      content: existingContent,
+    };
+
+    const signedEvent = await signNostrEvent(signer, eventTemplate);
+    latestLocalContactListEvents.set(userPubkey, signedEvent);
+    cacheAndPublishSignedEventInBackground(nostr, signedEvent, signer);
+    return signedEvent;
+  });
+}
+
+export async function signNostrEvent(
+  signer: NostrSigner,
+  eventTemplate: EventTemplate
+): Promise<NostrEvent> {
+  return (await signer.sign(eventTemplate)) as NostrEvent;
+}
+
+async function persistSignedEvent(
+  nostr: NostrManager,
+  signedEvent: NostrEvent,
+  signer?: NostrSigner
+) {
+  const { writeRelays, relays } = getLocalStorageData();
+  const allWriteRelays = withBlastr([...writeRelays, ...relays]);
+
+  try {
+    await cacheEventToDatabase(signedEvent);
+  } catch (error) {
+    console.error(
+      "Failed to cache signed event to database before relay publish:",
+      error
+    );
+  }
+
+  try {
+    await newPromiseWithTimeout(
+      async (resolve, reject) => {
+        try {
+          await nostr.publish(signedEvent, allWriteRelays);
+          resolve(undefined);
+        } catch (err) {
+          reject(err as Error);
+        }
+      },
+      { timeout: 21000 }
+    );
+  } catch (error) {
+    console.warn(
+      "Relay publish timed out or failed, but event is saved to database:",
+      error
+    );
+    const { trackFailedRelayPublish } = await import("@/utils/db/db-client");
+    await trackFailedRelayPublish(
+      signedEvent.id,
+      signedEvent,
+      allWriteRelays,
+      signer
+    ).catch(console.error);
+  }
+}
+
+export function cacheAndPublishSignedEventInBackground(
+  nostr: NostrManager,
+  signedEvent: NostrEvent,
+  signer?: NostrSigner
+) {
+  void persistSignedEvent(nostr, signedEvent, signer).catch((error) => {
+    console.error("Unexpected error while persisting signed event:", error);
+  });
+}
+
+/**
+ * User followed by appending their pubkey to the current NIP-02 kind:3 contact list.
+ * Returns as soon as signing succeeds; DB cache and relay publish continue in the background.
+ */
+export async function followUser(
+  nostr: NostrManager,
+  signer: NostrSigner,
+  targetPubkey: string
+): Promise<NostrEvent | null> {
+  try {
+    return await mutateContactList(nostr, signer, targetPubkey, "follow");
+  } catch (error) {
+    console.error("followUser failed:", error);
+    return null;
+  }
+}
+
+/**
+ * User unfollowed by removing their pubkey from the current NIP-02 kind:3 contact list.
+ * Returns as soon as signing succeeds; DB cache and relay publish continue in the background.
+ */
+export async function unfollowUser(
+  nostr: NostrManager,
+  signer: NostrSigner,
+  targetPubkey: string
+): Promise<NostrEvent | null> {
+  try {
+    return await mutateContactList(nostr, signer, targetPubkey, "unfollow");
+  } catch (error) {
+    console.error("unfollowUser failed:", error);
+    return null;
+  }
+}
+
 export async function finalizeAndSendNostrEvent(
   signer: NostrSigner,
   nostr: NostrManager,
   eventTemplate: EventTemplate
 ) {
   try {
-    const { writeRelays, relays } = getLocalStorageData();
     const signedEvent = await signer.sign(eventTemplate);
 
-    // Cache to database first and wait for confirmation
-    await cacheEventToDatabase(signedEvent);
-
-    // After DB confirmation, attempt to publish to relays with timeout
-    const allWriteRelays = withBlastr([...writeRelays, ...relays]);
-    try {
-      await newPromiseWithTimeout(
-        async (resolve, reject) => {
-          try {
-            await nostr.publish(signedEvent, allWriteRelays);
-            resolve(undefined);
-          } catch (err) {
-            reject(err as Error);
-          }
-        },
-        { timeout: 21000 } // 21 second timeout
-      );
-    } catch (error) {
-      // Timeout or relay publish error - track for retry
-      console.warn(
-        "Relay publish timed out or failed, but event is saved to database:",
-        error
-      );
-      const { trackFailedRelayPublish } = await import("@/utils/db/db-client");
-      await trackFailedRelayPublish(
-        signedEvent.id,
-        signedEvent,
-        allWriteRelays,
-        signer
-      ).catch(console.error);
-    }
+    // Cache to database first and wait for confirmation, then publish with retry tracking.
+    await persistSignedEvent(nostr, signedEvent, signer);
 
     // return the signed event to caller so we know generated IDs
     return signedEvent;

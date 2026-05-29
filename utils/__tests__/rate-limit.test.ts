@@ -124,6 +124,13 @@ describe("getRequestIp", () => {
     expect(getRequestIp(req)).toBe("9.9.9.9");
   });
 
+  it("falls back to the socket remote address when headers are missing", () => {
+    const req = {
+      socket: { remoteAddress: "9.9.9.9" },
+    } as any;
+    expect(getRequestIp(req)).toBe("9.9.9.9");
+  });
+
   it("normalizes IPv6-mapped IPv4 socket addresses", () => {
     const req = {
       headers: {},

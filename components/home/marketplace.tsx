@@ -55,6 +55,7 @@ import {
   isNpub,
 } from "@/utils/url-slugs";
 import { useDebounce } from "@/utils/hooks/useDebounce";
+import { useFollowToggle } from "@/components/hooks/use-follow-toggle";
 
 export function normalizeNpub(
   npub: string | string[] | undefined
@@ -128,6 +129,11 @@ function MarketplacePage({
     useContext(SignerContext);
 
   const searchBarRef = useRef<HTMLDivElement>(null);
+  const {
+    isFollowing: isFollowingFocusedPubkey,
+    isLoading: isFollowActionLoading,
+    toggle: handleFollowToggle,
+  } = useFollowToggle(focusedPubkey, { onRequireSignIn: onOpen });
   const hasTrustGraph =
     Boolean(loggedIn) &&
     !followsContext.isLoading &&
@@ -348,6 +354,7 @@ function MarketplacePage({
                                   "inquiry",
                                   "copy_npub",
                                   "report_profile",
+                                  "follow",
                                 ]
                           }
                         />
@@ -475,6 +482,20 @@ function MarketplacePage({
               >
                 Message
               </Button>
+              {focusedPubkey !== userPubkey && (
+                <Button
+                  className="text-light-text dark:text-dark-text dark:hover:text-accent-dark-text bg-transparent text-lg hover:text-purple-700 sm:text-xl"
+                  onClick={handleFollowToggle}
+                  isLoading={isFollowActionLoading}
+                  isDisabled={isFollowActionLoading}
+                >
+                  {isFollowActionLoading
+                    ? "Please sign..."
+                    : isFollowingFocusedPubkey
+                      ? "Following"
+                      : "+ Follow"}
+                </Button>
+              )}
               {rawEvent && (
                 <Dropdown>
                   <DropdownTrigger>

@@ -1,3 +1,4 @@
+const originalFetch = global.fetch;
 import { fetchReports } from "../fetch-service";
 
 jest.mock("@/utils/db/db-client", () => ({
@@ -142,6 +143,10 @@ describe("fetchProfile", () => {
     jest.clearAllMocks();
   });
 
+  afterEach(() => {
+    global.fetch = originalFetch;
+  });
+
   it("keeps the latest kind 0 profile from the DB and ignores shop profile rows", async () => {
     const verifyNip05Identifier = jest.fn().mockResolvedValue(false);
     const cacheEventsToDatabase = jest.fn();
@@ -237,6 +242,10 @@ describe("fetchAllFollows", () => {
   beforeEach(() => {
     jest.resetModules();
     jest.clearAllMocks();
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ contactList: null }),
+    }) as typeof global.fetch;
 
     jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
       getLocalStorageData: jest.fn(() => ({ wot: 2 })),
@@ -264,7 +273,8 @@ describe("fetchAllFollows", () => {
 
     expect(result.followList).toEqual([]);
     expect(nostr.fetch).not.toHaveBeenCalled();
-    expect(editFollowsContext).toHaveBeenCalledWith([], 0, false);
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(editFollowsContext).toHaveBeenCalledWith([], [], 0, false);
   });
 
   it("keeps follows empty when a logged-in user has no contact list", async () => {
@@ -283,12 +293,15 @@ describe("fetchAllFollows", () => {
 
     expect(result.followList).toEqual([]);
     expect(nostr.fetch).toHaveBeenCalledTimes(1);
+    expect(global.fetch).toHaveBeenCalledWith(
+      `/api/db/fetch-contacts?pubkey=${encodeURIComponent(userPubkey)}`
+    );
     expect(nostr.fetch).toHaveBeenCalledWith(
       [{ kinds: [3], authors: [userPubkey] }],
       {},
       ["wss://relay.example"]
     );
-    expect(editFollowsContext).toHaveBeenCalledWith([], 0, false);
+    expect(editFollowsContext).toHaveBeenCalledWith([], [], 0, false);
   });
 
   it("uses only the latest kind 3 contact list for direct follows", async () => {
@@ -336,6 +349,7 @@ describe("fetchAllFollows", () => {
       ["wss://relay.example"]
     );
     expect(editFollowsContext).toHaveBeenCalledWith(
+      [latestFollowPubkey],
       [latestFollowPubkey],
       1,
       false
@@ -526,5 +540,206 @@ describe("fetchCashuWallet", () => {
     expect(global.fetch).not.toHaveBeenCalled();
     expect(nostr.fetch).not.toHaveBeenCalled();
     expect(editCashuWalletContext).toHaveBeenCalledWith([], [], [], false);
+  });
+});
+
+describe("fetchAllFollows", () => {
+  const userPubkey =
+    "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+  const directFromDb =
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+  const directFromRelay =
+    "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
+  const secondDegreeFromRelay =
+    "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+  const ignoredHexTag =
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
+
+  beforeEach(() => {
+    jest.resetModules();
+    jest.clearAllMocks();
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+  });
+
+  it("hydrates direct follows from DB first, then merges the latest event with relay WoT data", async () => {
+    const editFollowsContext = jest.fn();
+
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(() => ({
+        wot: 1,
+      })),
+      deleteEvent: jest.fn(),
+      verifyNip05Identifier: jest.fn(),
+    }));
+
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn(),
+    }));
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        contactList: {
+          id: "db-contact-list",
+          pubkey: userPubkey,
+          created_at: 200,
+          kind: 3,
+          tags: [
+            ["relay", ignoredHexTag],
+            ["p", directFromDb],
+          ],
+          content: "",
+          sig: "db-sig",
+        },
+      }),
+    }) as typeof global.fetch;
+
+    const { fetchAllFollows } = await import("../fetch-service");
+
+    const nostr = {
+      fetch: jest
+        .fn()
+        .mockResolvedValueOnce([
+          {
+            id: "older-relay-contact-list",
+            pubkey: userPubkey,
+            created_at: 100,
+            kind: 3,
+            tags: [],
+            content: "",
+            sig: "relay-sig",
+          },
+        ])
+        .mockResolvedValueOnce([
+          {
+            id: "second-degree-event",
+            pubkey: directFromDb,
+            created_at: 250,
+            kind: 3,
+            tags: [
+              ["e", ignoredHexTag],
+              ["p", secondDegreeFromRelay],
+            ],
+            content: "",
+            sig: "second-degree-sig",
+          },
+        ]),
+    } as any;
+
+    const result = await fetchAllFollows(
+      nostr,
+      ["wss://relay.example"],
+      editFollowsContext,
+      userPubkey
+    );
+
+    expect(editFollowsContext).toHaveBeenNthCalledWith(
+      1,
+      [directFromDb],
+      [directFromDb],
+      1,
+      true
+    );
+    expect(editFollowsContext).toHaveBeenLastCalledWith(
+      [directFromDb],
+      [directFromDb, secondDegreeFromRelay],
+      1,
+      false
+    );
+    expect(result).toEqual({
+      directFollowList: [directFromDb],
+      followList: [directFromDb, secondDegreeFromRelay],
+      firstDegreeFollowsLength: 1,
+    });
+    expect(nostr.fetch).toHaveBeenNthCalledWith(
+      1,
+      [{ kinds: [3], authors: [userPubkey] }],
+      {},
+      ["wss://relay.example"]
+    );
+    expect(nostr.fetch).toHaveBeenNthCalledWith(
+      2,
+      [{ kinds: [3], authors: [directFromDb] }],
+      {},
+      ["wss://relay.example"]
+    );
+  });
+
+  it("uses the lower event id when DB and relay contact lists share the same timestamp", async () => {
+    const editFollowsContext = jest.fn();
+
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(() => ({
+        wot: 1,
+      })),
+      deleteEvent: jest.fn(),
+      verifyNip05Identifier: jest.fn(),
+    }));
+
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn(),
+    }));
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        contactList: {
+          id: "0".repeat(64),
+          pubkey: userPubkey,
+          created_at: 200,
+          kind: 3,
+          tags: [["p", directFromDb]],
+          content: "",
+          sig: "db-sig",
+        },
+      }),
+    }) as typeof global.fetch;
+
+    const { fetchAllFollows } = await import("../fetch-service");
+
+    const nostr = {
+      fetch: jest
+        .fn()
+        .mockResolvedValueOnce([
+          {
+            id: "f".repeat(64),
+            pubkey: userPubkey,
+            created_at: 200,
+            kind: 3,
+            tags: [["p", directFromRelay]],
+            content: "",
+            sig: "relay-sig",
+          },
+        ])
+        .mockResolvedValueOnce([]),
+    } as any;
+
+    const result = await fetchAllFollows(
+      nostr,
+      ["wss://relay.example"],
+      editFollowsContext,
+      userPubkey
+    );
+
+    expect(result).toEqual({
+      directFollowList: [directFromDb],
+      followList: [directFromDb],
+      firstDegreeFollowsLength: 1,
+    });
+    expect(editFollowsContext).toHaveBeenLastCalledWith(
+      [directFromDb],
+      [directFromDb],
+      1,
+      false
+    );
+    expect(nostr.fetch).toHaveBeenNthCalledWith(
+      2,
+      [{ kinds: [3], authors: [directFromDb] }],
+      {},
+      ["wss://relay.example"]
+    );
   });
 });

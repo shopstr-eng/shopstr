@@ -93,6 +93,27 @@ describe("/api/db/cache-event", () => {
     });
   });
 
+  it("accepts signed contact list cache writes", async () => {
+    verifyEventMock.mockReturnValue(true);
+    cacheEventMock.mockResolvedValue(undefined);
+
+    const event = {
+      id: "evt-contact-list",
+      pubkey: "follower-pubkey",
+      kind: 3,
+      tags: [["p", "seller-pubkey"]],
+      content: "",
+      sig: "sig-contact-list",
+    };
+    const req = createRequest("POST", event);
+    const res = createResponse();
+
+    await cacheEventHandler(req, res as unknown as NextApiResponse);
+
+    expect(cacheEventMock).toHaveBeenCalledWith(event);
+    expect(res.statusCode).toBe(200);
+  });
+
   it("rejects batch writes containing disallowed kinds", async () => {
     verifyEventMock.mockReturnValue(true);
 
