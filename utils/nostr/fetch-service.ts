@@ -20,6 +20,8 @@ import {
   ProductData,
   parseTags,
 } from "@/utils/parsers/product-parser-functions";
+import { productSatisfiesSearchFilter } from "@/utils/parsers/product-filter-helpers";
+import { parseZapsnagNote } from "@/utils/parsers/zapsnag-parser";
 import { parseCommunityEvent } from "../parsers/community-parser-functions";
 import { calculateWeightedScore } from "@/utils/parsers/review-parser-functions";
 import { hashToCurve } from "@cashu/cashu-ts";
@@ -37,6 +39,139 @@ interface NipProfile {
   created_at: number;
   content: { nip05?: string; [key: string]: any };
   nip05Verified: boolean;
+}
+
+type SearchFilter = Filter & { search: string };
+
+const PRODUCT_SEARCH_LIMIT = 100;
+
+export function getProductEventKey(event: NostrEvent): string {
+  if (event.kind === 30402) {
+    const dTag = event.tags?.find((tag: string[]) => tag[0] === "d")?.[1];
+    if (dTag) return `${event.kind}:${event.pubkey}:${dTag}`;
+  }
+
+  return `${event.kind}:${event.id}`;
+}
+
+export function dedupeProductEvents(events: NostrEvent[]): NostrEvent[] {
+  const eventMap = new Map<string, NostrEvent>();
+  const orderedKeys: string[] = [];
+
+  for (const event of events) {
+    if (!event?.id) continue;
+
+    const key = getProductEventKey(event);
+    const existing = eventMap.get(key);
+
+    if (!existing) {
+      orderedKeys.push(key);
+      eventMap.set(key, event);
+      continue;
+    }
+
+    if ((event.created_at ?? 0) >= (existing.created_at ?? 0)) {
+      eventMap.set(key, event);
+    }
+  }
+
+  return orderedKeys
+    .map((key) => eventMap.get(key))
+    .filter((event): event is NostrEvent => !!event);
+}
+
+export function buildNip50ProductSearchFilters(
+  searchQuery: string,
+  options: { authors?: string[]; limit?: number } = {}
+): SearchFilter[] {
+  const search = searchQuery.trim().replace(/\s+/g, " ");
+  if (!search) return [];
+
+  const limit = options.limit ?? PRODUCT_SEARCH_LIMIT;
+  const baseFilter = {
+    search,
+    limit,
+    ...(options.authors?.length ? { authors: options.authors } : {}),
+  };
+
+  return [
+    {
+      ...baseFilter,
+      kinds: [30402],
+    },
+    {
+      ...baseFilter,
+      kinds: [1],
+      "#t": ["shopstr-zapsnag", "zapsnag"],
+    },
+  ];
+}
+
+function eventMatchesProductSearch(
+  event: NostrEvent,
+  searchQuery: string
+): boolean {
+  if (event.kind === 30402) {
+    const parsedProduct = parseTags(event);
+    return (
+      !!parsedProduct &&
+      productSatisfiesSearchFilter(parsedProduct, searchQuery)
+    );
+  }
+
+  if (event.kind === 1) {
+    const tags = event.tags
+      ?.filter((tag) => tag[0] === "t")
+      .map((tag) => tag[1]);
+    if (!tags?.some((tag) => tag === "shopstr-zapsnag" || tag === "zapsnag")) {
+      return false;
+    }
+
+    return productSatisfiesSearchFilter(parseZapsnagNote(event), searchQuery);
+  }
+
+  return false;
+}
+
+export async function fetchNip50ProductSearch(
+  nostr: NostrManager,
+  relays: string[],
+  searchQuery: string,
+  options: { authors?: string[]; limit?: number } = {}
+): Promise<{
+  productEvents: NostrEvent[];
+}> {
+  const filters = buildNip50ProductSearchFilters(searchQuery, options);
+  if (!filters.length || !relays.length) {
+    return { productEvents: [] };
+  }
+
+  const fetchedEvents = await nostr.fetch(filters, {}, relays);
+  const searchProductEvents = fetchedEvents.filter(
+    (event) =>
+      event.id &&
+      event.sig &&
+      event.pubkey &&
+      (event.kind === 30402 || event.kind === 1)
+  );
+  const relevantSearchProductEvents = searchProductEvents.filter((event) =>
+    eventMatchesProductSearch(event, searchQuery)
+  );
+  const cacheableProductEvents = relevantSearchProductEvents.filter(
+    (event) => event.kind === 30402
+  );
+
+  if (cacheableProductEvents.length > 0) {
+    try {
+      await cacheEventsToDatabase(cacheableProductEvents);
+    } catch (error) {
+      console.error("Failed to cache NIP-50 product search events:", error);
+    }
+  }
+
+  return {
+    productEvents: dedupeProductEvents(relevantSearchProductEvents),
+  };
 }
 
 export function getUniqueProofs(proofs: Proof[]): Proof[] {
@@ -69,11 +204,7 @@ export const fetchAllPosts = async (
       const dbProductsMap = new Map<string, NostrEvent>();
 
       const getEventKey = (event: NostrEvent): string => {
-        if (event.kind === 30402) {
-          const dTag = event.tags?.find((tag: string[]) => tag[0] === "d")?.[1];
-          if (dTag) return `${event.pubkey}:${dTag}`;
-        }
-        return event.id;
+        return getProductEventKey(event);
       };
       const isValidProductRelayEvent = (
         event: NostrEvent | null | undefined
@@ -135,7 +266,10 @@ export const fetchAllPosts = async (
       }
 
       // Cache valid product events to database
-      const validProductEvents = fetchedEvents.filter(isValidProductRelayEvent);
+      const validProductEvents = fetchedEvents.filter(
+        (event): event is NostrEvent =>
+          isValidProductRelayEvent(event) && event.kind === 30402
+      );
       if (validProductEvents.length > 0) {
         cacheEventsToDatabase(validProductEvents).catch((error) =>
           console.error("Failed to cache products to database:", error)

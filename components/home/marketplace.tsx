@@ -94,7 +94,7 @@ function MarketplacePage({
   );
   const [selectedLocation, setSelectedLocation] = useState("");
   const [selectedSearch, setSelectedSearch] = useState("");
-  const debouncedSearch = useDebounce(selectedSearch, 300);
+  const debouncedSearch = useDebounce(selectedSearch, 500);
   const { isOpen, onOpen, onClose } = useDisclosure();
 
   const [wotFilter, setWotFilter] = useState(false);
