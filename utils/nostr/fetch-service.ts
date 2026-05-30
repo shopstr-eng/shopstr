@@ -39,7 +39,7 @@ interface NipProfile {
   nip05Verified: boolean;
 }
 
-function getUniqueProofs(proofs: Proof[]): Proof[] {
+export function getUniqueProofs(proofs: Proof[]): Proof[] {
   const seenSecrets = new Set<string>();
   return proofs.filter((proof) => {
     if (!seenSecrets.has(proof.secret)) {
