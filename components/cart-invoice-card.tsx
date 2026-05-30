@@ -454,6 +454,7 @@ export default function CartInvoiceCard({
         keepalive: true,
         body: JSON.stringify({
           buyerEmail: shouldIncludeBuyer ? buyerEmail || undefined : undefined,
+          buyerEmailForSeller: buyerEmail || undefined,
           buyerPubkey: shouldIncludeBuyer ? userPubkey || undefined : undefined,
           sellerPubkey: params.sellerPubkey,
           orderId: params.orderId,

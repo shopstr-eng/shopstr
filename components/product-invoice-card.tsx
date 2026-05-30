@@ -275,6 +275,7 @@ export default function ProductInvoiceCard({
         keepalive: true,
         body: JSON.stringify({
           buyerEmail: buyerEmail || undefined,
+          buyerEmailForSeller: buyerEmail || undefined,
           buyerPubkey: userPubkey || undefined,
           sellerPubkey: params.sellerPubkey,
           orderId: params.orderId,
