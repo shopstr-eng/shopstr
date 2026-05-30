@@ -219,9 +219,18 @@ const UserProfilePage = () => {
         | undefined;
 
       if (data?.p2pkEnabled) {
+        const rawPubkey = (data?.p2pkPubkey as string) ?? "";
+        if (!rawPubkey) {
+          setError("p2pkPubkey", {
+            message:
+              "Cashu wallet key not yet available. Key management is coming soon.",
+          });
+          setIsUploadingProfile(false);
+          return;
+        }
         let mainHex: string;
         try {
-          mainHex = decodeNpubOrHexPubkey(data?.p2pkPubkey as string);
+          mainHex = decodeNpubOrHexPubkey(rawPubkey);
         } catch {
           setError("p2pkPubkey", { message: "Must be valid hex or npub" });
           setIsUploadingProfile(false);
@@ -708,38 +717,28 @@ const UserProfilePage = () => {
                     <Controller
                       name="p2pkPubkey"
                       control={control}
-                      rules={{
-                        required: "Required",
-                        validate: (v: string) => {
-                          try {
-                            decodeNpubOrHexPubkey(v);
-                            return true;
-                          } catch {
-                            return "Must be valid hex or npub";
-                          }
-                        },
-                      }}
-                      render={({
-                        field: { onChange, onBlur, value },
-                        fieldState: { error },
-                      }) => (
-                        <Input
-                          className="text-light-text dark:text-dark-text pb-4"
-                          classNames={{
-                            label:
-                              "text-light-text dark:text-dark-text text-lg",
-                          }}
-                          variant="bordered"
-                          fullWidth
-                          label="P2PK Redeem Pubkey (hex or npub)"
-                          labelPlacement="outside"
-                          placeholder="Your pubkey that will claim payments"
-                          isInvalid={!!error}
-                          errorMessage={error?.message}
-                          onChange={onChange}
-                          onBlur={onBlur}
-                          value={value}
-                        />
+                      render={({ field: { value } }) => (
+                        <div>
+                          <Input
+                            className="text-light-text dark:text-dark-text"
+                            classNames={{
+                              label:
+                                "text-light-text dark:text-dark-text text-lg",
+                            }}
+                            variant="bordered"
+                            fullWidth
+                            label="P2PK Redeem Pubkey (Cashu wallet key)"
+                            labelPlacement="outside"
+                            placeholder="Will be auto-filled from your Cashu wallet key"
+                            isReadOnly
+                            value={value}
+                          />
+                          <p className="text-default-400 mt-1 mb-4 text-xs">
+                            Auto-filled from your Cashu wallet. This key is used
+                            to claim locked payments &mdash; it is separate from
+                            your Nostr identity.
+                          </p>
+                        </div>
                       )}
                     />
 
@@ -759,7 +758,7 @@ const UserProfilePage = () => {
                           type="number"
                           min={1}
                           max={365}
-                          className="text-light-text dark:text-dark-text pb-4"
+                          className="text-light-text dark:text-dark-text py-6"
                           classNames={{
                             label:
                               "text-light-text dark:text-dark-text text-lg",

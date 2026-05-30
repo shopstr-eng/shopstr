@@ -28,6 +28,10 @@ import { NostrManager } from "@/utils/nostr/nostr-manager";
 import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 import { cacheEventsToDatabase } from "@/utils/db/db-client";
 import {
+  applyWalletConfigContent,
+  LatestWalletKeypair,
+} from "@/utils/cashu/wallet-config";
+import {
   buildMessagesListProof,
   buildSignedHttpRequestProofTemplate,
   SIGNED_EVENT_HEADER,
@@ -1656,6 +1660,8 @@ export const fetchCashuWallet = async (
   proofEvents: any[];
   cashuMints: string[];
   cashuProofs: Proof[];
+  cashuPubkey?: string;
+  cashuPrivkey?: string;
 }> => {
   return new Promise(async function (resolve, reject) {
     const { tokens } = getLocalStorageData();
@@ -1677,6 +1683,7 @@ export const fetchCashuWallet = async (
       const cashuRelays: string[] = [];
       const cashuMints: string[] = [];
       const cashuMintSet: Set<string> = new Set();
+      let latestKeypair: LatestWalletKeypair | null = null;
       let cashuProofs: Proof[] = [...tokens]; // Start with existing tokens
       const incomingSpendingHistory: [][] = [];
 
@@ -1695,15 +1702,13 @@ export const fetchCashuWallet = async (
                 userPubkey,
                 event.content
               );
-              const walletContent: string[][] = JSON.parse(decrypted);
-              walletContent
-                .filter((entry) => entry[0] === "mint")
-                .forEach((entry) => {
-                  if (entry[1] && !cashuMintSet.has(entry[1])) {
-                    cashuMintSet.add(entry[1]);
-                    cashuMints.push(entry[1]);
-                  }
-                });
+              latestKeypair = applyWalletConfigContent(
+                decrypted,
+                event.created_at,
+                cashuMintSet,
+                cashuMints,
+                latestKeypair
+              );
             } catch (error) {
               console.error(
                 `Failed to decrypt wallet config event from DB ${event.id}:`,
@@ -1818,15 +1823,13 @@ export const fetchCashuWallet = async (
                 userPubkey,
                 event.content
               );
-              const walletContent: string[][] = JSON.parse(decrypted);
-              walletContent
-                .filter((entry) => entry[0] === "mint")
-                .forEach((entry) => {
-                  if (entry[1] && !cashuMintSet.has(entry[1])) {
-                    cashuMintSet.add(entry[1]);
-                    cashuMints.push(entry[1]);
-                  }
-                });
+              latestKeypair = applyWalletConfigContent(
+                decrypted,
+                event.created_at,
+                cashuMintSet,
+                cashuMints,
+                latestKeypair
+              );
             } catch (decryptError) {
               console.error(
                 `Failed to decrypt wallet config event ${event.id}:`,
@@ -2088,6 +2091,12 @@ export const fetchCashuWallet = async (
         proofEvents: proofEvents,
         cashuMints: cashuMints,
         cashuProofs: cashuProofs,
+        ...(latestKeypair?.cashuPubkey !== undefined
+          ? {
+              cashuPubkey: latestKeypair.cashuPubkey,
+              cashuPrivkey: latestKeypair.cashuPrivkey,
+            }
+          : {}),
       });
     } catch (error) {
       console.error("Fatal error in fetchCashuWallet:", error);

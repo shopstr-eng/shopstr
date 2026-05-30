@@ -295,6 +295,13 @@ export interface ParsedP2PK {
   rawTags: any[];
 }
 
+export type WalletConfig = {
+  version: 1;
+  cashuPubkey: string;
+  cashuPrivkey: string;
+  mints: string[];
+};
+
 declare global {
   interface Window {
     nostr: {
