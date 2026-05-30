@@ -14,6 +14,7 @@ import {
   upsertPendingDomain,
 } from "@/utils/db/custom-domains";
 import { sendCustomDomainAdminNotification } from "@/utils/email/email-service";
+import { requireProEntitlement } from "@/utils/pro/require-pro";
 
 const pool = getDbPool();
 
@@ -179,6 +180,11 @@ export default async function handler(
         .status(401)
         .json({ error: authResult.error || "Authentication failed" });
     }
+
+    // Custom domains are a Pro-only feature. Blocks free, read-only and
+    // hidden sellers from attaching/refreshing a domain. (DELETE stays open
+    // so a lapsed seller can always detach their domain.)
+    if (!(await requireProEntitlement(pubkey, res))) return;
 
     const slugResult = await pool.query(
       "SELECT slug FROM shop_slugs WHERE pubkey = $1",

@@ -9,6 +9,7 @@ import {
   FlowType,
 } from "@/utils/email/flow-email-templates";
 import { applyRateLimit } from "@/utils/rate-limit";
+import { requireProEntitlement } from "@/utils/pro/require-pro";
 
 const RATE_LIMIT = { limit: 60, windowMs: 60 * 1000 };
 
@@ -57,6 +58,9 @@ export default async function handler(
         )}`,
       });
     }
+
+    // Custom email flows are Pro-only. Block creation for non-entitled sellers.
+    if (!(await requireProEntitlement(seller_pubkey, res))) return;
 
     try {
       const flow = await createEmailFlow({

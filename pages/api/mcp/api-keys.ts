@@ -18,6 +18,7 @@ import {
   verifyAndConsumeSignedRequestProof,
 } from "@/utils/mcp/request-proof-server";
 import { applyRateLimit } from "@/utils/rate-limit";
+import { requireProEntitlement } from "@/utils/pro/require-pro";
 
 // Sensitive credential management; tight per-IP cap.
 const RATE_LIMIT = { limit: 30, windowMs: 60 * 1000 };
@@ -94,6 +95,10 @@ export default async function handler(
     ) {
       return;
     }
+
+    // MCP API keys are a Pro-only feature. Block creation for sellers who are
+    // not currently entitled (free, read-only or hidden).
+    if (!(await requireProEntitlement(normalizedPubkey, res))) return;
 
     try {
       const result = await createApiKey(normalizedName, normalizedPubkey, perm);

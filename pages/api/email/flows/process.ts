@@ -12,6 +12,7 @@ import {
 } from "@/utils/email/flow-email-templates";
 import { getUncachableSendGridClient } from "@/utils/email/sendgrid-client";
 import { applyRateLimit } from "@/utils/rate-limit";
+import { isPubkeyProEntitled } from "@/utils/pro/membership";
 
 export default async function handler(
   req: NextApiRequest,
@@ -55,9 +56,32 @@ export default async function handler(
 
     const results: Array<{
       execution_id: number;
-      status: "sent" | "failed";
+      status: "sent" | "failed" | "skipped";
       error?: string;
     }> = [];
+
+    // Email flows are Pro-only. Cache per-seller entitlement for this batch so
+    // we don't re-check the same seller repeatedly, and skip sends for sellers
+    // who are not currently entitled (read-only/hidden/free). Skipped sends are
+    // marked failed so they leave the pending queue and don't starve the batch.
+    const entitlementCache = new Map<string, boolean>();
+    const isSellerEntitled = async (sellerPubkey: string): Promise<boolean> => {
+      if (entitlementCache.has(sellerPubkey))
+        return entitlementCache.get(sellerPubkey)!;
+      let entitled = false;
+      try {
+        entitled = await isPubkeyProEntitled(sellerPubkey);
+      } catch (err) {
+        console.error(
+          "Failed to resolve seller entitlement for flow email:",
+          sellerPubkey,
+          err
+        );
+        entitled = false;
+      }
+      entitlementCache.set(sellerPubkey, entitled);
+      return entitled;
+    };
 
     // Cache per-seller storefront style for the duration of this batch so we
     // don't re-fetch the kind 30019 event for every execution from the same
@@ -105,6 +129,15 @@ export default async function handler(
 
     for (const execution of executions) {
       try {
+        if (!(await isSellerEntitled(execution.seller_pubkey))) {
+          await markExecutionFailed(
+            execution.id,
+            "Skipped: seller does not have an active Pro membership"
+          );
+          results.push({ execution_id: execution.id, status: "skipped" });
+          continue;
+        }
+
         const mergeData: MergeTagData = {
           ...(execution.enrollment_data || {}),
           shop_name:

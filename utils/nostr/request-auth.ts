@@ -599,3 +599,84 @@ export function buildClearFailedRelayPublishProof({
     fields: incrementRetry ? { eventId, incrementRetry: "true" } : { eventId },
   };
 }
+
+// ---------------------------------------------------------------------------
+// Pro membership tier
+// ---------------------------------------------------------------------------
+
+export function buildProCreateSubscriptionProof({
+  pubkey,
+  term,
+}: {
+  pubkey: string;
+  term: "monthly" | "yearly";
+}): SignedHttpRequestProof {
+  return {
+    action: "create_pro_subscription",
+    method: "POST",
+    path: "/api/pro/create-subscription",
+    pubkey,
+    fields: { term },
+  };
+}
+
+export function buildProSyncProof(pubkey: string): SignedHttpRequestProof {
+  return {
+    action: "sync_pro_subscription",
+    method: "POST",
+    path: "/api/pro/sync",
+    pubkey,
+  };
+}
+
+export function buildProCancelProof(pubkey: string): SignedHttpRequestProof {
+  return {
+    action: "cancel_pro_subscription",
+    method: "POST",
+    path: "/api/pro/cancel",
+    pubkey,
+  };
+}
+
+export function buildProManualInvoiceProof({
+  pubkey,
+  term,
+  method,
+}: {
+  pubkey: string;
+  term: "monthly" | "yearly";
+  method: "bitcoin" | "fiat";
+}): SignedHttpRequestProof {
+  return {
+    action: "create_pro_invoice",
+    method: "POST",
+    path: "/api/pro/manual-invoice",
+    pubkey,
+    fields: { term, method },
+  };
+}
+
+export function buildProHistoryProof(pubkey: string): SignedHttpRequestProof {
+  return {
+    action: "list_pro_history",
+    method: "GET",
+    path: "/api/pro/history",
+    pubkey,
+  };
+}
+
+export function buildProVerifyInvoiceProof({
+  pubkey,
+  invoiceId,
+}: {
+  pubkey: string;
+  invoiceId: string;
+}): SignedHttpRequestProof {
+  return {
+    action: "verify_pro_invoice",
+    method: "POST",
+    path: "/api/pro/verify-invoice",
+    pubkey,
+    fields: { invoiceId },
+  };
+}

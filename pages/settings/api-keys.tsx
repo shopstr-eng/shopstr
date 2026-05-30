@@ -7,6 +7,8 @@ import {
   DANGERBUTTONCLASSNAMES,
 } from "@/utils/STATIC-VARIABLES";
 import ProtectedRoute from "@/components/utility-components/protected-route";
+import UpgradeBanner from "@/components/pro/upgrade-banner";
+import { useProMembership } from "@/components/utility-components/pro-membership-context";
 import { copyToClipboard } from "@/utils/clipboard";
 import { NostrEventTemplate } from "@/utils/nostr/nostr-manager";
 import {
@@ -38,6 +40,7 @@ interface ApiKeyItem {
 
 const ApiKeysPage = () => {
   const { pubkey, signer } = useContext(SignerContext);
+  const { membership } = useProMembership();
   const [apiKeys, setApiKeys] = useState<ApiKeyItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
@@ -284,47 +287,51 @@ const ApiKeysPage = () => {
             <h2 className="mb-4 text-2xl font-bold text-black">
               Create API Key
             </h2>
-            <div className="shadow-neo space-y-4 rounded-md border-2 border-black bg-white p-4">
-              <Input
-                label="Key Name"
-                placeholder="e.g., My AI Agent"
-                value={newKeyName}
-                onValueChange={setNewKeyName}
-                classNames={{
-                  label: "text-black",
-                  input: "!text-black",
-                  inputWrapper:
-                    "rounded-md border-2 border-black bg-white shadow-none data-[hover=true]:bg-white data-[focus=true]:bg-white group-data-[focus=true]:bg-white group-data-[focus=true]:border-black",
-                  innerWrapper: "text-black",
-                }}
-              />
-              <Select
-                label="Permissions"
-                selectedKeys={[newKeyPermission]}
-                onChange={(e) => setNewKeyPermission(e.target.value)}
-                classNames={{
-                  trigger:
-                    "rounded-md border-2 border-black bg-white shadow-none data-[hover=true]:bg-white",
-                  label: "text-black",
-                  value: "text-black",
-                }}
-              >
-                <SelectItem key="read">
-                  Read Only — Browse products, profiles, reviews
-                </SelectItem>
-                <SelectItem key="read_write">
-                  Read + Write — Browse and place orders
-                </SelectItem>
-              </Select>
-              <Button
-                className={BLUEBUTTONCLASSNAMES}
-                onClick={handleCreate}
-                isLoading={isCreating}
-                isDisabled={!newKeyName.trim()}
-              >
-                {isCreating ? "Creating..." : "Generate API Key"}
-              </Button>
-            </div>
+            {!membership.isPro ? (
+              <UpgradeBanner feature="The MCP API" />
+            ) : (
+              <div className="shadow-neo space-y-4 rounded-md border-2 border-black bg-white p-4">
+                <Input
+                  label="Key Name"
+                  placeholder="e.g., My AI Agent"
+                  value={newKeyName}
+                  onValueChange={setNewKeyName}
+                  classNames={{
+                    label: "text-black",
+                    input: "!text-black",
+                    inputWrapper:
+                      "rounded-md border-2 border-black bg-white shadow-none data-[hover=true]:bg-white data-[focus=true]:bg-white group-data-[focus=true]:bg-white group-data-[focus=true]:border-black",
+                    innerWrapper: "text-black",
+                  }}
+                />
+                <Select
+                  label="Permissions"
+                  selectedKeys={[newKeyPermission]}
+                  onChange={(e) => setNewKeyPermission(e.target.value)}
+                  classNames={{
+                    trigger:
+                      "rounded-md border-2 border-black bg-white shadow-none data-[hover=true]:bg-white",
+                    label: "text-black",
+                    value: "text-black",
+                  }}
+                >
+                  <SelectItem key="read">
+                    Read Only — Browse products, profiles, reviews
+                  </SelectItem>
+                  <SelectItem key="read_write">
+                    Read + Write — Browse and place orders
+                  </SelectItem>
+                </Select>
+                <Button
+                  className={BLUEBUTTONCLASSNAMES}
+                  onClick={handleCreate}
+                  isLoading={isCreating}
+                  isDisabled={!newKeyName.trim()}
+                >
+                  {isCreating ? "Creating..." : "Generate API Key"}
+                </Button>
+              </div>
+            )}
           </div>
 
           <div className="mb-8">

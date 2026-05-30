@@ -17,6 +17,7 @@ import {
   affiliatePaidEmail,
   affiliatePausedToAffiliateEmail,
   affiliatePausedToSellerEmail,
+  proReceiptEmail,
   OrderEmailParams,
   SubscriptionEmailParams,
   StorefrontBranding,
@@ -359,6 +360,22 @@ export async function sendCustomDomainAdminNotification(
     );
   }
   return ok;
+}
+
+export async function sendProReceipt(
+  sellerEmail: string,
+  params: {
+    amountCents: number;
+    currency: string;
+    term: "monthly" | "yearly" | null;
+    method: "stripe" | "bitcoin" | "fiat";
+    paidAt: string | null;
+    receiptUrl?: string | null;
+    invoicePdfUrl?: string | null;
+  }
+): Promise<boolean> {
+  const { subject, html } = proReceiptEmail(params);
+  return sendEmail(sellerEmail, subject, html);
 }
 
 export async function sendTransferFailureAlert(

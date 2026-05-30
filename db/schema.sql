@@ -669,3 +669,68 @@ BEGIN
     ON affiliate_codes (seller_pubkey, UPPER(code));
 END
 $aff_migrate$;
+
+-- ===========================================================================
+-- Pro membership tier (paid seller tier). Status is resolved in code from the
+-- forward-looking lapse timeline stored here (trial/period end → grace →
+-- read-only → hidden).
+-- ===========================================================================
+CREATE TABLE IF NOT EXISTS pro_memberships (
+    id SERIAL PRIMARY KEY,
+    pubkey TEXT NOT NULL UNIQUE,
+    billing_method TEXT CHECK (billing_method IN ('stripe', 'manual')),
+    term TEXT CHECK (term IN ('monthly', 'yearly')),
+    status TEXT NOT NULL DEFAULT 'free',
+    stripe_customer_id TEXT,
+    stripe_subscription_id TEXT,
+    trial_end TIMESTAMP,
+    current_period_end TIMESTAMP,
+    grace_until TIMESTAMP,
+    readonly_until TIMESTAMP,
+    cancel_at_period_end BOOLEAN NOT NULL DEFAULT FALSE,
+    trial_reminder_sent_at TIMESTAMP,
+    due_reminder_sent_at TIMESTAMP,
+    readonly_notice_sent_at TIMESTAMP,
+    hidden_notice_sent_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_pro_memberships_pubkey ON pro_memberships(pubkey);
+CREATE INDEX IF NOT EXISTS idx_pro_memberships_stripe_subscription_id ON pro_memberships(stripe_subscription_id);
+CREATE INDEX IF NOT EXISTS idx_pro_memberships_stripe_customer_id ON pro_memberships(stripe_customer_id);
+
+CREATE TABLE IF NOT EXISTS pro_manual_invoices (
+    id SERIAL PRIMARY KEY,
+    invoice_id TEXT NOT NULL UNIQUE,
+    pubkey TEXT NOT NULL,
+    term TEXT NOT NULL CHECK (term IN ('monthly', 'yearly')),
+    method TEXT NOT NULL CHECK (method IN ('bitcoin', 'fiat')),
+    amount_usd_cents INTEGER NOT NULL,
+    amount_sats INTEGER,
+    bolt11 TEXT,
+    verify_url TEXT,
+    payment_hash TEXT,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'paid', 'expired', 'canceled')),
+    due_at TIMESTAMP NOT NULL,
+    paid_at TIMESTAMP,
+    -- Set only once the membership extension for this invoice has been applied.
+    -- Guards the paid→entitled step so a partial failure can be safely retried.
+    membership_applied_at TIMESTAMP,
+    -- Exact entitlement window this charge paid for, persisted at settle time so
+    -- the billing history doesn't have to replay the stacking heuristic.
+    coverage_start TIMESTAMP,
+    coverage_end TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_pro_manual_invoices_pubkey ON pro_manual_invoices(pubkey);
+CREATE INDEX IF NOT EXISTS idx_pro_manual_invoices_status ON pro_manual_invoices(status);
+CREATE INDEX IF NOT EXISTS idx_pro_manual_invoices_invoice_id ON pro_manual_invoices(invoice_id);
+
+CREATE TABLE IF NOT EXISTS pro_settings (
+    key TEXT PRIMARY KEY,
+    value TEXT,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);

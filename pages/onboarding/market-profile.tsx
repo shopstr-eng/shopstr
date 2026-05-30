@@ -15,11 +15,18 @@ const OnboardingMarketProfile = () => {
   const isSeller = type === "seller";
 
   const migrate = router.query.migrate as string | undefined;
-  const migrateQuery = migrate ? `?migrate=${encodeURIComponent(migrate)}` : "";
+  const plan = router.query.plan as string | undefined;
+  const buildQuery = () => {
+    const params = new URLSearchParams();
+    if (plan) params.set("plan", plan);
+    if (migrate) params.set("migrate", migrate);
+    const s = params.toString();
+    return s ? `?${s}` : "";
+  };
 
   const handleNext = () => {
     if (isSeller) {
-      router.push(`/onboarding/shop-profile${migrateQuery}`);
+      router.push(`/onboarding/shop-profile${buildQuery()}`);
     } else {
       router.push("/marketplace");
     }
@@ -44,7 +51,7 @@ const OnboardingMarketProfile = () => {
             </div>
             <div className="mb-6 text-center">
               <h2 className="mb-3 text-2xl font-bold text-black">
-                Step 3: Set Up Your Profile
+                Step {isSeller ? 4 : 3}: Set Up Your Profile
               </h2>
               <p className="font-medium text-black">
                 {isBuyer

@@ -1168,3 +1168,91 @@ export function accountRecoveryEmail(params: { recoveryLink: string }): {
     html: baseTemplate("Account Recovery", body),
   };
 }
+
+function formatProAmount(amountCents: number, currency: string): string {
+  const c = currency.toUpperCase();
+  const major = (amountCents / 100).toFixed(2);
+  return c === "USD" ? `$${major}` : `${major} ${c}`;
+}
+
+function formatProDate(paidAt: string | null): string {
+  if (!paidAt) return "";
+  const d = new Date(paidAt);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+}
+
+// Receipt confirmation for a successful Pro membership charge — sent after a
+// Stripe renewal is paid (webhook) or a manual Bitcoin/fiat invoice is settled.
+// Stripe charges carry receipt/PDF links; manual charges do not.
+export function proReceiptEmail(params: {
+  amountCents: number;
+  currency: string;
+  term: "monthly" | "yearly" | null;
+  method: "stripe" | "bitcoin" | "fiat";
+  paidAt: string | null;
+  receiptUrl?: string | null;
+  invoicePdfUrl?: string | null;
+}): { subject: string; html: string } {
+  const amount = formatProAmount(params.amountCents, params.currency);
+  const date = formatProDate(params.paidAt);
+  const termLabel =
+    params.term === "yearly"
+      ? "Annual"
+      : params.term === "monthly"
+        ? "Monthly"
+        : "—";
+  const methodLabel =
+    params.method === "stripe"
+      ? "Card (Stripe)"
+      : params.method === "bitcoin"
+        ? "Bitcoin"
+        : "Fiat";
+
+  const row = (label: string, value: string) => `
+    <tr>
+      <td style="padding:8px 0;color:#6b7280;font-size:14px;">${esc(label)}</td>
+      <td style="padding:8px 0;color:#111827;font-size:14px;font-weight:600;text-align:right;">${esc(value)}</td>
+    </tr>`;
+
+  const links: string[] = [];
+  if (params.receiptUrl) {
+    links.push(
+      `<a href="${esc(params.receiptUrl)}" style="color:#111827;text-decoration:underline;">View receipt</a>`
+    );
+  }
+  if (params.invoicePdfUrl) {
+    links.push(
+      `<a href="${esc(params.invoicePdfUrl)}" style="color:#111827;text-decoration:underline;">Download PDF</a>`
+    );
+  }
+  const linksHtml =
+    links.length > 0
+      ? `<p style="margin:0 0 16px;color:#374151;font-size:14px;line-height:1.6;">${links.join(" &nbsp;·&nbsp; ")}</p>`
+      : "";
+
+  const body = `
+    <h2 style="margin:0 0 16px;color:#111827;font-size:20px;font-weight:700;">Payment received — thank you</h2>
+    <p style="margin:0 0 16px;color:#374151;font-size:15px;line-height:1.6;">
+      We received your ${BRAND_NAME} Pro payment of <strong>${esc(amount)}</strong>. Your Pro features stay active — here are the details for your records.
+    </p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;border-top:1px solid #e5e7eb;border-bottom:1px solid #e5e7eb;">
+      ${date ? row("Date", date) : ""}
+      ${row("Amount", amount)}
+      ${row("Plan", `${termLabel} Pro`)}
+      ${row("Payment method", methodLabel)}
+    </table>
+    ${linksHtml}
+    <p style="margin:0;color:#6b7280;font-size:13px;line-height:1.5;">
+      You can review your full billing history anytime from your account settings.
+    </p>`;
+
+  return {
+    subject: `${BRAND_NAME} — Pro payment receipt (${amount})`,
+    html: baseTemplate("Pro payment receipt", body),
+  };
+}

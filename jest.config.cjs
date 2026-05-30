@@ -34,13 +34,25 @@ const customJestConfig = {
 
 module.exports = async () => {
   const jestConfig = await createJestConfig(customJestConfig)();
-  // Note: pnpm hoists modules under node_modules/.pnpm/<pkg>@<ver>/node_modules/<pkg>.
-  // The negative lookahead has to handle BOTH the classic `node_modules/@noble/...`
-  // layout and the pnpm `node_modules/.pnpm/.../node_modules/@noble/...` layout,
-  // otherwise ESM-only deps like @noble/hashes/sha2.js are passed through to
-  // Node untransformed and crash with "Cannot use import statement outside a module".
+  // ESM-only deps (nostr-tools, @noble/*, @scure/*, @cashu/cashu-ts, etc.) must
+  // be transformed by Jest or Node crashes with "Cannot use import statement
+  // outside a module". pnpm stores packages two ways that both have to be
+  // handled:
+  //   - .pnpm store:  node_modules/.pnpm/@noble+curves@2.0.1/node_modules/@noble/curves/...
+  //   - classic/hoisted: node_modules/@noble/curves/...
+  // A single combined pattern with an OPTIONAL `.pnpm/...` group does NOT work:
+  // the regex backtracks, matches the optional group as empty, and then the
+  // lookahead inspects the literal string ".pnpm/" (never whitelisted), so the
+  // whole path matches and the file is wrongly ignored. Splitting into two
+  // anchored patterns avoids the backtracking trap.
+  //
+  // In the .pnpm store, scoped package dirs use `+` instead of `/`
+  // (e.g. `@noble+curves@2.0.1`), so the .pnpm whitelist matches on `@noble+`.
   jestConfig.transformIgnorePatterns = [
-    "/node_modules/(?:\\.pnpm/[^/]+/node_modules/)?(?!(dexie|nostr-tools|@noble|@scure|@getalby/lightning-tools|@cashu/cashu-ts|uuid)/)",
+    // .pnpm store layout: ignore everything except the whitelisted package dirs.
+    "/node_modules/\\.pnpm/(?!(dexie@|nostr-tools@|@noble\\+|@scure\\+|@getalby\\+lightning-tools|@cashu\\+cashu-ts|uuid@))",
+    // Classic/hoisted layout (anything not under .pnpm): same whitelist with `/`.
+    "/node_modules/(?!\\.pnpm/)(?!(dexie|nostr-tools|@noble|@scure|@getalby/lightning-tools|@cashu/cashu-ts|uuid)/)",
     "^.+\\.module\\.(css|sass|scss)$",
   ];
 

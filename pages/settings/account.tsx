@@ -36,6 +36,7 @@ import {
 import ProtectedRoute from "@/components/utility-components/protected-route";
 import NostrKeysSection from "@/components/settings/nostr-keys-section";
 import NWCSection from "@/components/settings/nwc-section";
+import ProMembershipSection from "@/components/settings/pro-membership-section";
 
 const AccountSettingsPage = () => {
   const { nostr } = useContext(NostrContext);
@@ -275,6 +276,9 @@ const AccountSettingsPage = () => {
               your data storage.
             </p>
           </div>
+
+          {/* Pro Membership */}
+          <ProMembershipSection />
 
           {/* Nostr Keys + Recovery */}
           <NostrKeysSection />

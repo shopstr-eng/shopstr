@@ -5,6 +5,7 @@ import {
   deleteEmailFlow,
 } from "@/utils/db/db-service";
 import { applyRateLimit } from "@/utils/rate-limit";
+import { requireProEntitlement } from "@/utils/pro/require-pro";
 
 const RATE_LIMIT = { limit: 60, windowMs: 60 * 1000 };
 
@@ -59,6 +60,8 @@ export default async function handler(
         return res.status(403).json({ error: "Not authorized" });
       }
 
+      if (!(await requireProEntitlement(seller_pubkey, res))) return;
+
       const updated = await updateEmailFlow(id, {
         name,
         status,
@@ -87,6 +90,8 @@ export default async function handler(
       if (flow.seller_pubkey !== seller_pubkey) {
         return res.status(403).json({ error: "Not authorized" });
       }
+
+      if (!(await requireProEntitlement(seller_pubkey, res))) return;
 
       await deleteEmailFlow(id);
       return res.status(200).json({ success: true });

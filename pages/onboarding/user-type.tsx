@@ -19,13 +19,17 @@ const UserTypeSelection = () => {
   const migrateSuffix = migrate
     ? `&migrate=${encodeURIComponent(migrate)}`
     : "";
+  const plan = router.query.plan as string | undefined;
+  const planSuffix = plan ? `&plan=${encodeURIComponent(plan)}` : "";
 
   useEffect(() => {
     if (!router.isReady) return;
     // Sellers coming through the Shopify migration funnel already have an
     // implicit role — skip this step entirely.
     if (migrate === "shopify") {
-      router.replace("/onboarding/market-profile?type=seller&migrate=shopify");
+      router.replace(
+        `/onboarding/choose-plan?type=seller&migrate=shopify${planSuffix}`
+      );
       return;
     }
     if (preselect === "seller") {
@@ -35,7 +39,9 @@ const UserTypeSelection = () => {
 
   const handleNext = () => {
     if (selectedType === "seller") {
-      router.push(`/onboarding/market-profile?type=seller${migrateSuffix}`);
+      router.push(
+        `/onboarding/choose-plan?type=seller${planSuffix}${migrateSuffix}`
+      );
     } else if (selectedType === "buyer") {
       router.push(`/onboarding/market-profile?type=buyer${migrateSuffix}`);
     }

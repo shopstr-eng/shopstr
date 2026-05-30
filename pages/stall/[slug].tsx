@@ -14,6 +14,7 @@ import {
   resolveStallBranding,
   buildStallOgMeta,
 } from "@/utils/storefront/stall-branding";
+import { getMembershipView } from "@/utils/pro/membership";
 
 type ShopPageProps = {
   ogMeta: OgMetaProps;
@@ -32,11 +33,15 @@ export const getServerSideProps: GetServerSideProps<ShopPageProps> = async (
   try {
     const pubkey = await fetchShopPubkeyBySlug(shopSlug);
     if (pubkey) {
+      // Hidden sellers (lapsed past the read-only window) stop serving their
+      // custom branding publicly, so crawlers/social bots get the default OG
+      // meta instead of the seller's custom title/description/image.
+      const membership = await getMembershipView(pubkey);
       const [shopEvent, profileEvent] = await Promise.all([
         fetchShopProfileByPubkeyFromDb(pubkey),
         fetchProfileByPubkeyFromDb(pubkey),
       ]);
-      if (shopEvent) {
+      if (shopEvent && !membership.isHidden) {
         const content = JSON.parse(shopEvent.content);
         let profileContent: Record<string, unknown> | null = null;
         if (profileEvent) {

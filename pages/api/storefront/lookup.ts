@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getDbPool } from "@/utils/db/db-service";
 import { applyRateLimit } from "@/utils/rate-limit";
+import { getMembershipView } from "@/utils/pro/membership";
 
 const pool = getDbPool();
 
@@ -35,6 +36,13 @@ export default async function handler(
         [domain.toLowerCase()]
       );
       if (result.rows.length > 0) {
+        // Custom domains are a Pro feature. Once a lapsed seller falls past the
+        // read-only window (hidden), their custom domain stops resolving so the
+        // proxy serves the unconfigured placeholder instead of the storefront.
+        const view = await getMembershipView(result.rows[0].pubkey);
+        if (view.isHidden) {
+          return res.status(404).json({ error: "Domain not found" });
+        }
         return res.status(200).json({
           pubkey: result.rows[0].pubkey,
           shopSlug: result.rows[0].shop_slug,

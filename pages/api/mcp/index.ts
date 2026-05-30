@@ -9,6 +9,8 @@ import {
   extractBearerToken,
   validateApiKey,
   initializeApiKeysTable,
+  isApiKeyOwnerProEntitled,
+  MCP_PRO_REQUIRED_MESSAGE,
   ApiKeyRecord,
 } from "@/utils/mcp/auth";
 import { recordRequest } from "@/utils/mcp/metrics";
@@ -735,6 +737,18 @@ export default async function handler(
     return res.status(401).json({
       jsonrpc: "2.0",
       error: { code: -32000, message: "Invalid or revoked API key" },
+      id: null,
+    });
+  }
+
+  // MCP usage is Pro-only. Reject keys whose owning seller is no longer
+  // entitled so access tracks the membership lifecycle even for keys minted
+  // while the seller was on Pro.
+  if (!(await isApiKeyOwnerProEntitled(apiKey))) {
+    recordRequest(Date.now() - requestStart, false);
+    return res.status(403).json({
+      jsonrpc: "2.0",
+      error: { code: -32000, message: MCP_PRO_REQUIRED_MESSAGE },
       id: null,
     });
   }

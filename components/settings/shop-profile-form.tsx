@@ -77,10 +77,47 @@ import CustomDomainSection from "./custom-domain-section";
 import StorefrontPreviewModal from "./storefront/storefront-preview-modal";
 import StorefrontPreviewPanel from "./storefront/storefront-preview-panel";
 import { sanitizeStorefrontConfigLinks } from "@/utils/storefront-links";
+import UpgradeBanner from "@/components/pro/upgrade-banner";
+import { useProMembership } from "@/components/utility-components/pro-membership-context";
+import type { MembershipView } from "@/utils/pro/constants";
 
 interface ShopProfileFormProps {
   isOnboarding?: boolean;
 }
+
+// Gates the advanced storefront customization region (colors, fonts, page
+// builder, footer, custom domain). Pro sellers edit freely; read-only (recently
+// lapsed) sellers can view but not save; free/hidden sellers see an upgrade
+// nudge instead. Basic stall name/slug/description/picture stay free and live
+// outside this gate.
+const AdvancedStorefrontGate = ({
+  membership,
+  children,
+}: {
+  membership: MembershipView;
+  children: React.ReactNode;
+}) => {
+  if (membership.isPro) return <>{children}</>;
+  if (membership.isReadOnly) {
+    return (
+      <>
+        <UpgradeBanner
+          className="mb-6"
+          feature="Advanced storefront customization"
+        />
+        <fieldset disabled className="m-0 block border-0 p-0">
+          {children}
+        </fieldset>
+      </>
+    );
+  }
+  return (
+    <UpgradeBanner
+      className="mb-6"
+      feature="Advanced storefront customization"
+    />
+  );
+};
 
 const CURRENCY_OPTIONS = Object.keys(currencySelection);
 
@@ -316,6 +353,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
   const [isMobilePreviewClosing, setIsMobilePreviewClosing] = useState(false);
 
   const { signer, pubkey: userPubkey } = useContext(SignerContext);
+  const { membership } = useProMembership();
 
   const shopContext = useContext(ShopMapContext);
   const profileContext = useContext(ProfileMapContext);
@@ -1342,121 +1380,194 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                         )}
                       </div>
 
-                      <div className="mb-6">
-                        <CustomDomainSection />
-                      </div>
-
-                      <div className="mb-6">
-                        <label className="mb-2 block text-base font-bold text-black">
-                          Color Scheme
-                        </label>
-                        <div className="mb-3 flex flex-wrap gap-2">
-                          {COLOR_PRESETS.map((preset) => {
-                            const isActive =
-                              !isCustomColorScheme &&
-                              JSON.stringify(colorScheme) ===
-                                JSON.stringify(preset.colors);
-                            return (
-                              <button
-                                key={preset.name}
-                                type="button"
-                                onClick={() => {
-                                  setColorScheme(preset.colors);
-                                  setIsCustomColorScheme(false);
-                                }}
-                                className={`flex items-center gap-2 rounded-lg border-2 px-3 py-2 text-sm font-medium transition-all ${
-                                  isActive
-                                    ? "shadow-neo border-black"
-                                    : "border-gray-300 hover:border-black"
-                                }`}
-                              >
-                                <div className="flex gap-1">
-                                  <div
-                                    className="h-4 w-4 rounded-full border"
-                                    style={{
-                                      backgroundColor: preset.colors.primary,
-                                    }}
-                                  />
-                                  <div
-                                    className="h-4 w-4 rounded-full border"
-                                    style={{
-                                      backgroundColor: preset.colors.secondary,
-                                    }}
-                                  />
-                                  <div
-                                    className="h-4 w-4 rounded-full border"
-                                    style={{
-                                      backgroundColor: preset.colors.accent,
-                                    }}
-                                  />
-                                </div>
-                                {preset.name}
-                              </button>
-                            );
-                          })}
-                          <button
-                            type="button"
-                            onClick={() => setIsCustomColorScheme(true)}
-                            className={`flex items-center gap-2 rounded-lg border-2 px-3 py-2 text-sm font-medium transition-all ${
-                              isCustomColorScheme
-                                ? "shadow-neo border-black"
-                                : "border-gray-300 hover:border-black"
-                            }`}
-                          >
-                            <div className="flex gap-1">
-                              <div
-                                className="h-4 w-4 rounded-full border"
-                                style={{ backgroundColor: colorScheme.primary }}
-                              />
-                              <div
-                                className="h-4 w-4 rounded-full border"
-                                style={{
-                                  backgroundColor: colorScheme.secondary,
-                                }}
-                              />
-                              <div
-                                className="h-4 w-4 rounded-full border"
-                                style={{ backgroundColor: colorScheme.accent }}
-                              />
-                            </div>
-                            Custom
-                          </button>
+                      <AdvancedStorefrontGate membership={membership}>
+                        <div className="mb-6">
+                          <CustomDomainSection />
                         </div>
-                        {isCustomColorScheme && (
+
+                        <div className="mb-6">
+                          <label className="mb-2 block text-base font-bold text-black">
+                            Color Scheme
+                          </label>
+                          <div className="mb-3 flex flex-wrap gap-2">
+                            {COLOR_PRESETS.map((preset) => {
+                              const isActive =
+                                !isCustomColorScheme &&
+                                JSON.stringify(colorScheme) ===
+                                  JSON.stringify(preset.colors);
+                              return (
+                                <button
+                                  key={preset.name}
+                                  type="button"
+                                  onClick={() => {
+                                    setColorScheme(preset.colors);
+                                    setIsCustomColorScheme(false);
+                                  }}
+                                  className={`flex items-center gap-2 rounded-lg border-2 px-3 py-2 text-sm font-medium transition-all ${
+                                    isActive
+                                      ? "shadow-neo border-black"
+                                      : "border-gray-300 hover:border-black"
+                                  }`}
+                                >
+                                  <div className="flex gap-1">
+                                    <div
+                                      className="h-4 w-4 rounded-full border"
+                                      style={{
+                                        backgroundColor: preset.colors.primary,
+                                      }}
+                                    />
+                                    <div
+                                      className="h-4 w-4 rounded-full border"
+                                      style={{
+                                        backgroundColor:
+                                          preset.colors.secondary,
+                                      }}
+                                    />
+                                    <div
+                                      className="h-4 w-4 rounded-full border"
+                                      style={{
+                                        backgroundColor: preset.colors.accent,
+                                      }}
+                                    />
+                                  </div>
+                                  {preset.name}
+                                </button>
+                              );
+                            })}
+                            <button
+                              type="button"
+                              onClick={() => setIsCustomColorScheme(true)}
+                              className={`flex items-center gap-2 rounded-lg border-2 px-3 py-2 text-sm font-medium transition-all ${
+                                isCustomColorScheme
+                                  ? "shadow-neo border-black"
+                                  : "border-gray-300 hover:border-black"
+                              }`}
+                            >
+                              <div className="flex gap-1">
+                                <div
+                                  className="h-4 w-4 rounded-full border"
+                                  style={{
+                                    backgroundColor: colorScheme.primary,
+                                  }}
+                                />
+                                <div
+                                  className="h-4 w-4 rounded-full border"
+                                  style={{
+                                    backgroundColor: colorScheme.secondary,
+                                  }}
+                                />
+                                <div
+                                  className="h-4 w-4 rounded-full border"
+                                  style={{
+                                    backgroundColor: colorScheme.accent,
+                                  }}
+                                />
+                              </div>
+                              Custom
+                            </button>
+                          </div>
+                          {isCustomColorScheme && (
+                            <div className="grid grid-cols-1 gap-3 rounded-lg border-2 border-gray-200 bg-gray-50 p-4 sm:grid-cols-2 lg:grid-cols-3">
+                              {[
+                                {
+                                  key: "primary" as const,
+                                  label: "Primary",
+                                  hint: "Buttons, links, active tabs, and accents",
+                                },
+                                {
+                                  key: "secondary" as const,
+                                  label: "Secondary",
+                                  hint: "Hero background, default navbar/footer base",
+                                },
+                                {
+                                  key: "accent" as const,
+                                  label: "Accent",
+                                  hint: "Highlights, badges, and hover effects",
+                                },
+                                {
+                                  key: "background" as const,
+                                  label: "Background",
+                                  hint: "Main page background and card surfaces",
+                                },
+                                {
+                                  key: "text" as const,
+                                  label: "Text",
+                                  hint: "Headings, body text, and labels",
+                                },
+                              ].map(({ key, label, hint }) => (
+                                <div
+                                  key={key}
+                                  className="flex items-start gap-2"
+                                >
+                                  <input
+                                    type="color"
+                                    value={colorScheme[key]}
+                                    onChange={(e) =>
+                                      setColorScheme((prev) => ({
+                                        ...prev,
+                                        [key]: e.target.value,
+                                      }))
+                                    }
+                                    className="mt-0.5 h-8 w-8 flex-shrink-0 cursor-pointer rounded border-2 border-black"
+                                  />
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-xs font-medium text-gray-700">
+                                        {label}
+                                      </span>
+                                      <span className="text-xs text-gray-400">
+                                        {colorScheme[key]}
+                                      </span>
+                                    </div>
+                                    <p className="text-[11px] leading-tight text-gray-400">
+                                      {hint}
+                                    </p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="mb-6">
+                          <label className="mb-2 block text-base font-bold text-black">
+                            Navbar Colors
+                          </label>
+                          <p className="mb-3 text-sm text-gray-500">
+                            Override the default colors for your navigation bar.
+                            Leave empty to use the general color scheme.
+                          </p>
                           <div className="grid grid-cols-1 gap-3 rounded-lg border-2 border-gray-200 bg-gray-50 p-4 sm:grid-cols-2 lg:grid-cols-3">
                             {[
                               {
-                                key: "primary" as const,
-                                label: "Primary",
-                                hint: "Buttons, links, active tabs, and accents",
-                              },
-                              {
-                                key: "secondary" as const,
-                                label: "Secondary",
-                                hint: "Hero background, default navbar/footer base",
-                              },
-                              {
-                                key: "accent" as const,
-                                label: "Accent",
-                                hint: "Highlights, badges, and hover effects",
-                              },
-                              {
                                 key: "background" as const,
                                 label: "Background",
-                                hint: "Main page background and card surfaces",
+                                hint: "Navbar background fill",
                               },
                               {
                                 key: "text" as const,
                                 label: "Text",
-                                hint: "Headings, body text, and labels",
+                                hint: "Stall name, links, and icons",
+                              },
+                              {
+                                key: "accent" as const,
+                                label: "Accent",
+                                hint: "Active link highlight and badges",
                               },
                             ].map(({ key, label, hint }) => (
                               <div key={key} className="flex items-start gap-2">
                                 <input
                                   type="color"
-                                  value={colorScheme[key]}
+                                  value={
+                                    navColors[key] ||
+                                    (key === "background"
+                                      ? colorScheme.secondary
+                                      : key === "text"
+                                        ? colorScheme.background
+                                        : colorScheme.primary)
+                                  }
                                   onChange={(e) =>
-                                    setColorScheme((prev) => ({
+                                    setNavColors((prev) => ({
                                       ...prev,
                                       [key]: e.target.value,
                                     }))
@@ -1469,1724 +1580,1688 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                                       {label}
                                     </span>
                                     <span className="text-xs text-gray-400">
-                                      {colorScheme[key]}
+                                      {navColors[key] || "default"}
                                     </span>
                                   </div>
                                   <p className="text-[11px] leading-tight text-gray-400">
                                     {hint}
                                   </p>
                                 </div>
+                                {navColors[key] && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setNavColors((prev) => ({
+                                        ...prev,
+                                        [key]: "",
+                                      }))
+                                    }
+                                    className="ml-auto text-xs text-gray-400 hover:text-red-500"
+                                    title="Reset to default"
+                                  >
+                                    ✕
+                                  </button>
+                                )}
                               </div>
                             ))}
                           </div>
-                        )}
-                      </div>
-
-                      <div className="mb-6">
-                        <label className="mb-2 block text-base font-bold text-black">
-                          Navbar Colors
-                        </label>
-                        <p className="mb-3 text-sm text-gray-500">
-                          Override the default colors for your navigation bar.
-                          Leave empty to use the general color scheme.
-                        </p>
-                        <div className="grid grid-cols-1 gap-3 rounded-lg border-2 border-gray-200 bg-gray-50 p-4 sm:grid-cols-2 lg:grid-cols-3">
-                          {[
-                            {
-                              key: "background" as const,
-                              label: "Background",
-                              hint: "Navbar background fill",
-                            },
-                            {
-                              key: "text" as const,
-                              label: "Text",
-                              hint: "Stall name, links, and icons",
-                            },
-                            {
-                              key: "accent" as const,
-                              label: "Accent",
-                              hint: "Active link highlight and badges",
-                            },
-                          ].map(({ key, label, hint }) => (
-                            <div key={key} className="flex items-start gap-2">
-                              <input
-                                type="color"
-                                value={
-                                  navColors[key] ||
-                                  (key === "background"
-                                    ? colorScheme.secondary
-                                    : key === "text"
-                                      ? colorScheme.background
-                                      : colorScheme.primary)
-                                }
-                                onChange={(e) =>
-                                  setNavColors((prev) => ({
-                                    ...prev,
-                                    [key]: e.target.value,
-                                  }))
-                                }
-                                className="mt-0.5 h-8 w-8 flex-shrink-0 cursor-pointer rounded border-2 border-black"
-                              />
-                              <div className="min-w-0">
-                                <div className="flex items-center gap-1.5">
-                                  <span className="text-xs font-medium text-gray-700">
-                                    {label}
-                                  </span>
-                                  <span className="text-xs text-gray-400">
-                                    {navColors[key] || "default"}
-                                  </span>
-                                </div>
-                                <p className="text-[11px] leading-tight text-gray-400">
-                                  {hint}
-                                </p>
-                              </div>
-                              {navColors[key] && (
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setNavColors((prev) => ({
-                                      ...prev,
-                                      [key]: "",
-                                    }))
-                                  }
-                                  className="ml-auto text-xs text-gray-400 hover:text-red-500"
-                                  title="Reset to default"
-                                >
-                                  ✕
-                                </button>
-                              )}
-                            </div>
-                          ))}
                         </div>
-                      </div>
 
-                      <div className="mb-6">
-                        <label className="mb-2 block text-base font-bold text-black">
-                          Footer Colors
-                        </label>
-                        <p className="mb-3 text-sm text-gray-500">
-                          Override the default colors for your footer. Leave
-                          empty to use the general color scheme.
-                        </p>
-                        <div className="grid grid-cols-1 gap-3 rounded-lg border-2 border-gray-200 bg-gray-50 p-4 sm:grid-cols-2 lg:grid-cols-3">
-                          {[
-                            {
-                              key: "background" as const,
-                              label: "Background",
-                              hint: "Footer background fill",
-                            },
-                            {
-                              key: "text" as const,
-                              label: "Text",
-                              hint: "Footer text, links, and labels",
-                            },
-                            {
-                              key: "accent" as const,
-                              label: "Accent",
-                              hint: "Social icons, powered-by link",
-                            },
-                          ].map(({ key, label, hint }) => (
-                            <div key={key} className="flex items-start gap-2">
-                              <input
-                                type="color"
-                                value={
-                                  footerColors[key] ||
-                                  (key === "background"
-                                    ? colorScheme.secondary
-                                    : key === "text"
-                                      ? colorScheme.background
-                                      : colorScheme.primary)
-                                }
-                                onChange={(e) =>
-                                  setFooterColors((prev) => ({
-                                    ...prev,
-                                    [key]: e.target.value,
-                                  }))
-                                }
-                                className="mt-0.5 h-8 w-8 flex-shrink-0 cursor-pointer rounded border-2 border-black"
-                              />
-                              <div className="min-w-0">
-                                <div className="flex items-center gap-1.5">
-                                  <span className="text-xs font-medium text-gray-700">
-                                    {label}
-                                  </span>
-                                  <span className="text-xs text-gray-400">
-                                    {footerColors[key] || "default"}
-                                  </span>
-                                </div>
-                                <p className="text-[11px] leading-tight text-gray-400">
-                                  {hint}
-                                </p>
-                              </div>
-                              {footerColors[key] && (
-                                <button
-                                  type="button"
-                                  onClick={() =>
+                        <div className="mb-6">
+                          <label className="mb-2 block text-base font-bold text-black">
+                            Footer Colors
+                          </label>
+                          <p className="mb-3 text-sm text-gray-500">
+                            Override the default colors for your footer. Leave
+                            empty to use the general color scheme.
+                          </p>
+                          <div className="grid grid-cols-1 gap-3 rounded-lg border-2 border-gray-200 bg-gray-50 p-4 sm:grid-cols-2 lg:grid-cols-3">
+                            {[
+                              {
+                                key: "background" as const,
+                                label: "Background",
+                                hint: "Footer background fill",
+                              },
+                              {
+                                key: "text" as const,
+                                label: "Text",
+                                hint: "Footer text, links, and labels",
+                              },
+                              {
+                                key: "accent" as const,
+                                label: "Accent",
+                                hint: "Social icons, powered-by link",
+                              },
+                            ].map(({ key, label, hint }) => (
+                              <div key={key} className="flex items-start gap-2">
+                                <input
+                                  type="color"
+                                  value={
+                                    footerColors[key] ||
+                                    (key === "background"
+                                      ? colorScheme.secondary
+                                      : key === "text"
+                                        ? colorScheme.background
+                                        : colorScheme.primary)
+                                  }
+                                  onChange={(e) =>
                                     setFooterColors((prev) => ({
                                       ...prev,
-                                      [key]: "",
+                                      [key]: e.target.value,
                                     }))
                                   }
-                                  className="ml-auto text-xs text-gray-400 hover:text-red-500"
-                                  title="Reset to default"
-                                >
-                                  ✕
-                                </button>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="mb-6">
-                        <label className="mb-2 block text-base font-bold text-black">
-                          Landing Page Style
-                        </label>
-                        <div className="grid grid-cols-3 gap-3">
-                          {[
-                            {
-                              value: "hero" as const,
-                              label: "Hero",
-                              desc: "Large banner with shop info overlay",
-                            },
-                            {
-                              value: "classic" as const,
-                              label: "Classic",
-                              desc: "Banner image with info below",
-                            },
-                            {
-                              value: "minimal" as const,
-                              label: "Minimal",
-                              desc: "Clean, simple header",
-                            },
-                          ].map((style) => (
-                            <button
-                              key={style.value}
-                              type="button"
-                              onClick={() =>
-                                handleLandingPageStyleChange(style.value)
-                              }
-                              className={`rounded-lg border-2 p-2 text-center transition-all ${
-                                landingPageStyle === style.value
-                                  ? "shadow-neo border-black"
-                                  : "border-gray-300 hover:border-black"
-                              }`}
-                            >
-                              <div className="mb-2 flex justify-center">
-                                <LandingPagePreviewSvg variant={style.value} />
-                              </div>
-                              <span className="block text-sm font-bold text-black">
-                                {style.label}
-                              </span>
-                              <span className="block text-[10px] leading-tight text-gray-500">
-                                {style.desc}
-                              </span>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="mb-6">
-                        <label className="mb-2 block text-base font-bold text-black">
-                          Product Layout
-                        </label>
-                        <div className="grid grid-cols-3 gap-3">
-                          {[
-                            {
-                              value: "grid" as const,
-                              label: "Grid",
-                              desc: "Products in a grid",
-                            },
-                            {
-                              value: "list" as const,
-                              label: "List",
-                              desc: "Products in a list",
-                            },
-                            {
-                              value: "featured" as const,
-                              label: "Featured",
-                              desc: "Hero product + grid",
-                            },
-                          ].map((layout) => (
-                            <button
-                              key={layout.value}
-                              type="button"
-                              onClick={() =>
-                                handleProductLayoutChange(layout.value)
-                              }
-                              className={`rounded-lg border-2 p-2 text-center transition-all ${
-                                productLayout === layout.value
-                                  ? "shadow-neo border-black"
-                                  : "border-gray-300 hover:border-black"
-                              }`}
-                            >
-                              <div className="mb-2 flex justify-center">
-                                <ProductLayoutPreviewSvg
-                                  variant={layout.value}
+                                  className="mt-0.5 h-8 w-8 flex-shrink-0 cursor-pointer rounded border-2 border-black"
                                 />
-                              </div>
-                              <span className="block text-sm font-bold text-black">
-                                {layout.label}
-                              </span>
-                              <span className="block text-[10px] leading-tight text-gray-500">
-                                {layout.desc}
-                              </span>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="mb-6">
-                        <label className="mb-2 block text-base font-bold text-black">
-                          Fonts
-                        </label>
-                        <p className="mb-1 text-sm text-gray-500">
-                          Choose a Google Font or upload your own custom font
-                          file for headings and body text.
-                        </p>
-                        <p className="mb-3 text-xs text-gray-400">
-                          Accepted formats: .woff2 (recommended), .woff, .ttf,
-                          .otf. Upload a single font file per slot. For best
-                          results, use a{" "}
-                          <span className="font-medium text-gray-500">
-                            variable font
-                          </span>{" "}
-                          file (one file containing multiple weights). A
-                          single-weight font will work but all text will render
-                          in that one weight (e.g., Regular only).
-                        </p>
-                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                          <div>
-                            <label className="mb-1 block text-xs font-medium text-gray-500">
-                              Heading Font
-                            </label>
-                            {customFontHeadingUrl ? (
-                              <div className="flex items-center gap-2 rounded-lg border-3 border-black bg-white px-3 py-2">
-                                <span className="min-w-0 flex-1 truncate text-sm text-black">
-                                  {customFontHeadingName || "Custom font"}
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setCustomFontHeadingUrl("");
-                                    setCustomFontHeadingName("");
-                                  }}
-                                  className="flex-shrink-0 text-xs text-gray-400 hover:text-red-500"
-                                >
-                                  Remove
-                                </button>
-                              </div>
-                            ) : (
-                              <Select
-                                label="Select Google Font"
-                                classNames={{
-                                  trigger:
-                                    "border-3 border-black rounded-lg bg-white shadow-none hover:bg-white data-[hover=true]:bg-white",
-                                  value: "text-base !text-black",
-                                  popoverContent:
-                                    "border-2 border-black rounded-lg bg-white",
-                                  listbox: "!text-black",
-                                  label: "text-black",
-                                }}
-                                variant="bordered"
-                                selectedKeys={fontHeading ? [fontHeading] : []}
-                                onChange={(e) => setFontHeading(e.target.value)}
-                              >
-                                {GOOGLE_FONT_OPTIONS.map((f) => (
-                                  <SelectItem key={f} className="text-black">
-                                    {f}
-                                  </SelectItem>
-                                ))}
-                              </Select>
-                            )}
-                            {!customFontHeadingUrl && (
-                              <label className="mt-2 flex cursor-pointer items-center gap-1.5 text-xs text-gray-500 hover:text-black">
-                                <input
-                                  type="file"
-                                  accept=".woff2,.woff,.ttf,.otf"
-                                  className="hidden"
-                                  onChange={async (e) => {
-                                    const file = e.target.files?.[0];
-                                    if (!file) return;
-                                    try {
-                                      setFontUploadingHeading(true);
-                                      const { blossomServers } =
-                                        getLocalStorageData() || {};
-                                      const tags = await blossomUpload(
-                                        file,
-                                        false,
-                                        signer!,
-                                        blossomServers || [
-                                          "https://cdn.nostrcheck.me",
-                                        ]
-                                      );
-                                      const urlTag = tags.find(
-                                        (t) => t[0] === "url"
-                                      );
-                                      if (!urlTag?.[1])
-                                        throw new Error(
-                                          "Upload returned no URL"
-                                        );
-                                      setCustomFontHeadingUrl(urlTag[1]);
-                                      setCustomFontHeadingName(file.name);
-                                      setFontHeading("");
-                                    } catch (err) {
-                                      console.error("Font upload failed:", err);
-                                    } finally {
-                                      setFontUploadingHeading(false);
-                                      e.target.value = "";
-                                    }
-                                  }}
-                                />
-                                {fontUploadingHeading ? (
-                                  <span className="text-xs text-gray-400">
-                                    Uploading...
-                                  </span>
-                                ) : (
-                                  <>
-                                    <svg
-                                      xmlns="http://www.w3.org/2000/svg"
-                                      fill="none"
-                                      viewBox="0 0 24 24"
-                                      strokeWidth={1.5}
-                                      stroke="currentColor"
-                                      className="h-3.5 w-3.5"
-                                    >
-                                      <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5"
-                                      />
-                                    </svg>
-                                    Or upload custom font
-                                  </>
-                                )}
-                              </label>
-                            )}
-                          </div>
-                          <div>
-                            <label className="mb-1 block text-xs font-medium text-gray-500">
-                              Body Font
-                            </label>
-                            {customFontBodyUrl ? (
-                              <div className="flex items-center gap-2 rounded-lg border-3 border-black bg-white px-3 py-2">
-                                <span className="min-w-0 flex-1 truncate text-sm text-black">
-                                  {customFontBodyName || "Custom font"}
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setCustomFontBodyUrl("");
-                                    setCustomFontBodyName("");
-                                  }}
-                                  className="flex-shrink-0 text-xs text-gray-400 hover:text-red-500"
-                                >
-                                  Remove
-                                </button>
-                              </div>
-                            ) : (
-                              <Select
-                                label="Select Google Font"
-                                classNames={{
-                                  trigger:
-                                    "border-3 border-black rounded-lg bg-white shadow-none hover:bg-white data-[hover=true]:bg-white",
-                                  value: "text-base !text-black",
-                                  popoverContent:
-                                    "border-2 border-black rounded-lg bg-white",
-                                  listbox: "!text-black",
-                                  label: "text-black",
-                                }}
-                                variant="bordered"
-                                selectedKeys={fontBody ? [fontBody] : []}
-                                onChange={(e) => setFontBody(e.target.value)}
-                              >
-                                {GOOGLE_FONT_OPTIONS.map((f) => (
-                                  <SelectItem key={f} className="text-black">
-                                    {f}
-                                  </SelectItem>
-                                ))}
-                              </Select>
-                            )}
-                            {!customFontBodyUrl && (
-                              <label className="mt-2 flex cursor-pointer items-center gap-1.5 text-xs text-gray-500 hover:text-black">
-                                <input
-                                  type="file"
-                                  accept=".woff2,.woff,.ttf,.otf"
-                                  className="hidden"
-                                  onChange={async (e) => {
-                                    const file = e.target.files?.[0];
-                                    if (!file) return;
-                                    try {
-                                      setFontUploadingBody(true);
-                                      const { blossomServers } =
-                                        getLocalStorageData() || {};
-                                      const tags = await blossomUpload(
-                                        file,
-                                        false,
-                                        signer!,
-                                        blossomServers || [
-                                          "https://cdn.nostrcheck.me",
-                                        ]
-                                      );
-                                      const urlTag = tags.find(
-                                        (t) => t[0] === "url"
-                                      );
-                                      if (!urlTag?.[1])
-                                        throw new Error(
-                                          "Upload returned no URL"
-                                        );
-                                      setCustomFontBodyUrl(urlTag[1]);
-                                      setCustomFontBodyName(file.name);
-                                      setFontBody("");
-                                    } catch (err) {
-                                      console.error("Font upload failed:", err);
-                                    } finally {
-                                      setFontUploadingBody(false);
-                                      e.target.value = "";
-                                    }
-                                  }}
-                                />
-                                {fontUploadingBody ? (
-                                  <span className="text-xs text-gray-400">
-                                    Uploading...
-                                  </span>
-                                ) : (
-                                  <>
-                                    <svg
-                                      xmlns="http://www.w3.org/2000/svg"
-                                      fill="none"
-                                      viewBox="0 0 24 24"
-                                      strokeWidth={1.5}
-                                      stroke="currentColor"
-                                      className="h-3.5 w-3.5"
-                                    >
-                                      <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5"
-                                      />
-                                    </svg>
-                                    Or upload custom font
-                                  </>
-                                )}
-                              </label>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="mb-6">
-                        <label className="mb-2 flex items-center gap-3 text-base font-bold text-black">
-                          <input
-                            type="checkbox"
-                            checked={neoShadows}
-                            onChange={(e) => setNeoShadows(e.target.checked)}
-                            className="h-4 w-4 rounded border-gray-300"
-                          />
-                          Neo-brutalist Card Shadows
-                        </label>
-                        <p className="ml-7 text-sm text-gray-500">
-                          Adds a hard offset shadow to bordered cards across
-                          your stall — the same look used on the main Milk
-                          Market marketplace.
-                        </p>
-                      </div>
-
-                      <div className="mb-6">
-                        <PageEditor
-                          pages={pages}
-                          onChange={setPages}
-                          navLinks={navLinks}
-                          onNavLinksChange={setNavLinks}
-                          sellerProducts={sellerProducts}
-                          shopPubkey={userPubkey}
-                        />
-                      </div>
-
-                      <div className="mb-6">
-                        <label className="mb-2 flex items-center gap-3 text-base font-bold text-black">
-                          <input
-                            type="checkbox"
-                            checked={showCommunityPage}
-                            onChange={(e) =>
-                              setShowCommunityPage(e.target.checked)
-                            }
-                            className="h-4 w-4 rounded border-gray-300"
-                          />
-                          Show Community Page
-                        </label>
-                        <p className="ml-7 text-sm text-gray-500">
-                          Enable a community page on your storefront that
-                          displays your community feed. A &quot;Community&quot;
-                          link will be added to your storefront navigation bar.
-                        </p>
-                      </div>
-
-                      <div className="mb-6">
-                        <label className="mb-2 flex items-center gap-3 text-base font-bold text-black">
-                          <input
-                            type="checkbox"
-                            checked={showWalletPage}
-                            onChange={(e) =>
-                              setShowWalletPage(e.target.checked)
-                            }
-                            className="h-4 w-4 rounded border-gray-300"
-                          />
-                          Show Bitcoin Wallet Page
-                        </label>
-                        <p className="ml-7 text-sm text-gray-500">
-                          Enable a Bitcoin wallet page on your storefront for
-                          Cashu ecash payments. A &quot;Wallet&quot; link will
-                          be added to your storefront navigation bar.
-                        </p>
-                      </div>
-
-                      <div className="mb-6 rounded-lg border-2 border-gray-200 p-4">
-                        <label className="mb-2 flex items-center gap-3 text-base font-bold text-black">
-                          <input
-                            type="checkbox"
-                            checked={emailPopup.enabled}
-                            onChange={(e) =>
-                              setEmailPopup({
-                                ...emailPopup,
-                                enabled: e.target.checked,
-                              })
-                            }
-                            className="h-4 w-4 rounded border-gray-300"
-                          />
-                          Email Capture Popup
-                        </label>
-                        <p className="mb-3 ml-7 text-sm text-gray-500">
-                          Show a popup to new visitors offering a discount code
-                          in exchange for their email address. Optionally add
-                          interactive question flows before the capture step.
-                        </p>
-                        <p className="mb-3 ml-7 text-sm">
-                          <a
-                            href="/orders?tab=contacts"
-                            className="font-semibold text-blue-600 hover:underline"
-                          >
-                            View captured contacts →
-                          </a>
-                        </p>
-
-                        {emailPopup.enabled && (
-                          <div className="ml-7 space-y-4 border-t border-gray-100 pt-4">
-                            <div>
-                              <label className="mb-1 block text-sm font-semibold text-black">
-                                Discount Percentage
-                              </label>
-                              <div className="flex items-center gap-2">
-                                <Input
-                                  type="number"
-                                  min={0}
-                                  max={100}
-                                  classNames={{
-                                    inputWrapper:
-                                      "border-3 border-black rounded-lg bg-white shadow-none hover:bg-white data-[hover=true]:bg-white group-data-[focus=true]:border-4 group-data-[focus=true]:border-black w-24",
-                                    input: "text-base !text-black",
-                                  }}
-                                  variant="bordered"
-                                  value={String(emailPopup.discountPercentage)}
-                                  onChange={(e) =>
-                                    setEmailPopup({
-                                      ...emailPopup,
-                                      discountPercentage: Math.min(
-                                        100,
-                                        Math.max(
-                                          0,
-                                          parseInt(e.target.value) || 0
-                                        )
-                                      ),
-                                    })
-                                  }
-                                />
-                                <span className="text-sm font-medium text-gray-600">
-                                  % off products
-                                </span>
-                              </div>
-                              <p className="mt-1 text-xs text-gray-500">
-                                Set to 0 if you only want this welcome code to
-                                discount shipping.
-                              </p>
-                            </div>
-
-                            <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
-                              <label className="flex items-center gap-3 text-sm font-semibold text-black">
-                                <input
-                                  type="checkbox"
-                                  checked={
-                                    (emailPopup.shippingDiscountType ||
-                                      "none") !== "none"
-                                  }
-                                  onChange={(e) =>
-                                    setEmailPopup({
-                                      ...emailPopup,
-                                      shippingDiscountType: e.target.checked
-                                        ? "free"
-                                        : "none",
-                                      shippingDiscountValue: e.target.checked
-                                        ? emailPopup.shippingDiscountValue || 0
-                                        : 0,
-                                    })
-                                  }
-                                  className="h-4 w-4 rounded border-gray-300"
-                                />
-                                Also discount shipping
-                              </label>
-                              {(emailPopup.shippingDiscountType || "none") !==
-                                "none" && (
-                                <div className="mt-3 ml-7 space-y-2">
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    <select
-                                      className="rounded border border-gray-300 bg-white px-2 py-1 text-sm text-black"
-                                      value={
-                                        emailPopup.shippingDiscountType ||
-                                        "free"
-                                      }
-                                      onChange={(e) =>
-                                        setEmailPopup({
-                                          ...emailPopup,
-                                          shippingDiscountType: e.target
-                                            .value as
-                                            | "free"
-                                            | "percent"
-                                            | "fixed",
-                                          shippingDiscountValue:
-                                            e.target.value === "free"
-                                              ? 0
-                                              : emailPopup.shippingDiscountValue ||
-                                                0,
-                                        })
-                                      }
-                                    >
-                                      <option value="free">
-                                        Free shipping
-                                      </option>
-                                      <option value="percent">
-                                        % off shipping
-                                      </option>
-                                      <option value="fixed">
-                                        Flat amount off shipping
-                                      </option>
-                                    </select>
-                                    {emailPopup.shippingDiscountType !==
-                                      "free" && (
-                                      <>
-                                        <Input
-                                          type="number"
-                                          min={0}
-                                          max={
-                                            emailPopup.shippingDiscountType ===
-                                            "percent"
-                                              ? 100
-                                              : undefined
-                                          }
-                                          step={
-                                            emailPopup.shippingDiscountType ===
-                                            "fixed"
-                                              ? 0.01
-                                              : 1
-                                          }
-                                          classNames={{
-                                            inputWrapper:
-                                              "border-3 border-black rounded-lg bg-white shadow-none w-28",
-                                            input: "text-base !text-black",
-                                          }}
-                                          variant="bordered"
-                                          value={String(
-                                            emailPopup.shippingDiscountValue ||
-                                              ""
-                                          )}
-                                          onChange={(e) =>
-                                            setEmailPopup({
-                                              ...emailPopup,
-                                              shippingDiscountValue:
-                                                parseFloat(e.target.value) || 0,
-                                            })
-                                          }
-                                        />
-                                        <span className="text-sm text-gray-600">
-                                          {emailPopup.shippingDiscountType ===
-                                          "percent"
-                                            ? "% off shipping"
-                                            : "off shipping (in buyer's cart currency)"}
-                                        </span>
-                                      </>
-                                    )}
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-xs font-medium text-gray-700">
+                                      {label}
+                                    </span>
+                                    <span className="text-xs text-gray-400">
+                                      {footerColors[key] || "default"}
+                                    </span>
                                   </div>
-                                </div>
-                              )}
-                            </div>
-
-                            <div>
-                              <label className="mb-1 block text-sm font-semibold text-black">
-                                Headline (optional)
-                              </label>
-                              <Input
-                                classNames={{
-                                  inputWrapper:
-                                    "border-3 border-black rounded-lg bg-white shadow-none hover:bg-white data-[hover=true]:bg-white group-data-[focus=true]:border-4 group-data-[focus=true]:border-black",
-                                  input: "text-base !text-black",
-                                }}
-                                variant="bordered"
-                                fullWidth
-                                placeholder={`Get ${emailPopup.discountPercentage}% Off Your First Order`}
-                                value={emailPopup.headline || ""}
-                                onChange={(e) =>
-                                  setEmailPopup({
-                                    ...emailPopup,
-                                    headline: e.target.value || undefined,
-                                  })
-                                }
-                              />
-                            </div>
-
-                            <div>
-                              <label className="mb-1 block text-sm font-semibold text-black">
-                                Subtext (optional)
-                              </label>
-                              <Input
-                                classNames={{
-                                  inputWrapper:
-                                    "border-3 border-black rounded-lg bg-white shadow-none hover:bg-white data-[hover=true]:bg-white group-data-[focus=true]:border-4 group-data-[focus=true]:border-black",
-                                  input: "text-base !text-black",
-                                }}
-                                variant="bordered"
-                                fullWidth
-                                placeholder="Sign up to receive an exclusive discount code."
-                                value={emailPopup.subtext || ""}
-                                onChange={(e) =>
-                                  setEmailPopup({
-                                    ...emailPopup,
-                                    subtext: e.target.value || undefined,
-                                  })
-                                }
-                              />
-                            </div>
-
-                            <div>
-                              <label className="mb-1 block text-sm font-semibold text-black">
-                                Button Text (optional)
-                              </label>
-                              <Input
-                                classNames={{
-                                  inputWrapper:
-                                    "border-3 border-black rounded-lg bg-white shadow-none hover:bg-white data-[hover=true]:bg-white group-data-[focus=true]:border-4 group-data-[focus=true]:border-black",
-                                  input: "text-base !text-black",
-                                }}
-                                variant="bordered"
-                                fullWidth
-                                placeholder="Get My Discount"
-                                value={emailPopup.buttonText || ""}
-                                onChange={(e) =>
-                                  setEmailPopup({
-                                    ...emailPopup,
-                                    buttonText: e.target.value || undefined,
-                                  })
-                                }
-                              />
-                            </div>
-
-                            <div>
-                              <label className="mb-1 block text-sm font-semibold text-black">
-                                Success Message (optional)
-                              </label>
-                              <Input
-                                classNames={{
-                                  inputWrapper:
-                                    "border-3 border-black rounded-lg bg-white shadow-none hover:bg-white data-[hover=true]:bg-white group-data-[focus=true]:border-4 group-data-[focus=true]:border-black",
-                                  input: "text-base !text-black",
-                                }}
-                                variant="bordered"
-                                fullWidth
-                                placeholder="Check your email for your discount code!"
-                                value={emailPopup.successMessage || ""}
-                                onChange={(e) =>
-                                  setEmailPopup({
-                                    ...emailPopup,
-                                    successMessage: e.target.value || undefined,
-                                  })
-                                }
-                              />
-                            </div>
-
-                            <div className="flex flex-col gap-2">
-                              <label className="flex items-center gap-3 text-sm font-semibold text-black">
-                                <input
-                                  type="checkbox"
-                                  checked={emailPopup.collectPhone || false}
-                                  onChange={(e) =>
-                                    setEmailPopup({
-                                      ...emailPopup,
-                                      collectPhone: e.target.checked,
-                                      requirePhone: e.target.checked
-                                        ? emailPopup.requirePhone
-                                        : false,
-                                    })
-                                  }
-                                  className="h-4 w-4 rounded border-gray-300"
-                                />
-                                Collect phone number
-                              </label>
-                              {emailPopup.collectPhone && (
-                                <label className="ml-7 flex items-center gap-3 text-sm text-gray-600">
-                                  <input
-                                    type="checkbox"
-                                    checked={emailPopup.requirePhone || false}
-                                    onChange={(e) =>
-                                      setEmailPopup({
-                                        ...emailPopup,
-                                        requirePhone: e.target.checked,
-                                      })
-                                    }
-                                    className="h-4 w-4 rounded border-gray-300"
-                                  />
-                                  Make phone number required
-                                </label>
-                              )}
-                            </div>
-
-                            <div className="border-t border-gray-200 pt-4">
-                              <label className="mb-3 block text-sm font-bold text-black">
-                                Popup Styling
-                              </label>
-                              <div className="space-y-3">
-                                <div className="grid grid-cols-2 gap-3">
-                                  <div>
-                                    <label className="mb-1 block text-xs font-semibold text-gray-600">
-                                      Background Color
-                                    </label>
-                                    <div className="flex items-center gap-2">
-                                      <input
-                                        type="color"
-                                        value={
-                                          emailPopup.style?.backgroundColor ||
-                                          colorScheme.background
-                                        }
-                                        onChange={(e) =>
-                                          setEmailPopup({
-                                            ...emailPopup,
-                                            style: {
-                                              ...emailPopup.style,
-                                              backgroundColor: e.target.value,
-                                            },
-                                          })
-                                        }
-                                        className="h-8 w-8 cursor-pointer rounded border"
-                                      />
-                                      <span className="text-xs text-gray-400">
-                                        {emailPopup.style?.backgroundColor ||
-                                          "default"}
-                                      </span>
-                                      {emailPopup.style?.backgroundColor && (
-                                        <button
-                                          type="button"
-                                          onClick={() =>
-                                            setEmailPopup({
-                                              ...emailPopup,
-                                              style: {
-                                                ...emailPopup.style,
-                                                backgroundColor: undefined,
-                                              },
-                                            })
-                                          }
-                                          className="text-xs text-red-400 hover:text-red-600"
-                                        >
-                                          ✕
-                                        </button>
-                                      )}
-                                    </div>
-                                  </div>
-                                  <div>
-                                    <label className="mb-1 block text-xs font-semibold text-gray-600">
-                                      Text Color
-                                    </label>
-                                    <div className="flex items-center gap-2">
-                                      <input
-                                        type="color"
-                                        value={
-                                          emailPopup.style?.textColor ||
-                                          colorScheme.text
-                                        }
-                                        onChange={(e) =>
-                                          setEmailPopup({
-                                            ...emailPopup,
-                                            style: {
-                                              ...emailPopup.style,
-                                              textColor: e.target.value,
-                                            },
-                                          })
-                                        }
-                                        className="h-8 w-8 cursor-pointer rounded border"
-                                      />
-                                      <span className="text-xs text-gray-400">
-                                        {emailPopup.style?.textColor ||
-                                          "default"}
-                                      </span>
-                                      {emailPopup.style?.textColor && (
-                                        <button
-                                          type="button"
-                                          onClick={() =>
-                                            setEmailPopup({
-                                              ...emailPopup,
-                                              style: {
-                                                ...emailPopup.style,
-                                                textColor: undefined,
-                                              },
-                                            })
-                                          }
-                                          className="text-xs text-red-400 hover:text-red-600"
-                                        >
-                                          ✕
-                                        </button>
-                                      )}
-                                    </div>
-                                  </div>
-                                  <div>
-                                    <label className="mb-1 block text-xs font-semibold text-gray-600">
-                                      Accent / Banner Color
-                                    </label>
-                                    <div className="flex items-center gap-2">
-                                      <input
-                                        type="color"
-                                        value={
-                                          emailPopup.style?.accentColor ||
-                                          colorScheme.primary
-                                        }
-                                        onChange={(e) =>
-                                          setEmailPopup({
-                                            ...emailPopup,
-                                            style: {
-                                              ...emailPopup.style,
-                                              accentColor: e.target.value,
-                                            },
-                                          })
-                                        }
-                                        className="h-8 w-8 cursor-pointer rounded border"
-                                      />
-                                      <span className="text-xs text-gray-400">
-                                        {emailPopup.style?.accentColor ||
-                                          "default"}
-                                      </span>
-                                      {emailPopup.style?.accentColor && (
-                                        <button
-                                          type="button"
-                                          onClick={() =>
-                                            setEmailPopup({
-                                              ...emailPopup,
-                                              style: {
-                                                ...emailPopup.style,
-                                                accentColor: undefined,
-                                              },
-                                            })
-                                          }
-                                          className="text-xs text-red-400 hover:text-red-600"
-                                        >
-                                          ✕
-                                        </button>
-                                      )}
-                                    </div>
-                                  </div>
-                                  <div>
-                                    <label className="mb-1 block text-xs font-semibold text-gray-600">
-                                      Button Color
-                                    </label>
-                                    <div className="flex items-center gap-2">
-                                      <input
-                                        type="color"
-                                        value={
-                                          emailPopup.style?.buttonColor ||
-                                          colorScheme.primary
-                                        }
-                                        onChange={(e) =>
-                                          setEmailPopup({
-                                            ...emailPopup,
-                                            style: {
-                                              ...emailPopup.style,
-                                              buttonColor: e.target.value,
-                                            },
-                                          })
-                                        }
-                                        className="h-8 w-8 cursor-pointer rounded border"
-                                      />
-                                      <span className="text-xs text-gray-400">
-                                        {emailPopup.style?.buttonColor ||
-                                          "default"}
-                                      </span>
-                                      {emailPopup.style?.buttonColor && (
-                                        <button
-                                          type="button"
-                                          onClick={() =>
-                                            setEmailPopup({
-                                              ...emailPopup,
-                                              style: {
-                                                ...emailPopup.style,
-                                                buttonColor: undefined,
-                                              },
-                                            })
-                                          }
-                                          className="text-xs text-red-400 hover:text-red-600"
-                                        >
-                                          ✕
-                                        </button>
-                                      )}
-                                    </div>
-                                  </div>
-                                  <div>
-                                    <label className="mb-1 block text-xs font-semibold text-gray-600">
-                                      Button Text Color
-                                    </label>
-                                    <div className="flex items-center gap-2">
-                                      <input
-                                        type="color"
-                                        value={
-                                          emailPopup.style?.buttonTextColor ||
-                                          colorScheme.secondary
-                                        }
-                                        onChange={(e) =>
-                                          setEmailPopup({
-                                            ...emailPopup,
-                                            style: {
-                                              ...emailPopup.style,
-                                              buttonTextColor: e.target.value,
-                                            },
-                                          })
-                                        }
-                                        className="h-8 w-8 cursor-pointer rounded border"
-                                      />
-                                      <span className="text-xs text-gray-400">
-                                        {emailPopup.style?.buttonTextColor ||
-                                          "default"}
-                                      </span>
-                                      {emailPopup.style?.buttonTextColor && (
-                                        <button
-                                          type="button"
-                                          onClick={() =>
-                                            setEmailPopup({
-                                              ...emailPopup,
-                                              style: {
-                                                ...emailPopup.style,
-                                                buttonTextColor: undefined,
-                                              },
-                                            })
-                                          }
-                                          className="text-xs text-red-400 hover:text-red-600"
-                                        >
-                                          ✕
-                                        </button>
-                                      )}
-                                    </div>
-                                  </div>
-                                </div>
-
-                                <div>
-                                  <label className="mb-1 block text-xs font-semibold text-gray-600">
-                                    Background Image
-                                  </label>
-                                  <div className="flex items-center gap-2">
-                                    <Input
-                                      size="sm"
-                                      classNames={{
-                                        inputWrapper:
-                                          "border-3 border-black rounded-lg bg-white shadow-none hover:bg-white data-[hover=true]:bg-white group-data-[focus=true]:border-4 group-data-[focus=true]:border-black",
-                                        input: "text-sm !text-black",
-                                      }}
-                                      variant="bordered"
-                                      placeholder="Image URL"
-                                      value={
-                                        emailPopup.style?.backgroundImage || ""
-                                      }
-                                      onChange={(e) =>
-                                        setEmailPopup({
-                                          ...emailPopup,
-                                          style: {
-                                            ...emailPopup.style,
-                                            backgroundImage:
-                                              e.target.value || undefined,
-                                          },
-                                        })
-                                      }
-                                      className="flex-1"
-                                    />
-                                    <FileUploaderButton
-                                      className="rounded-lg border-2 border-black bg-white px-3 py-2 text-xs font-bold text-black"
-                                      imgCallbackOnUpload={(url) =>
-                                        setEmailPopup({
-                                          ...emailPopup,
-                                          style: {
-                                            ...emailPopup.style,
-                                            backgroundImage: url,
-                                          },
-                                        })
-                                      }
-                                    >
-                                      Upload
-                                    </FileUploaderButton>
-                                  </div>
-                                  <p className="mt-1 text-[11px] text-gray-500">
-                                    Recommended: 800 × 600 px (4:3 popup
-                                    background)
+                                  <p className="text-[11px] leading-tight text-gray-400">
+                                    {hint}
                                   </p>
-                                  {emailPopup.style?.backgroundImage && (
-                                    <div className="mt-2 flex items-center gap-2">
-                                      <img
-                                        src={emailPopup.style.backgroundImage}
-                                        alt="BG preview"
-                                        className="h-12 w-20 rounded border object-cover"
-                                      />
-                                      <div className="flex items-center gap-2">
-                                        <label className="text-xs text-gray-500">
-                                          Opacity:
-                                        </label>
-                                        <input
-                                          type="range"
-                                          min={10}
-                                          max={100}
-                                          value={
-                                            (emailPopup.style?.overlayOpacity ??
-                                              0.6) * 100
-                                          }
-                                          onChange={(e) =>
-                                            setEmailPopup({
-                                              ...emailPopup,
-                                              style: {
-                                                ...emailPopup.style,
-                                                overlayOpacity:
-                                                  parseInt(e.target.value) /
-                                                  100,
-                                              },
-                                            })
-                                          }
-                                          className="w-20"
-                                        />
-                                        <span className="text-xs text-gray-400">
-                                          {Math.round(
-                                            (emailPopup.style?.overlayOpacity ??
-                                              0.6) * 100
-                                          )}
-                                          %
-                                        </span>
-                                      </div>
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          setEmailPopup({
-                                            ...emailPopup,
-                                            style: {
-                                              ...emailPopup.style,
-                                              backgroundImage: undefined,
-                                              overlayOpacity: undefined,
-                                            },
-                                          })
-                                        }
-                                        className="text-xs text-red-400 hover:text-red-600"
-                                      >
-                                        ✕
-                                      </button>
-                                    </div>
-                                  )}
                                 </div>
-
-                                <label className="flex items-center gap-2 text-sm font-semibold text-black">
-                                  <input
-                                    type="checkbox"
-                                    checked={
-                                      emailPopup.style?.useCustomFonts || false
+                                {footerColors[key] && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setFooterColors((prev) => ({
+                                        ...prev,
+                                        [key]: "",
+                                      }))
                                     }
-                                    onChange={(e) =>
-                                      setEmailPopup({
-                                        ...emailPopup,
-                                        style: {
-                                          ...emailPopup.style,
-                                          useCustomFonts:
-                                            e.target.checked || undefined,
-                                        },
-                                      })
-                                    }
-                                    className="h-4 w-4 rounded border-gray-300"
-                                  />
-                                  Use storefront custom fonts
-                                </label>
+                                    className="ml-auto text-xs text-gray-400 hover:text-red-500"
+                                    title="Reset to default"
+                                  >
+                                    ✕
+                                  </button>
+                                )}
                               </div>
-                            </div>
-
-                            <div className="border-t border-gray-200 pt-4">
-                              <label className="mb-1 block text-sm font-bold text-black">
-                                Interactive Flow Steps
-                              </label>
-                              <p className="mb-3 text-xs text-gray-500">
-                                Add question steps that visitors answer before
-                                reaching the email capture. Each question has
-                                multiple answer buttons. Leave empty for a
-                                direct email capture popup.
-                              </p>
-                              <PopupFlowEditor
-                                steps={emailPopup.flowSteps || []}
-                                onChange={(flowSteps) =>
-                                  setEmailPopup({
-                                    ...emailPopup,
-                                    flowSteps:
-                                      flowSteps.length > 0
-                                        ? flowSteps
-                                        : undefined,
-                                  })
-                                }
-                              />
-                            </div>
+                            ))}
                           </div>
-                        )}
-                      </div>
+                        </div>
 
-                      <div className="mb-6 rounded-lg border-2 border-gray-200 p-4">
-                        <label className="mb-2 block text-base font-bold text-black">
-                          SEO & Open Graph
-                        </label>
-                        <p className="mb-3 text-sm text-gray-500">
-                          Control how your storefront appears in search results,
-                          social media previews, and AI-powered search engines.
-                          Leave fields empty to auto-generate from your shop
-                          details.
-                        </p>
-                        <div className="mb-3 flex items-center gap-3">
-                          <label className="flex items-center gap-2 text-sm font-semibold text-black">
-                            <input
-                              type="checkbox"
-                              checked={seoMeta.autoGenerate !== false}
-                              onChange={(e) =>
-                                setSeoMeta({
-                                  ...seoMeta,
-                                  autoGenerate: e.target.checked,
-                                })
-                              }
-                              className="h-4 w-4 rounded border-gray-300"
-                            />
-                            Auto-generate from shop data
+                        <div className="mb-6">
+                          <label className="mb-2 block text-base font-bold text-black">
+                            Landing Page Style
                           </label>
-                        </div>
-                        <div className="space-y-4">
-                          <div>
-                            <label className="mb-1 block text-sm font-semibold text-black">
-                              Meta Title
-                            </label>
-                            <Input
-                              classNames={{
-                                inputWrapper:
-                                  "border-3 border-black rounded-lg bg-white shadow-none hover:bg-white data-[hover=true]:bg-white group-data-[focus=true]:border-4 group-data-[focus=true]:border-black",
-                                input: "text-base !text-black",
-                              }}
-                              variant="bordered"
-                              fullWidth
-                              placeholder={
-                                seoMeta.autoGenerate !== false
-                                  ? "Auto-generated from shop name"
-                                  : "e.g. Green Valley Farm — Fresh Raw Milk"
-                              }
-                              value={seoMeta.metaTitle || ""}
-                              onChange={(e) =>
-                                setSeoMeta({
-                                  ...seoMeta,
-                                  metaTitle: e.target.value || undefined,
-                                })
-                              }
-                            />
-                            <p className="mt-1 text-xs text-gray-400">
-                              Appears as the page title in search results and
-                              browser tabs (50-60 characters ideal)
-                            </p>
-                          </div>
-                          <div>
-                            <label className="mb-1 block text-sm font-semibold text-black">
-                              Meta Description
-                            </label>
-                            <Textarea
-                              classNames={{
-                                inputWrapper:
-                                  "border-3 border-black rounded-lg bg-white shadow-none hover:bg-white data-[hover=true]:bg-white group-data-[focus=true]:border-4 group-data-[focus=true]:border-black",
-                                input: "text-base !text-black",
-                              }}
-                              variant="bordered"
-                              fullWidth
-                              minRows={2}
-                              maxRows={3}
-                              placeholder={
-                                seoMeta.autoGenerate !== false
-                                  ? "Auto-generated from shop about"
-                                  : "A brief summary of your shop for search engines (150-160 characters ideal)"
-                              }
-                              value={seoMeta.metaDescription || ""}
-                              onChange={(e) =>
-                                setSeoMeta({
-                                  ...seoMeta,
-                                  metaDescription: e.target.value || undefined,
-                                })
-                              }
-                            />
-                          </div>
-                          <div>
-                            <label className="mb-1 block text-sm font-semibold text-black">
-                              OG Image URL
-                            </label>
-                            <div className="flex items-center gap-2">
-                              <Input
-                                classNames={{
-                                  inputWrapper:
-                                    "border-3 border-black rounded-lg bg-white shadow-none hover:bg-white data-[hover=true]:bg-white group-data-[focus=true]:border-4 group-data-[focus=true]:border-black",
-                                  input: "text-base !text-black",
-                                }}
-                                variant="bordered"
-                                fullWidth
-                                placeholder="Defaults to your banner/profile image"
-                                value={seoMeta.ogImage || ""}
-                                onChange={(e) =>
-                                  setSeoMeta({
-                                    ...seoMeta,
-                                    ogImage: e.target.value || undefined,
-                                  })
+                          <div className="grid grid-cols-3 gap-3">
+                            {[
+                              {
+                                value: "hero" as const,
+                                label: "Hero",
+                                desc: "Large banner with shop info overlay",
+                              },
+                              {
+                                value: "classic" as const,
+                                label: "Classic",
+                                desc: "Banner image with info below",
+                              },
+                              {
+                                value: "minimal" as const,
+                                label: "Minimal",
+                                desc: "Clean, simple header",
+                              },
+                            ].map((style) => (
+                              <button
+                                key={style.value}
+                                type="button"
+                                onClick={() =>
+                                  handleLandingPageStyleChange(style.value)
                                 }
-                              />
-                            </div>
-                            <p className="mt-1 text-xs text-gray-400">
-                              The image shown when your shop is shared on social
-                              media (1200x630px recommended)
-                            </p>
-                          </div>
-                          <div>
-                            <label className="mb-1 block text-sm font-semibold text-black">
-                              Keywords
-                            </label>
-                            <Input
-                              classNames={{
-                                inputWrapper:
-                                  "border-3 border-black rounded-lg bg-white shadow-none hover:bg-white data-[hover=true]:bg-white group-data-[focus=true]:border-4 group-data-[focus=true]:border-black",
-                                input: "text-base !text-black",
-                              }}
-                              variant="bordered"
-                              fullWidth
-                              placeholder={
-                                seoMeta.autoGenerate !== false
-                                  ? "Auto-generated from shop name"
-                                  : "raw milk, farm fresh dairy, organic eggs, ..."
-                              }
-                              value={seoMeta.keywords || ""}
-                              onChange={(e) =>
-                                setSeoMeta({
-                                  ...seoMeta,
-                                  keywords: e.target.value || undefined,
-                                })
-                              }
-                            />
-                            <p className="mt-1 text-xs text-gray-400">
-                              Comma-separated keywords for search engines and AI
-                              discovery
-                            </p>
-                          </div>
-                          <div className="grid grid-cols-2 gap-3">
-                            <div>
-                              <label className="mb-1 block text-sm font-semibold text-black">
-                                Location Region
-                              </label>
-                              <Input
-                                classNames={{
-                                  inputWrapper:
-                                    "border-3 border-black rounded-lg bg-white shadow-none hover:bg-white data-[hover=true]:bg-white group-data-[focus=true]:border-4 group-data-[focus=true]:border-black",
-                                  input: "text-base !text-black",
-                                }}
-                                variant="bordered"
-                                fullWidth
-                                placeholder="e.g. US-TX, GB-LND"
-                                value={seoMeta.locationRegion || ""}
-                                onChange={(e) =>
-                                  setSeoMeta({
-                                    ...seoMeta,
-                                    locationRegion: e.target.value || undefined,
-                                  })
-                                }
-                              />
-                            </div>
-                            <div>
-                              <label className="mb-1 block text-sm font-semibold text-black">
-                                Location City
-                              </label>
-                              <Input
-                                classNames={{
-                                  inputWrapper:
-                                    "border-3 border-black rounded-lg bg-white shadow-none hover:bg-white data-[hover=true]:bg-white group-data-[focus=true]:border-4 group-data-[focus=true]:border-black",
-                                  input: "text-base !text-black",
-                                }}
-                                variant="bordered"
-                                fullWidth
-                                placeholder="e.g. Austin, London"
-                                value={seoMeta.locationCity || ""}
-                                onChange={(e) =>
-                                  setSeoMeta({
-                                    ...seoMeta,
-                                    locationCity: e.target.value || undefined,
-                                  })
-                                }
-                              />
-                            </div>
-                          </div>
-                          <p className="text-xs text-gray-400">
-                            Location helps with local search and GEO (Generative
-                            Engine Optimization) for AI-powered search like
-                            ChatGPT, Perplexity, and Google AI Overviews
-                          </p>
-                          <div>
-                            <label className="mb-1 block text-sm font-semibold text-black">
-                              Locale
-                            </label>
-                            <Input
-                              classNames={{
-                                inputWrapper:
-                                  "border-3 border-black rounded-lg bg-white shadow-none hover:bg-white data-[hover=true]:bg-white group-data-[focus=true]:border-4 group-data-[focus=true]:border-black w-40",
-                                input: "text-base !text-black",
-                              }}
-                              variant="bordered"
-                              placeholder="en_US"
-                              value={seoMeta.locale || ""}
-                              onChange={(e) =>
-                                setSeoMeta({
-                                  ...seoMeta,
-                                  locale: e.target.value || undefined,
-                                })
-                              }
-                            />
-                            <p className="mt-1 text-xs text-gray-400">
-                              Language/region code (e.g. en_US, en_GB, es_MX,
-                              fr_FR)
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="mb-6">
-                        <label className="mb-2 block text-base font-bold text-black">
-                          Homepage Sections
-                        </label>
-                        <p className="mb-3 text-sm text-gray-500">
-                          Build your storefront homepage by adding and arranging
-                          content sections. If no sections are added, the
-                          landing page style above is used instead.
-                        </p>
-                        <div className="space-y-2">
-                          {sections.map((section, idx) => {
-                            const drag = sectionsDnd.getItemProps(idx);
-                            return (
-                              <div
-                                key={section.id}
-                                {...drag.rootProps}
-                                className={`transition-all ${
-                                  drag.isDragging ? "opacity-40" : ""
-                                } ${
-                                  drag.isDragOver
-                                    ? "rounded-lg ring-2 ring-blue-400 ring-offset-1"
-                                    : ""
+                                className={`rounded-lg border-2 p-2 text-center transition-all ${
+                                  landingPageStyle === style.value
+                                    ? "shadow-neo border-black"
+                                    : "border-gray-300 hover:border-black"
                                 }`}
                               >
-                                <SectionEditor
-                                  section={section}
-                                  onChange={(updated) => {
-                                    const newSections = [...sections];
-                                    newSections[idx] = updated;
-                                    setSections(newSections);
-                                  }}
-                                  onRemove={() =>
-                                    setSections(
-                                      sections.filter((_, i) => i !== idx)
-                                    )
-                                  }
-                                  onMoveUp={() => {
-                                    if (idx === 0) return;
-                                    const newSections = [...sections];
-                                    [newSections[idx - 1], newSections[idx]] = [
-                                      newSections[idx]!,
-                                      newSections[idx - 1]!,
-                                    ];
-                                    setSections(newSections);
-                                  }}
-                                  onMoveDown={() => {
-                                    if (idx === sections.length - 1) return;
-                                    const newSections = [...sections];
-                                    [newSections[idx], newSections[idx + 1]] = [
-                                      newSections[idx + 1]!,
-                                      newSections[idx]!,
-                                    ];
-                                    setSections(newSections);
-                                  }}
-                                  isFirst={idx === 0}
-                                  isLast={idx === sections.length - 1}
-                                  sellerProducts={sellerProducts}
-                                  isNew={newSectionId === section.id}
-                                  onFlashDone={() => setNewSectionId(null)}
-                                  dragHandleProps={drag.handleProps}
-                                  focusToken={sectionFocusTokens[section.id]}
-                                />
-                              </div>
-                            );
-                          })}
-                        </div>
-                        <div className="mt-3">
-                          <p className="mb-2 text-xs font-semibold tracking-wider text-gray-400 uppercase">
-                            Add Section
-                          </p>
-                          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                            {(
-                              [
-                                {
-                                  type: "hero" as StorefrontSectionType,
-                                  label: "Hero",
-                                  icon: "🖼",
-                                  desc: "Full-width banner with call-to-action",
-                                },
-                                {
-                                  type: "about" as StorefrontSectionType,
-                                  label: "About",
-                                  icon: "👋",
-                                  desc: "Tell your farm's story with an image",
-                                },
-                                {
-                                  type: "story" as StorefrontSectionType,
-                                  label: "Our Story",
-                                  icon: "📖",
-                                  desc: "Timeline of your journey",
-                                },
-                                {
-                                  type: "products" as StorefrontSectionType,
-                                  label: "Products",
-                                  icon: "🛒",
-                                  desc: "Display your product catalog",
-                                },
-                                {
-                                  type: "testimonials" as StorefrontSectionType,
-                                  label: "Testimonials",
-                                  icon: "⭐",
-                                  desc: "Customer quotes and ratings",
-                                },
-                                {
-                                  type: "faq" as StorefrontSectionType,
-                                  label: "FAQ",
-                                  icon: "❓",
-                                  desc: "Common questions and answers",
-                                },
-                                {
-                                  type: "ingredients" as StorefrontSectionType,
-                                  label: "Ingredients",
-                                  icon: "🌿",
-                                  desc: "Highlight what goes into your products",
-                                },
-                                {
-                                  type: "comparison" as StorefrontSectionType,
-                                  label: "Comparison",
-                                  icon: "⚖️",
-                                  desc: "Compare your products vs alternatives",
-                                },
-                                {
-                                  type: "text" as StorefrontSectionType,
-                                  label: "Text",
-                                  icon: "📝",
-                                  desc: "Free-form text content block",
-                                },
-                                {
-                                  type: "image" as StorefrontSectionType,
-                                  label: "Image",
-                                  icon: "📷",
-                                  desc: "Full or contained image with caption",
-                                },
-                                {
-                                  type: "contact" as StorefrontSectionType,
-                                  label: "Contact",
-                                  icon: "📬",
-                                  desc: "Email, phone, and address info",
-                                },
-                                {
-                                  type: "reviews" as StorefrontSectionType,
-                                  label: "Reviews",
-                                  icon: "💬",
-                                  desc: "Show customer reviews from Nostr",
-                                },
-                                {
-                                  type: "social_posts" as StorefrontSectionType,
-                                  label: "Social Posts",
-                                  icon: "📱",
-                                  desc: "Link out to posts from X, Instagram, Nostr, etc.",
-                                },
-                              ] as const
-                            ).map((st) => (
-                              <button
-                                key={st.type}
-                                type="button"
-                                onClick={() => {
-                                  const sectionId = `section-${Date.now()}-${Math.random()
-                                    .toString(36)
-                                    .slice(2, 6)}`;
-                                  const newSection: StorefrontSection = {
-                                    id: sectionId,
-                                    type: st.type,
-                                    enabled: true,
-                                  };
-                                  if (st.type === "products") {
-                                    newSection.productLayout = productLayout;
-                                  }
-                                  setNewSectionId(sectionId);
-                                  if (st.type === "hero") {
-                                    setSections([newSection, ...sections]);
-                                  } else {
-                                    setSections([...sections, newSection]);
-                                  }
-                                }}
-                                className="group flex flex-col items-center rounded-lg border-2 border-gray-200 bg-white p-3 text-center transition-all hover:border-black hover:shadow-sm"
-                              >
-                                <div className="mb-2">
-                                  <SectionPreviewSvg type={st.type} />
+                                <div className="mb-2 flex justify-center">
+                                  <LandingPagePreviewSvg
+                                    variant={style.value}
+                                  />
                                 </div>
                                 <span className="block text-sm font-bold text-black">
-                                  {st.label}
+                                  {style.label}
                                 </span>
-                                <span className="block text-[10px] leading-tight text-gray-400 group-hover:text-gray-600">
-                                  {st.desc}
+                                <span className="block text-[10px] leading-tight text-gray-500">
+                                  {style.desc}
                                 </span>
                               </button>
                             ))}
                           </div>
                         </div>
-                      </div>
 
-                      <div className="mb-6">
-                        <label className="mb-2 block text-base font-bold text-black">
-                          Footer
-                        </label>
-                        <p className="mb-3 text-sm text-gray-500">
-                          Customize the footer at the bottom of your storefront.
-                        </p>
-                        <FooterEditor
-                          footer={footer}
-                          onChange={setFooter}
-                          shopName={watch("name")}
-                        />
-                      </div>
-
-                      <div className="hidden rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 p-4 lg:block">
-                        <div className="flex items-center gap-3">
-                          {shopSlug && (
-                            <a
-                              href={`/stall/${shopSlug}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-primary-blue text-sm font-bold underline"
-                            >
-                              Open live storefront (/stall/{shopSlug})
-                            </a>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => setIsPreviewOpen(true)}
-                            className="text-xs text-gray-400 underline hover:text-gray-600"
-                          >
-                            Open full-screen preview
-                          </button>
+                        <div className="mb-6">
+                          <label className="mb-2 block text-base font-bold text-black">
+                            Product Layout
+                          </label>
+                          <div className="grid grid-cols-3 gap-3">
+                            {[
+                              {
+                                value: "grid" as const,
+                                label: "Grid",
+                                desc: "Products in a grid",
+                              },
+                              {
+                                value: "list" as const,
+                                label: "List",
+                                desc: "Products in a list",
+                              },
+                              {
+                                value: "featured" as const,
+                                label: "Featured",
+                                desc: "Hero product + grid",
+                              },
+                            ].map((layout) => (
+                              <button
+                                key={layout.value}
+                                type="button"
+                                onClick={() =>
+                                  handleProductLayoutChange(layout.value)
+                                }
+                                className={`rounded-lg border-2 p-2 text-center transition-all ${
+                                  productLayout === layout.value
+                                    ? "shadow-neo border-black"
+                                    : "border-gray-300 hover:border-black"
+                                }`}
+                              >
+                                <div className="mb-2 flex justify-center">
+                                  <ProductLayoutPreviewSvg
+                                    variant={layout.value}
+                                  />
+                                </div>
+                                <span className="block text-sm font-bold text-black">
+                                  {layout.label}
+                                </span>
+                                <span className="block text-[10px] leading-tight text-gray-500">
+                                  {layout.desc}
+                                </span>
+                              </button>
+                            ))}
+                          </div>
                         </div>
-                      </div>
+
+                        <div className="mb-6">
+                          <label className="mb-2 block text-base font-bold text-black">
+                            Fonts
+                          </label>
+                          <p className="mb-1 text-sm text-gray-500">
+                            Choose a Google Font or upload your own custom font
+                            file for headings and body text.
+                          </p>
+                          <p className="mb-3 text-xs text-gray-400">
+                            Accepted formats: .woff2 (recommended), .woff, .ttf,
+                            .otf. Upload a single font file per slot. For best
+                            results, use a{" "}
+                            <span className="font-medium text-gray-500">
+                              variable font
+                            </span>{" "}
+                            file (one file containing multiple weights). A
+                            single-weight font will work but all text will
+                            render in that one weight (e.g., Regular only).
+                          </p>
+                          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                            <div>
+                              <label className="mb-1 block text-xs font-medium text-gray-500">
+                                Heading Font
+                              </label>
+                              {customFontHeadingUrl ? (
+                                <div className="flex items-center gap-2 rounded-lg border-3 border-black bg-white px-3 py-2">
+                                  <span className="min-w-0 flex-1 truncate text-sm text-black">
+                                    {customFontHeadingName || "Custom font"}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setCustomFontHeadingUrl("");
+                                      setCustomFontHeadingName("");
+                                    }}
+                                    className="flex-shrink-0 text-xs text-gray-400 hover:text-red-500"
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
+                              ) : (
+                                <Select
+                                  label="Select Google Font"
+                                  classNames={{
+                                    trigger:
+                                      "border-3 border-black rounded-lg bg-white shadow-none hover:bg-white data-[hover=true]:bg-white",
+                                    value: "text-base !text-black",
+                                    popoverContent:
+                                      "border-2 border-black rounded-lg bg-white",
+                                    listbox: "!text-black",
+                                    label: "text-black",
+                                  }}
+                                  variant="bordered"
+                                  selectedKeys={
+                                    fontHeading ? [fontHeading] : []
+                                  }
+                                  onChange={(e) =>
+                                    setFontHeading(e.target.value)
+                                  }
+                                >
+                                  {GOOGLE_FONT_OPTIONS.map((f) => (
+                                    <SelectItem key={f} className="text-black">
+                                      {f}
+                                    </SelectItem>
+                                  ))}
+                                </Select>
+                              )}
+                              {!customFontHeadingUrl && (
+                                <label className="mt-2 flex cursor-pointer items-center gap-1.5 text-xs text-gray-500 hover:text-black">
+                                  <input
+                                    type="file"
+                                    accept=".woff2,.woff,.ttf,.otf"
+                                    className="hidden"
+                                    onChange={async (e) => {
+                                      const file = e.target.files?.[0];
+                                      if (!file) return;
+                                      try {
+                                        setFontUploadingHeading(true);
+                                        const { blossomServers } =
+                                          getLocalStorageData() || {};
+                                        const tags = await blossomUpload(
+                                          file,
+                                          false,
+                                          signer!,
+                                          blossomServers || [
+                                            "https://cdn.nostrcheck.me",
+                                          ]
+                                        );
+                                        const urlTag = tags.find(
+                                          (t) => t[0] === "url"
+                                        );
+                                        if (!urlTag?.[1])
+                                          throw new Error(
+                                            "Upload returned no URL"
+                                          );
+                                        setCustomFontHeadingUrl(urlTag[1]);
+                                        setCustomFontHeadingName(file.name);
+                                        setFontHeading("");
+                                      } catch (err) {
+                                        console.error(
+                                          "Font upload failed:",
+                                          err
+                                        );
+                                      } finally {
+                                        setFontUploadingHeading(false);
+                                        e.target.value = "";
+                                      }
+                                    }}
+                                  />
+                                  {fontUploadingHeading ? (
+                                    <span className="text-xs text-gray-400">
+                                      Uploading...
+                                    </span>
+                                  ) : (
+                                    <>
+                                      <svg
+                                        xmlns="http://www.w3.org/2000/svg"
+                                        fill="none"
+                                        viewBox="0 0 24 24"
+                                        strokeWidth={1.5}
+                                        stroke="currentColor"
+                                        className="h-3.5 w-3.5"
+                                      >
+                                        <path
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                          d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5"
+                                        />
+                                      </svg>
+                                      Or upload custom font
+                                    </>
+                                  )}
+                                </label>
+                              )}
+                            </div>
+                            <div>
+                              <label className="mb-1 block text-xs font-medium text-gray-500">
+                                Body Font
+                              </label>
+                              {customFontBodyUrl ? (
+                                <div className="flex items-center gap-2 rounded-lg border-3 border-black bg-white px-3 py-2">
+                                  <span className="min-w-0 flex-1 truncate text-sm text-black">
+                                    {customFontBodyName || "Custom font"}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setCustomFontBodyUrl("");
+                                      setCustomFontBodyName("");
+                                    }}
+                                    className="flex-shrink-0 text-xs text-gray-400 hover:text-red-500"
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
+                              ) : (
+                                <Select
+                                  label="Select Google Font"
+                                  classNames={{
+                                    trigger:
+                                      "border-3 border-black rounded-lg bg-white shadow-none hover:bg-white data-[hover=true]:bg-white",
+                                    value: "text-base !text-black",
+                                    popoverContent:
+                                      "border-2 border-black rounded-lg bg-white",
+                                    listbox: "!text-black",
+                                    label: "text-black",
+                                  }}
+                                  variant="bordered"
+                                  selectedKeys={fontBody ? [fontBody] : []}
+                                  onChange={(e) => setFontBody(e.target.value)}
+                                >
+                                  {GOOGLE_FONT_OPTIONS.map((f) => (
+                                    <SelectItem key={f} className="text-black">
+                                      {f}
+                                    </SelectItem>
+                                  ))}
+                                </Select>
+                              )}
+                              {!customFontBodyUrl && (
+                                <label className="mt-2 flex cursor-pointer items-center gap-1.5 text-xs text-gray-500 hover:text-black">
+                                  <input
+                                    type="file"
+                                    accept=".woff2,.woff,.ttf,.otf"
+                                    className="hidden"
+                                    onChange={async (e) => {
+                                      const file = e.target.files?.[0];
+                                      if (!file) return;
+                                      try {
+                                        setFontUploadingBody(true);
+                                        const { blossomServers } =
+                                          getLocalStorageData() || {};
+                                        const tags = await blossomUpload(
+                                          file,
+                                          false,
+                                          signer!,
+                                          blossomServers || [
+                                            "https://cdn.nostrcheck.me",
+                                          ]
+                                        );
+                                        const urlTag = tags.find(
+                                          (t) => t[0] === "url"
+                                        );
+                                        if (!urlTag?.[1])
+                                          throw new Error(
+                                            "Upload returned no URL"
+                                          );
+                                        setCustomFontBodyUrl(urlTag[1]);
+                                        setCustomFontBodyName(file.name);
+                                        setFontBody("");
+                                      } catch (err) {
+                                        console.error(
+                                          "Font upload failed:",
+                                          err
+                                        );
+                                      } finally {
+                                        setFontUploadingBody(false);
+                                        e.target.value = "";
+                                      }
+                                    }}
+                                  />
+                                  {fontUploadingBody ? (
+                                    <span className="text-xs text-gray-400">
+                                      Uploading...
+                                    </span>
+                                  ) : (
+                                    <>
+                                      <svg
+                                        xmlns="http://www.w3.org/2000/svg"
+                                        fill="none"
+                                        viewBox="0 0 24 24"
+                                        strokeWidth={1.5}
+                                        stroke="currentColor"
+                                        className="h-3.5 w-3.5"
+                                      >
+                                        <path
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                          d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5"
+                                        />
+                                      </svg>
+                                      Or upload custom font
+                                    </>
+                                  )}
+                                </label>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="mb-6">
+                          <label className="mb-2 flex items-center gap-3 text-base font-bold text-black">
+                            <input
+                              type="checkbox"
+                              checked={neoShadows}
+                              onChange={(e) => setNeoShadows(e.target.checked)}
+                              className="h-4 w-4 rounded border-gray-300"
+                            />
+                            Neo-brutalist Card Shadows
+                          </label>
+                          <p className="ml-7 text-sm text-gray-500">
+                            Adds a hard offset shadow to bordered cards across
+                            your stall — the same look used on the main Milk
+                            Market marketplace.
+                          </p>
+                        </div>
+
+                        <div className="mb-6">
+                          <PageEditor
+                            pages={pages}
+                            onChange={setPages}
+                            navLinks={navLinks}
+                            onNavLinksChange={setNavLinks}
+                            sellerProducts={sellerProducts}
+                            shopPubkey={userPubkey}
+                          />
+                        </div>
+
+                        <div className="mb-6">
+                          <label className="mb-2 flex items-center gap-3 text-base font-bold text-black">
+                            <input
+                              type="checkbox"
+                              checked={showCommunityPage}
+                              onChange={(e) =>
+                                setShowCommunityPage(e.target.checked)
+                              }
+                              className="h-4 w-4 rounded border-gray-300"
+                            />
+                            Show Community Page
+                          </label>
+                          <p className="ml-7 text-sm text-gray-500">
+                            Enable a community page on your storefront that
+                            displays your community feed. A
+                            &quot;Community&quot; link will be added to your
+                            storefront navigation bar.
+                          </p>
+                        </div>
+
+                        <div className="mb-6">
+                          <label className="mb-2 flex items-center gap-3 text-base font-bold text-black">
+                            <input
+                              type="checkbox"
+                              checked={showWalletPage}
+                              onChange={(e) =>
+                                setShowWalletPage(e.target.checked)
+                              }
+                              className="h-4 w-4 rounded border-gray-300"
+                            />
+                            Show Bitcoin Wallet Page
+                          </label>
+                          <p className="ml-7 text-sm text-gray-500">
+                            Enable a Bitcoin wallet page on your storefront for
+                            Cashu ecash payments. A &quot;Wallet&quot; link will
+                            be added to your storefront navigation bar.
+                          </p>
+                        </div>
+
+                        <div className="mb-6 rounded-lg border-2 border-gray-200 p-4">
+                          <label className="mb-2 flex items-center gap-3 text-base font-bold text-black">
+                            <input
+                              type="checkbox"
+                              checked={emailPopup.enabled}
+                              onChange={(e) =>
+                                setEmailPopup({
+                                  ...emailPopup,
+                                  enabled: e.target.checked,
+                                })
+                              }
+                              className="h-4 w-4 rounded border-gray-300"
+                            />
+                            Email Capture Popup
+                          </label>
+                          <p className="mb-3 ml-7 text-sm text-gray-500">
+                            Show a popup to new visitors offering a discount
+                            code in exchange for their email address. Optionally
+                            add interactive question flows before the capture
+                            step.
+                          </p>
+                          <p className="mb-3 ml-7 text-sm">
+                            <a
+                              href="/orders?tab=contacts"
+                              className="font-semibold text-blue-600 hover:underline"
+                            >
+                              View captured contacts →
+                            </a>
+                          </p>
+
+                          {emailPopup.enabled && (
+                            <div className="ml-7 space-y-4 border-t border-gray-100 pt-4">
+                              <div>
+                                <label className="mb-1 block text-sm font-semibold text-black">
+                                  Discount Percentage
+                                </label>
+                                <div className="flex items-center gap-2">
+                                  <Input
+                                    type="number"
+                                    min={0}
+                                    max={100}
+                                    classNames={{
+                                      inputWrapper:
+                                        "border-3 border-black rounded-lg bg-white shadow-none hover:bg-white data-[hover=true]:bg-white group-data-[focus=true]:border-4 group-data-[focus=true]:border-black w-24",
+                                      input: "text-base !text-black",
+                                    }}
+                                    variant="bordered"
+                                    value={String(
+                                      emailPopup.discountPercentage
+                                    )}
+                                    onChange={(e) =>
+                                      setEmailPopup({
+                                        ...emailPopup,
+                                        discountPercentage: Math.min(
+                                          100,
+                                          Math.max(
+                                            0,
+                                            parseInt(e.target.value) || 0
+                                          )
+                                        ),
+                                      })
+                                    }
+                                  />
+                                  <span className="text-sm font-medium text-gray-600">
+                                    % off products
+                                  </span>
+                                </div>
+                                <p className="mt-1 text-xs text-gray-500">
+                                  Set to 0 if you only want this welcome code to
+                                  discount shipping.
+                                </p>
+                              </div>
+
+                              <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                                <label className="flex items-center gap-3 text-sm font-semibold text-black">
+                                  <input
+                                    type="checkbox"
+                                    checked={
+                                      (emailPopup.shippingDiscountType ||
+                                        "none") !== "none"
+                                    }
+                                    onChange={(e) =>
+                                      setEmailPopup({
+                                        ...emailPopup,
+                                        shippingDiscountType: e.target.checked
+                                          ? "free"
+                                          : "none",
+                                        shippingDiscountValue: e.target.checked
+                                          ? emailPopup.shippingDiscountValue ||
+                                            0
+                                          : 0,
+                                      })
+                                    }
+                                    className="h-4 w-4 rounded border-gray-300"
+                                  />
+                                  Also discount shipping
+                                </label>
+                                {(emailPopup.shippingDiscountType || "none") !==
+                                  "none" && (
+                                  <div className="mt-3 ml-7 space-y-2">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <select
+                                        className="rounded border border-gray-300 bg-white px-2 py-1 text-sm text-black"
+                                        value={
+                                          emailPopup.shippingDiscountType ||
+                                          "free"
+                                        }
+                                        onChange={(e) =>
+                                          setEmailPopup({
+                                            ...emailPopup,
+                                            shippingDiscountType: e.target
+                                              .value as
+                                              | "free"
+                                              | "percent"
+                                              | "fixed",
+                                            shippingDiscountValue:
+                                              e.target.value === "free"
+                                                ? 0
+                                                : emailPopup.shippingDiscountValue ||
+                                                  0,
+                                          })
+                                        }
+                                      >
+                                        <option value="free">
+                                          Free shipping
+                                        </option>
+                                        <option value="percent">
+                                          % off shipping
+                                        </option>
+                                        <option value="fixed">
+                                          Flat amount off shipping
+                                        </option>
+                                      </select>
+                                      {emailPopup.shippingDiscountType !==
+                                        "free" && (
+                                        <>
+                                          <Input
+                                            type="number"
+                                            min={0}
+                                            max={
+                                              emailPopup.shippingDiscountType ===
+                                              "percent"
+                                                ? 100
+                                                : undefined
+                                            }
+                                            step={
+                                              emailPopup.shippingDiscountType ===
+                                              "fixed"
+                                                ? 0.01
+                                                : 1
+                                            }
+                                            classNames={{
+                                              inputWrapper:
+                                                "border-3 border-black rounded-lg bg-white shadow-none w-28",
+                                              input: "text-base !text-black",
+                                            }}
+                                            variant="bordered"
+                                            value={String(
+                                              emailPopup.shippingDiscountValue ||
+                                                ""
+                                            )}
+                                            onChange={(e) =>
+                                              setEmailPopup({
+                                                ...emailPopup,
+                                                shippingDiscountValue:
+                                                  parseFloat(e.target.value) ||
+                                                  0,
+                                              })
+                                            }
+                                          />
+                                          <span className="text-sm text-gray-600">
+                                            {emailPopup.shippingDiscountType ===
+                                            "percent"
+                                              ? "% off shipping"
+                                              : "off shipping (in buyer's cart currency)"}
+                                          </span>
+                                        </>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+
+                              <div>
+                                <label className="mb-1 block text-sm font-semibold text-black">
+                                  Headline (optional)
+                                </label>
+                                <Input
+                                  classNames={{
+                                    inputWrapper:
+                                      "border-3 border-black rounded-lg bg-white shadow-none hover:bg-white data-[hover=true]:bg-white group-data-[focus=true]:border-4 group-data-[focus=true]:border-black",
+                                    input: "text-base !text-black",
+                                  }}
+                                  variant="bordered"
+                                  fullWidth
+                                  placeholder={`Get ${emailPopup.discountPercentage}% Off Your First Order`}
+                                  value={emailPopup.headline || ""}
+                                  onChange={(e) =>
+                                    setEmailPopup({
+                                      ...emailPopup,
+                                      headline: e.target.value || undefined,
+                                    })
+                                  }
+                                />
+                              </div>
+
+                              <div>
+                                <label className="mb-1 block text-sm font-semibold text-black">
+                                  Subtext (optional)
+                                </label>
+                                <Input
+                                  classNames={{
+                                    inputWrapper:
+                                      "border-3 border-black rounded-lg bg-white shadow-none hover:bg-white data-[hover=true]:bg-white group-data-[focus=true]:border-4 group-data-[focus=true]:border-black",
+                                    input: "text-base !text-black",
+                                  }}
+                                  variant="bordered"
+                                  fullWidth
+                                  placeholder="Sign up to receive an exclusive discount code."
+                                  value={emailPopup.subtext || ""}
+                                  onChange={(e) =>
+                                    setEmailPopup({
+                                      ...emailPopup,
+                                      subtext: e.target.value || undefined,
+                                    })
+                                  }
+                                />
+                              </div>
+
+                              <div>
+                                <label className="mb-1 block text-sm font-semibold text-black">
+                                  Button Text (optional)
+                                </label>
+                                <Input
+                                  classNames={{
+                                    inputWrapper:
+                                      "border-3 border-black rounded-lg bg-white shadow-none hover:bg-white data-[hover=true]:bg-white group-data-[focus=true]:border-4 group-data-[focus=true]:border-black",
+                                    input: "text-base !text-black",
+                                  }}
+                                  variant="bordered"
+                                  fullWidth
+                                  placeholder="Get My Discount"
+                                  value={emailPopup.buttonText || ""}
+                                  onChange={(e) =>
+                                    setEmailPopup({
+                                      ...emailPopup,
+                                      buttonText: e.target.value || undefined,
+                                    })
+                                  }
+                                />
+                              </div>
+
+                              <div>
+                                <label className="mb-1 block text-sm font-semibold text-black">
+                                  Success Message (optional)
+                                </label>
+                                <Input
+                                  classNames={{
+                                    inputWrapper:
+                                      "border-3 border-black rounded-lg bg-white shadow-none hover:bg-white data-[hover=true]:bg-white group-data-[focus=true]:border-4 group-data-[focus=true]:border-black",
+                                    input: "text-base !text-black",
+                                  }}
+                                  variant="bordered"
+                                  fullWidth
+                                  placeholder="Check your email for your discount code!"
+                                  value={emailPopup.successMessage || ""}
+                                  onChange={(e) =>
+                                    setEmailPopup({
+                                      ...emailPopup,
+                                      successMessage:
+                                        e.target.value || undefined,
+                                    })
+                                  }
+                                />
+                              </div>
+
+                              <div className="flex flex-col gap-2">
+                                <label className="flex items-center gap-3 text-sm font-semibold text-black">
+                                  <input
+                                    type="checkbox"
+                                    checked={emailPopup.collectPhone || false}
+                                    onChange={(e) =>
+                                      setEmailPopup({
+                                        ...emailPopup,
+                                        collectPhone: e.target.checked,
+                                        requirePhone: e.target.checked
+                                          ? emailPopup.requirePhone
+                                          : false,
+                                      })
+                                    }
+                                    className="h-4 w-4 rounded border-gray-300"
+                                  />
+                                  Collect phone number
+                                </label>
+                                {emailPopup.collectPhone && (
+                                  <label className="ml-7 flex items-center gap-3 text-sm text-gray-600">
+                                    <input
+                                      type="checkbox"
+                                      checked={emailPopup.requirePhone || false}
+                                      onChange={(e) =>
+                                        setEmailPopup({
+                                          ...emailPopup,
+                                          requirePhone: e.target.checked,
+                                        })
+                                      }
+                                      className="h-4 w-4 rounded border-gray-300"
+                                    />
+                                    Make phone number required
+                                  </label>
+                                )}
+                              </div>
+
+                              <div className="border-t border-gray-200 pt-4">
+                                <label className="mb-3 block text-sm font-bold text-black">
+                                  Popup Styling
+                                </label>
+                                <div className="space-y-3">
+                                  <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                      <label className="mb-1 block text-xs font-semibold text-gray-600">
+                                        Background Color
+                                      </label>
+                                      <div className="flex items-center gap-2">
+                                        <input
+                                          type="color"
+                                          value={
+                                            emailPopup.style?.backgroundColor ||
+                                            colorScheme.background
+                                          }
+                                          onChange={(e) =>
+                                            setEmailPopup({
+                                              ...emailPopup,
+                                              style: {
+                                                ...emailPopup.style,
+                                                backgroundColor: e.target.value,
+                                              },
+                                            })
+                                          }
+                                          className="h-8 w-8 cursor-pointer rounded border"
+                                        />
+                                        <span className="text-xs text-gray-400">
+                                          {emailPopup.style?.backgroundColor ||
+                                            "default"}
+                                        </span>
+                                        {emailPopup.style?.backgroundColor && (
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              setEmailPopup({
+                                                ...emailPopup,
+                                                style: {
+                                                  ...emailPopup.style,
+                                                  backgroundColor: undefined,
+                                                },
+                                              })
+                                            }
+                                            className="text-xs text-red-400 hover:text-red-600"
+                                          >
+                                            ✕
+                                          </button>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <label className="mb-1 block text-xs font-semibold text-gray-600">
+                                        Text Color
+                                      </label>
+                                      <div className="flex items-center gap-2">
+                                        <input
+                                          type="color"
+                                          value={
+                                            emailPopup.style?.textColor ||
+                                            colorScheme.text
+                                          }
+                                          onChange={(e) =>
+                                            setEmailPopup({
+                                              ...emailPopup,
+                                              style: {
+                                                ...emailPopup.style,
+                                                textColor: e.target.value,
+                                              },
+                                            })
+                                          }
+                                          className="h-8 w-8 cursor-pointer rounded border"
+                                        />
+                                        <span className="text-xs text-gray-400">
+                                          {emailPopup.style?.textColor ||
+                                            "default"}
+                                        </span>
+                                        {emailPopup.style?.textColor && (
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              setEmailPopup({
+                                                ...emailPopup,
+                                                style: {
+                                                  ...emailPopup.style,
+                                                  textColor: undefined,
+                                                },
+                                              })
+                                            }
+                                            className="text-xs text-red-400 hover:text-red-600"
+                                          >
+                                            ✕
+                                          </button>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <label className="mb-1 block text-xs font-semibold text-gray-600">
+                                        Accent / Banner Color
+                                      </label>
+                                      <div className="flex items-center gap-2">
+                                        <input
+                                          type="color"
+                                          value={
+                                            emailPopup.style?.accentColor ||
+                                            colorScheme.primary
+                                          }
+                                          onChange={(e) =>
+                                            setEmailPopup({
+                                              ...emailPopup,
+                                              style: {
+                                                ...emailPopup.style,
+                                                accentColor: e.target.value,
+                                              },
+                                            })
+                                          }
+                                          className="h-8 w-8 cursor-pointer rounded border"
+                                        />
+                                        <span className="text-xs text-gray-400">
+                                          {emailPopup.style?.accentColor ||
+                                            "default"}
+                                        </span>
+                                        {emailPopup.style?.accentColor && (
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              setEmailPopup({
+                                                ...emailPopup,
+                                                style: {
+                                                  ...emailPopup.style,
+                                                  accentColor: undefined,
+                                                },
+                                              })
+                                            }
+                                            className="text-xs text-red-400 hover:text-red-600"
+                                          >
+                                            ✕
+                                          </button>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <label className="mb-1 block text-xs font-semibold text-gray-600">
+                                        Button Color
+                                      </label>
+                                      <div className="flex items-center gap-2">
+                                        <input
+                                          type="color"
+                                          value={
+                                            emailPopup.style?.buttonColor ||
+                                            colorScheme.primary
+                                          }
+                                          onChange={(e) =>
+                                            setEmailPopup({
+                                              ...emailPopup,
+                                              style: {
+                                                ...emailPopup.style,
+                                                buttonColor: e.target.value,
+                                              },
+                                            })
+                                          }
+                                          className="h-8 w-8 cursor-pointer rounded border"
+                                        />
+                                        <span className="text-xs text-gray-400">
+                                          {emailPopup.style?.buttonColor ||
+                                            "default"}
+                                        </span>
+                                        {emailPopup.style?.buttonColor && (
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              setEmailPopup({
+                                                ...emailPopup,
+                                                style: {
+                                                  ...emailPopup.style,
+                                                  buttonColor: undefined,
+                                                },
+                                              })
+                                            }
+                                            className="text-xs text-red-400 hover:text-red-600"
+                                          >
+                                            ✕
+                                          </button>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <label className="mb-1 block text-xs font-semibold text-gray-600">
+                                        Button Text Color
+                                      </label>
+                                      <div className="flex items-center gap-2">
+                                        <input
+                                          type="color"
+                                          value={
+                                            emailPopup.style?.buttonTextColor ||
+                                            colorScheme.secondary
+                                          }
+                                          onChange={(e) =>
+                                            setEmailPopup({
+                                              ...emailPopup,
+                                              style: {
+                                                ...emailPopup.style,
+                                                buttonTextColor: e.target.value,
+                                              },
+                                            })
+                                          }
+                                          className="h-8 w-8 cursor-pointer rounded border"
+                                        />
+                                        <span className="text-xs text-gray-400">
+                                          {emailPopup.style?.buttonTextColor ||
+                                            "default"}
+                                        </span>
+                                        {emailPopup.style?.buttonTextColor && (
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              setEmailPopup({
+                                                ...emailPopup,
+                                                style: {
+                                                  ...emailPopup.style,
+                                                  buttonTextColor: undefined,
+                                                },
+                                              })
+                                            }
+                                            className="text-xs text-red-400 hover:text-red-600"
+                                          >
+                                            ✕
+                                          </button>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <div>
+                                    <label className="mb-1 block text-xs font-semibold text-gray-600">
+                                      Background Image
+                                    </label>
+                                    <div className="flex items-center gap-2">
+                                      <Input
+                                        size="sm"
+                                        classNames={{
+                                          inputWrapper:
+                                            "border-3 border-black rounded-lg bg-white shadow-none hover:bg-white data-[hover=true]:bg-white group-data-[focus=true]:border-4 group-data-[focus=true]:border-black",
+                                          input: "text-sm !text-black",
+                                        }}
+                                        variant="bordered"
+                                        placeholder="Image URL"
+                                        value={
+                                          emailPopup.style?.backgroundImage ||
+                                          ""
+                                        }
+                                        onChange={(e) =>
+                                          setEmailPopup({
+                                            ...emailPopup,
+                                            style: {
+                                              ...emailPopup.style,
+                                              backgroundImage:
+                                                e.target.value || undefined,
+                                            },
+                                          })
+                                        }
+                                        className="flex-1"
+                                      />
+                                      <FileUploaderButton
+                                        className="rounded-lg border-2 border-black bg-white px-3 py-2 text-xs font-bold text-black"
+                                        imgCallbackOnUpload={(url) =>
+                                          setEmailPopup({
+                                            ...emailPopup,
+                                            style: {
+                                              ...emailPopup.style,
+                                              backgroundImage: url,
+                                            },
+                                          })
+                                        }
+                                      >
+                                        Upload
+                                      </FileUploaderButton>
+                                    </div>
+                                    <p className="mt-1 text-[11px] text-gray-500">
+                                      Recommended: 800 × 600 px (4:3 popup
+                                      background)
+                                    </p>
+                                    {emailPopup.style?.backgroundImage && (
+                                      <div className="mt-2 flex items-center gap-2">
+                                        <img
+                                          src={emailPopup.style.backgroundImage}
+                                          alt="BG preview"
+                                          className="h-12 w-20 rounded border object-cover"
+                                        />
+                                        <div className="flex items-center gap-2">
+                                          <label className="text-xs text-gray-500">
+                                            Opacity:
+                                          </label>
+                                          <input
+                                            type="range"
+                                            min={10}
+                                            max={100}
+                                            value={
+                                              (emailPopup.style
+                                                ?.overlayOpacity ?? 0.6) * 100
+                                            }
+                                            onChange={(e) =>
+                                              setEmailPopup({
+                                                ...emailPopup,
+                                                style: {
+                                                  ...emailPopup.style,
+                                                  overlayOpacity:
+                                                    parseInt(e.target.value) /
+                                                    100,
+                                                },
+                                              })
+                                            }
+                                            className="w-20"
+                                          />
+                                          <span className="text-xs text-gray-400">
+                                            {Math.round(
+                                              (emailPopup.style
+                                                ?.overlayOpacity ?? 0.6) * 100
+                                            )}
+                                            %
+                                          </span>
+                                        </div>
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            setEmailPopup({
+                                              ...emailPopup,
+                                              style: {
+                                                ...emailPopup.style,
+                                                backgroundImage: undefined,
+                                                overlayOpacity: undefined,
+                                              },
+                                            })
+                                          }
+                                          className="text-xs text-red-400 hover:text-red-600"
+                                        >
+                                          ✕
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  <label className="flex items-center gap-2 text-sm font-semibold text-black">
+                                    <input
+                                      type="checkbox"
+                                      checked={
+                                        emailPopup.style?.useCustomFonts ||
+                                        false
+                                      }
+                                      onChange={(e) =>
+                                        setEmailPopup({
+                                          ...emailPopup,
+                                          style: {
+                                            ...emailPopup.style,
+                                            useCustomFonts:
+                                              e.target.checked || undefined,
+                                          },
+                                        })
+                                      }
+                                      className="h-4 w-4 rounded border-gray-300"
+                                    />
+                                    Use storefront custom fonts
+                                  </label>
+                                </div>
+                              </div>
+
+                              <div className="border-t border-gray-200 pt-4">
+                                <label className="mb-1 block text-sm font-bold text-black">
+                                  Interactive Flow Steps
+                                </label>
+                                <p className="mb-3 text-xs text-gray-500">
+                                  Add question steps that visitors answer before
+                                  reaching the email capture. Each question has
+                                  multiple answer buttons. Leave empty for a
+                                  direct email capture popup.
+                                </p>
+                                <PopupFlowEditor
+                                  steps={emailPopup.flowSteps || []}
+                                  onChange={(flowSteps) =>
+                                    setEmailPopup({
+                                      ...emailPopup,
+                                      flowSteps:
+                                        flowSteps.length > 0
+                                          ? flowSteps
+                                          : undefined,
+                                    })
+                                  }
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="mb-6 rounded-lg border-2 border-gray-200 p-4">
+                          <label className="mb-2 block text-base font-bold text-black">
+                            SEO & Open Graph
+                          </label>
+                          <p className="mb-3 text-sm text-gray-500">
+                            Control how your storefront appears in search
+                            results, social media previews, and AI-powered
+                            search engines. Leave fields empty to auto-generate
+                            from your shop details.
+                          </p>
+                          <div className="mb-3 flex items-center gap-3">
+                            <label className="flex items-center gap-2 text-sm font-semibold text-black">
+                              <input
+                                type="checkbox"
+                                checked={seoMeta.autoGenerate !== false}
+                                onChange={(e) =>
+                                  setSeoMeta({
+                                    ...seoMeta,
+                                    autoGenerate: e.target.checked,
+                                  })
+                                }
+                                className="h-4 w-4 rounded border-gray-300"
+                              />
+                              Auto-generate from shop data
+                            </label>
+                          </div>
+                          <div className="space-y-4">
+                            <div>
+                              <label className="mb-1 block text-sm font-semibold text-black">
+                                Meta Title
+                              </label>
+                              <Input
+                                classNames={{
+                                  inputWrapper:
+                                    "border-3 border-black rounded-lg bg-white shadow-none hover:bg-white data-[hover=true]:bg-white group-data-[focus=true]:border-4 group-data-[focus=true]:border-black",
+                                  input: "text-base !text-black",
+                                }}
+                                variant="bordered"
+                                fullWidth
+                                placeholder={
+                                  seoMeta.autoGenerate !== false
+                                    ? "Auto-generated from shop name"
+                                    : "e.g. Green Valley Farm — Fresh Raw Milk"
+                                }
+                                value={seoMeta.metaTitle || ""}
+                                onChange={(e) =>
+                                  setSeoMeta({
+                                    ...seoMeta,
+                                    metaTitle: e.target.value || undefined,
+                                  })
+                                }
+                              />
+                              <p className="mt-1 text-xs text-gray-400">
+                                Appears as the page title in search results and
+                                browser tabs (50-60 characters ideal)
+                              </p>
+                            </div>
+                            <div>
+                              <label className="mb-1 block text-sm font-semibold text-black">
+                                Meta Description
+                              </label>
+                              <Textarea
+                                classNames={{
+                                  inputWrapper:
+                                    "border-3 border-black rounded-lg bg-white shadow-none hover:bg-white data-[hover=true]:bg-white group-data-[focus=true]:border-4 group-data-[focus=true]:border-black",
+                                  input: "text-base !text-black",
+                                }}
+                                variant="bordered"
+                                fullWidth
+                                minRows={2}
+                                maxRows={3}
+                                placeholder={
+                                  seoMeta.autoGenerate !== false
+                                    ? "Auto-generated from shop about"
+                                    : "A brief summary of your shop for search engines (150-160 characters ideal)"
+                                }
+                                value={seoMeta.metaDescription || ""}
+                                onChange={(e) =>
+                                  setSeoMeta({
+                                    ...seoMeta,
+                                    metaDescription:
+                                      e.target.value || undefined,
+                                  })
+                                }
+                              />
+                            </div>
+                            <div>
+                              <label className="mb-1 block text-sm font-semibold text-black">
+                                OG Image URL
+                              </label>
+                              <div className="flex items-center gap-2">
+                                <Input
+                                  classNames={{
+                                    inputWrapper:
+                                      "border-3 border-black rounded-lg bg-white shadow-none hover:bg-white data-[hover=true]:bg-white group-data-[focus=true]:border-4 group-data-[focus=true]:border-black",
+                                    input: "text-base !text-black",
+                                  }}
+                                  variant="bordered"
+                                  fullWidth
+                                  placeholder="Defaults to your banner/profile image"
+                                  value={seoMeta.ogImage || ""}
+                                  onChange={(e) =>
+                                    setSeoMeta({
+                                      ...seoMeta,
+                                      ogImage: e.target.value || undefined,
+                                    })
+                                  }
+                                />
+                              </div>
+                              <p className="mt-1 text-xs text-gray-400">
+                                The image shown when your shop is shared on
+                                social media (1200x630px recommended)
+                              </p>
+                            </div>
+                            <div>
+                              <label className="mb-1 block text-sm font-semibold text-black">
+                                Keywords
+                              </label>
+                              <Input
+                                classNames={{
+                                  inputWrapper:
+                                    "border-3 border-black rounded-lg bg-white shadow-none hover:bg-white data-[hover=true]:bg-white group-data-[focus=true]:border-4 group-data-[focus=true]:border-black",
+                                  input: "text-base !text-black",
+                                }}
+                                variant="bordered"
+                                fullWidth
+                                placeholder={
+                                  seoMeta.autoGenerate !== false
+                                    ? "Auto-generated from shop name"
+                                    : "raw milk, farm fresh dairy, organic eggs, ..."
+                                }
+                                value={seoMeta.keywords || ""}
+                                onChange={(e) =>
+                                  setSeoMeta({
+                                    ...seoMeta,
+                                    keywords: e.target.value || undefined,
+                                  })
+                                }
+                              />
+                              <p className="mt-1 text-xs text-gray-400">
+                                Comma-separated keywords for search engines and
+                                AI discovery
+                              </p>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <label className="mb-1 block text-sm font-semibold text-black">
+                                  Location Region
+                                </label>
+                                <Input
+                                  classNames={{
+                                    inputWrapper:
+                                      "border-3 border-black rounded-lg bg-white shadow-none hover:bg-white data-[hover=true]:bg-white group-data-[focus=true]:border-4 group-data-[focus=true]:border-black",
+                                    input: "text-base !text-black",
+                                  }}
+                                  variant="bordered"
+                                  fullWidth
+                                  placeholder="e.g. US-TX, GB-LND"
+                                  value={seoMeta.locationRegion || ""}
+                                  onChange={(e) =>
+                                    setSeoMeta({
+                                      ...seoMeta,
+                                      locationRegion:
+                                        e.target.value || undefined,
+                                    })
+                                  }
+                                />
+                              </div>
+                              <div>
+                                <label className="mb-1 block text-sm font-semibold text-black">
+                                  Location City
+                                </label>
+                                <Input
+                                  classNames={{
+                                    inputWrapper:
+                                      "border-3 border-black rounded-lg bg-white shadow-none hover:bg-white data-[hover=true]:bg-white group-data-[focus=true]:border-4 group-data-[focus=true]:border-black",
+                                    input: "text-base !text-black",
+                                  }}
+                                  variant="bordered"
+                                  fullWidth
+                                  placeholder="e.g. Austin, London"
+                                  value={seoMeta.locationCity || ""}
+                                  onChange={(e) =>
+                                    setSeoMeta({
+                                      ...seoMeta,
+                                      locationCity: e.target.value || undefined,
+                                    })
+                                  }
+                                />
+                              </div>
+                            </div>
+                            <p className="text-xs text-gray-400">
+                              Location helps with local search and GEO
+                              (Generative Engine Optimization) for AI-powered
+                              search like ChatGPT, Perplexity, and Google AI
+                              Overviews
+                            </p>
+                            <div>
+                              <label className="mb-1 block text-sm font-semibold text-black">
+                                Locale
+                              </label>
+                              <Input
+                                classNames={{
+                                  inputWrapper:
+                                    "border-3 border-black rounded-lg bg-white shadow-none hover:bg-white data-[hover=true]:bg-white group-data-[focus=true]:border-4 group-data-[focus=true]:border-black w-40",
+                                  input: "text-base !text-black",
+                                }}
+                                variant="bordered"
+                                placeholder="en_US"
+                                value={seoMeta.locale || ""}
+                                onChange={(e) =>
+                                  setSeoMeta({
+                                    ...seoMeta,
+                                    locale: e.target.value || undefined,
+                                  })
+                                }
+                              />
+                              <p className="mt-1 text-xs text-gray-400">
+                                Language/region code (e.g. en_US, en_GB, es_MX,
+                                fr_FR)
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="mb-6">
+                          <label className="mb-2 block text-base font-bold text-black">
+                            Homepage Sections
+                          </label>
+                          <p className="mb-3 text-sm text-gray-500">
+                            Build your storefront homepage by adding and
+                            arranging content sections. If no sections are
+                            added, the landing page style above is used instead.
+                          </p>
+                          <div className="space-y-2">
+                            {sections.map((section, idx) => {
+                              const drag = sectionsDnd.getItemProps(idx);
+                              return (
+                                <div
+                                  key={section.id}
+                                  {...drag.rootProps}
+                                  className={`transition-all ${
+                                    drag.isDragging ? "opacity-40" : ""
+                                  } ${
+                                    drag.isDragOver
+                                      ? "rounded-lg ring-2 ring-blue-400 ring-offset-1"
+                                      : ""
+                                  }`}
+                                >
+                                  <SectionEditor
+                                    section={section}
+                                    onChange={(updated) => {
+                                      const newSections = [...sections];
+                                      newSections[idx] = updated;
+                                      setSections(newSections);
+                                    }}
+                                    onRemove={() =>
+                                      setSections(
+                                        sections.filter((_, i) => i !== idx)
+                                      )
+                                    }
+                                    onMoveUp={() => {
+                                      if (idx === 0) return;
+                                      const newSections = [...sections];
+                                      [newSections[idx - 1], newSections[idx]] =
+                                        [
+                                          newSections[idx]!,
+                                          newSections[idx - 1]!,
+                                        ];
+                                      setSections(newSections);
+                                    }}
+                                    onMoveDown={() => {
+                                      if (idx === sections.length - 1) return;
+                                      const newSections = [...sections];
+                                      [newSections[idx], newSections[idx + 1]] =
+                                        [
+                                          newSections[idx + 1]!,
+                                          newSections[idx]!,
+                                        ];
+                                      setSections(newSections);
+                                    }}
+                                    isFirst={idx === 0}
+                                    isLast={idx === sections.length - 1}
+                                    sellerProducts={sellerProducts}
+                                    isNew={newSectionId === section.id}
+                                    onFlashDone={() => setNewSectionId(null)}
+                                    dragHandleProps={drag.handleProps}
+                                    focusToken={sectionFocusTokens[section.id]}
+                                  />
+                                </div>
+                              );
+                            })}
+                          </div>
+                          <div className="mt-3">
+                            <p className="mb-2 text-xs font-semibold tracking-wider text-gray-400 uppercase">
+                              Add Section
+                            </p>
+                            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                              {(
+                                [
+                                  {
+                                    type: "hero" as StorefrontSectionType,
+                                    label: "Hero",
+                                    icon: "🖼",
+                                    desc: "Full-width banner with call-to-action",
+                                  },
+                                  {
+                                    type: "about" as StorefrontSectionType,
+                                    label: "About",
+                                    icon: "👋",
+                                    desc: "Tell your farm's story with an image",
+                                  },
+                                  {
+                                    type: "story" as StorefrontSectionType,
+                                    label: "Our Story",
+                                    icon: "📖",
+                                    desc: "Timeline of your journey",
+                                  },
+                                  {
+                                    type: "products" as StorefrontSectionType,
+                                    label: "Products",
+                                    icon: "🛒",
+                                    desc: "Display your product catalog",
+                                  },
+                                  {
+                                    type: "testimonials" as StorefrontSectionType,
+                                    label: "Testimonials",
+                                    icon: "⭐",
+                                    desc: "Customer quotes and ratings",
+                                  },
+                                  {
+                                    type: "faq" as StorefrontSectionType,
+                                    label: "FAQ",
+                                    icon: "❓",
+                                    desc: "Common questions and answers",
+                                  },
+                                  {
+                                    type: "ingredients" as StorefrontSectionType,
+                                    label: "Ingredients",
+                                    icon: "🌿",
+                                    desc: "Highlight what goes into your products",
+                                  },
+                                  {
+                                    type: "comparison" as StorefrontSectionType,
+                                    label: "Comparison",
+                                    icon: "⚖️",
+                                    desc: "Compare your products vs alternatives",
+                                  },
+                                  {
+                                    type: "text" as StorefrontSectionType,
+                                    label: "Text",
+                                    icon: "📝",
+                                    desc: "Free-form text content block",
+                                  },
+                                  {
+                                    type: "image" as StorefrontSectionType,
+                                    label: "Image",
+                                    icon: "📷",
+                                    desc: "Full or contained image with caption",
+                                  },
+                                  {
+                                    type: "contact" as StorefrontSectionType,
+                                    label: "Contact",
+                                    icon: "📬",
+                                    desc: "Email, phone, and address info",
+                                  },
+                                  {
+                                    type: "reviews" as StorefrontSectionType,
+                                    label: "Reviews",
+                                    icon: "💬",
+                                    desc: "Show customer reviews from Nostr",
+                                  },
+                                  {
+                                    type: "social_posts" as StorefrontSectionType,
+                                    label: "Social Posts",
+                                    icon: "📱",
+                                    desc: "Link out to posts from X, Instagram, Nostr, etc.",
+                                  },
+                                ] as const
+                              ).map((st) => (
+                                <button
+                                  key={st.type}
+                                  type="button"
+                                  onClick={() => {
+                                    const sectionId = `section-${Date.now()}-${Math.random()
+                                      .toString(36)
+                                      .slice(2, 6)}`;
+                                    const newSection: StorefrontSection = {
+                                      id: sectionId,
+                                      type: st.type,
+                                      enabled: true,
+                                    };
+                                    if (st.type === "products") {
+                                      newSection.productLayout = productLayout;
+                                    }
+                                    setNewSectionId(sectionId);
+                                    if (st.type === "hero") {
+                                      setSections([newSection, ...sections]);
+                                    } else {
+                                      setSections([...sections, newSection]);
+                                    }
+                                  }}
+                                  className="group flex flex-col items-center rounded-lg border-2 border-gray-200 bg-white p-3 text-center transition-all hover:border-black hover:shadow-sm"
+                                >
+                                  <div className="mb-2">
+                                    <SectionPreviewSvg type={st.type} />
+                                  </div>
+                                  <span className="block text-sm font-bold text-black">
+                                    {st.label}
+                                  </span>
+                                  <span className="block text-[10px] leading-tight text-gray-400 group-hover:text-gray-600">
+                                    {st.desc}
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="mb-6">
+                          <label className="mb-2 block text-base font-bold text-black">
+                            Footer
+                          </label>
+                          <p className="mb-3 text-sm text-gray-500">
+                            Customize the footer at the bottom of your
+                            storefront.
+                          </p>
+                          <FooterEditor
+                            footer={footer}
+                            onChange={setFooter}
+                            shopName={watch("name")}
+                          />
+                        </div>
+
+                        <div className="hidden rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 p-4 lg:block">
+                          <div className="flex items-center gap-3">
+                            {shopSlug && (
+                              <a
+                                href={`/stall/${shopSlug}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-primary-blue text-sm font-bold underline"
+                              >
+                                Open live storefront (/stall/{shopSlug})
+                              </a>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => setIsPreviewOpen(true)}
+                              className="text-xs text-gray-400 underline hover:text-gray-600"
+                            >
+                              Open full-screen preview
+                            </button>
+                          </div>
+                        </div>
+                      </AdvancedStorefrontGate>
                     </>
                   )}
                 </div>

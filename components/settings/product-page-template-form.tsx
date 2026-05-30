@@ -26,6 +26,8 @@ import {
 } from "@/utils/types/types";
 import ProductPageEditor from "@/components/settings/storefront/product-page-editor";
 import MilkMarketSpinner from "@/components/utility-components/mm-spinner";
+import UpgradeBanner from "@/components/pro/upgrade-banner";
+import { useProMembership } from "@/components/utility-components/pro-membership-context";
 
 const DEFAULT_COLORS: StorefrontColorScheme = {
   primary: "#FFD23F",
@@ -40,6 +42,7 @@ const ProductPageTemplateForm = () => {
   const { nostr } = useContext(NostrContext);
   const shopContext = useContext(ShopMapContext);
   const productContext = useContext(ProductContext);
+  const { membership } = useProMembership();
 
   const [isFetching, setIsFetching] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -195,42 +198,55 @@ const ProductPageTemplateForm = () => {
         </p>
       </div>
 
-      <ProductPageEditor
-        sections={productPageDefaults}
-        onChange={(next) => {
-          // Treat any editor-driven change as user input so the saved
-          // confirmation reverts back to the action label.
-          setProductPageDefaults(next);
-          setIsSaved(false);
-        }}
-        sellerProducts={sellerProducts}
-        shopPubkey={userPubkey || undefined}
-        showSizeReadout
-        preview={previewContext}
-      />
-
-      {error && (
-        <div className="mt-4 rounded-md border-2 border-red-400 bg-red-50 p-3 text-sm text-red-700">
-          {error}
-        </div>
+      {!membership.isPro && (
+        <UpgradeBanner className="mb-6" feature="Custom product pages" />
       )}
 
-      <div className="mt-6 flex items-center gap-4">
-        <Button
-          className={BLUEBUTTONCLASSNAMES}
-          onClick={handleSave}
-          isDisabled={isSaving}
-          isLoading={isSaving}
-        >
-          {isSaving ? "Saving..." : "Save Template"}
-        </Button>
-        {isSaved && (
-          <span className="flex items-center gap-1 text-sm font-bold text-green-700">
-            <CheckCircleIcon className="h-5 w-5" />
-            Saved
-          </span>
-        )}
-      </div>
+      {membership.isPro || membership.isReadOnly ? (
+        <>
+          <fieldset
+            disabled={!membership.isPro}
+            className="m-0 block border-0 p-0"
+          >
+            <ProductPageEditor
+              sections={productPageDefaults}
+              onChange={(next) => {
+                // Treat any editor-driven change as user input so the saved
+                // confirmation reverts back to the action label.
+                setProductPageDefaults(next);
+                setIsSaved(false);
+              }}
+              sellerProducts={sellerProducts}
+              shopPubkey={userPubkey || undefined}
+              showSizeReadout
+              preview={previewContext}
+            />
+          </fieldset>
+
+          {error && (
+            <div className="mt-4 rounded-md border-2 border-red-400 bg-red-50 p-3 text-sm text-red-700">
+              {error}
+            </div>
+          )}
+
+          <div className="mt-6 flex items-center gap-4">
+            <Button
+              className={BLUEBUTTONCLASSNAMES}
+              onClick={handleSave}
+              isDisabled={isSaving || !membership.isPro}
+              isLoading={isSaving}
+            >
+              {isSaving ? "Saving..." : "Save Template"}
+            </Button>
+            {isSaved && (
+              <span className="flex items-center gap-1 text-sm font-bold text-green-700">
+                <CheckCircleIcon className="h-5 w-5" />
+                Saved
+              </span>
+            )}
+          </div>
+        </>
+      ) : null}
     </div>
   );
 };

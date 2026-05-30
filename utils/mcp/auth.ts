@@ -3,6 +3,22 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import type { PoolClient } from "pg";
 import { getDbPool } from "@/utils/db/db-service";
 import { verifyEvent } from "nostr-tools";
+import { isPubkeyProEntitled } from "@/utils/pro/membership";
+
+// Shared "Pro required" message for MCP authentication failures so REST and
+// JSON-RPC entry points surface identical copy.
+export const MCP_PRO_REQUIRED_MESSAGE =
+  "This API key's owner does not have an active Pro membership. MCP access requires Pro.";
+
+/**
+ * True when the API key's owning seller is currently Pro-entitled. Used by the
+ * MCP auth chokepoints so existing keys stop working once a seller lapses.
+ */
+export async function isApiKeyOwnerProEntitled(
+  apiKey: ApiKeyRecord
+): Promise<boolean> {
+  return isPubkeyProEntitled(apiKey.pubkey);
+}
 
 export type ApiKeyPermission = "read" | "read_write" | "full_access";
 
@@ -332,6 +348,13 @@ export async function authenticateRequest(
   const apiKey = await validateApiKey(token);
   if (!apiKey) {
     res.status(401).json({ error: "Invalid or revoked API key" });
+    return null;
+  }
+
+  // Reject keys whose owner is no longer Pro, so access tracks the membership
+  // lifecycle even for keys created while the seller was entitled.
+  if (!(await isApiKeyOwnerProEntitled(apiKey))) {
+    res.status(403).json({ error: MCP_PRO_REQUIRED_MESSAGE });
     return null;
   }
 

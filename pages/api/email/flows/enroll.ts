@@ -7,6 +7,7 @@ import {
 } from "@/utils/db/db-service";
 import { FlowType } from "@/utils/email/flow-email-templates";
 import { applyRateLimit } from "@/utils/rate-limit";
+import { isPubkeyProEntitled } from "@/utils/pro/membership";
 
 const RATE_LIMIT = { limit: 30, windowMs: 60 * 1000 };
 
@@ -50,6 +51,18 @@ export default async function handler(
   }
 
   try {
+    // Email flows are Pro-only. If the seller is not currently entitled
+    // (free, read-only or hidden), silently skip enrollment instead of
+    // erroring — enroll is triggered by buyer-facing actions, so we don't
+    // want to surface a hard failure to the buyer.
+    if (!(await isPubkeyProEntitled(seller_pubkey))) {
+      return res.status(200).json({
+        success: true,
+        skipped: true,
+        reason: "Seller does not have an active Pro membership",
+      });
+    }
+
     const flows = await getEmailFlows(seller_pubkey);
     const activeFlow = flows.find(
       (f) => f.flow_type === flow_type && f.status === "active"

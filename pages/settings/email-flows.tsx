@@ -9,6 +9,8 @@ import {
 } from "@heroui/react";
 import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
+import UpgradeBanner from "@/components/pro/upgrade-banner";
+import { useProMembership } from "@/components/utility-components/pro-membership-context";
 import { FlowStepEditor } from "@/components/settings/flow-step-editor";
 import { ShopMapContext, ProfileMapContext } from "@/utils/context/context";
 import { FlowEmailStorefrontStyle } from "@/utils/email/flow-email-templates";
@@ -83,6 +85,7 @@ function formatDelayHours(hours: number): string {
 
 const EmailFlowsPage = () => {
   const { pubkey, isLoggedIn } = useContext(SignerContext);
+  const { membership } = useProMembership();
   const shopMapContext = useContext(ShopMapContext);
   const profileMapContext = useContext(ProfileMapContext);
 
@@ -782,19 +785,25 @@ const EmailFlowsPage = () => {
           </div>
         </div>
 
+        {!membership.isPro && (
+          <UpgradeBanner className="mb-6" feature="Email flows" />
+        )}
+
         <div className="mb-8">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-2xl font-bold text-black">Your Flows</h2>
-            <Button
-              className={BLACKBUTTONCLASSNAMES}
-              onClick={() => setShowCreateForm(!showCreateForm)}
-            >
-              <PlusIcon className="h-4 w-4" />
-              New Flow
-            </Button>
+            {membership.isPro && (
+              <Button
+                className={BLACKBUTTONCLASSNAMES}
+                onClick={() => setShowCreateForm(!showCreateForm)}
+              >
+                <PlusIcon className="h-4 w-4" />
+                New Flow
+              </Button>
+            )}
           </div>
 
-          {showCreateForm && (
+          {membership.isPro && showCreateForm && (
             <div className="shadow-neo mb-6 space-y-4 rounded-md border-2 border-black bg-white p-4">
               <h3 className="text-lg font-bold text-black">
                 Create Email Flow
@@ -862,13 +871,15 @@ const EmailFlowsPage = () => {
                 Create your first flow to start sending automated emails to your
                 customers.
               </p>
-              <Button
-                className={PRIMARYBUTTONCLASSNAMES}
-                onClick={() => setShowCreateForm(true)}
-              >
-                <PlusIcon className="h-4 w-4" />
-                Create Your First Flow
-              </Button>
+              {membership.isPro && (
+                <Button
+                  className={PRIMARYBUTTONCLASSNAMES}
+                  onClick={() => setShowCreateForm(true)}
+                >
+                  <PlusIcon className="h-4 w-4" />
+                  Create Your First Flow
+                </Button>
+              )}
             </div>
           ) : (
             <div className="space-y-3">

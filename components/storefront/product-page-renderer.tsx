@@ -14,6 +14,7 @@ import parseTags, {
   ProductData,
 } from "@/utils/parsers/product-parser-functions";
 import SectionRenderer from "./section-renderer";
+import { usePublicMembershipStatus } from "@/utils/pro/use-public-membership";
 
 const DEFAULT_COLORS: StorefrontColorScheme = {
   primary: "#FFD23F",
@@ -35,6 +36,9 @@ export default function ProductPageRenderer({
   const shopMapContext = useContext(ShopMapContext);
   const profileMapContext = useContext(ProfileMapContext);
   const productContext = useContext(ProductContext);
+  // Hidden sellers (lapsed past the read-only window) stop serving their
+  // custom product-page design to the public; we render nothing custom.
+  const { isHidden: sellerHidden } = usePublicMembershipStatus(sellerPubkey);
 
   const [storefront, setStorefront] = useState<StorefrontConfig | null>(null);
 
@@ -67,7 +71,7 @@ export default function ProductPageRenderer({
       .filter((p): p is ProductData => !!p);
   }, [productContext?.productEvents, sellerPubkey]);
 
-  if (sections.length === 0) return null;
+  if (sections.length === 0 || sellerHidden) return null;
 
   const profile = profileMapContext?.profileData?.get(sellerPubkey);
   const shop = shopMapContext.shopData.get(sellerPubkey);

@@ -69,6 +69,7 @@ import {
 } from "@/components/utility-components/nostr-context-provider";
 import { retryFailedRelayPublishes } from "@/utils/nostr/retry-service";
 import { MintRecoveryBoot } from "@/components/utility-components/mint-recovery-boot";
+import { ProMembershipProvider } from "@/components/utility-components/pro-membership-context";
 import AffiliateRefTracker from "@/components/utility-components/affiliate-ref-tracker";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
 
@@ -1513,8 +1514,10 @@ function App(props: AppProps) {
         <NextThemesProvider attribute="class">
           <NostrContextProvider>
             <SignerContextProvider>
-              <MintRecoveryBoot />
-              <MilkMarket props={props} />
+              <ProMembershipProvider>
+                <MintRecoveryBoot />
+                <MilkMarket props={props} />
+              </ProMembershipProvider>
             </SignerContextProvider>
           </NostrContextProvider>
         </NextThemesProvider>

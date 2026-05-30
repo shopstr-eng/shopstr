@@ -86,11 +86,20 @@ const Keys = () => {
       await signer.getPubKey();
       saveSigner(signer);
       const migrate = router.query.migrate as string | undefined;
+      const plan = router.query.plan as string | undefined;
+      const planSuffix = plan ? `&plan=${encodeURIComponent(plan)}` : "";
       if (migrate === "shopify") {
-        // Sellers migrating from Shopify skip the role-selection step.
-        router.push("/onboarding/market-profile?type=seller&migrate=shopify");
+        // Sellers migrating from Shopify skip the role-selection step but still
+        // choose a plan before setting up their profile.
+        router.push(
+          `/onboarding/choose-plan?type=seller&migrate=shopify${planSuffix}`
+        );
       } else {
-        router.push("/onboarding/user-type");
+        router.push(
+          `/onboarding/user-type${
+            plan ? `?plan=${encodeURIComponent(plan)}` : ""
+          }`
+        );
       }
     }
   };

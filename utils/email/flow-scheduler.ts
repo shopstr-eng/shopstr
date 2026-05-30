@@ -46,6 +46,10 @@ async function processWinback() {
   await callEndpoint("/api/email/flows/cron-winback", { inactive_days: 30 });
 }
 
+async function processProLifecycle() {
+  await callEndpoint("/api/pro/cron-lifecycle", {});
+}
+
 export function startFlowScheduler() {
   if (schedulerStarted) return;
   if (!process.env.FLOW_PROCESSOR_SECRET) {
@@ -68,6 +72,7 @@ export function startFlowScheduler() {
   const PROCESS_INTERVAL = 2 * 60 * 1000;
   const ABANDONED_CART_INTERVAL = 30 * 60 * 1000;
   const WINBACK_INTERVAL = 24 * 60 * 60 * 1000;
+  const PRO_LIFECYCLE_INTERVAL = 6 * 60 * 60 * 1000;
 
   setTimeout(() => processEmails(), 30 * 1000);
   setInterval(() => processEmails(), PROCESS_INTERVAL);
@@ -77,4 +82,7 @@ export function startFlowScheduler() {
 
   setTimeout(() => processWinback(), 2 * 60 * 1000);
   setInterval(() => processWinback(), WINBACK_INTERVAL);
+
+  setTimeout(() => processProLifecycle(), 3 * 60 * 1000);
+  setInterval(() => processProLifecycle(), PRO_LIFECYCLE_INTERVAL);
 }

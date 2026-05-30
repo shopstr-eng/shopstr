@@ -46,6 +46,25 @@ export async function claimStripeEvent(
 }
 
 /**
+ * Release a previously-claimed event so Stripe's retry can reprocess it. Call
+ * this when handler logic throws AFTER `claimStripeEvent` succeeded — otherwise
+ * the permanent claim would dedup every retry and silently drop the event.
+ */
+export async function releaseStripeEvent(eventId: string): Promise<void> {
+  const pool = getDbPool();
+  const client = await pool.connect();
+  try {
+    await ensureTable(client);
+    await client.query(
+      `DELETE FROM stripe_processed_events WHERE event_id = $1`,
+      [eventId]
+    );
+  } finally {
+    client.release();
+  }
+}
+
+/**
  * Best-effort cleanup helper: drop processed-event records older than
  * `maxAgeMs`. Stripe replays events for ~30 days, so default to 45 days.
  */

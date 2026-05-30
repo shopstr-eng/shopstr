@@ -5,3 +5,7 @@
 - [Multi-mint wallet attribution](multi-mint-wallet-attribution.md) — proofs carry no mint; attribute via keysets, promote receiving mint to default, pick spend mint by probe, dedup reactive reloads, and retry loadMint on failure or balances go stale/zero.
 - [Cashu spent-proof self-heal sweep](spent-proof-self-heal.md) — wallet must periodically checkProofsStates and prune SPENT local proofs, with merge-safe writes and a per-tab lock so it can't delete funds added mid-probe.
 - [Storefront SSR head tags](storefront-ssr-head.md) — seller favicon/OG meta must flow through getServerSideProps ogMeta → DynamicHead; client-only head tags are invisible to crawlers/social bots.
+- [Onboarding flow redirects](onboarding-flow-redirects.md) — inserting a wizard step means updating every redirect into it (incl. two Shopify-migrate auto-redirects), not just the linear Next chain.
+- [Pro feature enforcement surfaces](pro-feature-enforcement-surfaces.md) — gate server-backed Pro features (domain/MCP/email) at the write endpoint; Nostr-published design has no server write path, enforce at the serve/render layer.
+- [Stripe webhook claim release](stripe-webhook-claim-release.md) — claimStripeEvent permanently dedups; release the claim in catch on handler failure or Stripe's retry is silently dropped.
+- [Membership extension atomicity](membership-extension-atomicity.md) — stack paid time in one SQL stmt from GREATEST(now, current end), never read-modify-write, or concurrent settles drop a term.

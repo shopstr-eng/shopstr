@@ -15,6 +15,7 @@ import {
 } from "@/utils/STATIC-VARIABLES";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import SignInModal from "@/components/sign-in/SignInModal";
+import { FREE_FEATURES, PRO_FEATURES } from "@/components/pro/plan-features";
 
 function FAQItem({ question, answer }: { question: string; answer: string }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -241,6 +242,9 @@ export default function StandaloneLanding() {
         </div>
 
         <div className="hidden md:flex md:items-center md:space-x-4">
+          <a href="#pricing" className="font-bold text-black hover:underline">
+            Pricing
+          </a>
           <button
             className={WHITEBUTTONCLASSNAMES}
             onClick={() => setIsSignInOpen(true)}
@@ -267,6 +271,13 @@ export default function StandaloneLanding() {
           </button>
           {isMobileMenuOpen && (
             <div className="fixed inset-0 top-20 z-40 flex flex-col items-center space-y-6 bg-white pt-10">
+              <a
+                href="#pricing"
+                className="text-lg font-bold text-black hover:underline"
+                onClick={() => setIsMobileMenuOpen(false)}
+              >
+                Pricing
+              </a>
               <button
                 className={WHITEBUTTONCLASSNAMES}
                 onClick={() => {
@@ -597,6 +608,81 @@ export default function StandaloneLanding() {
               </span>
             </cite>
           </blockquote>
+        </div>
+      </section>
+
+      {/* Pricing - Free vs Pro for Sellers */}
+      <section
+        id="pricing"
+        className="relative z-10 border-b-2 border-black bg-white py-16"
+      >
+        <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
+          <div className="mb-12 text-center">
+            <h2 className="mb-4 text-3xl font-black md:text-4xl">
+              Simple Pricing for Sellers
+            </h2>
+            <p className="mx-auto max-w-2xl text-zinc-600">
+              Start selling for free. Upgrade to Pro when you want a fully
+              custom storefront and pro tools. No mandatory transaction fees,
+              ever.
+            </p>
+          </div>
+
+          <div className="grid gap-8 md:grid-cols-2">
+            {/* Free plan */}
+            <div className="shadow-neo flex flex-col rounded-lg border-2 border-black bg-white p-8">
+              <h3 className="text-2xl font-black">Free</h3>
+              <p className="mt-2 mb-6">
+                <span className="text-4xl font-black">$0</span>
+                <span className="ml-1 text-zinc-600">forever</span>
+              </p>
+              <ul className="mb-8 space-y-3 text-zinc-700">
+                {FREE_FEATURES.map((feature) => (
+                  <li key={feature} className="flex items-start gap-2">
+                    <span className="text-green-500">&#10003;</span>
+                    {feature}
+                  </li>
+                ))}
+              </ul>
+              <Link href="/onboarding/new-account" className="mt-auto">
+                <button className={`${WHITEBUTTONCLASSNAMES} w-full`}>
+                  Start Selling Free
+                </button>
+              </Link>
+            </div>
+
+            {/* Pro plan */}
+            <div className="shadow-neo bg-primary-yellow relative flex flex-col rounded-lg border-2 border-black p-8">
+              <span className="absolute -top-3 right-6 rounded-md border-2 border-black bg-black px-3 py-1 text-xs font-bold text-white">
+                MOST POPULAR
+              </span>
+              <h3 className="text-2xl font-black">Pro</h3>
+              <p className="mt-2 mb-1">
+                <span className="text-4xl font-black">$21</span>
+                <span className="ml-1 text-zinc-700">/month</span>
+              </p>
+              <p className="mb-6 text-sm font-bold text-zinc-700">
+                or $168/year &mdash; save 33%
+              </p>
+              <ul className="mb-8 space-y-3 text-zinc-800">
+                {PRO_FEATURES.map((feature) => (
+                  <li key={feature} className="flex items-start gap-2">
+                    <span className="text-green-600">&#10003;</span>
+                    {feature}
+                  </li>
+                ))}
+              </ul>
+              <Link href="/onboarding/new-account?plan=pro" className="mt-auto">
+                <button className={`${BLACKBUTTONCLASSNAMES} w-full`}>
+                  Go Pro
+                </button>
+              </Link>
+            </div>
+          </div>
+
+          <p className="mt-8 text-center text-sm text-zinc-500">
+            Pay by card, Bitcoin (Lightning), or manual invoice. Cancel anytime.
+          </p>
         </div>
       </section>
 

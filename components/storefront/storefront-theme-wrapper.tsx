@@ -26,6 +26,7 @@ import {
   applyCustomDomainHref,
   useIsCustomDomain,
 } from "@/utils/storefront/custom-domain-context";
+import { usePublicMembershipStatus } from "@/utils/pro/use-public-membership";
 
 const DEFAULT_COLORS: StorefrontColorScheme = {
   primary: "#FFD23F",
@@ -87,6 +88,9 @@ function StorefrontThemeWrapperInner({
   const router = useRouter();
   const { isOpen, onOpen, onClose } = useDisclosure();
   const isCustomDomain = useIsCustomDomain();
+  // When a seller lapses past the read-only window (hidden), the public site
+  // stops serving their custom storefront design — we render the plain page.
+  const { isHidden: sellerHidden } = usePublicMembershipStatus(sellerPubkey);
 
   const [storefront, setStorefront] = useState<StorefrontConfig | null>(null);
   const [colors, setColors] = useState<StorefrontColorScheme>(DEFAULT_COLORS);
@@ -167,7 +171,7 @@ function StorefrontThemeWrapperInner({
     };
   }, [storefront, colors]);
 
-  const hasCustomStorefront = !!storefront;
+  const hasCustomStorefront = !!storefront && !sellerHidden;
   const hasFooter = !!storefront?.footer;
 
   const navBg = storefront?.navColors?.background || colors.secondary;

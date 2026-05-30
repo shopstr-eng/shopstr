@@ -8,10 +8,17 @@ const OnboardingShopProfile = () => {
   const router = useRouter();
 
   const migrate = router.query.migrate as string | undefined;
-  const migrateQuery = migrate ? `?migrate=${encodeURIComponent(migrate)}` : "";
+  const plan = router.query.plan as string | undefined;
+  const buildQuery = () => {
+    const params = new URLSearchParams();
+    if (plan) params.set("plan", plan);
+    if (migrate) params.set("migrate", migrate);
+    const s = params.toString();
+    return s ? `?${s}` : "";
+  };
 
   const handleFinish = () => {
-    router.push(`/onboarding/stripe-connect${migrateQuery}`);
+    router.push(`/onboarding/stripe-connect${buildQuery()}`);
   };
 
   return (
@@ -33,7 +40,7 @@ const OnboardingShopProfile = () => {
             </div>
             <div className="mb-6 text-center">
               <h2 className="mb-3 text-2xl font-bold text-black">
-                Step 4: Set Up Your Stall
+                Step 5: Set Up Your Stall
               </h2>
               <p className="font-medium text-black">
                 Set up your shop details or skip this step to finish onboarding.

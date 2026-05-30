@@ -157,7 +157,7 @@ const OnboardingStripeConnect = () => {
             </div>
             <div className="mb-6 text-center">
               <h2 className="mb-3 text-2xl font-bold text-black">
-                Step 5: Accept Card Payments
+                Step 6: Accept Card Payments
               </h2>
               <p className="font-medium text-black">
                 Set up Stripe to accept credit card payments from buyers.

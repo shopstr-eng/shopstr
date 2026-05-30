@@ -6,6 +6,7 @@ import {
   updateFlowStep,
   reorderFlowSteps,
 } from "@/utils/db/db-service";
+import { requireProEntitlement } from "@/utils/pro/require-pro";
 
 export default async function handler(
   req: NextApiRequest,
@@ -65,6 +66,8 @@ export default async function handler(
         return res.status(403).json({ error: "Not authorized" });
       }
 
+      if (!(await requireProEntitlement(seller_pubkey, res))) return;
+
       let order = step_order;
       if (order === undefined) {
         const existingSteps = await getFlowSteps(id);
@@ -104,6 +107,8 @@ export default async function handler(
       if (flow.seller_pubkey !== seller_pubkey) {
         return res.status(403).json({ error: "Not authorized" });
       }
+
+      if (!(await requireProEntitlement(seller_pubkey, res))) return;
 
       if (Array.isArray(steps)) {
         const existingSteps = await getFlowSteps(id);

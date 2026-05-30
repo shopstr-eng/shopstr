@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from "next";
 import { getEmailFlow, updateEmailFlow } from "@/utils/db/db-service";
+import { requireProEntitlement } from "@/utils/pro/require-pro";
 
 export default async function handler(
   req: NextApiRequest,
@@ -30,6 +31,8 @@ export default async function handler(
     if (flow.seller_pubkey !== seller_pubkey) {
       return res.status(403).json({ error: "Not authorized" });
     }
+
+    if (!(await requireProEntitlement(seller_pubkey, res))) return;
 
     const newStatus = flow.status === "active" ? "paused" : "active";
     const updated = await updateEmailFlow(id, { status: newStatus });

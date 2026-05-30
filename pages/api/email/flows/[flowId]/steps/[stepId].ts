@@ -5,6 +5,7 @@ import {
   deleteFlowStep,
   getFlowSteps,
 } from "@/utils/db/db-service";
+import { requireProEntitlement } from "@/utils/pro/require-pro";
 
 export default async function handler(
   req: NextApiRequest,
@@ -39,6 +40,8 @@ export default async function handler(
       if (!steps.some((s) => s.id === stepIdNum)) {
         return res.status(404).json({ error: "Step not found in this flow" });
       }
+
+      if (!(await requireProEntitlement(seller_pubkey, res))) return;
 
       const updated = await updateFlowStep(stepIdNum, {
         subject,
@@ -78,6 +81,8 @@ export default async function handler(
       if (!steps.some((s) => s.id === stepIdNum)) {
         return res.status(404).json({ error: "Step not found in this flow" });
       }
+
+      if (!(await requireProEntitlement(seller_pubkey, res))) return;
 
       await deleteFlowStep(stepIdNum);
       return res.status(200).json({ success: true });
