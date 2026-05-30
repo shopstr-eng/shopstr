@@ -6,3 +6,4 @@
 - [Cashu spent-proof self-heal sweep](spent-proof-self-heal.md) — wallet must periodically checkProofsStates and prune SPENT local proofs, with merge-safe writes and a per-tab lock so it can't delete funds added mid-probe.
 - [Storefront SSR head tags](storefront-ssr-head.md) — seller favicon/OG meta must flow through getServerSideProps ogMeta → DynamicHead; client-only head tags are invisible to crawlers/social bots.
 - [Reported vs charged amounts](reported-vs-charged-amounts.md) — order totals in DMs/email/dashboard must equal items+discounted-shipping (display-only), computed separately from fund amounts (ecash proofs/Stripe charge).
+- [Order DM seller-relay delivery](order-dm-seller-relay-delivery.md) — order gift-wraps must reach the SELLER's relays (server republish of the signed event needs no key + client NIP-65 fallback), not the buyer's; else custom-domain orders miss the dashboard.

@@ -975,7 +975,13 @@ export default function ProductInvoiceCard({
           pubkeyToReceiveMessage
         );
 
-        await sendGiftWrappedMessageEvent(nostr!, giftWrappedEvent, signer);
+        // Only seller-bound order messages drive the orders dashboard; deliver
+        // those to the seller's own relays (server + client fallback). Buyer
+        // receipts and donations don't need this and would just add latency.
+        const deliverToRecipientRelays = !!orderId && !isReceipt && !isDonation;
+        await sendGiftWrappedMessageEvent(nostr!, giftWrappedEvent, signer, {
+          deliverToRecipientRelays,
+        });
 
         if (isReceipt || isHerdshare) {
           chatsContext.addNewlyCreatedMessageEvent(

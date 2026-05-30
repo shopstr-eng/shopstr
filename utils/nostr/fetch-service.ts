@@ -654,7 +654,21 @@ export const fetchGiftWrappedChatsAndMessages = async (
           relays
         );
 
+        // Merge relay-fetched gift wraps with the server-cached ones so order
+        // messages (and any DMs) still surface even when a relay dropped the
+        // event or never received it. The DB stores the same encrypted
+        // kind-1059 wraps, so they decrypt through the identical path below.
+        const wrapsToProcess = new Map<string, NostrEvent>();
         for (const event of fetchedEvents) {
+          if (event?.id) wrapsToProcess.set(event.id, event);
+        }
+        for (const [id, cached] of chatMessagesFromCache) {
+          if (!wrapsToProcess.has(id)) {
+            wrapsToProcess.set(id, cached as unknown as NostrEvent);
+          }
+        }
+
+        for (const event of wrapsToProcess.values()) {
           let messageEvent;
 
           const sealEventString = await signer!.decrypt(
@@ -706,7 +720,7 @@ export const fetchGiftWrappedChatsAndMessages = async (
                 ${tagsMap},
                 ${event}`
             );
-            return;
+            continue;
           }
           const cachedMessage = chatMessagesFromCache.get(event.id);
           let chatMessage: NostrMessageEvent;

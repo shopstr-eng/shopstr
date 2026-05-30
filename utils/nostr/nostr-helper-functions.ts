@@ -528,10 +528,56 @@ export async function constructMessageGiftWrap(
   return signedEvent;
 }
 
+// Best-effort lookup of the relays a recipient READS from (NIP-65 kind 10002),
+// queried over the buyer's own relays/blastr. Bounded so a slow relay can't
+// stall checkout; returns [] on any failure.
+async function fetchRecipientReadRelays(
+  nostr: NostrManager,
+  recipientPubkey: string,
+  baseRelays: string[]
+): Promise<string[]> {
+  try {
+    // Always include default relays (NIP-65 indexers like purplepag.es /
+    // relay.nostr.band) for the lookup so discovery works even if the buyer's
+    // localStorage relays were customized — and is independent of our server.
+    const lookupRelays = Array.from(
+      new Set([...baseRelays, ...getDefaultRelays()])
+    );
+    const events = await newPromiseWithTimeout<NostrEvent[]>(
+      async (resolve, reject) => {
+        try {
+          const res = await nostr.fetch(
+            [{ kinds: [10002], authors: [recipientPubkey] }],
+            {},
+            lookupRelays
+          );
+          resolve(res);
+        } catch (err) {
+          reject(err as Error);
+        }
+      },
+      { timeout: 4000 }
+    );
+    const out: string[] = [];
+    for (const ev of events) {
+      for (const tag of ev.tags) {
+        // Unmarked ("r", url) = read+write; ("r", url, "read") = read-only.
+        if (tag[0] === "r" && tag[1] && (!tag[2] || tag[2] === "read")) {
+          out.push(tag[1]);
+        }
+      }
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
 export async function sendGiftWrappedMessageEvent(
   nostr: NostrManager,
   giftWrappedMessageEvent: NostrEvent,
-  signer?: NostrSigner
+  signer?: NostrSigner,
+  options?: { deliverToRecipientRelays?: boolean }
 ) {
   const { relays, writeRelays } = getLocalStorageData();
   const allWriteRelays = withBlastr([...writeRelays, ...relays]);
@@ -565,6 +611,47 @@ export async function sendGiftWrappedMessageEvent(
       allWriteRelays,
       signer
     ).catch(console.error);
+  }
+
+  // For order messages the buyer's relays are often not the seller's relays
+  // (e.g. a guest checking out on a custom domain), so the seller's dashboard —
+  // which reads from the seller's own relays — never sees the order. Deliver it
+  // to the recipient's relays via two independent paths. Both are fire-and-
+  // forget so they never add latency to, or change the success of, checkout.
+  if (options?.deliverToRecipientRelays) {
+    const recipient = giftWrappedMessageEvent.tags.find(
+      (t) => t[0] === "p"
+    )?.[1];
+
+    // Fallback path (works even if our server is down): publish straight to the
+    // recipient's relays from the browser, so the dashboard can read it off the
+    // relays via its PWA subscription.
+    if (recipient) {
+      void (async () => {
+        try {
+          const recipientRelays = await fetchRecipientReadRelays(
+            nostr,
+            recipient,
+            allWriteRelays
+          );
+          if (recipientRelays.length > 0) {
+            await nostr.publish(giftWrappedMessageEvent, recipientRelays);
+          }
+        } catch (err) {
+          console.warn("Recipient-relay publish failed (non-fatal):", err);
+        }
+      })();
+    }
+
+    // Primary path: have the server publish to the recipient's relays,
+    // independent of buyer origin/login.
+    void import("@/utils/db/db-client")
+      .then(({ deliverOrderEventsServerSide }) =>
+        deliverOrderEventsServerSide([giftWrappedMessageEvent])
+      )
+      .catch((err) =>
+        console.warn("Server-side order delivery failed (non-fatal):", err)
+      );
   }
 }
 
