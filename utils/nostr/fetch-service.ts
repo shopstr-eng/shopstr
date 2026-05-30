@@ -50,7 +50,7 @@ export function getUniqueProofs(proofs: Proof[]): Proof[] {
   });
 }
 
-function isHexString(value: string): boolean {
+export function isHexString(value: string): boolean {
   return /^[0-9a-fA-F]{64}$/.test(value);
 }
 
@@ -162,7 +162,7 @@ export const fetchAllPosts = async (
   });
 };
 
-function getReportTargetIdentifiers(event: NostrEvent): {
+export function getReportTargetIdentifiers(event: NostrEvent): {
   referencedPubkeys: string[];
   referencedEventIds: string[];
 } {

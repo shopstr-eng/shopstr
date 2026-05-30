@@ -63,6 +63,83 @@ const makeDbPayload = <T>(items: T[]) => ({
   json: async () => items,
 });
 
+describe("getReportTargetIdentifiers", () => {
+  beforeEach(() => {
+    jest.resetModules();
+  });
+
+  it("extracts both p and e tags from a report event", async () => {
+    const { getReportTargetIdentifiers } = await import("../fetch-service");
+
+    const identifiers = getReportTargetIdentifiers(
+      makeReportEvent({
+        tags: [
+          ["p", "seller-1"],
+          ["e", "listing-1", "spam"],
+          ["p", "seller-2"],
+          ["e", "listing-2", "impersonation"],
+          ["t", "ignored"],
+        ],
+      }) as any
+    );
+
+    expect(identifiers).toEqual({
+      referencedPubkeys: ["seller-1", "seller-2"],
+      referencedEventIds: ["listing-1", "listing-2"],
+    });
+  });
+
+  it("returns empty arrays when the report has no p or e tags", async () => {
+    const { getReportTargetIdentifiers } = await import("../fetch-service");
+
+    const identifiers = getReportTargetIdentifiers(
+      makeReportEvent({
+        tags: [
+          ["t", "ignored"],
+          ["subject", "noise"],
+        ],
+      }) as any
+    );
+
+    expect(identifiers).toEqual({
+      referencedPubkeys: [],
+      referencedEventIds: [],
+    });
+  });
+});
+
+describe("isHexString", () => {
+  beforeEach(() => {
+    jest.resetModules();
+  });
+
+  it("returns true for a valid 64-character hex string", async () => {
+    const { isHexString } = await import("../fetch-service");
+
+    expect(
+      isHexString(
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+      )
+    ).toBe(true);
+  });
+
+  it("returns false for short strings", async () => {
+    const { isHexString } = await import("../fetch-service");
+
+    expect(isHexString("abc123")).toBe(false);
+  });
+
+  it("returns false for non-hex strings", async () => {
+    const { isHexString } = await import("../fetch-service");
+
+    expect(
+      isHexString(
+        "z23456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+      )
+    ).toBe(false);
+  });
+});
+
 describe("getUniqueProofs", () => {
   beforeEach(() => {
     jest.resetModules();
