@@ -1128,6 +1128,18 @@ export default function CartInvoiceCard({
   // the correct unit without re-doing the conversion.
   const [nativeShippingTotal, setNativeShippingTotal] = useState<number>(0);
 
+  // Per-seller discounted shipping, kept in two units so the reported order
+  // totals (DMs / email / dashboard) can include the shipping the buyer is
+  // actually charged. These are REPORTING-ONLY mirrors of the same per-seller
+  // shipping math the charge accumulators use — they never feed fund
+  // distribution (ecash proofs, Stripe intents, etc.).
+  const [shippingCostsInSats, setShippingCostsInSats] = useState<
+    Record<string, number>
+  >({});
+  const [nativeShippingPerSeller, setNativeShippingPerSeller] = useState<
+    Record<string, number>
+  >({});
+
   useEffect(() => {
     if (
       !cartCurrency ||
@@ -1136,6 +1148,7 @@ export default function CartInvoiceCard({
     ) {
       setNativeTotalCost(null);
       setNativeShippingTotal(0);
+      setNativeShippingPerSeller({});
       return;
     }
     let cancelled = false;
@@ -1194,6 +1207,7 @@ export default function CartInvoiceCard({
         totalSmallest += lineToSmallest(lineInCartCurrency);
       }
       let nativeShippingSum = 0;
+      const nativeShipPerSeller: Record<string, number> = {};
       if (
         formType === "shipping" ||
         (formType === "combined" && shippingPickupPreference === "shipping")
@@ -1260,6 +1274,8 @@ export default function CartInvoiceCard({
           }
           totalSmallest += lineToSmallest(shippingInCartCurrency);
           nativeShippingSum += shippingInCartCurrency;
+          nativeShipPerSeller[product.pubkey] =
+            (nativeShipPerSeller[product.pubkey] || 0) + shippingInCartCurrency;
         }
       }
       if (!cancelled) {
@@ -1271,6 +1287,14 @@ export default function CartInvoiceCard({
             ? Math.round(nativeShippingSum)
             : Math.round(nativeShippingSum * 100) / 100
         );
+        const roundedNativeShipPerSeller: Record<string, number> = {};
+        for (const pk of Object.keys(nativeShipPerSeller)) {
+          const v = nativeShipPerSeller[pk] || 0;
+          roundedNativeShipPerSeller[pk] = cartIsZeroDecimal
+            ? Math.round(v)
+            : Math.round(v * 100) / 100;
+        }
+        setNativeShippingPerSeller(roundedNativeShipPerSeller);
       }
     };
     compute();
@@ -2094,14 +2118,17 @@ export default function CartInvoiceCard({
             .map((p: any) => selectedPickupLocations[p.id])
             .filter(Boolean)
             .join(", ");
-          const sellerAmountSats = totalCostsInSats[sellerPubkey] || 0;
+          const sellerShipSats = shippingCostsInSats[sellerPubkey] || 0;
+          const sellerShipNative = nativeShippingPerSeller[sellerPubkey] || 0;
+          const sellerAmountSats =
+            (totalCostsInSats[sellerPubkey] || 0) + sellerShipSats;
           const sellerAmountNative =
             !isSatsCart && nativeCostsPerProduct
               ? sellerProducts.reduce(
                   (sum: number, p: any) =>
                     sum + (nativeCostsPerProduct[p.id] || 0),
                   0
-                )
+                ) + sellerShipNative
               : null;
           const orderCurrency =
             !isSatsCart && cartCurrency ? cartCurrency : "sats";
@@ -2332,10 +2359,14 @@ export default function CartInvoiceCard({
     let cancelled = false;
     const recompute = async () => {
       if (formType !== "shipping" && formType !== "combined") {
-        if (!cancelled) setTotalCost(subtotalCost);
+        if (!cancelled) {
+          setTotalCost(subtotalCost);
+          setShippingCostsInSats({});
+        }
         return;
       }
       let shippingTotal = 0;
+      const shipPerSeller: Record<string, number> = {};
       const processedSellers = new Set<string>();
       for (const product of products) {
         const sellerPubkey = product.pubkey;
@@ -2360,21 +2391,28 @@ export default function CartInvoiceCard({
             const shippingCostInSats = await convertShippingToSats(
               highestShippingProduct
             );
-            shippingTotal += Math.ceil(
+            const discountedShip = Math.ceil(
               applyShippingDiscount(shippingCostInSats, sellerPubkey)
             );
+            shippingTotal += discountedShip;
+            shipPerSeller[sellerPubkey] = discountedShip;
           }
         } else if (sellerProducts.length === 1) {
           const shippingCostInSats = await convertShippingToSats(
             sellerProducts[0]!
           );
           const quantity = quantities[sellerProducts[0]!.id] || 1;
-          shippingTotal += Math.ceil(
+          const discountedShip = Math.ceil(
             applyShippingDiscount(shippingCostInSats * quantity, sellerPubkey)
           );
+          shippingTotal += discountedShip;
+          shipPerSeller[sellerPubkey] = discountedShip;
         }
       }
-      if (!cancelled) setTotalCost(subtotalCost + shippingTotal);
+      if (!cancelled) {
+        setTotalCost(subtotalCost + shippingTotal);
+        setShippingCostsInSats(shipPerSeller);
+      }
     };
     recompute();
     return () => {
@@ -2864,6 +2902,17 @@ export default function CartInvoiceCard({
           ? (cartCurrency as string)
           : "sats";
 
+        // Fold the seller's discounted shipping into the REPORTED amount only
+        // (attributed to the first product so multi-product sellers don't
+        // double-count). The Stripe charge and donation base are unchanged.
+        const reportShipStripe =
+          product === sellerProducts[0]
+            ? useNativeForMsg
+              ? nativeShippingPerSeller[product.pubkey] || 0
+              : shippingCostsInSats[product.pubkey] || 0
+            : 0;
+        const reportedProductAmount = productAmount + reportShipStripe;
+
         const sellerProfileForDonation = profileContext.profileData.get(
           product.pubkey
         );
@@ -2886,7 +2935,7 @@ export default function CartInvoiceCard({
           "stripe",
           paymentIntentId,
           paymentIntentId,
-          productAmount,
+          reportedProductAmount,
           quantities[product.id] || 1,
           undefined,
           addressTag,
@@ -3157,6 +3206,15 @@ export default function CartInvoiceCard({
             const fiatCurrency = useNativeForMsg
               ? (cartCurrency as string)
               : "sats";
+            // Reporting-only: fold the seller's discounted shipping into the
+            // amount tag once (first product), leaving fund handling unchanged.
+            const reportShipFiat =
+              product === sellerProducts[0]
+                ? useNativeForMsg
+                  ? nativeShippingPerSeller[product.pubkey] || 0
+                  : shippingCostsInSats[product.pubkey] || 0
+                : 0;
+            const reportedFiatAmount = fiatAmount + reportShipFiat;
             await sendPaymentAndContactMessage(
               sellerPubkey,
               paymentMessage,
@@ -3169,7 +3227,7 @@ export default function CartInvoiceCard({
               sellerFiatOption,
               sellerFiatHandle,
               sellerFiatHandle,
-              fiatAmount,
+              reportedFiatAmount,
               quantities[product.id] || 1,
               undefined,
               addressTag,
@@ -3329,6 +3387,15 @@ export default function CartInvoiceCard({
           const fiatCurrency = useNativeForMsg
             ? (cartCurrency as string)
             : "sats";
+          // Reporting-only: fold the seller's discounted shipping into the
+          // amount tag once (first product), leaving fund handling unchanged.
+          const reportShipFiat =
+            product === products[0]
+              ? useNativeForMsg
+                ? nativeShippingPerSeller[product.pubkey] || 0
+                : shippingCostsInSats[product.pubkey] || 0
+              : 0;
+          const reportedFiatAmount = fiatAmount + reportShipFiat;
           await sendPaymentAndContactMessage(
             sellerPubkey,
             paymentMessage,
@@ -3341,7 +3408,7 @@ export default function CartInvoiceCard({
             selectedFiatOption,
             (fiatPaymentOptions as any)[selectedFiatOption] || "",
             (fiatPaymentOptions as any)[selectedFiatOption] || "",
-            fiatAmount,
+            reportedFiatAmount,
             quantities[product.id] || 1,
             undefined,
             addressTag,
@@ -3875,11 +3942,22 @@ export default function CartInvoiceCard({
         });
       }
 
+      // Track which sellers already had their (sats) shipping folded into a
+      // reported order total, so multi-product sellers don't double-count
+      // shipping across this per-product message loop. Reporting only — the
+      // ecash proof amounts (sellerAmount) below are untouched.
+      const cashuShipReported = new Set<string>();
+
       for (const product of products) {
         const title = product.title;
         const pubkey = product.pubkey;
         const required = product.required;
         const tokenAmount = totalCostsInSats[pubkey];
+        const reportedShipSats = cashuShipReported.has(pubkey)
+          ? 0
+          : shippingCostsInSats[pubkey] || 0;
+        cashuShipReported.add(pubkey);
+        const reportedOrderAmount = (tokenAmount || 0) + reportedShipSats;
         let sellerToken;
         let donationToken;
         let beefDonationToken;
@@ -3965,7 +4043,7 @@ export default function CartInvoiceCard({
           orderInfoTags.push(["address", addressString]);
         }
         if (tokenAmount) {
-          orderInfoTags.push(["amount", tokenAmount.toString()]);
+          orderInfoTags.push(["amount", reportedOrderAmount.toString()]);
         }
         if (donationAmount > 0) {
           orderInfoTags.push([

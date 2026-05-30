@@ -845,9 +845,7 @@ export default function ProductInvoiceCard({
             ? messageAmount
             : orderCurrencyOverride
               ? undefined
-              : formType === "shipping"
-                ? productData.totalCost
-                : productData.price,
+              : discountedTotal,
         orderCurrency:
           orderCurrencyOverride || productData.currency || undefined,
         orderId,
@@ -886,7 +884,7 @@ export default function ProductInvoiceCard({
             ? messageAmount
             : orderCurrencyOverride
               ? undefined
-              : productData.totalCost,
+              : discountedTotal,
         orderCurrency:
           orderCurrencyOverride || productData.currency || undefined,
         orderId,
@@ -926,7 +924,7 @@ export default function ProductInvoiceCard({
             ? messageAmount
             : orderCurrencyOverride
               ? undefined
-              : productData.totalCost,
+              : discountedTotal,
         orderCurrency:
           orderCurrencyOverride || productData.currency || undefined,
         orderId,
@@ -1153,7 +1151,7 @@ export default function ProductInvoiceCard({
         paymentType === "lightning" ||
         paymentType === "stripe";
       const orderAmountNumeric = !isSatsProduct
-        ? Number(productData.totalCost) || 0
+        ? Number(discountedTotal) || 0
         : Number(price) || 0;
       const emailDonationPercentage =
         !isPlatformSeller && onPlatformPayment
@@ -1166,7 +1164,7 @@ export default function ProductInvoiceCard({
       pendingOrderEmailRef.current = {
         orderId: "",
         productTitle: productData.title,
-        amount: !isSatsProduct ? String(productData.totalCost) : String(price),
+        amount: !isSatsProduct ? String(discountedTotal) : String(price),
         currency: productData.currency || "sats",
         paymentMethod: paymentType || "lightning",
         sellerPubkey: productData.pubkey,
@@ -1787,7 +1785,7 @@ export default function ProductInvoiceCard({
           JSON.stringify({
             productTitle: title,
             productImage: productData.images[0] || "",
-            amount: String(productData.totalCost),
+            amount: String(discountedTotal),
             currency: productData.currency || "sats",
             paymentMethod: selectedFiatOption || "fiat",
             orderId: orderId || "",
@@ -1813,7 +1811,7 @@ export default function ProductInvoiceCard({
       triggerOrderEmail({
         orderId: orderId || "",
         productTitle: title,
-        amount: String(productData.totalCost),
+        amount: String(discountedTotal),
         currency: productData.currency || "sats",
         paymentMethod: selectedFiatOption || "fiat",
         sellerPubkey: pubkey,

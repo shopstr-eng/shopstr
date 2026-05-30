@@ -153,6 +153,7 @@ const OrdersDashboard = ({
   const [showShippingModal, setShowShippingModal] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<OrderData | null>(null);
   const [isSendingShipping, setIsSendingShipping] = useState(false);
+  const [deliveryMode, setDeliveryMode] = useState<"days" | "date">("days");
 
   const [randomNpubForSender, setRandomNpubForSender] = useState<string>("");
   const [randomNsecForSender, setRandomNsecForSender] = useState<string>("");
@@ -217,8 +218,10 @@ const OrdersDashboard = ({
     control: shippingControl,
     reset: shippingReset,
   } = useForm({
+    shouldUnregister: true,
     defaultValues: {
       "Delivery Time": "",
+      "Delivery Date": "",
       "Shipping Carrier": "",
       "Tracking Number": "",
     },
@@ -971,6 +974,7 @@ const OrdersDashboard = ({
 
   const handleOpenShippingModal = (order: OrderData) => {
     setSelectedOrder(order);
+    setDeliveryMode("days");
     shippingReset();
     setShowShippingModal(true);
   };
@@ -978,6 +982,7 @@ const OrdersDashboard = ({
   const handleCloseShippingModal = () => {
     setShowShippingModal(false);
     setSelectedOrder(null);
+    setDeliveryMode("days");
     shippingReset();
   };
 
@@ -996,9 +1001,18 @@ const OrdersDashboard = ({
         randomNsecForReceiver
       );
 
-      const daysToAdd = parseInt(data["Delivery Time"]!);
-      const currentTimestamp = Math.floor(Date.now() / 1000);
-      const futureTimestamp = currentTimestamp + daysToAdd * 24 * 60 * 60;
+      let futureTimestamp: number;
+      if (deliveryMode === "date") {
+        const [year, month, day] = data["Delivery Date"]!.split("-").map(
+          (part) => parseInt(part)
+        );
+        const deliveryDate = new Date(year!, month! - 1, day!);
+        futureTimestamp = Math.floor(deliveryDate.getTime() / 1000);
+      } else {
+        const daysToAdd = parseInt(data["Delivery Time"]!);
+        const currentTimestamp = Math.floor(Date.now() / 1000);
+        futureTimestamp = currentTimestamp + daysToAdd * 24 * 60 * 60;
+      }
 
       const humanReadableDate = new Date(
         futureTimestamp * 1000
@@ -1102,6 +1116,7 @@ const OrdersDashboard = ({
             (trackingNumber ? ` Tracking: ${trackingNumber}` : ""),
           trackingNumber: trackingNumber || undefined,
           carrier: shippingCarrier || undefined,
+          estimatedDelivery: humanReadableDate || undefined,
           sellerPubkey: selectedOrder.sellerPubkey || undefined,
         }),
       }).catch(() => {});
@@ -2230,37 +2245,121 @@ const OrdersDashboard = ({
           </ModalHeader>
           <form onSubmit={handleShippingSubmit(onShippingSubmit)}>
             <ModalBody>
-              <Controller
-                name="Delivery Time"
-                control={shippingControl}
-                rules={{
-                  required: "Expected delivery time is required.",
-                }}
-                render={({
-                  field: { onChange, onBlur, value },
-                  fieldState: { error },
-                }) => {
-                  const isErrored = error !== undefined;
-                  const errorMessage: string = error?.message
-                    ? error.message
-                    : "";
-                  return (
-                    <Input
-                      autoFocus
-                      label="Expected Delivery Time (days)"
-                      placeholder="e.g. 3"
-                      variant="bordered"
-                      isInvalid={isErrored}
-                      errorMessage={errorMessage}
-                      className="text-black"
-                      type="number"
-                      onChange={onChange}
-                      onBlur={onBlur}
-                      value={value}
-                    />
-                  );
-                }}
-              />
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={deliveryMode === "days" ? "solid" : "bordered"}
+                  className={
+                    deliveryMode === "days"
+                      ? "bg-black text-white"
+                      : "text-black"
+                  }
+                  onClick={() => setDeliveryMode("days")}
+                >
+                  Number of days
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={deliveryMode === "date" ? "solid" : "bordered"}
+                  className={
+                    deliveryMode === "date"
+                      ? "bg-black text-white"
+                      : "text-black"
+                  }
+                  onClick={() => setDeliveryMode("date")}
+                >
+                  Exact date
+                </Button>
+              </div>
+              {deliveryMode === "days" ? (
+                <Controller
+                  name="Delivery Time"
+                  control={shippingControl}
+                  rules={{
+                    required: "Expected delivery time is required.",
+                    validate: (value) => {
+                      const days = Number(value);
+                      if (!Number.isInteger(days) || days < 1) {
+                        return "Enter a whole number of days (1 or more).";
+                      }
+                      return true;
+                    },
+                  }}
+                  render={({
+                    field: { onChange, onBlur, value },
+                    fieldState: { error },
+                  }) => {
+                    const isErrored = error !== undefined;
+                    const errorMessage: string = error?.message
+                      ? error.message
+                      : "";
+                    return (
+                      <Input
+                        autoFocus
+                        label="Expected Delivery Time (days)"
+                        placeholder="e.g. 3"
+                        variant="bordered"
+                        isInvalid={isErrored}
+                        errorMessage={errorMessage}
+                        className="text-black"
+                        type="number"
+                        onChange={onChange}
+                        onBlur={onBlur}
+                        value={value}
+                      />
+                    );
+                  }}
+                />
+              ) : (
+                <Controller
+                  name="Delivery Date"
+                  control={shippingControl}
+                  rules={{
+                    required: "Expected delivery date is required.",
+                    validate: (value) => {
+                      if (!value) return "Expected delivery date is required.";
+                      const [year, month, day] = value
+                        .split("-")
+                        .map((part) => parseInt(part));
+                      const selected = new Date(year!, month! - 1, day!);
+                      if (isNaN(selected.getTime())) {
+                        return "Enter a valid date.";
+                      }
+                      const today = new Date();
+                      today.setHours(0, 0, 0, 0);
+                      if (selected < today) {
+                        return "Delivery date can't be in the past.";
+                      }
+                      return true;
+                    },
+                  }}
+                  render={({
+                    field: { onChange, onBlur, value },
+                    fieldState: { error },
+                  }) => {
+                    const isErrored = error !== undefined;
+                    const errorMessage: string = error?.message
+                      ? error.message
+                      : "";
+                    return (
+                      <Input
+                        autoFocus
+                        label="Expected Delivery Date"
+                        variant="bordered"
+                        isInvalid={isErrored}
+                        errorMessage={errorMessage}
+                        className="text-black"
+                        type="date"
+                        onChange={onChange}
+                        onBlur={onBlur}
+                        value={value}
+                      />
+                    );
+                  }}
+                />
+              )}
               <Controller
                 name="Shipping Carrier"
                 control={shippingControl}
