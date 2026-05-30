@@ -46,6 +46,7 @@ import {
   fetchAllCommunities,
   fetchGiftWrappedChatsAndMessages,
   fetchStorefrontData,
+  fetchStorefrontChats,
 } from "@/utils/nostr/fetch-service";
 import {
   NostrEvent,
@@ -71,6 +72,24 @@ import { retryFailedRelayPublishes } from "@/utils/nostr/retry-service";
 import { MintRecoveryBoot } from "@/components/utility-components/mint-recovery-boot";
 import AffiliateRefTracker from "@/components/utility-components/affiliate-ref-tracker";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
+
+// Run a callback after the browser has had a chance to paint, yielding the
+// main thread first so the visible UI shows before heavy work (e.g. decrypting
+// the full gift-wrapped message history) begins.
+const scheduleAfterPaint = (cb: () => void) => {
+  if (typeof window === "undefined") {
+    cb();
+    return;
+  }
+  const ric = (window as any).requestIdleCallback as
+    | ((callback: () => void, options?: { timeout: number }) => number)
+    | undefined;
+  if (ric) {
+    ric(cb, { timeout: 2000 });
+  } else {
+    setTimeout(cb, 200);
+  }
+};
 
 function MilkMarket({ props }: { props: AppProps }) {
   const { Component, pageProps } = props;
@@ -517,6 +536,62 @@ function MilkMarket({ props }: { props: AppProps }) {
 
   const router = useRouter();
   const initializationRunRef = useRef(0);
+  // Token guarding deferred storefront chat fetches. It is bumped on every
+  // schedule AND at the top of the main init effect (auth/signer/relay change),
+  // so a slow message fetch from a previous shop — or a previous signed-in
+  // user — can never overwrite the chat context after the user has moved on.
+  const storefrontChatRunRef = useRef(0);
+
+  // Fetch the signed-in user's gift-wrapped messages for a storefront AFTER the
+  // page has painted, then hydrate any missing counterparty profiles. Kept off
+  // the initial render path because decrypting the full message history is the
+  // slow part of loading a custom stall/domain page when signed in.
+  const scheduleStorefrontChatFetch = (
+    sfPubkey: string,
+    userPubkey: string,
+    allRelays: string[]
+  ) => {
+    if (!nostr || !signer) return;
+    const token = ++storefrontChatRunRef.current;
+    scheduleAfterPaint(() => {
+      if (storefrontChatRunRef.current !== token) return;
+      const guardedEditChat = (chatsMap: ChatsMap, isLoading: boolean) => {
+        if (storefrontChatRunRef.current !== token) return;
+        editChatContext(chatsMap, isLoading);
+      };
+      fetchStorefrontChats(
+        nostr!,
+        signer!,
+        allRelays,
+        sfPubkey,
+        userPubkey,
+        guardedEditChat
+      )
+        .then((profileSet) => {
+          if (storefrontChatRunRef.current !== token) return;
+          const missing = Array.from(profileSet).filter(
+            (pk) => !profileContext.profileData.has(pk)
+          );
+          if (missing.length > 0) {
+            fetchProfile(
+              nostr!,
+              allRelays,
+              missing,
+              editProfileContext,
+              profileContext.profileData
+            ).catch((error) =>
+              console.error(
+                "Error fetching deferred storefront chat profiles:",
+                error
+              )
+            );
+          }
+        })
+        .catch((error) =>
+          console.error("Error during deferred storefront chat fetch:", error)
+        );
+    });
+  };
 
   // Detect when the visitor is on a seller's custom domain (anything that
   // isn't milk.market, *.milk.market, *.replit.app, *.replit.dev, *.repl.co,
@@ -675,6 +750,10 @@ function MilkMarket({ props }: { props: AppProps }) {
     async function fetchData() {
       const runId = ++initializationRunRef.current;
       const isCurrentRun = () => runId === initializationRunRef.current;
+      // Invalidate any deferred storefront chat fetch queued by a previous
+      // init run (e.g. before an account switch / logout) so it can't repopulate
+      // the chat context with the prior session's messages.
+      storefrontChatRunRef.current++;
       type EditorFn = (...args: any[]) => void;
 
       const guard = <TFn extends EditorFn>(fn: TFn) => {
@@ -811,19 +890,22 @@ function MilkMarket({ props }: { props: AppProps }) {
                 guardedEditProfileContext,
                 guardedEditReviewsContext,
                 guardedEditCommunityContext,
-                isLoggedIn && userPubkey
-                  ? {
-                      signer: signer!,
-                      editChatContext: guardedEditChatContext,
-                      userPubkey,
-                    }
-                  : undefined
+                isLoggedIn && userPubkey ? { userPubkey } : undefined
               );
             } catch (error) {
               console.error("Error during focused storefront fetch:", error);
             }
 
             if (!isCurrentRun()) return;
+
+            // Defer the heavy gift-wrapped message fetch + decryption until
+            // after the storefront has painted. Decrypting the full message
+            // history (two signer.decrypt calls per wrap) would otherwise
+            // block the initial render for signed-in users on custom domains
+            // and stall routes.
+            if (isLoggedIn && userPubkey) {
+              scheduleStorefrontChatFetch(sfPubkey, userPubkey, allRelays);
+            }
 
             const blossomPromise = isLoggedIn
               ? runTask(
@@ -1131,12 +1213,16 @@ function MilkMarket({ props }: { props: AppProps }) {
           editProfileContext,
           editReviewsContext,
           editCommunityContext,
-          isLoggedIn && userPubkey
-            ? { signer: signer!, editChatContext, userPubkey }
-            : undefined
+          isLoggedIn && userPubkey ? { userPubkey } : undefined
         );
       } catch (error) {
         console.error("Error during storefront-to-storefront refetch:", error);
+      }
+
+      // Defer the heavy message fetch + decryption until after the new
+      // storefront has painted (see fast-path note above).
+      if (isLoggedIn && userPubkey) {
+        scheduleStorefrontChatFetch(sfPubkey, userPubkey, allRelays);
       }
     };
 

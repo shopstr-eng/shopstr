@@ -2230,8 +2230,6 @@ export const fetchStorefrontData = async (
     isLoading: boolean
   ) => void,
   options?: {
-    signer?: NostrSigner;
-    editChatContext?: (chatsMap: ChatsMap, isLoading: boolean) => void;
     userPubkey?: string;
   }
 ): Promise<{
@@ -2449,78 +2447,12 @@ export const fetchStorefrontData = async (
     }
   })();
 
-  const chatPromise = (async () => {
-    if (!options?.userPubkey || !options?.signer || !options?.editChatContext)
-      return;
-    try {
-      const isShopOwner = options.userPubkey === shopPubkey;
-
-      let fullChatsMap: ChatsMap = new Map();
-      const capturingEditChat = (chatsMap: ChatsMap, _isLoading: boolean) => {
-        fullChatsMap = chatsMap;
-      };
-
-      const { profileSetFromChats } = await fetchGiftWrappedChatsAndMessages(
-        nostr,
-        options.signer,
-        relays,
-        capturingEditChat,
-        options.userPubkey
-      );
-
-      if (isShopOwner) {
-        options.editChatContext(fullChatsMap, false);
-        for (const pk of profileSetFromChats) {
-          profileSetFromProducts.add(pk);
-        }
-      } else {
-        const filteredChatsMap: ChatsMap = new Map();
-
-        for (const [counterpartyPubkey, messages] of fullChatsMap.entries()) {
-          if (counterpartyPubkey === shopPubkey) {
-            filteredChatsMap.set(counterpartyPubkey, messages);
-            profileSetFromProducts.add(counterpartyPubkey);
-            continue;
-          }
-
-          const relevantMessages = messages.filter((msg: NostrMessageEvent) => {
-            const tagsMap = new Map(
-              msg.tags?.map(
-                (tag: string[]) =>
-                  [tag[0] ?? "", tag[1] ?? ""] as [string, string]
-              ) || []
-            );
-            const itemTag = tagsMap.get("item") || tagsMap.get("a") || "";
-            if (itemTag) {
-              const parts = itemTag.split(":");
-              if (parts.length >= 2 && parts[1] === shopPubkey) {
-                return true;
-              }
-            }
-            return false;
-          });
-
-          if (relevantMessages.length > 0) {
-            filteredChatsMap.set(counterpartyPubkey, relevantMessages);
-            profileSetFromProducts.add(counterpartyPubkey);
-          }
-        }
-
-        options.editChatContext(filteredChatsMap, false);
-      }
-    } catch (error) {
-      console.error("Error fetching storefront chats:", error);
-      options.editChatContext(new Map(), false);
-    }
-  })();
-
   await Promise.all([
     profilePromise,
     shopPromise,
     productRelayPromise,
     reviewPromise,
     communityPromise,
-    chatPromise,
   ]);
 
   if (profileSetFromProducts.size > pubkeysToFetch.length) {
@@ -2533,4 +2465,86 @@ export const fetchStorefrontData = async (
   }
 
   return { productEvents, profileSetFromProducts };
+};
+
+// Fetches and decrypts the signed-in user's gift-wrapped messages for a
+// storefront view. This is intentionally separate from fetchStorefrontData so
+// it can be deferred until AFTER the storefront has painted — decrypting the
+// full message history (two signer.decrypt calls per wrap) is heavy and would
+// otherwise block the initial render on custom domains / stall routes.
+//
+// For the shop owner the full chat map is surfaced; for a regular visitor only
+// the messages with this shop (direct or tagged to its listings) are kept.
+// Returns the set of counterparty pubkeys whose profiles are worth fetching.
+export const fetchStorefrontChats = async (
+  nostr: NostrManager,
+  signer: NostrSigner,
+  relays: string[],
+  shopPubkey: string,
+  userPubkey: string,
+  editChatContext: (chatsMap: ChatsMap, isLoading: boolean) => void
+): Promise<Set<string>> => {
+  const profileSet = new Set<string>();
+  try {
+    const isShopOwner = userPubkey === shopPubkey;
+
+    let fullChatsMap: ChatsMap = new Map();
+    const capturingEditChat = (chatsMap: ChatsMap, _isLoading: boolean) => {
+      fullChatsMap = chatsMap;
+    };
+
+    const { profileSetFromChats } = await fetchGiftWrappedChatsAndMessages(
+      nostr,
+      signer,
+      relays,
+      capturingEditChat,
+      userPubkey
+    );
+
+    if (isShopOwner) {
+      editChatContext(fullChatsMap, false);
+      for (const pk of profileSetFromChats) {
+        profileSet.add(pk);
+      }
+    } else {
+      const filteredChatsMap: ChatsMap = new Map();
+
+      for (const [counterpartyPubkey, messages] of fullChatsMap.entries()) {
+        if (counterpartyPubkey === shopPubkey) {
+          filteredChatsMap.set(counterpartyPubkey, messages);
+          profileSet.add(counterpartyPubkey);
+          continue;
+        }
+
+        const relevantMessages = messages.filter((msg: NostrMessageEvent) => {
+          const tagsMap = new Map(
+            msg.tags?.map(
+              (tag: string[]) =>
+                [tag[0] ?? "", tag[1] ?? ""] as [string, string]
+            ) || []
+          );
+          const itemTag = tagsMap.get("item") || tagsMap.get("a") || "";
+          if (itemTag) {
+            const parts = itemTag.split(":");
+            if (parts.length >= 2 && parts[1] === shopPubkey) {
+              return true;
+            }
+          }
+          return false;
+        });
+
+        if (relevantMessages.length > 0) {
+          filteredChatsMap.set(counterpartyPubkey, relevantMessages);
+          profileSet.add(counterpartyPubkey);
+        }
+      }
+
+      editChatContext(filteredChatsMap, false);
+    }
+  } catch (error) {
+    console.error("Error fetching storefront chats:", error);
+    editChatContext(new Map(), false);
+  }
+
+  return profileSet;
 };

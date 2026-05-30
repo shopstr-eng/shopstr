@@ -7,3 +7,4 @@
 - [Storefront SSR head tags](storefront-ssr-head.md) — seller favicon/OG meta must flow through getServerSideProps ogMeta → DynamicHead; client-only head tags are invisible to crawlers/social bots.
 - [Reported vs charged amounts](reported-vs-charged-amounts.md) — order totals in DMs/email/dashboard must equal items+discounted-shipping (display-only), computed separately from fund amounts (ecash proofs/Stripe charge).
 - [Order DM seller-relay delivery](order-dm-seller-relay-delivery.md) — order gift-wraps must reach the SELLER's relays (server republish of the signed event needs no key + client NIP-65 fallback), not the buyer's; else custom-domain orders miss the dashboard.
+- [Storefront deferred chat load](storefront-deferred-chat-load.md) — signed-in custom stall/domain pages must defer gift-wrap message decryption off the render path; guard deferred chat writes with a run token bumped on slug change AND auth change.
