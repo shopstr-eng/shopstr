@@ -11,6 +11,12 @@ import { loadStorefrontBranding } from "@/utils/email/storefront-branding";
 const PER_IP_LIMIT = { limit: 30, windowMs: 60 * 1000 };
 const PER_PUBKEY_LIMIT = { limit: 30, windowMs: 60 * 1000 };
 
+// Basic, conservative email shape check for the seller-supplied fallback
+// recipient. Order contents are end-to-end encrypted, so the server cannot
+// independently verify a buyer's email for orders that predate (or skipped)
+// the checkout notification-email capture; this keeps obviously-bad values out.
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
@@ -21,9 +27,8 @@ export default async function handler(
 
   if (!applyRateLimit(req, res, "email-send-update:ip", PER_IP_LIMIT)) return;
 
-  // Sending an order-update email exposes (and, via the fallback, can target)
-  // the buyer's contact email, so require the same NIP-98 seller proof used by
-  // the order-status write path before doing anything else.
+  // Require a NIP-98 proof so this endpoint can't be used as an anonymous email
+  // relay, and so the per-pubkey rate limit below has a real identity to key on.
   const authResult = await verifyNip98Request(req, "POST", req.body);
   if (!authResult.ok) {
     return res.status(401).json({ error: authResult.error });
@@ -48,7 +53,6 @@ export default async function handler(
     trackingNumber,
     carrier,
     estimatedDelivery,
-    sellerPubkey,
     buyerEmail: buyerEmailFromBody,
   } = req.body;
 
@@ -59,27 +63,31 @@ export default async function handler(
   }
 
   try {
-    const { sellerPubkey: orderSellerPubkey } =
-      await getOrderParticipants(orderId);
-
-    if (!orderSellerPubkey) {
-      return res.status(404).json({
-        error: "Could not resolve the seller for this order.",
-      });
+    // Order messages are stored as encrypted gift wraps, so the seller usually
+    // can't be resolved from the cache. Only enforce ownership when we actually
+    // can resolve it; never block the common (unresolvable) case, or no
+    // shipping email would ever be delivered.
+    let orderSellerPubkey: string | null = null;
+    try {
+      ({ sellerPubkey: orderSellerPubkey } =
+        await getOrderParticipants(orderId));
+    } catch (lookupError) {
+      console.error("Failed to resolve order participants:", lookupError);
     }
 
-    if (authResult.pubkey !== orderSellerPubkey) {
+    if (orderSellerPubkey && authResult.pubkey !== orderSellerPubkey) {
       return res.status(403).json({
         error: "Only the order's seller can send update emails for this order.",
       });
     }
 
-    const buyerEmail =
-      (await getBuyerNotificationEmail(orderId)) ||
-      (typeof buyerEmailFromBody === "string" &&
-      buyerEmailFromBody.includes("@")
+    const dbBuyerEmail = await getBuyerNotificationEmail(orderId);
+    const fallbackBuyerEmail =
+      typeof buyerEmailFromBody === "string" &&
+      EMAIL_PATTERN.test(buyerEmailFromBody.trim())
         ? buyerEmailFromBody.trim()
-        : null);
+        : null;
+    const buyerEmail = dbBuyerEmail || fallbackBuyerEmail;
 
     if (!buyerEmail) {
       return res.status(200).json({
@@ -89,9 +97,10 @@ export default async function handler(
       });
     }
 
-    const branding = await loadStorefrontBranding(
-      sellerPubkey || orderSellerPubkey
-    );
+    // Brand the email from the authenticated caller's storefront only. Never
+    // trust a body-supplied sellerPubkey here, or a caller could send mail
+    // wearing another seller's branding.
+    const branding = await loadStorefrontBranding(authResult.pubkey);
     const emailSent = await sendOrderUpdateToBuyer(
       buyerEmail,
       {
