@@ -1104,22 +1104,37 @@ const OrdersDashboard = ({
         console.error("Failed to persist shipped status:", err)
       );
 
-      fetch("/api/email/send-update-email", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          orderId: selectedOrder.orderId,
-          productTitle: selectedOrder.productTitle || "your order",
-          updateType: "shipping",
-          message:
-            "Your order has been shipped!" +
-            (trackingNumber ? ` Tracking: ${trackingNumber}` : ""),
-          trackingNumber: trackingNumber || undefined,
-          carrier: shippingCarrier || undefined,
-          estimatedDelivery: humanReadableDate || undefined,
-          sellerPubkey: selectedOrder.sellerPubkey || undefined,
-        }),
-      }).catch(() => {});
+      const emailBody = JSON.stringify({
+        orderId: selectedOrder.orderId,
+        productTitle: selectedOrder.productTitle || "your order",
+        updateType: "shipping",
+        message:
+          "Your order has been shipped!" +
+          (trackingNumber ? ` Tracking: ${trackingNumber}` : ""),
+        trackingNumber: trackingNumber || undefined,
+        carrier: shippingCarrier || undefined,
+        estimatedDelivery: humanReadableDate || undefined,
+        sellerPubkey: selectedOrder.sellerPubkey || undefined,
+        buyerEmail: selectedOrder.buyerEmail || undefined,
+      });
+
+      createNip98AuthorizationHeader(
+        signer,
+        `${window.location.origin}/api/email/send-update-email`,
+        "POST",
+        emailBody
+      )
+        .then((emailAuthHeader) =>
+          fetch("/api/email/send-update-email", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: emailAuthHeader,
+            },
+            body: emailBody,
+          })
+        )
+        .catch(() => {});
 
       handleCloseShippingModal();
     } catch (error) {

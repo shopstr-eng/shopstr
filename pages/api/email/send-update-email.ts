@@ -1,10 +1,15 @@
 import { NextApiRequest, NextApiResponse } from "next";
 import { sendOrderUpdateToBuyer } from "@/utils/email/email-service";
-import { getBuyerNotificationEmail } from "@/utils/db/db-service";
+import {
+  getBuyerNotificationEmail,
+  getOrderParticipants,
+} from "@/utils/db/db-service";
+import { verifyNip98Request } from "@/utils/nostr/nip98-auth";
 import { applyRateLimit } from "@/utils/rate-limit";
 import { loadStorefrontBranding } from "@/utils/email/storefront-branding";
 
-const RATE_LIMIT = { limit: 30, windowMs: 60 * 1000 };
+const PER_IP_LIMIT = { limit: 30, windowMs: 60 * 1000 };
+const PER_PUBKEY_LIMIT = { limit: 30, windowMs: 60 * 1000 };
 
 export default async function handler(
   req: NextApiRequest,
@@ -14,7 +19,26 @@ export default async function handler(
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  if (!applyRateLimit(req, res, "email-send-update", RATE_LIMIT)) return;
+  if (!applyRateLimit(req, res, "email-send-update:ip", PER_IP_LIMIT)) return;
+
+  // Sending an order-update email exposes (and, via the fallback, can target)
+  // the buyer's contact email, so require the same NIP-98 seller proof used by
+  // the order-status write path before doing anything else.
+  const authResult = await verifyNip98Request(req, "POST", req.body);
+  if (!authResult.ok) {
+    return res.status(401).json({ error: authResult.error });
+  }
+
+  if (
+    !applyRateLimit(
+      req,
+      res,
+      "email-send-update:pubkey",
+      PER_PUBKEY_LIMIT,
+      authResult.pubkey
+    )
+  )
+    return;
 
   const {
     orderId,
@@ -25,6 +49,7 @@ export default async function handler(
     carrier,
     estimatedDelivery,
     sellerPubkey,
+    buyerEmail: buyerEmailFromBody,
   } = req.body;
 
   if (!orderId || !productTitle || !updateType || !message) {
@@ -34,7 +59,27 @@ export default async function handler(
   }
 
   try {
-    const buyerEmail = await getBuyerNotificationEmail(orderId);
+    const { sellerPubkey: orderSellerPubkey } =
+      await getOrderParticipants(orderId);
+
+    if (!orderSellerPubkey) {
+      return res.status(404).json({
+        error: "Could not resolve the seller for this order.",
+      });
+    }
+
+    if (authResult.pubkey !== orderSellerPubkey) {
+      return res.status(403).json({
+        error: "Only the order's seller can send update emails for this order.",
+      });
+    }
+
+    const buyerEmail =
+      (await getBuyerNotificationEmail(orderId)) ||
+      (typeof buyerEmailFromBody === "string" &&
+      buyerEmailFromBody.includes("@")
+        ? buyerEmailFromBody.trim()
+        : null);
 
     if (!buyerEmail) {
       return res.status(200).json({
@@ -44,7 +89,9 @@ export default async function handler(
       });
     }
 
-    const branding = await loadStorefrontBranding(sellerPubkey);
+    const branding = await loadStorefrontBranding(
+      sellerPubkey || orderSellerPubkey
+    );
     const emailSent = await sendOrderUpdateToBuyer(
       buyerEmail,
       {
