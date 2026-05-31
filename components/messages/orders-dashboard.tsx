@@ -987,20 +987,14 @@ const OrdersDashboard = ({
   };
 
   const onShippingSubmit = async (data: { [x: string]: string }) => {
-    if (!selectedOrder || !signer || !nostr) return;
+    // The email path only needs `selectedOrder` (for content) and `signer`
+    // (for the NIP-98 header). `nostr` is required solely for the gift-wrap
+    // relay publish below, so it must not gate the email.
+    if (!selectedOrder || !signer) return;
 
     setIsSendingShipping(true);
 
     try {
-      const decodedRandomPubkeyForSender = nip19.decode(randomNpubForSender);
-      const decodedRandomPrivkeyForSender = nip19.decode(randomNsecForSender);
-      const decodedRandomPubkeyForReceiver = nip19.decode(
-        randomNpubForReceiver
-      );
-      const decodedRandomPrivkeyForReceiver = nip19.decode(
-        randomNsecForReceiver
-      );
-
       let futureTimestamp: number;
       if (deliveryMode === "date") {
         const [year, month, day] = data["Delivery Date"]!.split("-").map(
@@ -1035,75 +1029,10 @@ const OrdersDashboard = ({
         " tracking number is: " +
         trackingNumber;
 
-      if (!selectedOrder.isGuest) {
-        const giftWrappedMessageEvent = await constructGiftWrappedEvent(
-          decodedRandomPubkeyForSender.data as string,
-          selectedOrder.buyerPubkey,
-          message,
-          "shipping-info",
-          {
-            productAddress: selectedOrder.productAddress,
-            type: 4, // Shipping update type
-            status: "shipped",
-            isOrder: true,
-            orderId: selectedOrder.orderId,
-            tracking: trackingNumber,
-            carrier: shippingCarrier,
-            eta: futureTimestamp,
-            buyerPubkey: selectedOrder.buyerPubkey,
-          }
-        );
-
-        const sealedEvent = await constructMessageSeal(
-          signer,
-          giftWrappedMessageEvent,
-          decodedRandomPubkeyForSender.data as string,
-          selectedOrder.buyerPubkey,
-          decodedRandomPrivkeyForSender.data as Uint8Array
-        );
-
-        const giftWrappedEvent = await constructMessageGiftWrap(
-          sealedEvent,
-          decodedRandomPubkeyForReceiver.data as string,
-          decodedRandomPrivkeyForReceiver.data as Uint8Array,
-          selectedOrder.buyerPubkey
-        );
-
-        await sendGiftWrappedMessageEvent(nostr, giftWrappedEvent, signer);
-      }
-
-      // Update local state to shipped status (removes Send Shipping Update button)
-      setOrders((prevOrders) =>
-        prevOrders.map((order) =>
-          order.orderId === selectedOrder.orderId
-            ? { ...order, status: "shipped" }
-            : order
-        )
-      );
-
-      // Persist status to database
-      const body = JSON.stringify({
-        orderId: selectedOrder.orderId,
-        status: "shipped",
-      });
-      const authHeader = await createNip98AuthorizationHeader(
-        signer,
-        `${window.location.origin}/api/db/update-order-status`,
-        "POST",
-        body
-      );
-
-      fetch("/api/db/update-order-status", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: authHeader,
-        },
-        body,
-      }).catch((err) =>
-        console.error("Failed to persist shipped status:", err)
-      );
-
+      // Fire the buyer shipping-confirmation email FIRST and independently.
+      // Nostr relay delivery and the status-update write below can throw or
+      // hang; keeping the email on its own path guarantees it is always
+      // attempted regardless of those outcomes.
       const emailBody = JSON.stringify({
         orderId: selectedOrder.orderId,
         productTitle: selectedOrder.productTitle || "your order",
@@ -1114,7 +1043,6 @@ const OrdersDashboard = ({
         trackingNumber: trackingNumber || undefined,
         carrier: shippingCarrier || undefined,
         estimatedDelivery: humanReadableDate || undefined,
-        sellerPubkey: selectedOrder.sellerPubkey || undefined,
         buyerEmail: selectedOrder.buyerEmail || undefined,
       });
 
@@ -1134,7 +1062,101 @@ const OrdersDashboard = ({
             body: emailBody,
           })
         )
-        .catch(() => {});
+        .catch((err) => console.error("Failed to send shipping email:", err));
+
+      // Send the encrypted shipping message to the buyer over Nostr. Isolate
+      // its failure so it can't abort the status update below.
+      if (!selectedOrder.isGuest && nostr) {
+        try {
+          const decodedRandomPubkeyForSender =
+            nip19.decode(randomNpubForSender);
+          const decodedRandomPrivkeyForSender =
+            nip19.decode(randomNsecForSender);
+          const decodedRandomPubkeyForReceiver = nip19.decode(
+            randomNpubForReceiver
+          );
+          const decodedRandomPrivkeyForReceiver = nip19.decode(
+            randomNsecForReceiver
+          );
+
+          const giftWrappedMessageEvent = await constructGiftWrappedEvent(
+            decodedRandomPubkeyForSender.data as string,
+            selectedOrder.buyerPubkey,
+            message,
+            "shipping-info",
+            {
+              productAddress: selectedOrder.productAddress,
+              type: 4, // Shipping update type
+              status: "shipped",
+              isOrder: true,
+              orderId: selectedOrder.orderId,
+              tracking: trackingNumber,
+              carrier: shippingCarrier,
+              eta: futureTimestamp,
+              buyerPubkey: selectedOrder.buyerPubkey,
+            }
+          );
+
+          const sealedEvent = await constructMessageSeal(
+            signer,
+            giftWrappedMessageEvent,
+            decodedRandomPubkeyForSender.data as string,
+            selectedOrder.buyerPubkey,
+            decodedRandomPrivkeyForSender.data as Uint8Array
+          );
+
+          const giftWrappedEvent = await constructMessageGiftWrap(
+            sealedEvent,
+            decodedRandomPubkeyForReceiver.data as string,
+            decodedRandomPrivkeyForReceiver.data as Uint8Array,
+            selectedOrder.buyerPubkey
+          );
+
+          await sendGiftWrappedMessageEvent(nostr, giftWrappedEvent, signer);
+        } catch (giftWrapError) {
+          console.error(
+            "Failed to send shipping Nostr message:",
+            giftWrapError
+          );
+        }
+      }
+
+      // Update local state to shipped status (removes Send Shipping Update button)
+      setOrders((prevOrders) =>
+        prevOrders.map((order) =>
+          order.orderId === selectedOrder.orderId
+            ? { ...order, status: "shipped" }
+            : order
+        )
+      );
+
+      // Persist status to database. Isolate so a signing/network failure here
+      // can't prevent the modal from closing or affect the email above.
+      try {
+        const body = JSON.stringify({
+          orderId: selectedOrder.orderId,
+          status: "shipped",
+        });
+        const authHeader = await createNip98AuthorizationHeader(
+          signer,
+          `${window.location.origin}/api/db/update-order-status`,
+          "POST",
+          body
+        );
+
+        fetch("/api/db/update-order-status", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: authHeader,
+          },
+          body,
+        }).catch((err) =>
+          console.error("Failed to persist shipped status:", err)
+        );
+      } catch (statusError) {
+        console.error("Failed to sign shipped status update:", statusError);
+      }
 
       handleCloseShippingModal();
     } catch (error) {

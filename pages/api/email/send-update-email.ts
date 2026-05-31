@@ -25,14 +25,22 @@ export default async function handler(
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  if (!applyRateLimit(req, res, "email-send-update:ip", PER_IP_LIMIT)) return;
+  if (!applyRateLimit(req, res, "email-send-update:ip", PER_IP_LIMIT)) {
+    console.warn("[send-update-email] blocked by per-IP rate limit");
+    return;
+  }
 
   // Require a NIP-98 proof so this endpoint can't be used as an anonymous email
   // relay, and so the per-pubkey rate limit below has a real identity to key on.
   const authResult = await verifyNip98Request(req, "POST", req.body);
   if (!authResult.ok) {
+    console.warn("[send-update-email] NIP-98 auth failed:", authResult.error);
     return res.status(401).json({ error: authResult.error });
   }
+  console.info(
+    "[send-update-email] auth ok pubkey=",
+    authResult.pubkey.slice(0, 8)
+  );
 
   if (
     !applyRateLimit(
@@ -57,6 +65,12 @@ export default async function handler(
   } = req.body;
 
   if (!orderId || !productTitle || !updateType || !message) {
+    console.warn("[send-update-email] missing required fields", {
+      hasOrderId: !!orderId,
+      hasProductTitle: !!productTitle,
+      hasUpdateType: !!updateType,
+      hasMessage: !!message,
+    });
     return res.status(400).json({
       error: "orderId, productTitle, updateType, and message are required",
     });
@@ -89,6 +103,14 @@ export default async function handler(
         : null;
     const buyerEmail = dbBuyerEmail || fallbackBuyerEmail;
 
+    console.info("[send-update-email] recipient resolution", {
+      sellerResolved: !!orderSellerPubkey,
+      dbEmail: !!dbBuyerEmail,
+      bodyEmailProvided: typeof buyerEmailFromBody === "string",
+      bodyEmailValid: !!fallbackBuyerEmail,
+      willSend: !!buyerEmail,
+    });
+
     if (!buyerEmail) {
       return res.status(200).json({
         success: true,
@@ -115,6 +137,7 @@ export default async function handler(
       branding
     );
 
+    console.info("[send-update-email] send result emailSent=", emailSent);
     return res.status(200).json({ success: true, emailSent });
   } catch (error) {
     console.error("Error sending update email:", error);
