@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   Modal,
   ModalContent,
@@ -7,7 +7,7 @@ import {
   ModalFooter,
   Input,
   Button,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import { useRouter } from "next/router";
 import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
 
@@ -71,7 +71,7 @@ export default function PassphraseChallengeModal({
       isDismissable={false}
     >
       <ModalContent>
-        <ModalHeader className="flex flex-col gap-1 font-black uppercase tracking-tighter text-white">
+        <ModalHeader className="flex flex-col gap-1 font-black tracking-tighter text-white uppercase">
           Enter Passphrase
         </ModalHeader>
         <ModalBody>
@@ -112,7 +112,7 @@ export default function PassphraseChallengeModal({
 
         <ModalFooter>
           <Button
-            className="font-bold uppercase tracking-wider text-red-500 hover:bg-red-500/10"
+            className="font-bold tracking-wider text-red-500 uppercase hover:bg-red-500/10"
             color="danger"
             variant="light"
             onClick={onCancel}

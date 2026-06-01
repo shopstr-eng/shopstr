@@ -10,8 +10,8 @@ jest.mock("next/router", () => ({
   }),
 }));
 
-jest.mock("@nextui-org/react", () => {
-  const originalModule = jest.requireActual("@nextui-org/react");
+jest.mock("@heroui/react", () => {
+  const originalModule = jest.requireActual("@heroui/react");
   return {
     ...originalModule,
     Modal: ({

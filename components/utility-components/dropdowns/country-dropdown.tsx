@@ -1,5 +1,5 @@
-import React, { useMemo } from "react";
-import { Select, SelectItem, SelectSection } from "@nextui-org/react";
+import { useMemo } from "react";
+import { Select, SelectItem, SelectSection } from "@heroui/react";
 import locations from "../../../public/locationSelection.json";
 
 const CountryDropdown = ({ _value, ...props }: { [x: string]: any }) => {
@@ -17,9 +17,7 @@ const CountryDropdown = ({ _value, ...props }: { [x: string]: any }) => {
       >
         {locations.countries.map((country) => {
           return (
-            <SelectItem key={country.country} value={country.country}>
-              {country.country}
-            </SelectItem>
+            <SelectItem key={country.country}>{country.country}</SelectItem>
           );
         })}
       </SelectSection>
@@ -30,7 +28,7 @@ const CountryDropdown = ({ _value, ...props }: { [x: string]: any }) => {
   return (
     <Select
       {...props}
-      className="mt-2 text-light-text dark:text-dark-text"
+      className="text-light-text dark:text-dark-text mt-2"
       classNames={{
         trigger: "h-12",
         value: "text-base",

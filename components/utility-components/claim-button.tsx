@@ -6,7 +6,7 @@ import {
   ModalHeader,
   Button,
   Spinner,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import {
   ArrowDownTrayIcon,
   BoltIcon,
@@ -26,12 +26,13 @@ import {
 import { LightningAddress } from "@getalby/lightning-tools";
 import { nip19 } from "nostr-tools";
 import {
-  CashuMint,
-  CashuWallet,
+  Mint as CashuMint,
+  Wallet as CashuWallet,
   Proof,
   getDecodedToken,
   getEncodedToken,
 } from "@cashu/cashu-ts";
+import * as cashuCompat from "@/utils/cashu/compat";
 import { formatWithCommas } from "./display-monetary-info";
 import {
   NostrContext,
@@ -88,7 +89,7 @@ export default function ClaimButton({ token }: { token: string }) {
 
   useEffect(() => {
     try {
-      const decodedToken = getDecodedToken(token);
+      const decodedToken = getDecodedToken(token, []);
       const mint = decodedToken.mint;
       setTokenMint(mint);
       const proofs = decodedToken.proofs;
@@ -97,7 +98,10 @@ export default function ClaimButton({ token }: { token: string }) {
       setWallet(newWallet);
       const totalAmount =
         Array.isArray(proofs) && proofs.length > 0
-          ? proofs.reduce((acc, current: Proof) => acc + current.amount, 0)
+          ? proofs.reduce(
+              (acc, current: Proof) => acc + cashuCompat.proofAmount(current),
+              0
+            )
           : 0;
 
       setTokenAmount(totalAmount);
@@ -222,7 +226,7 @@ export default function ClaimButton({ token }: { token: string }) {
         setIsSpent(true);
         setIsRedeeming(false);
       }
-    } catch (_) {
+    } catch {
       setIsInvalidToken(true);
       setIsRedeeming(false);
     }
@@ -240,18 +244,28 @@ export default function ClaimButton({ token }: { token: string }) {
         await ln.fetch();
         const invoice = await ln.requestInvoice({ satoshi: newAmount });
         const invoicePaymentRequest = invoice.paymentRequest;
-        const meltQuote = await wallet.createMeltQuote(invoicePaymentRequest);
+        const meltQuote = await cashuCompat.createMeltQuote(
+          wallet,
+          invoicePaymentRequest
+        );
         if (meltQuote) {
-          const meltQuoteTotal = meltQuote.amount + meltQuote.fee_reserve;
+          const meltQuoteTotal =
+            cashuCompat.amountToNumber(meltQuote.amount) +
+            cashuCompat.amountToNumber(meltQuote.fee_reserve);
           const { keep, send } = await wallet.send(meltQuoteTotal, proofs, {
             includeFees: true,
           });
-          const meltResponse = await wallet.meltProofs(meltQuote, send);
+          const meltResponse = await cashuCompat.meltProofs(
+            wallet,
+            meltQuote,
+            send
+          );
           const changeProofs = [...keep, ...meltResponse.change];
           const changeAmount =
             Array.isArray(changeProofs) && changeProofs.length > 0
               ? changeProofs.reduce(
-                  (acc, current: Proof) => acc + current.amount,
+                  (acc, current: Proof) =>
+                    acc + cashuCompat.proofAmount(current),
                   0
                 )
               : 0;
@@ -307,7 +321,7 @@ export default function ClaimButton({ token }: { token: string }) {
       } else {
         throw new Error("Wallet not initialized");
       }
-    } catch (_) {
+    } catch {
       setIsPaid(false);
       setOpenRedemptionModal(true);
       setIsRedeeming(false);
@@ -319,7 +333,7 @@ export default function ClaimButton({ token }: { token: string }) {
       <Button
         className={
           isRedeemed || isInvalidToken
-            ? "mt-2 min-w-fit cursor-not-allowed rounded-xl border border-zinc-700 bg-zinc-800 text-xs font-bold uppercase tracking-wider text-zinc-500 opacity-60"
+            ? "mt-2 min-w-fit cursor-not-allowed rounded-xl border border-zinc-700 bg-zinc-800 text-xs font-bold tracking-wider text-zinc-500 uppercase opacity-60"
             : `${NEO_BTN} mt-2 min-w-fit text-xs`
         }
         onClick={handleClaimButtonClick}
@@ -353,13 +367,13 @@ export default function ClaimButton({ token }: { token: string }) {
       >
         <ModalContent>
           <ModalBody className="flex flex-col gap-6 overflow-hidden text-zinc-300">
-            <div className="flex items-center justify-center text-center font-bold uppercase tracking-tight text-white">
+            <div className="flex items-center justify-center text-center font-bold tracking-tight text-white uppercase">
               Would you like to claim the token directly to your Shopstr wallet,
               or to your Lightning address?
             </div>
             <div className="flex w-full flex-col items-center justify-center gap-4 sm:flex-row">
               <Button
-                className="h-14 w-full rounded-xl border border-zinc-700 bg-[#111] text-xs font-bold uppercase tracking-wider text-white transition-colors hover:border-yellow-400 sm:w-[48%]"
+                className="h-14 w-full rounded-xl border border-zinc-700 bg-[#111] text-xs font-bold tracking-wider text-white uppercase transition-colors hover:border-yellow-400 sm:w-[48%]"
                 onClick={() => handleClaimType("receive")}
                 startContent={
                   <ArrowDownTrayIcon className="h-6 w-6 text-yellow-400" />
@@ -368,7 +382,7 @@ export default function ClaimButton({ token }: { token: string }) {
                 Receive
               </Button>
               <Button
-                className="h-14 w-full rounded-xl border border-zinc-700 bg-[#111] text-xs font-bold uppercase tracking-wider text-white transition-colors hover:border-yellow-400 sm:w-[48%]"
+                className="h-14 w-full rounded-xl border border-zinc-700 bg-[#111] text-xs font-bold tracking-wider text-white uppercase transition-colors hover:border-yellow-400 sm:w-[48%]"
                 onClick={() => handleClaimType("redeem")}
                 startContent={<BoltIcon className="h-6 w-6 text-yellow-400" />}
               >
@@ -397,7 +411,7 @@ export default function ClaimButton({ token }: { token: string }) {
             size="md"
           >
             <ModalContent>
-              <ModalHeader className="flex items-center justify-center font-black uppercase tracking-tighter">
+              <ModalHeader className="flex items-center justify-center font-black tracking-tighter uppercase">
                 <XCircleIcon className="h-6 w-6 text-red-500" />
                 <div className="ml-2">No valid Lightning address found!</div>
               </ModalHeader>
@@ -429,7 +443,7 @@ export default function ClaimButton({ token }: { token: string }) {
             size="md"
           >
             <ModalContent>
-              <ModalHeader className="flex items-center justify-center font-black uppercase tracking-tighter">
+              <ModalHeader className="flex items-center justify-center font-black tracking-tighter uppercase">
                 <CheckCircleIcon className="h-6 w-6 text-green-500" />
                 <div className="ml-2">Token successfully claimed!</div>
               </ModalHeader>
@@ -461,7 +475,7 @@ export default function ClaimButton({ token }: { token: string }) {
             size="md"
           >
             <ModalContent>
-              <ModalHeader className="flex items-center justify-center font-black uppercase tracking-tighter">
+              <ModalHeader className="flex items-center justify-center font-black tracking-tighter uppercase">
                 <XCircleIcon className="h-6 w-6 text-red-500" />
                 <div className="ml-2">Duplicate token!</div>
               </ModalHeader>
@@ -494,7 +508,7 @@ export default function ClaimButton({ token }: { token: string }) {
             size="md"
           >
             <ModalContent>
-              <ModalHeader className="flex items-center justify-center font-black uppercase tracking-tighter">
+              <ModalHeader className="flex items-center justify-center font-black tracking-tighter uppercase">
                 <XCircleIcon className="h-6 w-6 text-red-500" />
                 <div className="ml-2">Spent token!</div>
               </ModalHeader>
@@ -526,7 +540,7 @@ export default function ClaimButton({ token }: { token: string }) {
             size="md"
           >
             <ModalContent>
-              <ModalHeader className="flex items-center justify-center font-black uppercase tracking-tighter">
+              <ModalHeader className="flex items-center justify-center font-black tracking-tighter uppercase">
                 <CheckCircleIcon className="h-6 w-6 text-green-500" />
                 <div className="ml-2">Token successfully redeemed!</div>
               </ModalHeader>
@@ -557,7 +571,7 @@ export default function ClaimButton({ token }: { token: string }) {
             size="md"
           >
             <ModalContent>
-              <ModalHeader className="flex items-center justify-center font-black uppercase tracking-tighter">
+              <ModalHeader className="flex items-center justify-center font-black tracking-tighter uppercase">
                 <XCircleIcon className="h-6 w-6 text-red-500" />
                 <div className="ml-2">Token redemption failed!</div>
               </ModalHeader>

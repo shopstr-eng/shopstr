@@ -1,4 +1,4 @@
-import React, { useContext, useState, useEffect } from "react";
+import { useContext, useState, useEffect } from "react";
 import {
   CashuWalletContext,
   ChatsContext,
@@ -20,7 +20,7 @@ import {
   Select,
   SelectItem,
   Input,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import {
   BanknotesIcon,
   BoltIcon,
@@ -29,14 +29,15 @@ import {
   CurrencyDollarIcon,
   WalletIcon,
 } from "@heroicons/react/24/outline";
-import { fiat } from "@getalby/lightning-tools";
+import { getSatoshiValue } from "@getalby/lightning-tools";
 import {
-  CashuMint,
-  CashuWallet,
+  Mint as CashuMint,
+  Wallet as CashuWallet,
   getEncodedToken,
   MintKeyset,
   Proof,
 } from "@cashu/cashu-ts";
+import * as cashuCompat from "@/utils/cashu/compat";
 import {
   constructGiftWrappedEvent,
   constructMessageSeal,
@@ -50,7 +51,7 @@ import { LightningAddress } from "@getalby/lightning-tools";
 import QRCode from "qrcode";
 import { v4 as uuidv4 } from "uuid";
 import { nip19 } from "nostr-tools";
-import { webln } from "@getalby/sdk";
+import { NostrWebLNProvider } from "@getalby/sdk";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
 import { formatWithCommas } from "./utility-components/display-monetary-info";
 import SignInModal from "./sign-in/SignInModal";
@@ -517,7 +518,7 @@ export default function ProductInvoiceCard({
             amount: price,
             currency: productData.currency,
           };
-          const numSats = await fiat.getSatoshiValue(currencyData);
+          const numSats = await getSatoshiValue(currencyData);
           price = Math.round(numSats);
         } catch (err) {
           console.error("ERROR", err);
@@ -567,7 +568,7 @@ export default function ProductInvoiceCard({
       } else {
         await handleLightningPayment(price, paymentData);
       }
-    } catch (error) {
+    } catch {
       if (setCashuPaymentFailed) {
         setCashuPaymentFailed(true);
       }
@@ -619,7 +620,7 @@ export default function ProductInvoiceCard({
 
   const handleNWCPayment = async (convertedPrice: number, data: any) => {
     setIsNwcLoading(true);
-    let nwc: webln.NostrWebLNProvider | null = null;
+    let nwc: NostrWebLNProvider | null = null;
 
     try {
       if (data.shippingName || data.shippingAddress) {
@@ -645,13 +646,15 @@ export default function ProductInvoiceCard({
       }
 
       const wallet = new CashuWallet(new CashuMint(mints[0]!));
-      const { request: pr, quote: hash } =
-        await wallet.createMintQuote(convertedPrice);
+      const { request: pr, quote: hash } = await cashuCompat.createMintQuote(
+        wallet,
+        convertedPrice
+      );
 
       const { nwcString } = getLocalStorageData();
       if (!nwcString) throw new Error("NWC connection not found.");
 
-      nwc = new webln.NostrWebLNProvider({ nostrWalletConnectUrl: nwcString });
+      nwc = new NostrWebLNProvider({ nostrWalletConnectUrl: nwcString });
       await nwc.enable();
 
       await nwc.sendPayment(pr);
@@ -1031,7 +1034,7 @@ export default function ProductInvoiceCard({
       }
       setFormType(null);
       setOrderConfirmed(true);
-    } catch (error) {
+    } catch {
       if (setFiatOrderFailed) {
         setFiatOrderFailed(true);
       }
@@ -1072,8 +1075,10 @@ export default function ProductInvoiceCard({
       setShowInvoiceCard(true);
       const wallet = new CashuWallet(new CashuMint(mints[0]!));
 
-      const { request: pr, quote: hash } =
-        await wallet.createMintQuote(convertedPrice);
+      const { request: pr, quote: hash } = await cashuCompat.createMintQuote(
+        wallet,
+        convertedPrice
+      );
 
       setInvoice(pr);
 
@@ -1117,7 +1122,7 @@ export default function ProductInvoiceCard({
         data.shippingCountry ? data.shippingCountry : undefined,
         data.additionalInfo ? data.additionalInfo : undefined
       );
-    } catch (error) {
+    } catch {
       if (setInvoiceGenerationFailed) {
         setInvoiceGenerationFailed(true);
         setShowInvoiceCard(false);
@@ -1147,12 +1152,12 @@ export default function ProductInvoiceCard({
     while (retryCount < maxRetries) {
       try {
         // First check if the quote has been paid
-        const quoteState = await wallet.checkMintQuote(hash);
+        const quoteState = await cashuCompat.checkMintQuote(wallet, hash);
 
         if (quoteState.state === "PAID") {
           // Quote is paid, try to mint proofs
           try {
-            const proofs = await wallet.mintProofs(newPrice, hash);
+            const proofs = await cashuCompat.mintProofs(wallet, newPrice, hash);
             if (proofs && proofs.length > 0) {
               await sendTokens(
                 wallet,
@@ -1305,20 +1310,32 @@ export default function ProductInvoiceCard({
       await ln.fetch();
       const invoice = await ln.requestInvoice({ satoshi: newAmount });
       const invoicePaymentRequest = invoice.paymentRequest;
-      const meltQuote = await wallet.createMeltQuote(invoicePaymentRequest);
+      const meltQuote = await cashuCompat.createMeltQuote(
+        wallet,
+        invoicePaymentRequest
+      );
       if (meltQuote) {
-        const meltQuoteTotal = meltQuote.amount + meltQuote.fee_reserve;
+        const meltQuoteTotal =
+          cashuCompat.amountToNumber(meltQuote.amount) +
+          cashuCompat.amountToNumber(meltQuote.fee_reserve);
         const { keep, send } = await wallet.send(meltQuoteTotal, sellerProofs, {
           includeFees: true,
         });
-        const meltResponse = await wallet.meltProofs(meltQuote, send);
+        const meltResponse = await cashuCompat.meltProofs(
+          wallet,
+          meltQuote,
+          send
+        );
         if (meltResponse.quote) {
-          const meltAmount = meltResponse.quote.amount;
+          const meltAmount = cashuCompat.amountToNumber(
+            meltResponse.quote.amount
+          );
           const changeProofs = [...keep, ...meltResponse.change];
           const changeAmount =
             Array.isArray(changeProofs) && changeProofs.length > 0
               ? changeProofs.reduce(
-                  (acc, current: Proof) => acc + current.amount,
+                  (acc, current: Proof) =>
+                    acc + cashuCompat.proofAmount(current),
                   0
                 )
               : 0;
@@ -1396,7 +1413,8 @@ export default function ProductInvoiceCard({
           const unusedAmount =
             Array.isArray(unusedProofs) && unusedProofs.length > 0
               ? unusedProofs.reduce(
-                  (acc, current: Proof) => acc + current.amount,
+                  (acc, current: Proof) =>
+                    acc + cashuCompat.proofAmount(current),
                   0
                 )
               : 0;
@@ -1821,10 +1839,9 @@ export default function ProductInvoiceCard({
 
       const mint = new CashuMint(mints[0]!);
       const wallet = new CashuWallet(mint);
-      const mintKeySetIds = await wallet.getKeySets();
-      const filteredProofs = tokens.filter(
-        (p: Proof) =>
-          mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
+      const mintKeySetIds = await cashuCompat.getWalletKeysets(wallet);
+      const filteredProofs = tokens.filter((p: Proof) =>
+        mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
       );
       const { keep, send } = await wallet.send(price, filteredProofs, {
         includeFees: true,
@@ -1878,9 +1895,8 @@ export default function ProductInvoiceCard({
         data.additionalInfo ? data.additionalInfo : undefined
       );
       const changeProofs = keep;
-      const remainingProofs = tokens.filter(
-        (p: Proof) =>
-          mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id !== p.id)
+      const remainingProofs = tokens.filter((p: Proof) =>
+        mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id !== p.id)
       );
       let proofArray;
       if (changeProofs.length >= 1 && changeProofs) {
@@ -1908,7 +1924,7 @@ export default function ProductInvoiceCard({
       if (setCashuPaymentSent) {
         setCashuPaymentSent(true);
       }
-    } catch (error) {
+    } catch {
       if (setCashuPaymentFailed) {
         setCashuPaymentFailed(true);
       }
@@ -1926,7 +1942,7 @@ export default function ProductInvoiceCard({
 
   // Calculate shipping cost based on form type
   const shippingCostToAdd =
-    formType === "shipping" ? productData.shippingCost ?? 0 : 0;
+    formType === "shipping" ? (productData.shippingCost ?? 0) : 0;
 
   const discountedTotal = discountedPrice + shippingCostToAdd;
 
@@ -1959,7 +1975,6 @@ export default function ProductInvoiceCard({
               {(productData.pickupLocations || []).map((location) => (
                 <SelectItem
                   key={location}
-                  value={location}
                   className="rounded-lg text-zinc-300 data-[hover=true]:bg-zinc-800 data-[hover=true]:text-white"
                 >
                   {location}
@@ -2263,9 +2278,9 @@ export default function ProductInvoiceCard({
       <div className="flex min-h-screen w-full bg-[#111] text-white">
         <div className="mx-auto flex w-full max-w-7xl flex-col lg:flex-row">
           {/* Left Side - Product Summary - maintain same width */}
-          <div className="w-full border-b border-zinc-800 bg-[#161616] p-4 md:p-6 lg:w-1/2 lg:border-b-0 lg:border-r">
+          <div className="w-full border-b border-zinc-800 bg-[#161616] p-4 md:p-6 lg:w-1/2 lg:border-r lg:border-b-0">
             <div className="sticky top-6">
-              <h2 className="mb-6 text-2xl font-black uppercase tracking-tighter text-white">
+              <h2 className="mb-6 text-2xl font-black tracking-tighter text-white uppercase">
                 Order Summary
               </h2>
 
@@ -2297,7 +2312,7 @@ export default function ProductInvoiceCard({
 
               <div className="border-t border-zinc-700 pt-4">
                 <div className="space-y-3">
-                  <h4 className="font-bold uppercase tracking-wider text-zinc-400">
+                  <h4 className="font-bold tracking-wider text-zinc-400 uppercase">
                     Cost Breakdown
                   </h4>
                   <div className="space-y-2 border-l-2 border-zinc-700 pl-3">
@@ -2356,7 +2371,7 @@ export default function ProductInvoiceCard({
                     </div>
                   )}
                 </div>
-                <div className="flex justify-between border-t border-zinc-700 pt-2 text-lg font-black uppercase text-yellow-400">
+                <div className="flex justify-between border-t border-zinc-700 pt-2 text-lg font-black text-yellow-400 uppercase">
                   <span>Total:</span>
                   <span>
                     {formatWithCommas(discountedTotal, productData.currency)}
@@ -2367,7 +2382,7 @@ export default function ProductInvoiceCard({
 
             <button
               onClick={() => setIsBeingPaid(false)}
-              className="mt-4 text-sm font-bold uppercase tracking-wider text-zinc-500 hover:text-white"
+              className="mt-4 text-sm font-bold tracking-wider text-zinc-500 uppercase hover:text-white"
             >
               ← Back to product
             </button>
@@ -2381,7 +2396,7 @@ export default function ProductInvoiceCard({
         <div className="w-full bg-[#111] p-6 lg:w-1/2">
           <Card className="w-full border border-zinc-800 bg-[#161616]">
             <CardHeader className="flex justify-center border-b border-zinc-800 pb-4">
-              <span className="text-xl font-black uppercase tracking-tighter text-white">
+              <span className="text-xl font-black tracking-tighter text-white uppercase">
                 Lightning Invoice
               </span>
             </CardHeader>
@@ -2390,7 +2405,7 @@ export default function ProductInvoiceCard({
                 <div className="flex flex-col items-center justify-center">
                   {qrCodeUrl ? (
                     <>
-                      <h3 className="mb-4 mt-3 text-center text-lg font-bold text-white">
+                      <h3 className="mt-3 mb-4 text-center text-lg font-bold text-white">
                         Don&apos;t refresh or close the page until the payment
                         has been confirmed!
                       </h3>
@@ -2413,12 +2428,12 @@ export default function ProductInvoiceCard({
                         </p>
                         <ClipboardIcon
                           onClick={handleCopyInvoice}
-                          className={`ml-2 mt-4 h-5 w-5 cursor-pointer text-zinc-400 hover:text-white ${
+                          className={`mt-4 ml-2 h-5 w-5 cursor-pointer text-zinc-400 hover:text-white ${
                             copiedToClipboard ? "hidden" : ""
                           }`}
                         />
                         <CheckIcon
-                          className={`ml-2 mt-4 h-5 w-5 text-green-500 ${
+                          className={`mt-4 ml-2 h-5 w-5 text-green-500 ${
                             copiedToClipboard ? "" : "hidden"
                           }`}
                         />
@@ -2458,7 +2473,7 @@ export default function ProductInvoiceCard({
         {/* Left Side - Product Summary */}
         <div className="w-full border-r border-zinc-800 bg-[#161616] p-6 lg:w-1/2">
           <div className="sticky top-6">
-            <h2 className="mb-6 text-xl font-black uppercase tracking-tighter text-white md:text-2xl">
+            <h2 className="mb-6 text-xl font-black tracking-tighter text-white uppercase md:text-2xl">
               Order Summary
             </h2>
 
@@ -2490,7 +2505,7 @@ export default function ProductInvoiceCard({
 
             <div className="border-t border-zinc-700 pt-4">
               <div className="space-y-3">
-                <h4 className="font-bold uppercase tracking-wider text-zinc-400">
+                <h4 className="font-bold tracking-wider text-zinc-400 uppercase">
                   Cost Breakdown
                 </h4>
                 <div className="space-y-2 border-l-2 border-zinc-700 pl-3">
@@ -2547,7 +2562,7 @@ export default function ProductInvoiceCard({
                     </div>
                   )}
                 </div>
-                <div className="flex justify-between border-t border-zinc-700 pt-2 text-lg font-black uppercase text-yellow-400">
+                <div className="flex justify-between border-t border-zinc-700 pt-2 text-lg font-black text-yellow-400 uppercase">
                   <span>Total:</span>
                   <span>
                     {formatWithCommas(discountedTotal, productData.currency)}
@@ -2558,7 +2573,7 @@ export default function ProductInvoiceCard({
 
             <button
               onClick={() => setIsBeingPaid(false)}
-              className="mt-4 text-sm font-bold uppercase tracking-wider text-zinc-500 hover:text-white"
+              className="mt-4 text-sm font-bold tracking-wider text-zinc-500 uppercase hover:text-white"
             >
               ← Back to product
             </button>
@@ -2573,7 +2588,7 @@ export default function ProductInvoiceCard({
           {/* Order Type Selection */}
           {showOrderTypeSelection && (
             <>
-              <h2 className="mb-6 text-xl font-black uppercase tracking-tighter text-white md:text-2xl">
+              <h2 className="mb-6 text-xl font-black tracking-tighter text-white uppercase md:text-2xl">
                 Select Order Type
               </h2>
               <div className="space-y-4">
@@ -2583,7 +2598,7 @@ export default function ProductInvoiceCard({
                       onClick={() => handleOrderTypeSelection("shipping")}
                       className="w-full rounded-xl border border-zinc-800 bg-[#161616] p-4 text-left transition-colors hover:border-yellow-400 hover:bg-zinc-900"
                     >
-                      <div className="font-bold uppercase tracking-wide text-white">
+                      <div className="font-bold tracking-wide text-white uppercase">
                         Free shipping
                       </div>
                       <div className="text-sm font-medium text-zinc-500">
@@ -2594,7 +2609,7 @@ export default function ProductInvoiceCard({
                       onClick={() => handleOrderTypeSelection("contact")}
                       className="w-full rounded-xl border border-zinc-800 bg-[#161616] p-4 text-left transition-colors hover:border-yellow-400 hover:bg-zinc-900"
                     >
-                      <div className="font-bold uppercase tracking-wide text-white">
+                      <div className="font-bold tracking-wide text-white uppercase">
                         Pickup
                       </div>
                       <div className="text-sm font-medium text-zinc-500">
@@ -2608,7 +2623,7 @@ export default function ProductInvoiceCard({
                     onClick={() => handleOrderTypeSelection("shipping")}
                     className="w-full rounded-xl border border-zinc-800 bg-[#161616] p-4 text-left transition-colors hover:border-yellow-400 hover:bg-zinc-900"
                   >
-                    <div className="font-bold uppercase tracking-wide text-white">
+                    <div className="font-bold tracking-wide text-white uppercase">
                       Online order with shipping
                     </div>
                     <div className="text-sm font-medium text-zinc-500">
@@ -2620,7 +2635,7 @@ export default function ProductInvoiceCard({
                     onClick={() => handleOrderTypeSelection("contact")}
                     className="w-full rounded-xl border border-zinc-800 bg-[#161616] p-4 text-left transition-colors hover:border-yellow-400 hover:bg-zinc-900"
                   >
-                    <div className="font-bold uppercase tracking-wide text-white">
+                    <div className="font-bold tracking-wide text-white uppercase">
                       Online order
                     </div>
                     <div className="text-sm font-medium text-zinc-500">
@@ -2636,12 +2651,12 @@ export default function ProductInvoiceCard({
           {formType && (
             <>
               {formType === "shipping" && (
-                <h2 className="mb-6 text-xl font-black uppercase tracking-tighter text-white md:text-2xl">
+                <h2 className="mb-6 text-xl font-black tracking-tighter text-white uppercase md:text-2xl">
                   Shipping Information
                 </h2>
               )}
               {formType === "contact" && (
-                <h2 className="mb-6 text-xl font-black uppercase tracking-tighter text-white md:text-2xl">
+                <h2 className="mb-6 text-xl font-black tracking-tighter text-white uppercase md:text-2xl">
                   Payment Method
                 </h2>
               )}
@@ -2660,7 +2675,7 @@ export default function ProductInvoiceCard({
                   }`}
                 >
                   {formType === "shipping" && (
-                    <h3 className="mb-4 text-lg font-black uppercase tracking-wide text-white">
+                    <h3 className="mb-4 text-lg font-black tracking-wide text-white uppercase">
                       Payment Method
                     </h3>
                   )}
@@ -2773,11 +2788,11 @@ export default function ProductInvoiceCard({
 
       {/* Fiat Payment Instructions */}
       {showFiatPaymentInstructions && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+        <div className="bg-opacity-50 fixed inset-0 z-50 flex items-center justify-center bg-black">
           <div className="max-w-md rounded-xl border border-zinc-800 bg-[#161616] p-8 text-center">
             {selectedFiatOption === "cash" ? (
               <>
-                <h3 className="mb-4 text-2xl font-black uppercase tracking-tight text-white">
+                <h3 className="mb-4 text-2xl font-black tracking-tight text-white uppercase">
                   Cash Payment
                 </h3>
                 <p className="mb-6 text-zinc-400">
@@ -2807,7 +2822,7 @@ export default function ProductInvoiceCard({
               </>
             ) : (
               <>
-                <h3 className="mb-4 text-2xl font-black uppercase tracking-tight text-white">
+                <h3 className="mb-4 text-2xl font-black tracking-tight text-white uppercase">
                   Send Payment
                 </h3>
                 <p className="mb-4 text-zinc-400">
@@ -2868,7 +2883,7 @@ export default function ProductInvoiceCard({
                   setPendingPaymentData(null); // Clear stored data
                 }}
                 variant="bordered"
-                className="w-full border-zinc-700 font-bold uppercase text-zinc-400 hover:border-zinc-500 hover:text-white"
+                className="w-full border-zinc-700 font-bold text-zinc-400 uppercase hover:border-zinc-500 hover:text-white"
               >
                 Cancel
               </Button>
@@ -2895,7 +2910,7 @@ export default function ProductInvoiceCard({
         size="2xl"
       >
         <ModalContent>
-          <ModalHeader className="flex items-center justify-center font-black uppercase tracking-tighter">
+          <ModalHeader className="flex items-center justify-center font-black tracking-tighter uppercase">
             Select your fiat payment preference:
           </ModalHeader>
           <ModalBody className="flex flex-col overflow-hidden">
@@ -2921,7 +2936,6 @@ export default function ProductInvoiceCard({
                   Object.keys(fiatPaymentOptions).map((option) => (
                     <SelectItem
                       key={option}
-                      value={option}
                       className="rounded-lg text-white hover:bg-zinc-800"
                     >
                       {option}

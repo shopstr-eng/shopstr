@@ -1,4 +1,3 @@
-import React from "react";
 import {
   render,
   screen,
@@ -12,20 +11,25 @@ import {
   NostrContext,
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
-import { CashuMint, CashuWallet } from "@cashu/cashu-ts";
+import { Mint as CashuMint, Wallet as CashuWallet } from "@cashu/cashu-ts";
 import * as NostrHelper from "@/utils/nostr/nostr-helper-functions";
 import QRCode from "qrcode";
 
-jest.mock("@cashu/cashu-ts");
+jest.mock("@cashu/cashu-ts", () => ({
+  ...jest.requireActual("@cashu/cashu-ts"),
+  Wallet: jest.fn(),
+  Mint: jest.fn().mockImplementation(() => ({})),
+}));
 const mockCreateMintQuote = jest.fn();
 const mockCheckMintQuote = jest.fn();
 const mockMintProofs = jest.fn();
 (CashuWallet as jest.Mock).mockImplementation(() => ({
-  createMintQuote: mockCreateMintQuote,
-  checkMintQuote: mockCheckMintQuote,
-  mintProofs: mockMintProofs,
+  loadMint: jest.fn().mockResolvedValue(undefined),
+  createMintQuoteBolt11: mockCreateMintQuote,
+  checkMintQuoteBolt11: mockCheckMintQuote,
+  mintProofsBolt11: mockMintProofs,
 }));
-(CashuMint as jest.Mock).mockImplementation(() => ({}));
+(CashuMint as unknown as jest.Mock).mockImplementation(() => ({}));
 
 jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
   getLocalStorageData: jest.fn(),
@@ -62,8 +66,8 @@ jest.mock("@/components/utility-components/failure-modal", () => ({
 
 jest.mock("@heroicons/react/24/outline", () => ({
   BanknotesIcon: () => <div data-testid="banknotes-icon" />,
-  ClipboardIcon: (props: React.SVGProps<SVGSVGElement>) => (
-    <div data-testid="clipboard-icon" {...props} />
+  ClipboardIcon: (props: any) => (
+    <svg data-testid="clipboard-icon" {...props} />
   ),
   CheckIcon: () => <div data-testid="check-icon" />,
   InformationCircleIcon: () => <div data-testid="info-icon" />,
@@ -86,9 +90,11 @@ const mockLocalStorage = {
 const renderComponent = (customSigner = mockSigner) => {
   return render(
     <SignerContext.Provider
-      value={{ signer: customSigner, setSigner: jest.fn() }}
+      value={{ signer: customSigner as any, setSigner: jest.fn() } as any}
     >
-      <NostrContext.Provider value={{ nostr: mockNostr, setNostr: jest.fn() }}>
+      <NostrContext.Provider
+        value={{ nostr: mockNostr as any, setNostr: jest.fn() } as any}
+      >
         <MintButton />
       </NostrContext.Provider>
     </SignerContext.Provider>
@@ -149,6 +155,9 @@ describe("MintButton Component", () => {
     fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
     await waitFor(() => expect(screen.getByRole("dialog")).toBeVisible());
     fireEvent.click(screen.getByRole("button", { name: /Cancel/i }));
+    act(() => {
+      jest.runOnlyPendingTimers();
+    });
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
@@ -161,7 +170,6 @@ describe("MintButton Component", () => {
     const input = screen.getByLabelText(/Token amount in sats/i);
     const submitButton = screen.getByRole("button", {
       name: /Mint/i,
-      type: "submit",
     });
     fireEvent.change(input, { target: { value: "abc" } });
     fireEvent.click(submitButton);
@@ -189,9 +197,7 @@ describe("MintButton Component", () => {
     fireEvent.change(screen.getByLabelText(/Token amount in sats/i), {
       target: { value: satsToMint },
     });
-    fireEvent.click(
-      screen.getByRole("button", { name: /Mint/i, type: "submit" })
-    );
+    fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
 
     await waitFor(() => {
       expect(mockCreateMintQuote).toHaveBeenCalledWith(satsToMint);
@@ -219,9 +225,7 @@ describe("MintButton Component", () => {
     fireEvent.change(screen.getByLabelText(/Token amount in sats/i), {
       target: { value: satsToMint },
     });
-    fireEvent.click(
-      screen.getByRole("button", { name: /Mint/i, type: "submit" })
-    );
+    fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
 
     await waitFor(
       () => {
@@ -256,9 +260,7 @@ describe("MintButton Component", () => {
     fireEvent.change(screen.getByLabelText(/Token amount in sats/i), {
       target: { value: satsToMint },
     });
-    fireEvent.click(
-      screen.getByRole("button", { name: /Mint/i, type: "submit" })
-    );
+    fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
 
     expect(await screen.findByText("Lightning Invoice")).toBeVisible();
 
@@ -298,9 +300,7 @@ describe("MintButton Component", () => {
     fireEvent.change(screen.getByLabelText(/Token amount in sats/i), {
       target: { value: "10" },
     });
-    fireEvent.click(
-      screen.getByRole("button", { name: /Mint/i, type: "submit" })
-    );
+    fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
 
     const clipboardIcon = await screen.findByTestId("clipboard-icon");
     fireEvent.click(clipboardIcon);
@@ -332,9 +332,7 @@ describe("MintButton Component", () => {
     fireEvent.change(screen.getByLabelText(/Token amount in sats/i), {
       target: { value: satsToMint },
     });
-    fireEvent.click(
-      screen.getByRole("button", { name: /Mint/i, type: "submit" })
-    );
+    fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
 
     await waitFor(() => {
       expect(console.error).toHaveBeenCalledWith("ERROR", expect.any(Error));
@@ -365,9 +363,7 @@ describe("MintButton Component", () => {
     fireEvent.change(screen.getByLabelText(/Token amount in sats/i), {
       target: { value: satsToMint },
     });
-    fireEvent.click(
-      screen.getByRole("button", { name: /Mint/i, type: "submit" })
-    );
+    fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
 
     await waitFor(() => {
       expect(mockWebLN.enable).toHaveBeenCalled();
@@ -395,9 +391,7 @@ describe("MintButton Component", () => {
     fireEvent.change(screen.getByLabelText(/Token amount in sats/i), {
       target: { value: satsToMint },
     });
-    fireEvent.click(
-      screen.getByRole("button", { name: /Mint/i, type: "submit" })
-    );
+    fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
 
     await waitFor(() => {
       expect(console.error).toHaveBeenCalledWith(expect.any(Error));
@@ -424,9 +418,7 @@ describe("MintButton Component", () => {
     fireEvent.change(screen.getByLabelText(/Token amount in sats/i), {
       target: { value: satsToMint },
     });
-    fireEvent.click(
-      screen.getByRole("button", { name: /Mint/i, type: "submit" })
-    );
+    fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
 
     await waitFor(() => {
       expect(mockWebLN.enable).toHaveBeenCalled();
@@ -456,9 +448,7 @@ describe("MintButton Component", () => {
     fireEvent.change(screen.getByLabelText(/Token amount in sats/i), {
       target: { value: satsToMint },
     });
-    fireEvent.click(
-      screen.getByRole("button", { name: /Mint/i, type: "submit" })
-    );
+    fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
 
     await waitFor(() => {
       expect(console.error).toHaveBeenCalledWith(expect.any(Error));
@@ -486,9 +476,7 @@ describe("MintButton Component", () => {
     fireEvent.change(screen.getByLabelText(/Token amount in sats/i), {
       target: { value: satsToMint },
     });
-    fireEvent.click(
-      screen.getByRole("button", { name: /Mint/i, type: "submit" })
-    );
+    fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
 
     await waitFor(() => {
       expect(console.error).toHaveBeenCalledWith(expect.any(Error));
@@ -512,9 +500,7 @@ describe("MintButton Component", () => {
     fireEvent.change(screen.getByLabelText(/Token amount in sats/i), {
       target: { value: satsToMint },
     });
-    fireEvent.click(
-      screen.getByRole("button", { name: /Mint/i, type: "submit" })
-    );
+    fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
 
     await waitFor(() => {
       expect(screen.getByText("Payment confirmed!")).toBeVisible();
@@ -549,9 +535,7 @@ describe("MintButton Component", () => {
     fireEvent.change(screen.getByLabelText(/Token amount in sats/i), {
       target: { value: satsToMint },
     });
-    fireEvent.click(
-      screen.getByRole("button", { name: /Mint/i, type: "submit" })
-    );
+    fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
 
     await waitFor(() => {
       expect(screen.getByText("Payment confirmed!")).toBeVisible();
@@ -584,13 +568,14 @@ describe("MintButton Component", () => {
     fireEvent.change(screen.getByLabelText(/Token amount in sats/i), {
       target: { value: satsToMint },
     });
-    fireEvent.click(
-      screen.getByRole("button", { name: /Mint/i, type: "submit" })
-    );
+    fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
 
-    await waitFor(() => {
-      expect(screen.getByTestId("failure-modal")).toBeVisible();
-    });
+    await waitFor(
+      () => {
+        expect(screen.getByTestId("failure-modal")).toBeVisible();
+      },
+      { timeout: 5000 }
+    );
 
     fireEvent.click(screen.getByTestId("failure-modal-close"));
 
@@ -628,9 +613,7 @@ describe("MintButton Component", () => {
     fireEvent.change(screen.getByLabelText(/Token amount in sats/i), {
       target: { value: satsToMint },
     });
-    fireEvent.click(
-      screen.getByRole("button", { name: /Mint/i, type: "submit" })
-    );
+    fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
 
     expect(await screen.findByText("Lightning Invoice")).toBeVisible();
 

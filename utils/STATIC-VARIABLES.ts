@@ -42,5 +42,13 @@ export const SHIPPING_OPTIONS = [
 export const NEO_BTN =
   "rounded-xl border-2 border-transparent bg-yellow-400 font-black uppercase tracking-widest text-black shadow-[2px_2px_0px_0px_#ffffff] hover:bg-yellow-500 transition-all active:shadow-none active:translate-x-[1px] active:translate-y-[1px] disabled:opacity-50 disabled:cursor-not-allowed";
 
+export const SHOPSTRBUTTONCLASSNAMES = NEO_BTN;
+
+export const WHITEBUTTONCLASSNAMES =
+  "bg-white border-2 border-black text-black font-bold hover:bg-gray-100 transition-colors";
+
+export const BLUEBUTTONCLASSNAMES =
+  "bg-primary-blue border-2 border-black text-white font-bold hover:opacity-90 transition-opacity";
+
 export const PREVNEXTBUTTONSTYLES =
   "absolute z-10 top-1/2 transform -translate-y-1/2 p-2 bg-[#161616] border border-zinc-700 text-white rounded-lg shadow-[2px_2px_0px_0px_#ffffff] hover:bg-zinc-800 transition duration-200";

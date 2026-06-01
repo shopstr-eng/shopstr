@@ -8,7 +8,7 @@ import {
   DropdownTrigger,
   User,
   useDisclosure,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import { nip19 } from "nostr-tools";
 import { useContext, useEffect, useState } from "react";
 import {
@@ -18,11 +18,13 @@ import {
   CheckIcon,
   ClipboardIcon,
   Cog6ToothIcon,
+  ExclamationTriangleIcon,
   UserIcon,
 } from "@heroicons/react/24/outline";
 import { useRouter } from "next/router";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import SignInModal from "../../sign-in/SignInModal";
+import useReportEventFlow from "../use-report-event-flow";
 
 type DropDownKeys =
   | "shop"
@@ -31,7 +33,8 @@ type DropDownKeys =
   | "settings"
   | "user_profile"
   | "logout"
-  | "copy_npub";
+  | "copy_npub"
+  | "report_profile";
 
 export const ProfileWithDropdown = ({
   pubkey,
@@ -53,6 +56,11 @@ export const ProfileWithDropdown = ({
   const router = useRouter();
   const { isLoggedIn } = useContext(SignerContext);
   const { isOpen, onOpen, onClose } = useDisclosure();
+  const { openReportFlow, reportFlowUi } = useReportEventFlow({
+    targetLabel: "profile",
+    reportedPubkey: pubkey,
+    onRequireLogin: onOpen,
+  });
   useEffect(() => {
     const profileMap = profileContext.profileData;
     const profile = profileMap.has(pubkey) ? profileMap.get(pubkey) : undefined;
@@ -115,6 +123,15 @@ export const ProfileWithDropdown = ({
         }
       },
       label: "Send Inquiry",
+    },
+    report_profile: {
+      key: "report_profile",
+      color: "danger",
+      className:
+        "text-zinc-400 font-bold uppercase tracking-wider text-xs hover:text-white",
+      startContent: <ExclamationTriangleIcon className={"h-5 w-5"} />,
+      onClick: openReportFlow,
+      label: "Report Profile",
     },
     user_profile: {
       key: "user_profile",
@@ -223,6 +240,7 @@ export const ProfileWithDropdown = ({
           }}
         </DropdownMenu>
       </Dropdown>
+      {reportFlowUi}
       <SignInModal isOpen={isOpen} onClose={onClose} />
     </>
   );

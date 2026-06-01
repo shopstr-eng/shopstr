@@ -1,0 +1,73 @@
+# Version control
+.git
+.gitignore
+.gitattributes
+
+# Dev artifacts & caches
+.next
+out
+.turbo
+**/.turbo
+.swc
+.cache
+.parcel-cache
+
+# Dependencies — reinstalled in production-only mode at deploy time
+node_modules
+**/node_modules
+.pnp
+.pnp.js
+
+# Tests / coverage
+coverage
+__tests__
+**/__tests__
+**/__mocks__
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
+jest.config.cjs
+jest.setup.js
+playwright-report
+test-results
+
+# Local env files (Replit injects secrets at runtime)
+.env
+.env.local
+.env*.local
+.env.development
+.env.test
+
+# Editor / OS junk
+.DS_Store
+*.pem
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.vscode
+.idea
+
+# TypeScript build info
+*.tsbuildinfo
+next-env.d.ts
+
+# Docs / planning / agent scratch (not needed at runtime)
+.local
+.agents
+attached_assets
+docs
+*.md
+!README.md
+threat_model.md
+
+# Replit checkpoints / backups
+.replit-backup
+.upm
+gitsafe-backup
+
+# Misc deployment platforms
+.vercel
+.netlify

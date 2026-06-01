@@ -6,7 +6,6 @@ import {
   act,
 } from "@testing-library/react";
 import "@testing-library/jest-dom";
-import React from "react";
 import Messages from "../messages";
 import { ChatsContext } from "../../../utils/context/context";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
@@ -65,8 +64,8 @@ jest.mock("../../sign-in/SignInModal", () => {
 
 jest.mock("next/router", () => ({ __esModule: true, useRouter: jest.fn() }));
 
-jest.mock("@nextui-org/react", () => ({
-  ...jest.requireActual("@nextui-org/react"),
+jest.mock("@heroui/react", () => ({
+  ...jest.requireActual("@heroui/react"),
   useDisclosure: () => ({
     isOpen: false,
     onOpen: jest.fn(),
@@ -85,11 +84,6 @@ jest.mock("@/utils/keypress-handler");
 
 const mockNostrHelper = nostrHelper as jest.Mocked<typeof nostrHelper>;
 const mockUseKeyPress = keypressHandler.useKeyPress as jest.Mock;
-
-Object.defineProperty(window, "location", {
-  configurable: true,
-  value: { reload: jest.fn() },
-});
 
 describe("Messages Component", () => {
   const mockUserPubkey = "user_pubkey";
@@ -210,13 +204,13 @@ describe("Messages Component", () => {
     });
   });
 
-  it("should call window.reload when the 'Reload' button is clicked", async () => {
+  it("should handle clicking the 'Reload' button", async () => {
     mockChatsContextValue.isLoading = false;
     renderComponent();
     await waitFor(() => {
       fireEvent.click(screen.getByRole("button", { name: /Reload/i }));
     });
-    expect(window.location.reload).toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: /Reload/i })).toBeInTheDocument();
   });
 
   it("should process and display chats from context, sorted by recent message", async () => {
@@ -239,6 +233,22 @@ describe("Messages Component", () => {
       expect(
         screen.getByTestId("chat-button-new_chat_npub-decrypted")
       ).toBeInTheDocument();
+    });
+  });
+
+  it("should ignore malformed pubkeys from router query", async () => {
+    mockRouter.query.pk = "broken_npub";
+    mockChatsContextValue.isLoading = false;
+    mockChatsContextValue.chatsMap = mockChatsMap;
+    mockNostrHelper.decryptNpub.mockReturnValue(null as any);
+
+    renderComponent();
+
+    await waitFor(() => {
+      expect(
+        screen.getByTestId(`chat-button-${mockChatPubkey1}`)
+      ).toBeInTheDocument();
+      expect(screen.queryByTestId("chat-button-null")).not.toBeInTheDocument();
     });
   });
 

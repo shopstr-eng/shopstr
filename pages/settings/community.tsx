@@ -1,6 +1,6 @@
 /* eslint-disable @next/next/no-img-element */
 
-import React, { useContext, useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import {
   Card,
   CardBody,
@@ -8,7 +8,7 @@ import {
   Button,
   CardHeader,
   Spinner,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs";
 import {
   SignerContext,
@@ -91,7 +91,7 @@ const CommunityManagementPage = () => {
 
   return (
     <div className="relative flex min-h-screen flex-col bg-[#111] pt-24 selection:bg-yellow-400 selection:text-black">
-      <div className="pointer-events-none absolute inset-0 z-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)]"></div>
+      <div className="pointer-events-none absolute inset-0 z-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] bg-[size:24px_24px]"></div>
 
       <div className="relative z-10 mx-auto h-full w-full px-4 lg:w-1/2 lg:pl-4">
         <SettingsBreadCrumbs />
@@ -99,7 +99,7 @@ const CommunityManagementPage = () => {
         {communityToEdit ? (
           <Card className="rounded-2xl border border-zinc-800 bg-[#161616] p-4 shadow-none">
             <CardBody>
-              <h2 className="text-3xl font-black uppercase tracking-tighter text-white">
+              <h2 className="text-3xl font-black tracking-tighter text-white uppercase">
                 {communityToEdit === "new"
                   ? "Create Your Community"
                   : `Editing: ${communityToEdit.name}`}
@@ -121,7 +121,7 @@ const CommunityManagementPage = () => {
           <Card className="rounded-2xl border border-zinc-800 bg-[#161616] p-4 shadow-none">
             <CardHeader>
               <div className="flex w-full items-center justify-between">
-                <h2 className="text-3xl font-black uppercase tracking-tighter text-white">
+                <h2 className="text-3xl font-black tracking-tighter text-white uppercase">
                   Your Communities
                 </h2>
                 <Button
@@ -142,7 +142,7 @@ const CommunityManagementPage = () => {
                       key={community.id}
                       className="flex items-center justify-between rounded-xl border border-zinc-800 bg-[#111] p-4 transition-all hover:border-zinc-600"
                     >
-                      <span className="font-bold uppercase tracking-tight text-white">
+                      <span className="font-bold tracking-tight text-white uppercase">
                         {community.name}
                       </span>
                       <div className="flex gap-2">
@@ -163,7 +163,7 @@ const CommunityManagementPage = () => {
                   ))}
                 </div>
               ) : (
-                <p className="text-center italic text-zinc-500">
+                <p className="text-center text-zinc-500 italic">
                   You haven&apos;t created any communities yet.
                 </p>
               )}

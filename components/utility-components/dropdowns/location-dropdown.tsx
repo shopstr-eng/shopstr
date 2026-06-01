@@ -1,5 +1,5 @@
-import React, { useMemo } from "react";
-import { Select, SelectItem, SelectSection, Avatar } from "@nextui-org/react";
+import { useMemo } from "react";
+import { Select, SelectItem, SelectSection, Avatar } from "@heroui/react";
 import locations from "../../../public/locationSelection.json";
 
 export const locationAvatar = (location: string) => {

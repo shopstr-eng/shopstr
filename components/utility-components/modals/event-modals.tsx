@@ -1,11 +1,10 @@
-import React from "react";
 import {
   Modal,
   ModalContent,
   ModalHeader,
   ModalBody,
   Snippet,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import { Event, nip19 } from "nostr-tools";
 
 interface RawEventModalProps {
@@ -34,7 +33,7 @@ export const RawEventModal = ({
       }}
     >
       <ModalContent>
-        <ModalHeader className="font-black uppercase tracking-tighter">
+        <ModalHeader className="font-black tracking-tighter uppercase">
           Raw Event JSON
         </ModalHeader>
         <ModalBody>
@@ -45,7 +44,7 @@ export const RawEventModal = ({
             hideCopyButton={false}
           >
             <div className="max-h-[50vh] w-full overflow-y-auto pr-2 md:max-h-[60vh]">
-              <pre className="whitespace-pre-wrap break-all font-mono text-[10px] text-green-400 md:text-xs">
+              <pre className="font-mono text-[10px] break-all whitespace-pre-wrap text-green-400 md:text-xs">
                 {JSON.stringify(rawEvent, null, 2)}
               </pre>
             </div>
@@ -81,13 +80,13 @@ export const EventIdModal = ({
       }}
     >
       <ModalContent>
-        <ModalHeader className="font-black uppercase tracking-tighter">
+        <ModalHeader className="font-black tracking-tighter uppercase">
           Event ID
         </ModalHeader>
         <ModalBody className="pb-6">
           <div className="flex flex-col gap-4">
             <div className="w-full">
-              <p className="mb-2 text-xs font-bold uppercase tracking-wider text-zinc-500">
+              <p className="mb-2 text-xs font-bold tracking-wider text-zinc-500 uppercase">
                 Hex ID:
               </p>
               <Snippet
@@ -96,7 +95,7 @@ export const EventIdModal = ({
                 className="w-full rounded-xl border border-zinc-800 bg-[#111] py-3 text-zinc-300"
                 classNames={{ pre: "font-mono" }}
               >
-                <span className="whitespace-normal break-all font-mono text-xs md:text-sm">
+                <span className="font-mono text-xs break-all whitespace-normal md:text-sm">
                   {rawEvent?.id}
                 </span>
               </Snippet>
@@ -104,7 +103,7 @@ export const EventIdModal = ({
 
             {rawEvent && (
               <div className="w-full">
-                <p className="mb-2 text-xs font-bold uppercase tracking-wider text-zinc-500">
+                <p className="mb-2 text-xs font-bold tracking-wider text-zinc-500 uppercase">
                   Bech32 Note ID:
                 </p>
                 <Snippet
@@ -113,7 +112,7 @@ export const EventIdModal = ({
                   className="w-full rounded-xl border border-zinc-800 bg-[#111] py-3 text-zinc-300"
                   classNames={{ pre: "font-mono" }}
                 >
-                  <span className="whitespace-normal break-all font-mono text-xs md:text-sm">
+                  <span className="font-mono text-xs break-all whitespace-normal md:text-sm">
                     {nip19.noteEncode(rawEvent.id)}
                   </span>
                 </Snippet>

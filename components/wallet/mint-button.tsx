@@ -1,4 +1,4 @@
-import React, { useContext, useState } from "react";
+import { useContext, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import {
   BanknotesIcon,
@@ -19,13 +19,14 @@ import {
   Button,
   Image,
   Input,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
 import {
   getLocalStorageData,
   publishProofEvent,
 } from "@/utils/nostr/nostr-helper-functions";
-import { CashuMint, CashuWallet } from "@cashu/cashu-ts";
+import { Mint as CashuMint, Wallet as CashuWallet } from "@cashu/cashu-ts";
+import * as cashuCompat from "@/utils/cashu/compat";
 import QRCode from "qrcode";
 import FailureModal from "@/components/utility-components/failure-modal";
 import {
@@ -73,7 +74,10 @@ const MintButton = () => {
   const handleMint = async (numSats: number) => {
     const wallet = new CashuWallet(new CashuMint(mints[0]!));
 
-    const { request: pr, quote: hash } = await wallet.createMintQuote(numSats);
+    const { request: pr, quote: hash } = await cashuCompat.createMintQuote(
+      wallet,
+      numSats
+    );
 
     setInvoice(pr);
 
@@ -119,12 +123,12 @@ const MintButton = () => {
     while (retryCount < maxRetries) {
       try {
         // First check if the quote has been paid
-        const quoteState = await wallet.checkMintQuote(hash);
+        const quoteState = await cashuCompat.checkMintQuote(wallet, hash);
 
         if (quoteState.state === "PAID") {
           // Quote is paid, try to mint proofs
           try {
-            const proofs = await wallet.mintProofs(numSats, hash);
+            const proofs = await cashuCompat.mintProofs(wallet, numSats, hash);
             if (proofs && proofs.length > 0) {
               const proofArray = [...tokens, ...proofs];
               localStorage.setItem("tokens", JSON.stringify(proofArray));
@@ -257,7 +261,7 @@ const MintButton = () => {
         size="md"
       >
         <ModalContent>
-          <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
+          <ModalHeader className="text-light-text dark:text-dark-text flex flex-col gap-1">
             Mint Tokens
           </ModalHeader>
           <form onSubmit={handleMintSubmit(onMintSubmit)}>
@@ -302,8 +306,8 @@ const MintButton = () => {
               />
               {signer instanceof NostrNIP46Signer && (
                 <div className="mx-4 my-2 flex items-center justify-center text-center">
-                  <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
-                  <p className="ml-2 text-xs text-light-text dark:text-dark-text">
+                  <InformationCircleIcon className="text-light-text dark:text-dark-text h-6 w-6" />
+                  <p className="text-light-text dark:text-dark-text ml-2 text-xs">
                     If the token is taking a while to be minted, make sure to
                     check your bunker application to approve the transaction
                     events.
@@ -327,7 +331,7 @@ const MintButton = () => {
                               src={qrCodeUrl}
                             />
                             <div className="mt-2 flex items-center justify-center px-2">
-                              <p className="break-all text-center text-xs">
+                              <p className="text-center text-xs break-all">
                                 {invoice.length > 30
                                   ? `${invoice.substring(
                                       0,
@@ -340,12 +344,12 @@ const MintButton = () => {
                               </p>
                               <ClipboardIcon
                                 onClick={handleCopyInvoice}
-                                className={`ml-2 h-4 w-4 cursor-pointer text-light-text dark:text-dark-text ${
+                                className={`text-light-text dark:text-dark-text ml-2 h-4 w-4 cursor-pointer ${
                                   copiedToClipboard ? "hidden" : ""
                                 }`}
                               />
                               <CheckIcon
-                                className={`ml-2 h-4 w-4 cursor-pointer text-light-text dark:text-dark-text ${
+                                className={`text-light-text dark:text-dark-text ml-2 h-4 w-4 cursor-pointer ${
                                   copiedToClipboard ? "" : "hidden"
                                 }`}
                               />
@@ -359,7 +363,7 @@ const MintButton = () => {
                       </div>
                     ) : (
                       <div className="flex flex-col items-center justify-center">
-                        <h3 className="mt-3 text-center text-lg font-black uppercase tracking-tighter text-green-500">
+                        <h3 className="mt-3 text-center text-lg font-black tracking-tighter text-green-500 uppercase">
                           Payment confirmed!
                         </h3>
                         <Image

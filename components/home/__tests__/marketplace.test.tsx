@@ -1,15 +1,23 @@
-import React from "react";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import MarketplacePage from "../marketplace";
+import MarketplacePage, { normalizeNpub } from "../marketplace";
 import {
   ShopMapContext,
   ReviewsContext,
   FollowsContext,
+  ProfileMapContext,
 } from "@/utils/context/context";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import { nip19 } from "nostr-tools";
 import { useRouter } from "next/router";
+import { findPubkeyByProfileSlug, isNpub } from "@/utils/url-slugs";
+
+jest.mock("@/utils/url-slugs", () => ({
+  getListingSlug: jest.fn(),
+  getProfileSlug: jest.fn(() => "mock-profile"),
+  findPubkeyByProfileSlug: jest.fn(),
+  isNpub: jest.fn(() => true),
+}));
 
 jest.mock(
   "../../display-products",
@@ -42,9 +50,9 @@ jest.mock("nostr-tools", () => ({
   },
 }));
 
-import { useDisclosure } from "@nextui-org/react";
-jest.mock("@nextui-org/react", () => ({
-  ...jest.requireActual("@nextui-org/react"),
+import { useDisclosure } from "@heroui/react";
+jest.mock("@heroui/react", () => ({
+  ...jest.requireActual("@heroui/react"),
   useDisclosure: jest.fn(),
 }));
 
@@ -52,20 +60,34 @@ const renderComponent = ({
   focusedPubkey = "",
   routerQuery = {},
   isLoggedIn = true,
+  followList = [],
+  firstDegreeFollowsLength = 0,
+  isFollowsLoading = false,
 }: {
   focusedPubkey?: string;
   routerQuery?: any;
   isLoggedIn?: boolean;
+  followList?: string[];
+  firstDegreeFollowsLength?: number;
+  isFollowsLoading?: boolean;
 }) => {
   const mockRouterPush = jest.fn();
+  const mockRouterReplace = jest.fn();
   (useRouter as jest.Mock).mockReturnValue({
     push: mockRouterPush,
+    replace: mockRouterReplace,
     query: routerQuery,
     pathname: "/marketplace",
     asPath: "/marketplace",
   });
-  if (routerQuery.npub) {
-    (nip19.decode as jest.Mock).mockReturnValue({ data: "decoded-pubkey" });
+  if (
+    typeof routerQuery.npub === "string" ||
+    (Array.isArray(routerQuery.npub) && typeof routerQuery.npub[0] === "string")
+  ) {
+    (nip19.decode as jest.Mock).mockReturnValue({
+      type: "npub",
+      data: "decoded-pubkey",
+    });
   }
 
   const mockOnOpen = jest.fn();
@@ -91,29 +113,58 @@ const renderComponent = ({
 
   render(
     <SignerContext.Provider
-      value={{ isLoggedIn, pubkey: isLoggedIn ? "user-pubkey" : null }}
+      value={{ isLoggedIn, pubkey: isLoggedIn ? "user-pubkey" : undefined }}
     >
-      <ShopMapContext.Provider value={{ shopData: mockShopData }}>
-        <ReviewsContext.Provider
+      <ShopMapContext.Provider
+        value={{
+          shopData: mockShopData,
+          isLoading: false,
+          updateShopData: jest.fn(),
+        }}
+      >
+        <ProfileMapContext.Provider
           value={{
-            merchantReviewsData: new Map(),
-            productReviewsData: new Map(),
+            profileData: new Map(),
+            isLoading: false,
+            updateProfileData: jest.fn(),
           }}
         >
-          <FollowsContext.Provider value={{ followList: [], isLoading: false }}>
-            <MarketplacePage
-              focusedPubkey={focusedPubkey}
-              setFocusedPubkey={setFocusedPubkey}
-              selectedSection={focusedPubkey ? "shop" : ""}
-              setSelectedSection={setSelectedSection}
-            />
-          </FollowsContext.Provider>
-        </ReviewsContext.Provider>
+          <ReviewsContext.Provider
+            value={{
+              merchantReviewsData: new Map(),
+              productReviewsData: new Map(),
+              isLoading: false,
+              updateMerchantReviewsData: jest.fn(),
+              updateProductReviewsData: jest.fn(),
+            }}
+          >
+            <FollowsContext.Provider
+              value={{
+                followList,
+                firstDegreeFollowsLength,
+                isLoading: isFollowsLoading,
+              }}
+            >
+              <MarketplacePage
+                focusedPubkey={focusedPubkey}
+                setFocusedPubkey={setFocusedPubkey}
+                selectedSection={focusedPubkey ? "shop" : ""}
+                setSelectedSection={setSelectedSection}
+              />
+            </FollowsContext.Provider>
+          </ReviewsContext.Provider>
+        </ProfileMapContext.Provider>
       </ShopMapContext.Provider>
     </SignerContext.Provider>
   );
 
-  return { setFocusedPubkey, setSelectedSection, mockRouterPush, mockOnOpen };
+  return {
+    setFocusedPubkey,
+    setSelectedSection,
+    mockRouterPush,
+    mockRouterReplace,
+    mockOnOpen,
+  };
 };
 
 describe("MarketplacePage Component", () => {
@@ -129,6 +180,9 @@ describe("MarketplacePage Component", () => {
 
   beforeEach(() => {
     (nip19.decode as jest.Mock).mockClear();
+    (findPubkeyByProfileSlug as jest.Mock).mockReset();
+    (isNpub as jest.Mock).mockReset();
+    (isNpub as jest.Mock).mockReturnValue(true);
   });
 
   it("renders general view when no shop is focused", () => {
@@ -144,11 +198,23 @@ describe("MarketplacePage Component", () => {
 
   it("calls setFocusedPubkey when npub appears in URL", () => {
     const { setFocusedPubkey, setSelectedSection } = renderComponent({
-      routerQuery: { npub: ["npub-test"] },
+      routerQuery: { npub: ["npub1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq"] },
     });
-    expect(nip19.decode).toHaveBeenCalledWith("npub-test");
+    expect(nip19.decode).toHaveBeenCalledWith(
+      "npub1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq"
+    );
     expect(setFocusedPubkey).toHaveBeenCalledWith("decoded-pubkey");
     expect(setSelectedSection).toHaveBeenCalledWith("shop");
+  });
+
+  it("calls nip19.decode for a valid string npub query", () => {
+    const validNpub = "  npub1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq  ";
+
+    renderComponent({
+      routerQuery: { npub: validNpub },
+    });
+
+    expect(nip19.decode).toHaveBeenCalledWith(validNpub.trim());
   });
 
   it("calls setSelectedSection when Reviews and About tabs are clicked", async () => {
@@ -182,5 +248,64 @@ describe("MarketplacePage Component", () => {
     });
     await userEvent.click(screen.getByRole("button", { name: "Message" }));
     expect(mockOnOpen).toHaveBeenCalled();
+  });
+
+  it("hides the Trust toggle when logged out", () => {
+    renderComponent({
+      isLoggedIn: false,
+      followList: ["followed-pubkey"],
+      firstDegreeFollowsLength: 1,
+    });
+
+    expect(screen.queryByText("Trust")).not.toBeInTheDocument();
+  });
+
+  it("hides the Trust toggle when logged in with no direct follows", () => {
+    renderComponent({
+      isLoggedIn: true,
+      followList: [],
+      firstDegreeFollowsLength: 0,
+    });
+
+    expect(screen.queryByText("Trust")).not.toBeInTheDocument();
+  });
+
+  it("shows the Trust toggle when logged in with direct follows", () => {
+    renderComponent({
+      isLoggedIn: true,
+      followList: ["followed-pubkey"],
+      firstDegreeFollowsLength: 1,
+    });
+
+    expect(screen.getByText("Trust")).toBeInTheDocument();
+  });
+
+  it.each([
+    { label: "undefined", value: undefined, expected: null },
+    { label: "empty string", value: "", expected: null },
+    {
+      label: "array",
+      value: ["  npub1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq  ", "ignored"],
+      expected: "npub1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq",
+    },
+  ])(
+    "normalizeNpub returns the expected value for %s",
+    ({ value, expected }) => {
+      expect(normalizeNpub(value)).toBe(expected);
+    }
+  );
+
+  it.each([
+    { label: "undefined", npub: undefined },
+    { label: "empty string", npub: "" },
+    { label: "array", npub: ["", "extra-segment"] },
+  ])("handles %s npub query safely", ({ npub }) => {
+    (isNpub as jest.Mock).mockReturnValue(false);
+    (findPubkeyByProfileSlug as jest.Mock).mockReturnValue(undefined);
+    const routerQuery = npub === undefined ? {} : { npub };
+
+    expect(() => renderComponent({ routerQuery })).not.toThrow();
+    expect(nip19.decode).not.toHaveBeenCalled();
+    expect(findPubkeyByProfileSlug).not.toHaveBeenCalled();
   });
 });

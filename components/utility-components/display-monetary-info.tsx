@@ -1,4 +1,3 @@
-import React from "react";
 import { ShippingOptionsType } from "@/utils/STATIC-VARIABLES";
 
 type ProductMonetaryInfo = {
@@ -29,7 +28,7 @@ export default function CompactPriceDisplay({
     compactDisplay: "short",
   });
   return (
-    <span className="whitespace-nowrap font-bold">
+    <span className="font-bold whitespace-nowrap">
       {formatter.format(Number(price))} {currency}{" "}
       {monetaryInfo.shippingType ? getShippingLabel() : ""}{" "}
     </span>
@@ -51,7 +50,7 @@ export function DisplayCheckoutCost({
         {formattedPrice}
       </p>
       {shippingType && (
-        <p className="mb-2 text-xs font-bold uppercase tracking-wider text-zinc-500 md:text-sm">
+        <p className="mb-2 text-xs font-bold tracking-wider text-zinc-500 uppercase md:text-sm">
           Shipping: {shippingType}
         </p>
       )}

@@ -1,4 +1,3 @@
-import React from "react";
 import {
   Modal,
   ModalContent,
@@ -6,7 +5,7 @@ import {
   ModalBody,
   ModalFooter,
   Button,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import { useRouter } from "next/router";
 import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
 
@@ -16,7 +15,7 @@ function sanitizeURL(s: string) {
     if (url.protocol !== "https:" && url.protocol !== "http:")
       throw new Error("invalid protocol");
     return url.href;
-  } catch (e) {
+  } catch {
     return null;
   }
 }
@@ -66,7 +65,7 @@ export default function AuthChallengeModal({
       isDismissable={false}
     >
       <ModalContent>
-        <ModalHeader className="flex flex-col gap-1 font-black uppercase tracking-tighter text-white">
+        <ModalHeader className="flex flex-col gap-1 font-black tracking-tighter text-white uppercase">
           Waiting for confirmation
         </ModalHeader>
         <ModalBody>
@@ -83,7 +82,7 @@ export default function AuthChallengeModal({
 
         <ModalFooter>
           <Button
-            className="font-bold uppercase tracking-wider text-red-500 hover:bg-red-500/10"
+            className="font-bold tracking-wider text-red-500 uppercase hover:bg-red-500/10"
             color="danger"
             variant="light"
             onClick={onCancel}

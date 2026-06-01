@@ -1,12 +1,12 @@
 "use client";
-import React, { useContext, useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 
 import { nip19 } from "nostr-tools";
 
 import useNavigation from "@/components/hooks/use-navigation";
 
 import { ShopMapContext } from "@/utils/context/context";
-import { Button, useDisclosure } from "@nextui-org/react";
+import { Button, useDisclosure } from "@heroui/react";
 import { useRouter } from "next/router";
 import SignInModal from "../sign-in/SignInModal";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
@@ -106,7 +106,7 @@ const SideShopNav = ({
               onClick={() => setSelectedCategories(new Set<string>([]))}
               className="flex w-full flex-row justify-start bg-transparent py-8 text-zinc-400 duration-200 hover:text-yellow-400"
             >
-              <span className="hidden pt-2 text-xl font-bold uppercase tracking-wide md:flex">
+              <span className="hidden pt-2 text-xl font-bold tracking-wide uppercase md:flex">
                 All listings
               </span>
             </Button>
@@ -131,13 +131,13 @@ const SideShopNav = ({
                 isMessagesActive ? "border-white" : ""
               }`}
             >
-              <span className="hidden text-sm font-bold uppercase tracking-wider md:flex">
+              <span className="hidden text-sm font-bold tracking-wider uppercase md:flex">
                 Message seller
               </span>
             </Button>
             {shopAbout && (
               <div className="flex w-full flex-col justify-start bg-transparent py-8 text-white">
-                <h2 className="pb-2 text-xl font-black uppercase tracking-wide text-zinc-500">
+                <h2 className="pb-2 text-xl font-black tracking-wide text-zinc-500 uppercase">
                   About
                 </h2>
                 <p className="text-sm text-zinc-300">{shopAbout}</p>
@@ -152,7 +152,7 @@ const SideShopNav = ({
                   onClick={() => setSelectedCategories(new Set<string>([]))}
                   className="flex w-full flex-row justify-start bg-transparent py-8 text-zinc-400 duration-200 hover:text-yellow-400"
                 >
-                  <span className="hidden pt-2 text-xl font-bold uppercase tracking-wide md:flex">
+                  <span className="hidden pt-2 text-xl font-bold tracking-wide uppercase md:flex">
                     All listings
                   </span>
                 </Button>
@@ -182,14 +182,14 @@ const SideShopNav = ({
               Add Listing
             </Button>
             <Button
-              className="mt-4 h-12 w-full rounded-xl border border-zinc-600 bg-transparent text-sm font-bold uppercase tracking-wider text-white hover:border-white hover:bg-zinc-800"
+              className="mt-4 h-12 w-full rounded-xl border border-zinc-600 bg-transparent text-sm font-bold tracking-wider text-white uppercase hover:border-white hover:bg-zinc-800"
               onClick={() => router.push("settings/shop-profile")}
             >
               Edit Shop
             </Button>
             {shopAbout && (
               <div className="flex w-full flex-col justify-start bg-transparent py-8 text-white">
-                <h2 className="pb-2 text-xl font-black uppercase tracking-wide text-zinc-500">
+                <h2 className="pb-2 text-xl font-black tracking-wide text-zinc-500 uppercase">
                   About
                 </h2>
                 <p className="text-sm text-zinc-300">{shopAbout}</p>

@@ -16,13 +16,19 @@ import {
   ModalBody,
   ModalFooter,
   Spinner,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import {
   getLocalStorageData,
   publishProofEvent,
 } from "@/utils/nostr/nostr-helper-functions";
 import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
-import { CashuMint, CashuWallet, MintKeyset, Proof } from "@cashu/cashu-ts";
+import {
+  Mint as CashuMint,
+  Wallet as CashuWallet,
+  MintKeyset,
+  Proof,
+} from "@cashu/cashu-ts";
+import * as cashuCompat from "@/utils/cashu/compat";
 import { formatWithCommas } from "../utility-components/display-monetary-info";
 import { CashuWalletContext } from "../../utils/context/context";
 import {
@@ -72,9 +78,14 @@ const PayButton = () => {
     if (invoice && /^lnbc/.test(invoice)) {
       const mint = new CashuMint(mints[0]!);
       const wallet = new CashuWallet(mint);
-      const meltQuote = await wallet?.createMeltQuote(invoice);
+      const meltQuote = await cashuCompat.createMeltQuote(wallet, invoice);
       if (meltQuote) {
-        setFeeReserveAmount(formatWithCommas(meltQuote.fee_reserve, "sats"));
+        setFeeReserveAmount(
+          formatWithCommas(
+            cashuCompat.amountToNumber(meltQuote.fee_reserve),
+            "sats"
+          )
+        );
       } else {
         setFeeReserveAmount("");
       }
@@ -90,12 +101,17 @@ const PayButton = () => {
     try {
       const mint = new CashuMint(mints[0]!);
       const wallet = new CashuWallet(mint);
-      const mintKeySetIds = await wallet.getKeySets();
+      const mintKeySetIds = await cashuCompat.getWalletKeysets(wallet);
       const filteredProofs = tokens.filter((p: Proof) =>
         mintKeySetIds.some((keyset: MintKeyset) => keyset.id === p.id)
       );
-      const meltQuote = await wallet.createMeltQuote(invoiceString);
-      const meltQuoteTotal = meltQuote.amount + meltQuote.fee_reserve;
+      const meltQuote = await cashuCompat.createMeltQuote(
+        wallet,
+        invoiceString
+      );
+      const meltQuoteTotal =
+        cashuCompat.amountToNumber(meltQuote.amount) +
+        cashuCompat.amountToNumber(meltQuote.fee_reserve);
       const { keep, send } = await wallet.send(meltQuoteTotal, filteredProofs, {
         includeFees: true,
       });
@@ -133,18 +149,21 @@ const PayButton = () => {
             .map((event) => event.id),
         ]),
       ];
-      const meltResponse = await wallet.meltProofs(meltQuote, send);
+      const meltResponse = await cashuCompat.meltProofs(
+        wallet,
+        meltQuote,
+        send
+      );
       const changeProofs = [...keep, ...meltResponse.change];
       const changeAmount =
         Array.isArray(changeProofs) && changeProofs.length > 0
           ? changeProofs.reduce(
-              (acc, current: Proof) => acc + current.amount,
+              (acc, current: Proof) => acc + cashuCompat.proofAmount(current),
               0
             )
           : 0;
-      const remainingProofs = tokens.filter(
-        (p: Proof) =>
-          mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id !== p.id)
+      const remainingProofs = tokens.filter((p: Proof) =>
+        mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id !== p.id)
       );
       let proofArray;
       if (changeAmount >= 1 && changeProofs) {
@@ -154,7 +173,7 @@ const PayButton = () => {
       }
       localStorage.setItem("tokens", JSON.stringify(proofArray));
       const filteredTokenAmount = filteredProofs.reduce(
-        (acc, token: Proof) => acc + token.amount,
+        (acc, token: Proof) => acc + cashuCompat.proofAmount(token),
         0
       );
       const transactionAmount = filteredTokenAmount - changeAmount;
@@ -181,7 +200,7 @@ const PayButton = () => {
       setIsPaid(true);
       setIsRedeeming(false);
       handleTogglePayModal();
-    } catch (_) {
+    } catch {
       setPaymentFailed(true);
       setIsRedeeming(false);
     }
@@ -211,7 +230,7 @@ const PayButton = () => {
         size="md"
       >
         <ModalContent>
-          <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
+          <ModalHeader className="text-light-text dark:text-dark-text flex flex-col gap-1">
             Pay Lightning Invoice
           </ModalHeader>
           <form onSubmit={handlePaySubmit(onPaySubmit)}>
@@ -253,7 +272,7 @@ const PayButton = () => {
                           onChange(newValue);
                           try {
                             await calculateFee(newValue);
-                          } catch (_) {
+                          } catch {
                             setFeeReserveAmount("");
                           }
                         }}
@@ -261,7 +280,7 @@ const PayButton = () => {
                         value={value}
                       />
                       {feeReserveAmount && (
-                        <div className="mt-2 text-left text-light-text dark:text-dark-text">
+                        <div className="text-light-text dark:text-dark-text mt-2 text-left">
                           Fee Reserve: {feeReserveAmount}
                         </div>
                       )}
@@ -271,8 +290,8 @@ const PayButton = () => {
               />
               {signer instanceof NostrNIP46Signer && (
                 <div className="mx-4 my-2 flex items-center justify-center text-center">
-                  <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
-                  <p className="ml-2 text-xs text-light-text dark:text-dark-text">
+                  <InformationCircleIcon className="text-light-text dark:text-dark-text h-6 w-6" />
+                  <p className="text-light-text dark:text-dark-text ml-2 text-xs">
                     If the invoice payment is taking a while to be confirmed,
                     make sure to check your bunker application to approve the
                     transaction events.
@@ -300,11 +319,11 @@ const PayButton = () => {
                   size="md"
                 >
                   <ModalContent>
-                    <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+                    <ModalHeader className="text-light-text dark:text-dark-text flex items-center justify-center">
                       <XCircleIcon className="h-6 w-6 text-red-500" />
                       <div className="ml-2">Payment failed!</div>
                     </ModalHeader>
-                    <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+                    <ModalBody className="text-light-text dark:text-dark-text flex flex-col overflow-hidden">
                       <div className="flex items-center justify-center">
                         No routes could be found, or you don&apos;t have enough
                         funds. Please try again with a new invoice, or change
@@ -335,11 +354,11 @@ const PayButton = () => {
                   size="md"
                 >
                   <ModalContent>
-                    <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+                    <ModalHeader className="text-light-text dark:text-dark-text flex items-center justify-center">
                       <CheckCircleIcon className="h-6 w-6 text-green-500" />
                       <div className="ml-2">Invoice successfully paid!</div>
                     </ModalHeader>
-                    <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+                    <ModalBody className="text-light-text dark:text-dark-text flex flex-col overflow-hidden">
                       <div className="flex items-center justify-center">
                         Check your external Lightning wallet for your sats.
                       </div>

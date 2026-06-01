@@ -3,6 +3,7 @@ node_modules
 public
 out
 build
+dist
 coverage
 .github
 .husky
@@ -10,3 +11,5 @@ coverage
 *.log
 .env*
 package-lock.json
+.local
+.cache

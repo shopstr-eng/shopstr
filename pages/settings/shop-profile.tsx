@@ -1,6 +1,6 @@
-import React, { useEffect, useState, useContext } from "react";
+import { useEffect, useState, useContext } from "react";
 import { useForm, Controller } from "react-hook-form";
-import { Button, Textarea, Input, Image } from "@nextui-org/react";
+import { Button, Textarea, Input, Image } from "@heroui/react";
 
 import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs";
 import { ShopMapContext } from "@/utils/context/context";
@@ -83,7 +83,7 @@ const ShopProfilePage = () => {
     <>
       <div className="relative flex min-h-screen flex-col bg-[#111] pt-24 selection:bg-yellow-400 selection:text-black md:pb-20">
         {/* Background Grid Pattern */}
-        <div className="pointer-events-none absolute inset-0 z-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)]"></div>
+        <div className="pointer-events-none absolute inset-0 z-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] bg-[size:24px_24px]"></div>
 
         <div className="relative z-10 mx-auto h-full w-full px-4 lg:w-1/2">
           <SettingsBreadCrumbs />
@@ -101,7 +101,7 @@ const ShopProfilePage = () => {
                     />
                   )}
                   <FileUploaderButton
-                    className={`${NEO_BTN} absolute bottom-4 right-4 z-20 h-10 px-4 text-xs`}
+                    className={`${NEO_BTN} absolute right-4 bottom-4 z-20 h-10 px-4 text-xs`}
                     imgCallbackOnUpload={(imgUrl) => setValue("banner", imgUrl)}
                   >
                     Upload Banner
@@ -112,7 +112,7 @@ const ShopProfilePage = () => {
                     <div className="rounded-full border-4 border-[#111]">
                       <FileUploaderButton
                         isIconOnly={true}
-                        className={`${NEO_BTN} min-w-10 absolute bottom-0 right-0 z-20 h-10 w-10 rounded-full border-white p-0`}
+                        className={`${NEO_BTN} absolute right-0 bottom-0 z-20 h-10 w-10 min-w-10 rounded-full border-white p-0`}
                         imgCallbackOnUpload={(imgUrl) =>
                           setValue("picture", imgUrl)
                         }

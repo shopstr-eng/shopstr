@@ -1,0 +1,537 @@
+import { useEffect, useRef, useState, useContext } from "react";
+import { useRouter } from "next/router";
+import { Button } from "@heroui/react";
+import StorefrontThemeWrapper from "@/components/storefront/storefront-theme-wrapper";
+import {
+  CheckCircleIcon,
+  ShoppingBagIcon,
+  ClipboardDocumentListIcon,
+  ChatBubbleLeftRightIcon,
+} from "@heroicons/react/24/outline";
+import { nip19 } from "nostr-tools";
+import { ProductContext } from "@/utils/context/context";
+import parseTags, {
+  ProductData,
+} from "@/utils/parsers/product-parser-functions";
+import ProductCard from "@/components/utility-components/product-card";
+import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import ProtectedRoute from "@/components/utility-components/protected-route";
+
+interface OrderSummaryData {
+  productTitle: string;
+  productImage: string;
+  amount: string;
+  currency: string;
+  paymentMethod: string;
+  orderId: string;
+  shippingCost?: string;
+  selectedSize?: string;
+  selectedVolume?: string;
+  selectedWeight?: string;
+  selectedBulkOption?: string;
+  shippingAddress?: string;
+  pickupLocation?: string;
+  sellerPubkey?: string;
+  subtotal?: string;
+  freeShippingApplied?: boolean;
+  originalShippingCost?: string;
+  isCart?: boolean;
+  cartItems?: Array<{
+    title: string;
+    image: string;
+    amount: string;
+    currency: string;
+    quantity?: number;
+    shipping?: string;
+    pickupLocation?: string;
+    selectedSize?: string;
+    selectedVolume?: string;
+    selectedWeight?: string;
+    selectedBulkOption?: string;
+  }>;
+}
+
+export default function OrderSummary() {
+  const router = useRouter();
+  const [orderData, setOrderData] = useState<OrderSummaryData | null>(null);
+  const [latestProducts, setLatestProducts] = useState<ProductData[]>([]);
+  const [sfSellerPubkey, setSfSellerPubkey] = useState("");
+  const [sfShopSlug, setSfShopSlug] = useState("");
+  const productContext = useContext(ProductContext);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const pk =
+        sessionStorage.getItem("sf_seller_pubkey") ||
+        localStorage.getItem("sf_seller_pubkey");
+      if (pk) setSfSellerPubkey(pk);
+      const slug =
+        sessionStorage.getItem("sf_shop_slug") ||
+        localStorage.getItem("sf_shop_slug");
+      if (slug) setSfShopSlug(slug);
+    }
+  }, []);
+
+  // Guard against React 18 strict-mode double-invocation. The effect both
+  // consumes (removes) the sessionStorage entry and drives a fallback
+  // redirect — without this guard, the second invocation sees the entry
+  // gone and bounces the user to /marketplace immediately after we just
+  // arrived from a successful checkout.
+  const hasConsumedOrderRef = useRef(false);
+  useEffect(() => {
+    if (hasConsumedOrderRef.current) return;
+    const stored = sessionStorage.getItem("orderSummary");
+    if (stored) {
+      hasConsumedOrderRef.current = true;
+      try {
+        const data = JSON.parse(stored);
+        setOrderData(data);
+        sessionStorage.removeItem("orderSummary");
+        if (data.sellerPubkey && !sfSellerPubkey) {
+          setSfSellerPubkey(data.sellerPubkey);
+        }
+      } catch {
+        router.push("/marketplace");
+      }
+    } else {
+      router.push("/marketplace");
+    }
+  }, [router]);
+
+  useEffect(() => {
+    if (!productContext.isLoading && productContext.productEvents) {
+      const products: ProductData[] = [];
+      for (const event of productContext.productEvents) {
+        try {
+          const parsed = parseTags(event);
+          if (parsed && parsed.title && parsed.images.length > 0) {
+            products.push(parsed);
+          }
+        } catch {}
+      }
+      for (let i = products.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        const current = products[i];
+        const random = products[j];
+        if (!current || !random) continue;
+        products[i] = random;
+        products[j] = current;
+      }
+      const shuffled = products.slice(0, 4);
+      setLatestProducts(shuffled);
+    }
+  }, [productContext.isLoading, productContext.productEvents, orderData]);
+
+  const formatPaymentMethod = (method: string) => {
+    const methods: Record<string, string> = {
+      lightning: "Lightning Network",
+      cashu: "Cashu eCash",
+      ecash: "Cashu eCash",
+      nwc: "Nostr Wallet Connect",
+    };
+    return methods[method] || method;
+  };
+
+  const getProductHref = (product: ProductData) => {
+    try {
+      const naddr = nip19.naddrEncode({
+        identifier: product.d as string,
+        pubkey: product.pubkey,
+        kind: 30402,
+      });
+      return `/listing/${naddr}`;
+    } catch {
+      return null;
+    }
+  };
+
+  if (!orderData) {
+    return (
+      <ProtectedRoute>
+        <StorefrontThemeWrapper sellerPubkey={sfSellerPubkey}>
+          <div className="bg-light-bg dark:bg-dark-bg flex min-h-screen items-center justify-center">
+            <div className="text-center">
+              <p className="text-lg text-gray-600 dark:text-gray-400">
+                Loading order details...
+              </p>
+            </div>
+          </div>
+        </StorefrontThemeWrapper>
+      </ProtectedRoute>
+    );
+  }
+
+  return (
+    <ProtectedRoute>
+      <StorefrontThemeWrapper sellerPubkey={sfSellerPubkey}>
+        <div className="bg-light-bg dark:bg-dark-bg min-h-screen">
+          <div className="mx-auto max-w-4xl px-4 pt-24 pb-8 sm:px-6 lg:px-8">
+            <div className="bg-light-fg dark:bg-dark-fg mb-8 rounded-lg border border-gray-200 p-6 shadow-md sm:p-8 dark:border-gray-700">
+              <div className="mb-6 flex flex-col items-center border-b border-gray-200 pb-6 dark:border-gray-700">
+                <div className="mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
+                  <CheckCircleIcon className="h-10 w-10 text-green-600 dark:text-green-400" />
+                </div>
+                <h1 className="text-light-text dark:text-dark-text text-2xl font-bold sm:text-3xl">
+                  Order Confirmed!
+                </h1>
+                <p className="mt-2 text-center text-gray-600 dark:text-gray-400">
+                  The seller has been notified and will receive your order
+                  details.
+                </p>
+                {orderData.orderId && (
+                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                    Order ID: {orderData.orderId.substring(0, 8)}...
+                  </p>
+                )}
+              </div>
+
+              {orderData.isCart && orderData.cartItems ? (
+                <div className="mb-6">
+                  <h2 className="text-light-text dark:text-dark-text mb-4 text-lg font-bold">
+                    Items Ordered
+                  </h2>
+                  <div className="space-y-4">
+                    {orderData.cartItems.map((item, index) => (
+                      <div
+                        key={index}
+                        className="flex items-center gap-4 rounded-md border border-gray-200 p-3 dark:border-gray-700"
+                      >
+                        <img
+                          src={item.image}
+                          alt={item.title}
+                          className="h-16 w-16 rounded-md object-cover"
+                        />
+                        <div className="flex-1">
+                          <h3 className="text-light-text dark:text-dark-text font-semibold">
+                            {item.title}
+                          </h3>
+                          <div className="flex flex-wrap gap-x-3 text-sm text-gray-500 dark:text-gray-400">
+                            {item.quantity && item.quantity > 1 && (
+                              <span>Qty: {item.quantity}</span>
+                            )}
+                            {item.selectedSize && (
+                              <span>Size: {item.selectedSize}</span>
+                            )}
+                            {item.selectedVolume && (
+                              <span>Volume: {item.selectedVolume}</span>
+                            )}
+                            {item.selectedWeight && (
+                              <span>Weight: {item.selectedWeight}</span>
+                            )}
+                            {item.selectedBulkOption && (
+                              <span>
+                                Bundle: {item.selectedBulkOption} units
+                              </span>
+                            )}
+                            {item.shipping && (
+                              <span className="capitalize">
+                                {item.shipping}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <p className="text-light-text dark:text-dark-text font-bold">
+                          {item.amount} {item.currency}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="mb-6">
+                  <h2 className="text-light-text dark:text-dark-text mb-4 text-lg font-bold">
+                    Product Details
+                  </h2>
+                  <div className="flex items-start gap-4 rounded-md border border-gray-200 p-4 dark:border-gray-700">
+                    {orderData.productImage && (
+                      <img
+                        src={orderData.productImage}
+                        alt={orderData.productTitle}
+                        className="h-24 w-24 rounded-md object-cover"
+                      />
+                    )}
+                    <div className="flex-1">
+                      <h3 className="text-light-text dark:text-dark-text text-lg font-semibold">
+                        {orderData.productTitle}
+                      </h3>
+                      {orderData.selectedSize && (
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                          Size: {orderData.selectedSize}
+                        </p>
+                      )}
+                      {orderData.selectedVolume && (
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                          Volume: {orderData.selectedVolume}
+                        </p>
+                      )}
+                      {orderData.selectedWeight && (
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                          Weight: {orderData.selectedWeight}
+                        </p>
+                      )}
+                      {orderData.selectedBulkOption && (
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                          Bundle: {orderData.selectedBulkOption} units
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="mb-6">
+                <h2 className="text-light-text dark:text-dark-text mb-4 text-lg font-bold">
+                  Order Details
+                </h2>
+                <div className="rounded-md border border-gray-200 p-4 dark:border-gray-700">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between border-b border-gray-100 pb-2 dark:border-gray-700">
+                      <span className="text-gray-600 dark:text-gray-400">
+                        Payment Method
+                      </span>
+                      <span className="text-light-text dark:text-dark-text font-semibold">
+                        {formatPaymentMethod(orderData.paymentMethod)}
+                      </span>
+                    </div>
+
+                    {orderData.isCart &&
+                    orderData.subtotal &&
+                    Number(orderData.subtotal) !== Number(orderData.amount) ? (
+                      <>
+                        <div className="flex items-center justify-between border-b border-gray-100 pb-2 dark:border-gray-700">
+                          <span className="text-gray-600 dark:text-gray-400">
+                            Subtotal
+                          </span>
+                          <span className="text-light-text dark:text-dark-text">
+                            {Number(orderData.subtotal).toLocaleString()}{" "}
+                            {orderData.currency}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between border-b border-gray-100 pb-2 dark:border-gray-700">
+                          <span className="text-gray-600 dark:text-gray-400">
+                            Shipping
+                          </span>
+                          {orderData.freeShippingApplied ? (
+                            <span className="flex items-center gap-2">
+                              {orderData.originalShippingCost && (
+                                <span className="text-gray-400 line-through dark:text-gray-500">
+                                  {Number(
+                                    orderData.originalShippingCost
+                                  ).toLocaleString()}{" "}
+                                  {orderData.currency}
+                                </span>
+                              )}
+                              <span className="text-light-text dark:text-dark-text">
+                                0 (Free Shipping)
+                              </span>
+                              <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                                Free
+                              </span>
+                            </span>
+                          ) : (
+                            <span className="text-light-text dark:text-dark-text">
+                              {(
+                                Number(orderData.amount) -
+                                Number(orderData.subtotal)
+                              ).toLocaleString()}{" "}
+                              {orderData.currency}
+                            </span>
+                          )}
+                        </div>
+                      </>
+                    ) : orderData.freeShippingApplied ? (
+                      <>
+                        <div className="flex items-center justify-between border-b border-gray-100 pb-2 dark:border-gray-700">
+                          <span className="text-gray-600 dark:text-gray-400">
+                            Subtotal
+                          </span>
+                          <span className="text-light-text dark:text-dark-text">
+                            {Number(orderData.amount).toLocaleString()}{" "}
+                            {orderData.currency}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between border-b border-gray-100 pb-2 dark:border-gray-700">
+                          <span className="text-gray-600 dark:text-gray-400">
+                            Shipping
+                          </span>
+                          <span className="flex items-center gap-2">
+                            {orderData.originalShippingCost && (
+                              <span className="text-gray-400 line-through dark:text-gray-500">
+                                {Number(
+                                  orderData.originalShippingCost
+                                ).toLocaleString()}{" "}
+                                {orderData.currency}
+                              </span>
+                            )}
+                            <span className="text-light-text dark:text-dark-text">
+                              0 (Free Shipping)
+                            </span>
+                            <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                              Free
+                            </span>
+                          </span>
+                        </div>
+                      </>
+                    ) : orderData.shippingCost &&
+                      Number(orderData.shippingCost) > 0 ? (
+                      <>
+                        <div className="flex items-center justify-between border-b border-gray-100 pb-2 dark:border-gray-700">
+                          <span className="text-gray-600 dark:text-gray-400">
+                            Subtotal
+                          </span>
+                          <span className="text-light-text dark:text-dark-text">
+                            {(
+                              Number(orderData.amount) -
+                              Number(orderData.shippingCost)
+                            ).toLocaleString()}{" "}
+                            {orderData.currency}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between border-b border-gray-100 pb-2 dark:border-gray-700">
+                          <span className="text-gray-600 dark:text-gray-400">
+                            Shipping
+                          </span>
+                          <span className="text-light-text dark:text-dark-text">
+                            {Number(orderData.shippingCost).toLocaleString()}{" "}
+                            {orderData.currency}
+                          </span>
+                        </div>
+                      </>
+                    ) : null}
+
+                    <div className="flex items-center justify-between pt-1">
+                      <span className="text-light-text dark:text-dark-text text-lg font-bold">
+                        Total
+                      </span>
+                      <span className="text-light-text dark:text-dark-text text-lg font-bold">
+                        {Number(orderData.amount).toLocaleString()}{" "}
+                        {orderData.currency}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {(orderData.shippingAddress ||
+                orderData.pickupLocation ||
+                (orderData.isCart &&
+                  orderData.cartItems?.some((i) => i.pickupLocation))) && (
+                <div className="mb-6">
+                  <h2 className="text-light-text dark:text-dark-text mb-4 text-lg font-bold">
+                    Delivery Information
+                  </h2>
+                  <div className="space-y-3 rounded-md border border-gray-200 p-4 dark:border-gray-700">
+                    {orderData.shippingAddress && (
+                      <div>
+                        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                          Shipping Address
+                        </p>
+                        <p className="text-light-text dark:text-dark-text">
+                          {orderData.shippingAddress}
+                        </p>
+                      </div>
+                    )}
+                    {orderData.pickupLocation && (
+                      <div>
+                        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                          Pickup Location
+                        </p>
+                        <p className="text-light-text dark:text-dark-text">
+                          {orderData.pickupLocation}
+                        </p>
+                      </div>
+                    )}
+                    {orderData.isCart &&
+                      orderData.cartItems?.some((i) => i.pickupLocation) && (
+                        <div>
+                          <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                            Pickup Locations
+                          </p>
+                          {orderData.cartItems
+                            ?.filter((i) => i.pickupLocation)
+                            .map((item, idx) => (
+                              <p
+                                key={idx}
+                                className="text-light-text dark:text-dark-text"
+                              >
+                                <span className="text-gray-600 dark:text-gray-400">
+                                  {item.title}:
+                                </span>{" "}
+                                {item.pickupLocation}
+                              </p>
+                            ))}
+                        </div>
+                      )}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <Button
+                  className={SHOPSTRBUTTONCLASSNAMES + " flex-1"}
+                  onClick={() =>
+                    router.push(
+                      sfShopSlug ? `/shop/${sfShopSlug}` : "/marketplace"
+                    )
+                  }
+                  size="lg"
+                  startContent={<ShoppingBagIcon className="h-5 w-5" />}
+                >
+                  Continue Shopping
+                </Button>
+                <Button
+                  className="text-light-text dark:text-dark-text flex-1 bg-gray-200 dark:bg-gray-700"
+                  onClick={() => router.push("/orders")}
+                  size="lg"
+                  startContent={
+                    <ClipboardDocumentListIcon className="h-5 w-5" />
+                  }
+                >
+                  Check Order Status
+                </Button>
+                <Button
+                  className="text-light-text dark:text-dark-text flex-1 bg-gray-200 dark:bg-gray-700"
+                  onClick={() => {
+                    const npub = orderData?.sellerPubkey
+                      ? nip19.npubEncode(orderData.sellerPubkey)
+                      : null;
+                    router.push(
+                      npub
+                        ? `/orders?pk=${npub}&isInquiry=true`
+                        : "/orders?isInquiry=true"
+                    );
+                  }}
+                  size="lg"
+                  startContent={<ChatBubbleLeftRightIcon className="h-5 w-5" />}
+                >
+                  Contact Merchant
+                </Button>
+              </div>
+            </div>
+
+            {latestProducts.length > 0 && (
+              <div className="mt-10">
+                <h2 className="text-light-text dark:text-dark-text mb-6 text-center text-2xl font-bold">
+                  More From the Marketplace
+                </h2>
+                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+                  {latestProducts.map((product) => (
+                    <div
+                      key={product.id}
+                      className="overflow-hidden rounded-lg transition-transform hover:-translate-y-1"
+                    >
+                      <ProductCard
+                        productData={product}
+                        href={getProductHref(product)}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </StorefrontThemeWrapper>
+    </ProtectedRoute>
+  );
+}

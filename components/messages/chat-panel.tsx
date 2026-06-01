@@ -1,6 +1,6 @@
 // initialize new react funcitonal component
-import { Button, Input } from "@nextui-org/react";
-import React, { useEffect, useContext, useRef, useState } from "react";
+import { Button, Input } from "@heroui/react";
+import { useEffect, useContext, useRef, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { nip19 } from "nostr-tools";
 import {
@@ -9,7 +9,7 @@ import {
   ModalFooter,
   ModalHeader,
   ModalBody,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import {
   ArrowUturnLeftIcon,
   ArrowsUpDownIcon,
@@ -350,10 +350,10 @@ const ChatPanel = ({
         <div className="mt-10 flex flex-grow items-center justify-center py-10">
           <div className="w-full max-w-xl rounded-2xl border border-zinc-800 bg-[#111] p-10 text-center shadow-xl">
             <ChatBubbleLeftIcon className="mx-auto mb-5 h-20 w-20 text-zinc-600" />
-            <span className="block text-4xl font-black uppercase text-white">
+            <span className="block text-4xl font-black text-white uppercase">
               No chat selected . . .
             </span>
-            <div className="opacity-4 flex flex-col items-center justify-center gap-3 pt-5">
+            <div className="flex flex-col items-center justify-center gap-3 pt-5 opacity-4">
               <span className="text-xl font-bold text-zinc-500">
                 Use your up and down arrow keys to select chats!
               </span>
@@ -442,7 +442,7 @@ const ChatPanel = ({
         <>
           <div className="flex w-full items-center justify-center border-t border-zinc-800 p-4 sm:justify-between">
             <Button
-              className="h-10 w-full rounded-xl border border-zinc-600 bg-transparent px-6 text-sm font-bold uppercase tracking-wider text-white hover:border-white hover:bg-zinc-800 sm:w-auto"
+              className="h-10 w-full rounded-xl border border-zinc-600 bg-transparent px-6 text-sm font-bold tracking-wider text-white uppercase hover:border-white hover:bg-zinc-800 sm:w-auto"
               onClick={handleToggleShippingModal}
             >
               Send Shipping Info
@@ -638,7 +638,7 @@ const ChatPanel = ({
                   <ModalBody>
                     <div className="mb-4 flex flex-col items-center justify-center gap-6 sm:flex-row sm:gap-16">
                       <div className="flex items-center gap-3">
-                        <span className="font-bold uppercase tracking-wider text-white">
+                        <span className="font-bold tracking-wider text-white uppercase">
                           Good Overall
                         </span>
                         <HandThumbUpIcon
@@ -659,7 +659,7 @@ const ChatPanel = ({
                           }`}
                           onClick={() => setSelectedThumb("down")}
                         />
-                        <span className="font-bold uppercase tracking-wider text-white">
+                        <span className="font-bold tracking-wider text-white uppercase">
                           Bad Overall
                         </span>
                       </div>

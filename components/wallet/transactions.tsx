@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ArrowDownTrayIcon,
   ArrowUpTrayIcon,
@@ -12,7 +12,7 @@ import { Transaction } from "@/utils/types/types";
 // add found proofs as nutsack deposit with different icon
 
 const Transactions = () => {
-  const [history, setHistory] = useState([]);
+  const [history, setHistory] = useState<Transaction[]>([]);
 
   useEffect(() => {
     // Function to fetch and update transactions
@@ -50,15 +50,15 @@ const Transactions = () => {
     <div className="relative mt-4 w-full overflow-x-auto rounded-2xl border border-white/5">
       <div className="max-h-[50vh] w-full min-w-[320px]">
         <table className="w-full text-left text-sm text-gray-400">
-          <thead className="bg-[#1a1a1a] text-xs font-bold uppercase tracking-widest text-gray-500">
+          <thead className="bg-[#1a1a1a] text-xs font-bold tracking-widest text-gray-500 uppercase">
             <tr>
-              <th scope="col" className="px-3 pb-3 pt-5 md:px-6">
+              <th scope="col" className="px-3 pt-5 pb-3 md:px-6">
                 Type
               </th>
-              <th scope="col" className="px-3 pb-3 pt-5 md:px-6">
+              <th scope="col" className="px-3 pt-5 pb-3 md:px-6">
                 Amount
               </th>
-              <th scope="col" className="px-3 pb-3 pt-5 text-right md:px-6">
+              <th scope="col" className="px-3 pt-5 pb-3 text-right md:px-6">
                 Date
               </th>
             </tr>
@@ -80,11 +80,11 @@ const Transactions = () => {
                     ) : transaction.type === 4 ? (
                       <BoltIcon className="mr-2 h-5 w-5 text-red-500" />
                     ) : transaction.type === 5 ? (
-                      <ShoppingBagIcon className="mr-2 h-5 w-5 text-shopstr-purple-light dark:text-shopstr-yellow-light" />
+                      <ShoppingBagIcon className="text-shopstr-purple-light dark:text-shopstr-yellow-light mr-2 h-5 w-5" />
                     ) : null}
                   </div>
                 </td>
-                <td className="whitespace-nowrap px-3 py-4 font-mono font-bold text-white md:px-6">
+                <td className="px-3 py-4 font-mono font-bold whitespace-nowrap text-white md:px-6">
                   {transaction.amount} sats
                 </td>
                 <td className="px-3 py-4 text-right font-mono text-[10px] leading-tight md:px-6 md:text-xs">

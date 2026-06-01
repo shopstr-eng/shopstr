@@ -10,9 +10,9 @@ import { SignerContext } from "@/components/utility-components/nostr-context-pro
 
 function isDecodableToken(token: string): boolean {
   try {
-    getDecodedToken(token);
+    getDecodedToken(token, []);
     return true;
-  } catch (e) {
+  } catch {
     return false;
   }
 }
@@ -97,7 +97,7 @@ const ChatMessage = ({
         orderData = parsed;
       }
     }
-  } catch (e) {}
+  } catch {}
 
   const handleCopyToken = (token: string) => {
     navigator.clipboard.writeText(token);
@@ -175,7 +175,7 @@ const ChatMessage = ({
                 isUserMessage ? "border-black/20" : "border-yellow-400"
               }`}
             >
-              <span className="text-xs font-black uppercase tracking-wider opacity-70">
+              <span className="text-xs font-black tracking-wider uppercase opacity-70">
                 ⚡ Zapsnag Order
               </span>
               <div className="font-semibold">{orderData.shipping.name}</div>
@@ -195,7 +195,7 @@ const ChatMessage = ({
         </p>
         <div className="m-1"></div>
         <span
-          className={`text-[10px] font-bold uppercase tracking-wider opacity-60 ${
+          className={`text-[10px] font-bold tracking-wider uppercase opacity-60 ${
             isUserMessage ? "text-right" : "text-left"
           }`}
         >

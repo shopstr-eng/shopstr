@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from "react";
+import { useState, useEffect, useContext } from "react";
 import { useRouter } from "next/router";
 import {
   Modal,
@@ -10,7 +10,7 @@ import {
   DropdownMenu,
   DropdownItem,
   Button,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import {
   CheckCircleIcon,
   XCircleIcon,
@@ -111,7 +111,7 @@ const Listing = () => {
                 />
                 <div className="p-6">
                   <div className="mb-2 flex items-start justify-between">
-                    <h1 className="text-2xl font-black uppercase tracking-tighter text-white">
+                    <h1 className="text-2xl font-black tracking-tighter text-white uppercase">
                       {productData.title}
                     </h1>
                     {rawEvent && (
@@ -205,7 +205,7 @@ const Listing = () => {
               size="md"
             >
               <ModalContent>
-                <ModalHeader className="flex items-center justify-center font-black uppercase tracking-tighter">
+                <ModalHeader className="flex items-center justify-center font-black tracking-tighter uppercase">
                   <CheckCircleIcon className="h-6 w-6 text-green-500" />
                   <div className="ml-2">Order successful!</div>
                 </ModalHeader>
@@ -237,7 +237,7 @@ const Listing = () => {
               size="md"
             >
               <ModalContent>
-                <ModalHeader className="flex items-center justify-center font-black uppercase tracking-tighter">
+                <ModalHeader className="flex items-center justify-center font-black tracking-tighter uppercase">
                   <XCircleIcon className="h-6 w-6 text-red-500" />
                   <div className="ml-2">Invoice generation failed!</div>
                 </ModalHeader>
@@ -269,7 +269,7 @@ const Listing = () => {
               size="md"
             >
               <ModalContent>
-                <ModalHeader className="flex items-center justify-center font-black uppercase tracking-tighter">
+                <ModalHeader className="flex items-center justify-center font-black tracking-tighter uppercase">
                   <XCircleIcon className="h-6 w-6 text-red-500" />
                   <div className="ml-2">Purchase failed!</div>
                 </ModalHeader>
@@ -301,7 +301,7 @@ const Listing = () => {
               size="md"
             >
               <ModalContent>
-                <ModalHeader className="flex items-center justify-center font-black uppercase tracking-tighter">
+                <ModalHeader className="flex items-center justify-center font-black tracking-tighter uppercase">
                   <XCircleIcon className="h-6 w-6 text-red-500" />
                   <div className="ml-2">Order failed!</div>
                 </ModalHeader>

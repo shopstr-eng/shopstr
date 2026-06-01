@@ -1,6 +1,6 @@
 import { useState, useEffect, useContext } from "react";
-import { Button } from "@nextui-org/react";
-import { Slider } from "@nextui-org/react";
+import { Button } from "@heroui/react";
+import { Slider } from "@heroui/react";
 import { FollowsContext } from "../../utils/context/context";
 import { getLocalStorageData } from "@/utils/nostr/nostr-helper-functions";
 import { NEO_BTN } from "@/utils/STATIC-VARIABLES";

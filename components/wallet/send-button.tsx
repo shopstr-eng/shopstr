@@ -1,4 +1,4 @@
-import React, { useContext, useState } from "react";
+import { useContext, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import {
   ArrowUpTrayIcon,
@@ -20,19 +20,20 @@ import {
   ModalFooter,
   Button,
   Input,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
 import {
   getLocalStorageData,
   publishProofEvent,
 } from "@/utils/nostr/nostr-helper-functions";
 import {
-  CashuMint,
-  CashuWallet,
+  Mint as CashuMint,
+  Wallet as CashuWallet,
   getEncodedToken,
   MintKeyset,
   Proof,
 } from "@cashu/cashu-ts";
+import * as cashuCompat from "@/utils/cashu/compat";
 import { CashuWalletContext } from "../../utils/context/context";
 import {
   NostrContext,
@@ -84,10 +85,9 @@ const SendButton = () => {
     try {
       const mint = new CashuMint(mints[0]!);
       const wallet = new CashuWallet(mint);
-      const mintKeySetIds = await wallet.getKeySets();
-      const filteredProofs = tokens.filter(
-        (p: Proof) =>
-          mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
+      const mintKeySetIds = await cashuCompat.getWalletKeysets(wallet);
+      const filteredProofs = tokens.filter((p: Proof) =>
+        mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
       );
       const sendTotal = (numSats / 10) * 10;
       const { keep, send } = await wallet.send(sendTotal, filteredProofs, {
@@ -136,9 +136,8 @@ const SendButton = () => {
       setShowTokenCard(true);
       setNewToken(encodedSendToken);
       const changeProofs = keep;
-      const remainingProofs = tokens.filter(
-        (p: Proof) =>
-          mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id !== p.id)
+      const remainingProofs = tokens.filter((p: Proof) =>
+        mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id !== p.id)
       );
       let proofArray;
       if (changeProofs.length >= 1 && changeProofs) {
@@ -163,7 +162,7 @@ const SendButton = () => {
         sendTotal.toString(),
         deletedEventIds
       );
-    } catch (_) {
+    } catch {
       setSendFailed(true);
     }
   };
@@ -200,7 +199,7 @@ const SendButton = () => {
         size="md"
       >
         <ModalContent>
-          <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
+          <ModalHeader className="text-light-text dark:text-dark-text flex flex-col gap-1">
             Send Tokens
           </ModalHeader>
           <form onSubmit={handleSendSubmit(onSendSubmit)}>
@@ -245,8 +244,8 @@ const SendButton = () => {
               />
               {signer instanceof NostrNIP46Signer && (
                 <div className="mx-4 my-2 flex items-center justify-center text-center">
-                  <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
-                  <p className="ml-2 text-xs text-light-text dark:text-dark-text">
+                  <InformationCircleIcon className="text-light-text dark:text-dark-text h-6 w-6" />
+                  <p className="text-light-text dark:text-dark-text ml-2 text-xs">
                     If the token is taking a while to be generated, make sure to
                     check your bunker application to approve the transaction
                     events.
@@ -287,17 +286,17 @@ const SendButton = () => {
                   <CardBody className="flex flex-col items-center">
                     {newToken ? (
                       <div className="flex w-full flex-col items-center justify-center">
-                        <p className="whitespace-break-spaces break-all px-2 text-center text-xs">
+                        <p className="px-2 text-center text-xs break-all whitespace-break-spaces">
                           {newToken}
                         </p>
                         <ClipboardIcon
                           onClick={handleCopyTokenString}
-                          className={`mt-4 h-8 w-8 cursor-pointer text-light-text dark:text-dark-text ${
+                          className={`text-light-text dark:text-dark-text mt-4 h-8 w-8 cursor-pointer ${
                             copiedToClipboard ? "hidden" : ""
                           }`}
                         />
                         <CheckIcon
-                          className={`mt-4 h-8 w-8 cursor-pointer text-light-text dark:text-dark-text ${
+                          className={`text-light-text dark:text-dark-text mt-4 h-8 w-8 cursor-pointer ${
                             copiedToClipboard ? "" : "hidden"
                           }`}
                         />

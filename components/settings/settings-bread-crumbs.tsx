@@ -1,5 +1,4 @@
-import React from "react";
-import { Breadcrumbs, BreadcrumbItem, Divider } from "@nextui-org/react";
+import { Breadcrumbs, BreadcrumbItem, Divider } from "@heroui/react";
 import { useRouter } from "next/router";
 
 const pathMap: { [key: string]: string } = {
@@ -9,6 +8,7 @@ const pathMap: { [key: string]: string } = {
   "shop-profile": "Shop Profile",
   community: "Community Management",
   nwc: "Nostr Wallet Connect",
+  "api-keys": "API Keys",
 };
 
 export const SettingsBreadCrumbs = () => {

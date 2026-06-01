@@ -1,4 +1,3 @@
-import React from "react";
 import { render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import ShopstrSpinner from "../shopstr-spinner";
@@ -8,7 +7,7 @@ jest.mock("next-themes", () => ({
   useTheme: jest.fn(),
 }));
 
-jest.mock("@nextui-org/react", () => ({
+jest.mock("@heroui/react", () => ({
   Spinner: (props: { color: string; size: string }) => (
     <div data-testid="spinner" data-color={props.color}></div>
   ),

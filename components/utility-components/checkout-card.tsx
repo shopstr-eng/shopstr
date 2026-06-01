@@ -1,6 +1,6 @@
 /* eslint-disable @next/next/no-img-element */
 
-import React, { useContext, useEffect, useRef, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import { Event, nip19 } from "nostr-tools";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
 import { ProfileWithDropdown } from "./profile/profile-dropdown";
@@ -16,7 +16,7 @@ import {
   DropdownTrigger,
   DropdownMenu,
   DropdownItem,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import { locationAvatar } from "./dropdowns/location-dropdown";
 import {
   FaceFrownIcon,
@@ -373,7 +373,7 @@ export default function CheckoutCard({
           (productData.sizeQuantities?.get(size) || 0) > 0 ? (
             <button
               key={size}
-              className={`rounded-lg border p-2 text-sm font-bold uppercase tracking-wider ${
+              className={`rounded-lg border p-2 text-sm font-bold tracking-wider uppercase ${
                 selectedSize === size
                   ? "border-yellow-400 bg-yellow-400 text-black"
                   : "border-zinc-700 bg-[#161616] text-zinc-400 hover:border-zinc-500 hover:text-white"
@@ -419,7 +419,7 @@ export default function CheckoutCard({
           <>
             <div className="max-w-screen pt-4">
               <div
-                className="max-w-screen mx-3 my-3 flex flex-col gap-6 whitespace-normal break-words md:flex-row"
+                className="mx-3 my-3 flex max-w-screen flex-col gap-6 break-words whitespace-normal md:flex-row"
                 key={uniqueKey}
               >
                 <div className="w-full md:w-1/2">
@@ -498,7 +498,7 @@ export default function CheckoutCard({
                                     : "text-green-300"
                                 }`}
                               />
-                              <span className="whitespace-nowrap text-xs font-bold uppercase tracking-wider text-zinc-300">
+                              <span className="text-xs font-bold tracking-wider whitespace-nowrap text-zinc-300 uppercase">
                                 {merchantQuality}
                               </span>
                             </>
@@ -511,7 +511,7 @@ export default function CheckoutCard({
                                     : "text-red-500"
                                 }`}
                               />
-                              <span className="whitespace-nowrap text-xs font-bold uppercase tracking-wider text-zinc-300">
+                              <span className="text-xs font-bold tracking-wider whitespace-nowrap text-zinc-300 uppercase">
                                 {merchantQuality}
                               </span>
                             </>
@@ -521,7 +521,7 @@ export default function CheckoutCard({
                     </div>
                   </div>
                   <div className="mt-4 flex w-full items-start justify-between">
-                    <h2 className="text-left text-2xl font-black uppercase tracking-tighter text-white">
+                    <h2 className="text-left text-2xl font-black tracking-tighter text-white uppercase">
                       {productData.title}
                       {isExpired && (
                         <Chip color="warning" variant="flat" className="ml-2">
@@ -541,7 +541,7 @@ export default function CheckoutCard({
                             isIconOnly
                             variant="light"
                             size="sm"
-                            className="min-w-8 h-8 text-zinc-400 hover:text-white"
+                            className="h-8 min-w-8 text-zinc-400 hover:text-white"
                           >
                             <EllipsisVerticalIcon className="h-6 w-6" />
                           </Button>
@@ -576,7 +576,7 @@ export default function CheckoutCard({
                     </p>
                   )}
                   {productData.condition && (
-                    <div className="text-left text-xs font-bold uppercase tracking-wider text-zinc-400">
+                    <div className="text-left text-xs font-bold tracking-wider text-zinc-400 uppercase">
                       <span>
                         Condition:{" "}
                         <span className="text-white">
@@ -586,7 +586,7 @@ export default function CheckoutCard({
                     </div>
                   )}
                   {productData.restrictions && (
-                    <div className="text-left text-xs font-bold uppercase tracking-wider text-zinc-400">
+                    <div className="text-left text-xs font-bold tracking-wider text-zinc-400 uppercase">
                       <span>Restrictions: </span>
                       <span className="text-red-500">
                         {productData.restrictions}
@@ -628,7 +628,7 @@ export default function CheckoutCard({
                     <>
                       {productData.pubkey !== userPubkey && (
                         <div className="mt-4 space-y-2">
-                          <p className="text-xs font-bold uppercase tracking-wider text-zinc-500">
+                          <p className="text-xs font-bold tracking-wider text-zinc-500 uppercase">
                             DISCOUNT CODE
                           </p>
                           <div className="flex items-start gap-2">
@@ -651,14 +651,14 @@ export default function CheckoutCard({
                             />
                             {appliedDiscount > 0 ? (
                               <Button
-                                className="h-10 rounded-lg bg-red-500 font-bold uppercase tracking-wider text-white"
+                                className="h-10 rounded-lg bg-red-500 font-bold tracking-wider text-white uppercase"
                                 onClick={handleRemoveDiscount}
                               >
                                 Remove
                               </Button>
                             ) : (
                               <Button
-                                className="h-10 rounded-lg border border-zinc-700 bg-[#161616] font-bold uppercase tracking-wider text-zinc-300 hover:bg-zinc-800 hover:text-white"
+                                className="h-10 rounded-lg border border-zinc-700 bg-[#161616] font-bold tracking-wider text-zinc-300 uppercase hover:bg-zinc-800 hover:text-white"
                                 onClick={handleApplyDiscount}
                               >
                                 Apply
@@ -710,7 +710,7 @@ export default function CheckoutCard({
                                 Buy Now
                               </Button>
                               <Button
-                                className={`h-14 min-w-[140px] flex-1 rounded-xl border-2 border-zinc-700 bg-[#161616] px-6 text-sm font-bold uppercase tracking-wider text-zinc-300 hover:border-zinc-500 hover:text-white md:flex-none ${
+                                className={`h-14 min-w-[140px] flex-1 rounded-xl border-2 border-zinc-700 bg-[#161616] px-6 text-sm font-bold tracking-wider text-zinc-300 uppercase hover:border-zinc-500 hover:text-white md:flex-none ${
                                   isAdded ||
                                   (hasSizes && !selectedSize) ||
                                   (hasVolumes && !selectedVolume)
@@ -731,7 +731,7 @@ export default function CheckoutCard({
                           ) : (
                             <>
                               <Button
-                                className="h-12 min-w-fit cursor-not-allowed rounded-xl border-2 border-zinc-800 bg-zinc-900 px-6 text-sm font-bold uppercase tracking-wider text-zinc-600 opacity-50"
+                                className="h-12 min-w-fit cursor-not-allowed rounded-xl border-2 border-zinc-800 bg-zinc-900 px-6 text-sm font-bold tracking-wider text-zinc-600 uppercase opacity-50"
                                 disabled
                               >
                                 Sold Out
@@ -740,7 +740,7 @@ export default function CheckoutCard({
                           )}
                           <Button
                             type="submit"
-                            className="h-14 w-full rounded-xl border-2 border-zinc-700 bg-[#161616] px-6 text-sm font-bold uppercase tracking-wider text-zinc-300 hover:border-zinc-500 hover:text-white md:w-auto"
+                            className="h-14 w-full rounded-xl border-2 border-zinc-700 bg-[#161616] px-6 text-sm font-bold tracking-wider text-zinc-300 uppercase hover:border-zinc-500 hover:text-white md:w-auto"
                             onClick={handleShare}
                           >
                             Share
@@ -765,7 +765,7 @@ export default function CheckoutCard({
                   )}
                 </div>
               </div>
-              <div className="max-w-screen mx-3 my-3 max-w-full overflow-hidden whitespace-normal break-words sm:hidden">
+              <div className="mx-3 my-3 max-w-full max-w-screen overflow-hidden break-words whitespace-normal sm:hidden">
                 <p className="break-words-all w-full text-left text-base text-zinc-300">
                   {renderSummary()}
                 </p>
@@ -780,7 +780,7 @@ export default function CheckoutCard({
               </div>
               {!isFetchingReviews && productReviews && (
                 <div className="mt-4 max-w-full p-4 pt-4">
-                  <h3 className="mb-3 text-lg font-black uppercase tracking-tighter text-white">
+                  <h3 className="mb-3 text-lg font-black tracking-tighter text-white uppercase">
                     Product Reviews
                   </h3>
                   {productReviews.size > 0 ? (
@@ -812,7 +812,7 @@ export default function CheckoutCard({
                                       return (
                                         <Chip
                                           key={index}
-                                          className={`border text-xs font-bold uppercase tracking-wider ${
+                                          className={`border text-xs font-bold tracking-wider uppercase ${
                                             value === "1"
                                               ? "border-green-900 bg-green-900/20 text-green-400"
                                               : "border-red-900 bg-red-900/20 text-red-400"
@@ -828,7 +828,7 @@ export default function CheckoutCard({
                                       return (
                                         <Chip
                                           key={index}
-                                          className={`border text-xs font-bold uppercase tracking-wider ${
+                                          className={`border text-xs font-bold tracking-wider uppercase ${
                                             value === "1"
                                               ? "border-green-900 bg-green-900/20 text-green-400"
                                               : "border-red-900 bg-red-900/20 text-red-400"
@@ -849,7 +849,7 @@ export default function CheckoutCard({
                                   return (
                                     <p
                                       key={index}
-                                      className="mt-2 text-sm italic text-zinc-300"
+                                      className="mt-2 text-sm text-zinc-300 italic"
                                     >
                                       &ldquo;{value}&rdquo;
                                     </p>
@@ -865,7 +865,7 @@ export default function CheckoutCard({
                   ) : (
                     <div className="flex justify-center">
                       <div className="w-full max-w-xl rounded-2xl border border-zinc-800 bg-[#161616] p-10 text-center">
-                        <span className="block text-4xl font-black uppercase tracking-tighter text-zinc-700">
+                        <span className="block text-4xl font-black tracking-tighter text-zinc-700 uppercase">
                           No reviews . . . yet!
                         </span>
                         <div className="flex flex-col items-center justify-center gap-3 pt-5 opacity-80">

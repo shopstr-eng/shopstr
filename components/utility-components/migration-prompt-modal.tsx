@@ -1,11 +1,5 @@
-import React, { useState } from "react";
-import {
-  Modal,
-  ModalContent,
-  ModalBody,
-  Button,
-  Input,
-} from "@nextui-org/react";
+import { useState } from "react";
+import { Modal, ModalContent, ModalBody, Button, Input } from "@heroui/react";
 import { migrateToNip49 } from "@/utils/nostr/encryption-migration";
 import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
 
@@ -82,7 +76,7 @@ export default function MigrationPromptModal({
       <ModalContent>
         <ModalBody className="flex flex-col overflow-hidden">
           <div className="mb-4 text-center">
-            <h3 className="text-2xl font-black uppercase tracking-tighter text-white">
+            <h3 className="text-2xl font-black tracking-tighter text-white uppercase">
               Encryption Upgrade
             </h3>
             <p className="mt-2 text-sm text-zinc-400">
@@ -119,7 +113,7 @@ export default function MigrationPromptModal({
 
           <div className="flex flex-col justify-end gap-3 sm:flex-row sm:space-x-4">
             <Button
-              className="order-2 h-12 font-bold uppercase tracking-wider text-zinc-500 hover:text-white sm:order-1 sm:h-10"
+              className="order-2 h-12 font-bold tracking-wider text-zinc-500 uppercase hover:text-white sm:order-1 sm:h-10"
               variant="light"
               onClick={() => {
                 resetModal();

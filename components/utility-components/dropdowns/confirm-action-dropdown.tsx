@@ -6,7 +6,7 @@ import {
   DropdownMenu,
   DropdownItem,
   DropdownSection,
-} from "@nextui-org/react";
+} from "@heroui/react";
 
 type ConfirmActionDropdownProps = {
   helpText: string;
@@ -40,7 +40,7 @@ export default function ConfirmActionDropdown({
         >
           <DropdownItem
             key="delete"
-            className="rounded-lg text-danger data-[hover=true]:bg-red-500/10 data-[hover=true]:text-red-500"
+            className="text-danger rounded-lg data-[hover=true]:bg-red-500/10 data-[hover=true]:text-red-500"
             color="danger"
             onPress={onConfirm}
           >

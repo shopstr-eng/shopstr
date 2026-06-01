@@ -1,5 +1,4 @@
-import React from "react";
-import { Button } from "@nextui-org/react";
+import { Button } from "@heroui/react";
 import { ArrowLongLeftIcon } from "@heroicons/react/24/outline";
 import { useRouter } from "next/router";
 import Link from "next/link";
@@ -11,10 +10,10 @@ export default function Custom404() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-[#050505] px-4">
       <div className="w-full max-w-2xl rounded-3xl border border-white/10 bg-[#111] p-6 text-center shadow-2xl md:px-8 md:py-16">
-        <h1 className="mb-2 text-6xl font-black text-shopstr-yellow md:text-9xl">
+        <h1 className="text-shopstr-yellow mb-2 text-6xl font-black md:text-9xl">
           404
         </h1>
-        <h2 className="mb-6 text-2xl font-bold uppercase tracking-widest text-white md:text-3xl">
+        <h2 className="mb-6 text-2xl font-bold tracking-widest text-white uppercase md:text-3xl">
           Page Not Found
         </h2>
         <p className="mb-12 text-lg text-gray-400">

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useContext } from "react";
+import { useEffect, useState, useContext } from "react";
 import CryptoJS from "crypto-js";
 import { useRouter } from "next/router";
 import { useForm, Controller } from "react-hook-form";
@@ -17,7 +17,7 @@ import {
   Chip,
   Image,
   Switch,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import {
   PhotoIcon,
   ChevronLeftIcon,
@@ -406,7 +406,7 @@ export default function ProductForm({
                       hasPrev && (
                         <button
                           type="button"
-                          className={`absolute left-4 top-1/2 z-10 -translate-y-1/2 rounded-full bg-black/50 p-2 text-white hover:bg-black/80`}
+                          className={`absolute top-1/2 left-4 z-10 -translate-y-1/2 rounded-full bg-black/50 p-2 text-white hover:bg-black/80`}
                           onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
@@ -422,7 +422,7 @@ export default function ProductForm({
                       hasNext && (
                         <button
                           type="button"
-                          className={`absolute right-4 top-1/2 z-10 -translate-y-1/2 rounded-full bg-black/50 p-2 text-white hover:bg-black/80`}
+                          className={`absolute top-1/2 right-4 z-10 -translate-y-1/2 rounded-full bg-black/50 p-2 text-white hover:bg-black/80`}
                           onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
@@ -441,7 +441,7 @@ export default function ProductForm({
                         className="relative flex h-64 w-full items-center justify-center bg-black"
                         onClick={(e) => e.preventDefault()}
                       >
-                        <div className="absolute right-4 top-4 z-20">
+                        <div className="absolute top-4 right-4 z-20">
                           <ConfirmActionDropdown
                             helpText="Are you sure you want to delete this image?"
                             buttonLabel="Delete Image"
@@ -768,7 +768,7 @@ export default function ProductForm({
             {(watchShippingOption === "Pickup" ||
               watchShippingOption === "Free/Pickup") && (
               <div className="space-y-4">
-                <h3 className="text-sm font-bold uppercase tracking-wider text-white">
+                <h3 className="text-sm font-bold tracking-wider text-white uppercase">
                   Pickup Locations
                 </h3>
                 <p className="text-xs text-zinc-400">
@@ -822,7 +822,7 @@ export default function ProductForm({
                       ))}
 
                       <Button
-                        className="h-12 w-full rounded-xl border border-zinc-700 bg-zinc-800/50 text-sm font-bold uppercase tracking-wider text-zinc-300 hover:bg-zinc-800 hover:text-white"
+                        className="h-12 w-full rounded-xl border border-zinc-700 bg-zinc-800/50 text-sm font-bold tracking-wider text-zinc-300 uppercase hover:bg-zinc-800 hover:text-white"
                         onClick={() => {
                           const newLocations = [...value, ""];
                           onChange(newLocations);
@@ -892,9 +892,7 @@ export default function ProductForm({
                   >
                     <SelectSection className="text-white">
                       {CATEGORIES.map((category) => (
-                        <SelectItem key={category} value={category}>
-                          {category}
-                        </SelectItem>
+                        <SelectItem key={category}>{category}</SelectItem>
                       ))}
                     </SelectSection>
                   </Select>
@@ -1017,24 +1015,12 @@ export default function ProductForm({
                         selectedKeys={new Set(selectedSizes)}
                       >
                         <SelectSection className="text-white">
-                          <SelectItem key="XS" value="XS">
-                            XS
-                          </SelectItem>
-                          <SelectItem key="SM" value="SM">
-                            SM
-                          </SelectItem>
-                          <SelectItem key="MD" value="MD">
-                            MD
-                          </SelectItem>
-                          <SelectItem key="LG" value="LG">
-                            LG
-                          </SelectItem>
-                          <SelectItem key="XL" value="XL">
-                            XL
-                          </SelectItem>
-                          <SelectItem key="XXL" value="XXL">
-                            XXL
-                          </SelectItem>
+                          <SelectItem key="XS">XS</SelectItem>
+                          <SelectItem key="SM">SM</SelectItem>
+                          <SelectItem key="MD">MD</SelectItem>
+                          <SelectItem key="LG">LG</SelectItem>
+                          <SelectItem key="XL">XL</SelectItem>
+                          <SelectItem key="XXL">XXL</SelectItem>
                         </SelectSection>
                       </Select>
                     );
@@ -1088,21 +1074,11 @@ export default function ProductForm({
                         selectedKeys={new Set(selectedVolumes)}
                       >
                         <SelectSection className="text-white">
-                          <SelectItem key="Half-pint" value="Half-pint">
-                            Half-pint
-                          </SelectItem>
-                          <SelectItem key="Pint" value="Pint">
-                            Pint
-                          </SelectItem>
-                          <SelectItem key="Quart" value="Quart">
-                            Quart
-                          </SelectItem>
-                          <SelectItem key="Half-gallon" value="Half-gallon">
-                            Half-gallon
-                          </SelectItem>
-                          <SelectItem key="Gallon" value="Gallon">
-                            Gallon
-                          </SelectItem>
+                          <SelectItem key="Half-pint">Half-pint</SelectItem>
+                          <SelectItem key="Pint">Pint</SelectItem>
+                          <SelectItem key="Quart">Quart</SelectItem>
+                          <SelectItem key="Half-gallon">Half-gallon</SelectItem>
+                          <SelectItem key="Gallon">Gallon</SelectItem>
                         </SelectSection>
                       </Select>
                     );
@@ -1257,31 +1233,16 @@ export default function ProductForm({
                         selectedKeys={value ? [value as string] : []}
                       >
                         <SelectSection className="text-white">
-                          <SelectItem key="New" value="New">
-                            New
-                          </SelectItem>
-                          <SelectItem key="Renewed" value="Renewed">
-                            Renewed
-                          </SelectItem>
-                          <SelectItem
-                            key="Used - Like New"
-                            value="Used - Like New"
-                          >
+                          <SelectItem key="New">New</SelectItem>
+                          <SelectItem key="Renewed">Renewed</SelectItem>
+                          <SelectItem key="Used - Like New">
                             Used - Like New
                           </SelectItem>
-                          <SelectItem
-                            key="Used - Very Good"
-                            value="Used - Very Good"
-                          >
+                          <SelectItem key="Used - Very Good">
                             Used - Very Good
                           </SelectItem>
-                          <SelectItem key="Used - Good" value="Used - Good">
-                            Used - Good
-                          </SelectItem>
-                          <SelectItem
-                            key="Used - Acceptable"
-                            value="Used - Acceptable"
-                          >
+                          <SelectItem key="Used - Good">Used - Good</SelectItem>
+                          <SelectItem key="Used - Acceptable">
                             Used - Acceptable
                           </SelectItem>
                         </SelectSection>
@@ -1323,12 +1284,8 @@ export default function ProductForm({
                         selectedKeys={value ? [value as string] : []}
                       >
                         <SelectSection className="text-white">
-                          <SelectItem key="active" value="active">
-                            Active
-                          </SelectItem>
-                          <SelectItem key="sold" value="sold">
-                            Sold
-                          </SelectItem>
+                          <SelectItem key="active">Active</SelectItem>
+                          <SelectItem key="sold">Sold</SelectItem>
                         </SelectSection>
                       </Select>
                     );
@@ -1429,7 +1386,7 @@ export default function ProductForm({
                           onBlur={onBlur}
                           value={value as string}
                         />
-                        <p className="mt-1 text-tiny text-gray-500">
+                        <p className="text-tiny mt-1 text-gray-500">
                           Listing will remain visible but marked as
                           &quot;Outdated&quot; after this date. Leave empty if
                           product has no expiration. Buyers won&apos;t be able

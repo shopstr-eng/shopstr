@@ -1,6 +1,6 @@
 /* eslint-disable @next/next/no-img-element */
 
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/router";
 import {
@@ -10,7 +10,7 @@ import {
   ModalHeader,
   ModalBody,
   Input,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import {
   PlusIcon,
   MinusIcon,
@@ -21,7 +21,7 @@ import {
 import { ShippingOptionsType, NEO_BTN } from "@/utils/STATIC-VARIABLES";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
 import CartInvoiceCard from "../../components/cart-invoice-card";
-import { fiat } from "@getalby/lightning-tools";
+import { getSatoshiValue } from "@getalby/lightning-tools";
 import { sanitizeUrl } from "@braintree/sanitize-url";
 import currencySelection from "../../public/currencySelection.json";
 
@@ -366,7 +366,7 @@ export default function Component() {
           amount: basePrice,
           currency: product.currency,
         };
-        const numSats = await fiat.getSatoshiValue(currencyData);
+        const numSats = await getSatoshiValue(currencyData);
         price = Math.round(numSats);
       } catch (err) {
         console.error("ERROR", err);
@@ -400,7 +400,7 @@ export default function Component() {
           amount: shippingCost,
           currency: product.currency,
         };
-        const numSats = await fiat.getSatoshiValue(currencyData);
+        const numSats = await getSatoshiValue(currencyData);
         cost = Math.round(numSats);
       } catch (err) {
         console.error("ERROR", err);
@@ -417,7 +417,7 @@ export default function Component() {
         <div className="flex min-h-screen flex-col bg-[#111] p-4 text-white">
           <div className="mx-auto w-full max-w-4xl pt-20">
             <div className="mb-6 flex items-center">
-              <h1 className="w-full text-left text-4xl font-black uppercase tracking-tighter">
+              <h1 className="w-full text-left text-4xl font-black tracking-tighter uppercase">
                 Shopping Cart
               </h1>
             </div>
@@ -455,7 +455,7 @@ export default function Component() {
                                 </div>
                                 {product.quantity && (
                                   <div className="mt-2">
-                                    <p className="mb-2 text-xs font-bold uppercase tracking-wider text-green-400">
+                                    <p className="mb-2 text-xs font-bold tracking-wider text-green-400 uppercase">
                                       {product.quantity} in stock
                                     </p>
                                     <QuantitySelector
@@ -492,7 +492,7 @@ export default function Component() {
                                 size="sm"
                                 color="danger"
                                 variant="light"
-                                className="ml-auto font-bold uppercase tracking-wider text-red-500 hover:bg-red-500/10"
+                                className="ml-auto font-bold tracking-wider text-red-500 uppercase hover:bg-red-500/10"
                                 onClick={() => handleRemoveFromCart(product.id)}
                               >
                                 Remove
@@ -503,10 +503,10 @@ export default function Component() {
 
                         {/* Discount code section for this seller */}
                         <div className="rounded-xl border border-zinc-800 bg-[#161616] p-6">
-                          <h3 className="mb-3 text-sm font-bold uppercase tracking-wider text-zinc-400">
+                          <h3 className="mb-3 text-sm font-bold tracking-wider text-zinc-400 uppercase">
                             Have a discount code from this seller?
                           </h3>
-                          <p className="mb-1 text-xs font-bold uppercase tracking-wider text-zinc-500">
+                          <p className="mb-1 text-xs font-bold tracking-wider text-zinc-500 uppercase">
                             Discount Code
                           </p>
                           <div className="flex items-start gap-2">
@@ -532,7 +532,7 @@ export default function Component() {
                             />
                             {appliedDiscounts[sellerPubkey]! > 0 ? (
                               <Button
-                                className="h-10 rounded-lg bg-red-500 font-bold uppercase tracking-wider text-white"
+                                className="h-10 rounded-lg bg-red-500 font-bold tracking-wider text-white uppercase"
                                 onClick={() =>
                                   handleRemoveDiscount(sellerPubkey)
                                 }
@@ -541,7 +541,7 @@ export default function Component() {
                               </Button>
                             ) : (
                               <Button
-                                className="h-10 rounded-lg border border-zinc-700 bg-[#161616] font-bold uppercase tracking-wider text-zinc-300 hover:bg-zinc-800 hover:text-white"
+                                className="h-10 rounded-lg border border-zinc-700 bg-[#161616] font-bold tracking-wider text-zinc-300 uppercase hover:bg-zinc-800 hover:text-white"
                                 onClick={() =>
                                   handleApplyDiscount(sellerPubkey)
                                 }
@@ -562,7 +562,7 @@ export default function Component() {
                   )}
                 </div>
                 <div className="mt-6 flex flex-col items-end border-t border-zinc-800 pt-6">
-                  <p className="mb-4 text-xl font-black uppercase tracking-tight">
+                  <p className="mb-4 text-xl font-black tracking-tight uppercase">
                     Subtotal ({products.length}{" "}
                     {products.length === 1 ? "item" : "items"}): {subtotal} sats
                   </p>
@@ -580,7 +580,7 @@ export default function Component() {
                 <div className="mb-8 flex items-center justify-center rounded-full border border-zinc-700 bg-[#111] p-6">
                   <ShoppingBagIcon className="h-16 w-16 text-zinc-500" />
                 </div>
-                <h2 className="mb-2 text-center text-3xl font-black uppercase tracking-tighter text-white">
+                <h2 className="mb-2 text-center text-3xl font-black tracking-tighter text-white uppercase">
                   Your cart is empty . . .
                 </h2>
                 <p className="mb-6 max-w-md text-center text-zinc-400">
@@ -644,7 +644,7 @@ export default function Component() {
             size="md"
           >
             <ModalContent>
-              <ModalHeader className="flex items-center justify-center font-black uppercase tracking-tighter">
+              <ModalHeader className="flex items-center justify-center font-black tracking-tighter uppercase">
                 <CheckCircleIcon className="h-6 w-6 text-green-500" />
                 <div className="ml-2">Order successful!</div>
               </ModalHeader>
@@ -678,7 +678,7 @@ export default function Component() {
             size="md"
           >
             <ModalContent>
-              <ModalHeader className="flex items-center justify-center font-black uppercase tracking-tighter">
+              <ModalHeader className="flex items-center justify-center font-black tracking-tighter uppercase">
                 <XCircleIcon className="h-6 w-6 text-red-500" />
                 <div className="ml-2">Invoice generation failed!</div>
               </ModalHeader>
@@ -712,7 +712,7 @@ export default function Component() {
             size="md"
           >
             <ModalContent>
-              <ModalHeader className="flex items-center justify-center font-black uppercase tracking-tighter">
+              <ModalHeader className="flex items-center justify-center font-black tracking-tighter uppercase">
                 <XCircleIcon className="h-6 w-6 text-red-500" />
                 <div className="ml-2">Purchase failed!</div>
               </ModalHeader>

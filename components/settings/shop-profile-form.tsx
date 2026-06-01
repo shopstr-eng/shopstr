@@ -1,7 +1,7 @@
-import React, { useEffect, useState, useContext } from "react";
+import { useEffect, useState, useContext } from "react";
 import { useRouter } from "next/router";
 import { useForm, Controller } from "react-hook-form";
-import { Button, Textarea, Input, Image } from "@nextui-org/react";
+import { Button, Textarea, Input, Image } from "@heroui/react";
 
 import { ShopMapContext } from "@/utils/context/context";
 import {
@@ -104,7 +104,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
             />
           )}
           <FileUploaderButton
-            className={`${NEO_BTN} absolute bottom-2 right-2 z-20 h-8 px-3 text-[10px] md:bottom-4 md:right-4 md:h-10 md:px-4 md:text-xs`}
+            className={`${NEO_BTN} absolute right-2 bottom-2 z-20 h-8 px-3 text-[10px] md:right-4 md:bottom-4 md:h-10 md:px-4 md:text-xs`}
             imgCallbackOnUpload={(imgUrl) => setValue("banner", imgUrl)}
           >
             Upload Banner
@@ -115,7 +115,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
             <div className="rounded-full border-4 border-[#111]">
               <FileUploaderButton
                 isIconOnly={true}
-                className={`${NEO_BTN} absolute bottom-0 right-0 z-[60] h-8 w-8 min-w-0 rounded-full border-white p-0 shadow-lg md:h-10 md:w-10`}
+                className={`${NEO_BTN} absolute right-0 bottom-0 z-[60] h-8 w-8 min-w-0 rounded-full border-white p-0 shadow-lg md:h-10 md:w-10`}
                 imgCallbackOnUpload={(imgUrl) => setValue("picture", imgUrl)}
               />
               {watchPicture ? (

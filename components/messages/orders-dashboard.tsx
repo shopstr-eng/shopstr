@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useContext } from "react";
+import { useEffect, useState, useContext } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { nip19 } from "nostr-tools";
 import {
@@ -11,7 +11,7 @@ import {
   ModalFooter,
   Input,
   Button,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import {
   HandThumbUpIcon,
   HandThumbDownIcon,
@@ -43,7 +43,7 @@ import {
 } from "@/components/utility-components/nostr-context-provider";
 import { calculateWeightedScore } from "@/utils/parsers/review-parser-functions";
 import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
-import { fiat } from "@getalby/lightning-tools";
+import { getSatoshiValue } from "@getalby/lightning-tools";
 import currencySelection from "@/public/currencySelection.json";
 import {
   Chart as ChartJS,
@@ -221,7 +221,7 @@ const OrdersDashboard = () => {
 
       const ratePromises = currenciesToFetch.map(async (currency) => {
         try {
-          const sats = await fiat.getSatoshiValue({ amount: 1, currency });
+          const sats = await getSatoshiValue({ amount: 1, currency });
           return { currency: currency.toLowerCase(), rate: sats };
         } catch (err) {
           console.error(`Failed to fetch rate for ${currency}:`, err);
@@ -379,9 +379,9 @@ const OrdersDashboard = () => {
             if (productAddress && productContext?.productEvents) {
               const productEvent = productContext.productEvents.find(
                 (event: any) => {
-                  const eventAddress = `30402:${event.pubkey}:${event.tags.find(
-                    (tag: any) => tag[0] === "d"
-                  )?.[1]}`;
+                  const eventAddress = `30402:${event.pubkey}:${
+                    event.tags.find((tag: any) => tag[0] === "d")?.[1]
+                  }`;
                   return productAddress.includes(eventAddress);
                 }
               );
@@ -732,9 +732,9 @@ const OrdersDashboard = () => {
     if (!productContext?.productEvents) return;
 
     const productEvent = productContext.productEvents.find((event: any) => {
-      const eventAddress = `30402:${event.pubkey}:${event.tags.find(
-        (tag: any) => tag[0] === "d"
-      )?.[1]}`;
+      const eventAddress = `30402:${event.pubkey}:${
+        event.tags.find((tag: any) => tag[0] === "d")?.[1]
+      }`;
       return productAddress.includes(eventAddress);
     });
 
@@ -998,23 +998,23 @@ const OrdersDashboard = () => {
   }
 
   return (
-    <div className="relative min-w-0 max-w-[98vw] bg-[#111] px-4 py-8 text-white selection:bg-yellow-400 selection:text-black sm:py-12">
+    <div className="relative max-w-[98vw] min-w-0 bg-[#111] px-4 py-8 text-white selection:bg-yellow-400 selection:text-black sm:py-12">
       {/* Background Grid Pattern */}
-      <div className="pointer-events-none absolute inset-0 z-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)]"></div>
+      <div className="pointer-events-none absolute inset-0 z-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] bg-[size:24px_24px]"></div>
 
-      <div className="relative z-10 mx-auto w-full min-w-0 max-w-full">
+      <div className="relative z-10 mx-auto w-full max-w-full min-w-0">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-          <h1 className="text-4xl font-black uppercase tracking-tighter text-white">
+          <h1 className="text-4xl font-black tracking-tighter text-white uppercase">
             Orders Dashboard
           </h1>
           <div className="flex items-center gap-3">
-            <span className="text-xs font-bold uppercase tracking-wider text-zinc-500">
+            <span className="text-xs font-bold tracking-wider text-zinc-500 uppercase">
               Display:
             </span>
             <div className="inline-flex gap-2">
               <button
                 onClick={() => setDisplayCurrency("sats")}
-                className={`rounded-lg border-2 px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all ${
+                className={`rounded-lg border-2 px-4 py-2 text-xs font-bold tracking-wider uppercase transition-all ${
                   displayCurrency === "sats"
                     ? "border-yellow-400 bg-yellow-400 text-black shadow-[2px_2px_0px_0px_#ffffff]"
                     : "border-zinc-800 bg-transparent text-zinc-400 hover:border-zinc-600 hover:text-white"
@@ -1024,7 +1024,7 @@ const OrdersDashboard = () => {
               </button>
               <button
                 onClick={() => setDisplayCurrency("USD")}
-                className={`rounded-lg border-2 px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all ${
+                className={`rounded-lg border-2 px-4 py-2 text-xs font-bold tracking-wider uppercase transition-all ${
                   displayCurrency === "USD"
                     ? "border-yellow-400 bg-yellow-400 text-black shadow-[2px_2px_0px_0px_#ffffff]"
                     : "border-zinc-800 bg-transparent text-zinc-400 hover:border-zinc-600 hover:text-white"
@@ -1038,14 +1038,14 @@ const OrdersDashboard = () => {
 
         <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-3">
           <div className="rounded-2xl border border-zinc-800 bg-[#161616] p-6">
-            <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-zinc-500">
+            <h3 className="mb-2 text-xs font-bold tracking-wider text-zinc-500 uppercase">
               Total Orders
             </h3>
             <p className="text-4xl font-black text-white">{totalOrders}</p>
           </div>
 
           <div className="rounded-2xl border border-zinc-800 bg-[#161616] p-6">
-            <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-zinc-500">
+            <h3 className="mb-2 text-xs font-bold tracking-wider text-zinc-500 uppercase">
               Total GMV
             </h3>
             <p className="text-4xl font-black text-white">
@@ -1059,7 +1059,7 @@ const OrdersDashboard = () => {
           </div>
 
           <div className="rounded-2xl border border-zinc-800 bg-[#161616] p-6">
-            <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-zinc-500">
+            <h3 className="mb-2 text-xs font-bold tracking-wider text-zinc-500 uppercase">
               Average Order Size
             </h3>
             <p className="text-4xl font-black text-white">
@@ -1086,40 +1086,40 @@ const OrdersDashboard = () => {
             <table className="min-w-full text-left text-sm text-zinc-400">
               <thead className="border-b border-zinc-800 bg-[#111]">
                 <tr>
-                  <th className="px-4 py-4 text-left text-xs font-bold uppercase tracking-wider text-zinc-500">
+                  <th className="px-4 py-4 text-left text-xs font-bold tracking-wider text-zinc-500 uppercase">
                     Order ID
                   </th>
-                  <th className="px-4 py-4 text-left text-xs font-bold uppercase tracking-wider text-zinc-500">
+                  <th className="px-4 py-4 text-left text-xs font-bold tracking-wider text-zinc-500 uppercase">
                     Type
                   </th>
-                  <th className="px-4 py-4 text-left text-xs font-bold uppercase tracking-wider text-zinc-500">
+                  <th className="px-4 py-4 text-left text-xs font-bold tracking-wider text-zinc-500 uppercase">
                     Buyer/Seller
                   </th>
-                  <th className="px-4 py-4 text-left text-xs font-bold uppercase tracking-wider text-zinc-500">
+                  <th className="px-4 py-4 text-left text-xs font-bold tracking-wider text-zinc-500 uppercase">
                     Amount
                   </th>
-                  <th className="px-4 py-4 text-left text-xs font-bold uppercase tracking-wider text-zinc-500">
+                  <th className="px-4 py-4 text-left text-xs font-bold tracking-wider text-zinc-500 uppercase">
                     Status
                   </th>
-                  <th className="px-4 py-4 text-left text-xs font-bold uppercase tracking-wider text-zinc-500">
+                  <th className="px-4 py-4 text-left text-xs font-bold tracking-wider text-zinc-500 uppercase">
                     Date
                   </th>
-                  <th className="px-4 py-4 text-left text-xs font-bold uppercase tracking-wider text-zinc-500">
+                  <th className="px-4 py-4 text-left text-xs font-bold tracking-wider text-zinc-500 uppercase">
                     Address
                   </th>
-                  <th className="px-4 py-4 text-left text-xs font-bold uppercase tracking-wider text-zinc-500">
+                  <th className="px-4 py-4 text-left text-xs font-bold tracking-wider text-zinc-500 uppercase">
                     Pickup Location
                   </th>
-                  <th className="px-4 py-4 text-left text-xs font-bold uppercase tracking-wider text-zinc-500">
+                  <th className="px-4 py-4 text-left text-xs font-bold tracking-wider text-zinc-500 uppercase">
                     Order Specs
                   </th>
-                  <th className="px-4 py-4 text-left text-xs font-bold uppercase tracking-wider text-zinc-500">
+                  <th className="px-4 py-4 text-left text-xs font-bold tracking-wider text-zinc-500 uppercase">
                     Payment
                   </th>
-                  <th className="px-4 py-4 text-left text-xs font-bold uppercase tracking-wider text-zinc-500">
+                  <th className="px-4 py-4 text-left text-xs font-bold tracking-wider text-zinc-500 uppercase">
                     Product
                   </th>
-                  <th className="px-4 py-4 text-left text-xs font-bold uppercase tracking-wider text-zinc-500">
+                  <th className="px-4 py-4 text-left text-xs font-bold tracking-wider text-zinc-500 uppercase">
                     Donation Amount
                   </th>
                 </tr>
@@ -1148,7 +1148,7 @@ const OrdersDashboard = () => {
                             : ""
                         }`}
                       >
-                        <td className="whitespace-nowrap px-4 py-4 text-sm font-medium text-white">
+                        <td className="px-4 py-4 text-sm font-medium whitespace-nowrap text-white">
                           <div className="flex flex-col gap-1">
                             <span>{order.orderId.substring(0, 8)}...</span>
                             {order.reviewRating !== undefined ? (
@@ -1165,9 +1165,9 @@ const OrdersDashboard = () => {
                             ) : null}
                           </div>
                         </td>
-                        <td className="whitespace-nowrap px-4 py-4 text-sm">
+                        <td className="px-4 py-4 text-sm whitespace-nowrap">
                           <span
-                            className={`inline-flex rounded bg-opacity-10 px-2 py-1 text-xs font-bold uppercase tracking-wider ${
+                            className={`bg-opacity-10 inline-flex rounded px-2 py-1 text-xs font-bold tracking-wider uppercase ${
                               order.isSale
                                 ? "bg-[#6d28d9] text-[#6d28d9]"
                                 : "bg-orange-500 text-orange-500"
@@ -1195,7 +1195,7 @@ const OrdersDashboard = () => {
                             );
                           })()}
                         </td>
-                        <td className="whitespace-nowrap px-4 py-4 text-sm font-bold text-white">
+                        <td className="px-4 py-4 text-sm font-bold whitespace-nowrap text-white">
                           {order.amount > 0
                             ? displayCurrency === "sats"
                               ? `${getConvertedAmount(
@@ -1211,10 +1211,10 @@ const OrdersDashboard = () => {
                                 })}`
                             : "N/A"}
                         </td>
-                        <td className="whitespace-nowrap px-4 py-4 text-sm">
+                        <td className="px-4 py-4 text-sm whitespace-nowrap">
                           <div className="flex flex-col gap-1">
                             <span
-                              className={`inline-flex rounded border bg-opacity-10 px-2 py-1 text-xs font-bold uppercase tracking-wider ${
+                              className={`bg-opacity-10 inline-flex rounded border px-2 py-1 text-xs font-bold tracking-wider uppercase ${
                                 order.status === "completed"
                                   ? "border-blue-500/20 bg-blue-500 text-blue-500"
                                   : order.status === "shipped"
@@ -1236,7 +1236,7 @@ const OrdersDashboard = () => {
                             )}
                           </div>
                         </td>
-                        <td className="whitespace-nowrap px-4 py-4 text-sm text-zinc-300">
+                        <td className="px-4 py-4 text-sm whitespace-nowrap text-zinc-300">
                           {new Date(
                             order.timestamp * 1000
                           ).toLocaleDateString()}
@@ -1257,7 +1257,7 @@ const OrdersDashboard = () => {
                             {order.pickupLocation || "N/A"}
                           </div>
                         </td>
-                        <td className="whitespace-nowrap px-4 py-4 text-sm text-zinc-300">
+                        <td className="px-4 py-4 text-sm whitespace-nowrap text-zinc-300">
                           {(() => {
                             const specs = [];
                             if (order.selectedSize)
@@ -1292,7 +1292,7 @@ const OrdersDashboard = () => {
                             "N/A"
                           )}
                         </td>
-                        <td className="whitespace-nowrap px-4 py-4 text-sm text-zinc-300">
+                        <td className="px-4 py-4 text-sm whitespace-nowrap text-zinc-300">
                           {order.donationAmount !== undefined &&
                           order.donationAmount > 0
                             ? displayCurrency === "sats"
@@ -1505,7 +1505,7 @@ const OrdersDashboard = () => {
             <ModalBody>
               <div className="mb-4 flex flex-col items-center justify-center gap-6 sm:flex-row sm:gap-16">
                 <div className="flex items-center gap-3">
-                  <span className="font-bold uppercase tracking-wider text-white">
+                  <span className="font-bold tracking-wider text-white uppercase">
                     Good Overall
                   </span>
                   <HandThumbUpIcon
@@ -1526,7 +1526,7 @@ const OrdersDashboard = () => {
                     }`}
                     onClick={() => setSelectedThumb("down")}
                   />
-                  <span className="font-bold uppercase tracking-wider text-white">
+                  <span className="font-bold tracking-wider text-white uppercase">
                     Bad Overall
                   </span>
                 </div>

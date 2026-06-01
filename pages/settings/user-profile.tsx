@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useContext, useMemo } from "react";
+import { useEffect, useState, useContext, useMemo } from "react";
 import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs";
 import { ProfileMapContext } from "@/utils/context/context";
 import { useForm, Controller, SubmitHandler } from "react-hook-form";
@@ -9,7 +9,7 @@ import {
   Image,
   Select,
   SelectItem,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import {
   CheckIcon,
   ClipboardIcon,
@@ -120,7 +120,7 @@ const UserProfilePage = () => {
     <>
       <div className="relative flex min-h-screen flex-col bg-[#111] pt-24 selection:bg-yellow-400 selection:text-black md:pb-20">
         {/* Background Grid Pattern */}
-        <div className="pointer-events-none absolute inset-0 z-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)]"></div>
+        <div className="pointer-events-none absolute inset-0 z-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] bg-[size:24px_24px]"></div>
 
         <div className="relative z-10 mx-auto h-full w-full px-4 lg:w-1/2">
           <SettingsBreadCrumbs />
@@ -138,7 +138,7 @@ const UserProfilePage = () => {
                     />
                   )}
                   <FileUploaderButton
-                    className={`${NEO_BTN} absolute bottom-4 right-4 z-20 h-10 px-4 text-xs`}
+                    className={`${NEO_BTN} absolute right-4 bottom-4 z-20 h-10 px-4 text-xs`}
                     imgCallbackOnUpload={(imgUrl) => setValue("banner", imgUrl)}
                   >
                     Upload Banner
@@ -149,7 +149,7 @@ const UserProfilePage = () => {
                     <div className="rounded-full border-4 border-[#111]">
                       <FileUploaderButton
                         isIconOnly
-                        className={`${NEO_BTN} min-w-10 absolute bottom-0 right-0 z-20 h-10 w-10 rounded-full border-white p-0`}
+                        className={`${NEO_BTN} absolute right-0 bottom-0 z-20 h-10 w-10 min-w-10 rounded-full border-white p-0`}
                         imgCallbackOnUpload={(imgUrl) =>
                           setValue("picture", imgUrl)
                         }
@@ -183,7 +183,7 @@ const UserProfilePage = () => {
                 }}
               >
                 <span
-                  className="lg:text-md break-all pr-3 font-mono text-[0.60rem] font-bold text-zinc-400 sm:text-xs md:text-sm"
+                  className="lg:text-md pr-3 font-mono text-[0.60rem] font-bold break-all text-zinc-400 sm:text-xs md:text-sm"
                   suppressHydrationWarning
                 >
                   {userNPub!}
@@ -206,7 +206,7 @@ const UserProfilePage = () => {
               {userNSec ? (
                 <div className="mx-auto mb-12 flex w-full max-w-2xl cursor-pointer flex-row items-center justify-center rounded-xl border-2 border-zinc-800 bg-[#161616] p-3">
                   <span
-                    className="lg:text-md break-all pr-3 font-mono text-[0.60rem] font-bold text-zinc-400 sm:text-xs md:text-sm"
+                    className="lg:text-md pr-3 font-mono text-[0.60rem] font-bold break-all text-zinc-400 sm:text-xs md:text-sm"
                     suppressHydrationWarning
                   >
                     {viewState === "shown"
@@ -489,25 +489,13 @@ const UserProfilePage = () => {
                       onChange={(e) => onChange(e.target.value)}
                       onBlur={onBlur}
                     >
-                      <SelectItem
-                        key="ecash"
-                        value="ecash"
-                        className="text-zinc-800"
-                      >
+                      <SelectItem key="ecash" className="text-zinc-800">
                         Cashu (Bitcoin)
                       </SelectItem>
-                      <SelectItem
-                        key="lightning"
-                        value="lightning"
-                        className="text-zinc-800"
-                      >
+                      <SelectItem key="lightning" className="text-zinc-800">
                         Lightning (Bitcoin)
                       </SelectItem>
-                      <SelectItem
-                        key="fiat"
-                        value="fiat"
-                        className="text-zinc-800"
-                      >
+                      <SelectItem key="fiat" className="text-zinc-800">
                         Local Currency (Fiat)
                       </SelectItem>
                     </Select>
@@ -515,7 +503,7 @@ const UserProfilePage = () => {
                 />
 
                 <div className="pb-8">
-                  <label className="mb-4 block text-sm font-bold uppercase tracking-wider text-zinc-400">
+                  <label className="mb-4 block text-sm font-bold tracking-wider text-zinc-400 uppercase">
                     Fiat payment options
                   </label>
                   <div className="space-y-4">

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useContext, useMemo } from "react";
+import { useEffect, useState, useContext, useMemo } from "react";
 import { useRouter } from "next/router";
 import { useForm, Controller } from "react-hook-form";
 import {
@@ -8,7 +8,7 @@ import {
   Image,
   Select,
   SelectItem,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import { ProfileMapContext } from "@/utils/context/context";
 import { FiatOptionsType } from "@/utils/types/types";
 import {
@@ -100,7 +100,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
             />
           )}
           <FileUploaderButton
-            className={`${NEO_BTN} absolute bottom-2 right-2 z-20 h-8 px-3 text-[10px] md:bottom-4 md:right-4 md:h-10 md:px-4 md:text-xs`}
+            className={`${NEO_BTN} absolute right-2 bottom-2 z-20 h-8 px-3 text-[10px] md:right-4 md:bottom-4 md:h-10 md:px-4 md:text-xs`}
             imgCallbackOnUpload={(imgUrl) => setValue("banner", imgUrl)}
           >
             Upload Banner
@@ -111,7 +111,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
             <div className="rounded-full border-4 border-[#111]">
               <FileUploaderButton
                 isIconOnly
-                className={`${NEO_BTN} absolute bottom-0 right-0 z-[60] h-8 w-8 min-w-0 rounded-full border-white p-0 shadow-lg md:h-10 md:w-10`}
+                className={`${NEO_BTN} absolute right-0 bottom-0 z-[60] h-8 w-8 min-w-0 rounded-full border-white p-0 shadow-lg md:h-10 md:w-10`}
                 imgCallbackOnUpload={(imgUrl) => setValue("picture", imgUrl)}
               />
               {watchPicture ? (
@@ -358,17 +358,13 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
               onChange={(e) => onChange(e.target.value)}
               onBlur={onBlur}
             >
-              <SelectItem key="ecash" value="ecash" className="text-zinc-800">
+              <SelectItem key="ecash" className="text-zinc-800">
                 Cashu (Bitcoin)
               </SelectItem>
-              <SelectItem
-                key="lightning"
-                value="lightning"
-                className="text-zinc-800"
-              >
+              <SelectItem key="lightning" className="text-zinc-800">
                 Lightning (Bitcoin)
               </SelectItem>
-              <SelectItem key="fiat" value="fiat" className="text-zinc-800">
+              <SelectItem key="fiat" className="text-zinc-800">
                 Local Currency (Fiat)
               </SelectItem>
             </Select>
@@ -376,7 +372,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
         />
 
         <div className="pb-8">
-          <label className="mb-4 block text-sm font-bold uppercase tracking-wider text-zinc-400">
+          <label className="mb-4 block text-sm font-bold tracking-wider text-zinc-400 uppercase">
             Fiat payment options (for sellers)
           </label>
           <div className="space-y-4">

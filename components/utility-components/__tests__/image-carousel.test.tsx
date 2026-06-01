@@ -1,4 +1,3 @@
-import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import ImageCarousel from "../image-carousel";
@@ -19,7 +18,7 @@ jest.mock("react-responsive-carousel", () => ({
   )),
 }));
 
-jest.mock("@nextui-org/react", () => ({
+jest.mock("@heroui/react", () => ({
   Image: ({ _disableSkeleton, ...props }: any) => (
     <img {...props} data-testid="next-image" />
   ),
@@ -37,7 +36,7 @@ jest.mock("@/utils/STATIC-VARIABLES", () => ({
   PREVNEXTBUTTONSTYLES: "mock-button-styles",
 }));
 
-const MockCarousel = Carousel as jest.Mock;
+const MockCarousel = Carousel as unknown as jest.Mock;
 
 describe("ImageCarousel", () => {
   beforeEach(() => {

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useContext } from "react";
+import { useEffect, useState, useContext } from "react";
 import {
   Modal,
   ModalContent,
@@ -7,7 +7,7 @@ import {
   Image,
   Input,
   InputProps,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import {
   setLocalStorageDataOnSignIn,
   validateNSecKey,
@@ -99,7 +99,7 @@ export default function SignInModal({
       await signer.getPubKey();
       onClose();
       router.push("/onboarding/user-profile");
-    } catch (error) {
+    } catch {
       setFailureText("Bunker sign-in failed!");
       setShowFailureModal(true);
       setIsBunkerConnecting(false);
@@ -207,7 +207,7 @@ export default function SignInModal({
                     </p>
                   </div>
                   <Button
-                    className="h-10 rounded-lg border border-zinc-600 bg-transparent text-sm font-bold uppercase tracking-wider text-white hover:border-white hover:bg-zinc-800"
+                    className="h-10 rounded-lg border border-zinc-600 bg-transparent text-sm font-bold tracking-wider text-white uppercase hover:border-white hover:bg-zinc-800"
                     onClick={handleGenerateKeys}
                   >
                     Sign Up
@@ -225,7 +225,7 @@ export default function SignInModal({
                       src="/shopstr-2000x2000.png"
                       width={50}
                     />
-                    <div className="text-2xl font-black uppercase tracking-tighter text-white">
+                    <div className="text-2xl font-black tracking-tighter text-white uppercase">
                       Shopstr
                     </div>
                   </div>
@@ -238,7 +238,7 @@ export default function SignInModal({
                   <div className="text-center font-mono text-xs text-zinc-600">
                     ------ or ------
                   </div>
-                  <div className="flex flex-col ">
+                  <div className="flex flex-col">
                     <div className="">
                       <Button
                         data-testid="bunker-open-btn"
@@ -259,7 +259,7 @@ export default function SignInModal({
                       }`}
                     >
                       <div>
-                        <label className="mb-1 block text-xs font-bold uppercase text-zinc-500">
+                        <label className="mb-1 block text-xs font-bold text-zinc-500 uppercase">
                           Bunker Token:
                         </label>
                         <Input
@@ -299,7 +299,7 @@ export default function SignInModal({
                     ------ or ------
                   </div>
                 </div>
-                <div className="flex flex-col ">
+                <div className="flex flex-col">
                   <div className="">
                     <Button
                       data-testid="nsec-open-btn"
@@ -320,7 +320,7 @@ export default function SignInModal({
                     }`}
                   >
                     <div>
-                      <label className="mb-1 block text-xs font-bold uppercase text-zinc-500">
+                      <label className="mb-1 block text-xs font-bold text-zinc-500 uppercase">
                         Private Key:
                       </label>
                       <Input
@@ -340,7 +340,7 @@ export default function SignInModal({
                       />
                     </div>
                     <div>
-                      <label className="mb-1 block text-xs font-bold uppercase text-zinc-500">
+                      <label className="mb-1 block text-xs font-bold text-zinc-500 uppercase">
                         Encryption Passphrase:
                         <span className="text-red-500">*</span>
                       </label>
@@ -390,7 +390,7 @@ export default function SignInModal({
                       </p>
                     </div>
                     <Button
-                      className="h-10 w-full rounded-lg border border-zinc-600 bg-transparent text-sm font-bold uppercase tracking-wider text-white hover:border-white hover:bg-zinc-800"
+                      className="h-10 w-full rounded-lg border border-zinc-600 bg-transparent text-sm font-bold tracking-wider text-white uppercase hover:border-white hover:bg-zinc-800"
                       onClick={handleGenerateKeys}
                     >
                       Sign Up

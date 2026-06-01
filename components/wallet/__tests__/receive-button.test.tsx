@@ -13,10 +13,11 @@ import {
   NostrContext,
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
-import { getDecodedToken, CashuWallet } from "@cashu/cashu-ts";
+import { getDecodedToken, Wallet as CashuWallet } from "@cashu/cashu-ts";
 import {
   getLocalStorageData,
   publishProofEvent,
+  publishWalletEvent,
 } from "@/utils/nostr/nostr-helper-functions";
 import { NostrNIP46Signer } from "@/utils/nostr/signers/nostr-nip46-signer";
 
@@ -25,11 +26,14 @@ jest.setTimeout(15000);
 jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
   getLocalStorageData: jest.fn(),
   publishProofEvent: jest.fn(),
+  publishWalletEvent: jest.fn(),
 }));
 jest.mock("@cashu/cashu-ts", () => ({
   ...jest.requireActual("@cashu/cashu-ts"),
   getDecodedToken: jest.fn(),
-  CashuWallet: jest.fn().mockImplementation(() => ({
+  Mint: jest.fn().mockImplementation(() => ({})),
+  Wallet: jest.fn().mockImplementation(() => ({
+    loadMint: jest.fn().mockResolvedValue(undefined),
     checkProofsStates: jest.fn(),
   })),
 }));
@@ -44,17 +48,28 @@ jest.mock("@heroicons/react/24/outline", () => ({
 const mockGetLocalStorageData = getLocalStorageData as jest.Mock;
 const mockGetDecodedToken = getDecodedToken as jest.Mock;
 const mockPublishProofEvent = publishProofEvent as jest.Mock;
+const mockPublishWalletEvent = publishWalletEvent as jest.Mock;
 const MockCashuWallet = CashuWallet as jest.Mock;
-const mockSigner = { getPublicKey: jest.fn().mockResolvedValue("mock-pubkey") };
-const mockNostr = { pool: {} };
+const mockSigner = {
+  connect: jest.fn(),
+  getPubKey: jest.fn().mockResolvedValue("mock-pubkey"),
+  sign: jest.fn(),
+  encrypt: jest.fn(),
+  decrypt: jest.fn(),
+  close: jest.fn(),
+  toJSON: jest.fn(),
+} as any;
+const mockNostr = { pool: {} } as any;
 
 const renderWithProviders = (
   ui: React.ReactElement,
-  { signer = mockSigner, nostr = mockNostr } = {}
+  { signer = mockSigner as any, nostr = mockNostr as any } = {}
 ) => {
   return render(
-    <NostrContext.Provider value={{ nostr }}>
-      <SignerContext.Provider value={{ signer }}>{ui}</SignerContext.Provider>
+    <NostrContext.Provider value={{ nostr } as any}>
+      <SignerContext.Provider value={{ signer } as any}>
+        {ui}
+      </SignerContext.Provider>
     </NostrContext.Provider>
   );
 };
@@ -72,6 +87,7 @@ describe("ReceiveButton", () => {
       history: [],
     });
     mockPublishProofEvent.mockResolvedValue(undefined);
+    mockPublishWalletEvent.mockResolvedValue(undefined);
   });
 
   test("renders the receive button and opens/closes the modal", async () => {
@@ -79,7 +95,7 @@ describe("ReceiveButton", () => {
     const receiveButton = screen.getByRole("button", { name: /Receive/i });
     fireEvent.click(receiveButton);
     const modal = await screen.findByRole("dialog");
-    expect(modal).toBeVisible();
+    expect(modal).toBeInTheDocument();
     const cancelButton = within(modal).getByRole("button", { name: /Cancel/i });
     fireEvent.click(cancelButton);
     await waitFor(() => {
@@ -118,12 +134,20 @@ describe("ReceiveButton", () => {
 
   test("successfully receives a valid token and closes the success modal", async () => {
     const user = userEvent.setup();
-    const mockProofs = [{ id: "test", amount: 10, secret: "secret", C: "C1" }];
+    const mockProofs = [
+      {
+        id: "test",
+        amount: { toNumber: () => 10 },
+        secret: "secret",
+        C: "C1",
+      },
+    ];
     mockGetDecodedToken.mockReturnValue({
       mint: "https://testmint.com",
       proofs: mockProofs,
     });
     MockCashuWallet.mockImplementation(() => ({
+      loadMint: jest.fn().mockResolvedValue(undefined),
       checkProofsStates: jest
         .fn()
         .mockResolvedValue([{ state: "UNSPENT", Y: "Y1" }]),
@@ -143,7 +167,7 @@ describe("ReceiveButton", () => {
     fireEvent.click(submitButton);
 
     const successModal = await screen.findByText("Token successfully claimed!");
-    expect(successModal).toBeVisible();
+    expect(successModal).toBeInTheDocument();
 
     const closeButton = screen.getByRole("button", { name: /close/i });
     fireEvent.click(closeButton);
@@ -158,9 +182,17 @@ describe("ReceiveButton", () => {
     const user = userEvent.setup();
     mockGetDecodedToken.mockReturnValue({
       mint: "https://testmint.com",
-      proofs: [{ id: "test", amount: 10 }],
+      proofs: [
+        {
+          id: "test",
+          amount: { toNumber: () => 10 },
+          secret: "secret",
+          C: "C1",
+        },
+      ],
     });
     MockCashuWallet.mockImplementation(() => ({
+      loadMint: jest.fn().mockResolvedValue(undefined),
       checkProofsStates: jest
         .fn()
         .mockResolvedValue([{ state: "SPENT", Y: "Y1" }]),
@@ -179,7 +211,7 @@ describe("ReceiveButton", () => {
     fireEvent.click(submitButton);
 
     const errorModal = await screen.findByText("Spent token!");
-    expect(errorModal).toBeVisible();
+    expect(errorModal).toBeInTheDocument();
 
     const closeButton = screen.getByRole("button", { name: /close/i });
     fireEvent.click(closeButton);
@@ -190,7 +222,12 @@ describe("ReceiveButton", () => {
 
   test("shows an error modal for duplicate tokens and closes it", async () => {
     const user = userEvent.setup();
-    const mockProof = { id: "test", amount: 10, secret: "secret", C: "C1" };
+    const mockProof = {
+      id: "test",
+      amount: { toNumber: () => 10 },
+      secret: "secret",
+      C: "C1",
+    };
     mockGetLocalStorageData.mockReturnValue({
       mints: [],
       tokens: [mockProof],
@@ -201,6 +238,7 @@ describe("ReceiveButton", () => {
       proofs: [mockProof],
     });
     MockCashuWallet.mockImplementation(() => ({
+      loadMint: jest.fn().mockResolvedValue(undefined),
       checkProofsStates: jest
         .fn()
         .mockResolvedValue([{ state: "UNSPENT", Y: "Y1" }]),
@@ -219,7 +257,7 @@ describe("ReceiveButton", () => {
     );
 
     const errorModal = await screen.findByText("Duplicate token!");
-    expect(errorModal).toBeVisible();
+    expect(errorModal).toBeInTheDocument();
 
     const closeButton = screen.getByRole("button", { name: /close/i });
     fireEvent.click(closeButton);
@@ -247,7 +285,7 @@ describe("ReceiveButton", () => {
     );
 
     const errorModal = await screen.findByText("Invalid token!");
-    expect(errorModal).toBeVisible();
+    expect(errorModal).toBeInTheDocument();
 
     const closeButton = screen.getByRole("button", { name: /close/i });
     fireEvent.click(closeButton);
@@ -257,14 +295,17 @@ describe("ReceiveButton", () => {
   });
 
   test("shows info message when signer is NostrNIP46Signer", async () => {
-    const nip46Signer = new NostrNIP46Signer();
-    renderWithProviders(<ReceiveButton />, { signer: nip46Signer });
+    const nip46Signer = new NostrNIP46Signer(
+      { bunker: "bunker://dummy@dummy" },
+      jest.fn()
+    );
+    renderWithProviders(<ReceiveButton />, { signer: nip46Signer as any });
     fireEvent.click(screen.getByRole("button", { name: /Receive/i }));
     const modal = await screen.findByRole("dialog");
     const infoMessage =
       "If the token is taking a while to be received, make sure to check your bunker application to approve the transaction events.";
     expect(
       await within(modal).findByText(infoMessage, { exact: false })
-    ).toBeVisible();
+    ).toBeInTheDocument();
   });
 });

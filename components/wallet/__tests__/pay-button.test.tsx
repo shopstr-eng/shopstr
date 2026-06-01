@@ -3,7 +3,6 @@ import {
   screen,
   fireEvent,
   waitFor,
-  waitForElementToBeRemoved,
   within,
 } from "@testing-library/react";
 import "@testing-library/jest-dom";
@@ -40,14 +39,19 @@ const mockCreateMeltQuote = jest.fn();
 const mockGetKeySets = jest.fn();
 const mockSend = jest.fn();
 const mockMeltProofs = jest.fn();
+const mockCheckMeltQuote = jest
+  .fn()
+  .mockResolvedValue({ state: "UNPAID", change: [] });
 
 jest.mock("@cashu/cashu-ts", () => ({
-  CashuMint: jest.fn().mockImplementation(() => ({})),
-  CashuWallet: jest.fn().mockImplementation(() => ({
-    createMeltQuote: mockCreateMeltQuote,
-    getKeySets: mockGetKeySets,
+  Mint: jest.fn().mockImplementation(() => ({})),
+  Wallet: jest.fn().mockImplementation(() => ({
+    loadMint: jest.fn().mockResolvedValue(undefined),
+    createMeltQuoteBolt11: mockCreateMeltQuote,
+    keyChain: { getKeysets: mockGetKeySets },
     send: mockSend,
-    meltProofs: mockMeltProofs,
+    meltProofsBolt11: mockMeltProofs,
+    checkMeltQuoteBolt11: mockCheckMeltQuote,
   })),
 }));
 
@@ -70,12 +74,8 @@ Object.defineProperty(window, "localStorage", {
   value: localStorageMock,
 });
 
-const mockSigner = {
-  /* mock signer object properties if needed */
-};
-const mockNostr = {
-  /* mock nostr object properties if needed */
-};
+const mockSigner = {} as any;
+const mockNostr = {} as any;
 const mockWalletContext = {
   proofEvents: [
     {
@@ -87,16 +87,21 @@ const mockWalletContext = {
       proofs: [{ id: "00d0a1b24d1c1a53", amount: 30, secret: "secret2" }],
     },
   ],
+  cashuMints: [],
+  cashuProofs: [],
+  isLoading: false,
   setProofEvents: jest.fn(),
 };
 
 const renderComponent = (customSigner = mockSigner) => {
   return render(
-    <NostrContext.Provider value={{ nostr: mockNostr, setNostr: jest.fn() }}>
+    <NostrContext.Provider
+      value={{ nostr: mockNostr, setNostr: jest.fn() } as any}
+    >
       <SignerContext.Provider
-        value={{ signer: customSigner, setSigner: jest.fn() }}
+        value={{ signer: customSigner, setSigner: jest.fn() } as any}
       >
-        <CashuWalletContext.Provider value={mockWalletContext}>
+        <CashuWalletContext.Provider value={mockWalletContext as any}>
           <PayButton />
         </CashuWalletContext.Provider>
       </SignerContext.Provider>
@@ -135,13 +140,17 @@ describe("PayButton Component", () => {
 
     const payButton = screen.getByRole("button", { name: /pay/i });
     fireEvent.click(payButton);
-    expect(await screen.findByText("Pay Lightning Invoice")).toBeVisible();
+    expect(
+      await screen.findByText("Pay Lightning Invoice")
+    ).toBeInTheDocument();
 
     const cancelButton = screen.getByRole("button", { name: "Cancel" });
     fireEvent.click(cancelButton);
-    await waitForElementToBeRemoved(() =>
-      screen.queryByText("Pay Lightning Invoice")
-    );
+    await waitFor(() => {
+      expect(
+        screen.queryByText("Pay Lightning Invoice")
+      ).not.toBeInTheDocument();
+    });
   });
 
   test("shows validation error for invalid invoice prefix", async () => {
@@ -222,7 +231,10 @@ describe("PayButton Component", () => {
   });
 
   test("shows NIP46 signer information when using NostrNIP46Signer", async () => {
-    const nip46Signer = new NostrNIP46Signer();
+    const nip46Signer = new NostrNIP46Signer(
+      { bunker: "bunker://dummy@dummy" },
+      jest.fn()
+    );
     renderComponent(nip46Signer);
 
     fireEvent.click(screen.getByRole("button", { name: /pay/i }));

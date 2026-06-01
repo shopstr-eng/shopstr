@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 
 export default function Tos() {
   const [expandedItems, setExpandedItems] = useState<Record<number, boolean>>(
@@ -68,11 +68,11 @@ export default function Tos() {
   };
 
   return (
-    <div className="min-h-screen bg-[#050505] pb-20 pt-32 text-white">
+    <div className="min-h-screen bg-[#050505] pt-32 pb-20 text-white">
       <div className="container mx-auto max-w-3xl px-4">
         {/* Header */}
         <div className="mb-16 flex flex-col items-center text-center">
-          <h1 className="mb-6 text-3xl font-black uppercase tracking-tight md:text-5xl lg:text-6xl">
+          <h1 className="mb-6 text-3xl font-black tracking-tight uppercase md:text-5xl lg:text-6xl">
             Terms of Service
           </h1>
           <p className="mb-8 text-lg text-gray-400">
@@ -82,7 +82,7 @@ export default function Tos() {
           {/* Date Pill */}
           <div className="inline-flex items-center rounded-lg border border-white/10 bg-[#111] px-4 py-2 text-sm text-gray-400">
             <span>Last updated:</span>
-            <span className="ml-2 font-bold text-shopstr-yellow">
+            <span className="text-shopstr-yellow ml-2 font-bold">
               2025-04-25
             </span>
           </div>
@@ -101,11 +101,11 @@ export default function Tos() {
                   onClick={() => toggleItem(index)}
                   className="flex w-full items-center justify-between p-6 text-left transition-colors hover:bg-white/5"
                 >
-                  <span className="pr-8 text-lg font-bold uppercase text-white">
+                  <span className="pr-8 text-lg font-bold text-white uppercase">
                     {item.title}
                   </span>
                   <div
-                    className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/5 duration-200 transition-transform ${
+                    className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/5 transition-transform duration-200 ${
                       isOpen ? "rotate-180" : ""
                     }`}
                   >
@@ -126,7 +126,7 @@ export default function Tos() {
                   </div>
                 </button>
                 {isOpen && (
-                  <div className="border-t border-white/5 px-6 pb-6 pt-4 leading-relaxed text-gray-400">
+                  <div className="border-t border-white/5 px-6 pt-4 pb-6 leading-relaxed text-gray-400">
                     {item.content}
                   </div>
                 )}

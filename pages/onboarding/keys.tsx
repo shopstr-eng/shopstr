@@ -1,7 +1,7 @@
 import { useState, useEffect, useContext } from "react";
 import { useRouter } from "next/router";
 import { Square2StackIcon } from "@heroicons/react/24/outline";
-import { Button, Image } from "@nextui-org/react";
+import { Button, Image } from "@heroui/react";
 import { ArrowLongRightIcon } from "@heroicons/react/24/outline";
 import {
   generateKeys,
@@ -93,8 +93,8 @@ const Keys = () => {
       <div className="flex min-h-screen items-center justify-center bg-[#050505] p-4 pt-24">
         <div className="relative w-full max-w-2xl rounded-3xl border border-white/10 bg-[#1a1a1a] p-8 shadow-2xl md:p-12">
           {/* Step Pill */}
-          <div className="absolute -top-5 left-1/2 -translate-x-1/2 rounded-full border-2 border-b-4 border-shopstr-yellow bg-[#111] px-6 py-2">
-            <span className="text-xs font-bold uppercase tracking-widest text-shopstr-yellow">
+          <div className="border-shopstr-yellow absolute -top-5 left-1/2 -translate-x-1/2 rounded-full border-2 border-b-4 bg-[#111] px-6 py-2">
+            <span className="text-shopstr-yellow text-xs font-bold tracking-widest uppercase">
               Step 1 of 4
             </span>
           </div>
@@ -123,7 +123,7 @@ const Keys = () => {
           <div className="space-y-6">
             {/* Public Key Section */}
             <div>
-              <label className="mb-3 block text-xs font-bold uppercase tracking-widest text-white/50">
+              <label className="mb-3 block text-xs font-bold tracking-widest text-white/50 uppercase">
                 Public Key
               </label>
               {npub && (
@@ -140,7 +140,7 @@ const Keys = () => {
             </div>
 
             <div>
-              <label className="mb-3 block text-xs font-bold uppercase tracking-widest text-white/50">
+              <label className="mb-3 block text-xs font-bold tracking-widest text-white/50 uppercase">
                 Private Key
               </label>
               {privateKey && (
@@ -165,7 +165,7 @@ const Keys = () => {
             </div>
 
             <div>
-              <label className="mb-3 block text-xs font-bold uppercase tracking-widest text-white/50">
+              <label className="mb-3 block text-xs font-bold tracking-widest text-white/50 uppercase">
                 Encryption Passphrase <span className="text-red-500">*</span>
               </label>
               <input

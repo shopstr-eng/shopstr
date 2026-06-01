@@ -1,4 +1,3 @@
-import React from "react";
 import { render, screen, act } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import MessageFeed from "../message-feed";
@@ -20,7 +19,7 @@ jest.mock("@/components/framer", () => ({
   },
 }));
 
-const mockRouterEvents: { [key: string]: jest.Mock } = {
+const mockRouterEvents: { on: jest.Mock; off: jest.Mock } = {
   on: jest.fn(),
   off: jest.fn(),
 };

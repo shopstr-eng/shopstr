@@ -1,4 +1,4 @@
-import { Modal, ModalContent, ModalHeader, ModalBody } from "@nextui-org/react";
+import { Modal, ModalContent, ModalHeader, ModalBody } from "@heroui/react";
 import { CheckCircleIcon } from "@heroicons/react/24/outline";
 
 export default function FailureModal({
@@ -29,7 +29,7 @@ export default function FailureModal({
         size="2xl"
       >
         <ModalContent>
-          <ModalHeader className="flex items-center justify-center font-black uppercase tracking-tighter">
+          <ModalHeader className="flex items-center justify-center font-black tracking-tighter uppercase">
             <CheckCircleIcon className="h-6 w-6 text-green-500" />
             <div className="ml-2">Success</div>
           </ModalHeader>

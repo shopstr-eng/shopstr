@@ -1,4 +1,4 @@
-import React, { useState, useContext, useEffect } from "react";
+import { useState, useContext, useEffect } from "react";
 import {
   Button,
   Modal,
@@ -7,10 +7,10 @@ import {
   ModalBody,
   Input,
   useDisclosure,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import { BoltIcon } from "@heroicons/react/24/outline";
 import { LightningAddress } from "@getalby/lightning-tools";
-import { webln } from "@getalby/sdk";
+import { NostrWebLNProvider } from "@getalby/sdk";
 import {
   NostrContext,
   SignerContext,
@@ -103,7 +103,9 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
       let lud16 = "";
 
       if (events.length > 0) {
-        const kind0 = events.sort((a, b) => b.created_at - a.created_at)[0];
+        const kind0 = [...events].sort(
+          (a, b) => b.created_at - a.created_at
+        )[0];
         if (kind0) {
           try {
             const content = JSON.parse(kind0.content || "{}");
@@ -121,7 +123,7 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
       originalWebLN = (window as any).webln;
       const { nwcString } = getLocalStorageData();
       if (nwcString) {
-        const nwcProvider = new webln.NostrWebLNProvider({
+        const nwcProvider = new NostrWebLNProvider({
           nostrWalletConnectUrl: nwcString,
         });
         await nwcProvider.enable();
@@ -171,7 +173,7 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
         product.pubkey
       );
 
-      await sendGiftWrappedMessageEvent(nostrManager!, finalEvent);
+      await sendGiftWrappedMessageEvent(nostrManager!, finalEvent, signer);
 
       setStatus("Paying via Lightning...");
       const ln = new LightningAddress(lud16);
@@ -273,7 +275,7 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
         }}
       >
         <ModalContent>
-          <ModalHeader className="text-xl font-black uppercase italic tracking-tighter text-white md:text-2xl">
+          <ModalHeader className="text-xl font-black tracking-tighter text-white uppercase italic md:text-2xl">
             ⚡ Zapsnag: {product.title}
           </ModalHeader>
           <ModalBody>
@@ -421,7 +423,7 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
             </div>
 
             <div className="py-8 text-center">
-              <span className="mr-2 font-bold uppercase tracking-wider text-zinc-500">
+              <span className="mr-2 font-bold tracking-wider text-zinc-500 uppercase">
                 Total:
               </span>
               <span className="text-3xl font-black text-yellow-400">

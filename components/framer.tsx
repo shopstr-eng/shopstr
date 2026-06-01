@@ -1,10 +1,10 @@
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactElement } from "react";
 
 import { Tab } from "@/components/hooks/use-tabs";
 import classNames from "classnames";
-import { motion } from "framer-motion";
+import { motion, type Transition } from "framer-motion";
 
-const transition = {
+const transition: Transition = {
   type: "tween",
   ease: "easeOut",
   duration: 0.15,
@@ -20,7 +20,7 @@ const Tabs = ({
   tabs,
   selectedTabIndex,
   setSelectedTab,
-}: Props): JSX.Element => {
+}: Props): ReactElement => {
   const [buttonRefs, setButtonRefs] = useState<Array<HTMLButtonElement | null>>(
     []
   );
@@ -66,13 +66,15 @@ const Tabs = ({
           <button
             key={i}
             className={classNames(
-              "relative z-20 flex h-10 w-full min-w-fit cursor-pointer select-none items-center justify-center whitespace-nowrap bg-transparent px-6 py-8 text-xs uppercase tracking-widest duration-200 transition-colors hover:bg-white/5 md:text-sm",
+              "relative z-20 flex h-10 w-full min-w-fit cursor-pointer items-center justify-center bg-transparent px-6 py-8 text-xs tracking-widest whitespace-nowrap uppercase transition-colors duration-200 select-none hover:bg-white/5 md:text-sm",
               {
                 "font-bold text-zinc-500 hover:text-zinc-300": !isActive,
                 "font-black text-white": isActive,
               }
             )}
-            ref={(el) => (buttonRefs[i] = el)}
+            ref={(el) => {
+              buttonRefs[i] = el;
+            }}
             onClick={() => {
               setSelectedTab([i, i > selectedTabIndex ? 1 : -1]);
             }}

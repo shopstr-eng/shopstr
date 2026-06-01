@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/router";
 import { getLocalStorageData } from "@/utils/nostr/nostr-helper-functions";
 import MintButton from "../../components/wallet/mint-button";
@@ -6,7 +6,13 @@ import ReceiveButton from "../../components/wallet/receive-button";
 import SendButton from "../../components/wallet/send-button";
 import PayButton from "../../components/wallet/pay-button";
 import Transactions from "../../components/wallet/transactions";
-import { CashuMint, CashuWallet, MintKeyset, Proof } from "@cashu/cashu-ts";
+import {
+  Mint as CashuMint,
+  Wallet as CashuWallet,
+  MintKeyset,
+  Proof,
+} from "@cashu/cashu-ts";
+import * as cashuCompat from "@/utils/cashu/compat";
 
 const Wallet = () => {
   const [totalBalance, setTotalBalance] = useState(0);
@@ -29,7 +35,7 @@ const Wallet = () => {
   useEffect(() => {
     const fetchLocalKeySet = async () => {
       if (wallet) {
-        const mintKeySetIdsArray = await wallet.getKeySets();
+        const mintKeySetIdsArray = await cashuCompat.getWalletKeysets(wallet);
         if (mintKeySetIdsArray) {
           setMintKeySetIds(mintKeySetIdsArray);
         }
@@ -40,9 +46,8 @@ const Wallet = () => {
 
   const filteredProofs = useMemo(() => {
     if (mints && tokens && mintKeySetIds) {
-      return tokens.filter(
-        (p: Proof) =>
-          mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
+      return tokens.filter((p: Proof) =>
+        mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
       );
     }
     return [];
@@ -52,14 +57,20 @@ const Wallet = () => {
     if (tokens) {
       const tokensTotal =
         tokens.length >= 1
-          ? tokens.reduce((acc, token: Proof) => acc + token.amount, 0)
+          ? tokens.reduce(
+              (acc, token: Proof) => acc + cashuCompat.proofAmount(token),
+              0
+            )
           : 0;
       setTotalBalance(tokensTotal);
     }
 
     const walletTotal =
       filteredProofs.length >= 1
-        ? filteredProofs.reduce((acc, p: Proof) => acc + p.amount, 0)
+        ? filteredProofs.reduce(
+            (acc, p: Proof) => acc + cashuCompat.proofAmount(p),
+            0
+          )
         : 0;
     setWalletBalance(walletTotal);
   }, [tokens, filteredProofs]);
@@ -73,7 +84,8 @@ const Wallet = () => {
         const tokensTotal =
           newTokens.length >= 1
             ? newTokens.reduce(
-                (acc: number, token: Proof) => acc + token.amount,
+                (acc: number, token: Proof) =>
+                  acc + cashuCompat.proofAmount(token),
                 0
               )
             : 0;
@@ -86,7 +98,7 @@ const Wallet = () => {
           const newWalletTotal =
             newFilteredProofs.length >= 1
               ? newFilteredProofs.reduce(
-                  (acc: number, p: Proof) => acc + p.amount,
+                  (acc: number, p: Proof) => acc + cashuCompat.proofAmount(p),
                   0
                 )
               : 0;
@@ -115,7 +127,7 @@ const Wallet = () => {
               </span>
             </h1>
             <p
-              className="mt-6 cursor-pointer break-words text-center font-mono text-sm text-gray-600 transition-colors hover:text-gray-400"
+              className="mt-6 cursor-pointer text-center font-mono text-sm break-words text-gray-600 transition-colors hover:text-gray-400"
               onClick={handleMintClick}
             >
               {mint}: {walletBalance} sats

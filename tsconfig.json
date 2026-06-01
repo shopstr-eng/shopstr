@@ -12,11 +12,12 @@
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "jsx": "preserve",
+    "jsx": "react-jsx",
     "incremental": true,
     "paths": {
       "@/*": ["./*"]
     },
+    "ignoreDeprecations": "6.0",
     "baseUrl": ".",
     "noUnusedLocals": true,
     "noUnusedParameters": true,

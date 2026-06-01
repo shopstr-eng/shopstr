@@ -2,229 +2,166 @@
 
 ## Overview
 
-Shopstr is a global, permissionless marketplace built on the Nostr protocol, enabling Bitcoin commerce through decentralized communication and censorship-resistant transactions. The platform leverages Nostr's event-based architecture to create, manage, and trade products while supporting multiple payment methods including Lightning Network, Cashu ecash, and fiat currencies. Built with Next.js 14, the application provides a Progressive Web App (PWA) experience with client-side state management and serverside caching via PostgreSQL.
+Shopstr is a global, permissionless marketplace built on the Nostr protocol, enabling Bitcoin commerce through decentralized communication and censorship-resistant transactions. It supports multiple payment methods including Lightning Network, Cashu ecash, and NWC (Nostr Wallet Connect). The platform is a Progressive Web App with client-side state management and server-side caching.
 
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.
 
+## Tech Stack
+
+- **Node**: 22.22.0 / **npm**: 10.9.4 (engines `>=22.4.0`)
+- **Next.js**: 16.2.x (Turbopack) — `allowedDevOrigins: [process.env.REPLIT_DEV_DOMAIN]` in `next.config.mjs` is required for HMR through the Replit proxy
+- **React / React-DOM**: 19.2.x
+- **Tailwind CSS**: 4.x via `@tailwindcss/postcss`. CSS uses `@import "tailwindcss"` + `@config "../tailwind.config.ts"` in `styles/globals.css`
+- **@heroui/react**: 2.8.10 (HeroUI v2 — successor to `@nextui-org/react` v2). Provider is `HeroUIProvider`; CSS vars are `--heroui-*`. **Do not upgrade to v3** without a planned migration — v3 is a breaking React Aria Components rewrite (no `ModalContent`, no `useDisclosure`, restructured Button/Input props)
+- **framer-motion**: 12.x
+- **@cashu/cashu-ts**: 4.x (uses `Bolt11`-suffixed quote/proof methods, `wallet.keyChain.getKeysets()`, `Amount` boundary type — convert with `.toNumber()` at the boundary, runtime `await wallet.loadMint()` required after `new CashuWallet(...)`, `getDecodedToken(token, [])`). Migration playbook at `.agents/skills/cashu-ts-migration/SKILL.md`
+- **@noble/hashes**: 2.x — requires explicit `.js` subpath imports (e.g. `@noble/hashes/utils.js`)
+- **postcss**: pinned to `8.5.13` via `overrides` in `package.json` to satisfy security scans (Next.js bundles 8.4.31 transitively)
+
 ## System Architecture
 
-### Frontend Architecture
+### Frontend
 
-**Framework & Core Technologies**
+- **Framework**: Next.js 16 (Pages Router) with TypeScript, React 19
+- **UI/UX**: HeroUI v2, Tailwind CSS v4, Framer Motion, PWA support
+- **State Management**: React Context API (products, profiles, shops, chats, reviews, follows, relays, media, wallet, communities)
+- **Data Persistence**: Local storage for user preferences and authentication, service worker for caching
+- **Routing**: Middleware-based URL rewriting, dynamic routing, protected routes for authenticated operations. Friendly URL slugs for listings (title-based) and profiles (name-based) with collision handling via pubkey disambiguation. naddr/npub inputs still resolve but redirect to friendly slugs. Slug utilities in `utils/url-slugs.ts`
 
-- Next.js 14.2.32 with TypeScript in App Router mode
-- React 18.2.0 for component composition
-- NextUI component library with Tailwind CSS for styling
-- Framer Motion for animations and transitions
-- Progressive Web App (PWA) capabilities via next-pwa
+### Backend
 
-**State Management Pattern**
+- **Nostr Integration**: Multi-signer architecture (NIP-07, NIP-46, NIP-49); standard and custom kinds for products (NIP-99), user metadata, shop profiles, DMs (NIP-17), reviews (NIP-85), communities (NIP-72)
+- **Data Fetching & Caching**: Service layer with dedicated fetch functions, subscription-based real-time updates from Nostr relays, multi-relay querying with fallback, cache-first strategy with background refresh
+- **Authentication**: Stateless authentication via cryptographic signing, passphrase-based encryption (NIP-49), challenge-response pattern for secure operations
 
-- React Context API for global state distribution across multiple domains:
-  - ProductContext: Product listings and marketplace data
-  - ProfileMapContext: User profile information
-  - ShopMapContext: Shop metadata and configurations
-  - ChatsContext: Direct messaging state
-  - ReviewsContext: Product and seller reviews
-  - FollowsContext: Social graph relationships
-  - RelaysContext: Nostr relay connections
-  - BlossomContext: Media server configurations
-  - CashuWalletContext: Ecash wallet state
-  - CommunityContext: Community management
+### Payment Processing
 
-**Client-Side Data Persistence**
+- **Multi-Payment Support**: Lightning Network, Cashu Ecash, NWC, and Zapsnags. Fiat-to-Bitcoin price conversion for display
+- **Order Management**: Encrypted buyer-seller communication (gift-wrapped messages), payment confirmation proof, post-fulfillment review system
 
-- Local storage for user preferences and authentication tokens
-- Service worker for asset caching and offline functionality
+### Cashu Mint Operation Durability
 
-**Routing Strategy**
+The user-paid → claim-proofs path is hardened against network blips, mint outages, rate limiting, and tab closes:
 
-- Middleware-based URL rewriting for Nostr identifier handling (npub, naddr)
-- Dynamic routing for product listings, user profiles, and communities
-- Protected routes requiring authentication for sensitive operations
+- `utils/cashu/mint-retry-service.ts` — `withMintRetry()` wraps cashu-ts calls with bounded per-attempt timeouts, exponential backoff with full jitter, total-time budget, and `RateLimitError.retryAfterMs` honoring. Retries 5xx `HttpResponseError`, `RateLimitError`, our `Timeout` sentinel, and common network errors; 4xx-other-than-429 is terminal. Failures wrap in `MintOperationError`
+- `utils/cashu/pending-mint-operations.ts` — durable localStorage record (`shopstr.pendingMintQuotes`) with status lifecycle `awaiting_payment → paid_unclaimed → claimed | failed_terminal`. `recoverPendingMintQuotes()` re-checks state with the mint and finishes the claim; quotes older than 7 days are abandoned
+- `components/utility-components/mint-recovery-boot.tsx` — single-shot boot component mounted in `pages/_app.tsx`. On first signer availability it walks the pending store, finishes any unclaimed mints, and publishes the recovered proofs as a kind-7375 event
 
-### Backend Architecture
+### API Rate Limiting
 
-**Nostr Protocol Integration**
+`utils/rate-limit.ts` exposes `applyRateLimit(req, res, bucket, opts, key?)` and is applied per-IP across every public API route. Authenticated write/MCP routes layer a tighter per-pubkey or per-key bucket after auth. Limits are sized per endpoint cost (10/hr for `set-nsec`, 30/min for credential mgmt and DNS-touching routes, 60–120/min for write/MCP, 120–600/min for read).
 
-- Multi-signer architecture supporting:
-  - NIP-07: Browser extension signing (Alby, nos2x)
-  - NIP-46: Remote signing via Nostr Connect/bunker
-  - NIP-49: Encrypted private key storage with passphrase
-- Event-based data model using standardized Nostr event kinds:
-  - Kind 30402: Product listings (NIP-99 classified listings)
-  - Kind 0: User metadata profiles
-  - Kind 10000: Shop profiles (custom merchant metadata)
-  - Kind 14: Direct messages with gift wrapping (NIP-17)
-  - Kind 1985: Product reviews (NIP-85)
-  - Kind 34550: Community definitions (NIP-72)
-
-**Data Fetching & Caching**
-
-- Service layer pattern with dedicated fetch functions per data type
-- Subscription-based real-time updates from Nostr relays
-- Multi-relay querying with timeout handling and fallback mechanisms
-- Cache-first strategy with background refresh for product listings and profiles
-
-**Authentication & Authorization**
-
-- Stateless authentication via cryptographic signing
-- Passphrase-based encryption for stored credentials (NIP-49 standard)
-- Challenge-response pattern for secure operations
-- Migration system for upgrading encryption standards
-
-### Payment Processing Architecture
-
-**Multi-Payment Support**
-
-- Lightning Network: Invoice generation and payment verification via Lightning Address (LNURL)
-- Cashu Ecash: Privacy-preserving payments using Cashu protocol with token minting and redemption
-- Fiat Options: Traditional payment metadata support with currency conversion display
-
-**Payment Flow Components**
-
-- Product/Cart Invoice Cards: Payment interface generation
-- Claim Button: Ecash token redemption
-- Volume Selector: Quantity-based pricing calculations
-
-**Order Management**
-
-- Gift-wrapped messaging for order placement (encrypted buyer-seller communication)
-- Proof publication for payment confirmation
-- Review system post-fulfillment
+**Deployment caveat**: the bucket store is a per-process in-memory `Map`. Under horizontal scaling the effective ceiling is `N × limit`. Intentionally a coarse safety net to keep one bad client from monopolising the DB pool. For a strict global limit, swap the store for Redis (interface is already `bucketName + key → { count, resetAt }`).
 
 ### Media Handling
 
-**Blossom Protocol Integration (NIP-B7)**
-
-- Decentralized media storage via Blossom servers
-- Authenticated uploads with Nostr event signing
-- Progress tracking for multi-file uploads
-- Image optimization with responsive srcset generation
-- Maximum 100MB file size limit per upload
-- Supported formats: JPEG, PNG, WebP
-
-**Image Serving Strategy**
-
-- Automatic responsive image generation for nostr.build domains
-- Fallback to original URLs for unknown providers
-- Lazy loading and placeholder support
+- **Blossom (NIP-B7)**: Decentralized media storage, authenticated uploads, multi-file upload progress, image optimization (responsive srcset for nostr.build), 100MB max file size, automatic compression for larger files
 
 ### Community Features
 
-**Moderated Communities (NIP-72)**
+- **Moderated Communities (NIP-72)**: Creation, moderation, post approval workflows
+- **Web of Trust**: Configurable follow-graph filtering
 
-- Community creation and management interface
-- Post approval workflow for moderators
-- Feed rendering with rich content support (images, videos, YouTube embeds)
-- Member interaction through Nostr events
+### Core Features
 
-**Social Graph & Trust**
+- **Order Summary Page** (`/order-summary`): Confirmation with order ID, product details (single or cart, including sizes/volumes/bulk options), payment method, cost breakdown, delivery info. Data passed via sessionStorage. Includes "Continue Shopping", "Check Order Status", "Contact Merchant", and a "More From the Marketplace" recommendations section
+- **Bulk/Bundle Pricing**, **Size and Volume Options**, **Pickup Location Selection**
+- **Order Status Persistence**: Database storage and API for tracking and updating
+- **Unread/Read Indicators**: For messages and new orders, with persistence
+- **SSR OpenGraph Meta Tags**: Product, shop, marketplace seller, and community pages use `getServerSideProps` to fetch entity data from the PostgreSQL cache and render `og:*` and Twitter Card meta server-side. Single-entity DB query functions in `utils/db/db-service.ts`. SSR OG flows from `getServerSideProps` → `pageProps.ogMeta` → `DynamicHead` (via `_app.tsx`). Shared types in `components/og-head.tsx`
+- **Free Shipping Threshold**: Merchants set a minimum order amount + currency in shop profile (`freeShippingThreshold`, `freeShippingCurrency` on `ShopProfile`). When met per seller: shipping waived in `cart-invoice-card.tsx`, slide-in notification on add-to-cart (`components/free-shipping-notification.tsx`), per-seller progress bars on cart, and "Free" badge on order summary
+- **Order Address Change**: Buyers can change shipping address from the Orders Dashboard via `AddressChangeModal` (`components/utility-components/address-change-modal.tsx`), which sends a gift-wrapped DM to the seller and updates local state
 
-- Web of Trust (WoT) filtering based on follow relationships
-- First and second-degree follow calculations
-- Configurable trust thresholds for marketplace filtering
+## MCP Server (AI Agent Integration)
+
+Model Context Protocol server enabling AI agents to participate in the marketplace as buyers and sellers using their Nostr keys for event signing.
+
+### Architecture
+
+- **Endpoint**: `pages/api/mcp/index.ts` — Streamable HTTP transport
+- **Server Factory**: `mcp/server.ts`
+- **Tools**: `mcp/tools/read-tools.ts`, `mcp/tools/write-tools.ts`; purchase tools inline in `pages/api/mcp/index.ts`
+- **Resources**: `mcp/resources.ts` (catalog via `shopstr://catalog/products`)
+- **Nostr Signing**: `utils/mcp/nostr-signing.ts` — `McpNostrSigner`, `McpRelayManager`, encrypted nsec storage, `signAndPublishEvent()`
+- **Auth**: `utils/mcp/auth.ts` — API key generation/validation, nsec storage/retrieval, `getAgentSigner()`
+- **Metrics**: `utils/mcp/metrics.ts`
+- **Endpoints**: `api-keys.ts`, `create-order.ts`, `verify-payment.ts`, `onboard.ts`, `set-nsec.ts`, `status.ts`
+- **Manifest**: `pages/api/.well-known/agent.json.ts` (v2.0.0)
+- **Settings UI**: `pages/settings/api-keys.tsx`
+
+### Tools
+
+- **Read** (any key): `search_products`, `get_product_details`, `list_companies`, `get_company_details`, `get_reviews`, `check_discount_code`, `get_payment_methods`, `get_storefront`
+- **Purchase** (`read_write`+): `create_order`, `verify_payment`, `get_order_status`, `list_orders`, `list_seller_orders`, `get_notifications`
+- **Write** (`full_access` + stored nsec): `set_user_profile`, `set_shop_profile`, `register_shop_slug`, `create_product_listing`, `update_product_listing`, `delete_listing`, `publish_review`, `create_community_post`, `send_direct_message`, `set_relay_list`, `set_blossom_servers`, `upload_media`, `create_discount_code`, `delete_discount_code`, `list_discount_codes`, `get_cashu_balance`, `receive_cashu_tokens`, `set_cashu_mints`, `send_cashu_payment`, `update_order_address`, `send_shipping_update`, `update_order_status`, `list_messages`, `mark_messages_read`
+
+### Payment Methods
+
+- **Lightning**: Cashu mint quote (bolt11) via `@cashu/cashu-ts`. Default mint: `https://mint.minibits.cash/Bitcoin`. Agent pays then calls `verify_payment`
+- **Cashu**: Agent provides serialized token; server verifies and redeems
+
+### Permissions & Auth
+
+- `read` — browse only; `read_write` — browse + purchase; `full_access` — full participation with server-side Nostr signing (requires nsec stored at onboarding or via `POST /api/mcp/set-nsec`)
+- Keys created via `/settings/api-keys`, `/api/mcp/api-keys`, or zero-touch `/api/mcp/onboard`. PBKDF2-hashed, Bearer token auth, prefix `sk_`
+- Server-side nsec storage: AES-256-GCM, key in `MCP_ENCRYPTION_KEY`. `McpNostrSigner` provides `sign()/encrypt()/decrypt()/getPubKey()` without browser dependencies. Events cached to DB and published via `nostr-tools` SimplePool
+
+### Database Tables
+
+- `mcp_api_keys` — hashed secrets, permissions, usage tracking, optional `encrypted_nsec`
+- `mcp_orders` — orders placed through MCP/API with payment and status tracking
+
+## Storefront System
+
+Sellers configure branded storefronts at `/shop/[slug]`. Subdomain routing (`*.shopstr.market`) handled in `proxy.ts`.
+
+### Architecture
+
+- **Routes**: `pages/shop/[slug].tsx` (home), `pages/shop/[...shopPath].tsx` (sub-pages)
+- **Layout**: `components/storefront/storefront-layout.tsx` — applies CSS variables for theming, adds `sf-active` class to body to hide global Shopstr nav
+- **Theme Wrapper**: `components/storefront/storefront-theme-wrapper.tsx` — wraps existing pages (e.g. `/listing`) when visited from a storefront context. Detects active storefront via sessionStorage `sf_seller_pubkey`
+- **Custom Domain Landing**: `pages/shop/_custom-domain.tsx` — Shopstr-branded fallback when domain not found
+
+### Config (in `ShopProfile.content.storefront`)
+
+`colorScheme`, `productLayout` (`grid|list|featured`), `landingPageStyle` (`hero|classic|minimal`), `shopSlug`, `customDomain`, `fontHeading`, `fontBody`, `sections`, `pages`, `footer`, `navLinks`, `showCommunityPage`, `showWalletPage`.
+
+### Sections
+
+12 types in `components/storefront/sections/`: `hero`, `about`, `story`, `products`, `testimonials`, `faq`, `ingredients`, `comparison`, `text`, `image`, `contact`, `reviews`. Dispatched by `section-renderer.tsx`.
+
+### Helper Components
+
+`storefront-hero.tsx`, `storefront-footer.tsx`, `storefront-product-grid.tsx`, `storefront-community.tsx`, `storefront-wallet.tsx`, `storefront-orders.tsx`, `storefront-my-listings.tsx`, `storefront-order-confirmation.tsx`.
+
+### API Routes
+
+- `GET /api/storefront/lookup?slug=` — pubkey by shop slug
+- `POST /api/storefront/register-slug` — register/update slug
+- `POST /api/storefront/custom-domain` — register custom domain + DNS instructions
+- `GET/DELETE /api/storefront/custom-domain?pubkey=` — get/remove custom domain
+
+### Database Tables
+
+- `shop_slugs` — pubkey → slug (unique slug)
+- `custom_domains` — pubkey → custom domain (verified flag)
+
+### Settings UI
+
+Shop profile settings (`/settings/shop-profile`) uses `ShopProfileForm` (`components/settings/shop-profile-form.tsx`) with two tabs: **Basic Info** (name, about, banner, picture, free shipping threshold) and **Storefront** (slug, layout, colors with 7 presets, typography, nav, sections builder, custom pages, community/wallet toggles, footer editor, custom domain, preview, remove). Sub-editors in `components/settings/storefront/`: `section-editor.tsx`, `footer-editor.tsx`, `page-editor.tsx`, `storefront-preview-modal.tsx`.
+
+### Cart Integration
+
+`pages/cart/index.tsx` is wrapped in `StorefrontThemeWrapper` — reads `sf_seller_pubkey` from sessionStorage, filters cart items to the active storefront seller, shows a banner if other sellers' items were excluded, and wraps the page with the storefront nav/footer.
 
 ## External Dependencies
 
-**Nostr Protocol Libraries**
-
-- nostr-tools 2.7.1: Core Nostr protocol implementation (event creation, signing, encoding)
-- @getalby/lightning-tools 5.0.1: Lightning Network utilities and LNURL handling
-
-**Payment & Wallet Integration**
-
-- @cashu/cashu-ts 2.1.0: Cashu ecash protocol client for privacy-preserving payments
-- Lightning Address support via Alby tools
-
-**Database & Storage**
-
-- pg 8.11.5: Server-side caching and database operations
-
-**UI & Styling**
-
-- @nextui-org/react 2.2.9: Component library providing consistent UI patterns
-- @heroicons/react 2.1.1: Icon system
-- Tailwind CSS 3.3.1: Utility-first CSS framework
-- Framer Motion 10.16.4: Animation library for transitions
-
-**Media & Content**
-
-- qrcode 1.5.3: QR code generation for Lightning invoices and payment requests
-- react-responsive-carousel 3.2.23: Image carousel component
-- @braintree/sanitize-url 7.1.0: URL sanitization for user-generated content
-
-**Cryptography & Security**
-
-- crypto-js 4.2.0: Additional encryption utilities beyond Nostr protocol requirements
-
-**Development & Testing**
-
-- Jest 29.5.14 with Testing Library: Unit and integration testing
-- ESLint with TypeScript support: Code quality enforcement
-- TypeScript 5.x: Static type checking
-
-**Relay Infrastructure**
-
-- Default relay set managed in localStorage with fallback to hardcoded defaults
-- Multi-relay broadcast for event publication redundancy
-- Subscription management for real-time event streaming
-
-**Blossom Media Servers**
-
-- User-configurable Blossom server list stored in localStorage
-- Authenticated upload support with progress tracking
-- Fallback to traditional image hosting when Blossom unavailable
-
-## Recent Changes
-
-### Size and Volume Options for Orders (February 2, 2026)
-
-- Added "size" and "volume" tags to Nostr order messages via constructGiftWrappedEvent function
-- Updated sendPaymentAndContactMessageWithKeys in CartInvoiceCard to pass product.selectedSize and product.selectedVolume in messageOptions for payment, receipt, and order-info messages
-- Updated sendPaymentAndContactMessage in ProductInvoiceCard to pass selectedSize and selectedVolume at top level of messageOptions for all order message types
-- Added "Order Specs" column to orders dashboard combining size and volume into formatted display
-- Display format: "Size: S, Volume: 1 gal" when both present, individual values when only one, "N/A" when neither
-- Updated OrderData interface to include selectedSize and selectedVolume fields
-- Size and volume values are extracted from message tags and consolidated across related order messages
-
-### Pickup Location Selection and Address Tag for Orders (January 24, 2026)
-
-- Added pickup location dropdown in ProductInvoiceCard for contact orders when product has pickup shipping options (Pickup, Free/Pickup, Added Cost/Pickup) and pickupLocations array defined
-- Added pickup location selection to CartInvoiceCard for multi-product cart orders, with product title displayed next to each dropdown for clarity
-- Payment buttons disabled until pickup location is selected when required
-- Added "pickup" tag to Nostr order messages via constructGiftWrappedEvent function
-- Updated sendPaymentAndContactMessage in both ProductInvoiceCard and CartInvoiceCard to include pickup parameter
-- Pickup tags are applied per-product, only to order messages corresponding to that specific product (not all products in cart)
-- Added "Pickup Location" column to orders dashboard with proper tag parsing and display
-- Pickup location state resets when form type changes to prevent stale selections
-- Fixed "address" tag to be properly included in all order message types (payment, receipt, and info) when shipping information is provided
-- Both ProductInvoiceCard and CartInvoiceCard now construct address tag early and pass it to all relevant message calls
-- CartInvoiceCard handles both form field naming conventions (shippingName/shippingAddress and Name/Address)
-
-### Order Status Persistence (January 23, 2026)
-
-- Added `order_status` and `order_id` columns to `message_events` table for efficient order status tracking
-- Created API endpoints for updating and retrieving order statuses (`/api/db/update-order-status`, `/api/db/get-order-statuses`)
-- Orders dashboard now loads cached statuses from database first, then updates from parsed messages
-- Status priority system prevents status downgrades (canceled > completed > shipped > confirmed > pending)
-- Status persisted to database only when parsed status has higher priority than cached
-
-### Unread/Read Indicator System (January 23, 2026)
-
-- Added `is_read` column to `message_events` table for tracking read status
-- Navbar displays styled unread count badge (purple in light mode, yellow in dark mode)
-- New order indicators in orders dashboard with colored borders during current session
-- Messages automatically marked as read when orders page opens
-- Database migration handles existing deployments
-
-### Deployment Configuration (October 4, 2025)
-
-- Added health check endpoint at `/api/health` for Cloud Run deployment monitoring
-- Configured production server to bind to `0.0.0.0` and respect PORT environment variable
-- Removed `babel.config.json` to use Next.js 14's default SWC compiler for better performance
-- Enhanced error handling in `_app.tsx` initialization with individual try-catch blocks for each data fetch operation
-- Updated development workflow to run on port 5000
-- Configured autoscale deployment with proper build and run commands
+- **Nostr**: `nostr-tools`, `@getalby/lightning-tools`
+- **Payments**: `@cashu/cashu-ts`, Lightning Address (Alby tools)
+- **MCP**: `@modelcontextprotocol/sdk`
+- **Database**: `pg` (PostgreSQL)
+- **UI**: `@heroui/react` v2, `@heroicons/react`, Tailwind v4, Framer Motion v12
+- **Media**: `qrcode`, `react-responsive-carousel`, `@braintree/sanitize-url`
+- **Crypto**: `crypto-js`, `@noble/hashes` v2

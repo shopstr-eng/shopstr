@@ -1,4 +1,4 @@
-import { Button } from "@nextui-org/react";
+import { Button } from "@heroui/react";
 import Image from "next/image";
 import {
   ShoppingCartIcon,
@@ -54,7 +54,7 @@ export default function Landing() {
   return (
     <div className="relative min-h-screen w-full bg-[#111] text-white selection:bg-yellow-400 selection:text-black">
       {/* Background Grid Pattern */}
-      <div className="pointer-events-none absolute inset-0 z-0 h-[800px] w-full bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)]"></div>
+      <div className="pointer-events-none absolute inset-0 z-0 h-[800px] w-full bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] bg-[size:24px_24px]"></div>
 
       {/* Navigation */}
       <nav className="container mx-auto flex items-center justify-between px-6 py-6">
@@ -69,7 +69,7 @@ export default function Landing() {
             SHOPSTR
           </span>
         </div>
-        <div className="hidden items-center gap-8 text-sm font-bold uppercase tracking-wider text-zinc-400 md:flex">
+        <div className="hidden items-center gap-8 text-sm font-bold tracking-wider text-zinc-400 uppercase md:flex">
           <Link href="#features" className="hover:text-white">
             Features
           </Link>
@@ -111,11 +111,11 @@ export default function Landing() {
       </nav>
 
       {/* Hero Section */}
-      <section className="container relative z-10 mx-auto flex flex-col items-center justify-center px-4 py-24 text-center">
-        <div className="mb-8 inline-block rounded-full border border-yellow-400/30 bg-yellow-400/5 px-6 py-2 text-xs font-bold uppercase tracking-[0.2em] text-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.1)]">
+      <section className="relative z-10 container mx-auto flex flex-col items-center justify-center px-4 py-24 text-center">
+        <div className="mb-8 inline-block rounded-full border border-yellow-400/30 bg-yellow-400/5 px-6 py-2 text-xs font-bold tracking-[0.2em] text-yellow-400 uppercase shadow-[0_0_15px_rgba(250,204,21,0.1)]">
           The Future of Commerce
         </div>
-        <h1 className="mb-6 text-5xl font-black uppercase tracking-tighter text-white [text-shadow:4px_4px_0px_#45320b] md:text-7xl md:[text-shadow:6px_6px_0px_#45320b] lg:text-9xl">
+        <h1 className="mb-6 text-5xl font-black tracking-tighter text-white uppercase [text-shadow:4px_4px_0px_#45320b] md:text-7xl md:[text-shadow:6px_6px_0px_#45320b] lg:text-9xl">
           Shopstr
         </h1>
         <p className="mb-12 max-w-2xl text-xl font-medium text-zinc-400 md:text-2xl">
@@ -168,7 +168,7 @@ export default function Landing() {
             <div className="mb-6 inline-block rounded-xl border border-yellow-400/20 bg-yellow-400/10 p-3">
               <ShieldCheckIcon className="h-8 w-8 text-yellow-400" />
             </div>
-            <h3 className="mb-3 text-lg font-bold uppercase tracking-wider text-yellow-400">
+            <h3 className="mb-3 text-lg font-bold tracking-wider text-yellow-400 uppercase">
               Permissionless
             </h3>
             <p className="leading-relaxed text-zinc-400">
@@ -191,7 +191,7 @@ export default function Landing() {
             <div className="mb-6 inline-block rounded-xl border border-yellow-400/20 bg-yellow-400/10 p-3">
               <BoltIcon className="h-8 w-8 text-yellow-400" />
             </div>
-            <h3 className="mb-3 text-lg font-bold uppercase tracking-wider text-yellow-400">
+            <h3 className="mb-3 text-lg font-bold tracking-wider text-yellow-400 uppercase">
               Bitcoin Native
             </h3>
             <p className="leading-relaxed text-zinc-400">
@@ -222,7 +222,7 @@ export default function Landing() {
             <div className="mb-6 inline-block rounded-xl border border-yellow-400/20 bg-yellow-400/10 p-3">
               <EyeIcon className="h-8 w-8 text-yellow-400" />
             </div>
-            <h3 className="mb-3 text-lg font-bold uppercase tracking-wider text-yellow-400">
+            <h3 className="mb-3 text-lg font-bold tracking-wider text-yellow-400 uppercase">
               Privacy First
             </h3>
             <p className="leading-relaxed text-zinc-400">
@@ -241,7 +241,7 @@ export default function Landing() {
               <h2 className="mb-2 text-3xl font-black text-white md:text-4xl">
                 Latest Products
               </h2>
-              <p className="text-xs font-bold uppercase tracking-widest text-zinc-500">
+              <p className="text-xs font-bold tracking-widest text-zinc-500 uppercase">
                 Fresh from the network
               </p>
             </div>
@@ -268,7 +268,7 @@ export default function Landing() {
                       className="h-full w-full object-cover opacity-80 transition-opacity group-hover:opacity-100"
                     />
                   )}
-                  <div className="absolute right-2 top-2 rounded bg-yellow-400 px-2 py-1 text-xs font-bold text-black shadow-lg">
+                  <div className="absolute top-2 right-2 rounded bg-yellow-400 px-2 py-1 text-xs font-bold text-black shadow-lg">
                     {product.price} {product.currency}
                   </div>
                 </div>
@@ -282,7 +282,7 @@ export default function Landing() {
                   </p>
 
                   <button
-                    className="w-full rounded-lg border border-white/20 py-3 text-xs font-bold uppercase tracking-wider text-white transition-colors hover:bg-white hover:text-black"
+                    className="w-full rounded-lg border border-white/20 py-3 text-xs font-bold tracking-wider text-white uppercase transition-colors hover:bg-white hover:text-black"
                     onClick={() =>
                       router.push(
                         `/listing/${nip19.naddrEncode({
@@ -305,7 +305,7 @@ export default function Landing() {
       {/* How It Works */}
       <section className="container mx-auto px-4 py-24">
         <div className="mb-16 text-center">
-          <span className="mb-2 inline-block rounded-md bg-white px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-black">
+          <span className="mb-2 inline-block rounded-md bg-white px-2 py-1 text-[10px] font-bold tracking-widest text-black uppercase">
             Simple Process
           </span>
           <h2 className="text-4xl font-black text-white md:text-5xl">
@@ -462,7 +462,7 @@ export default function Landing() {
               </span>
             </div>
 
-            <div className="flex flex-wrap justify-center gap-6 text-xs font-bold uppercase tracking-wider text-zinc-500 md:gap-8">
+            <div className="flex flex-wrap justify-center gap-6 text-xs font-bold tracking-wider text-zinc-500 uppercase md:gap-8">
               <Link href="/faq" className="hover:text-white">
                 FAQ
               </Link>
@@ -528,7 +528,7 @@ export default function Landing() {
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4 backdrop-blur-sm"
           onClick={() => setSelectedImage(null)}
         >
-          <button className="absolute right-6 top-6 text-zinc-400 transition-colors hover:text-white">
+          <button className="absolute top-6 right-6 text-zinc-400 transition-colors hover:text-white">
             <XMarkIcon className="h-10 w-10" />
           </button>
           <div className="relative max-h-[90vh] max-w-5xl overflow-hidden rounded-2xl border border-zinc-800 bg-[#161616] p-2 shadow-2xl">

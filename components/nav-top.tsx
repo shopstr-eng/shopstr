@@ -1,6 +1,6 @@
-import React, { useContext, useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import useNavigation from "@/components/hooks/use-navigation";
-import { Button, Image, useDisclosure } from "@nextui-org/react";
+import { Button, Image, useDisclosure } from "@heroui/react";
 import { Bars4Icon } from "@heroicons/react/24/outline";
 import { countNumberOfUnreadMessagesFromChatsContext } from "@/utils/messages/utils";
 import { ChatsContext, ShopMapContext } from "@/utils/context/context";
@@ -114,21 +114,21 @@ const TopNav = ({
   };
 
   const MobileMenu = () => (
-    <div className="absolute left-0 top-full flex max-h-[calc(100vh-70px)] w-full flex-col overflow-y-auto border-b border-zinc-800 bg-[#161616] p-2 shadow-xl">
+    <div className="absolute top-full left-0 flex max-h-[calc(100vh-70px)] w-full flex-col overflow-y-auto border-b border-zinc-800 bg-[#161616] p-2 shadow-xl">
       <Button
-        className="h-14 w-full justify-start bg-transparent px-6 font-bold uppercase text-zinc-400 hover:text-white"
+        className="h-14 w-full justify-start bg-transparent px-6 font-bold text-zinc-400 uppercase hover:text-white"
         onClick={handleHomeClick}
       >
         Marketplace
       </Button>
       <Button
-        className="h-14 w-full justify-start bg-transparent px-6 font-bold uppercase text-zinc-400 hover:text-white"
+        className="h-14 w-full justify-start bg-transparent px-6 font-bold text-zinc-400 uppercase hover:text-white"
         onClick={() => router.push("/communities")}
       >
         Communities
       </Button>
       <Button
-        className="h-14 w-full justify-start bg-transparent px-6 font-bold uppercase text-zinc-400 hover:text-white"
+        className="h-14 w-full justify-start bg-transparent px-6 font-bold text-zinc-400 uppercase hover:text-white"
         onClick={() => handleRoute("/orders")}
       >
         Orders
@@ -139,19 +139,19 @@ const TopNav = ({
         )}
       </Button>
       <Button
-        className="h-14 w-full justify-start bg-transparent px-6 font-bold uppercase text-zinc-400 hover:text-white"
+        className="h-14 w-full justify-start bg-transparent px-6 font-bold text-zinc-400 uppercase hover:text-white"
         onClick={() => handleRoute("/wallet")}
       >
         Wallet
       </Button>
       <Button
-        className="h-14 w-full justify-start bg-transparent px-6 font-bold uppercase text-zinc-400 hover:text-white"
+        className="h-14 w-full justify-start bg-transparent px-6 font-bold text-zinc-400 uppercase hover:text-white"
         onClick={() => handleRoute("/my-listings")}
       >
         My Listings
       </Button>
       <Button
-        className="h-14 w-full justify-start bg-transparent px-6 font-bold uppercase text-zinc-400 hover:text-white"
+        className="h-14 w-full justify-start bg-transparent px-6 font-bold text-zinc-400 uppercase hover:text-white"
         onClick={() => handleRoute("/cart")}
       >
         Cart
@@ -180,7 +180,7 @@ const TopNav = ({
               width={40}
             />
             <span
-              className={`ml-2 hidden text-xl font-black uppercase tracking-tighter md:flex ${
+              className={`ml-2 hidden text-xl font-black tracking-tighter uppercase md:flex ${
                 isHomeActive ? "text-white" : "text-white"
               }`}
             >
@@ -218,7 +218,7 @@ const TopNav = ({
         </div>
         <div className="hidden items-center gap-1 font-bold text-zinc-400 md:flex">
           <Button
-            className={`bg-transparent text-xs font-black uppercase tracking-widest hover:text-white ${
+            className={`bg-transparent text-xs font-black tracking-widest uppercase hover:text-white ${
               isHomeActive ? "text-yellow-400" : ""
             }`}
             onClick={handleHomeClick}
@@ -227,7 +227,7 @@ const TopNav = ({
           </Button>
           <span className="text-zinc-700">|</span>
           <Button
-            className={`bg-transparent text-xs font-black uppercase tracking-widest hover:text-white ${
+            className={`bg-transparent text-xs font-black tracking-widest uppercase hover:text-white ${
               isCommunitiesActive ? "text-yellow-400" : ""
             }`}
             onClick={() => router.push("/communities")}
@@ -236,7 +236,7 @@ const TopNav = ({
           </Button>
           <span className="text-zinc-700">|</span>
           <Button
-            className="bg-transparent text-xs font-black uppercase tracking-widest hover:text-white"
+            className="bg-transparent text-xs font-black tracking-widest uppercase hover:text-white"
             onClick={() => handleRoute("/orders")}
           >
             Orders
@@ -248,21 +248,21 @@ const TopNav = ({
           </Button>
           <span className="text-zinc-700">|</span>
           <Button
-            className="bg-transparent text-xs font-black uppercase tracking-widest hover:text-white"
+            className="bg-transparent text-xs font-black tracking-widest uppercase hover:text-white"
             onClick={() => handleRoute("/wallet")}
           >
             Wallet
           </Button>
           <span className="text-zinc-700">|</span>
           <Button
-            className="bg-transparent text-xs font-black uppercase tracking-widest hover:text-white"
+            className="bg-transparent text-xs font-black tracking-widest uppercase hover:text-white"
             onClick={() => handleRoute("/my-listings")}
           >
             My Listings
           </Button>
           <span className="text-zinc-700">|</span>
           <Button
-            className="bg-transparent text-xs font-black uppercase tracking-widest hover:text-white"
+            className="bg-transparent text-xs font-black tracking-widest uppercase hover:text-white"
             onClick={() => handleRoute("/cart")}
           >
             Cart
@@ -291,7 +291,7 @@ const TopNav = ({
             <>
               <Button
                 onClick={onOpen}
-                className={`bg-transparent text-xs font-black uppercase tracking-widest hover:text-white ${
+                className={`bg-transparent text-xs font-black tracking-widest uppercase hover:text-white ${
                   isProfileActive ? "text-yellow-400" : ""
                 }`}
               >

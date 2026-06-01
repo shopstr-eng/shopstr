@@ -8,7 +8,6 @@ A global, permissionless Nostr marketplace for Bitcoin commerce.
 - [x] NIP-05: Mapping Nostr keys to DNS-based internet identifiers
 - [x] NIP-07: window.nostr capability for web browsers
 - [x] NIP-09: Event Deletion
-- [ ] NIP-15: Nostr Marketplace (for resilient marketplaces)
 - [x] NIP-17: Private Direct Messages
 - [x] NIP-19: bech32-encoded entities
 - [x] NIP-24: Extra metadata fields and tags
@@ -30,6 +29,7 @@ A global, permissionless Nostr marketplace for Bitcoin commerce.
 - [x] NIP-72: Moderated Communities
 - [x] NIP-85: Reviews
 - [x] NIP-89: Recommended Application Handlers
+- [x] NIP-98: HTTP Auth
 - [x] NIP-99: Classified Listings
 - [x] NIP-B7: Blossom Media
 

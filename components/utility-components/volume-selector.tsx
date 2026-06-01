@@ -1,5 +1,4 @@
-import React from "react";
-import { Select, SelectItem, SelectSection } from "@nextui-org/react";
+import { Select, SelectItem, SelectSection } from "@heroui/react";
 
 interface VolumeSelectorProps {
   volumes: string[];
@@ -49,7 +48,6 @@ export default function VolumeSelector({
           return (
             <SelectItem
               key={volume}
-              value={volume}
               textValue={`${volume} - ${price} ${currency}`}
               className="rounded-lg text-zinc-300 data-[hover=true]:bg-zinc-800 data-[hover=true]:text-white data-[selectable=true]:focus:bg-zinc-800"
             >

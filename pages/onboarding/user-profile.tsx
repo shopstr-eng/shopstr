@@ -1,6 +1,6 @@
 import React from "react";
 import { useRouter } from "next/router";
-import { Button, Image } from "@nextui-org/react";
+import { Button, Image } from "@heroui/react";
 import { ArrowLongRightIcon } from "@heroicons/react/24/outline";
 import UserProfileForm from "@/components/settings/user-profile-form";
 import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
@@ -16,8 +16,8 @@ const OnboardingUserProfile = () => {
     <div className="flex min-h-screen items-center justify-center bg-[#050505] p-4 pt-24">
       <div className="relative w-full max-w-2xl rounded-3xl border border-white/10 bg-[#1a1a1a] p-6 shadow-2xl md:p-12">
         {/* Step Pill */}
-        <div className="absolute -top-5 left-1/2 -translate-x-1/2 rounded-full border-2 border-b-4 border-shopstr-yellow bg-[#222] px-6 py-2">
-          <span className="text-xs font-bold uppercase tracking-widest text-shopstr-yellow">
+        <div className="border-shopstr-yellow absolute -top-5 left-1/2 -translate-x-1/2 rounded-full border-2 border-b-4 bg-[#222] px-6 py-2">
+          <span className="text-shopstr-yellow text-xs font-bold tracking-widest uppercase">
             Step 2 of 4
           </span>
         </div>
@@ -57,7 +57,7 @@ const OnboardingUserProfile = () => {
         <div className="mt-8 flex flex-col items-center justify-between gap-4 sm:flex-row">
           <button
             onClick={handleNext}
-            className="text-xs font-bold uppercase tracking-widest text-gray-600 transition-colors hover:text-white"
+            className="text-xs font-bold tracking-widest text-gray-600 uppercase transition-colors hover:text-white"
           >
             Skip for now
           </button>

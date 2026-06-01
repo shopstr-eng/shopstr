@@ -1,5 +1,6 @@
 import { ShippingOptionsType } from "@/utils/STATIC-VARIABLES";
 import { calculateTotalCost } from "@/components/utility-components/display-monetary-info";
+import { parseShippingTag } from "@/utils/parsers/product-tag-helpers";
 import { NostrEvent } from "@/utils/types/types";
 
 export type ProductData = {
@@ -24,12 +25,19 @@ export type ProductData = {
   sizeQuantities?: Map<string, number>;
   volumes?: string[];
   volumePrices?: Map<string, number>;
+  weights?: string[];
+  weightPrices?: Map<string, number>;
   condition?: string;
   status?: string;
   selectedSize?: string;
   selectedQuantity?: number;
   selectedVolume?: string;
   volumePrice?: number;
+  selectedWeight?: string;
+  weightPrice?: number;
+  bulkPrices?: Map<number, number>;
+  selectedBulkOption?: number;
+  bulkPrice?: number;
   required?: string;
   restrictions?: string;
   pickupLocations?: string[];
@@ -43,7 +51,7 @@ export const parseTags = (productEvent: NostrEvent) => {
     pubkey: "",
     createdAt: 0,
     title: "",
-    summary: "",
+    summary: productEvent.content || "",
     publishedAt: "",
     images: [],
     categories: [],
@@ -65,7 +73,11 @@ export const parseTags = (productEvent: NostrEvent) => {
         parsedData.title = values[0]!;
         break;
       case "summary":
-        parsedData.summary = values[0]!;
+        // NIP-99 uses event content as primary description.
+        // Keep summary tag as backward-compatible fallback when content is empty or whitespace.
+        if (!parsedData.summary.trim()) {
+          parsedData.summary = values[0]!;
+        }
         break;
       case "published_at":
         parsedData.publishedAt = values[0]!;
@@ -87,25 +99,10 @@ export const parseTags = (productEvent: NostrEvent) => {
         parsedData.currency = currency!;
         break;
       case "shipping":
-        if (values.length === 3) {
-          const [shippingType, cost, _currency] = values;
-          parsedData.shippingType = shippingType as ShippingOptionsType;
-          parsedData.shippingCost = Number(cost);
-          break;
-        }
-        // TODO Deprecate Below after 11/07/2023
-        else if (values.length === 2) {
-          // [cost, currency]
-          const [cost, _currency] = values;
-          parsedData.shippingType = "Added Cost";
-          parsedData.shippingCost = Number(cost);
-          break;
-        } else if (values.length === 1) {
-          // [type]
-          const [shippingType] = values;
-          parsedData.shippingType = shippingType as ShippingOptionsType;
-          parsedData.shippingCost = 0;
-          break;
+        const parsedShipping = parseShippingTag(tag);
+        if (parsedShipping) {
+          parsedData.shippingType = parsedShipping.shippingType;
+          parsedData.shippingCost = parsedShipping.shippingCost;
         }
         break;
       case "d":
@@ -147,6 +144,26 @@ export const parseTags = (productEvent: NostrEvent) => {
           if (values[1]) {
             parsedData.volumePrices!.set(values[0], parseFloat(values[1]));
           }
+        }
+        break;
+      case "weight":
+        if (!parsedData.weights) {
+          parsedData.weights = [];
+          parsedData.weightPrices = new Map<string, number>();
+        }
+        if (values[0]) {
+          parsedData.weights.push(values[0]);
+          if (values[1]) {
+            parsedData.weightPrices!.set(values[0], parseFloat(values[1]));
+          }
+        }
+        break;
+      case "bulk":
+        if (!parsedData.bulkPrices) {
+          parsedData.bulkPrices = new Map<number, number>();
+        }
+        if (values[0] && values[1]) {
+          parsedData.bulkPrices.set(parseInt(values[0]), parseFloat(values[1]));
         }
         break;
       case "condition":

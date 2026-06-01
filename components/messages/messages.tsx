@@ -1,7 +1,7 @@
 import { useState, useEffect, useContext } from "react";
 import { nip19 } from "nostr-tools";
 import { useRouter } from "next/router";
-import { Button, useDisclosure } from "@nextui-org/react";
+import { Button, useDisclosure } from "@heroui/react";
 import {
   constructGiftWrappedEvent,
   constructMessageSeal,
@@ -282,7 +282,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
       );
 
       setIsSendingDMLoading(false);
-    } catch (_) {
+    } catch {
       setFailureText("Error sending inquiry.");
       setShowFailureModal(true);
       setIsSendingDMLoading(false);
@@ -297,9 +297,9 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
   return (
     <div className="relative min-h-screen bg-[#111] text-white selection:bg-yellow-400 selection:text-black">
       {/* Background Grid Pattern */}
-      <div className="pointer-events-none absolute inset-0 z-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)]"></div>
+      <div className="pointer-events-none absolute inset-0 z-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] bg-[size:24px_24px]"></div>
 
-      <div className="container relative z-10 mx-auto px-4 py-10">
+      <div className="relative z-10 container mx-auto px-4 py-10">
         {chatsMap.size === 0 ? (
           <div className="flex h-[66vh] items-center justify-center">
             {isChatsLoading ? (
@@ -311,7 +311,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
                 <div className="text-center">
                   {isClient && userPubkey ? (
                     <div className="space-y-6">
-                      <h2 className="text-3xl font-black uppercase tracking-tight text-white">
+                      <h2 className="text-3xl font-black tracking-tight text-white uppercase">
                         No messages... yet!
                       </h2>
                       <div className="mt-2 text-base text-zinc-400">

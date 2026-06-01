@@ -1,14 +1,14 @@
-import React from "react";
 import { Carousel } from "react-responsive-carousel";
 import "react-responsive-carousel/lib/styles/carousel.min.css";
 import { ChevronLeftIcon, ChevronRightIcon } from "@heroicons/react/24/outline";
-import { Image } from "@nextui-org/react";
+import { Image } from "@heroui/react";
 import { buildSrcSet } from "@/utils/images";
 import { useRouter } from "next/router";
 import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
 
 interface ImageCarouselProps {
   images: string[];
+  productTitle?: string;
   classname?: string;
   showThumbs?: boolean;
   fixedHeight?: boolean;
@@ -16,6 +16,7 @@ interface ImageCarouselProps {
 
 export default function ImageCarousel({
   images,
+  productTitle = "",
   classname = "",
   showThumbs = false,
   fixedHeight = true,
@@ -47,7 +48,11 @@ export default function ImageCarousel({
           src={image}
           srcSet={buildSrcSet(image)}
           className={imageClass}
-          alt={image || `Product image ${index + 1}`}
+          alt={
+            productTitle
+              ? `${productTitle} — image ${index + 1}`
+              : `Product image ${index + 1}`
+          }
           radius="none"
           style={{
             width: "100%",
@@ -71,10 +76,11 @@ export default function ImageCarousel({
       renderArrowPrev={(onClickHandler, hasPrev, label) =>
         hasPrev && (
           <button
-            className={`${NEO_BTN} absolute left-2 top-1/2 z-10 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg p-0 md:left-4 md:h-10 md:w-10`}
+            className={`${NEO_BTN} absolute top-1/2 left-2 z-10 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg p-0 md:left-4 md:h-10 md:w-10`}
             onClick={(e) => {
-              onClickHandler();
+              e.preventDefault();
               e.stopPropagation();
+              onClickHandler();
             }}
             title={label}
           >
@@ -85,10 +91,11 @@ export default function ImageCarousel({
       renderArrowNext={(onClickHandler, hasNext, label) =>
         hasNext && (
           <button
-            className={`${NEO_BTN} absolute right-2 top-1/2 z-10 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg p-0 md:right-4 md:h-10 md:w-10`}
+            className={`${NEO_BTN} absolute top-1/2 right-2 z-10 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg p-0 md:right-4 md:h-10 md:w-10`}
             onClick={(e) => {
-              onClickHandler();
+              e.preventDefault();
               e.stopPropagation();
+              onClickHandler();
             }}
             title={label}
           >
@@ -108,8 +115,9 @@ export default function ImageCarousel({
                 : `${base} bg-zinc-700 hover:bg-zinc-500`
             }
             onClick={(e) => {
-              onClickHandler(e);
+              e.preventDefault();
               e.stopPropagation();
+              onClickHandler(e);
             }}
             title={`${label} ${index + 1}`}
             role="button"

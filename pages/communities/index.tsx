@@ -1,7 +1,7 @@
-import React, { useContext, useState, useMemo, useEffect } from "react";
+import { useContext, useState, useMemo, useEffect } from "react";
 import { CommunityContext } from "@/utils/context/context";
 import CommunityCard from "@/components/communities/CommunityCard";
-import { Spinner, Input } from "@nextui-org/react";
+import { Spinner, Input } from "@heroui/react";
 import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import { UserGroupIcon } from "@heroicons/react/24/outline";
@@ -51,10 +51,10 @@ const CommunitiesDiscoveryPage = () => {
           <>
             {/* --- Header --- */}
             <div className="mb-16 flex flex-col items-center">
-              <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl border-2 border-shopstr-yellow text-shopstr-yellow">
+              <div className="border-shopstr-yellow text-shopstr-yellow mb-6 flex h-16 w-16 items-center justify-center rounded-2xl border-2">
                 <UserGroupIcon className="h-8 w-8" />
               </div>
-              <h1 className="mb-8 text-center text-4xl font-black uppercase tracking-tighter text-white md:text-6xl">
+              <h1 className="mb-8 text-center text-4xl font-black tracking-tighter text-white uppercase md:text-6xl">
                 Discover{" "}
                 <span className="text-shopstr-yellow">Communities</span>
               </h1>
@@ -85,7 +85,7 @@ const CommunitiesDiscoveryPage = () => {
             {myCommunities.length > 0 && (
               <div className="mb-12">
                 <div className="mb-6 flex items-center justify-center gap-2 md:justify-start">
-                  <h2 className="text-xl font-bold uppercase text-white">
+                  <h2 className="text-xl font-bold text-white uppercase">
                     My Community
                   </h2>
                   <span className="text-xl">📌</span>

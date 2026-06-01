@@ -29,7 +29,7 @@ describe("newPromiseWithTimeout", () => {
   it("should reject successfully when the callback rejects before the timeout", async () => {
     const customError = new Error("Custom rejection");
     const promise = newPromiseWithTimeout<void>(
-      (resolve, reject) => {
+      (_resolve, reject) => {
         reject(customError);
       },
       { timeout: 1000 }
@@ -52,7 +52,7 @@ describe("newPromiseWithTimeout", () => {
   it("should clear the timeout when the promise rejects", () => {
     const clearTimeoutSpy = jest.spyOn(global, "clearTimeout");
 
-    const promise = newPromiseWithTimeout<void>((resolve, reject) => {
+    const promise = newPromiseWithTimeout<void>((_resolve, reject) => {
       reject(new Error());
     });
 
@@ -66,7 +66,7 @@ describe("newPromiseWithTimeout", () => {
     const abortListener = jest.fn();
 
     const promise = newPromiseWithTimeout<void>(
-      (resolve, reject, abortSignal) => {
+      (_resolve, _reject, abortSignal) => {
         abortSignal.addEventListener("abort", abortListener);
       },
       { timeout: 500 }

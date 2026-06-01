@@ -5,7 +5,11 @@ import {
   ShopProfile,
   Community,
 } from "@/utils/types/types";
-import { CashuMint, CashuWallet, Proof } from "@cashu/cashu-ts";
+import {
+  Mint as CashuMint,
+  Wallet as CashuWallet,
+  Proof,
+} from "@cashu/cashu-ts";
 import { ChatsMap } from "@/utils/context/context";
 import {
   getLocalStorageData,
@@ -18,17 +22,28 @@ import {
 } from "@/utils/parsers/product-parser-functions";
 import { parseCommunityEvent } from "../parsers/community-parser-functions";
 import { calculateWeightedScore } from "@/utils/parsers/review-parser-functions";
-import { hashToCurve } from "@cashu/crypto/modules/common";
+import { hashToCurve } from "@cashu/cashu-ts";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
 import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 import { cacheEventsToDatabase } from "@/utils/db/db-client";
+import {
+  buildMessagesListProof,
+  buildSignedHttpRequestProofTemplate,
+  SIGNED_EVENT_HEADER,
+} from "@/utils/nostr/request-auth";
+
+interface NipProfile {
+  pubkey: string;
+  created_at: number;
+  content: { nip05?: string; [key: string]: any };
+  nip05Verified: boolean;
+}
 
 function getUniqueProofs(proofs: Proof[]): Proof[] {
-  const uniqueProofs = new Set<string>();
+  const seenSecrets = new Set<string>();
   return proofs.filter((proof) => {
-    const serializedProof = JSON.stringify(proof);
-    if (!uniqueProofs.has(serializedProof)) {
-      uniqueProofs.add(serializedProof);
+    if (!seenSecrets.has(proof.secret)) {
+      seenSecrets.add(proof.secret);
       return true;
     }
     return false;
@@ -49,21 +64,50 @@ export const fetchAllPosts = async (
 }> => {
   return new Promise(async function (resolve, reject) {
     try {
-      // First, load from database to immediately populate the UI
-      let productArrayFromDb: NostrEvent[] = [];
-      try {
-        const response = await fetch("/api/db/fetch-products");
-        if (response.ok) {
-          productArrayFromDb = await response.json();
-          if (productArrayFromDb.length > 0) {
-            editProductContext(productArrayFromDb, false);
-          }
-        }
-      } catch (error) {
-        console.error("Failed to fetch products from database: ", error);
-      }
+      const BATCH_SIZE = 500;
+      const profileSetFromProducts: Set<string> = new Set();
+      const dbProductsMap = new Map<string, NostrEvent>();
 
-      let deletedProductsInCacheSet: Set<any> = new Set(); // used to remove deleted items from cache
+      const getEventKey = (event: NostrEvent): string => {
+        if (event.kind === 30402) {
+          const dTag = event.tags?.find((tag: string[]) => tag[0] === "d")?.[1];
+          if (dTag) return `${event.pubkey}:${dTag}`;
+        }
+        return event.id;
+      };
+
+      // Cascading DB fetch: load batches one at a time, displaying each as it arrives
+      let offset = 0;
+      let keepFetching = true;
+      while (keepFetching) {
+        try {
+          const response = await fetch(
+            `/api/db/fetch-products?limit=${BATCH_SIZE}&offset=${offset}`
+          );
+          if (!response.ok) break;
+          const batch: NostrEvent[] = await response.json();
+          if (!batch.length) break;
+
+          for (const event of batch) {
+            if (event && event.id) {
+              const key = getEventKey(event);
+              const existing = dbProductsMap.get(key);
+              if (!existing || event.created_at > existing.created_at) {
+                dbProductsMap.set(key, event);
+              }
+              if (event.pubkey) profileSetFromProducts.add(event.pubkey);
+            }
+          }
+
+          editProductContext(Array.from(dbProductsMap.values()), true);
+
+          if (batch.length < BATCH_SIZE) break;
+          offset += BATCH_SIZE;
+        } catch (error) {
+          console.error("Failed to fetch products batch from database:", error);
+          break;
+        }
+      }
 
       const filter: Filter = {
         kinds: [30402],
@@ -73,9 +117,6 @@ export const fetchAllPosts = async (
         kinds: [1],
         "#t": ["shopstr-zapsnag", "zapsnag"],
       };
-
-      const productArrayFromRelay: NostrEvent[] = [];
-      const profileSetFromProducts: Set<string> = new Set();
 
       const fetchedEvents = await nostr.fetch(
         [filter, zapsnagFilter],
@@ -96,37 +137,23 @@ export const fetchAllPosts = async (
         );
       }
 
+      // Merge relay events on top of the accumulated DB products
       for (const event of fetchedEvents) {
         if (!event || !event.id) continue;
-
-        productArrayFromRelay.push(event);
-        try {
-          if (
-            deletedProductsInCacheSet &&
-            event.id in deletedProductsInCacheSet
-          ) {
-            deletedProductsInCacheSet.delete(event.id);
-          }
-          profileSetFromProducts.add(event.pubkey);
-        } catch (error) {
-          console.error("Failed to process product:", event.id, error);
+        const key = getEventKey(event);
+        const existing = dbProductsMap.get(key);
+        if (!existing || event.created_at >= existing.created_at) {
+          dbProductsMap.set(key, event);
         }
+        profileSetFromProducts.add(event.pubkey);
       }
 
-      editProductContext(productArrayFromRelay, false);
+      const mergedProductArray = Array.from(dbProductsMap.values());
 
-      // Cache fetched products to database via API (only valid events with signatures)
-      const validProducts = productArrayFromRelay.filter(
-        (e) => e.id && e.sig && e.pubkey
-      );
-      if (validProducts.length > 0) {
-        cacheEventsToDatabase(validProducts).catch((error) =>
-          console.error("Failed to cache products to database:", error)
-        );
-      }
+      editProductContext(mergedProductArray, false);
 
       resolve({
-        productEvents: productArrayFromRelay,
+        productEvents: mergedProductArray,
         profileSetFromProducts,
       });
     } catch (error) {
@@ -135,6 +162,131 @@ export const fetchAllPosts = async (
   });
 };
 
+function getReportTargetIdentifiers(event: NostrEvent): {
+  referencedPubkeys: string[];
+  referencedEventIds: string[];
+} {
+  const referencedPubkeys = event.tags
+    .filter((tag: string[]) => tag[0] === "p" && tag[1])
+    .map((tag: string[]) => tag[1]!);
+  const referencedEventIds = event.tags
+    .filter((tag: string[]) => tag[0] === "e" && tag[1])
+    .map((tag: string[]) => tag[1]!);
+
+  return { referencedPubkeys, referencedEventIds };
+}
+
+export const fetchReports = async (
+  nostr: NostrManager,
+  relays: string[],
+  products: NostrEvent[],
+  editReportsContext: (reportEvents: NostrEvent[], isLoading: boolean) => void,
+  additionalProfilePubkeys: string[] = []
+): Promise<{
+  reportEvents: NostrEvent[];
+}> => {
+  return new Promise(async function (resolve, reject) {
+    try {
+      const productIds = new Set(products.map((product) => product.id));
+      const sellerPubkeys = new Set(
+        [
+          ...products.map((product) => product.pubkey),
+          ...additionalProfilePubkeys,
+        ].filter(Boolean)
+      );
+
+      const reportEventsMap = new Map<string, NostrEvent>();
+
+      const isRelevantReportEvent = (event: NostrEvent): boolean => {
+        const { referencedPubkeys, referencedEventIds } =
+          getReportTargetIdentifiers(event);
+
+        return (
+          referencedEventIds.some((eventId) => productIds.has(eventId)) ||
+          referencedPubkeys.some((pubkey) => sellerPubkeys.has(pubkey))
+        );
+      };
+
+      const upsertReportEvent = (event: NostrEvent) => {
+        if (!isRelevantReportEvent(event)) return;
+
+        const existing = reportEventsMap.get(event.id);
+        if (!existing || event.created_at >= existing.created_at) {
+          reportEventsMap.set(event.id, event);
+        }
+      };
+
+      try {
+        const params = new URLSearchParams();
+        Array.from(sellerPubkeys).forEach((pubkey) =>
+          params.append("p", pubkey)
+        );
+        Array.from(productIds).forEach((productId) =>
+          params.append("e", productId)
+        );
+        const response = await fetch(
+          `/api/db/fetch-reports?${params.toString()}`
+        );
+        if (response.ok) {
+          const reportsFromDb: NostrEvent[] = await response.json();
+          reportsFromDb.forEach(upsertReportEvent);
+
+          if (reportEventsMap.size > 0) {
+            editReportsContext(
+              Array.from(reportEventsMap.values()).sort(
+                (a, b) => b.created_at - a.created_at
+              ),
+              false
+            );
+          }
+        }
+      } catch (error) {
+        console.error("Failed to fetch reports from database: ", error);
+      }
+
+      const reportFilters: Filter[] = [];
+      if (sellerPubkeys.size > 0) {
+        reportFilters.push({
+          kinds: [1984],
+          "#p": Array.from(sellerPubkeys),
+        });
+      }
+      if (productIds.size > 0) {
+        reportFilters.push({
+          kinds: [1984],
+          "#e": Array.from(productIds),
+        });
+      }
+
+      if (reportFilters.length === 0) {
+        editReportsContext([], false);
+        resolve({ reportEvents: [] });
+        return;
+      }
+
+      const fetchedEvents = await nostr.fetch(reportFilters, {}, relays);
+      fetchedEvents.forEach(upsertReportEvent);
+
+      const reportEvents = Array.from(reportEventsMap.values()).sort(
+        (a, b) => b.created_at - a.created_at
+      );
+      editReportsContext(reportEvents, false);
+
+      const validReports = fetchedEvents.filter(
+        (event) => event.id && event.sig && event.pubkey && event.kind === 1984
+      );
+      if (validReports.length > 0) {
+        cacheEventsToDatabase(validReports).catch((error) =>
+          console.error("Failed to cache reports to database:", error)
+        );
+      }
+
+      resolve({ reportEvents });
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
 export const fetchCart = async (
   nostr: NostrManager,
   signer: NostrSigner | undefined,
@@ -340,7 +492,8 @@ export const fetchShopProfile = async (
 
         resolve({ shopProfileMap: shopProfile });
       } else {
-        reject();
+        editShopContext(shopProfile, false);
+        resolve({ shopProfileMap: shopProfile });
       }
     } catch (error) {
       reject(error);
@@ -348,55 +501,113 @@ export const fetchShopProfile = async (
   });
 };
 
+async function verifyProfilesNip05(
+  profileMap: Map<string, NipProfile | null>,
+  concurrency = 8
+): Promise<void> {
+  const profiles = Array.from(profileMap.values()).filter(
+    (profile): profile is NipProfile =>
+      profile !== null && !!profile?.content?.nip05
+  );
+
+  for (let i = 0; i < profiles.length; i += concurrency) {
+    await Promise.all(
+      profiles.slice(i, i + concurrency).map(async (profile) => {
+        const nip05 = profile.content.nip05!;
+        const pubkey: string = profile.pubkey;
+        const host = nip05.includes("@") ? nip05.split("@")[1] : undefined;
+        try {
+          profile.nip05Verified = await verifyNip05Identifier(nip05, pubkey);
+        } catch (error) {
+          profile.nip05Verified = false;
+          console.error("Failed to verify NIP-05 identifier", {
+            host,
+            pubkey,
+            nip05,
+            error,
+          });
+        }
+      })
+    );
+  }
+}
+
 export const fetchProfile = async (
   nostr: NostrManager,
   relays: string[],
   pubkeyProfilesToFetch: string[],
-  editProfileContext: (productEvents: Map<any, any>, isLoading: boolean) => void
+  editProfileContext: (
+    profileMap: Map<string, NipProfile | null>,
+    isLoading: boolean
+  ) => void,
+  existingProfileMap: Map<string, any> = new Map()
 ): Promise<{
-  profileMap: Map<string, any>;
+  profileMap: Map<string, NipProfile | null>;
 }> => {
   return new Promise(async function (resolve, reject) {
     try {
       if (!pubkeyProfilesToFetch.length) {
-        editProfileContext(new Map(), false);
-        resolve({ profileMap: new Map() });
+        const preservedProfileMap = new Map(existingProfileMap);
+        editProfileContext(preservedProfileMap, false);
+        resolve({ profileMap: preservedProfileMap });
         return;
       }
 
-      // First load from database
+      const mergedProfileMap = new Map(existingProfileMap);
+      const updateProfileIfNewer = (profile: any) => {
+        if (!profile?.pubkey) return;
+
+        const existingProfile = mergedProfileMap.get(profile.pubkey);
+        if (
+          !existingProfile ||
+          (profile.created_at ?? 0) >= (existingProfile.created_at ?? 0)
+        ) {
+          mergedProfileMap.set(profile.pubkey, profile);
+        }
+      };
+
+      const dbProfileMap = new Map<string, NipProfile>();
       try {
         const response = await fetch("/api/db/fetch-profiles");
         if (response.ok) {
           const profilesFromDb = await response.json();
-          const profileMap = new Map<string, any>();
+          const latestDbEvents = new Map<string, NostrEvent>();
+
           for (const event of profilesFromDb) {
-            if (pubkeyProfilesToFetch.includes(event.pubkey)) {
-              try {
-                const content = JSON.parse(event.content);
-                const profile = {
-                  pubkey: event.pubkey,
-                  created_at: event.created_at,
-                  content: content,
-                  nip05Verified: false,
-                };
-                if (content.nip05) {
-                  profile.nip05Verified = await verifyNip05Identifier(
-                    content.nip05,
-                    event.pubkey
-                  );
-                }
-                profileMap.set(event.pubkey, profile);
-              } catch (error) {
-                console.error(
-                  `Failed to parse profile from DB: ${event.pubkey}`,
-                  error
-                );
+            if (
+              event.kind === 0 &&
+              pubkeyProfilesToFetch.includes(event.pubkey)
+            ) {
+              const existing = latestDbEvents.get(event.pubkey);
+              if (!existing || event.created_at > existing.created_at) {
+                latestDbEvents.set(event.pubkey, event);
               }
             }
           }
-          if (profileMap.size > 0) {
-            editProfileContext(profileMap, false);
+
+          for (const [pubkey, event] of latestDbEvents.entries()) {
+            try {
+              const content = JSON.parse(event.content);
+              const profile: NipProfile = {
+                pubkey: event.pubkey,
+                created_at: event.created_at,
+                content,
+                nip05Verified: false,
+              };
+              dbProfileMap.set(pubkey, profile);
+              updateProfileIfNewer(profile);
+            } catch (error) {
+              console.error(
+                `Failed to parse profile from DB: ${pubkey}`,
+                error
+              );
+            }
+          }
+
+          if (dbProfileMap.size > 0) {
+            editProfileContext(new Map(mergedProfileMap), false);
+            await verifyProfilesNip05(dbProfileMap);
+            editProfileContext(new Map(mergedProfileMap), false);
           }
         }
       } catch (error) {
@@ -407,34 +618,36 @@ export const fetchProfile = async (
         kinds: [0],
         authors: Array.from(pubkeyProfilesToFetch),
       };
-      const profileMap: Map<string, any> = new Map(
-        Array.from(pubkeyProfilesToFetch).map((pubkey) => [pubkey, null])
+
+      const profileMap: Map<string, NipProfile | null> = new Map(
+        Array.from(pubkeyProfilesToFetch).map((pubkey) => [
+          pubkey,
+          mergedProfileMap.get(pubkey) || dbProfileMap.get(pubkey) || null,
+        ])
       );
+      const updatedProfiles = new Map<string, NipProfile | null>();
 
       const fetchedEvents = await nostr.fetch([subParams], {}, relays);
 
       for (const event of fetchedEvents) {
+        if (event.kind !== 0) continue;
+        const existing = profileMap.get(event.pubkey);
         if (
-          profileMap.get(event.pubkey) === null ||
-          profileMap.get(event.pubkey).created_at > event.created_at
+          existing === null ||
+          !existing ||
+          event.created_at > existing.created_at
         ) {
-          // update only if the profile is not already set or the new event is newer
           try {
             const content = JSON.parse(event.content);
-            const profile = {
+            const profile: NipProfile = {
               pubkey: event.pubkey,
               created_at: event.created_at,
-              content: content,
+              content,
               nip05Verified: false,
             };
-            if (content.nip05) {
-              profile.nip05Verified = await verifyNip05Identifier(
-                content.nip05,
-                event.pubkey
-              );
-            }
-
             profileMap.set(event.pubkey, profile);
+            updatedProfiles.set(event.pubkey, profile);
+            updateProfileIfNewer(profile);
           } catch (error) {
             console.error(
               `Failed parse profile for pubkey: ${event.pubkey}, ${event.content}`,
@@ -443,6 +656,8 @@ export const fetchProfile = async (
           }
         }
       }
+
+      await verifyProfilesNip05(updatedProfiles);
 
       // Cache profiles to database via API (reconstruct from fetched events)
       const validProfileEvents = fetchedEvents.filter(
@@ -454,7 +669,9 @@ export const fetchProfile = async (
         );
       }
 
-      resolve({ profileMap });
+      editProfileContext(new Map(mergedProfileMap), false);
+
+      resolve({ profileMap: mergedProfileMap });
     } catch (error) {
       reject(error);
     }
@@ -480,24 +697,48 @@ export const fetchGiftWrappedChatsAndMessages = async (
       // Load from database first
       const chatMessagesFromCache = new Map<string, NostrMessageEvent>();
 
-      try {
-        const response = await fetch(
-          `/api/db/fetch-messages?pubkey=${userPubkey}`
+      if (!signer) {
+        // The cached-messages endpoint requires a signed proof of pubkey
+        // ownership. Without a signer we cannot prove ownership, so skip the
+        // cache read entirely instead of issuing a request that is guaranteed
+        // to be rejected with 401.
+        console.warn(
+          "Skipping cached message fetch: no signer available to prove pubkey ownership."
         );
-        if (response.ok) {
-          const messagesFromDb = await response.json();
-          for (const event of messagesFromDb) {
-            if (!chatMessagesFromCache.has(event.id)) {
-              chatMessagesFromCache.set(event.id, {
-                ...event,
-                sig: event.sig || "",
-                read: event.is_read === true,
-              } as NostrMessageEvent);
+      } else {
+        try {
+          const signedEvent = await signer.sign(
+            buildSignedHttpRequestProofTemplate(
+              buildMessagesListProof(userPubkey)
+            )
+          );
+          const response = await fetch(
+            `/api/db/fetch-messages?pubkey=${userPubkey}`,
+            {
+              headers: {
+                [SIGNED_EVENT_HEADER]: JSON.stringify(signedEvent),
+              },
             }
+          );
+          if (response.ok) {
+            const messagesFromDb = await response.json();
+            for (const event of messagesFromDb) {
+              if (!chatMessagesFromCache.has(event.id)) {
+                chatMessagesFromCache.set(event.id, {
+                  ...event,
+                  sig: event.sig || "",
+                  read: event.is_read === true,
+                } as NostrMessageEvent);
+              }
+            }
+          } else {
+            console.error(
+              `Failed to fetch messages from database: ${response.status} ${response.statusText}`
+            );
           }
+        } catch (error) {
+          console.error("Failed to fetch messages from database: ", error);
         }
-      } catch (error) {
-        console.error("Failed to fetch messages from database: ", error);
       }
 
       try {
@@ -583,13 +824,26 @@ export const fetchGiftWrappedChatsAndMessages = async (
             );
             return;
           }
-          let chatMessage = chatMessagesFromCache.get(messageEvent.id);
-          if (!chatMessage) {
-            chatMessage = { ...messageEvent, sig: "", read: false }; // false because the user received it and it wasn't in the cache
+          const cachedMessage = chatMessagesFromCache.get(event.id);
+          let chatMessage: NostrMessageEvent;
+          if (cachedMessage) {
+            chatMessage = {
+              ...messageEvent,
+              sig: "",
+              read: cachedMessage.read,
+              wrappedEventId: event.id,
+            };
+          } else {
+            chatMessage = {
+              ...messageEvent,
+              sig: "",
+              read: false,
+              wrappedEventId: event.id,
+            };
           }
-          if (senderPubkey === userPubkey && chatMessage) {
+          if (senderPubkey === userPubkey) {
             addToChatsMap(recipientPubkey, chatMessage);
-          } else if (chatMessage) {
+          } else {
             addToChatsMap(senderPubkey, chatMessage);
           }
         }
@@ -645,11 +899,76 @@ export const fetchReviews = async (
         })
         .filter((address): address is string => address !== null);
 
-      const merchantScoresMap = new Map<string, number[]>();
       const productReviewsMap = new Map<
         string,
         Map<string, Map<string, string[][]>>
       >();
+
+      const reviewScoreTracker = new Map<
+        string,
+        { score: number; created_at: number }
+      >();
+      const getReviewScoreKey = (
+        merchantPubkey: string,
+        productDTag: string,
+        reviewerPubkey: string
+      ) => `${merchantPubkey}:${productDTag}:${reviewerPubkey}`;
+
+      const processReviewEvent = (event: NostrEvent, addressTag: string) => {
+        const [_, _kind, merchantPubkey, productDTag] = addressTag.split(":");
+        if (!merchantPubkey || !productDTag) return;
+
+        const ratingTags = event.tags.filter(
+          (tag: string[]) => tag[0] === "rating"
+        );
+        const commentArray = ["comment", event.content];
+        ratingTags.unshift(commentArray);
+
+        const scoreKey = getReviewScoreKey(
+          merchantPubkey,
+          productDTag,
+          event.pubkey
+        );
+        const score = calculateWeightedScore(event.tags);
+        const existingScore = reviewScoreTracker.get(scoreKey);
+
+        if (!existingScore || event.created_at > existingScore.created_at) {
+          reviewScoreTracker.set(scoreKey, {
+            score,
+            created_at: event.created_at,
+          });
+        }
+
+        if (!productReviewsMap.has(merchantPubkey)) {
+          productReviewsMap.set(merchantPubkey, new Map());
+        }
+
+        const merchantProducts = productReviewsMap.get(merchantPubkey)!;
+        if (!merchantProducts.has(productDTag)) {
+          merchantProducts.set(productDTag, new Map());
+        }
+
+        const productReviews = merchantProducts.get(productDTag)!;
+        const createdAt = event.created_at;
+        const existingReview = productReviews.get(event.pubkey);
+
+        if (
+          !existingReview ||
+          createdAt >
+            Number(existingReview.find((item) => item[0] === "created_at")?.[1])
+        ) {
+          const updatedReview = existingReview
+            ? existingReview.map((item) => {
+                if (item[0] === "created_at") {
+                  return ["created_at", createdAt.toString()];
+                }
+                return item;
+              })
+            : [...ratingTags, ["created_at", createdAt.toString()]];
+
+          productReviews.set(event.pubkey, updatedReview);
+        }
+      };
 
       // First load from database
       try {
@@ -662,59 +981,22 @@ export const fetchReviews = async (
             (tag: string[]) => tag[0] === "d"
           )?.[1];
           if (!addressTag || !addresses.includes(addressTag)) continue;
-
-          const [_, _kind, merchantPubkey, productDTag] = addressTag.split(":");
-          if (!merchantPubkey || !productDTag) continue;
-
-          const ratingTags = event.tags.filter(
-            (tag: string[]) => tag[0] === "rating"
-          );
-          const commentArray = ["comment", event.content];
-          ratingTags.unshift(commentArray);
-
-          if (!merchantScoresMap.has(merchantPubkey)) {
-            merchantScoresMap.set(merchantPubkey, []);
-          }
-          merchantScoresMap
-            .get(merchantPubkey)!
-            .push(calculateWeightedScore(event.tags));
-
-          if (!productReviewsMap.has(merchantPubkey)) {
-            productReviewsMap.set(merchantPubkey, new Map());
-          }
-
-          const merchantProducts = productReviewsMap.get(merchantPubkey)!;
-          if (!merchantProducts.has(productDTag)) {
-            merchantProducts.set(productDTag, new Map());
-          }
-
-          const productReviews = merchantProducts.get(productDTag)!;
-          const createdAt = event.created_at;
-          const existingReview = productReviews.get(event.pubkey);
-
-          if (
-            !existingReview ||
-            createdAt >
-              Number(
-                existingReview.find((item) => item[0] === "created_at")?.[1]
-              )
-          ) {
-            const updatedReview = existingReview
-              ? existingReview.map((item) => {
-                  if (item[0] === "created_at") {
-                    return ["created_at", createdAt.toString()];
-                  }
-                  return item;
-                })
-              : [...ratingTags, ["created_at", createdAt.toString()]];
-
-            productReviews.set(event.pubkey, updatedReview);
-          }
+          processReviewEvent(event, addressTag);
         }
 
-        if (merchantScoresMap.size > 0 || productReviewsMap.size > 0) {
-          productReviewsMap.forEach((merchantProducts, _) => {
-            merchantProducts.forEach((productReviews, _) => {
+        if (reviewScoreTracker.size > 0 || productReviewsMap.size > 0) {
+          const merchantScoresMap = new Map<string, number[]>();
+          reviewScoreTracker.forEach(({ score }, key) => {
+            const merchantPubkey = key.split(":")[0]!;
+            if (!merchantScoresMap.has(merchantPubkey)) {
+              merchantScoresMap.set(merchantPubkey, []);
+            }
+            merchantScoresMap.get(merchantPubkey)!.push(score);
+          });
+
+          const cleanedProductReviewsMap = new Map(productReviewsMap);
+          cleanedProductReviewsMap.forEach((merchantProducts) => {
+            merchantProducts.forEach((productReviews) => {
               productReviews.forEach((review, reviewerPubkey) => {
                 const cleanedReview = review.filter(
                   (item) => item[0] !== "created_at"
@@ -725,7 +1007,11 @@ export const fetchReviews = async (
               });
             });
           });
-          editReviewsContext(merchantScoresMap, productReviewsMap, false);
+          editReviewsContext(
+            merchantScoresMap,
+            cleanedProductReviewsMap,
+            false
+          );
         }
       } catch (error) {
         console.error("Failed to fetch reviews from database: ", error);
@@ -741,63 +1027,21 @@ export const fetchReviews = async (
       for (const event of fetchedEvents) {
         const addressTag = event.tags.find((tag) => tag[0] === "d")?.[1];
         if (!addressTag) continue;
+        processReviewEvent(event, addressTag);
+      }
 
-        const [_, _kind, merchantPubkey, productDTag] = addressTag.split(":");
-        if (!merchantPubkey || !productDTag) continue;
-
-        const ratingTags = event.tags.filter((tag) => tag[0] === "rating");
-        const commentArray = ["comment", event.content];
-        ratingTags.unshift(commentArray);
-
-        // Add score to merchant's scores (all reviews)
+      const merchantScoresMap = new Map<string, number[]>();
+      reviewScoreTracker.forEach(({ score }, key) => {
+        const merchantPubkey = key.split(":")[0]!;
         if (!merchantScoresMap.has(merchantPubkey)) {
           merchantScoresMap.set(merchantPubkey, []);
         }
-        merchantScoresMap
-          .get(merchantPubkey)!
-          .push(calculateWeightedScore(event.tags));
+        merchantScoresMap.get(merchantPubkey)!.push(score);
+      });
 
-        // Initialize merchant map if doesn't exist
-        if (!productReviewsMap.has(merchantPubkey)) {
-          productReviewsMap.set(merchantPubkey, new Map());
-        }
-
-        // Initialize product map if doesn't exist
-        const merchantProducts = productReviewsMap.get(merchantPubkey)!;
-        if (!merchantProducts.has(productDTag)) {
-          merchantProducts.set(productDTag, new Map());
-        }
-
-        // Add or update review
-        const productReviews = merchantProducts.get(productDTag)!;
-
-        const createdAt = event.created_at;
-
-        // Only update if this is a newer review from this pubkey
-        const existingReview = productReviews.get(event.pubkey);
-        if (
-          !existingReview ||
-          createdAt >
-            Number(existingReview.find((item) => item[0] === "created_at")?.[1])
-        ) {
-          // Replace the existing created_at or set a new entry
-          const updatedReview = existingReview
-            ? existingReview.map((item) => {
-                if (item[0] === "created_at") {
-                  return ["created_at", createdAt.toString()]; // Replace the created_at entry
-                }
-                return item; // Keep existing items
-              })
-            : [...ratingTags, ["created_at", createdAt.toString()]]; // Initialize if it's a new review
-
-          productReviews.set(event.pubkey, updatedReview);
-        }
-      }
-
-      productReviewsMap.forEach((merchantProducts, _) => {
-        merchantProducts.forEach((productReviews, _) => {
+      productReviewsMap.forEach((merchantProducts) => {
+        merchantProducts.forEach((productReviews) => {
           productReviews.forEach((review, reviewerPubkey) => {
-            // Filter out the created_at entries
             const cleanedReview = review.filter(
               (item) => item[0] !== "created_at"
             );
@@ -840,17 +1084,21 @@ export const fetchAllFollows = async (
   followList: string[];
 }> => {
   const wot = getLocalStorageData().wot;
-  const defaultAuthor =
-    "d36e8083fa7b36daee646cb8b3f99feaa3d89e5a396508741f003e21ac0b6bec";
+
+  if (!userPubkey) {
+    editFollowsContext([], 0, false);
+    return {
+      followList: [],
+    };
+  }
 
   const fetchFollows = async (userPubkey: string) => {
     let secondDegreeFollowsArrayFromRelay: string[] = [];
     let firstDegreeFollowsLength = 0;
-    let followsArrayFromRelay: string[] = [];
     const followsSet: Set<string> = new Set();
 
     // fetch first-degree follows
-    let fetchedEvents = await nostr.fetch(
+    const fetchedEvents = await nostr.fetch(
       [
         {
           kinds: [3],
@@ -860,19 +1108,41 @@ export const fetchAllFollows = async (
       {},
       relays
     );
+
+    const latestContactListEvent = fetchedEvents.reduce<NostrEvent | null>(
+      (latestEvent, event) => {
+        if (!latestEvent || event.created_at > latestEvent.created_at) {
+          return event;
+        }
+        return latestEvent;
+      },
+      null
+    );
+
+    if (!latestContactListEvent) {
+      return {
+        followsArrayFromRelay: [],
+        firstDegreeFollowsLength: 0,
+      };
+    }
+
     const authors: string[] = [];
-    for (const event of fetchedEvents) {
-      const validTags = event.tags
-        .map((tag) => tag[1])
-        .filter((pubkey) => isHexString(pubkey!) && !followsSet.has(pubkey!));
-      validTags.forEach((pubkey) => followsSet.add(pubkey!));
-      followsArrayFromRelay.push(...(validTags as string[]));
-      firstDegreeFollowsLength = followsArrayFromRelay.length;
-      authors.push(...followsArrayFromRelay);
+    const directFollowsArrayFromRelay = latestContactListEvent.tags
+      .map((tag) => tag[1])
+      .filter((pubkey) => isHexString(pubkey!) && !followsSet.has(pubkey!));
+    directFollowsArrayFromRelay.forEach((pubkey) => followsSet.add(pubkey!));
+    firstDegreeFollowsLength = directFollowsArrayFromRelay.length;
+    authors.push(...(directFollowsArrayFromRelay as string[]));
+
+    if (!authors.length) {
+      return {
+        followsArrayFromRelay: [],
+        firstDegreeFollowsLength,
+      };
     }
 
     // Fetch second-degree follows
-    fetchedEvents = await nostr.fetch(
+    const fetchedSecondDegreeEvents = await nostr.fetch(
       [
         {
           kinds: [3],
@@ -883,7 +1153,15 @@ export const fetchAllFollows = async (
       relays
     );
 
-    for (const followEvent of fetchedEvents) {
+    const latestSecondDegreeEvents = new Map<string, NostrEvent>();
+    for (const followEvent of fetchedSecondDegreeEvents) {
+      const latestEvent = latestSecondDegreeEvents.get(followEvent.pubkey);
+      if (!latestEvent || followEvent.created_at > latestEvent.created_at) {
+        latestSecondDegreeEvents.set(followEvent.pubkey, followEvent);
+      }
+    }
+
+    for (const followEvent of latestSecondDegreeEvents.values()) {
       const validFollowTags = followEvent.tags
         .map((tag) => tag[1])
         .filter((pubkey) => isHexString(pubkey!) && !followsSet.has(pubkey!));
@@ -899,8 +1177,12 @@ export const fetchAllFollows = async (
         (pubkey) => (pubkeyCount.get(pubkey) || 0) >= wot
       );
     // Concatenate arrays ensuring uniqueness
-    followsArrayFromRelay = Array.from(
-      new Set(followsArrayFromRelay.concat(secondDegreeFollowsArrayFromRelay))
+    const followsArrayFromRelay = Array.from(
+      new Set(
+        (directFollowsArrayFromRelay as string[]).concat(
+          secondDegreeFollowsArrayFromRelay
+        )
+      )
     );
     return {
       followsArrayFromRelay,
@@ -908,15 +1190,8 @@ export const fetchAllFollows = async (
     };
   };
 
-  let { followsArrayFromRelay, firstDegreeFollowsLength } = await fetchFollows(
-    userPubkey || defaultAuthor
-  );
-
-  if (!followsArrayFromRelay?.length) {
-    // If followsArrayFromRelay is still empty, add the default value
-    ({ followsArrayFromRelay, firstDegreeFollowsLength } =
-      await fetchFollows(defaultAuthor));
-  }
+  const { followsArrayFromRelay, firstDegreeFollowsLength } =
+    await fetchFollows(userPubkey);
   editFollowsContext(followsArrayFromRelay, firstDegreeFollowsLength, false);
   return {
     followList: followsArrayFromRelay,
@@ -1040,26 +1315,26 @@ export const fetchAllRelays = async (
           (tag) => tag[0] === "r" && tag[2] === "write"
         );
 
-        validRelays.forEach((tag) => relaySet.add(tag[1]!));
-        relayList.push(
-          ...validRelays
-            .map((tag) => tag[1]!)
-            .filter((tag) => tag !== undefined)
-        );
+        validRelays.forEach((tag) => {
+          if (tag[1] && !relaySet.has(tag[1])) {
+            relaySet.add(tag[1]);
+            relayList.push(tag[1]);
+          }
+        });
 
-        validReadRelays.forEach((tag) => readRelaySet.add(tag[1]!));
-        readRelayList.push(
-          ...validReadRelays
-            .map((tag) => tag[1]!)
-            .filter((tag) => tag !== undefined)
-        );
+        validReadRelays.forEach((tag) => {
+          if (tag[1] && !readRelaySet.has(tag[1])) {
+            readRelaySet.add(tag[1]);
+            readRelayList.push(tag[1]);
+          }
+        });
 
-        validWriteRelays.forEach((tag) => writeRelaySet.add(tag[1]!));
-        writeRelayList.push(
-          ...validWriteRelays
-            .map((tag) => tag[1]!)
-            .filter((tag) => tag !== undefined)
-        );
+        validWriteRelays.forEach((tag) => {
+          if (tag[1] && !writeRelaySet.has(tag[1])) {
+            writeRelaySet.add(tag[1]);
+            writeRelayList.push(tag[1]);
+          }
+        });
       }
       editRelaysContext(relayList, readRelayList, writeRelayList, false);
       resolve({
@@ -1152,12 +1427,12 @@ export const fetchAllBlossomServers = async (
           (tag) => tag[0] === "server"
         );
 
-        validBlossomServers.forEach((tag) => blossomSet.add(tag[1]!));
-        blossomServers.push(
-          ...validBlossomServers
-            .map((tag) => tag[1]!)
-            .filter((tag) => tag !== undefined)
-        );
+        validBlossomServers.forEach((tag) => {
+          if (tag[1] && !blossomSet.has(tag[1])) {
+            blossomSet.add(tag[1]);
+            blossomServers.push(tag[1]);
+          }
+        });
       }
       editBlossomContext(blossomServers, false);
       resolve({
@@ -1217,15 +1492,26 @@ export const fetchCashuWallet = async (
 
         for (const event of walletEventsFromDb) {
           if (event.kind === 17375) {
-            const mints = event.tags.filter(
-              (tag: string[]) => tag[0] === "mint"
-            );
-            mints.forEach((tag: string[]) => {
-              if (tag[1] && !cashuMintSet.has(tag[1])) {
-                cashuMintSet.add(tag[1]);
-                cashuMints.push(tag[1]);
-              }
-            });
+            try {
+              const decrypted = await signer!.decrypt(
+                userPubkey,
+                event.content
+              );
+              const walletContent: string[][] = JSON.parse(decrypted);
+              walletContent
+                .filter((entry) => entry[0] === "mint")
+                .forEach((entry) => {
+                  if (entry[1] && !cashuMintSet.has(entry[1])) {
+                    cashuMintSet.add(entry[1]);
+                    cashuMints.push(entry[1]);
+                  }
+                });
+            } catch (error) {
+              console.error(
+                `Failed to decrypt wallet config event from DB ${event.id}:`,
+                error
+              );
+            }
           } else if (event.kind === 37375) {
             if (
               !mostRecentWalletEvent ||
@@ -1328,16 +1614,27 @@ export const fetchCashuWallet = async (
       for (const event of hEvents) {
         try {
           if (event.kind === 17375) {
-            // Extract mints from configuration events
-            const mints = event.tags.filter(
-              (tag: string[]) => tag[0] === "mint"
-            );
-            mints.forEach((tag) => {
-              if (tag[1] && !cashuMintSet.has(tag[1])) {
-                cashuMintSet.add(tag[1]);
-                cashuMints.push(tag[1]);
-              }
-            });
+            // Mints are stored in the encrypted content, not in tags
+            try {
+              const decrypted = await signer!.decrypt(
+                userPubkey,
+                event.content
+              );
+              const walletContent: string[][] = JSON.parse(decrypted);
+              walletContent
+                .filter((entry) => entry[0] === "mint")
+                .forEach((entry) => {
+                  if (entry[1] && !cashuMintSet.has(entry[1])) {
+                    cashuMintSet.add(entry[1]);
+                    cashuMints.push(entry[1]);
+                  }
+                });
+            } catch (decryptError) {
+              console.error(
+                `Failed to decrypt wallet config event ${event.id}:`,
+                decryptError
+              );
+            }
           } else if (event.kind === 37375) {
             // Find the most recent wallet state event
             if (
@@ -1460,6 +1757,7 @@ export const fetchCashuWallet = async (
       for (const mint of cashuMints) {
         try {
           const wallet = new CashuWallet(new CashuMint(mint));
+          await wallet.loadMint();
 
           // Filter proofs for this specific mint
           const mintProofs = cashuProofs.filter((proof) => {
@@ -1484,11 +1782,13 @@ export const fetchCashuWallet = async (
                 .map((state) => state.Y)
             );
 
-            // Remove spent proofs
-            cashuProofs = cashuProofs.filter((proof, _index) => {
-              if (mintProofs.includes(proof)) {
-                const proofIndex = mintProofs.indexOf(proof);
-                return proofIndex === -1 || !spentYs.has(Ys[proofIndex]!);
+            // Remove spent proofs (compare by secret, not reference)
+            cashuProofs = cashuProofs.filter((proof) => {
+              const mintProofIndex = mintProofs.findIndex(
+                (mp) => mp.secret === proof.secret
+              );
+              if (mintProofIndex !== -1) {
+                return !spentYs.has(Ys[mintProofIndex]!);
               }
               return true;
             });
@@ -1517,13 +1817,12 @@ export const fetchCashuWallet = async (
           .filter((eventTags) =>
             eventTags.some((tag) => tag[0] === "direction" && tag[1] === "out")
           )
-          .map((eventTags) => {
-            const destroyedTag = eventTags.find(
-              (tag) => tag[0] === "e" && tag[3] === "destroyed"
-            );
-            return destroyedTag ? destroyedTag[1] : "";
-          })
-          .filter((eventId) => eventId !== "");
+          .flatMap((eventTags) =>
+            eventTags
+              .filter((tag) => tag[0] === "e" && tag[3] === "destroyed")
+              .map((tag) => tag[1])
+          )
+          .filter((eventId) => eventId !== "") as string[];
 
         const inProofIds = incomingSpendingHistory
           .filter((eventTags) =>
@@ -1538,7 +1837,7 @@ export const fetchCashuWallet = async (
             );
             return createdTag ? createdTag[1] : "";
           })
-          .filter((eventId) => eventId !== "");
+          .filter((eventId) => eventId !== "") as string[];
 
         // Remove proofs from events that were spent (out direction)
         const destroyedProofs = proofEvents
@@ -1548,8 +1847,7 @@ export const fetchCashuWallet = async (
         cashuProofs = cashuProofs.filter(
           (proof) =>
             !destroyedProofs.some(
-              (destroyed: Proof) =>
-                JSON.stringify(proof) === JSON.stringify(destroyed)
+              (destroyed: Proof) => destroyed.secret === proof.secret
             )
         );
 
@@ -1611,24 +1909,20 @@ export const fetchAllCommunities = async (
 ): Promise<Map<string, Community>> => {
   return new Promise(async (resolve, reject) => {
     try {
-      // First load from database
+      const dbCommunityMap = new Map<string, Community>();
       try {
         const response = await fetch("/api/db/fetch-communities");
         if (response.ok) {
           const communitiesFromDb = await response.json();
           if (communitiesFromDb.length > 0) {
-            const parsedCommunitiesFromDb: Community[] = [];
             for (const event of communitiesFromDb) {
               const community = parseCommunityEvent(event);
               if (community) {
-                parsedCommunitiesFromDb.push(community);
+                dbCommunityMap.set(community.id, community);
               }
             }
-            if (parsedCommunitiesFromDb.length > 0) {
-              const communityMap = new Map(
-                parsedCommunitiesFromDb.map((c) => [c.id, c])
-              );
-              editCommunityContext(communityMap, false);
+            if (dbCommunityMap.size > 0) {
+              editCommunityContext(new Map(dbCommunityMap), false);
             }
           }
         }
@@ -1642,16 +1936,19 @@ export const fetchAllCommunities = async (
       };
 
       const fetchedEvents = await nostr.fetch([filter], {}, relays);
-      const parsedCommunities: Community[] = [];
+
+      const communityMap = new Map(dbCommunityMap);
 
       for (const event of fetchedEvents) {
         const community = parseCommunityEvent(event);
         if (community) {
-          parsedCommunities.push(community);
+          const existing = communityMap.get(community.id);
+          if (!existing || community.createdAt >= existing.createdAt) {
+            communityMap.set(community.id, community);
+          }
         }
       }
 
-      const communityMap = new Map(parsedCommunities.map((c) => [c.id, c]));
       editCommunityContext(communityMap, false);
 
       // Cache communities to database via API (only valid events)

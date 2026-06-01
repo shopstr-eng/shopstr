@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
 
 export default function Faq() {
@@ -161,11 +161,11 @@ export default function Faq() {
     .filter((section) => section.items.length > 0);
 
   return (
-    <div className="min-h-screen bg-[#050505] pb-20 pt-32 text-white">
+    <div className="min-h-screen bg-[#050505] pt-32 pb-20 text-white">
       <div className="container mx-auto max-w-3xl px-4">
         {/* Header */}
         <div className="mb-16 flex flex-col items-center text-center">
-          <div className="mb-8 flex h-16 w-16 items-center justify-center rounded-2xl border-2 border-shopstr-yellow text-shopstr-yellow">
+          <div className="border-shopstr-yellow text-shopstr-yellow mb-8 flex h-16 w-16 items-center justify-center rounded-2xl border-2">
             <svg
               xmlns="http://www.w3.org/2000/svg"
               width="32"
@@ -182,7 +182,7 @@ export default function Faq() {
               <path d="M12 17h.01" />
             </svg>
           </div>
-          <h1 className="mb-4 text-3xl font-black uppercase tracking-tight md:text-5xl lg:text-6xl">
+          <h1 className="mb-4 text-3xl font-black tracking-tight uppercase md:text-5xl lg:text-6xl">
             How can we <span className="text-shopstr-yellow">help?</span>
           </h1>
           <p className="mb-10 max-w-lg text-lg text-gray-400">
@@ -210,7 +210,7 @@ export default function Faq() {
             </div>
             <input
               type="text"
-              className="w-full rounded-xl border border-white/10 bg-[#111] py-4 pl-12 pr-4 text-base text-white placeholder-gray-600 transition-colors focus:border-white/20 focus:outline-none"
+              className="w-full rounded-xl border border-white/10 bg-[#111] py-4 pr-4 pl-12 text-base text-white placeholder-gray-600 transition-colors focus:border-white/20 focus:outline-none"
               placeholder="Search for answers..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -227,7 +227,7 @@ export default function Faq() {
                 <div className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-white/10"></div>
                 <div className="relative rounded-full border border-white/5 p-1">
                   <div className="rounded-full border border-white/10 bg-[#111] px-6 py-2 text-center md:px-10 md:py-3">
-                    <span className="text-lg font-black uppercase tracking-tight text-white md:text-2xl">
+                    <span className="text-lg font-black tracking-tight text-white uppercase md:text-2xl">
                       {section.title}
                     </span>
                   </div>
@@ -253,7 +253,7 @@ export default function Faq() {
                           {item.title}
                         </span>
                         <div
-                          className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/5 duration-200 transition-transform ${
+                          className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/5 transition-transform duration-200 ${
                             isOpen ? "rotate-180" : ""
                           }`}
                         >
@@ -274,7 +274,7 @@ export default function Faq() {
                         </div>
                       </button>
                       {isOpen && (
-                        <div className="border-t border-white/5 px-5 pb-5 pt-3 text-gray-400">
+                        <div className="border-t border-white/5 px-5 pt-3 pb-5 text-gray-400">
                           {item.content}
                         </div>
                       )}
@@ -288,7 +288,7 @@ export default function Faq() {
 
         {/* Footer */}
         <div className="mt-24 border-t border-white/10 pt-16 text-center">
-          <h3 className="mb-8 text-sm font-bold uppercase tracking-widest text-gray-500">
+          <h3 className="mb-8 text-sm font-bold tracking-widest text-gray-500 uppercase">
             Still need help?
           </h3>
           <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
@@ -296,7 +296,7 @@ export default function Faq() {
               href="https://discord.gg/XDPb4kXJNv"
               target="_blank"
               rel="noopener noreferrer"
-              className="flex min-w-[160px] items-center justify-center gap-1 rounded-xl border-1 border-white/20 bg-transparent px-6 py-3.5 text-lg font-bold uppercase text-white transition-colors hover:bg-white/10"
+              className="flex min-w-[160px] items-center justify-center gap-1 rounded-xl border-1 border-white/20 bg-transparent px-6 py-3.5 text-lg font-bold text-white uppercase transition-colors hover:bg-white/10"
             >
               <span>Join Discord</span>
             </a>

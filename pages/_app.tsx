@@ -1,4 +1,3 @@
-import "tailwindcss/tailwind.css";
 import type { AppProps } from "next/app";
 import "../styles/globals.css";
 import { useState, useEffect, useCallback, useContext, useMemo } from "react";
@@ -31,7 +30,7 @@ import {
   getDefaultRelays,
   LogOut,
 } from "@/utils/nostr/nostr-helper-functions";
-import { NextUIProvider } from "@nextui-org/react";
+import { HeroUIProvider } from "@heroui/react";
 import { ThemeProvider as NextThemesProvider } from "next-themes";
 import {
   fetchAllPosts,
@@ -709,6 +708,7 @@ function Shopstr({ props }: { props: AppProps }) {
       <DynamicHead
         productEvents={productContext.productEvents}
         shopEvents={shopContext.shopData}
+        profileData={profileContext.profileData}
       />
       <CommunityContext.Provider value={communityContext}>
         <RelaysContext.Provider value={relaysContext}>
@@ -754,7 +754,7 @@ function Shopstr({ props }: { props: AppProps }) {
 function App(props: AppProps) {
   return (
     <>
-      <NextUIProvider>
+      <HeroUIProvider>
         <NextThemesProvider
           attribute="class"
           defaultTheme="dark"
@@ -766,7 +766,7 @@ function App(props: AppProps) {
             </SignerContextProvider>
           </NostrContextProvider>
         </NextThemesProvider>
-      </NextUIProvider>
+      </HeroUIProvider>
     </>
   );
 }

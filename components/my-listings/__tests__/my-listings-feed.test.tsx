@@ -1,4 +1,3 @@
-import React from "react";
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import MyListingsFeed from "../my-listings-feed";
@@ -47,9 +46,7 @@ const renderComponent = (isLoggedIn: boolean, hasQueryParam: boolean) => {
     <SignerContext.Provider
       value={{
         isLoggedIn,
-        login: jest.fn(),
-        logout: jest.fn(),
-        nostrUser: null,
+        pubkey: isLoggedIn ? "test-pubkey" : undefined,
       }}
     >
       <MyListingsFeed />

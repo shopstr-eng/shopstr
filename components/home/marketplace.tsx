@@ -11,7 +11,7 @@ import {
   DropdownTrigger,
   DropdownMenu,
   DropdownItem,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import {
   FaceFrownIcon,
   FaceSmileIcon,
@@ -20,7 +20,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { useRouter } from "next/router";
 import { nip19, Event } from "nostr-tools";
-import React, { useContext, useEffect, useState, useRef } from "react";
+import { useContext, useEffect, useState, useRef } from "react";
 import {
   ReviewsContext,
   ShopMapContext,
@@ -39,6 +39,27 @@ import {
   RawEventModal,
   EventIdModal,
 } from "../utility-components/modals/event-modals";
+
+export function normalizeNpub(
+  npub: string | string[] | undefined
+): string | null {
+  if (typeof npub === "string") {
+    const normalized = npub.trim();
+    return normalized.length > 0 ? normalized : null;
+  }
+
+  if (Array.isArray(npub)) {
+    const firstValue = npub[0];
+    if (typeof firstValue !== "string") {
+      return null;
+    }
+
+    const normalized = firstValue.trim();
+    return normalized.length > 0 ? normalized : null;
+  }
+
+  return null;
+}
 
 function MarketplacePage({
   focusedPubkey,
@@ -219,7 +240,7 @@ function MarketplacePage({
 
           return (
             <div key={product.id} className="mt-4 p-4 pt-4">
-              <h3 className="mb-3 text-lg font-semibold text-light-text dark:text-dark-text">
+              <h3 className="text-light-text dark:text-dark-text mb-3 text-lg font-semibold">
                 <div
                   onClick={() => handleTitleClick(product)}
                   className="cursor-pointer hover:underline"
@@ -295,7 +316,7 @@ function MarketplacePage({
                             return (
                               <p
                                 key={index}
-                                className="italic text-light-text dark:text-dark-text"
+                                className="text-light-text dark:text-dark-text italic"
                               >
                                 &ldquo;{value}&rdquo;
                               </p>
@@ -316,9 +337,9 @@ function MarketplacePage({
   };
 
   return (
-    <div className="mx-auto flex min-h-screen w-full flex-col bg-light-bg dark:bg-dark-bg">
+    <div className="bg-light-bg dark:bg-dark-bg mx-auto flex min-h-screen w-full flex-col">
       {/* Top Filter Bar */}
-      <div className="sticky top-0 z-30 flex w-full flex-col gap-3 border-b border-zinc-800 bg-light-bg px-4 py-4 dark:bg-dark-bg md:flex-row md:items-end">
+      <div className="bg-light-bg dark:bg-dark-bg sticky top-0 z-30 flex w-full flex-col gap-3 border-b border-zinc-800 px-4 py-4 md:flex-row md:items-end">
         {/* Search Input */}
         <div ref={searchBarRef} className="w-full md:flex-1">
           <Input
@@ -350,7 +371,7 @@ function MarketplacePage({
                 <Button
                   size="sm"
                   variant="light"
-                  className={`h-full rounded-lg px-3 text-xs font-bold uppercase tracking-wider ${
+                  className={`h-full rounded-lg px-3 text-xs font-bold tracking-wider uppercase ${
                     selectedSection === "shop" || selectedSection === ""
                       ? "bg-white text-black shadow-sm dark:bg-zinc-800 dark:text-white"
                       : "text-zinc-500 hover:text-black dark:hover:text-white"
@@ -367,7 +388,7 @@ function MarketplacePage({
                 <Button
                   size="sm"
                   variant="light"
-                  className={`h-full rounded-lg px-3 text-xs font-bold uppercase tracking-wider ${
+                  className={`h-full rounded-lg px-3 text-xs font-bold tracking-wider uppercase ${
                     selectedSection === "reviews"
                       ? "bg-white text-black shadow-sm dark:bg-zinc-800 dark:text-white"
                       : "text-zinc-500 hover:text-black dark:hover:text-white"
@@ -379,7 +400,7 @@ function MarketplacePage({
                 <Button
                   size="sm"
                   variant="light"
-                  className={`h-full rounded-lg px-3 text-xs font-bold uppercase tracking-wider ${
+                  className={`h-full rounded-lg px-3 text-xs font-bold tracking-wider uppercase ${
                     selectedSection === "about"
                       ? "bg-white text-black shadow-sm dark:bg-zinc-800 dark:text-white"
                       : "text-zinc-500 hover:text-black dark:hover:text-white"
@@ -392,7 +413,7 @@ function MarketplacePage({
 
               {/* Mobile Message Button (SideShopNav is hidden on mobile) */}
               <Button
-                className="flex h-[50px] items-center rounded-xl border border-zinc-300 bg-zinc-100 px-4 font-bold text-zinc-500 dark:border-[#27272a] dark:bg-[#18181b] dark:hover:text-white md:hidden"
+                className="flex h-[50px] items-center rounded-xl border border-zinc-300 bg-zinc-100 px-4 font-bold text-zinc-500 md:hidden dark:border-[#27272a] dark:bg-[#18181b] dark:hover:text-white"
                 onClick={() => handleSendMessage(focusedPubkey)}
               >
                 Msg
@@ -454,9 +475,7 @@ function MarketplacePage({
             >
               <SelectSection className="text-light-text dark:text-dark-text">
                 {CATEGORIES.map((category) => (
-                  <SelectItem value={category} key={category}>
-                    {category}
-                  </SelectItem>
+                  <SelectItem key={category}>{category}</SelectItem>
                 ))}
               </SelectSection>
             </Select>
@@ -508,17 +527,17 @@ function MarketplacePage({
           />
         )}
         {selectedSection === "about" && shopAbout && (
-          <div className="flex w-full flex-col justify-start bg-transparent px-4 py-8 text-light-text dark:text-dark-text">
+          <div className="text-light-text dark:text-dark-text flex w-full flex-col justify-start bg-transparent px-4 py-8">
             <h2 className="pb-2 text-2xl font-bold">About</h2>
             <p className="text-base">{shopAbout}</p>
           </div>
         )}
         {selectedSection === "reviews" && !isFetchingReviews && (
-          <div className="flex w-full flex-col justify-start bg-transparent px-4 py-8 text-light-text dark:text-dark-text">
+          <div className="text-light-text dark:text-dark-text flex w-full flex-col justify-start bg-transparent px-4 py-8">
             <h2 className="pb-2 text-2xl font-bold">Reviews</h2>
             {merchantQuality !== "" ? (
               <div className="mt-4 p-4 pt-4">
-                <h3 className="mb-3 text-lg font-semibold text-light-text dark:text-dark-text">
+                <h3 className="text-light-text dark:text-dark-text mb-3 text-lg font-semibold">
                   Merchant Quality
                 </h3>
                 <div className="inline-flex items-center gap-1 rounded-lg border-2 border-black px-2 dark:border-white">
@@ -531,7 +550,7 @@ function MarketplacePage({
                             : "text-green-300"
                         }`}
                       />
-                      <span className="mr-2 whitespace-nowrap text-sm text-light-text dark:text-dark-text">
+                      <span className="text-light-text dark:text-dark-text mr-2 text-sm whitespace-nowrap">
                         {merchantQuality}
                       </span>
                     </>
@@ -544,7 +563,7 @@ function MarketplacePage({
                             : "text-red-500"
                         }`}
                       />
-                      <span className="mr-2 whitespace-nowrap text-sm text-light-text dark:text-dark-text">
+                      <span className="text-light-text dark:text-dark-text mr-2 text-sm whitespace-nowrap">
                         {merchantQuality}
                       </span>
                     </>
@@ -553,11 +572,11 @@ function MarketplacePage({
               </div>
             ) : (
               <div className="mt-10 flex flex-grow items-center justify-center py-10">
-                <div className="w-full max-w-xl rounded-lg bg-light-fg p-10 text-center shadow-lg dark:bg-dark-fg">
-                  <p className="text-3xl font-semibold text-light-text dark:text-dark-text">
+                <div className="bg-light-fg dark:bg-dark-fg w-full max-w-xl rounded-lg p-10 text-center shadow-lg">
+                  <p className="text-light-text dark:text-dark-text text-3xl font-semibold">
                     No reviews . . . yet!
                   </p>
-                  <p className="mt-4 text-lg text-light-text dark:text-dark-text">
+                  <p className="text-light-text dark:text-dark-text mt-4 text-lg">
                     Seems there aren&apos;t any reviews for this shop yet.
                   </p>
                 </div>
@@ -571,7 +590,7 @@ function MarketplacePage({
         !router.asPath.includes("npub") && (
           <Button
             isIconOnly
-            className={`${NEO_BTN} fixed bottom-12 right-12 z-50 h-16 w-16 rounded-full border-4 border-white shadow-xl hover:shadow-2xl`}
+            className={`${NEO_BTN} fixed right-12 bottom-12 z-50 h-16 w-16 rounded-full border-4 border-white shadow-xl hover:shadow-2xl`}
             onClick={() => handleAddNewListing()}
           >
             <PlusIcon className="h-8 w-8 stroke-2" />

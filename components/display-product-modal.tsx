@@ -1,4 +1,4 @@
-import React, { useContext, useState } from "react";
+import { useContext, useState } from "react";
 import {
   PencilSquareIcon,
   ShareIcon,
@@ -13,7 +13,7 @@ import {
   Button,
   Chip,
   Divider,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import ProductForm from "./product-form";
 import ImageCarousel from "./utility-components/image-carousel";
 import CompactCategories from "./utility-components/compact-categories";
@@ -119,9 +119,9 @@ export default function DisplayProductModal({
         size="2xl"
       >
         <ModalContent>
-          <ModalHeader className="flex flex-col text-light-text dark:text-dark-text">
+          <ModalHeader className="text-light-text dark:text-dark-text flex flex-col">
             <div className="flex flex-col justify-between gap-2 md:flex-row md:items-center">
-              <h2 className="text-xl font-black uppercase tracking-tighter text-light-text dark:text-dark-text md:text-2xl">
+              <h2 className="text-light-text dark:text-dark-text text-xl font-black tracking-tighter uppercase md:text-2xl">
                 {productData.title}
                 {isExpired && (
                   <Chip
@@ -136,7 +136,7 @@ export default function DisplayProductModal({
               </h2>
               <div className="flex items-center gap-3">
                 {productData.expiration && (
-                  <p className="text-xs font-bold uppercase tracking-widest text-zinc-500">
+                  <p className="text-xs font-bold tracking-widest text-zinc-500 uppercase">
                     Expires:{" "}
                     {new Date(
                       productData.expiration * 1000
@@ -192,7 +192,7 @@ export default function DisplayProductModal({
             </div>
             <Divider />
             <span className="text-xl font-semibold">Summary: </span>
-            <span className="whitespace-break-spaces break-all">
+            <span className="break-all whitespace-break-spaces">
               {productData.summary}
             </span>
             {productData.sizes && productData.sizes.length > 0 ? (
@@ -203,7 +203,7 @@ export default function DisplayProductModal({
                     ? productData.sizes.map((size: string) => (
                         <span
                           key={size}
-                          className="mb-2 mr-4 text-light-text dark:text-dark-text"
+                          className="text-light-text dark:text-dark-text mr-4 mb-2"
                         >
                           {size}: {productData.sizeQuantities?.get(size) || 0}
                         </span>
@@ -220,7 +220,7 @@ export default function DisplayProductModal({
                     ? productData.volumes.map((volume: string) => (
                         <span
                           key={volume}
-                          className="mb-2 mr-4 text-light-text dark:text-dark-text"
+                          className="text-light-text dark:text-dark-text mr-4 mb-2"
                         >
                           {volume}: {productData.volumePrices?.get(volume) || 0}{" "}
                           {productData.currency}
@@ -232,7 +232,7 @@ export default function DisplayProductModal({
             ) : null}
             {productData.condition && (
               <>
-                <div className="text-left text-xs text-light-text dark:text-dark-text">
+                <div className="text-light-text dark:text-dark-text text-left text-xs">
                   <span className="text-xl font-semibold">Condition: </span>
                   <span className="text-xl">{productData.condition}</span>
                 </div>
@@ -240,7 +240,7 @@ export default function DisplayProductModal({
             )}
             {productData.quantity && (
               <>
-                <div className="text-left text-xs text-light-text dark:text-dark-text">
+                <div className="text-light-text dark:text-dark-text text-left text-xs">
                   <span className="text-xl font-semibold">Quantity: </span>
                   <span className="text-xl">{productData.quantity}</span>
                 </div>
@@ -248,7 +248,7 @@ export default function DisplayProductModal({
             )}
             {productData.restrictions && (
               <>
-                <div className="text-left text-xs text-light-text dark:text-dark-text">
+                <div className="text-light-text dark:text-dark-text text-left text-xs">
                   <span className="text-xl font-semibold">Restrictions: </span>
                   <span className="text-xl text-red-500">
                     {productData.restrictions}
@@ -258,7 +258,7 @@ export default function DisplayProductModal({
             )}
             {productData.required && (
               <>
-                <div className="text-left text-xs text-light-text dark:text-dark-text">
+                <div className="text-light-text dark:text-dark-text text-left text-xs">
                   <span className="text-xl font-semibold">
                     Required Customer Information:{" "}
                   </span>

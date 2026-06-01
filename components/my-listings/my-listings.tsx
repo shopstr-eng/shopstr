@@ -1,10 +1,10 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { useRouter } from "next/router";
-import React, { useContext, useState, useEffect, useRef } from "react";
+import { useContext, useState, useEffect, useRef } from "react";
 import DisplayProducts from "../display-products";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
-import { Button, useDisclosure } from "@nextui-org/react";
+import { Button, useDisclosure } from "@heroui/react";
 import {
   Bars3Icon,
   PlusIcon,
@@ -118,10 +118,10 @@ const MyListingsPage = () => {
   };
 
   const MobileMenu = () => (
-    <div className="absolute right-0 top-full z-50 mt-2 w-48 rounded-xl border border-zinc-800 bg-[#1a1a1a] p-1 shadow-2xl md:hidden">
+    <div className="absolute top-full right-0 z-50 mt-2 w-48 rounded-xl border border-zinc-800 bg-[#1a1a1a] p-1 shadow-2xl md:hidden">
       <div className="py-1">
         <Button
-          className="w-full justify-start bg-transparent px-4 py-2 text-left text-sm font-bold uppercase tracking-wider text-zinc-400 hover:text-white"
+          className="w-full justify-start bg-transparent px-4 py-2 text-left text-sm font-bold tracking-wider text-zinc-400 uppercase hover:text-white"
           onClick={() => {
             setSelectedSection("Listings");
             setIsMobileMenuOpen(false);
@@ -130,7 +130,7 @@ const MyListingsPage = () => {
           Listings
         </Button>
         <Button
-          className="w-full justify-start bg-transparent px-4 py-2 text-left text-sm font-bold uppercase tracking-wider text-zinc-400 hover:text-white"
+          className="w-full justify-start bg-transparent px-4 py-2 text-left text-sm font-bold tracking-wider text-zinc-400 uppercase hover:text-white"
           onClick={() => {
             setSelectedSection("Discounts");
             setIsMobileMenuOpen(false);
@@ -139,7 +139,7 @@ const MyListingsPage = () => {
           Discounts
         </Button>
         <Button
-          className="w-full justify-start bg-transparent px-4 py-2 text-left text-sm font-bold uppercase tracking-wider text-zinc-400 hover:text-white"
+          className="w-full justify-start bg-transparent px-4 py-2 text-left text-sm font-bold tracking-wider text-zinc-400 uppercase hover:text-white"
           onClick={() => {
             setSelectedSection("About");
             setIsMobileMenuOpen(false);
@@ -148,7 +148,7 @@ const MyListingsPage = () => {
           About
         </Button>
         <Button
-          className="w-full justify-start bg-transparent px-4 py-2 text-left text-sm font-bold uppercase tracking-wider text-zinc-400 hover:text-white"
+          className="w-full justify-start bg-transparent px-4 py-2 text-left text-sm font-bold tracking-wider text-zinc-400 uppercase hover:text-white"
           onClick={() => {
             handleViewOrders();
             setIsMobileMenuOpen(false);
@@ -157,7 +157,7 @@ const MyListingsPage = () => {
           Orders
         </Button>
         <Button
-          className="w-full justify-start bg-transparent px-4 py-2 text-left text-sm font-bold uppercase tracking-wider text-zinc-400 hover:text-white"
+          className="w-full justify-start bg-transparent px-4 py-2 text-left text-sm font-bold tracking-wider text-zinc-400 uppercase hover:text-white"
           onClick={() => {
             handleManageCommunity();
             setIsMobileMenuOpen(false);
@@ -170,10 +170,10 @@ const MyListingsPage = () => {
   );
 
   return (
-    <div className="mx-auto flex h-full min-h-screen w-full flex-col bg-light-bg dark:bg-dark-bg md:flex-row">
+    <div className="bg-light-bg dark:bg-dark-bg mx-auto flex h-full min-h-screen w-full flex-col md:flex-row">
       {/* Mobile Header */}
       <div className="flex items-center justify-between border-b border-zinc-800 bg-[#161616] p-4 md:hidden">
-        <h2 className="text-lg font-bold uppercase tracking-wider text-white">
+        <h2 className="text-lg font-bold tracking-wider text-white uppercase">
           {selectedSection}
         </h2>
         <div className="relative" ref={menuRef}>
@@ -191,12 +191,12 @@ const MyListingsPage = () => {
       {/* Left Sidebar */}
       <div className="hidden w-64 flex-col gap-6 border-r border-zinc-800 p-8 md:flex">
         <div className="flex flex-col gap-4">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500">
+          <h3 className="text-xs font-bold tracking-wider text-zinc-500 uppercase">
             Manage
           </h3>
           <button
             onClick={() => setSelectedSection("Listings")}
-            className={`text-left text-sm font-bold uppercase tracking-wide ${
+            className={`text-left text-sm font-bold tracking-wide uppercase ${
               selectedSection === "Listings"
                 ? "text-shopstr-yellow"
                 : "text-zinc-400 hover:text-white"
@@ -206,7 +206,7 @@ const MyListingsPage = () => {
           </button>
           <button
             onClick={() => setSelectedSection("About")}
-            className={`text-left text-sm font-bold uppercase tracking-wide ${
+            className={`text-left text-sm font-bold tracking-wide uppercase ${
               selectedSection === "About"
                 ? "text-shopstr-yellow"
                 : "text-zinc-400 hover:text-white"
@@ -216,7 +216,7 @@ const MyListingsPage = () => {
           </button>
           <button
             onClick={handleViewOrders}
-            className={`text-left text-sm font-bold uppercase tracking-wide ${
+            className={`text-left text-sm font-bold tracking-wide uppercase ${
               selectedSection === "Orders"
                 ? "text-shopstr-yellow"
                 : "text-zinc-400 hover:text-white"
@@ -226,7 +226,7 @@ const MyListingsPage = () => {
           </button>
           <button
             onClick={handleManageCommunity}
-            className={`text-left text-sm font-bold uppercase tracking-wide ${
+            className={`text-left text-sm font-bold tracking-wide uppercase ${
               selectedSection === "Community"
                 ? "text-shopstr-yellow"
                 : "text-zinc-400 hover:text-white"
@@ -236,7 +236,7 @@ const MyListingsPage = () => {
           </button>
           <button
             onClick={() => setSelectedSection("Discounts")}
-            className={`text-left text-sm font-bold uppercase tracking-wide ${
+            className={`text-left text-sm font-bold tracking-wide uppercase ${
               selectedSection === "Discounts"
                 ? "text-shopstr-yellow"
                 : "text-zinc-400 hover:text-white"
@@ -250,12 +250,12 @@ const MyListingsPage = () => {
             Object.keys(talliedCategories).length > 0 && (
               <>
                 <div className="my-2 h-px bg-zinc-800" />
-                <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500">
+                <h3 className="text-xs font-bold tracking-wider text-zinc-500 uppercase">
                   Filter Categories
                 </h3>
                 <button
                   onClick={() => setSelectedCategories(new Set([]))}
-                  className="text-left text-sm font-bold uppercase tracking-wide text-zinc-400 hover:text-white"
+                  className="text-left text-sm font-bold tracking-wide text-zinc-400 uppercase hover:text-white"
                 >
                   All Listings
                 </button>
@@ -281,7 +281,7 @@ const MyListingsPage = () => {
             Add Listing
           </Button>
           <Button
-            className="h-10 w-full rounded-xl border border-zinc-700 bg-zinc-800/50 text-xs font-bold uppercase tracking-wider text-zinc-300 hover:bg-zinc-800 hover:text-white"
+            className="h-10 w-full rounded-xl border border-zinc-700 bg-zinc-800/50 text-xs font-bold tracking-wider text-zinc-300 uppercase hover:bg-zinc-800 hover:text-white"
             startContent={<PencilSquareIcon className="h-4 w-4" />}
             onClick={handleEditShop}
           >
@@ -304,7 +304,7 @@ const MyListingsPage = () => {
             />
           )}
           {selectedSection === "About" && shopAbout && (
-            <div className="flex w-full flex-col justify-start bg-transparent px-4 py-8 text-light-text dark:text-dark-text">
+            <div className="text-light-text dark:text-dark-text flex w-full flex-col justify-start bg-transparent px-4 py-8">
               <h2 className="pb-2 text-2xl font-bold">About</h2>
               <p className="text-base">{shopAbout}</p>
             </div>
@@ -315,7 +315,7 @@ const MyListingsPage = () => {
                 <div className="mx-auto mb-6 flex h-24 w-24 items-center justify-center rounded-3xl bg-zinc-900">
                   <BuildingStorefrontIcon className="h-10 w-10 text-zinc-600" />
                 </div>
-                <h2 className="mb-2 text-2xl font-black uppercase text-white">
+                <h2 className="mb-2 text-2xl font-black text-white uppercase">
                   Nothing here... yet!
                 </h2>
                 <p className="mb-8 text-sm font-medium text-zinc-500">

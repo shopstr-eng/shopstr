@@ -1,6 +1,6 @@
 import React from "react";
 import { CATEGORIES } from "@/utils/STATIC-VARIABLES";
-import { Chip, Tooltip } from "@nextui-org/react";
+import { Chip, Tooltip } from "@heroui/react";
 
 const CompactCategories = ({ categories }: { categories: string[] }) => {
   const [isOpen, setIsOpen] = React.useState(false);
@@ -13,7 +13,7 @@ const CompactCategories = ({ categories }: { categories: string[] }) => {
     return (
       <Chip
         key={index}
-        className="rounded-lg border border-zinc-700 bg-[#161616] py-1 text-[10px] font-bold uppercase tracking-wider text-zinc-300"
+        className="rounded-lg border border-zinc-700 bg-[#161616] py-1 text-[10px] font-bold tracking-wider text-zinc-300 uppercase"
         size="sm"
       >
         {category}
@@ -67,14 +67,14 @@ const CompactCategories = ({ categories }: { categories: string[] }) => {
           >
             {isOpen ? (
               <Chip
-                className="rounded-lg border border-zinc-500 bg-[#161616] text-[10px] font-bold uppercase tracking-wider text-white"
+                className="rounded-lg border border-zinc-500 bg-[#161616] text-[10px] font-bold tracking-wider text-white uppercase"
                 size="sm"
               >
                 {validCategories[0]}
               </Chip>
             ) : (
               <Chip
-                className="rounded-lg border border-zinc-700 bg-[#161616] text-[10px] font-bold uppercase tracking-wider text-zinc-400 hover:border-zinc-500 hover:text-white"
+                className="rounded-lg border border-zinc-700 bg-[#161616] text-[10px] font-bold tracking-wider text-zinc-400 uppercase hover:border-zinc-500 hover:text-white"
                 size="sm"
               >
                 {validCategories[0]}

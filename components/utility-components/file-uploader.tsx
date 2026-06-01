@@ -1,5 +1,5 @@
 import { useContext, useRef, useState } from "react";
-import { Button, Input, Progress } from "@nextui-org/react";
+import { Button, Input, Progress } from "@heroui/react";
 import {
   blossomUploadImages,
   getLocalStorageData,
@@ -258,7 +258,7 @@ export const FileUploaderButton = ({
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        className={`relative w-full duration-300 transition-all ${
+        className={`relative w-full transition-all duration-300 ${
           isPlaceholder
             ? "flex h-full min-h-[180px] items-center justify-center rounded-2xl border-2 border-dashed border-zinc-700 bg-[#111] p-4 hover:border-yellow-400 hover:bg-[#161616] md:min-h-[250px] md:p-6"
             : !isDragging && "border-2 border-dashed border-transparent"
@@ -280,10 +280,10 @@ export const FileUploaderButton = ({
             >
               <PhotoIcon className="mb-4 h-12 w-12 text-yellow-400 md:h-16 md:w-16" />
             </motion.div>
-            <p className="px-4 text-center text-lg font-black uppercase tracking-wider text-white md:text-xl">
+            <p className="px-4 text-center text-lg font-black tracking-wider text-white uppercase md:text-xl">
               {isDragging ? "DROP TO UPLOAD" : "TAP OR DRAG TO UPLOAD"}
             </p>
-            <p className="mt-2 text-center text-[10px] font-bold uppercase tracking-wider text-zinc-500 md:text-xs">
+            <p className="mt-2 text-center text-[10px] font-bold tracking-wider text-zinc-500 uppercase md:text-xs">
               {isPlaceholder && !isDragging
                 ? "Supports JPEG, PNG, WebP"
                 : "Release to start upload"}
@@ -300,7 +300,7 @@ export const FileUploaderButton = ({
             disabled={disabled || loading}
             className={`${
               isProductUpload && "w-full"
-            } ${className} h-12 font-bold uppercase tracking-wider transition-all md:h-14`}
+            } ${className} h-12 font-bold tracking-wider uppercase transition-all md:h-14`}
             startContent={
               <motion.div
                 animate={loading ? {} : { scale: [1, 1.05, 1] }}
@@ -347,7 +347,7 @@ export const FileUploaderButton = ({
             className="w-full space-y-4"
           >
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-wider text-zinc-400">
+              <span className="text-xs font-bold tracking-wider text-zinc-400 uppercase">
                 UPLOADING {previews.length} IMAGE
                 {previews.length > 1 ? "s" : ""}
               </span>
@@ -365,7 +365,7 @@ export const FileUploaderButton = ({
                 indicator: "bg-yellow-400",
               }}
             />
-            <div className="flex justify-between text-[10px] font-bold uppercase tracking-wider text-zinc-600">
+            <div className="flex justify-between text-[10px] font-bold tracking-wider text-zinc-600 uppercase">
               <span>Preprocessing{progress >= 30 ? " ✓" : ""}</span>
               <span>Uploading{progress >= 100 ? " ✓" : ""}</span>
               <span>Processing</span>

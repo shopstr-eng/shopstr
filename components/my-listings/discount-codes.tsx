@@ -1,5 +1,5 @@
-import React, { useContext, useEffect, useState } from "react";
-import { Button, Input, Card, CardBody, Chip } from "@nextui-org/react";
+import { useContext, useEffect, useState } from "react";
+import { Button, Input, Card, CardBody, Chip } from "@heroui/react";
 import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
 import { TrashIcon } from "@heroicons/react/24/outline";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
@@ -115,7 +115,7 @@ export default function DiscountCodes() {
   return (
     <div className="w-full space-y-6 p-4">
       <div className="mb-6">
-        <h2 className="mb-2 text-2xl font-black uppercase tracking-wide text-white">
+        <h2 className="mb-2 text-2xl font-black tracking-wide text-white uppercase">
           Discount Codes
         </h2>
         <p className="text-sm text-zinc-400">
@@ -126,7 +126,7 @@ export default function DiscountCodes() {
 
       <div className="rounded-2xl border border-zinc-800 bg-[#161616] p-4 shadow-none sm:p-6">
         <div className="mb-4">
-          <h3 className="text-lg font-bold uppercase tracking-wider text-white">
+          <h3 className="text-lg font-bold tracking-wider text-white uppercase">
             Add New Discount Code
           </h3>
         </div>
@@ -194,7 +194,7 @@ export default function DiscountCodes() {
       </div>
 
       <div className="space-y-3">
-        <h3 className="text-lg font-bold uppercase tracking-wider text-white">
+        <h3 className="text-lg font-bold tracking-wider text-white uppercase">
           Active Codes
         </h3>
         {isLoading ? (

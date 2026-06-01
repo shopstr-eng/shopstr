@@ -9,7 +9,7 @@ import {
 } from "../utils/context/context";
 import ProductCard from "./utility-components/product-card";
 import DisplayProductModal from "./display-product-modal";
-import { Button, Pagination } from "@nextui-org/react";
+import { Button, Pagination } from "@heroui/react";
 import ShopstrSpinner from "./utility-components/shopstr-spinner";
 import { useRouter } from "next/router";
 import { CubeIcon } from "@heroicons/react/24/outline";
@@ -42,7 +42,7 @@ const DisplayProducts = ({
   isMyListings?: boolean;
   setCategories?: (categories: string[]) => void;
   onFilteredProductsChange?: (products: ProductData[]) => void;
-  searchBarRef?: React.RefObject<HTMLDivElement>;
+  searchBarRef?: React.RefObject<HTMLDivElement | null>;
 }) => {
   const [productEvents, setProductEvents] = useState<ProductData[]>([]);
   const [isProductsLoading, setIsProductLoading] = useState(true);
@@ -219,7 +219,7 @@ const DisplayProducts = ({
     try {
       await deleteEvent(nostr!, signer!, [productId]);
       productEventContext.removeDeletedProductEvent(productId);
-    } catch (_) {
+    } catch {
       return;
     }
   };
@@ -291,7 +291,7 @@ const DisplayProducts = ({
           );
         }
         return false;
-      } catch (_) {
+      } catch {
         return false;
       }
     }
@@ -303,7 +303,7 @@ const DisplayProducts = ({
           return parsedNpub.data === productData.pubkey;
         }
         return false;
-      } catch (_) {
+      } catch {
         return false;
       }
     }
@@ -325,7 +325,7 @@ const DisplayProducts = ({
       }
 
       return false;
-    } catch (_) {
+    } catch {
       return false;
     }
   };
@@ -363,7 +363,7 @@ const DisplayProducts = ({
         (profileMapContext.isLoading ||
           productEventContext.isLoading ||
           isProductsLoading) ? (
-          <div className="mb-6 mt-6 flex items-center justify-center">
+          <div className="mt-6 mb-6 flex items-center justify-center">
             <ShopstrSpinner />
           </div>
         ) : null}
@@ -383,7 +383,7 @@ const DisplayProducts = ({
             </div>
 
             {totalPages > 1 && (
-              <div className="mb-8 mt-12 flex justify-center overflow-x-auto pb-2">
+              <div className="mt-12 mb-8 flex justify-center overflow-x-auto pb-2">
                 <Pagination
                   total={totalPages}
                   page={currentPage}
@@ -403,7 +403,7 @@ const DisplayProducts = ({
               </div>
             )}
 
-            <div className="mb-6 mt-2 text-center text-xs text-light-text dark:text-dark-text">
+            <div className="text-light-text dark:text-dark-text mt-2 mb-6 text-center text-xs">
               Showing {(currentPage - 1) * itemsPerPage + 1} to{" "}
               {Math.min(filteredProducts.length, currentPage * itemsPerPage)} of{" "}
               {filteredProducts.length} products
@@ -413,11 +413,11 @@ const DisplayProducts = ({
           wotFilter &&
           !isProductsLoading && (
             <div className="mt-20 flex flex-grow items-center justify-center py-10">
-              <div className="w-full max-w-lg rounded-lg bg-light-fg p-8 text-center shadow-lg dark:bg-dark-fg">
-                <p className="text-3xl font-semibold text-light-text dark:text-dark-text">
+              <div className="bg-light-fg dark:bg-dark-fg w-full max-w-lg rounded-lg p-8 text-center shadow-lg">
+                <p className="text-light-text dark:text-dark-text text-3xl font-semibold">
                   No products found...
                 </p>
-                <p className="mt-4 text-lg text-light-text dark:text-dark-text">
+                <p className="text-light-text dark:text-dark-text mt-4 text-lg">
                   Try turning off the trust filter!
                 </p>
               </div>
@@ -439,7 +439,7 @@ const DisplayProducts = ({
                   Try adding a new listing!
                 </p>
                 <Button
-                  className={`${NEO_BTN} h-14 px-8 text-sm font-bold uppercase tracking-wider`}
+                  className={`${NEO_BTN} h-14 px-8 text-sm font-bold tracking-wider uppercase`}
                   onClick={() => router.push("?addNewListing")}
                 >
                   ADD LISTING

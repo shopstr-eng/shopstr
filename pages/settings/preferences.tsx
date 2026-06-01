@@ -13,7 +13,7 @@ import {
   ModalFooter,
   Button,
   Textarea,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import { Relay } from "nostr-tools";
 import {
   createBlossomServerEvent,
@@ -255,17 +255,17 @@ const PreferencesPage = () => {
 
   return (
     <>
-      <div className="flex min-h-screen flex-col bg-[#111] pb-6 pt-24">
+      <div className="flex min-h-screen flex-col bg-[#111] pt-24 pb-6">
         <div className="mx-auto px-4">
           <SettingsBreadCrumbs />
-          <span className="my-4 flex text-2xl font-black uppercase tracking-tighter text-white">
+          <span className="my-4 flex text-2xl font-black tracking-tighter text-white uppercase">
             Mint
           </span>
 
           <div>
             {mints.length === 0 && (
               <div className="mt-8 flex items-center justify-center">
-                <p className="break-words text-center text-xl text-zinc-500">
+                <p className="text-center text-xl break-words text-zinc-500">
                   No mint added . . .
                 </p>
               </div>
@@ -280,10 +280,10 @@ const PreferencesPage = () => {
                       : "border-zinc-700 bg-[#111]"
                   } px-3 py-2`}
                 >
-                  <div className="max-w-xsm break-all font-medium text-zinc-300">
+                  <div className="max-w-xsm font-medium break-all text-zinc-300">
                     {mint}
                     {index === 0 && (
-                      <span className="ml-2 rounded bg-yellow-400 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-black">
+                      <span className="ml-2 rounded bg-yellow-400 px-2 py-0.5 text-[10px] font-bold tracking-wider text-black uppercase">
                         Active Mint
                       </span>
                     )}
@@ -398,7 +398,7 @@ const PreferencesPage = () => {
 
                   <ModalFooter>
                     <Button
-                      className="bg-transparent font-bold uppercase tracking-wider text-red-500 hover:bg-red-500/10"
+                      className="bg-transparent font-bold tracking-wider text-red-500 uppercase hover:bg-red-500/10"
                       variant="light"
                       onClick={handleToggleMintModal}
                     >
@@ -414,13 +414,13 @@ const PreferencesPage = () => {
             </Modal>
           </div>
 
-          <span className="mt-8 flex text-2xl font-black uppercase tracking-tighter text-white">
+          <span className="mt-8 flex text-2xl font-black tracking-tighter text-white uppercase">
             Read/Write Relays
           </span>
 
           {relays.length === 0 && (
             <div className="mt-4 flex items-center justify-center">
-              <p className="break-words text-center text-xl text-zinc-500">
+              <p className="text-center text-xl break-words text-zinc-500">
                 No relays added . . .
               </p>
             </div>
@@ -431,7 +431,7 @@ const PreferencesPage = () => {
                 key={relay}
                 className="mb-2 flex items-center justify-between rounded-lg border border-zinc-700 bg-[#111] px-3 py-2"
               >
-                <div className="max-w-xsm break-all font-medium text-zinc-300">
+                <div className="max-w-xsm font-medium break-all text-zinc-300">
                   {relay}
                 </div>
                 {relays.length > 1 && (
@@ -531,7 +531,7 @@ const PreferencesPage = () => {
 
                 <ModalFooter>
                   <Button
-                    className="bg-transparent font-bold uppercase tracking-wider text-red-500 hover:bg-red-500/10"
+                    className="bg-transparent font-bold tracking-wider text-red-500 uppercase hover:bg-red-500/10"
                     variant="light"
                     onClick={() => handleToggleRelayModal("")}
                   >
@@ -546,13 +546,13 @@ const PreferencesPage = () => {
             </ModalContent>
           </Modal>
 
-          <span className="mt-8 flex text-2xl font-black uppercase tracking-tighter text-white">
+          <span className="mt-8 flex text-2xl font-black tracking-tighter text-white uppercase">
             Read Only Relays
           </span>
 
           {readRelays.length === 0 && (
             <div className="mt-4 flex items-center justify-center">
-              <p className="break-words text-center text-xl text-zinc-500">
+              <p className="text-center text-xl break-words text-zinc-500">
                 No relays added . . .
               </p>
             </div>
@@ -563,7 +563,7 @@ const PreferencesPage = () => {
                 key={relay}
                 className="mb-2 flex items-center justify-between rounded-lg border border-zinc-700 bg-[#111] px-3 py-2"
               >
-                <div className="max-w-xsm break-all font-medium text-zinc-300">
+                <div className="max-w-xsm font-medium break-all text-zinc-300">
                   {relay}
                 </div>
                 {readRelays.length > 1 && (
@@ -665,7 +665,7 @@ const PreferencesPage = () => {
 
                 <ModalFooter>
                   <Button
-                    className="bg-transparent font-bold uppercase tracking-wider text-red-500 hover:bg-red-500/10"
+                    className="bg-transparent font-bold tracking-wider text-red-500 uppercase hover:bg-red-500/10"
                     variant="light"
                     onClick={() => handleToggleRelayModal("")}
                   >
@@ -680,13 +680,13 @@ const PreferencesPage = () => {
             </ModalContent>
           </Modal>
 
-          <span className="mt-8 flex text-2xl font-black uppercase tracking-tighter text-white">
+          <span className="mt-8 flex text-2xl font-black tracking-tighter text-white uppercase">
             Write Only Relays
           </span>
 
           {writeRelays.length === 0 && (
             <div className="mt-4 flex items-center justify-center">
-              <p className="break-words text-center text-xl text-zinc-500">
+              <p className="text-center text-xl break-words text-zinc-500">
                 No relays added . . .
               </p>
             </div>
@@ -697,7 +697,7 @@ const PreferencesPage = () => {
                 key={relay}
                 className="mb-2 flex items-center justify-between rounded-lg border border-zinc-700 bg-[#111] px-3 py-2"
               >
-                <div className="max-w-xsm break-all font-medium text-zinc-300">
+                <div className="max-w-xsm font-medium break-all text-zinc-300">
                   {relay}
                 </div>
                 {writeRelays.length > 1 && (
@@ -799,7 +799,7 @@ const PreferencesPage = () => {
 
                 <ModalFooter>
                   <Button
-                    className="bg-transparent font-bold uppercase tracking-wider text-red-500 hover:bg-red-500/10"
+                    className="bg-transparent font-bold tracking-wider text-red-500 uppercase hover:bg-red-500/10"
                     variant="light"
                     onClick={() => handleToggleRelayModal("")}
                   >
@@ -814,13 +814,13 @@ const PreferencesPage = () => {
             </ModalContent>
           </Modal>
 
-          <span className="mt-8 flex text-2xl font-black uppercase tracking-tighter text-white">
+          <span className="mt-8 flex text-2xl font-black tracking-tighter text-white uppercase">
             Blossom Media Servers
           </span>
 
           {blossomServers.length === 0 && (
             <div className="mt-4 flex items-center justify-center">
-              <p className="break-words text-center text-xl text-zinc-500">
+              <p className="text-center text-xl break-words text-zinc-500">
                 No servers added . . .
               </p>
             </div>
@@ -835,10 +835,10 @@ const PreferencesPage = () => {
                     : "border-zinc-700 bg-[#111]"
                 } px-3 py-2`}
               >
-                <div className="max-w-xsm break-all font-medium text-zinc-300">
+                <div className="max-w-xsm font-medium break-all text-zinc-300">
                   {server}
                   {index === 0 && (
-                    <span className="ml-2 rounded bg-yellow-400 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-black">
+                    <span className="ml-2 rounded bg-yellow-400 px-2 py-0.5 text-[10px] font-bold tracking-wider text-black uppercase">
                       Primary Server
                     </span>
                   )}
@@ -942,7 +942,7 @@ const PreferencesPage = () => {
 
                 <ModalFooter>
                   <Button
-                    className="bg-transparent font-bold uppercase tracking-wider text-red-500 hover:bg-red-500/10"
+                    className="bg-transparent font-bold tracking-wider text-red-500 uppercase hover:bg-red-500/10"
                     variant="light"
                     onClick={() => handleToggleBlossomServerModal()}
                   >
@@ -957,7 +957,7 @@ const PreferencesPage = () => {
             </ModalContent>
           </Modal>
 
-          <span className="mb-4 mt-8 flex text-2xl font-black uppercase tracking-tighter text-white">
+          <span className="mt-8 mb-4 flex text-2xl font-black tracking-tighter text-white uppercase">
             Web of Trust
           </span>
 
