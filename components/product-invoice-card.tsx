@@ -1138,10 +1138,14 @@ export default function ProductInvoiceCard({
       const emailAddressTag =
         paymentData.shippingName && paymentData.shippingAddress
           ? `${paymentData.shippingName}, ${paymentData.shippingAddress}, ${
-              paymentData.shippingCity || ""
-            }, ${paymentData.shippingState || ""}, ${
-              paymentData.shippingPostalCode || ""
-            }, ${paymentData.shippingCountry || ""}`
+              paymentData.shippingUnitNo
+                ? `${paymentData.shippingUnitNo}, `
+                : ""
+            }${paymentData.shippingCity || ""}, ${
+              paymentData.shippingState || ""
+            }, ${paymentData.shippingPostalCode || ""}, ${
+              paymentData.shippingCountry || ""
+            }`
           : undefined;
       const isSatsProduct =
         !productData.currency ||

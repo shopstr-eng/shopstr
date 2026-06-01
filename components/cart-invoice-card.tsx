@@ -2093,10 +2093,14 @@ export default function CartInvoiceCard({
       const emailAddressTag =
         paymentData.shippingName && paymentData.shippingAddress
           ? `${paymentData.shippingName}, ${paymentData.shippingAddress}, ${
-              paymentData.shippingCity || ""
-            }, ${paymentData.shippingState || ""}, ${
-              paymentData.shippingPostalCode || ""
-            }, ${paymentData.shippingCountry || ""}`
+              paymentData.shippingUnitNo
+                ? `${paymentData.shippingUnitNo}, `
+                : ""
+            }${paymentData.shippingCity || ""}, ${
+              paymentData.shippingState || ""
+            }, ${paymentData.shippingPostalCode || ""}, ${
+              paymentData.shippingCountry || ""
+            }`
           : undefined;
       const productsBySeller: { [pubkey: string]: typeof products } = {};
       for (const p of products) {
@@ -3550,10 +3554,10 @@ export default function CartInvoiceCard({
       const emailAddressTag =
         data.shippingName && data.shippingAddress
           ? `${data.shippingName}, ${data.shippingAddress}, ${
-              data.shippingCity || ""
-            }, ${data.shippingState || ""}, ${data.shippingPostalCode || ""}, ${
-              data.shippingCountry || ""
-            }`
+              data.shippingUnitNo ? `${data.shippingUnitNo}, ` : ""
+            }${data.shippingCity || ""}, ${data.shippingState || ""}, ${
+              data.shippingPostalCode || ""
+            }, ${data.shippingCountry || ""}`
           : undefined;
 
       if (isMultiFiat) {
