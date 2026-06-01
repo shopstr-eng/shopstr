@@ -4113,7 +4113,78 @@ describe("fetchCashuWallet", () => {
       [],
       result.cashuMints,
       [],
-      false
+      false,
+      {
+        cashuPubkey: "02new-pk",
+        cashuPrivkey: "new-sk",
+      }
+    );
+  });
+
+  it("passes undefined keys through editCashuWalletContext for legacy-only wallet config", async () => {
+    const legacyDbConfig = [["mint", "https://legacy-mint.example"]];
+
+    const decrypt = jest.fn(async () => JSON.stringify(legacyDbConfig));
+
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(() => ({ tokens: [] })),
+      deleteEvent: jest.fn(),
+      verifyNip05Identifier: jest.fn(),
+    }));
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+    jest.doMock("@cashu/cashu-ts", () => ({
+      ...jest.requireActual("@cashu/cashu-ts"),
+      Wallet: jest.fn().mockImplementation(() => ({
+        loadMint: jest.fn().mockResolvedValue(undefined),
+        checkProofsStates: jest.fn().mockResolvedValue([]),
+      })),
+      Mint: jest.fn().mockImplementation(() => ({})),
+    }));
+
+    const { fetchCashuWallet } = await import("../fetch-service");
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [
+        {
+          id: "db-legacy",
+          kind: 17375,
+          created_at: 50,
+          content: "encrypted-legacy-db",
+          pubkey: userPubkey,
+          sig: "sig-legacy",
+        },
+      ],
+    }) as typeof global.fetch;
+
+    const nostr = {
+      fetch: jest.fn().mockResolvedValueOnce([]).mockResolvedValueOnce([]),
+    } as any;
+    const editCashuWalletContext = jest.fn();
+
+    const result = await fetchCashuWallet(
+      nostr,
+      createMockSigner({
+        getPubKey: jest.fn().mockResolvedValue(userPubkey),
+        decrypt,
+      }),
+      ["wss://relay.example"],
+      editCashuWalletContext
+    );
+
+    expect(result.cashuPubkey).toBeUndefined();
+    expect(result.cashuPrivkey).toBeUndefined();
+    expect(editCashuWalletContext).toHaveBeenCalledWith(
+      [],
+      ["https://legacy-mint.example"],
+      [],
+      false,
+      {
+        cashuPubkey: undefined,
+        cashuPrivkey: undefined,
+      }
     );
   });
 });

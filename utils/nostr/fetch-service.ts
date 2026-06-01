@@ -1654,7 +1654,11 @@ export const fetchCashuWallet = async (
     proofEvents: any[],
     cashuMints: string[],
     cashuProofs: Proof[],
-    isLoading: boolean
+    isLoading: boolean,
+    keys?: {
+      cashuPubkey?: string;
+      cashuPrivkey?: string;
+    }
   ) => void
 ): Promise<{
   proofEvents: any[];
@@ -2085,7 +2089,18 @@ export const fetchCashuWallet = async (
       // Final deduplication
       cashuProofs = getUniqueProofs(cashuProofs);
 
-      editCashuWalletContext(proofEvents, cashuMints, cashuProofs, false);
+      const walletKeys = {
+        cashuPubkey: latestKeypair?.cashuPubkey,
+        cashuPrivkey: latestKeypair?.cashuPrivkey,
+      };
+
+      editCashuWalletContext(
+        proofEvents,
+        cashuMints,
+        cashuProofs,
+        false,
+        walletKeys
+      );
 
       resolve({
         proofEvents: proofEvents,
