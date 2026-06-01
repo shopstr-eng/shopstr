@@ -2100,9 +2100,9 @@ const OrdersDashboard = ({
                             order.timestamp * 1000
                           ).toLocaleDateString()}
                         </td>
-                        <td className="max-w-xs px-4 py-4 text-sm text-black">
+                        <td className="px-4 py-4 align-top text-sm text-black">
                           <div
-                            className="truncate"
+                            className="break-words whitespace-pre-line"
                             title={order.address || "N/A"}
                           >
                             {order.address || "N/A"}
