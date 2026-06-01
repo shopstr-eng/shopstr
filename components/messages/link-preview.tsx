@@ -9,6 +9,19 @@ type OGData = {
 
 type Status = "loading" | "preview" | "link";
 
+function getSafePreviewHref(value: string | undefined, fallback: string) {
+  const candidate = value || fallback;
+  try {
+    const parsed = new URL(candidate);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return fallback;
+    }
+    return parsed.toString();
+  } catch {
+    return fallback;
+  }
+}
+
 const LinkPreview = ({
   url,
   isUserMessage,
@@ -68,7 +81,7 @@ const LinkPreview = ({
 
   return (
     <a
-      href={ogData?.url || url}
+      href={getSafePreviewHref(ogData?.url, url)}
       target="_blank"
       rel="noopener noreferrer"
       className={`mt-1 block overflow-hidden rounded-lg border no-underline transition-opacity hover:opacity-80 ${

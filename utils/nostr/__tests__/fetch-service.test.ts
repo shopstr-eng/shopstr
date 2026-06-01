@@ -1,52 +1,225 @@
-import { fetchReports } from "../fetch-service";
+const makeBaseEvent = (overrides: Record<string, any> = {}) => ({
+  id: "event-id",
+  pubkey: "pubkey",
+  created_at: 1,
+  kind: 1,
+  tags: [],
+  content: "",
+  sig: "sig",
+  ...overrides,
+});
 
-jest.mock("@/utils/db/db-client", () => ({
-  cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
-}));
+const makeProfileEvent = (overrides: Record<string, any> = {}) =>
+  makeBaseEvent({
+    kind: 0,
+    ...overrides,
+  });
 
-const { cacheEventsToDatabase } = jest.requireMock("@/utils/db/db-client");
+const makeProductEvent = (overrides: Record<string, any> = {}) =>
+  makeBaseEvent({
+    kind: 30402,
+    tags: [["d", "listing-1"]],
+    ...overrides,
+  });
+
+const makeReportEvent = (overrides: Record<string, any> = {}) =>
+  makeBaseEvent({
+    kind: 1984,
+    tags: [["e", "listing-1", "spam"]],
+    ...overrides,
+  });
+
+const makeReviewEvent = (overrides: Record<string, any> = {}) =>
+  makeBaseEvent({
+    kind: 31555,
+    tags: [["d", "review-address"]],
+    ...overrides,
+  });
+
+const makeWalletProof = (overrides: Record<string, any> = {}) => ({
+  id: "proof-id",
+  secret: "proof-secret",
+  amount: 1,
+  C: "C",
+  ...overrides,
+});
+
+const makeWalletEvent = (overrides: Record<string, any> = {}) =>
+  makeBaseEvent({
+    kind: 7375,
+    ...overrides,
+  });
+
+const fixtureFactories = {
+  makeReviewEvent,
+  makeWalletProof,
+  makeWalletEvent,
+};
+
+void fixtureFactories;
+
+const makeDbPayload = <T>(items: T[]) => ({
+  ok: true,
+  json: async () => items,
+});
+
+describe("getReportTargetIdentifiers", () => {
+  beforeEach(() => {
+    jest.resetModules();
+  });
+
+  it("extracts both p and e tags from a report event", async () => {
+    const { getReportTargetIdentifiers } = await import("../fetch-service");
+
+    const identifiers = getReportTargetIdentifiers(
+      makeReportEvent({
+        tags: [
+          ["p", "seller-1"],
+          ["e", "listing-1", "spam"],
+          ["p", "seller-2"],
+          ["e", "listing-2", "impersonation"],
+          ["t", "ignored"],
+        ],
+      }) as any
+    );
+
+    expect(identifiers).toEqual({
+      referencedPubkeys: ["seller-1", "seller-2"],
+      referencedEventIds: ["listing-1", "listing-2"],
+    });
+  });
+
+  it("returns empty arrays when the report has no p or e tags", async () => {
+    const { getReportTargetIdentifiers } = await import("../fetch-service");
+
+    const identifiers = getReportTargetIdentifiers(
+      makeReportEvent({
+        tags: [
+          ["t", "ignored"],
+          ["subject", "noise"],
+        ],
+      }) as any
+    );
+
+    expect(identifiers).toEqual({
+      referencedPubkeys: [],
+      referencedEventIds: [],
+    });
+  });
+});
+
+describe("isHexString", () => {
+  beforeEach(() => {
+    jest.resetModules();
+  });
+
+  it("returns true for a valid 64-character hex string", async () => {
+    const { isHexString } = await import("../fetch-service");
+
+    expect(
+      isHexString(
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+      )
+    ).toBe(true);
+  });
+
+  it("returns false for short strings", async () => {
+    const { isHexString } = await import("../fetch-service");
+
+    expect(isHexString("abc123")).toBe(false);
+  });
+
+  it("returns false for non-hex strings", async () => {
+    const { isHexString } = await import("../fetch-service");
+
+    expect(
+      isHexString(
+        "z23456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+      )
+    ).toBe(false);
+  });
+});
+
+describe("getUniqueProofs", () => {
+  beforeEach(() => {
+    jest.resetModules();
+    jest.clearAllMocks();
+  });
+
+  it("deduplicates proofs by secret while preserving the first proof for each secret", async () => {
+    const { getUniqueProofs } = await import("../fetch-service");
+
+    const firstProof = makeWalletProof({
+      id: "proof-1",
+      secret: "shared-secret",
+    }) as any;
+    const duplicateProof = makeWalletProof({
+      id: "proof-2",
+      secret: "shared-secret",
+      amount: 99,
+    }) as any;
+    const uniqueProof = makeWalletProof({
+      id: "proof-3",
+      secret: "unique-secret",
+    }) as any;
+
+    const dedupedProofs = getUniqueProofs([
+      firstProof,
+      duplicateProof,
+      uniqueProof,
+    ]);
+
+    expect(dedupedProofs).toEqual([firstProof, uniqueProof]);
+    expect(dedupedProofs).not.toContain(duplicateProof);
+    expect(dedupedProofs).toHaveLength(2);
+  });
+});
 
 describe("fetch-service report helpers", () => {
   beforeEach(() => {
+    jest.resetModules();
     jest.clearAllMocks();
     global.fetch = jest.fn();
+
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
   });
 
   it("filters report fetches to loaded listings and related profiles", async () => {
+    const { fetchReports } = await import("../fetch-service");
+    const { cacheEventsToDatabase } = jest.requireMock("@/utils/db/db-client");
+
     (global.fetch as jest.Mock).mockResolvedValue({
-      ok: true,
-      json: async () => [
-        {
+      ...makeDbPayload([
+        makeReportEvent({
           id: "db-relevant",
           pubkey: "reporter-1",
           created_at: 10,
-          kind: 1984,
           tags: [
             ["e", "listing-1", "spam"],
             ["p", "seller-1"],
           ],
           content: "spam listing",
           sig: "sig-1",
-        },
-        {
+        }),
+        makeReportEvent({
           id: "db-irrelevant",
           pubkey: "reporter-2",
           created_at: 11,
-          kind: 1984,
           tags: [["p", "seller-999", "spam"]],
           content: "other seller",
           sig: "sig-2",
-        },
-        {
+        }),
+        makeReportEvent({
           id: "db-reviewer-report",
           pubkey: "reporter-5",
           created_at: 14,
-          kind: 1984,
           tags: [["p", "reviewer-1", "spam"]],
           content: "bad reviewer",
           sig: "sig-5",
-        },
-      ],
+        }),
+      ]),
     });
 
     const nostr = {
@@ -74,15 +247,14 @@ describe("fetch-service report helpers", () => {
 
     const editReportsContext = jest.fn();
     const products = [
-      {
+      makeProductEvent({
         id: "listing-1",
         pubkey: "seller-1",
         created_at: 1,
-        kind: 30402,
         tags: [["d", "coffee-beans"]],
         content: "coffee",
         sig: "sig-product",
-      },
+      }),
     ];
 
     const result = await fetchReports(
@@ -158,10 +330,9 @@ describe("fetchProfile", () => {
 
     const { fetchProfile } = await import("../fetch-service");
 
-    global.fetch = jest.fn().mockResolvedValue({
-      ok: true,
-      json: async () => [
-        {
+    global.fetch = jest.fn().mockResolvedValue(
+      makeDbPayload([
+        makeProfileEvent({
           id: "latest-user-profile",
           pubkey,
           created_at: 300,
@@ -172,8 +343,8 @@ describe("fetchProfile", () => {
             name: "latest-user",
           }),
           sig: "sig-latest-user-profile",
-        },
-        {
+        }),
+        makeBaseEvent({
           id: "shop-profile",
           pubkey,
           created_at: 250,
@@ -184,21 +355,20 @@ describe("fetchProfile", () => {
             about: "Shop profile content should not populate user settings.",
           }),
           sig: "sig-shop-profile",
-        },
-        {
+        }),
+        makeProfileEvent({
           id: "older-user-profile",
           pubkey,
           created_at: 200,
-          kind: 0,
           tags: [],
           content: JSON.stringify({
             display_name: "Older User",
             name: "older-user",
           }),
           sig: "sig-older-user-profile",
-        },
-      ],
-    }) as typeof global.fetch;
+        }),
+      ])
+    ) as typeof global.fetch;
 
     const editProfileContext = jest.fn();
     const nostr = {
@@ -443,25 +613,23 @@ describe("fetchAllPosts", () => {
 
     const { fetchAllPosts } = await import("../fetch-service");
 
-    const oldCachedListing = {
+    const oldCachedListing = makeProductEvent({
       id: "cached-old",
       pubkey: "seller",
       created_at: 100,
-      kind: 30402,
       tags: [["d", "listing-1"]],
       content: "",
       sig: "sig-cached-old",
-    };
-    const newerRelayListing = {
+    });
+    const newerRelayListing = makeProductEvent({
       id: "relay-new",
       pubkey: "seller",
       created_at: 200,
-      kind: 30402,
       tags: [["d", "listing-1"]],
       content: "",
       sig: "sig-relay-new",
-    };
-    const relayNoteListing = {
+    });
+    const relayNoteListing = makeBaseEvent({
       id: "relay-zapsnag",
       pubkey: "zapsnag-seller",
       created_at: 150,
@@ -469,16 +637,15 @@ describe("fetchAllPosts", () => {
       tags: [["t", "shopstr-zapsnag"]],
       content: "zapsnag listing",
       sig: "sig-zapsnag",
-    };
-    const invalidRelayListing = {
+    });
+    const invalidRelayListing = makeProductEvent({
       id: "",
       pubkey: "seller",
       created_at: 300,
-      kind: 30402,
       tags: [["d", "invalid"]],
       content: "",
       sig: "sig-invalid",
-    };
+    });
 
     global.fetch = jest
       .fn()
