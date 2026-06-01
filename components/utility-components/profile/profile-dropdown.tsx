@@ -89,7 +89,7 @@ export const ProfileWithDropdown = ({
       className:
         "text-zinc-400 font-bold uppercase tracking-wider text-xs hover:text-white",
       startContent: <BuildingStorefrontIcon className={"h-5 w-5"} />,
-      onClick: () => {
+      onPress: () => {
         const npub = nip19.npubEncode(pubkey);
         router.push(`/marketplace/${npub}`);
       },
@@ -101,7 +101,7 @@ export const ProfileWithDropdown = ({
       className:
         "text-zinc-400 font-bold uppercase tracking-wider text-xs hover:text-white",
       startContent: <BuildingStorefrontIcon className={"h-5 w-5"} />,
-      onClick: () => {
+      onPress: () => {
         router.push("/settings/shop-profile");
       },
       label: "Shop Profile",
@@ -112,7 +112,7 @@ export const ProfileWithDropdown = ({
       className:
         "text-zinc-400 font-bold uppercase tracking-wider text-xs hover:text-white",
       startContent: <ChatBubbleBottomCenterIcon className={"h-5 w-5"} />,
-      onClick: () => {
+      onPress: () => {
         if (isLoggedIn) {
           router.push({
             pathname: "/orders",
@@ -130,7 +130,7 @@ export const ProfileWithDropdown = ({
       className:
         "text-zinc-400 font-bold uppercase tracking-wider text-xs hover:text-white",
       startContent: <ExclamationTriangleIcon className={"h-5 w-5"} />,
-      onClick: openReportFlow,
+      onPress: openReportFlow,
       label: "Report Profile",
     },
     user_profile: {
@@ -139,7 +139,7 @@ export const ProfileWithDropdown = ({
       className:
         "text-zinc-400 font-bold uppercase tracking-wider text-xs hover:text-white",
       startContent: <UserIcon className={"h-5 w-5"} />,
-      onClick: () => {
+      onPress: () => {
         router.push("/settings/user-profile");
       },
       label: "Profile",
@@ -150,7 +150,7 @@ export const ProfileWithDropdown = ({
       className:
         "text-zinc-400 font-bold uppercase tracking-wider text-xs hover:text-white",
       startContent: <Cog6ToothIcon className={"h-5 w-5"} />,
-      onClick: () => {
+      onPress: () => {
         router.push("/settings");
       },
       label: "Settings",
@@ -166,7 +166,7 @@ export const ProfileWithDropdown = ({
           color="red"
         />
       ),
-      onClick: () => {
+      onPress: () => {
         LogOut();
         router.push("/marketplace");
       },
@@ -182,7 +182,7 @@ export const ProfileWithDropdown = ({
       ) : (
         <ClipboardIcon className="h-5 w-5" />
       ),
-      onClick: () => {
+      onPress: () => {
         const npub = nip19.npubEncode(pubkey);
         navigator.clipboard.writeText(npub);
         setIsNPubCopied(true);
@@ -232,7 +232,7 @@ export const ProfileWithDropdown = ({
                 color={item.color}
                 className={`${item.className} py-3 md:py-2`}
                 startContent={item.startContent}
-                onClick={item.onClick}
+                onPress={item.onPress}
               >
                 {item.label}
               </DropdownItem>

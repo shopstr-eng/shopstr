@@ -22,7 +22,6 @@ const MyListingsPage = () => {
   const router = useRouter();
   const { isOpen, onOpen, onClose } = useDisclosure();
 
-  const [shopBannerURL, setShopBannerURL] = useState("");
   const [shopAbout, setShopAbout] = useState("");
 
   const [selectedSection, setSelectedSection] = useState("Listings");
@@ -63,11 +62,13 @@ const MyListingsPage = () => {
       const shopProfile: ShopProfile | undefined =
         shopMapContext.shopData.get(usersPubkey);
       if (shopProfile) {
-        setShopBannerURL(shopProfile.content.ui.banner);
         setShopAbout(shopProfile.content.about);
+        return;
       }
     }
-  }, [usersPubkey, shopMapContext, shopBannerURL]);
+
+    setShopAbout("");
+  }, [usersPubkey, shopMapContext]);
 
   useEffect(() => {
     if (categories) {
@@ -95,7 +96,7 @@ const MyListingsPage = () => {
 
   const handleEditShop = () => {
     if (usersPubkey) {
-      router.push("settings/shop-profile");
+      router.push("/settings/shop-profile");
     } else {
       onOpen();
     }

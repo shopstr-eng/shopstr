@@ -377,7 +377,7 @@ describe("CommunityFeed", () => {
         /This was approved by another mod/i
       );
       const postCard = approvedByOtherText.closest(
-        'div[tabindex="-1"]'
+        "div.rounded-xl"
       ) as HTMLElement;
 
       expect(

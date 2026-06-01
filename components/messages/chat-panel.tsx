@@ -55,6 +55,8 @@ const ChatPanel = ({
   const [messages, setMessages] = useState<NostrMessageEvent[]>([]); // [chatPubkey, chat]
   const [showShippingModal, setShowShippingModal] = useState(false);
   const [showReviewModal, setShowReviewModal] = useState(false);
+  const [showFailureModal, setShowFailureModal] = useState(false);
+  const [failureText, setFailureText] = useState("");
 
   const [randomNpubForSender, setRandomNpubForSender] = useState<string>("");
   const [randomNsecForSender, setRandomNsecForSender] = useState<string>("");
@@ -182,6 +184,20 @@ const ChatPanel = ({
         if (trackingTag) shippingInfo.tracking = trackingTag[1] || "";
         if (carrierTag) shippingInfo.carrier = carrierTag[1] || "";
         if (etaTag) shippingInfo.eta = parseInt(etaTag[1] || "0");
+      }
+
+      const missingShippingFields = [];
+      if (shippingMessage && !shippingInfo.tracking)
+        missingShippingFields.push("tracking");
+      if (shippingMessage && !shippingInfo.carrier)
+        missingShippingFields.push("carrier");
+
+      if (missingShippingFields.length > 0) {
+        setFailureText(
+          `Missing shipping fields: ${missingShippingFields.join(", ")}`
+        );
+        setShowFailureModal(true);
+        return;
       }
 
       const message =
@@ -600,6 +616,38 @@ const ChatPanel = ({
                   </Button>
                 </ModalFooter>
               </form>
+            </ModalContent>
+          </Modal>
+          <Modal
+            backdrop="blur"
+            isOpen={showFailureModal}
+            onClose={() => {
+              setShowFailureModal(false);
+              setFailureText("");
+            }}
+            classNames={{
+              base: "bg-[#161616] border border-zinc-800",
+              body: "py-6 text-zinc-300",
+              backdrop: "bg-black/80 backdrop-blur-sm",
+              header: "border-b border-zinc-800 text-white",
+              footer: "border-t border-zinc-800",
+              closeButton: "hover:bg-black/5 active:bg-white/10",
+            }}
+          >
+            <ModalContent>
+              <ModalHeader>Unable to Complete Order</ModalHeader>
+              <ModalBody>{failureText}</ModalBody>
+              <ModalFooter>
+                <Button
+                  className={NEO_BTN}
+                  onClick={() => {
+                    setShowFailureModal(false);
+                    setFailureText("");
+                  }}
+                >
+                  Dismiss
+                </Button>
+              </ModalFooter>
             </ModalContent>
           </Modal>
         </>

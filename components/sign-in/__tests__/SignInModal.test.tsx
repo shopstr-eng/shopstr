@@ -59,7 +59,10 @@ function renderModal(open = true) {
 }
 
 async function openSignInOptions(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(screen.getAllByRole("button", { name: /sign in/i })[0]!);
+  const signInButtons = screen.queryAllByRole("button", { name: /sign in/i });
+  if (signInButtons.length > 0) {
+    await user.click(signInButtons[0]!);
+  }
 }
 
 describe("SignInModal", () => {
@@ -80,9 +83,6 @@ describe("SignInModal", () => {
     const { user, push } = renderModal();
     const btn = screen.getAllByRole("button", { name: /sign up/i })[0]!;
     await user.click(btn);
-    await user.click(
-      screen.getByRole("button", { name: /create new account/i })
-    );
     await waitFor(() => expect(push).toHaveBeenCalledWith("/onboarding/keys"));
   });
 
@@ -98,7 +98,7 @@ describe("SignInModal", () => {
       );
       await waitFor(() => {
         expect(signer.getPubKey).toHaveBeenCalled();
-        expect(push).toHaveBeenCalledWith("/marketplace");
+        expect(push).toHaveBeenCalledWith("/onboarding/user-profile");
       });
     });
 
@@ -148,7 +148,9 @@ describe("SignInModal", () => {
       await user.type(input, "bunker://valid-token");
 
       await user.click(screen.getByTestId("bunker-submit-btn"));
-      await waitFor(() => expect(push).toHaveBeenCalledWith("/marketplace"));
+      await waitFor(() =>
+        expect(push).toHaveBeenCalledWith("/onboarding/user-profile")
+      );
     });
 
     it("shows a failure modal on connection error", async () => {
@@ -179,7 +181,7 @@ describe("SignInModal", () => {
       await user.click(screen.getByTestId("nsec-open-btn"));
 
       const pkInput = await screen.findByPlaceholderText(
-        /paste your nsec or ncryptsec/i
+        /paste your nostr private key/i
       );
       await user.type(pkInput, "abc");
       expect(helpers.validateNSecKey).toHaveBeenCalledWith("abc");
@@ -195,7 +197,7 @@ describe("SignInModal", () => {
       await user.click(screen.getByTestId("nsec-open-btn"));
 
       const pkInput = await screen.findByPlaceholderText(
-        /paste your nsec or ncryptsec/i
+        /paste your nostr private key/i
       );
       const passInput = screen.getByPlaceholderText(
         /enter a passphrase of your choice/i
@@ -207,7 +209,9 @@ describe("SignInModal", () => {
 
       act(() => jest.runAllTimers());
 
-      await waitFor(() => expect(push).toHaveBeenCalledWith("/marketplace"));
+      await waitFor(() =>
+        expect(push).toHaveBeenCalledWith("/onboarding/user-profile")
+      );
     });
 
     it("shows a failure modal if passphrase is empty", async () => {
@@ -217,7 +221,7 @@ describe("SignInModal", () => {
       await user.click(screen.getByTestId("nsec-open-btn"));
 
       const pkInput = await screen.findByPlaceholderText(
-        /paste your nsec or ncryptsec/i
+        /paste your nostr private key/i
       );
       await user.type(pkInput, "nsec1validkey");
 

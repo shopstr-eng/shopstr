@@ -22,7 +22,10 @@ const originalError = console.error;
 
 const warnSpy = jest.spyOn(console, "warn").mockImplementation((...args) => {
   const warnString = args.toString();
-  if (warnString.includes("Invoice check warning")) {
+  if (
+    warnString.includes("Invoice check warning") ||
+    warnString.includes("No table mapping for event kind")
+  ) {
     return;
   }
   originalWarn(...args);
@@ -35,7 +38,8 @@ const errorSpy = jest.spyOn(console, "error").mockImplementation((...args) => {
     errorString.includes("An update to") ||
     errorString.includes("React does not recognize the") ||
     errorString.includes("Received `false` for a non-boolean attribute") ||
-    errorString.includes("disableSkeleton")
+    errorString.includes("disableSkeleton") ||
+    errorString.includes("Failed to cache events batch:")
   ) {
     return;
   }

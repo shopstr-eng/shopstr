@@ -97,9 +97,8 @@ describe("HomeFeed Component", () => {
     await waitFor(() => {
       const bannerImage = screen.getByAltText("Shop Banner");
       expect(bannerImage).toBeInTheDocument();
-      expect(bannerImage).toHaveAttribute(
-        "src",
-        mockShopProfile.content.ui.banner
+      expect(bannerImage.getAttribute("src")).toContain(
+        encodeURIComponent(mockShopProfile.content.ui.banner)
       );
     });
 

@@ -479,12 +479,6 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
         <Button
           className={`${NEO_BTN} mb-10 h-14 w-full text-sm shadow-[4px_4px_0px_0px_#ffffff]`}
           type="submit"
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              handleSubmit(onSubmit as any)();
-            }
-          }}
           isDisabled={isUploadingProfile}
           isLoading={isUploadingProfile}
         >

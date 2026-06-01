@@ -41,9 +41,9 @@ describe("SettingsBreadCrumbs", () => {
     const settingsItem = screen.getByText("Settings");
     const shopProfileItem = screen.getByText("Shop Profile");
 
-    expect(settingsItem).toHaveClass("opacity-50");
+    expect(settingsItem).toHaveClass("opacity-40");
 
-    expect(shopProfileItem).not.toHaveClass("opacity-50");
+    expect(shopProfileItem).not.toHaveClass("opacity-40");
   });
 
   test("handles a single-level path correctly", () => {
@@ -59,7 +59,7 @@ describe("SettingsBreadCrumbs", () => {
     expect(settingsItem).toBeInTheDocument();
     expect(screen.queryByText("User Profile")).not.toBeInTheDocument();
 
-    expect(settingsItem).not.toHaveClass("opacity-50");
+    expect(settingsItem).not.toHaveClass("opacity-40");
   });
 
   test("calls router.push with the correct path when a breadcrumb is clicked", () => {
@@ -89,7 +89,7 @@ describe("SettingsBreadCrumbs", () => {
 
     expect(settingsItem).toBeInTheDocument();
 
-    expect(settingsItem).toHaveClass("opacity-50");
+    expect(settingsItem).toHaveClass("opacity-40");
     expect(screen.queryByText("an-unknown-page")).not.toBeInTheDocument();
   });
 });

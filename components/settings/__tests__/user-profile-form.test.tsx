@@ -141,9 +141,7 @@ describe("UserProfileForm", () => {
     await user.click(screen.getByRole("button", { name: /Save Profile/i }));
 
     await waitFor(() => {
-      expect(mockRouterPush).toHaveBeenCalledWith(
-        "/onboarding/wallet?type=seller"
-      );
+      expect(mockRouterPush).toHaveBeenCalledWith("/onboarding/shop-profile");
     });
   });
 

@@ -23,6 +23,9 @@ import {
 } from "@/components/utility-components/nostr-context-provider";
 import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
 
+const escapeRegExp = (value: string) =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 const DisplayProducts = ({
   focusedPubkey,
   selectedCategories,
@@ -237,19 +240,24 @@ const DisplayProducts = ({
       return `/listing/${product.id}`;
     }
 
-    const naddr = nip19.naddrEncode({
-      identifier: product.d as string,
-      pubkey: product.pubkey,
-      kind: 30402,
-    });
+    try {
+      const naddr = nip19.naddrEncode({
+        identifier: product.d as string,
+        pubkey: product.pubkey,
+        kind: 30402,
+      });
 
-    if (naddr) {
-      return `/listing/${naddr}`;
-    } else if (product.d !== undefined) {
-      return `/listing/${product.d}`;
-    } else {
-      return `/listing/${product.id}`;
+      if (naddr) {
+        return `/listing/${naddr}`;
+      }
+    } catch {
+      // Fall through to a stable fallback for incomplete or malformed events.
     }
+
+    if (product.d !== undefined) {
+      return `/listing/${product.d}`;
+    }
+    return `/listing/${product.id}`;
   };
 
   const onProductClick = (product: ProductData, e?: React.MouseEvent) => {
@@ -309,7 +317,7 @@ const DisplayProducts = ({
     }
 
     try {
-      const re = new RegExp(selectedSearch, "gi");
+      const re = new RegExp(escapeRegExp(selectedSearch), "gi");
 
       const titleMatch = productData.title.match(re);
       if (titleMatch && titleMatch.length > 0) return true;

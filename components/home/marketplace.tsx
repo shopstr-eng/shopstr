@@ -39,6 +39,7 @@ import {
   RawEventModal,
   EventIdModal,
 } from "../utility-components/modals/event-modals";
+import { findPubkeyByProfileSlug } from "@/utils/url-slugs";
 
 export function normalizeNpub(
   npub: string | string[] | undefined
@@ -111,13 +112,29 @@ function MarketplacePage({
   const searchBarRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const npub = router.query.npub;
-    if (npub && typeof npub[0] === "string") {
-      const { data } = nip19.decode(npub[0]);
+    const npub = normalizeNpub(router.query.npub);
+    if (!npub) return;
+
+    try {
+      const { data } = nip19.decode(npub);
       setFocusedPubkey(data as string);
       setSelectedSection("shop");
+    } catch {
+      const matchedPubkey = findPubkeyByProfileSlug(
+        npub,
+        shopMapContext.shopData
+      );
+      if (matchedPubkey) {
+        setFocusedPubkey(matchedPubkey);
+        setSelectedSection("shop");
+      }
     }
-  }, [router.query.npub, setFocusedPubkey, setSelectedSection]);
+  }, [
+    router.query.npub,
+    setFocusedPubkey,
+    setSelectedSection,
+    shopMapContext.shopData,
+  ]);
 
   useEffect(() => {
     setIsFetchingReviews(true);

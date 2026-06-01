@@ -123,7 +123,7 @@ describe("ProfileAvatar", () => {
     );
 
     expect(screen.getByTestId("mock-name").className).toContain(
-      "text-shopstr-purple"
+      "text-yellow-400"
     );
   });
 

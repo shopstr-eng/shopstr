@@ -183,7 +183,7 @@ const SideShopNav = ({
             </Button>
             <Button
               className="mt-4 h-12 w-full rounded-xl border border-zinc-600 bg-transparent text-sm font-bold tracking-wider text-white uppercase hover:border-white hover:bg-zinc-800"
-              onClick={() => router.push("settings/shop-profile")}
+              onClick={() => router.push("/settings/shop-profile")}
             >
               Edit Shop
             </Button>

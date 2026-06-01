@@ -43,8 +43,14 @@ const ChatMessage = ({
       // Find word containing npub using regex
       const npubMatch = messageEvent.content.match(/npub[a-zA-Z0-9]+/);
       if (npubMatch && setBuyerPubkey) {
-        const { data: buyerPubkey } = nip19.decode(npubMatch[0]);
-        setBuyerPubkey(buyerPubkey as string);
+        try {
+          const decoded = nip19.decode(npubMatch[0]);
+          setBuyerPubkey(
+            decoded.type === "npub" ? (decoded.data as string) : ""
+          );
+        } catch {
+          setBuyerPubkey("");
+        }
       }
     } else {
       setBuyerPubkey("");
@@ -112,6 +118,13 @@ const ChatMessage = ({
     return words.map((word, index) => {
       const npubMatch = word.match(/npub[a-zA-Z0-9]+/);
       if (npubMatch) {
+        try {
+          const decoded = nip19.decode(npubMatch[0]);
+          if (decoded.type !== "npub") return word;
+        } catch {
+          return word;
+        }
+
         return (
           <span
             key={index}

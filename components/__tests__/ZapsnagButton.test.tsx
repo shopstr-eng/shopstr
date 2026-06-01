@@ -65,11 +65,9 @@ jest.mock("@getalby/lightning-tools", () => {
 });
 
 jest.mock("@getalby/sdk", () => ({
-  webln: {
-    NostrWebLNProvider: jest.fn().mockImplementation(() => ({
-      enable: jest.fn().mockResolvedValue(true),
-    })),
-  },
+  NostrWebLNProvider: jest.fn().mockImplementation(() => ({
+    enable: jest.fn().mockResolvedValue(true),
+  })),
 }));
 
 jest.mock("nostr-tools", () => ({
@@ -163,7 +161,7 @@ describe("ZapsnagButton Component", () => {
     renderComponent();
     fireEvent.click(screen.getByText(/Zap to Buy/i));
     expect(screen.getByText(/Zapsnag: Test Product/i)).toBeInTheDocument();
-    expect(screen.getByLabelText("Full Name")).toBeInTheDocument();
+    expect(screen.getByLabelText(/full name/i)).toBeInTheDocument();
   });
 
   test("pre-fills form from localStorage if available", () => {
@@ -182,10 +180,10 @@ describe("ZapsnagButton Component", () => {
     renderComponent();
     fireEvent.click(screen.getByText(/Zap to Buy/i));
 
-    expect((screen.getByLabelText("Full Name") as HTMLInputElement).value).toBe(
-      "John Doe"
-    );
-    expect((screen.getByLabelText("City") as HTMLInputElement).value).toBe(
+    expect(
+      (screen.getByLabelText(/full name/i) as HTMLInputElement).value
+    ).toBe("John Doe");
+    expect((screen.getByLabelText(/city/i) as HTMLInputElement).value).toBe(
       "Bitcoin City"
     );
   });
@@ -194,10 +192,10 @@ describe("ZapsnagButton Component", () => {
     renderComponent();
     fireEvent.click(screen.getByText(/Zap to Buy/i));
 
-    const confirmBtn = screen.getByText("Confirm & Zap").closest("button");
+    const confirmBtn = screen.getByText(/confirm & zap/i).closest("button");
     expect(confirmBtn).toBeDisabled();
 
-    fireEvent.change(screen.getByLabelText("Full Name"), {
+    fireEvent.change(screen.getByLabelText(/full name/i), {
       target: { value: "User" },
     });
     expect(confirmBtn).toBeDisabled();
@@ -207,23 +205,23 @@ describe("ZapsnagButton Component", () => {
     renderComponent();
     fireEvent.click(screen.getByText(/Zap to Buy/i));
 
-    fireEvent.change(screen.getByLabelText("Full Name"), {
+    fireEvent.change(screen.getByLabelText(/full name/i), {
       target: { value: "User" },
     });
-    fireEvent.change(screen.getByLabelText("Street Address"), {
+    fireEvent.change(screen.getByLabelText(/street address/i), {
       target: { value: "123 St" },
     });
-    fireEvent.change(screen.getByLabelText("City"), {
+    fireEvent.change(screen.getByLabelText(/city/i), {
       target: { value: "City" },
     });
-    fireEvent.change(screen.getByLabelText("Postal / Zip Code"), {
+    fireEvent.change(screen.getByLabelText(/postal \/ zip code/i), {
       target: { value: "00000" },
     });
-    fireEvent.change(screen.getByLabelText("Country"), {
+    fireEvent.change(screen.getByLabelText(/country/i), {
       target: { value: "US" },
     });
 
-    const confirmBtn = screen.getByText("Confirm & Zap").closest("button");
+    const confirmBtn = screen.getByText(/confirm & zap/i).closest("button");
     expect(confirmBtn).not.toBeDisabled();
   });
 
@@ -234,23 +232,23 @@ describe("ZapsnagButton Component", () => {
 
     fireEvent.click(screen.getByText(/Zap to Buy/i));
 
-    fireEvent.change(screen.getByLabelText("Full Name"), {
+    fireEvent.change(screen.getByLabelText(/full name/i), {
       target: { value: "User" },
     });
-    fireEvent.change(screen.getByLabelText("Street Address"), {
+    fireEvent.change(screen.getByLabelText(/street address/i), {
       target: { value: "123 St" },
     });
-    fireEvent.change(screen.getByLabelText("City"), {
+    fireEvent.change(screen.getByLabelText(/city/i), {
       target: { value: "City" },
     });
-    fireEvent.change(screen.getByLabelText("Postal / Zip Code"), {
+    fireEvent.change(screen.getByLabelText(/postal \/ zip code/i), {
       target: { value: "00000" },
     });
-    fireEvent.change(screen.getByLabelText("Country"), {
+    fireEvent.change(screen.getByLabelText(/country/i), {
       target: { value: "US" },
     });
 
-    fireEvent.click(screen.getByText("Confirm & Zap"));
+    fireEvent.click(screen.getByText(/confirm & zap/i));
 
     expect(window.alert).toHaveBeenCalledWith("Please sign in to purchase.");
   });
@@ -268,23 +266,23 @@ describe("ZapsnagButton Component", () => {
     renderComponent();
 
     fireEvent.click(screen.getByText(/Zap to Buy/i));
-    fireEvent.change(screen.getByLabelText("Full Name"), {
+    fireEvent.change(screen.getByLabelText(/full name/i), {
       target: { value: "Buyer" },
     });
-    fireEvent.change(screen.getByLabelText("Street Address"), {
+    fireEvent.change(screen.getByLabelText(/street address/i), {
       target: { value: "Road" },
     });
-    fireEvent.change(screen.getByLabelText("City"), {
+    fireEvent.change(screen.getByLabelText(/city/i), {
       target: { value: "Town" },
     });
-    fireEvent.change(screen.getByLabelText("Postal / Zip Code"), {
+    fireEvent.change(screen.getByLabelText(/postal \/ zip code/i), {
       target: { value: "123" },
     });
-    fireEvent.change(screen.getByLabelText("Country"), {
+    fireEvent.change(screen.getByLabelText(/country/i), {
       target: { value: "US" },
     });
 
-    const confirmBtn = screen.getByText("Confirm & Zap");
+    const confirmBtn = screen.getByText(/confirm & zap/i);
     await act(async () => {
       fireEvent.click(confirmBtn);
     });
@@ -329,24 +327,24 @@ describe("ZapsnagButton Component", () => {
     renderComponent();
     fireEvent.click(screen.getByText(/Zap to Buy/i));
 
-    fireEvent.change(screen.getByLabelText("Full Name"), {
+    fireEvent.change(screen.getByLabelText(/full name/i), {
       target: { value: "Buyer" },
     });
-    fireEvent.change(screen.getByLabelText("Street Address"), {
+    fireEvent.change(screen.getByLabelText(/street address/i), {
       target: { value: "Road" },
     });
-    fireEvent.change(screen.getByLabelText("City"), {
+    fireEvent.change(screen.getByLabelText(/city/i), {
       target: { value: "Town" },
     });
-    fireEvent.change(screen.getByLabelText("Postal / Zip Code"), {
+    fireEvent.change(screen.getByLabelText(/postal \/ zip code/i), {
       target: { value: "123" },
     });
-    fireEvent.change(screen.getByLabelText("Country"), {
+    fireEvent.change(screen.getByLabelText(/country/i), {
       target: { value: "US" },
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByText("Confirm & Zap"));
+      fireEvent.click(screen.getByText(/confirm & zap/i));
     });
 
     expect(window.alert).toHaveBeenCalledWith(
@@ -370,22 +368,24 @@ describe("ZapsnagButton Component", () => {
     renderComponent();
     fireEvent.click(screen.getByText(/Zap to Buy/i));
 
-    fireEvent.change(screen.getByLabelText("Full Name"), {
+    fireEvent.change(screen.getByLabelText(/full name/i), {
       target: { value: "A" },
     });
-    fireEvent.change(screen.getByLabelText("Street Address"), {
+    fireEvent.change(screen.getByLabelText(/street address/i), {
       target: { value: "B" },
     });
-    fireEvent.change(screen.getByLabelText("City"), { target: { value: "C" } });
-    fireEvent.change(screen.getByLabelText("Postal / Zip Code"), {
+    fireEvent.change(screen.getByLabelText(/city/i), {
+      target: { value: "C" },
+    });
+    fireEvent.change(screen.getByLabelText(/postal \/ zip code/i), {
       target: { value: "D" },
     });
-    fireEvent.change(screen.getByLabelText("Country"), {
+    fireEvent.change(screen.getByLabelText(/country/i), {
       target: { value: "E" },
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByText("Confirm & Zap"));
+      fireEvent.click(screen.getByText(/confirm & zap/i));
     });
 
     expect(window.alert).not.toHaveBeenCalledWith(

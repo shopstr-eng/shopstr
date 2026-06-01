@@ -25,12 +25,12 @@ describe("ShopstrSpinner", () => {
     expect(spinner).toHaveAttribute("data-color", "warning");
   });
 
-  it('should render with the "secondary" color in light mode', () => {
+  it('should render with the "warning" color in light mode', () => {
     mockedUseTheme.mockReturnValue({ theme: "light" });
 
     render(<ShopstrSpinner />);
 
     const spinner = screen.getByTestId("spinner");
-    expect(spinner).toHaveAttribute("data-color", "secondary");
+    expect(spinner).toHaveAttribute("data-color", "warning");
   });
 });

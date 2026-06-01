@@ -5,15 +5,16 @@ import { SignerContext } from "@/components/utility-components/nostr-context-pro
 import { ShopMapContext } from "@/utils/context/context";
 import { ShopProfile } from "@/utils/types/types";
 
+const mockRouterPush = jest.fn();
 jest.mock("next/router", () => ({
   __esModule: true,
   default: {
-    push: jest.fn(),
+    push: (...args: any[]) => mockRouterPush(...args),
   },
+  useRouter: () => ({
+    push: (...args: any[]) => mockRouterPush(...args),
+  }),
 }));
-
-import router from "next/router";
-const mockRouterPush = router.push as jest.Mock;
 
 const mockOnOpen = jest.fn();
 jest.mock("@heroui/react", () => ({
@@ -51,6 +52,9 @@ jest.mock("@braintree/sanitize-url", () => ({
 }));
 jest.mock("@heroicons/react/24/outline", () => ({
   Bars3Icon: () => <div data-testid="bars3-icon-mock">Open Menu</div>,
+  PlusIcon: () => <div data-testid="plus-icon-mock" />,
+  PencilSquareIcon: () => <div data-testid="pencil-icon-mock" />,
+  BuildingStorefrontIcon: () => <div data-testid="storefront-icon-mock" />,
 }));
 
 import MyListingsPage from "../my-listings";
@@ -149,26 +153,24 @@ describe("MyListingsPage", () => {
         renderComponent(loggedInUser, mockShopDataContextWithProfile);
       });
 
-      test("fetches and displays shop banner and about info", () => {
-        expect(screen.getByAltText("Shop Banner")).toBeInTheDocument();
-        expect(screen.getByAltText("Shop Banner")).toHaveAttribute(
-          "src",
-          shopProfile.content.ui.banner
-        );
+      test("displays shop about info", () => {
+        expect(screen.queryByAltText("Shop Banner")).not.toBeInTheDocument();
 
         fireEvent.click(screen.getAllByRole("button", { name: "About" })[0]!);
         expect(
-          screen.getByRole("heading", { name: /about/i, level: 2 })
+          screen.getAllByRole("heading", { name: /about/i, level: 2 }).at(-1)!
         ).toBeInTheDocument();
         expect(screen.getByText(shopProfile.content.about)).toBeInTheDocument();
       });
 
       test("renders Listings section by default", () => {
         expect(screen.getByTestId("display-products-mock")).toBeInTheDocument();
-        expect(screen.getByTestId("side-shop-nav-mock")).toBeInTheDocument();
+        expect(
+          screen.queryByTestId("side-shop-nav-mock")
+        ).not.toBeInTheDocument();
       });
 
-      test("updates the About section when the shop profile changes but the banner stays the same", () => {
+      test("updates the About section when the shop profile changes", () => {
         const sharedBanner = "http://example.com/banner.jpg";
         const initialShopContext = {
           ...mockShopDataContextWithProfile,
@@ -247,9 +249,9 @@ describe("MyListingsPage", () => {
 
       test('shows "Nothing here" message in About section', () => {
         fireEvent.click(screen.getAllByRole("button", { name: "About" })[0]!);
-        expect(screen.getByText("Nothing here . . . yet!")).toBeInTheDocument();
+        expect(screen.getByText("Nothing here... yet!")).toBeInTheDocument();
         expect(
-          screen.getByText("Set up your shop in settings!")
+          screen.getByText("Set up your shop description in settings.")
         ).toBeInTheDocument();
       });
 
@@ -259,7 +261,7 @@ describe("MyListingsPage", () => {
           mockShopDataContextWithProfile
         );
 
-        expect(screen.getByAltText("Shop Banner")).toBeInTheDocument();
+        expect(screen.queryByAltText("Shop Banner")).not.toBeInTheDocument();
 
         rerender(
           <SignerContext.Provider value={loggedInUser}>
@@ -303,7 +305,7 @@ describe("MyListingsPage", () => {
         screen.queryByTestId("display-products-mock")
       ).not.toBeInTheDocument();
       expect(
-        screen.getByRole("heading", { name: /about/i, level: 2 })
+        screen.getAllByRole("heading", { name: /about/i, level: 2 }).at(-1)!
       ).toBeInTheDocument();
       expect(screen.getByText(shopProfile.content.about)).toBeInTheDocument();
 
