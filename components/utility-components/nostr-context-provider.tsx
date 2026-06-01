@@ -75,11 +75,18 @@ export function SignerContextProvider({ children }: { children: ReactNode }) {
     error
   ) => {
     return new Promise((resolve, _reject) => {
+      let isSettled = false;
+      const resolveChallenge = (res: any) => {
+        if (isSettled) return;
+        isSettled = true;
+        resolve(res);
+      };
+
       setError(error);
       setAbort(() => abort);
       setChallengeResolver(() => {
         return async (res: any) => {
-          resolve(res);
+          resolveChallenge(res);
         };
       });
       switch (type) {
@@ -87,6 +94,7 @@ export function SignerContextProvider({ children }: { children: ReactNode }) {
           setIsPassphraseRequested(true);
           abortSignal.addEventListener("abort", () => {
             setIsPassphraseRequested(false);
+            resolveChallenge({ res: "", remind: false });
           });
           break;
         }
@@ -95,6 +103,7 @@ export function SignerContextProvider({ children }: { children: ReactNode }) {
           setIsAuthChallengeRequested(true);
           abortSignal.addEventListener("abort", () => {
             setIsAuthChallengeRequested(false);
+            resolveChallenge({ res: "", remind: false });
           });
           break;
         }

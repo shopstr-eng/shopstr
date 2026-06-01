@@ -62,6 +62,9 @@ import {
 } from "@/components/utility-components/nostr-context-provider";
 import { retryFailedRelayPublishes } from "@/utils/nostr/retry-service";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
+import { createNip98AuthorizationHeader } from "@/utils/nostr/nip98-auth";
+import { MintRecoveryBoot } from "@/components/utility-components/mint-recovery-boot";
+import { NostrNSecSigner } from "@/utils/nostr/signers/nostr-nsec-signer";
 
 function Shopstr({ props }: { props: AppProps }) {
   const { Component, pageProps } = props;
@@ -239,21 +242,37 @@ function Shopstr({ props }: { props: AppProps }) {
 
   const markAllMessagesAsRead = useCallback(async (): Promise<string[]> => {
     const unreadMessageIds: string[] = [];
+    const wrappedEventIds: string[] = [];
 
     for (const [_, messages] of chatsMap) {
       for (const message of messages as NostrMessageEvent[]) {
         if (!message.read) {
           unreadMessageIds.push(message.id);
+          if (message.wrappedEventId) {
+            wrappedEventIds.push(message.wrappedEventId);
+          }
         }
       }
     }
 
     if (unreadMessageIds.length > 0) {
       try {
+        const idsForDb =
+          wrappedEventIds.length > 0 ? wrappedEventIds : unreadMessageIds;
+        const body = JSON.stringify({ messageIds: idsForDb });
+        const authHeader = await createNip98AuthorizationHeader(
+          signer!,
+          `${window.location.origin}/api/db/mark-messages-read`,
+          "POST",
+          body
+        );
         await fetch("/api/db/mark-messages-read", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ messageIds: unreadMessageIds }),
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: authHeader,
+          },
+          body,
         });
 
         setNewOrderIds(new Set(unreadMessageIds));
@@ -275,7 +294,7 @@ function Shopstr({ props }: { props: AppProps }) {
     }
 
     return unreadMessageIds;
-  }, [chatsMap]);
+  }, [chatsMap, signer]);
 
   const [followsContext, setFollowsContext] = useState<FollowsContextInterface>(
     {
@@ -466,6 +485,20 @@ function Shopstr({ props }: { props: AppProps }) {
 
   const router = useRouter();
 
+  const shouldFetchCashuWallet = useMemo(() => {
+    if (!isLoggedIn || !signer) return false;
+    if (signer instanceof NostrNSecSigner && !signer.canSignWithoutPrompt()) {
+      const walletRoutes = ["/wallet", "/cart", "/order-summary", "/orders"];
+      return walletRoutes.some(
+        (route) =>
+          router.pathname === route || router.pathname.startsWith(route + "/")
+      );
+    }
+    return true;
+  }, [isLoggedIn, signer, router.pathname]);
+
+  const shouldFetchChats = isLoggedIn && router.pathname === "/orders";
+
   /** FETCH initial FOLLOWS, RELAYS, PRODUCTS, and PROFILES **/
   useEffect(() => {
     async function fetchData() {
@@ -552,7 +585,7 @@ function Shopstr({ props }: { props: AppProps }) {
         const userPubkey = (await signer?.getPubKey()) || undefined;
         const profileSetFromChats = new Set<string>();
 
-        if (isLoggedIn) {
+        if (shouldFetchChats) {
           try {
             const { profileSetFromChats: newProfileSetFromChats } =
               await fetchGiftWrappedChatsAndMessages(
@@ -570,6 +603,8 @@ function Shopstr({ props }: { props: AppProps }) {
             console.error("Error fetching chats:", error);
             editChatContext(new Map(), false);
           }
+        } else {
+          editChatContext(new Map(), false);
         }
 
         if (userPubkey && profileSetFromChats.size != 0) {
@@ -628,8 +663,8 @@ function Shopstr({ props }: { props: AppProps }) {
           editCommunityContext(new Map(), false);
         }
 
-        // Fetch wallet if logged in
-        if (isLoggedIn) {
+        // Fetch wallet only when it will not surprise-prompt on unrelated pages.
+        if (shouldFetchCashuWallet) {
           try {
             const { cashuMints, cashuProofs } = await fetchCashuWallet(
               nostr!,
@@ -646,6 +681,8 @@ function Shopstr({ props }: { props: AppProps }) {
             console.error("Error fetching wallet:", error);
             editCashuWalletContext([], [], [], false);
           }
+        } else {
+          editCashuWalletContext([], [], [], false);
         }
 
         try {
@@ -664,7 +701,9 @@ function Shopstr({ props }: { props: AppProps }) {
         try {
           const { relays, writeRelays } = getLocalStorageData();
           const retryNostr = new NostrManager([...relays, ...writeRelays]);
-          await retryFailedRelayPublishes(retryNostr);
+          await retryFailedRelayPublishes(retryNostr, signer, {
+            silent: true,
+          });
         } catch (error) {
           console.error("Failed to retry relay publishes:", error);
         }
@@ -686,7 +725,7 @@ function Shopstr({ props }: { props: AppProps }) {
     fetchData();
     window.addEventListener("storage", fetchData);
     return () => window.removeEventListener("storage", fetchData);
-  }, [nostr, signer, isLoggedIn]);
+  }, [nostr, signer, isLoggedIn, shouldFetchCashuWallet, shouldFetchChats]);
 
   useEffect(() => {
     if ("serviceWorker" in navigator) {
@@ -762,6 +801,7 @@ function App(props: AppProps) {
         >
           <NostrContextProvider>
             <SignerContextProvider>
+              <MintRecoveryBoot />
               <Shopstr props={props} />
             </SignerContextProvider>
           </NostrContextProvider>

@@ -24,6 +24,7 @@ import CartInvoiceCard from "../../components/cart-invoice-card";
 import { getSatoshiValue } from "@getalby/lightning-tools";
 import { sanitizeUrl } from "@braintree/sanitize-url";
 import currencySelection from "../../public/currencySelection.json";
+import ProtectedRoute from "@/components/utility-components/protected-route";
 
 interface QuantitySelectorProps {
   value: number;
@@ -412,7 +413,7 @@ export default function Component() {
   };
 
   return (
-    <>
+    <ProtectedRoute>
       {!isBeingPaid ? (
         <div className="flex min-h-screen flex-col bg-[#111] p-4 text-white">
           <div className="mx-auto w-full max-w-4xl pt-20">
@@ -725,6 +726,6 @@ export default function Component() {
           </Modal>
         </>
       ) : null}
-    </>
+    </ProtectedRoute>
   );
 }

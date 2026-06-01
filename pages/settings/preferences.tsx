@@ -29,6 +29,7 @@ import {
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
 import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
+import ProtectedRoute from "@/components/utility-components/protected-route";
 
 const PreferencesPage = () => {
   const { nostr } = useContext(NostrContext);
@@ -254,7 +255,7 @@ const PreferencesPage = () => {
   };
 
   return (
-    <>
+    <ProtectedRoute>
       <div className="flex min-h-screen flex-col bg-[#111] pt-24 pb-6">
         <div className="mx-auto px-4">
           <SettingsBreadCrumbs />
@@ -983,7 +984,7 @@ const PreferencesPage = () => {
           setFailureText("");
         }}
       />
-    </>
+    </ProtectedRoute>
   );
 };
 

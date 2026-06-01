@@ -840,7 +840,7 @@ const OrdersDashboard = () => {
         selectedOrder.buyerPubkey
       );
 
-      await sendGiftWrappedMessageEvent(nostr, giftWrappedEvent);
+      await sendGiftWrappedMessageEvent(nostr, giftWrappedEvent, signer);
 
       // Update local state to shipped status (removes Send Shipping Update button)
       setOrders((prevOrders) =>

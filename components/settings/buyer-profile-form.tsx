@@ -3,7 +3,7 @@ import { useRouter } from "next/router";
 import { useForm, Controller } from "react-hook-form";
 import { Button, Input, Image } from "@heroui/react";
 import { ProfileMapContext } from "@/utils/context/context";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
 import {
   SignerContext,
   NostrContext,
@@ -92,12 +92,12 @@ const BuyerProfileForm = ({ isOnboarding }: BuyerProfileFormProps) => {
   }
 
   return (
-    <>
+    <div className="neo-settings-form">
       <div className="mb-16 flex items-center justify-center">
         <div className="relative h-24 w-24">
           <FileUploaderButton
             isIconOnly
-            className={`absolute right-[-0.5rem] bottom-[-0.5rem] z-20 ${SHOPSTRBUTTONCLASSNAMES}`}
+            className={`absolute right-[-0.5rem] bottom-[-0.5rem] z-20 ${NEO_BTN}`}
             imgCallbackOnUpload={(imgUrl) => setValue("picture", imgUrl)}
           />
           {watchPicture ? (
@@ -128,9 +128,9 @@ const BuyerProfileForm = ({ isOnboarding }: BuyerProfileFormProps) => {
             const errorMessage: string = error?.message ? error.message : "";
             return (
               <Input
-                className="text-light-text dark:text-dark-text pb-4"
+                className="pb-4 text-white"
                 classNames={{
-                  label: "text-light-text dark:text-dark-text text-lg",
+                  label: "text-white text-lg",
                 }}
                 variant="bordered"
                 fullWidth={true}
@@ -158,9 +158,9 @@ const BuyerProfileForm = ({ isOnboarding }: BuyerProfileFormProps) => {
             const errorMessage: string = error?.message ? error.message : "";
             return (
               <Input
-                className="text-light-text dark:text-dark-text pb-4"
+                className="pb-4 text-white"
                 classNames={{
-                  label: "text-light-text dark:text-dark-text text-lg",
+                  label: "text-white text-lg",
                 }}
                 variant="bordered"
                 fullWidth={true}
@@ -178,7 +178,7 @@ const BuyerProfileForm = ({ isOnboarding }: BuyerProfileFormProps) => {
         />
 
         <Button
-          className={`mb-4 w-full ${SHOPSTRBUTTONCLASSNAMES}`}
+          className={`mb-4 w-full ${NEO_BTN}`}
           type="submit"
           onKeyDown={(e) => {
             if (e.key === "Enter") {
@@ -192,7 +192,7 @@ const BuyerProfileForm = ({ isOnboarding }: BuyerProfileFormProps) => {
           {isSaved ? "✅ Saved!" : "Save Profile"}
         </Button>
       </form>
-    </>
+    </div>
   );
 };
 

@@ -25,13 +25,10 @@ export default function SellerView({
             width={1200}
             height={210}
           />
-          <Image
+          <img
             src="/shop-freely-dark.png"
             alt="Shopstr Banner"
-            className="hidden max-h-[210px] w-full object-cover sm:flex"
-            width={1200}
-            height={210}
-            priority
+            className="hidden h-auto max-h-[210px] w-full object-cover sm:flex"
           />
           <Image
             src="/shop-freely-light-sm.png"

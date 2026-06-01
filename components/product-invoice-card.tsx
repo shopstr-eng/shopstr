@@ -38,6 +38,19 @@ import {
   Proof,
 } from "@cashu/cashu-ts";
 import * as cashuCompat from "@/utils/cashu/compat";
+import { safeMeltProofs } from "@/utils/cashu/melt-retry-service";
+import { safeSwap } from "@/utils/cashu/swap-retry-service";
+import { withMintRetry } from "@/utils/cashu/mint-retry-service";
+import {
+  recordPendingMintQuote,
+  markMintQuoteClaimed,
+  updatePendingMintQuote,
+} from "@/utils/cashu/pending-mint-operations";
+import {
+  recoverProofsToBuyerWallet,
+  withDeadline,
+  isTimeoutError,
+} from "@/utils/cashu/wallet-recovery";
 import {
   constructGiftWrappedEvent,
   constructMessageSeal,
@@ -64,6 +77,25 @@ import {
 } from "@/components/utility-components/nostr-context-provider";
 import { ShippingFormData, ContactFormData } from "@/utils/types/types";
 import { Controller } from "react-hook-form";
+
+const SELLER_HANDOFF_TIMEOUT_MS = 90000;
+
+async function requireSafeSwap(
+  wallet: CashuWallet,
+  amount: number,
+  proofs: Proof[]
+): Promise<{ keep: Proof[]; send: Proof[] }> {
+  const swapOutcome = await safeSwap(wallet, amount, proofs, {
+    sendConfig: { includeFees: true },
+  });
+  if (swapOutcome.status !== "swapped") {
+    throw new Error(
+      swapOutcome.errorMessage ??
+        `Cashu swap did not complete (${swapOutcome.status})`
+    );
+  }
+  return { keep: swapOutcome.keep, send: swapOutcome.send };
+}
 
 export default function ProductInvoiceCard({
   productData,
@@ -194,8 +226,16 @@ export default function ProductInvoiceCard({
         userPubkey
       );
 
-      await sendGiftWrappedMessageEvent(nostr, giftWrappedEventForSeller);
-      await sendGiftWrappedMessageEvent(nostr, giftWrappedEventForBuyer);
+      await sendGiftWrappedMessageEvent(
+        nostr,
+        giftWrappedEventForSeller,
+        signer
+      );
+      await sendGiftWrappedMessageEvent(
+        nostr,
+        giftWrappedEventForBuyer,
+        signer
+      );
 
       // Add to local context for immediate UI feedback
       chatsContext.addNewlyCreatedMessageEvent(
@@ -444,7 +484,7 @@ export default function ProductInvoiceCard({
       decodedRandomPrivkeyForReceiver.data as Uint8Array,
       pubkeyToReceiveMessage
     );
-    await sendGiftWrappedMessageEvent(nostr!, giftWrappedEvent);
+    await sendGiftWrappedMessageEvent(nostr!, giftWrappedEvent, signer);
 
     if (isReceipt) {
       chatsContext.addNewlyCreatedMessageEvent(
@@ -646,10 +686,15 @@ export default function ProductInvoiceCard({
       }
 
       const wallet = new CashuWallet(new CashuMint(mints[0]!));
-      const { request: pr, quote: hash } = await cashuCompat.createMintQuote(
-        wallet,
-        convertedPrice
+      const { request: pr, quote: hash } = await withMintRetry(() =>
+        cashuCompat.createMintQuote(wallet, convertedPrice)
       );
+      recordPendingMintQuote({
+        quoteId: hash,
+        mintUrl: mints[0]!,
+        amount: convertedPrice,
+        invoice: pr,
+      });
 
       const { nwcString } = getLocalStorageData();
       if (!nwcString) throw new Error("NWC connection not found.");
@@ -1075,10 +1120,15 @@ export default function ProductInvoiceCard({
       setShowInvoiceCard(true);
       const wallet = new CashuWallet(new CashuMint(mints[0]!));
 
-      const { request: pr, quote: hash } = await cashuCompat.createMintQuote(
-        wallet,
-        convertedPrice
+      const { request: pr, quote: hash } = await withMintRetry(() =>
+        cashuCompat.createMintQuote(wallet, convertedPrice)
       );
+      recordPendingMintQuote({
+        quoteId: hash,
+        mintUrl: mints[0]!,
+        amount: convertedPrice,
+        invoice: pr,
+      });
 
       setInvoice(pr);
 
@@ -1152,30 +1202,60 @@ export default function ProductInvoiceCard({
     while (retryCount < maxRetries) {
       try {
         // First check if the quote has been paid
-        const quoteState = await cashuCompat.checkMintQuote(wallet, hash);
+        const quoteState = await withMintRetry(() =>
+          cashuCompat.checkMintQuote(wallet, hash)
+        );
 
         if (quoteState.state === "PAID") {
           // Quote is paid, try to mint proofs
           try {
-            const proofs = await cashuCompat.mintProofs(wallet, newPrice, hash);
+            updatePendingMintQuote(hash, { status: "paid_unclaimed" });
+            const proofs = await withMintRetry(() =>
+              cashuCompat.mintProofs(wallet, newPrice, hash)
+            );
             if (proofs && proofs.length > 0) {
-              await sendTokens(
-                wallet,
-                proofs,
-                newPrice,
-                shippingName ? shippingName : undefined,
-                shippingAddress ? shippingAddress : undefined,
-                shippingUnitNo ? shippingUnitNo : undefined,
-                shippingCity ? shippingCity : undefined,
-                shippingPostalCode ? shippingPostalCode : undefined,
-                shippingState ? shippingState : undefined,
-                shippingCountry ? shippingCountry : undefined,
-                additionalInfo ? additionalInfo : undefined
-              );
-              setPaymentConfirmed(true);
-              setQrCodeUrl(null);
-              if (setInvoiceIsPaid) {
-                setInvoiceIsPaid(true);
+              try {
+                await withDeadline(
+                  () =>
+                    sendTokens(
+                      wallet,
+                      proofs,
+                      newPrice,
+                      shippingName ? shippingName : undefined,
+                      shippingAddress ? shippingAddress : undefined,
+                      shippingUnitNo ? shippingUnitNo : undefined,
+                      shippingCity ? shippingCity : undefined,
+                      shippingPostalCode ? shippingPostalCode : undefined,
+                      shippingState ? shippingState : undefined,
+                      shippingCountry ? shippingCountry : undefined,
+                      additionalInfo ? additionalInfo : undefined
+                    ),
+                  SELLER_HANDOFF_TIMEOUT_MS,
+                  "seller hand-off"
+                );
+                markMintQuoteClaimed(hash);
+                setPaymentConfirmed(true);
+                setQrCodeUrl(null);
+                if (setInvoiceIsPaid) {
+                  setInvoiceIsPaid(true);
+                }
+              } catch (handoffError) {
+                await recoverProofsToBuyerWallet(
+                  nostr!,
+                  signer!,
+                  mints[0]!,
+                  proofs,
+                  newPrice
+                );
+                markMintQuoteClaimed(hash);
+                setPaymentConfirmed(true);
+                setQrCodeUrl(null);
+                setFailureText(
+                  isTimeoutError(handoffError)
+                    ? "Your payment was received but delivery to the seller timed out. Your sats have been credited to your wallet - please try the order again."
+                    : "Your payment was received but couldn't be delivered to the seller. Your sats have been credited to your wallet - please try the order again."
+                );
+                setShowFailureModal(true);
               }
               break;
             }
@@ -1185,6 +1265,11 @@ export default function ProductInvoiceCard({
               mintError instanceof Error &&
               mintError.message.includes("issued")
             ) {
+              updatePendingMintQuote(hash, {
+                status: "failed_terminal",
+                lastErrorMessage:
+                  "Mint reports quote ISSUED before local claim recorded proofs",
+              });
               // Quote was already processed, consider it successful
               setPaymentConfirmed(true);
               setQrCodeUrl(null);
@@ -1197,6 +1282,10 @@ export default function ProductInvoiceCard({
             throw mintError;
           }
         } else if (quoteState.state === "ISSUED") {
+          updatePendingMintQuote(hash, {
+            status: "failed_terminal",
+            lastErrorMessage: "Quote ISSUED before local claim recorded proofs",
+          });
           // Quote was already processed successfully
           setPaymentConfirmed(true);
           setQrCodeUrl(null);
@@ -1265,9 +1354,11 @@ export default function ProductInvoiceCard({
     let sellerProofs: Proof[] = [];
 
     if (sellerAmount > 0) {
-      const { keep, send } = await wallet.send(sellerAmount, remainingProofs, {
-        includeFees: true,
-      });
+      const { keep, send } = await requireSafeSwap(
+        wallet,
+        sellerAmount,
+        remainingProofs
+      );
       sellerProofs = send;
       sellerToken = getEncodedToken({
         mint: mints[0]!,
@@ -1277,12 +1368,10 @@ export default function ProductInvoiceCard({
     }
 
     if (donationAmount > 0) {
-      const { keep, send } = await wallet.send(
+      const { keep, send } = await requireSafeSwap(
+        wallet,
         donationAmount,
-        remainingProofs,
-        {
-          includeFees: true,
-        }
+        remainingProofs
       );
       donationToken = getEncodedToken({
         mint: mints[0]!,
@@ -1318,14 +1407,22 @@ export default function ProductInvoiceCard({
         const meltQuoteTotal =
           cashuCompat.amountToNumber(meltQuote.amount) +
           cashuCompat.amountToNumber(meltQuote.fee_reserve);
-        const { keep, send } = await wallet.send(meltQuoteTotal, sellerProofs, {
-          includeFees: true,
-        });
-        const meltResponse = await cashuCompat.meltProofs(
+        const { keep, send } = await requireSafeSwap(
           wallet,
-          meltQuote,
-          send
+          meltQuoteTotal,
+          sellerProofs
         );
+        const meltOutcome = await safeMeltProofs(wallet, meltQuote, send);
+        if (meltOutcome.status !== "paid") {
+          throw new Error(
+            meltOutcome.errorMessage ??
+              `Melt did not complete (${meltOutcome.status})`
+          );
+        }
+        const meltResponse = {
+          quote: meltOutcome.meltQuote,
+          change: meltOutcome.changeProofs,
+        };
         if (meltResponse.quote) {
           const meltAmount = cashuCompat.amountToNumber(
             meltResponse.quote.amount
@@ -1843,9 +1940,11 @@ export default function ProductInvoiceCard({
       const filteredProofs = tokens.filter((p: Proof) =>
         mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
       );
-      const { keep, send } = await wallet.send(price, filteredProofs, {
-        includeFees: true,
-      });
+      const { keep, send } = await requireSafeSwap(
+        wallet,
+        price,
+        filteredProofs
+      );
       const deletedEventIds = [
         ...new Set([
           ...walletContext.proofEvents

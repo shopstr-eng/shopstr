@@ -5,7 +5,7 @@ import locations from "../../../public/locationSelection.json";
 const CountryDropdown = ({ _value, ...props }: { [x: string]: any }) => {
   const countryOptions = useMemo(() => {
     const headingClasses =
-      "flex w-full sticky top-1 z-20 py-1.5 px-2 dark:bg-zinc-900 bg-white shadow-small rounded-small";
+      "sticky top-1 z-20 flex w-full rounded-small border border-zinc-800 bg-[#111] px-2 py-1.5 shadow-small";
 
     const countryOptions = (
       <SelectSection
@@ -13,7 +13,7 @@ const CountryDropdown = ({ _value, ...props }: { [x: string]: any }) => {
         classNames={{
           heading: headingClasses,
         }}
-        className="text-light-text dark:text-dark-text"
+        className="text-white"
       >
         {locations.countries.map((country) => {
           return (
@@ -28,7 +28,7 @@ const CountryDropdown = ({ _value, ...props }: { [x: string]: any }) => {
   return (
     <Select
       {...props}
-      className="text-light-text dark:text-dark-text mt-2"
+      className="mt-2 text-white"
       classNames={{
         trigger: "h-12",
         value: "text-base",

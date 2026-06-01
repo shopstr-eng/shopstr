@@ -57,3 +57,41 @@ body {
 body.sf-active [data-main-nav] {
   display: none !important;
 }
+
+.neo-settings-form [data-slot="input-wrapper"],
+.neo-settings-form [data-slot="trigger"] {
+  border-color: #3f3f46 !important;
+  background: #111111 !important;
+  color: #ffffff !important;
+}
+
+.neo-settings-form [data-slot="input-wrapper"]:hover,
+.neo-settings-form [data-slot="trigger"]:hover {
+  border-color: #71717a !important;
+}
+
+.neo-settings-form [data-focus="true"] [data-slot="input-wrapper"],
+.neo-settings-form [data-open="true"] [data-slot="trigger"] {
+  border-color: #facc15 !important;
+}
+
+.neo-settings-form [data-slot="label"] {
+  color: #a1a1aa !important;
+  font-size: 0.75rem !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase !important;
+}
+
+.neo-settings-form [data-slot="input"],
+.neo-settings-form [data-slot="value"],
+.neo-settings-form input,
+.neo-settings-form textarea,
+.neo-settings-form select {
+  color: #ffffff !important;
+}
+
+.neo-settings-form [data-slot="description"],
+.neo-settings-form ::placeholder {
+  color: #71717a !important;
+}

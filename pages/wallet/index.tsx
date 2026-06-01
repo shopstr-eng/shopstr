@@ -13,6 +13,7 @@ import {
   Proof,
 } from "@cashu/cashu-ts";
 import * as cashuCompat from "@/utils/cashu/compat";
+import ProtectedRoute from "@/components/utility-components/protected-route";
 
 const Wallet = () => {
   const [totalBalance, setTotalBalance] = useState(0);
@@ -115,7 +116,7 @@ const Wallet = () => {
   };
 
   return (
-    <>
+    <ProtectedRoute>
       <div className="flex min-h-screen flex-col items-center bg-[#050505] px-4 pt-24 md:pt-36">
         <div className="w-full max-w-4xl space-y-8">
           {/* Balance & Actions Card */}
@@ -156,7 +157,7 @@ const Wallet = () => {
           </div>
         </div>
       </div>
-    </>
+    </ProtectedRoute>
   );
 };
 

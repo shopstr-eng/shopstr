@@ -96,13 +96,13 @@ describe("AuthChallengeModal", () => {
   });
 
   describe("Cancel Button Logic", () => {
-    it("calls setIsOpen and routes to /marketplace on cancel by default", () => {
+    it("calls setIsOpen without navigating on cancel by default", () => {
       render(<AuthChallengeModal {...defaultProps} />);
       const cancelButton = screen.getByRole("button", { name: "Cancel" });
       fireEvent.click(cancelButton);
 
       expect(mockSetIsOpen).toHaveBeenCalledWith(false);
-      expect(mockRouterPush).toHaveBeenCalledWith("/marketplace");
+      expect(mockRouterPush).not.toHaveBeenCalled();
     });
 
     it("calls a custom action and routes to a custom path on cancel", () => {

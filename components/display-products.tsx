@@ -411,7 +411,7 @@ const DisplayProducts = ({
               </div>
             )}
 
-            <div className="text-light-text dark:text-dark-text mt-2 mb-6 text-center text-xs">
+            <div className="mt-2 mb-6 text-center text-xs text-white">
               Showing {(currentPage - 1) * itemsPerPage + 1} to{" "}
               {Math.min(filteredProducts.length, currentPage * itemsPerPage)} of{" "}
               {filteredProducts.length} products
@@ -421,11 +421,11 @@ const DisplayProducts = ({
           wotFilter &&
           !isProductsLoading && (
             <div className="mt-20 flex flex-grow items-center justify-center py-10">
-              <div className="bg-light-fg dark:bg-dark-fg w-full max-w-lg rounded-lg p-8 text-center shadow-lg">
-                <p className="text-light-text dark:text-dark-text text-3xl font-semibold">
+              <div className="w-full max-w-lg rounded-lg border border-zinc-800 bg-[#161616] p-8 text-center shadow-lg">
+                <p className="text-3xl font-semibold text-white">
                   No products found...
                 </p>
-                <p className="text-light-text dark:text-dark-text mt-4 text-lg">
+                <p className="mt-4 text-lg text-white">
                   Try turning off the trust filter!
                 </p>
               </div>

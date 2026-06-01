@@ -87,41 +87,41 @@ export default function FreeShippingNotification({
           animate={{ opacity: 1, x: 0, y: 0 }}
           exit={{ opacity: 0, x: 50, y: -10 }}
           transition={{ type: "spring", stiffness: 300, damping: 25 }}
-          className="bg-light-fg dark:bg-dark-fg fixed top-20 right-4 z-50 w-80 rounded-lg border border-gray-200 p-4 shadow-lg dark:border-gray-700"
+          className="fixed top-20 right-4 z-50 w-80 rounded-lg border border-zinc-800 bg-[#161616] p-4 shadow-lg"
         >
           <div className="mb-2 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <TruckIcon className="text-light-text dark:text-dark-text h-5 w-5" />
-              <span className="text-light-text dark:text-dark-text text-sm font-bold">
+              <TruckIcon className="h-5 w-5 text-white" />
+              <span className="text-sm font-bold text-white">
                 Free Shipping Progress
               </span>
             </div>
             <button
               onClick={onClose}
-              className="rounded-md p-0.5 transition-colors hover:bg-gray-200 dark:hover:bg-gray-600"
+              className="rounded-md p-0.5 transition-colors hover:bg-zinc-800 dark:hover:bg-gray-600"
             >
-              <XMarkIcon className="text-light-text dark:text-dark-text h-4 w-4" />
+              <XMarkIcon className="h-4 w-4 text-white" />
             </button>
           </div>
           <div className="space-y-3">
             {sellerProgresses.map((progress) => (
               <div key={progress.sellerPubkey}>
                 {progress.sellerName && (
-                  <p className="text-light-text dark:text-dark-text mb-1 text-xs font-semibold">
+                  <p className="mb-1 text-xs font-semibold text-white">
                     {progress.sellerName}
                   </p>
                 )}
                 {progress.amountAway > 0 ? (
-                  <p className="mb-1 text-xs text-gray-600 dark:text-gray-400">
+                  <p className="mb-1 text-xs text-zinc-400">
                     ${progress.amountAway.toFixed(2)} {progress.currency} away
                     from free shipping!
                   </p>
                 ) : (
-                  <p className="mb-1 text-xs font-bold text-green-600 dark:text-green-400">
+                  <p className="mb-1 text-xs font-bold text-green-300">
                     Free shipping unlocked!
                   </p>
                 )}
-                <div className="h-2 w-full overflow-hidden rounded-full border border-gray-300 bg-gray-200 dark:border-gray-600 dark:bg-gray-700">
+                <div className="h-2 w-full overflow-hidden rounded-full border border-zinc-700 bg-zinc-800">
                   <motion.div
                     initial={{ width: 0 }}
                     animate={{ width: `${progress.percentage}%` }}
@@ -129,7 +129,7 @@ export default function FreeShippingNotification({
                     className={`h-full rounded-full ${
                       progress.percentage >= 100
                         ? "bg-green-500"
-                        : "bg-shopstr-purple dark:bg-shopstr-yellow"
+                        : "bg-yellow-400"
                     }`}
                   />
                 </div>

@@ -257,7 +257,7 @@ function MarketplacePage({
 
           return (
             <div key={product.id} className="mt-4 p-4 pt-4">
-              <h3 className="text-light-text dark:text-dark-text mb-3 text-lg font-semibold">
+              <h3 className="mb-3 text-lg font-semibold text-white">
                 <div
                   onClick={() => handleTitleClick(product)}
                   className="cursor-pointer hover:underline"
@@ -280,7 +280,7 @@ function MarketplacePage({
                   ([reviewerPubkey, reviewData]) => (
                     <div
                       key={reviewerPubkey}
-                      className="rounded-lg border-2 border-black p-3 dark:border-white"
+                      className="rounded-lg border-2 border-zinc-800 bg-[#161616] p-3"
                     >
                       <div className="mb-2 flex items-center gap-2">
                         <ProfileWithDropdown
@@ -301,7 +301,7 @@ function MarketplacePage({
                               return (
                                 <Chip
                                   key={index}
-                                  className={`text-light-text dark:text-dark-text ${
+                                  className={`text-white ${
                                     value === "1"
                                       ? "bg-green-500"
                                       : "bg-red-500"
@@ -314,7 +314,7 @@ function MarketplacePage({
                               return (
                                 <Chip
                                   key={index}
-                                  className={`text-light-text dark:text-dark-text ${
+                                  className={`text-white ${
                                     value === "1"
                                       ? "bg-green-500"
                                       : "bg-red-500"
@@ -331,10 +331,7 @@ function MarketplacePage({
                         {reviewData.map(([category, value], index) => {
                           if (category === "comment" && value !== "") {
                             return (
-                              <p
-                                key={index}
-                                className="text-light-text dark:text-dark-text italic"
-                              >
+                              <p key={index} className="text-white italic">
                                 &ldquo;{value}&rdquo;
                               </p>
                             );
@@ -354,15 +351,15 @@ function MarketplacePage({
   };
 
   return (
-    <div className="bg-light-bg dark:bg-dark-bg mx-auto flex min-h-screen w-full flex-col">
+    <div className="mx-auto flex min-h-screen w-full flex-col bg-[#111]">
       {/* Top Filter Bar */}
-      <div className="bg-light-bg dark:bg-dark-bg sticky top-0 z-30 flex w-full flex-col gap-3 border-b border-zinc-800 px-4 py-4 md:flex-row md:items-end">
+      <div className="sticky top-0 z-30 flex w-full flex-col gap-3 border-b border-zinc-800 bg-[#111] px-4 py-4 md:flex-row md:items-end">
         {/* Search Input */}
         <div ref={searchBarRef} className="w-full md:flex-1">
           <Input
             classNames={{
               inputWrapper:
-                "bg-zinc-100 dark:bg-[#18181b] border border-zinc-300 dark:border-[#27272a] rounded-xl h-[50px] hover:border-zinc-400 dark:hover:border-zinc-500 transition-colors",
+                "h-[50px] rounded-xl border border-zinc-800 bg-[#161616] transition-colors hover:border-yellow-400",
               input: "text-base font-medium",
             }}
             isClearable
@@ -384,14 +381,14 @@ function MarketplacePage({
           {/* RESTORED: Navigation, Mobile Message & Event Actions */}
           {focusedPubkey && (
             <div className="flex items-center gap-2">
-              <div className="flex h-[50px] items-center rounded-xl border border-zinc-300 bg-zinc-100 p-1 dark:border-[#27272a] dark:bg-[#18181b]">
+              <div className="flex h-[50px] items-center rounded-xl border border-zinc-800 bg-[#161616] p-1">
                 <Button
                   size="sm"
                   variant="light"
                   className={`h-full rounded-lg px-3 text-xs font-bold tracking-wider uppercase ${
                     selectedSection === "shop" || selectedSection === ""
-                      ? "bg-white text-black shadow-sm dark:bg-zinc-800 dark:text-white"
-                      : "text-zinc-500 hover:text-black dark:hover:text-white"
+                      ? "border border-yellow-400 bg-yellow-400 text-black shadow-[2px_2px_0px_0px_#ffffff]"
+                      : "text-zinc-400 hover:text-white"
                   }`}
                   onClick={() => {
                     setSelectedCategories(new Set<string>([]));
@@ -407,8 +404,8 @@ function MarketplacePage({
                   variant="light"
                   className={`h-full rounded-lg px-3 text-xs font-bold tracking-wider uppercase ${
                     selectedSection === "reviews"
-                      ? "bg-white text-black shadow-sm dark:bg-zinc-800 dark:text-white"
-                      : "text-zinc-500 hover:text-black dark:hover:text-white"
+                      ? "border border-yellow-400 bg-yellow-400 text-black shadow-[2px_2px_0px_0px_#ffffff]"
+                      : "text-zinc-400 hover:text-white"
                   }`}
                   onClick={() => setSelectedSection("reviews")}
                 >
@@ -419,8 +416,8 @@ function MarketplacePage({
                   variant="light"
                   className={`h-full rounded-lg px-3 text-xs font-bold tracking-wider uppercase ${
                     selectedSection === "about"
-                      ? "bg-white text-black shadow-sm dark:bg-zinc-800 dark:text-white"
-                      : "text-zinc-500 hover:text-black dark:hover:text-white"
+                      ? "border border-yellow-400 bg-yellow-400 text-black shadow-[2px_2px_0px_0px_#ffffff]"
+                      : "text-zinc-400 hover:text-white"
                   }`}
                   onClick={() => setSelectedSection("about")}
                 >
@@ -430,7 +427,7 @@ function MarketplacePage({
 
               {/* Mobile Message Button (SideShopNav is hidden on mobile) */}
               <Button
-                className="flex h-[50px] items-center rounded-xl border border-zinc-300 bg-zinc-100 px-4 font-bold text-zinc-500 md:hidden dark:border-[#27272a] dark:bg-[#18181b] dark:hover:text-white"
+                className="flex h-[50px] items-center rounded-xl border border-zinc-800 bg-[#161616] px-4 font-bold text-zinc-300 hover:border-yellow-400 md:hidden"
                 onClick={() => handleSendMessage(focusedPubkey)}
               >
                 Msg
@@ -442,7 +439,7 @@ function MarketplacePage({
                     <Button
                       isIconOnly
                       variant="flat"
-                      className="h-[50px] w-[50px] rounded-xl border border-zinc-300 bg-zinc-100 dark:border-[#27272a] dark:bg-[#18181b]"
+                      className="h-[50px] w-[50px] rounded-xl border border-zinc-800 bg-[#161616] hover:border-yellow-400"
                     >
                       <EllipsisVerticalIcon className="h-6 w-6 text-zinc-500" />
                     </Button>
@@ -474,11 +471,12 @@ function MarketplacePage({
               selectorIcon={<FunnelIcon className="h-4 w-4 text-zinc-400" />}
               classNames={{
                 trigger:
-                  "bg-zinc-100 dark:bg-[#18181b] border border-zinc-300 dark:border-[#27272a] rounded-xl h-[50px]",
+                  "h-[50px] rounded-xl border border-zinc-800 bg-[#161616]",
                 label:
                   "text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1.5",
-                value: "text-zinc-900 dark:text-white font-bold text-sm",
-                popoverContent: "dark:bg-[#18181b] border border-[#27272a]",
+                value: "text-white font-bold text-sm",
+                popoverContent:
+                  "border border-zinc-800 bg-[#161616] text-white",
               }}
               selectedKeys={selectedCategories}
               onChange={(event) => {
@@ -490,7 +488,7 @@ function MarketplacePage({
               }}
               selectionMode="multiple"
             >
-              <SelectSection className="text-light-text dark:text-dark-text">
+              <SelectSection className="text-white">
                 {CATEGORIES.map((category) => (
                   <SelectItem key={category}>{category}</SelectItem>
                 ))}
@@ -505,11 +503,12 @@ function MarketplacePage({
               placeholder="All"
               classNames={{
                 trigger:
-                  "bg-zinc-100 dark:bg-[#18181b] border border-zinc-300 dark:border-[#27272a] rounded-xl h-[50px]",
+                  "h-[50px] rounded-xl border border-zinc-800 bg-[#161616]",
                 label:
                   "text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1.5",
-                value: "text-zinc-900 dark:text-white font-bold text-sm",
-                popoverContent: "dark:bg-[#18181b] border border-[#27272a]",
+                value: "text-white font-bold text-sm",
+                popoverContent:
+                  "border border-zinc-800 bg-[#161616] text-white",
               }}
               value={selectedLocation}
               onChange={(event: any) => {
@@ -519,7 +518,7 @@ function MarketplacePage({
           </div>
 
           <div className="flex h-[50px] flex-col justify-end">
-            <div className="flex h-[50px] items-center rounded-xl border border-zinc-300 bg-zinc-100 px-4 dark:border-[#27272a] dark:bg-[#18181b]">
+            <div className="flex h-[50px] items-center rounded-xl border border-zinc-800 bg-[#161616] px-4">
               <ShopstrSwitch
                 wotFilter={wotFilter}
                 setWotFilter={setWotFilter}
@@ -544,20 +543,20 @@ function MarketplacePage({
           />
         )}
         {selectedSection === "about" && shopAbout && (
-          <div className="text-light-text dark:text-dark-text flex w-full flex-col justify-start bg-transparent px-4 py-8">
+          <div className="flex w-full flex-col justify-start bg-transparent px-4 py-8 text-white">
             <h2 className="pb-2 text-2xl font-bold">About</h2>
             <p className="text-base">{shopAbout}</p>
           </div>
         )}
         {selectedSection === "reviews" && !isFetchingReviews && (
-          <div className="text-light-text dark:text-dark-text flex w-full flex-col justify-start bg-transparent px-4 py-8">
+          <div className="flex w-full flex-col justify-start bg-transparent px-4 py-8 text-white">
             <h2 className="pb-2 text-2xl font-bold">Reviews</h2>
             {merchantQuality !== "" ? (
               <div className="mt-4 p-4 pt-4">
-                <h3 className="text-light-text dark:text-dark-text mb-3 text-lg font-semibold">
+                <h3 className="mb-3 text-lg font-semibold text-white">
                   Merchant Quality
                 </h3>
-                <div className="inline-flex items-center gap-1 rounded-lg border-2 border-black px-2 dark:border-white">
+                <div className="inline-flex items-center gap-1 rounded-lg border-2 border-zinc-800 bg-[#161616] px-2">
                   {merchantReview && merchantReview >= 0.5 ? (
                     <>
                       <FaceSmileIcon
@@ -567,7 +566,7 @@ function MarketplacePage({
                             : "text-green-300"
                         }`}
                       />
-                      <span className="text-light-text dark:text-dark-text mr-2 text-sm whitespace-nowrap">
+                      <span className="mr-2 text-sm whitespace-nowrap text-white">
                         {merchantQuality}
                       </span>
                     </>
@@ -580,7 +579,7 @@ function MarketplacePage({
                             : "text-red-500"
                         }`}
                       />
-                      <span className="text-light-text dark:text-dark-text mr-2 text-sm whitespace-nowrap">
+                      <span className="mr-2 text-sm whitespace-nowrap text-white">
                         {merchantQuality}
                       </span>
                     </>
@@ -589,11 +588,11 @@ function MarketplacePage({
               </div>
             ) : (
               <div className="mt-10 flex flex-grow items-center justify-center py-10">
-                <div className="bg-light-fg dark:bg-dark-fg w-full max-w-xl rounded-lg p-10 text-center shadow-lg">
-                  <p className="text-light-text dark:text-dark-text text-3xl font-semibold">
+                <div className="w-full max-w-xl rounded-lg border border-zinc-800 bg-[#161616] p-10 text-center shadow-lg">
+                  <p className="text-3xl font-semibold text-white">
                     No reviews . . . yet!
                   </p>
-                  <p className="text-light-text dark:text-dark-text mt-4 text-lg">
+                  <p className="mt-4 text-lg text-white">
                     Seems there aren&apos;t any reviews for this shop yet.
                   </p>
                 </div>

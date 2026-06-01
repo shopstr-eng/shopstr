@@ -32,6 +32,13 @@ import {
   SIGNED_EVENT_HEADER,
 } from "@/utils/nostr/request-auth";
 
+const CHAT_FETCH_TIMEOUT_MS = 12000;
+
+const isUserCancelledError = (error: unknown): boolean =>
+  error instanceof Error && error.message === "Action cancelled by user";
+
+const COMMUNITY_FETCH_TIMEOUT_MS = 12000;
+
 interface NipProfile {
   pubkey: string;
   created_at: number;
@@ -39,7 +46,7 @@ interface NipProfile {
   nip05Verified: boolean;
 }
 
-function getUniqueProofs(proofs: Proof[]): Proof[] {
+export function getUniqueProofs(proofs: Proof[]): Proof[] {
   const seenSecrets = new Set<string>();
   return proofs.filter((proof) => {
     if (!seenSecrets.has(proof.secret)) {
@@ -50,8 +57,23 @@ function getUniqueProofs(proofs: Proof[]): Proof[] {
   });
 }
 
-function isHexString(value: string): boolean {
+export function isHexString(value: string): boolean {
   return /^[0-9a-fA-F]{64}$/.test(value);
+}
+
+function parseEventJsonObject<T>(event: Pick<NostrEvent, "content">): T | null {
+  try {
+    const parsed =
+      typeof event.content === "string"
+        ? JSON.parse(event.content)
+        : event.content;
+
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed as T;
+    }
+  } catch {}
+
+  return null;
 }
 
 export const fetchAllPosts = async (
@@ -162,7 +184,7 @@ export const fetchAllPosts = async (
   });
 };
 
-function getReportTargetIdentifiers(event: NostrEvent): {
+export function getReportTargetIdentifiers(event: NostrEvent): {
   referencedPubkeys: string[];
   referencedEventIds: string[];
 } {
@@ -391,6 +413,26 @@ export const fetchShopProfile = async (
         pubkeyShopProfileToFetch.map((pubkey) => [pubkey, null])
       );
 
+      const updateShopProfileFromEvent = (event: NostrEvent): boolean => {
+        const content = parseEventJsonObject<ShopProfile["content"]>(event);
+        if (!content) return false;
+
+        const existingProfile = shopProfile.get(event.pubkey);
+        if (
+          !existingProfile ||
+          event.created_at >= (existingProfile.created_at ?? 0)
+        ) {
+          shopProfile.set(event.pubkey, {
+            pubkey: event.pubkey,
+            content,
+            created_at: event.created_at,
+            event,
+          });
+        }
+
+        return true;
+      };
+
       if (pubkeyShopProfileToFetch.length === 0) {
         editShopContext(new Map(), false);
         resolve({ shopProfileMap: new Map() });
@@ -411,28 +453,8 @@ export const fetchShopProfile = async (
             shopProfilesFromDb.sort(
               (a: NostrEvent, b: NostrEvent) => b.created_at - a.created_at
             );
-            const latestEventsMap: Map<string, NostrEvent> = new Map();
             shopProfilesFromDb.forEach((event: NostrEvent) => {
-              if (!latestEventsMap.has(event.pubkey)) {
-                latestEventsMap.set(event.pubkey, event);
-              }
-            });
-
-            latestEventsMap.forEach((event, pubkey) => {
-              try {
-                const shopProfileSetting = {
-                  pubkey: event.pubkey,
-                  content: JSON.parse(event.content),
-                  created_at: event.created_at,
-                  event: event,
-                };
-                shopProfile.set(pubkey, shopProfileSetting);
-              } catch (error) {
-                console.error(
-                  `Failed to parse shop profile from DB for pubkey: ${pubkey}`,
-                  error
-                );
-              }
+              updateShopProfileFromEvent(event);
             });
 
             if (shopProfile.size > 0) {
@@ -454,35 +476,20 @@ export const fetchShopProfile = async (
       if (shopEvents.length > 0) {
         shopEvents.sort((a, b) => b.created_at - a.created_at);
 
-        const latestEventsMap: Map<string, NostrEvent> = new Map();
         shopEvents.forEach((event) => {
-          if (!latestEventsMap.has(event.pubkey)) {
-            latestEventsMap.set(event.pubkey, event);
-          }
-        });
-
-        latestEventsMap.forEach((event, pubkey) => {
-          try {
-            const shopProfileSetting = {
-              pubkey: event.pubkey,
-              content: JSON.parse(event.content),
-              created_at: event.created_at,
-              event: event,
-            };
-            shopProfile.set(pubkey, shopProfileSetting);
-          } catch (error) {
-            console.error(
-              `Failed to parse shop profile for pubkey: ${pubkey}`,
-              error
-            );
-          }
+          updateShopProfileFromEvent(event);
         });
 
         editShopContext(shopProfile, false);
 
         // Cache shop profiles to database via API
         const validShopEvents = shopEvents.filter(
-          (e) => e.id && e.sig && e.pubkey && e.kind === 30019
+          (e) =>
+            e.id &&
+            e.sig &&
+            e.pubkey &&
+            e.kind === 30019 &&
+            parseEventJsonObject<ShopProfile["content"]>(e)
         );
         if (validShopEvents.length > 0) {
           cacheEventsToDatabase(validShopEvents).catch((error) =>
@@ -571,37 +578,29 @@ export const fetchProfile = async (
         const response = await fetch("/api/db/fetch-profiles");
         if (response.ok) {
           const profilesFromDb = await response.json();
-          const latestDbEvents = new Map<string, NostrEvent>();
+          const dbProfileEvents = profilesFromDb
+            .filter(
+              (event: NostrEvent) =>
+                event.kind === 0 && pubkeyProfilesToFetch.includes(event.pubkey)
+            )
+            .sort(
+              (a: NostrEvent, b: NostrEvent) => b.created_at - a.created_at
+            );
 
-          for (const event of profilesFromDb) {
-            if (
-              event.kind === 0 &&
-              pubkeyProfilesToFetch.includes(event.pubkey)
-            ) {
-              const existing = latestDbEvents.get(event.pubkey);
-              if (!existing || event.created_at > existing.created_at) {
-                latestDbEvents.set(event.pubkey, event);
-              }
-            }
-          }
+          for (const event of dbProfileEvents) {
+            if (dbProfileMap.has(event.pubkey)) continue;
 
-          for (const [pubkey, event] of latestDbEvents.entries()) {
-            try {
-              const content = JSON.parse(event.content);
-              const profile: NipProfile = {
-                pubkey: event.pubkey,
-                created_at: event.created_at,
-                content,
-                nip05Verified: false,
-              };
-              dbProfileMap.set(pubkey, profile);
-              updateProfileIfNewer(profile);
-            } catch (error) {
-              console.error(
-                `Failed to parse profile from DB: ${pubkey}`,
-                error
-              );
-            }
+            const content = parseEventJsonObject<NipProfile["content"]>(event);
+            if (!content) continue;
+
+            const profile: NipProfile = {
+              pubkey: event.pubkey,
+              created_at: event.created_at,
+              content,
+              nip05Verified: false,
+            };
+            dbProfileMap.set(event.pubkey, profile);
+            updateProfileIfNewer(profile);
           }
 
           if (dbProfileMap.size > 0) {
@@ -629,7 +628,11 @@ export const fetchProfile = async (
 
       const fetchedEvents = await nostr.fetch([subParams], {}, relays);
 
-      for (const event of fetchedEvents) {
+      const sortedFetchedEvents = [...fetchedEvents].sort(
+        (a, b) => b.created_at - a.created_at
+      );
+
+      for (const event of sortedFetchedEvents) {
         if (event.kind !== 0) continue;
         const existing = profileMap.get(event.pubkey);
         if (
@@ -637,23 +640,18 @@ export const fetchProfile = async (
           !existing ||
           event.created_at > existing.created_at
         ) {
-          try {
-            const content = JSON.parse(event.content);
-            const profile: NipProfile = {
-              pubkey: event.pubkey,
-              created_at: event.created_at,
-              content,
-              nip05Verified: false,
-            };
-            profileMap.set(event.pubkey, profile);
-            updatedProfiles.set(event.pubkey, profile);
-            updateProfileIfNewer(profile);
-          } catch (error) {
-            console.error(
-              `Failed parse profile for pubkey: ${event.pubkey}, ${event.content}`,
-              error
-            );
-          }
+          const content = parseEventJsonObject<NipProfile["content"]>(event);
+          if (!content) continue;
+
+          const profile: NipProfile = {
+            pubkey: event.pubkey,
+            created_at: event.created_at,
+            content,
+            nip05Verified: false,
+          };
+          profileMap.set(event.pubkey, profile);
+          updatedProfiles.set(event.pubkey, profile);
+          updateProfileIfNewer(profile);
         }
       }
 
@@ -661,7 +659,12 @@ export const fetchProfile = async (
 
       // Cache profiles to database via API (reconstruct from fetched events)
       const validProfileEvents = fetchedEvents.filter(
-        (e) => e.id && e.sig && e.pubkey && e.kind === 0
+        (e) =>
+          e.id &&
+          e.sig &&
+          e.pubkey &&
+          e.kind === 0 &&
+          parseEventJsonObject<NipProfile["content"]>(e)
       );
       if (validProfileEvents.length > 0) {
         cacheEventsToDatabase(validProfileEvents).catch((error) =>
@@ -737,6 +740,11 @@ export const fetchGiftWrappedChatsAndMessages = async (
             );
           }
         } catch (error) {
+          if (isUserCancelledError(error)) {
+            editChatContext(new Map(), false);
+            resolve({ profileSetFromChats: new Set() });
+            return;
+          }
           console.error("Failed to fetch messages from database: ", error);
         }
       }
@@ -756,7 +764,7 @@ export const fetchGiftWrappedChatsAndMessages = async (
           }
         };
 
-        const fetchedEvents = await nostr.fetch(
+        const relayMessageFetch = nostr.fetch(
           [
             {
               kinds: [1059],
@@ -766,6 +774,19 @@ export const fetchGiftWrappedChatsAndMessages = async (
           {},
           relays
         );
+        const fetchedEvents = await Promise.race([
+          relayMessageFetch,
+          new Promise<NostrEvent[]>((resolve) => {
+            setTimeout(() => resolve([]), CHAT_FETCH_TIMEOUT_MS);
+          }),
+        ]).catch((error) => {
+          console.warn(
+            "Failed to fetch chat messages:",
+            error instanceof Error ? error.message : error
+          );
+          return [] as NostrEvent[];
+        });
+        relayMessageFetch.catch(() => undefined);
 
         for (const event of fetchedEvents) {
           let messageEvent;
@@ -868,6 +889,11 @@ export const fetchGiftWrappedChatsAndMessages = async (
 
         resolve({ profileSetFromChats: new Set(chatsMap.keys()) });
       } catch (error) {
+        if (isUserCancelledError(error)) {
+          editChatContext(new Map(), false);
+          resolve({ profileSetFromChats: new Set() });
+          return;
+        }
         reject(error);
       }
     }
@@ -1892,8 +1918,16 @@ export const fetchCashuWallet = async (
         cashuProofs: cashuProofs,
       });
     } catch (error) {
-      console.error("Fatal error in fetchCashuWallet:", error);
       editCashuWalletContext([], [], [], false);
+      if (isUserCancelledError(error)) {
+        resolve({
+          proofEvents: [],
+          cashuMints: [],
+          cashuProofs: [],
+        });
+        return;
+      }
+      console.error("Fatal error in fetchCashuWallet:", error);
       reject(error);
     }
   });
@@ -1935,7 +1969,12 @@ export const fetchAllCommunities = async (
         "#t": ["shopstr"],
       };
 
-      const fetchedEvents = await nostr.fetch([filter], {}, relays);
+      const fetchedEvents = await Promise.race([
+        nostr.fetch([filter], {}, relays),
+        new Promise<NostrEvent[]>((resolve) =>
+          setTimeout(() => resolve([]), COMMUNITY_FETCH_TIMEOUT_MS)
+        ),
+      ]);
 
       const communityMap = new Map(dbCommunityMap);
 

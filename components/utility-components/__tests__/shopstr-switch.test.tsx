@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import ShopstrSwitch from "../shopstr-switch";
 
@@ -54,12 +54,14 @@ describe("ShopstrSwitch", () => {
     expect(mockRouterPush).toHaveBeenCalledWith("/settings/preferences");
   });
 
-  it('should have the "secondary" color in light mode', () => {
+  it('should have the "secondary" color in light mode', async () => {
     render(<ShopstrSwitch wotFilter={false} setWotFilter={mockSetWotFilter} />);
 
     const switchControl = screen.getByRole("switch");
 
-    expect(switchControl).toHaveAttribute("data-color", "secondary");
+    await waitFor(() =>
+      expect(switchControl).toHaveAttribute("data-color", "secondary")
+    );
   });
 
   it('should have the "warning" color in dark mode', () => {

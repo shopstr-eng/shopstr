@@ -6,7 +6,9 @@ import {
   GlobeAltIcon,
   QuestionMarkCircleIcon,
   ArrowLeftIcon,
+  ArrowTopRightOnSquareIcon,
 } from "@heroicons/react/24/outline";
+import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
 
 const structuredData = {
   "@context": "https://schema.org",
@@ -71,29 +73,31 @@ export default function Contact() {
         />
       </Head>
 
-      <div className="bg-light-bg dark:bg-dark-bg min-h-screen">
-        <div className="container mx-auto max-w-4xl px-4 pt-28 pb-24">
-          <div className="mb-6 flex justify-end">
-            <Link href="/" passHref legacyBehavior>
-              <a className="border-shopstr-purple/30 text-shopstr-purple hover:bg-shopstr-purple/10 dark:border-shopstr-yellow/30 dark:text-shopstr-yellow dark:hover:bg-shopstr-yellow/10 inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors">
-                <ArrowLeftIcon className="h-4 w-4" />
-                Back to Home
-              </a>
+      <div className="relative min-h-screen overflow-hidden bg-[#111] pt-24 text-white selection:bg-yellow-400 selection:text-black">
+        <div className="pointer-events-none absolute inset-0 z-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] [mask-image:radial-gradient(ellipse_70%_55%_at_50%_0%,#000_65%,transparent_100%)] bg-[size:24px_24px]" />
+        <div className="relative z-10 mx-auto max-w-5xl px-4 pb-24">
+          <div className="mb-8 flex justify-end">
+            <Link
+              href="/"
+              className="inline-flex items-center gap-2 rounded-full border border-zinc-800 bg-[#161616] px-4 py-2 text-xs font-black tracking-widest text-zinc-300 uppercase transition-colors hover:border-yellow-400 hover:text-yellow-300"
+            >
+              <ArrowLeftIcon className="h-4 w-4" />
+              Back to Home
             </Link>
           </div>
-          <h1 className="text-light-text dark:text-dark-text mb-6 text-center text-4xl font-bold md:text-5xl">
-            Contact{" "}
-            <span className="text-shopstr-purple dark:text-shopstr-yellow">
-              Shopstr
-            </span>
-          </h1>
-          <p className="text-light-text/80 dark:text-dark-text/80 mx-auto mb-16 max-w-2xl text-center text-xl leading-relaxed">
-            Shopstr is a decentralized, open-source project. There is no central
-            office — all communication happens on open protocols like Nostr and
-            GitHub.
-          </p>
 
-          <div className="grid gap-6 sm:grid-cols-2">
+          <div className="mx-auto mb-14 max-w-3xl text-center">
+            <h1 className="text-5xl font-black tracking-tight text-white uppercase md:text-7xl">
+              Contact Shopstr
+            </h1>
+            <p className="mx-auto mt-5 max-w-2xl text-lg leading-relaxed text-zinc-400">
+              Shopstr is a decentralized, open-source project. There is no
+              central office. The best conversations happen through open
+              protocols like Nostr and GitHub.
+            </p>
+          </div>
+
+          <div className="grid gap-5 md:grid-cols-3">
             {channels.map(
               ({
                 icon: Icon,
@@ -106,82 +110,66 @@ export default function Contact() {
               }) => (
                 <div
                   key={title}
-                  className="bg-light-fg dark:bg-dark-fg flex flex-col rounded-2xl p-7 shadow-md"
+                  className="flex min-h-80 flex-col rounded-xl border border-zinc-800 bg-[#161616] p-6 shadow-2xl shadow-black/20 transition-all hover:-translate-y-1 hover:border-yellow-400/60"
                 >
-                  <div className="mb-5 flex items-start gap-4">
-                    <div className="bg-shopstr-purple/10 dark:bg-shopstr-yellow/10 rounded-xl p-3">
-                      <Icon className="text-shopstr-purple dark:text-shopstr-yellow h-7 w-7" />
-                    </div>
-                    <div>
-                      <h2 className="text-light-text dark:text-dark-text text-xl font-bold">
-                        {title}
-                      </h2>
-                      <p className="text-light-text/60 dark:text-dark-text/60 text-sm">
-                        {handle}
-                      </p>
-                    </div>
+                  <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-lg border border-yellow-400/30 bg-yellow-400/10">
+                    <Icon className="h-6 w-6 text-yellow-300" />
                   </div>
-                  <p className="text-light-text/80 dark:text-dark-text/80 mb-6 flex-1 leading-relaxed">
+                  <h2 className="text-2xl font-black tracking-tight text-white uppercase">
+                    {title}
+                  </h2>
+                  <p className="mt-1 text-xs font-bold tracking-widest text-zinc-500 uppercase">
+                    {handle}
+                  </p>
+                  <p className="mt-5 flex-1 text-sm leading-6 text-zinc-400">
                     {description}
                   </p>
-                  {external ? (
-                    <Link href={href} passHref legacyBehavior>
-                      <a
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="bg-shopstr-purple dark:bg-shopstr-yellow inline-flex w-fit items-center gap-2 rounded-lg px-5 py-2.5 font-semibold text-white transition-opacity hover:opacity-90 dark:text-black"
-                      >
-                        {cta}
-                      </a>
-                    </Link>
-                  ) : (
-                    <Link
-                      href={href}
-                      className="bg-shopstr-purple dark:bg-shopstr-yellow inline-flex w-fit items-center gap-2 rounded-lg px-5 py-2.5 font-semibold text-white transition-opacity hover:opacity-90 dark:text-black"
-                    >
-                      {cta}
-                    </Link>
-                  )}
+                  <Link
+                    href={href}
+                    target={external ? "_blank" : undefined}
+                    rel={external ? "noopener noreferrer" : undefined}
+                    className={`${NEO_BTN} mt-6 inline-flex h-11 w-fit items-center gap-2 px-5 text-xs`}
+                  >
+                    {cta}
+                    {external && (
+                      <ArrowTopRightOnSquareIcon className="h-4 w-4" />
+                    )}
+                  </Link>
                 </div>
               )
             )}
           </div>
 
-          {/* Response time */}
-          <div className="bg-light-fg dark:bg-dark-fg mt-16 rounded-2xl p-8">
-            <h2 className="text-light-text dark:text-dark-text mb-4 text-xl font-bold">
+          <div className="mt-16 rounded-xl border border-zinc-800 bg-[#161616] p-6 md:p-8">
+            <h2 className="text-2xl font-black tracking-tight text-white uppercase">
               What to expect
             </h2>
-            <ul className="text-light-text/80 dark:text-dark-text/80 space-y-3">
-              <li className="flex items-start gap-2">
-                <span className="text-shopstr-purple dark:text-shopstr-yellow mt-1">
-                  →
-                </span>
-                <span>
-                  <strong>GitHub issues</strong> — typically reviewed within a
-                  few days. Bug reports with reproduction steps are prioritized.
-                </span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-shopstr-purple dark:text-shopstr-yellow mt-1">
-                  →
-                </span>
-                <span>
-                  <strong>Nostr messages</strong> — best-effort responses;
-                  follow the official account to see announcements first.
-                </span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-shopstr-purple dark:text-shopstr-yellow mt-1">
-                  →
-                </span>
-                <span>
-                  <strong>Feature requests</strong> — open a GitHub discussion
-                  and the community can upvote and contribute to the
-                  conversation.
-                </span>
-              </li>
-            </ul>
+            <div className="mt-5 grid gap-4 md:grid-cols-3">
+              {[
+                [
+                  "GitHub issues",
+                  "Typically reviewed within a few days. Bug reports with reproduction steps are prioritized.",
+                ],
+                [
+                  "Nostr messages",
+                  "Best-effort responses; follow the official account to see announcements first.",
+                ],
+                [
+                  "Feature requests",
+                  "Open a GitHub discussion so the community can upvote and contribute.",
+                ],
+              ].map(([title, body]) => (
+                <div
+                  key={title}
+                  className="rounded-lg border border-zinc-800 bg-[#111] p-4"
+                >
+                  <p className="font-black text-yellow-300 uppercase">
+                    {title}
+                  </p>
+                  <p className="mt-2 text-sm leading-6 text-zinc-400">{body}</p>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>

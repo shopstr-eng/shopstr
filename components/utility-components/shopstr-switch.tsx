@@ -1,6 +1,7 @@
 import { Switch } from "@heroui/react";
 import { useRouter } from "next/router";
 import { useTheme } from "next-themes";
+import { useEffect, useState } from "react";
 
 const ShopstrSwitch = ({
   wotFilter,
@@ -10,7 +11,16 @@ const ShopstrSwitch = ({
   setWotFilter: (value: boolean) => void;
 }) => {
   const router = useRouter();
-  const { theme } = useTheme();
+  const { resolvedTheme, theme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const activeTheme = resolvedTheme ?? theme;
+  const switchColor =
+    mounted && activeTheme !== "dark" ? "secondary" : "warning";
 
   const handleTrustClick = () => {
     router.push("/settings/preferences");
@@ -20,7 +30,7 @@ const ShopstrSwitch = ({
     <div className="flex items-center gap-3">
       <Switch
         size={"lg"}
-        color={theme === "dark" ? "warning" : "secondary"}
+        color={switchColor}
         isSelected={wotFilter}
         onValueChange={setWotFilter}
       />

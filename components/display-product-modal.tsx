@@ -106,22 +106,21 @@ export default function DisplayProductModal({
         isOpen={showModal}
         onClose={handleModalToggle}
         classNames={{
-          base: "bg-white dark:bg-[#18181b] border border-zinc-200 dark:border-[#27272a] shadow-xl",
+          base: "border border-zinc-800 bg-[#161616] shadow-xl",
           body: "py-6",
           backdrop: "bg-black/80 backdrop-blur-sm",
-          header: "border-b border-zinc-200 dark:border-[#27272a] py-4",
-          footer: "border-t border-zinc-200 dark:border-[#27272a] py-4",
-          closeButton:
-            "hover:bg-zinc-100 dark:hover:bg-zinc-800 active:bg-zinc-200 dark:active:bg-zinc-700 text-zinc-500",
+          header: "border-b border-zinc-800 py-4",
+          footer: "border-t border-zinc-800 py-4",
+          closeButton: "text-zinc-400 hover:bg-white/10 active:bg-white/20",
         }}
         isDismissable={false}
         scrollBehavior={"outside"}
         size="2xl"
       >
         <ModalContent>
-          <ModalHeader className="text-light-text dark:text-dark-text flex flex-col">
+          <ModalHeader className="flex flex-col text-white">
             <div className="flex flex-col justify-between gap-2 md:flex-row md:items-center">
-              <h2 className="text-light-text dark:text-dark-text text-xl font-black tracking-tighter uppercase md:text-2xl">
+              <h2 className="text-xl font-black tracking-tighter text-white uppercase md:text-2xl">
                 {productData.title}
                 {isExpired && (
                   <Chip
@@ -144,19 +143,19 @@ export default function DisplayProductModal({
                   </p>
                 )}
                 {productData.status === "active" && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900 dark:text-green-300">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-green-100 bg-green-400/10 px-2 py-0.5 text-xs font-medium text-green-300 text-green-700">
                     Active
                   </span>
                 )}
                 {productData.status === "sold" && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900 dark:text-red-300">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-red-100 bg-red-400/10 px-2 py-0.5 text-xs font-medium text-red-300 text-red-700">
                     Sold
                   </span>
                 )}
               </div>
             </div>
           </ModalHeader>
-          <ModalBody className="text-light-text dark:text-dark-text">
+          <ModalBody className="text-white">
             {productData.images ? (
               <ImageCarousel
                 images={productData.images}
@@ -201,10 +200,7 @@ export default function DisplayProductModal({
                 <div className="flex flex-wrap items-center">
                   {productData.sizes && productData.sizes.length > 0
                     ? productData.sizes.map((size: string) => (
-                        <span
-                          key={size}
-                          className="text-light-text dark:text-dark-text mr-4 mb-2"
-                        >
+                        <span key={size} className="mr-4 mb-2 text-white">
                           {size}: {productData.sizeQuantities?.get(size) || 0}
                         </span>
                       ))
@@ -218,10 +214,7 @@ export default function DisplayProductModal({
                 <div className="flex flex-wrap items-center">
                   {productData.volumes && productData.volumes.length > 0
                     ? productData.volumes.map((volume: string) => (
-                        <span
-                          key={volume}
-                          className="text-light-text dark:text-dark-text mr-4 mb-2"
-                        >
+                        <span key={volume} className="mr-4 mb-2 text-white">
                           {volume}: {productData.volumePrices?.get(volume) || 0}{" "}
                           {productData.currency}
                         </span>
@@ -232,7 +225,7 @@ export default function DisplayProductModal({
             ) : null}
             {productData.condition && (
               <>
-                <div className="text-light-text dark:text-dark-text text-left text-xs">
+                <div className="text-left text-xs text-white">
                   <span className="text-xl font-semibold">Condition: </span>
                   <span className="text-xl">{productData.condition}</span>
                 </div>
@@ -240,7 +233,7 @@ export default function DisplayProductModal({
             )}
             {productData.quantity && (
               <>
-                <div className="text-light-text dark:text-dark-text text-left text-xs">
+                <div className="text-left text-xs text-white">
                   <span className="text-xl font-semibold">Quantity: </span>
                   <span className="text-xl">{productData.quantity}</span>
                 </div>
@@ -248,7 +241,7 @@ export default function DisplayProductModal({
             )}
             {productData.restrictions && (
               <>
-                <div className="text-light-text dark:text-dark-text text-left text-xs">
+                <div className="text-left text-xs text-white">
                   <span className="text-xl font-semibold">Restrictions: </span>
                   <span className="text-xl text-red-500">
                     {productData.restrictions}
@@ -258,7 +251,7 @@ export default function DisplayProductModal({
             )}
             {productData.required && (
               <>
-                <div className="text-light-text dark:text-dark-text text-left text-xs">
+                <div className="text-left text-xs text-white">
                   <span className="text-xl font-semibold">
                     Required Customer Information:{" "}
                   </span>

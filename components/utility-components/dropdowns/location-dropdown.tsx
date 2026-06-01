@@ -25,7 +25,7 @@ export const locationAvatar = (location: string) => {
 const LocationDropdown = ({ value, ...props }: { [x: string]: any }) => {
   const locationOptions = useMemo(() => {
     const headingClasses =
-      "flex w-full sticky top-1 z-20 py-1.5 px-2 dark:bg-zinc-900 bg-white shadow-small rounded-small";
+      "sticky top-1 z-20 flex w-full rounded-small border border-zinc-800 bg-[#111] px-2 py-1.5 shadow-small";
 
     const countryOptions = (
       <SelectSection
@@ -34,7 +34,7 @@ const LocationDropdown = ({ value, ...props }: { [x: string]: any }) => {
         classNames={{
           heading: headingClasses,
         }}
-        className="text-light-text dark:text-dark-text"
+        className="text-white"
       >
         {locations.countries.map((country) => {
           return (
@@ -62,7 +62,7 @@ const LocationDropdown = ({ value, ...props }: { [x: string]: any }) => {
         classNames={{
           heading: headingClasses,
         }}
-        className="text-light-text dark:text-dark-text"
+        className="text-white"
       >
         {locations.states.map((state) => {
           return (
@@ -90,7 +90,7 @@ const LocationDropdown = ({ value, ...props }: { [x: string]: any }) => {
         classNames={{
           heading: headingClasses,
         }}
-        className="text-light-text dark:text-dark-text"
+        className="text-white"
       >
         <SelectItem key={"Worldwide"}>Worldwide</SelectItem>
         <SelectItem key={"US & Canada"}>US &amp; Canada</SelectItem>
@@ -105,7 +105,7 @@ const LocationDropdown = ({ value, ...props }: { [x: string]: any }) => {
     <Select
       startContent={locationAvatar(value)}
       {...props}
-      className={`text-light-text dark:text-dark-text ${props.className || ""}`}
+      className={`text-white ${props.className || ""}`}
       classNames={{
         trigger: "h-12",
         value: "text-base", // Prevents iOS auto-zoom on focus

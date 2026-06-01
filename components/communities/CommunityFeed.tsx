@@ -289,7 +289,7 @@ const CommunityFeed: React.FC<CommunityFeedProps> = ({ community }) => {
             classNames={{
               inputWrapper:
                 "bg-[#1a1a1a] border-white/10 data-[hover=true]:bg-[#222] group-data-[focus=true]:bg-[#222]",
-              input: "text-white placeholder:text-gray-500",
+              input: "text-white placeholder:text-zinc-500",
             }}
           />
           <div className="mt-4 flex justify-end">
@@ -331,7 +331,7 @@ const CommunityFeed: React.FC<CommunityFeedProps> = ({ community }) => {
                     <Button
                       size="sm"
                       variant="light"
-                      className="text-gray-400 hover:text-white"
+                      className="text-zinc-400 hover:text-white"
                       onClick={() =>
                         setReplyingTo(replyingTo === post.id ? null : post.id)
                       }
@@ -425,7 +425,7 @@ const CommunityFeed: React.FC<CommunityFeedProps> = ({ community }) => {
                             <Button
                               size="sm"
                               variant="light"
-                              className="text-gray-400 hover:text-white"
+                              className="text-zinc-400 hover:text-white"
                               onClick={() =>
                                 setReplyingTo(
                                   replyingTo === reply.id ? null : reply.id
@@ -484,7 +484,7 @@ const CommunityFeed: React.FC<CommunityFeedProps> = ({ community }) => {
         </div>
       )}
       {!isLoading && topLevelPosts.length === 0 && (
-        <div className="text-light-text/80 dark:text-dark-text/80 mt-10 text-center">
+        <div className="mt-10 text-center text-zinc-400">
           <p>No announcements yet. Check back soon!</p>
         </div>
       )}

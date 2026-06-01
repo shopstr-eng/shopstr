@@ -224,13 +224,13 @@ const PayButton = () => {
           backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
           header: "border-b-[1px] border-[#292f46]",
           footer: "border-t-[1px] border-[#292f46]",
-          closeButton: "hover:bg-black/5 active:bg-white/10",
+          closeButton: "hover:bg-white/10 active:bg-white/20",
         }}
         scrollBehavior={"outside"}
         size="md"
       >
         <ModalContent>
-          <ModalHeader className="text-light-text dark:text-dark-text flex flex-col gap-1">
+          <ModalHeader className="flex flex-col gap-1 text-white">
             Pay Lightning Invoice
           </ModalHeader>
           <form onSubmit={handlePaySubmit(onPaySubmit)}>
@@ -258,7 +258,7 @@ const PayButton = () => {
                   return (
                     <>
                       <Textarea
-                        className="text-light-text dark:text-dark-text"
+                        className="text-white"
                         classNames={{ input: "text-base" }} // Prevents iOS auto-zoom
                         autoFocus
                         variant="bordered"
@@ -280,7 +280,7 @@ const PayButton = () => {
                         value={value}
                       />
                       {feeReserveAmount && (
-                        <div className="text-light-text dark:text-dark-text mt-2 text-left">
+                        <div className="mt-2 text-left text-white">
                           Fee Reserve: {feeReserveAmount}
                         </div>
                       )}
@@ -290,8 +290,8 @@ const PayButton = () => {
               />
               {signer instanceof NostrNIP46Signer && (
                 <div className="mx-4 my-2 flex items-center justify-center text-center">
-                  <InformationCircleIcon className="text-light-text dark:text-dark-text h-6 w-6" />
-                  <p className="text-light-text dark:text-dark-text ml-2 text-xs">
+                  <InformationCircleIcon className="h-6 w-6 text-white" />
+                  <p className="ml-2 text-xs text-white">
                     If the invoice payment is taking a while to be confirmed,
                     make sure to check your bunker application to approve the
                     transaction events.
@@ -311,7 +311,7 @@ const PayButton = () => {
                     backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
                     header: "border-b-[1px] border-[#292f46]",
                     footer: "border-t-[1px] border-[#292f46]",
-                    closeButton: "hover:bg-black/5 active:bg-white/10",
+                    closeButton: "hover:bg-white/10 active:bg-white/20",
                   }}
                   isDismissable={true}
                   scrollBehavior={"normal"}
@@ -319,11 +319,11 @@ const PayButton = () => {
                   size="md"
                 >
                   <ModalContent>
-                    <ModalHeader className="text-light-text dark:text-dark-text flex items-center justify-center">
+                    <ModalHeader className="flex items-center justify-center text-white">
                       <XCircleIcon className="h-6 w-6 text-red-500" />
                       <div className="ml-2">Payment failed!</div>
                     </ModalHeader>
-                    <ModalBody className="text-light-text dark:text-dark-text flex flex-col overflow-hidden">
+                    <ModalBody className="flex flex-col overflow-hidden text-white">
                       <div className="flex items-center justify-center">
                         No routes could be found, or you don&apos;t have enough
                         funds. Please try again with a new invoice, or change
@@ -346,7 +346,7 @@ const PayButton = () => {
                     backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
                     header: "border-b-[1px] border-[#292f46]",
                     footer: "border-t-[1px] border-[#292f46]",
-                    closeButton: "hover:bg-black/5 active:bg-white/10",
+                    closeButton: "hover:bg-white/10 active:bg-white/20",
                   }}
                   isDismissable={true}
                   scrollBehavior={"normal"}
@@ -354,11 +354,11 @@ const PayButton = () => {
                   size="md"
                 >
                   <ModalContent>
-                    <ModalHeader className="text-light-text dark:text-dark-text flex items-center justify-center">
+                    <ModalHeader className="flex items-center justify-center text-white">
                       <CheckCircleIcon className="h-6 w-6 text-green-500" />
                       <div className="ml-2">Invoice successfully paid!</div>
                     </ModalHeader>
-                    <ModalBody className="text-light-text dark:text-dark-text flex flex-col overflow-hidden">
+                    <ModalBody className="flex flex-col overflow-hidden text-white">
                       <div className="flex items-center justify-center">
                         Check your external Lightning wallet for your sats.
                       </div>

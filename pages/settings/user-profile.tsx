@@ -26,6 +26,7 @@ import { createNostrProfileEvent } from "@/utils/nostr/nostr-helper-functions";
 import { FileUploaderButton } from "@/components/utility-components/file-uploader";
 import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
 import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
+import ProtectedRoute from "@/components/utility-components/protected-route";
 
 interface UserProfileFormData {
   banner: string;
@@ -90,19 +91,7 @@ const UserProfilePage = () => {
       reset(profile.content);
     }
     setIsFetchingProfile(false);
-
-    if (signer instanceof NostrNSecSigner) {
-      const nsecSigner = signer as NostrNSecSigner;
-      nsecSigner._getNSec().then(
-        (nsec) => {
-          setUserNSec(nsec);
-        },
-        (err: unknown) => {
-          console.error(err);
-        }
-      );
-    }
-  }, [profileContext, userPubkey, signer, reset]);
+  }, [profileContext, userPubkey, reset]);
 
   const onSubmit: SubmitHandler<UserProfileFormData> = async (data) => {
     if (!userPubkey) throw new Error("pubkey is undefined");
@@ -117,7 +106,7 @@ const UserProfilePage = () => {
   };
 
   return (
-    <>
+    <ProtectedRoute>
       <div className="relative flex min-h-screen flex-col bg-[#111] pt-24 selection:bg-yellow-400 selection:text-black md:pb-20">
         {/* Background Grid Pattern */}
         <div className="pointer-events-none absolute inset-0 z-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] bg-[size:24px_24px]"></div>
@@ -243,7 +232,16 @@ const UserProfilePage = () => {
                   ) : (
                     <EyeIcon
                       className="h-6 w-6 flex-shrink-0 px-2 text-zinc-500 hover:text-white"
-                      onClick={() => {
+                      onClick={async () => {
+                        if (!userNSec && signer instanceof NostrNSecSigner) {
+                          try {
+                            const nsec = await signer._getNSec();
+                            setUserNSec(nsec);
+                          } catch (err) {
+                            console.error(err);
+                            return;
+                          }
+                        }
                         setViewState("shown");
                       }}
                     />
@@ -646,7 +644,7 @@ const UserProfilePage = () => {
           )}
         </div>
       </div>
-    </>
+    </ProtectedRoute>
   );
 };
 

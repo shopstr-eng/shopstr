@@ -33,16 +33,16 @@ export default function WeightSelector({
         }
       }}
       isRequired={isRequired}
-      className="text-light-text dark:text-dark-text mb-4 w-full md:w-1/2"
+      className="mb-4 w-full text-white md:w-1/2"
     >
-      <SelectSection className="text-light-text dark:text-dark-text">
+      <SelectSection className="text-white">
         {weights.map((weight) => {
           const price = weightPrices.get(weight) || 0;
           return (
             <SelectItem
               key={weight}
               textValue={`${weight} - ${price} ${currency}`}
-              className="text-light-text dark:text-dark-text"
+              className="text-white"
             >
               {weight} - {price} {currency}
             </SelectItem>

@@ -14,7 +14,6 @@ import {
 } from "@/utils/nostr/signers/nostr-signer";
 import { NostrNSecSigner } from "@/utils/nostr/signers/nostr-nsec-signer";
 import { NostrNIP07Signer } from "@/utils/nostr/signers/nostr-nip07-signer";
-import { newPromiseWithTimeout } from "../timeout";
 
 export type NostrRelay = {
   url: string;
@@ -172,31 +171,45 @@ export class NostrManager {
     params?: SubscribeManyParams,
     relayUrls?: string[]
   ): Promise<NostrEvent[]> {
-    return await newPromiseWithTimeout(async (resolve, _reject) => {
-      if (!params) {
-        params = {};
-      }
+    if (!params) {
+      params = {};
+    }
 
-      if (!params.onevent) {
-        params.onevent = () => {};
-      }
+    if (!params.onevent) {
+      params.onevent = () => {};
+    }
 
-      if (!params.oneose) {
-        params.oneose = () => {};
-      }
+    if (!params.oneose) {
+      params.oneose = () => {};
+    }
 
-      const onEvent = params.onevent;
-      const onEose = params.oneose;
-      const fetchedEvents: Array<NostrEvent> = [];
-      let sub: NostrSub | undefined;
-      let didCloseSub = false;
-      let didResolve = false;
+    const onEvent = params.onevent;
+    const onEose = params.oneose;
+    const fetchedEvents: Array<NostrEvent> = [];
+    let sub: NostrSub | undefined;
+    let didCloseSub = false;
+    let didResolve = false;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
-      const closeSubIfNeeded = async () => {
-        if (!sub || didCloseSub) return;
-        didCloseSub = true;
-        await sub.close();
+    const closeSubIfNeeded = async () => {
+      if (!sub || didCloseSub) return;
+      didCloseSub = true;
+      await sub.close();
+    };
+
+    return await new Promise<NostrEvent[]>((resolve, reject) => {
+      const resolveOnce = () => {
+        if (didResolve) return;
+        didResolve = true;
+        if (timeoutId) clearTimeout(timeoutId);
+        closeSubIfNeeded().catch(console.error);
+        resolve(fetchedEvents);
       };
+
+      timeoutId = setTimeout(
+        resolveOnce,
+        this.params.connectionTimeout ?? 60000
+      );
 
       params.onevent = (event: NostrEvent) => {
         fetchedEvents.push(event);
@@ -204,15 +217,27 @@ export class NostrManager {
       };
 
       params.oneose = () => {
-        closeSubIfNeeded().catch(console.error);
-        if (!didResolve) {
-          didResolve = true;
-          resolve(fetchedEvents);
-        }
+        resolveOnce();
         return onEose!();
       };
 
-      sub = await this.subscribe(filters, params, relayUrls);
+      this.subscribe(filters, params, relayUrls)
+        .then((createdSub) => {
+          if (didResolve) {
+            createdSub.close().catch(console.error);
+            return;
+          }
+          sub = createdSub;
+        })
+        .catch((error) => {
+          if (timeoutId) clearTimeout(timeoutId);
+          if (didResolve) {
+            console.error(error);
+            return;
+          }
+          didResolve = true;
+          reject(error);
+        });
     });
   }
 

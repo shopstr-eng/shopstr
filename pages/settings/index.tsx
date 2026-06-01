@@ -10,6 +10,7 @@ import {
 import { useRouter } from "next/router";
 import { LogOut } from "@/utils/nostr/nostr-helper-functions";
 import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs";
+import ProtectedRoute from "@/components/utility-components/protected-route";
 
 const SettingsPage = () => {
   const router = useRouter();
@@ -59,55 +60,60 @@ const SettingsPage = () => {
       description: "Connect your NIP-47 Nostr Wallet",
       title: "Nostr Wallet Connect",
       icon: <BanknotesIcon className={startIconClassnames} />,
-      route: "/settings/nwc",
+      route: "/settings/nostr-wallet-connect",
     },
   ];
 
   return (
-    <div className="flex h-full min-h-screen flex-col bg-[#111] pt-24">
-      <div className="bg mx-auto h-screen w-full lg:w-1/2 lg:pl-4">
-        <SettingsBreadCrumbs />
-        <Listbox variant="flat" aria-label="Listbox menu with sections">
-          <ListboxSection
-            title="Account"
-            showDivider
-            classNames={listBoxSectionClassnames}
-          >
-            {menuItems.map((item) => (
-              <ListboxItem
-                key={item.key}
-                description={item.description}
-                classNames={listBoxClassnames}
-                startContent={item.icon}
-                onClick={() => router.push(item.route)}
-              >
-                {item.title}
-              </ListboxItem>
-            ))}
-          </ListboxSection>
-          <ListboxSection title="Log out" classNames={listBoxSectionClassnames}>
-            <ListboxItem
-              key="delete"
-              description="Log out of Shopstr"
-              classNames={{
-                ...listBoxClassnames,
-                base: "group rounded-xl border border-zinc-800 bg-[#161616] p-3 mb-3 hover:bg-[#161616] hover:border-red-500/50 transition-all cursor-pointer",
-                title: "text-red-500 font-bold uppercase tracking-wide",
-              }}
-              startContent={
-                <ArrowRightStartOnRectangleIcon className="h-6 w-6 text-red-500" />
-              }
-              onClick={() => {
-                LogOut();
-                router.push("/marketplace");
-              }}
+    <ProtectedRoute>
+      <div className="flex h-full min-h-screen flex-col bg-[#111] pt-24">
+        <div className="bg mx-auto h-screen w-full lg:w-1/2 lg:pl-4">
+          <SettingsBreadCrumbs />
+          <Listbox variant="flat" aria-label="Listbox menu with sections">
+            <ListboxSection
+              title="Account"
+              showDivider
+              classNames={listBoxSectionClassnames}
             >
-              Log out
-            </ListboxItem>
-          </ListboxSection>
-        </Listbox>
+              {menuItems.map((item) => (
+                <ListboxItem
+                  key={item.key}
+                  description={item.description}
+                  classNames={listBoxClassnames}
+                  startContent={item.icon}
+                  onClick={() => router.push(item.route)}
+                >
+                  {item.title}
+                </ListboxItem>
+              ))}
+            </ListboxSection>
+            <ListboxSection
+              title="Log out"
+              classNames={listBoxSectionClassnames}
+            >
+              <ListboxItem
+                key="delete"
+                description="Log out of Shopstr"
+                classNames={{
+                  ...listBoxClassnames,
+                  base: "group rounded-xl border border-zinc-800 bg-[#161616] p-3 mb-3 hover:bg-[#161616] hover:border-red-500/50 transition-all cursor-pointer",
+                  title: "text-red-500 font-bold uppercase tracking-wide",
+                }}
+                startContent={
+                  <ArrowRightStartOnRectangleIcon className="h-6 w-6 text-red-500" />
+                }
+                onClick={() => {
+                  LogOut();
+                  router.push("/marketplace");
+                }}
+              >
+                Log out
+              </ListboxItem>
+            </ListboxSection>
+          </Listbox>
+        </div>
       </div>
-    </div>
+    </ProtectedRoute>
   );
 };
 

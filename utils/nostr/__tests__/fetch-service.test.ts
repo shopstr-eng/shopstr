@@ -226,6 +226,91 @@ describe("fetchProfile", () => {
   });
 });
 
+describe("fetchShopProfile", () => {
+  const pubkey =
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+  beforeEach(() => {
+    jest.resetModules();
+    jest.clearAllMocks();
+  });
+
+  it("skips malformed shop profile events without surfacing runtime errors", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase,
+    }));
+
+    const { fetchShopProfile } = await import("../fetch-service");
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [],
+    }) as typeof global.fetch;
+
+    const validContent = {
+      name: "Valid Shop",
+      about: "Still works",
+      ui: {
+        picture: "",
+        banner: "",
+        theme: "",
+        darkMode: true,
+      },
+      merchants: [],
+    };
+    const invalidEvent = {
+      id: "invalid-shop-profile",
+      pubkey,
+      created_at: 300,
+      kind: 30019,
+      tags: [],
+      content: "Codex Five",
+      sig: "sig-invalid-shop-profile",
+    };
+    const validEvent = {
+      id: "valid-shop-profile",
+      pubkey,
+      created_at: 200,
+      kind: 30019,
+      tags: [],
+      content: JSON.stringify(validContent),
+      sig: "sig-valid-shop-profile",
+    };
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([invalidEvent, validEvent]),
+    } as any;
+    const editShopContext = jest.fn();
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+
+    try {
+      const result = await fetchShopProfile(
+        nostr,
+        ["wss://relay.example"],
+        [pubkey],
+        editShopContext
+      );
+
+      expect(result.shopProfileMap.get(pubkey)).toMatchObject({
+        pubkey,
+        created_at: 200,
+        content: validContent,
+      });
+      expect(editShopContext).toHaveBeenLastCalledWith(
+        result.shopProfileMap,
+        false
+      );
+      expect(cacheEventsToDatabase).toHaveBeenCalledWith([validEvent]);
+      expect(consoleErrorSpy).not.toHaveBeenCalled();
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
+  });
+});
+
 describe("fetchAllFollows", () => {
   const userPubkey =
     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
@@ -481,6 +566,44 @@ describe("fetchGiftWrappedChatsAndMessages", () => {
     expect(cacheEventsToDatabase).not.toHaveBeenCalled();
 
     warnSpy.mockRestore();
+  });
+
+  it("settles chat context when relay message fetch times out", async () => {
+    jest.useFakeTimers();
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase,
+    }));
+
+    const { fetchGiftWrappedChatsAndMessages } =
+      await import("../fetch-service");
+
+    global.fetch = jest.fn() as typeof global.fetch;
+    const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
+    const nostr = {
+      fetch: jest.fn(() => new Promise(() => {})),
+    } as any;
+    const editChatContext = jest.fn();
+
+    const resultPromise = fetchGiftWrappedChatsAndMessages(
+      nostr,
+      undefined,
+      ["wss://relay.example"],
+      editChatContext,
+      "user-pubkey"
+    );
+
+    await jest.advanceTimersByTimeAsync(12000);
+
+    await expect(resultPromise).resolves.toEqual({
+      profileSetFromChats: new Set(),
+    });
+    expect(editChatContext).toHaveBeenCalledWith(new Map(), false);
+    expect(cacheEventsToDatabase).not.toHaveBeenCalled();
+
+    warnSpy.mockRestore();
+    jest.useRealTimers();
   });
 });
 

@@ -23,6 +23,7 @@ import {
 } from "@/components/utility-components/nostr-context-provider";
 import SignInModal from "../sign-in/SignInModal";
 import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
+import { createNip98AuthorizationHeader } from "@/utils/nostr/nip98-auth";
 
 const Messages = ({ isPayment }: { isPayment: boolean }) => {
   const router = useRouter();
@@ -209,9 +210,37 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
           pubkeyOfChat
         ) as NostrMessageEvent[];
         if (!encryptedChat) return prevChatMap;
+        const wrappedIdsToMark: string[] = [];
         encryptedChat.forEach((message) => {
-          message.read = true;
+          if (!message.read) {
+            message.read = true;
+            if (message.wrappedEventId) {
+              wrappedIdsToMark.push(message.wrappedEventId);
+            }
+          }
         });
+        if (wrappedIdsToMark.length > 0) {
+          const body = JSON.stringify({ messageIds: wrappedIdsToMark });
+          createNip98AuthorizationHeader(
+            signer!,
+            `${window.location.origin}/api/db/mark-messages-read`,
+            "POST",
+            body
+          )
+            .then((authHeader) =>
+              fetch("/api/db/mark-messages-read", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: authHeader,
+                },
+                body,
+              })
+            )
+            .catch((err) =>
+              console.error("Failed to mark messages as read:", err)
+            );
+        }
         const newChatMap = new Map(prevChatMap);
         newChatMap.set(pubkeyOfChat, updatedChat);
         return newChatMap;
@@ -272,8 +301,12 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
         decodedRandomPrivkeyForReceiver.data as Uint8Array,
         currentChatPubkey
       );
-      await sendGiftWrappedMessageEvent(nostr!, senderGiftWrappedEvent);
-      await sendGiftWrappedMessageEvent(nostr!, receiverGiftWrappedEvent);
+      await sendGiftWrappedMessageEvent(nostr!, senderGiftWrappedEvent, signer);
+      await sendGiftWrappedMessageEvent(
+        nostr!,
+        receiverGiftWrappedEvent,
+        signer
+      );
       chatsContext.addNewlyCreatedMessageEvent(
         {
           ...giftWrappedMessageEvent,

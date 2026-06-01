@@ -193,13 +193,13 @@ const SendButton = () => {
           backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
           header: "border-b-[1px] border-[#292f46]",
           footer: "border-t-[1px] border-[#292f46]",
-          closeButton: "hover:bg-black/5 active:bg-white/10",
+          closeButton: "hover:bg-white/10 active:bg-white/20",
         }}
         scrollBehavior={"outside"}
         size="md"
       >
         <ModalContent>
-          <ModalHeader className="text-light-text dark:text-dark-text flex flex-col gap-1">
+          <ModalHeader className="flex flex-col gap-1 text-white">
             Send Tokens
           </ModalHeader>
           <form onSubmit={handleSendSubmit(onSendSubmit)}>
@@ -226,7 +226,7 @@ const SendButton = () => {
                     : "";
                   return (
                     <Input
-                      className="text-light-text dark:text-dark-text"
+                      className="text-white"
                       classNames={{ input: "text-base" }} // Prevents iOS auto-zoom
                       autoFocus
                       variant="bordered"
@@ -244,8 +244,8 @@ const SendButton = () => {
               />
               {signer instanceof NostrNIP46Signer && (
                 <div className="mx-4 my-2 flex items-center justify-center text-center">
-                  <InformationCircleIcon className="text-light-text dark:text-dark-text h-6 w-6" />
-                  <p className="text-light-text dark:text-dark-text ml-2 text-xs">
+                  <InformationCircleIcon className="h-6 w-6 text-white" />
+                  <p className="ml-2 text-xs text-white">
                     If the token is taking a while to be generated, make sure to
                     check your bunker application to approve the transaction
                     events.
@@ -291,12 +291,12 @@ const SendButton = () => {
                         </p>
                         <ClipboardIcon
                           onClick={handleCopyTokenString}
-                          className={`text-light-text dark:text-dark-text mt-4 h-8 w-8 cursor-pointer ${
+                          className={`mt-4 h-8 w-8 cursor-pointer text-white ${
                             copiedToClipboard ? "hidden" : ""
                           }`}
                         />
                         <CheckIcon
-                          className={`text-light-text dark:text-dark-text mt-4 h-8 w-8 cursor-pointer ${
+                          className={`mt-4 h-8 w-8 cursor-pointer text-white ${
                             copiedToClipboard ? "" : "hidden"
                           }`}
                         />

@@ -107,6 +107,12 @@ export class NostrNSecSigner implements NostrSigner {
     return this.encryptedPrivKey;
   }
 
+  public canSignWithoutPrompt(): boolean {
+    return Boolean(
+      this.passphrase || this.rememberedPassphrase || this.inputPassphrase
+    );
+  }
+
   public async connect(): Promise<string> {
     return "connected";
   }

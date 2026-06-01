@@ -105,6 +105,20 @@ const CommunitiesDiscoveryPage = () => {
               ))}
             </div>
 
+            {!isLoading &&
+              filteredOtherCommunities.length === 0 &&
+              myCommunities.length === 0 &&
+              !searchQuery && (
+                <div className="mt-10 rounded-2xl border border-white/10 bg-[#111] p-10 text-center text-gray-400">
+                  <p className="text-lg font-bold text-white uppercase">
+                    No communities found
+                  </p>
+                  <p className="mt-2">
+                    There are no Shopstr communities available yet.
+                  </p>
+                </div>
+              )}
+
             {/* --- Message for No Search Results --- */}
             {!isLoading &&
               filteredOtherCommunities.length === 0 &&

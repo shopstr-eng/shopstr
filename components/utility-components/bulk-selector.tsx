@@ -45,14 +45,14 @@ export default function BulkSelector({
         }
       }}
       isRequired={isRequired}
-      className="text-light-text dark:text-dark-text mb-4 w-full md:w-1/2"
+      className="mb-4 w-full text-white md:w-1/2"
     >
-      <SelectSection className="text-light-text dark:text-dark-text">
+      <SelectSection className="text-white">
         {[
           <SelectItem
             key="1"
             textValue={`1 unit - ${basePrice} ${currency}`}
-            className="text-light-text dark:text-dark-text"
+            className="text-white"
           >
             1 unit - {basePrice} {currency}
           </SelectItem>,
@@ -65,16 +65,16 @@ export default function BulkSelector({
                 textValue={`${units} units - ${price} ${currency}${
                   savings > 0 ? ` (Save ${savings}%)` : ""
                 }`}
-                className="text-light-text dark:text-dark-text"
+                className="text-white"
               >
                 <div className="flex flex-col">
                   <span>
                     {units} units - {price} {currency}
                   </span>
-                  <span className="text-tiny text-gray-500">
+                  <span className="text-tiny text-zinc-500">
                     {perUnit} {currency}/unit
                     {savings > 0 && (
-                      <span className="ml-1 font-semibold text-green-600 dark:text-green-400">
+                      <span className="ml-1 font-semibold text-green-300">
                         — Save {savings}%
                       </span>
                     )}

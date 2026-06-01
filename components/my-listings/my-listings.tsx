@@ -171,7 +171,7 @@ const MyListingsPage = () => {
   );
 
   return (
-    <div className="bg-light-bg dark:bg-dark-bg mx-auto flex h-full min-h-screen w-full flex-col md:flex-row">
+    <div className="mx-auto flex h-full min-h-screen w-full flex-col bg-[#111] md:flex-row">
       {/* Mobile Header */}
       <div className="flex items-center justify-between border-b border-zinc-800 bg-[#161616] p-4 md:hidden">
         <h2 className="text-lg font-bold tracking-wider text-white uppercase">
@@ -305,7 +305,7 @@ const MyListingsPage = () => {
             />
           )}
           {selectedSection === "About" && shopAbout && (
-            <div className="text-light-text dark:text-dark-text flex w-full flex-col justify-start bg-transparent px-4 py-8">
+            <div className="flex w-full flex-col justify-start bg-transparent px-4 py-8 text-white">
               <h2 className="pb-2 text-2xl font-bold">About</h2>
               <p className="text-base">{shopAbout}</p>
             </div>

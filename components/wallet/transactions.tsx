@@ -80,7 +80,7 @@ const Transactions = () => {
                     ) : transaction.type === 4 ? (
                       <BoltIcon className="mr-2 h-5 w-5 text-red-500" />
                     ) : transaction.type === 5 ? (
-                      <ShoppingBagIcon className="text-shopstr-purple-light dark:text-shopstr-yellow-light mr-2 h-5 w-5" />
+                      <ShoppingBagIcon className="mr-2 h-5 w-5 text-yellow-300" />
                     ) : null}
                   </div>
                 </td>

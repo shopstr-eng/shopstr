@@ -11,33 +11,44 @@ import { ArrowLeftIcon } from "@heroicons/react/24/outline";
 const SingleCommunityPage = () => {
   const router = useRouter();
   const { naddr } = router.query;
-  const { communities } = useContext(CommunityContext);
+  const { communities, isLoading: areCommunitiesLoading } =
+    useContext(CommunityContext);
   const [community, setCommunity] = useState<Community | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (naddr && typeof naddr === "string" && communities.size > 0) {
-      try {
-        const decoded = nip19.decode(naddr);
-        if (decoded.type === "naddr") {
-          const { pubkey, identifier } = decoded.data;
-          // Find the community by pubkey and d-tag
-          for (const c of communities.values()) {
-            if (c.pubkey === pubkey && c.d === identifier) {
-              setCommunity(c);
-              break;
-            }
-          }
-        }
-      } catch (e) {
-        console.error("Failed to decode naddr:", e);
-      } finally {
+    if (!router.isReady) return;
+
+    if (!naddr || typeof naddr !== "string") {
+      setIsLoading(false);
+      return;
+    }
+
+    if (communities.size === 0) {
+      if (!areCommunitiesLoading) {
         setIsLoading(false);
       }
-    } else if (communities.size > 0) {
+      return;
+    }
+
+    try {
+      const decoded = nip19.decode(naddr);
+      if (decoded.type === "naddr") {
+        const { pubkey, identifier } = decoded.data;
+        // Find the community by pubkey and d-tag
+        for (const c of communities.values()) {
+          if (c.pubkey === pubkey && c.d === identifier) {
+            setCommunity(c);
+            break;
+          }
+        }
+      }
+    } catch (e) {
+      console.error("Failed to decode naddr:", e);
+    } finally {
       setIsLoading(false);
     }
-  }, [naddr, communities]);
+  }, [naddr, communities, areCommunitiesLoading, router.isReady]);
 
   if (isLoading) {
     return (
@@ -49,8 +60,23 @@ const SingleCommunityPage = () => {
 
   if (!community) {
     return (
-      <div className="flex h-screen items-center justify-center bg-[#050505] text-white">
-        <p>Community not found</p>
+      <div className="flex min-h-screen items-center justify-center bg-[#050505] px-4 text-white">
+        <div className="max-w-md rounded-2xl border border-white/10 bg-[#111] p-10 text-center shadow-2xl">
+          <h1 className="mb-3 text-3xl font-black tracking-tighter text-white uppercase">
+            Community not found
+          </h1>
+          <p className="mb-6 text-gray-400">
+            This community does not exist or is not available from the current
+            relays.
+          </p>
+          <button
+            type="button"
+            onClick={() => router.push("/communities")}
+            className="bg-shopstr-yellow rounded-xl px-6 py-3 text-sm font-black tracking-widest text-black uppercase transition hover:bg-yellow-300"
+          >
+            Back to communities
+          </button>
+        </div>
       </div>
     );
   }

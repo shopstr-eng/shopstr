@@ -3,7 +3,7 @@ import { Button, Input, Select, SelectItem, Spinner } from "@heroui/react";
 import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import ProtectedRoute from "@/components/utility-components/protected-route";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
 import { NostrEventTemplate } from "@/utils/nostr/nostr-manager";
 import {
   buildApiKeyCreateProof,
@@ -21,6 +21,9 @@ import {
   ExclamationCircleIcon,
   InformationCircleIcon,
 } from "@heroicons/react/24/outline";
+
+const isUserCancelledError = (error: unknown): boolean =>
+  error instanceof Error && error.message === "Action cancelled by user";
 
 interface ApiKeyItem {
   id: number;
@@ -75,8 +78,12 @@ const ApiKeysPage = () => {
       } else {
         setError(data.error || "Failed to load API keys.");
       }
-    } catch {
-      setError("Failed to load API keys.");
+    } catch (error) {
+      setError(
+        isUserCancelledError(error)
+          ? "Enter your passphrase to load API keys."
+          : "Failed to load API keys."
+      );
     } finally {
       setIsLoading(false);
     }
@@ -132,8 +139,12 @@ const ApiKeysPage = () => {
       } else {
         setError(data.error || "Failed to create API key.");
       }
-    } catch {
-      setError("Failed to create API key.");
+    } catch (error) {
+      setError(
+        isUserCancelledError(error)
+          ? "Enter your passphrase to create an API key."
+          : "Failed to create API key."
+      );
     } finally {
       setIsCreating(false);
     }
@@ -167,8 +178,12 @@ const ApiKeysPage = () => {
       } else {
         setError(data.error || "Failed to revoke API key.");
       }
-    } catch {
-      setError("Failed to revoke API key.");
+    } catch (error) {
+      setError(
+        isUserCancelledError(error)
+          ? "Enter your passphrase to revoke this API key."
+          : "Failed to revoke API key."
+      );
     }
   };
 
@@ -196,42 +211,43 @@ const ApiKeysPage = () => {
 
   return (
     <ProtectedRoute>
-      <div className="bg-light-bg dark:bg-dark-bg flex h-full flex-col pt-24">
-        <div className="mx-auto w-full px-4 lg:w-1/2 xl:w-2/5">
+      <div className="relative flex min-h-screen flex-col bg-[#111] pt-24 text-white selection:bg-yellow-400 selection:text-white">
+        <div className="pointer-events-none absolute inset-0 z-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] [mask-image:radial-gradient(ellipse_70%_55%_at_50%_0%,#000_65%,transparent_100%)] bg-[size:24px_24px]" />
+        <div className="relative z-10 mx-auto w-full px-4 lg:w-1/2 xl:w-2/5">
           <SettingsBreadCrumbs />
 
-          <div className="mb-8 p-4">
-            <h2 className="text-light-text dark:text-dark-text mb-2 text-2xl font-bold">
+          <div className="mb-8 px-0 py-4">
+            <h2 className="mb-4 text-3xl font-black tracking-tight text-white uppercase">
               MCP Connection
             </h2>
-            <div className="bg-light-fg dark:bg-dark-fg rounded-lg p-4">
+            <div className="rounded-xl border border-zinc-800 bg-[#161616] p-4">
               <div className="mb-3 flex items-start gap-2">
-                <InformationCircleIcon className="text-light-text dark:text-dark-text mt-0.5 h-5 w-5 flex-shrink-0" />
-                <p className="text-light-text dark:text-dark-text text-sm">
+                <InformationCircleIcon className="mt-0.5 h-5 w-5 flex-shrink-0 text-yellow-300" />
+                <p className="text-sm leading-6 text-zinc-400">
                   Use the endpoint URL below to connect AI agents to Shopstr via
                   the Model Context Protocol (MCP). Include your API key in the{" "}
-                  <code className="bg-light-bg dark:bg-dark-bg rounded px-1">
+                  <code className="rounded border border-zinc-800 bg-[#111] px-1 text-yellow-300">
                     Authorization
                   </code>{" "}
                   header as a Bearer token.
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                <code className="bg-light-bg text-light-text dark:bg-dark-bg dark:text-dark-text flex-1 rounded-lg px-3 py-2 text-sm break-all">
+                <code className="flex-1 rounded-lg border border-zinc-800 bg-[#111] px-3 py-2 text-sm break-all text-zinc-300">
                   {mcpEndpointUrl}
                 </code>
                 <button
                   onClick={() => handleCopy(mcpEndpointUrl)}
-                  className="bg-light-bg dark:bg-dark-bg rounded-lg p-2 transition-colors hover:opacity-70"
+                  className="rounded-lg border border-zinc-800 bg-[#111] p-2 transition-colors hover:border-yellow-400"
                 >
-                  <ClipboardDocumentIcon className="text-light-text dark:text-dark-text h-5 w-5" />
+                  <ClipboardDocumentIcon className="h-5 w-5 text-zinc-300" />
                 </button>
               </div>
-              <div className="bg-light-bg dark:bg-dark-bg mt-3 rounded-lg p-3">
-                <p className="text-light-text dark:text-dark-text mb-1 text-xs font-bold">
+              <div className="mt-3 rounded-lg border border-zinc-800 bg-[#111] p-3">
+                <p className="mb-1 text-xs font-black tracking-widest text-yellow-300 uppercase">
                   Example usage:
                 </p>
-                <code className="text-light-text dark:text-dark-text block text-xs break-all whitespace-pre-wrap">
+                <code className="block text-xs break-all whitespace-pre-wrap text-zinc-400">
                   {`curl ${mcpEndpointUrl} \\
   -H "Authorization: Bearer sk_your_api_key" \\
   -H "Content-Type: application/json" \\
@@ -242,25 +258,25 @@ const ApiKeysPage = () => {
           </div>
 
           {error && (
-            <div className="mx-4 mb-4 flex items-center rounded-lg border border-red-400 bg-red-100 p-3 text-red-700">
+            <div className="mb-4 flex items-center rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-red-300">
               <ExclamationCircleIcon className="mr-2 h-5 w-5" />
               <span className="text-sm">{error}</span>
             </div>
           )}
 
           {successMessage && (
-            <div className="mx-4 mb-4 flex items-center rounded-lg border border-green-400 bg-green-100 p-3 text-green-700">
+            <div className="mb-4 flex items-center rounded-lg border border-green-400/40 bg-green-400/10 p-3 text-green-300">
               <CheckCircleIcon className="mr-2 h-5 w-5" />
               <span className="text-sm">{successMessage}</span>
             </div>
           )}
 
           {createdKey && (
-            <div className="mx-4 mb-6 rounded-lg border border-green-400 bg-green-50 p-4 dark:bg-green-900/20">
-              <p className="mb-2 text-sm font-bold text-green-800 dark:text-green-300">
+            <div className="mb-6 rounded-xl border border-green-400/40 bg-green-400/10 p-4">
+              <p className="mb-2 text-sm font-black text-green-300">
                 API key created! Copy it now — it won&apos;t be shown again.{" "}
                 <button
-                  className="text-blue-500 underline hover:text-blue-700"
+                  className="text-yellow-300 underline hover:text-yellow-200"
                   onClick={() => setShowCreatedKey((prev) => !prev)}
                 >
                   {showCreatedKey ? "Hide" : "Show"}
@@ -268,37 +284,38 @@ const ApiKeysPage = () => {
               </p>
               <div className="flex items-center gap-2">
                 <code
-                  className={`bg-light-bg text-light-text dark:bg-dark-bg dark:text-dark-text flex-1 rounded-lg px-3 py-2 font-mono text-sm break-all ${showCreatedKey ? "" : "blur-sm"}`}
+                  className={`flex-1 rounded-lg border border-zinc-800 bg-[#111] px-3 py-2 font-mono text-sm break-all text-zinc-300 ${showCreatedKey ? "" : "blur-sm"}`}
                 >
                   {createdKey}
                 </code>
                 <button
                   onClick={() => handleCopy(createdKey)}
-                  className="bg-light-bg dark:bg-dark-bg rounded-lg p-2 transition-colors hover:opacity-70"
+                  className="rounded-lg border border-zinc-800 bg-[#111] p-2 transition-colors hover:border-yellow-400"
                 >
                   {copied ? (
                     <CheckCircleIcon className="h-5 w-5 text-green-600" />
                   ) : (
-                    <ClipboardDocumentIcon className="text-light-text dark:text-dark-text h-5 w-5" />
+                    <ClipboardDocumentIcon className="h-5 w-5 text-zinc-300" />
                   )}
                 </button>
               </div>
             </div>
           )}
 
-          <div className="mb-8 px-4">
-            <h2 className="text-light-text dark:text-dark-text mb-4 text-2xl font-bold">
+          <div className="mb-8 px-0">
+            <h2 className="mb-4 text-2xl font-black tracking-tight text-white uppercase">
               Create API Key
             </h2>
-            <div className="bg-light-fg dark:bg-dark-fg space-y-4 rounded-lg p-4">
+            <div className="space-y-4 rounded-xl border border-zinc-800 bg-[#161616] p-4">
               <Input
                 label="Key Name"
                 placeholder="e.g., My AI Agent"
                 value={newKeyName}
                 onValueChange={setNewKeyName}
                 classNames={{
-                  label: "text-light-text dark:text-dark-text",
-                  input: "text-light-text dark:text-dark-text",
+                  label:
+                    "text-zinc-400 font-bold uppercase tracking-wider text-xs",
+                  input: "text-white",
                 }}
               />
               <Select
@@ -306,8 +323,9 @@ const ApiKeysPage = () => {
                 selectedKeys={[newKeyPermission]}
                 onChange={(e) => setNewKeyPermission(e.target.value)}
                 classNames={{
-                  label: "text-light-text dark:text-dark-text",
-                  value: "text-light-text dark:text-dark-text",
+                  label:
+                    "text-zinc-400 font-bold uppercase tracking-wider text-xs",
+                  value: "text-white",
                 }}
               >
                 <SelectItem key="read">
@@ -318,7 +336,7 @@ const ApiKeysPage = () => {
                 </SelectItem>
               </Select>
               <Button
-                className={SHOPSTRBUTTONCLASSNAMES}
+                className={NEO_BTN}
                 onClick={handleCreate}
                 isLoading={isCreating}
                 isDisabled={!newKeyName.trim()}
@@ -328,8 +346,8 @@ const ApiKeysPage = () => {
             </div>
           </div>
 
-          <div className="mb-8 px-4">
-            <h2 className="text-light-text dark:text-dark-text mb-4 text-2xl font-bold">
+          <div className="mb-8 px-0">
+            <h2 className="mb-4 text-2xl font-black tracking-tight text-white uppercase">
               Your API Keys
             </h2>
             {isLoading ? (
@@ -337,9 +355,7 @@ const ApiKeysPage = () => {
                 <Spinner size="lg" />
               </div>
             ) : apiKeys.length === 0 ? (
-              <p className="text-light-text dark:text-dark-text">
-                No API keys created yet.
-              </p>
+              <p className="text-white">No API keys created yet.</p>
             ) : (
               <div className="space-y-3">
                 {apiKeys.map((key) => (
@@ -347,15 +363,15 @@ const ApiKeysPage = () => {
                     key={key.id}
                     className={`rounded-lg p-4 ${
                       key.is_active
-                        ? "bg-light-fg dark:bg-dark-fg"
-                        : "bg-light-fg dark:bg-dark-fg opacity-60"
+                        ? "border border-zinc-800 bg-[#161616]"
+                        : "border border-zinc-800 bg-[#161616] opacity-60"
                     }`}
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
-                          <KeyIcon className="text-light-text dark:text-dark-text h-5 w-5" />
-                          <span className="text-light-text dark:text-dark-text font-bold">
+                          <KeyIcon className="h-5 w-5 text-zinc-300" />
+                          <span className="font-bold text-white">
                             {key.name}
                           </span>
                           {!key.is_active && (
@@ -364,10 +380,10 @@ const ApiKeysPage = () => {
                             </span>
                           )}
                         </div>
-                        <div className="text-light-text dark:text-dark-text mt-2 space-y-1 text-sm">
+                        <div className="mt-2 space-y-1 text-sm text-white">
                           <p>
                             Key:{" "}
-                            <code className="bg-light-bg dark:bg-dark-bg rounded px-1">
+                            <code className="rounded border border-zinc-800 bg-[#111] px-1 text-yellow-300">
                               {key.key_prefix}...
                             </code>
                           </p>
@@ -376,8 +392,8 @@ const ApiKeysPage = () => {
                             <span
                               className={`rounded-md border px-2 py-0.5 text-xs font-bold ${
                                 key.permissions === "read_write"
-                                  ? "border-blue-300 bg-blue-100 text-blue-700"
-                                  : "border-gray-300 bg-gray-100 text-gray-700"
+                                  ? "border-blue-400/40 bg-blue-400/10 text-blue-300"
+                                  : "border-zinc-600 bg-[#111] text-zinc-300"
                               }`}
                             >
                               {key.permissions === "read_write"

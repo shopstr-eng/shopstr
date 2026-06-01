@@ -33,6 +33,8 @@ import {
   getEncodedToken,
 } from "@cashu/cashu-ts";
 import * as cashuCompat from "@/utils/cashu/compat";
+import { safeMeltProofs } from "@/utils/cashu/melt-retry-service";
+import { safeSwap } from "@/utils/cashu/swap-retry-service";
 import { formatWithCommas } from "./display-monetary-info";
 import {
   NostrContext,
@@ -252,15 +254,24 @@ export default function ClaimButton({ token }: { token: string }) {
           const meltQuoteTotal =
             cashuCompat.amountToNumber(meltQuote.amount) +
             cashuCompat.amountToNumber(meltQuote.fee_reserve);
-          const { keep, send } = await wallet.send(meltQuoteTotal, proofs, {
-            includeFees: true,
+          const swapOutcome = await safeSwap(wallet, meltQuoteTotal, proofs, {
+            sendConfig: { includeFees: true },
           });
-          const meltResponse = await cashuCompat.meltProofs(
-            wallet,
-            meltQuote,
-            send
-          );
-          const changeProofs = [...keep, ...meltResponse.change];
+          if (swapOutcome.status !== "swapped") {
+            throw new Error(
+              swapOutcome.errorMessage ??
+                `Pre-melt swap did not complete (${swapOutcome.status})`
+            );
+          }
+          const { keep, send } = swapOutcome;
+          const meltOutcome = await safeMeltProofs(wallet, meltQuote, send);
+          if (meltOutcome.status !== "paid") {
+            throw new Error(
+              meltOutcome.errorMessage ??
+                `Melt did not complete (${meltOutcome.status})`
+            );
+          }
+          const changeProofs = [...keep, ...meltOutcome.changeProofs];
           const changeAmount =
             Array.isArray(changeProofs) && changeProofs.length > 0
               ? changeProofs.reduce(
@@ -304,7 +315,7 @@ export default function ClaimButton({ token }: { token: string }) {
               decodedRandomPrivkeyForReceiver.data as Uint8Array,
               userPubkey!
             );
-            await sendGiftWrappedMessageEvent(nostr!, giftWrappedEvent);
+            await sendGiftWrappedMessageEvent(nostr!, giftWrappedEvent, signer);
             chatsContext.addNewlyCreatedMessageEvent(
               {
                 ...giftWrappedMessageEvent,

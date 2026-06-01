@@ -32,6 +32,19 @@ import {
   MintKeyset,
 } from "@cashu/cashu-ts";
 import * as cashuCompat from "@/utils/cashu/compat";
+import { safeMeltProofs } from "@/utils/cashu/melt-retry-service";
+import { safeSwap } from "@/utils/cashu/swap-retry-service";
+import { withMintRetry } from "@/utils/cashu/mint-retry-service";
+import {
+  recordPendingMintQuote,
+  markMintQuoteClaimed,
+  updatePendingMintQuote,
+} from "@/utils/cashu/pending-mint-operations";
+import {
+  recoverProofsToBuyerWallet,
+  withDeadline,
+  isTimeoutError,
+} from "@/utils/cashu/wallet-recovery";
 import {
   constructGiftWrappedEvent,
   constructMessageSeal,
@@ -61,6 +74,25 @@ import {
   CombinedFormData,
 } from "@/utils/types/types";
 import { Controller } from "react-hook-form";
+
+const SELLER_HANDOFF_TIMEOUT_MS = 90000;
+
+async function requireSafeSwap(
+  wallet: CashuWallet,
+  amount: number,
+  proofs: Proof[]
+): Promise<{ keep: Proof[]; send: Proof[] }> {
+  const swapOutcome = await safeSwap(wallet, amount, proofs, {
+    sendConfig: { includeFees: true },
+  });
+  if (swapOutcome.status !== "swapped") {
+    throw new Error(
+      swapOutcome.errorMessage ??
+        `Cashu swap did not complete (${swapOutcome.status})`
+    );
+  }
+  return { keep: swapOutcome.keep, send: swapOutcome.send };
+}
 
 export default function CartInvoiceCard({
   products,
@@ -182,8 +214,16 @@ export default function CartInvoiceCard({
         actualUserPubkey
       );
 
-      await sendGiftWrappedMessageEvent(nostr, giftWrappedEventForSeller);
-      await sendGiftWrappedMessageEvent(nostr, giftWrappedEventForBuyer);
+      await sendGiftWrappedMessageEvent(
+        nostr,
+        giftWrappedEventForSeller,
+        signer
+      );
+      await sendGiftWrappedMessageEvent(
+        nostr,
+        giftWrappedEventForBuyer,
+        signer
+      );
 
       // Add to local context for immediate UI feedback
       chatsContext.addNewlyCreatedMessageEvent(
@@ -531,7 +571,7 @@ export default function CartInvoiceCard({
       decodedRandomPrivkeyForReceiver.data as Uint8Array,
       pubkeyToReceiveMessage
     );
-    await sendGiftWrappedMessageEvent(nostr!, giftWrappedEvent);
+    await sendGiftWrappedMessageEvent(nostr!, giftWrappedEvent, signer);
 
     if (isReceipt) {
       chatsContext.addNewlyCreatedMessageEvent(
@@ -733,10 +773,15 @@ export default function CartInvoiceCard({
       validatePaymentData(convertedPrice, data);
 
       const wallet = new CashuWallet(new CashuMint(mints[0]!));
-      const { request: pr, quote: hash } = await cashuCompat.createMintQuote(
-        wallet,
-        convertedPrice
+      const { request: pr, quote: hash } = await withMintRetry(() =>
+        cashuCompat.createMintQuote(wallet, convertedPrice)
       );
+      recordPendingMintQuote({
+        quoteId: hash,
+        mintUrl: mints[0]!,
+        amount: convertedPrice,
+        invoice: pr,
+      });
 
       const { nwcString } = getLocalStorageData();
       if (!nwcString) throw new Error("NWC connection not found.");
@@ -761,10 +806,15 @@ export default function CartInvoiceCard({
       setShowInvoiceCard(true);
       const wallet = new CashuWallet(new CashuMint(mints[0]!));
 
-      const { request: pr, quote: hash } = await cashuCompat.createMintQuote(
-        wallet,
-        convertedPrice
+      const { request: pr, quote: hash } = await withMintRetry(() =>
+        cashuCompat.createMintQuote(wallet, convertedPrice)
       );
+      recordPendingMintQuote({
+        quoteId: hash,
+        mintUrl: mints[0]!,
+        amount: convertedPrice,
+        invoice: pr,
+      });
 
       setInvoice(pr);
 
@@ -822,22 +872,46 @@ export default function CartInvoiceCard({
     while (retryCount < maxRetries) {
       try {
         // First check if the quote has been paid
-        const quoteState = await cashuCompat.checkMintQuote(wallet, hash);
+        const quoteState = await withMintRetry(() =>
+          cashuCompat.checkMintQuote(wallet, hash)
+        );
 
         if (quoteState.state === "PAID") {
           // Quote is paid, try to mint proofs
           try {
-            const proofs = await cashuCompat.mintProofs(
-              wallet,
-              convertedPrice,
-              hash
+            updatePendingMintQuote(hash, { status: "paid_unclaimed" });
+            const proofs = await withMintRetry(() =>
+              cashuCompat.mintProofs(wallet, convertedPrice, hash)
             );
             if (proofs && proofs.length > 0) {
-              await sendTokens(wallet, proofs, data);
-              localStorage.setItem("cart", JSON.stringify([]));
-              setPaymentConfirmed(true);
-              if (setInvoiceIsPaid) {
-                setInvoiceIsPaid(true);
+              try {
+                await withDeadline(
+                  () => sendTokens(wallet, proofs, data),
+                  SELLER_HANDOFF_TIMEOUT_MS,
+                  "seller hand-off"
+                );
+                markMintQuoteClaimed(hash);
+                localStorage.setItem("cart", JSON.stringify([]));
+                setPaymentConfirmed(true);
+                if (setInvoiceIsPaid) {
+                  setInvoiceIsPaid(true);
+                }
+              } catch (handoffError) {
+                await recoverProofsToBuyerWallet(
+                  nostr!,
+                  signer!,
+                  mints[0]!,
+                  proofs,
+                  convertedPrice
+                );
+                markMintQuoteClaimed(hash);
+                setPaymentConfirmed(true);
+                setFailureText(
+                  isTimeoutError(handoffError)
+                    ? "Your payment was received but delivery to the seller timed out. Your sats have been credited to your wallet - please try the order again."
+                    : "Your payment was received but couldn't be delivered to the seller. Your sats have been credited to your wallet - please try the order again."
+                );
+                setShowFailureModal(true);
               }
               setQrCodeUrl(null);
               break;
@@ -848,6 +922,11 @@ export default function CartInvoiceCard({
               mintError instanceof Error &&
               mintError.message.includes("issued")
             ) {
+              updatePendingMintQuote(hash, {
+                status: "failed_terminal",
+                lastErrorMessage:
+                  "Mint reports quote ISSUED before local claim recorded proofs",
+              });
               // Quote was already processed, consider it successful
               localStorage.setItem("cart", JSON.stringify([]));
               setPaymentConfirmed(true);
@@ -866,6 +945,10 @@ export default function CartInvoiceCard({
           await new Promise((resolve) => setTimeout(resolve, 2100));
           continue;
         } else if (quoteState.state === "ISSUED") {
+          updatePendingMintQuote(hash, {
+            status: "failed_terminal",
+            lastErrorMessage: "Quote ISSUED before local claim recorded proofs",
+          });
           // Quote was already processed successfully
           localStorage.setItem("cart", JSON.stringify([]));
           setPaymentConfirmed(true);
@@ -1032,12 +1115,10 @@ export default function CartInvoiceCard({
       let paymentTags;
 
       if (sellerAmount > 0) {
-        const { keep, send } = await wallet.send(
+        const { keep, send } = await requireSafeSwap(
+          wallet,
           sellerAmount,
-          remainingProofs,
-          {
-            includeFees: true,
-          }
+          remainingProofs
         );
         sellerProofs = send;
         sellerToken = getEncodedToken({
@@ -1074,12 +1155,10 @@ export default function CartInvoiceCard({
 
       // Handle donation if applicable
       if (donationAmount > 0) {
-        const { keep, send } = await wallet.send(
+        const { keep, send } = await requireSafeSwap(
+          wallet,
           donationAmount,
-          remainingProofs,
-          {
-            includeFees: true,
-          }
+          remainingProofs
         );
         donationToken = getEncodedToken({
           mint: mints[0]!,
@@ -1110,18 +1189,22 @@ export default function CartInvoiceCard({
           const meltQuoteTotal =
             cashuCompat.amountToNumber(meltQuote.amount) +
             cashuCompat.amountToNumber(meltQuote.fee_reserve);
-          const { keep, send } = await wallet.send(
-            meltQuoteTotal,
-            sellerProofs,
-            {
-              includeFees: true,
-            }
-          );
-          const meltResponse = await cashuCompat.meltProofs(
+          const { keep, send } = await requireSafeSwap(
             wallet,
-            meltQuote,
-            send
+            meltQuoteTotal,
+            sellerProofs
           );
+          const meltOutcome = await safeMeltProofs(wallet, meltQuote, send);
+          if (meltOutcome.status !== "paid") {
+            throw new Error(
+              meltOutcome.errorMessage ??
+                `Melt did not complete (${meltOutcome.status})`
+            );
+          }
+          const meltResponse = {
+            quote: meltOutcome.meltQuote,
+            change: meltOutcome.changeProofs,
+          };
           if (meltResponse.quote) {
             const meltAmount = cashuCompat.amountToNumber(
               meltResponse.quote.amount
@@ -1737,9 +1820,11 @@ export default function CartInvoiceCard({
       const filteredProofs = tokens.filter((p: Proof) =>
         mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
       );
-      const { keep, send } = await wallet.send(price, filteredProofs, {
-        includeFees: true,
-      });
+      const { keep, send } = await requireSafeSwap(
+        wallet,
+        price,
+        filteredProofs
+      );
       const deletedEventIds = [
         ...new Set([
           ...walletContext.proofEvents
@@ -2049,7 +2134,7 @@ export default function CartInvoiceCard({
           formType === "combined" &&
           freePickupPreference === "contact" && (
             <div className="space-y-4">
-              <h4 className="font-medium text-gray-700 dark:text-gray-300">
+              <h4 className="font-medium text-zinc-300">
                 Select Pickup Locations
               </h4>
               {productsWithPickupLocations.map((product) => (
@@ -2146,12 +2231,12 @@ export default function CartInvoiceCard({
                     <div className="flex-1">
                       <h3 className="font-medium">{product.title}</h3>
                       {product.selectedSize && (
-                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                        <p className="text-sm text-zinc-400">
                           Size: {product.selectedSize}
                         </p>
                       )}
                       {product.selectedVolume && (
-                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                        <p className="text-sm text-zinc-400">
                           Volume: {product.selectedVolume}
                         </p>
                       )}

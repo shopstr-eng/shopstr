@@ -72,7 +72,7 @@ export default function FooterEditor({
   return (
     <div className="space-y-4">
       <div>
-        <label className="text-light-text dark:text-dark-text mb-1 block text-xs font-medium">
+        <label className="mb-1 block text-xs font-medium text-white">
           Footer Text
         </label>
         <Textarea
@@ -86,7 +86,7 @@ export default function FooterEditor({
       </div>
 
       <div>
-        <label className="text-light-text dark:text-dark-text mb-1 flex items-center gap-2 text-xs font-medium">
+        <label className="mb-1 flex items-center gap-2 text-xs font-medium text-white">
           <input
             type="checkbox"
             checked={footer.showPoweredBy !== false}
@@ -98,10 +98,10 @@ export default function FooterEditor({
       </div>
 
       <div>
-        <label className="text-light-text dark:text-dark-text mb-2 block text-xs font-medium">
+        <label className="mb-2 block text-xs font-medium text-white">
           Store Policies
         </label>
-        <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">
+        <p className="mb-2 text-xs text-zinc-400">
           Policy links shown in your storefront footer. Toggle each on or off
           and edit the text to match your shop.
         </p>
@@ -110,10 +110,7 @@ export default function FooterEditor({
             const policy = getPolicy(key);
             const isExpanded = expandedPolicy === key;
             return (
-              <div
-                key={key}
-                className="rounded-lg border border-gray-400 dark:border-gray-500"
-              >
+              <div key={key} className="rounded-lg border border-zinc-700">
                 <div className="flex items-center gap-3 px-3 py-2">
                   <input
                     type="checkbox"
@@ -123,19 +120,19 @@ export default function FooterEditor({
                     }
                     className="h-3.5 w-3.5"
                   />
-                  <span className="text-light-text dark:text-dark-text flex-1 text-xs font-medium">
+                  <span className="flex-1 text-xs font-medium text-white">
                     {POLICY_LABELS[key]}
                   </span>
                   <button
                     type="button"
                     onClick={() => setExpandedPolicy(isExpanded ? null : key)}
-                    className="text-shopstr-purple dark:text-shopstr-yellow text-xs hover:underline"
+                    className="text-xs text-yellow-300 hover:underline"
                   >
                     {isExpanded ? "Collapse" : "Edit"}
                   </button>
                 </div>
                 {isExpanded && (
-                  <div className="border-t border-gray-400 p-3 dark:border-gray-500">
+                  <div className="border-t border-zinc-700 p-3">
                     <Textarea
                       variant="bordered"
                       size="sm"
@@ -148,13 +145,13 @@ export default function FooterEditor({
                       placeholder="Enter your policy content (Markdown supported)"
                     />
                     <div className="mt-2 flex items-center justify-between">
-                      <p className="text-xs text-gray-400 dark:text-gray-500">
+                      <p className="text-xs text-zinc-500">
                         Supports Markdown (headings, bold, lists)
                       </p>
                       <button
                         type="button"
                         onClick={() => resetPolicyToDefault(key)}
-                        className="text-xs text-orange-500 hover:underline dark:text-orange-400"
+                        className="text-xs text-yellow-300 hover:underline"
                       >
                         Reset to Default
                       </button>
@@ -168,14 +165,14 @@ export default function FooterEditor({
       </div>
 
       <div>
-        <label className="text-light-text dark:text-dark-text mb-2 block text-xs font-medium">
+        <label className="mb-2 block text-xs font-medium text-white">
           Social Links
         </label>
         <div className="space-y-2">
           {(footer.socialLinks || []).map((link, i) => (
             <div key={i} className="flex items-center gap-2">
               <select
-                className="bg-light-fg text-light-text dark:bg-dark-fg dark:text-dark-text rounded border border-gray-300 p-1.5 text-xs dark:border-gray-600"
+                className="rounded border border-zinc-700 bg-[#111] p-1.5 text-xs text-white"
                 value={link.platform}
                 onChange={(e) => {
                   const links = [...(footer.socialLinks || [])];
@@ -229,7 +226,7 @@ export default function FooterEditor({
                 ],
               })
             }
-            className="text-xs font-bold text-blue-600 hover:underline dark:text-blue-400"
+            className="text-xs font-bold text-yellow-300 hover:underline"
           >
             + Add Social Link
           </button>
@@ -237,7 +234,7 @@ export default function FooterEditor({
       </div>
 
       <div>
-        <label className="text-light-text dark:text-dark-text mb-2 block text-xs font-medium">
+        <label className="mb-2 block text-xs font-medium text-white">
           Footer Nav Links
         </label>
         <div className="space-y-2">
@@ -288,7 +285,7 @@ export default function FooterEditor({
                 navLinks: [...(footer.navLinks || []), { label: "", href: "" }],
               })
             }
-            className="text-xs font-bold text-blue-600 hover:underline dark:text-blue-400"
+            className="text-xs font-bold text-yellow-300 hover:underline"
           >
             + Add Footer Link
           </button>

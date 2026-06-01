@@ -14,7 +14,7 @@ import parseTags, {
   ProductData,
 } from "@/utils/parsers/product-parser-functions";
 import ProductCard from "@/components/utility-components/product-card";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
 import ProtectedRoute from "@/components/utility-components/protected-route";
 
 interface OrderSummaryData {
@@ -149,9 +149,10 @@ export default function OrderSummary() {
     return (
       <ProtectedRoute>
         <StorefrontThemeWrapper sellerPubkey={sfSellerPubkey}>
-          <div className="bg-light-bg dark:bg-dark-bg flex min-h-screen items-center justify-center">
-            <div className="text-center">
-              <p className="text-lg text-gray-600 dark:text-gray-400">
+          <div className="relative flex min-h-screen items-center justify-center bg-[#111] text-white">
+            <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] [mask-image:radial-gradient(ellipse_70%_55%_at_50%_0%,#000_65%,transparent_100%)] bg-[size:24px_24px]" />
+            <div className="relative z-10 text-center">
+              <p className="text-lg font-bold text-zinc-400">
                 Loading order details...
               </p>
             </div>
@@ -164,22 +165,23 @@ export default function OrderSummary() {
   return (
     <ProtectedRoute>
       <StorefrontThemeWrapper sellerPubkey={sfSellerPubkey}>
-        <div className="bg-light-bg dark:bg-dark-bg min-h-screen">
-          <div className="mx-auto max-w-4xl px-4 pt-24 pb-8 sm:px-6 lg:px-8">
-            <div className="bg-light-fg dark:bg-dark-fg mb-8 rounded-lg border border-gray-200 p-6 shadow-md sm:p-8 dark:border-gray-700">
-              <div className="mb-6 flex flex-col items-center border-b border-gray-200 pb-6 dark:border-gray-700">
-                <div className="mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
-                  <CheckCircleIcon className="h-10 w-10 text-green-600 dark:text-green-400" />
+        <div className="relative min-h-screen bg-[#111] text-white selection:bg-yellow-400 selection:text-white">
+          <div className="pointer-events-none absolute inset-0 z-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] [mask-image:radial-gradient(ellipse_70%_55%_at_50%_0%,#000_65%,transparent_100%)] bg-[size:24px_24px]" />
+          <div className="relative z-10 mx-auto max-w-5xl px-4 pt-24 pb-12 sm:px-6 lg:px-8">
+            <div className="mb-8 rounded-2xl border border-zinc-800 bg-[#161616] p-6 shadow-2xl shadow-black/30 sm:p-8">
+              <div className="mb-6 flex flex-col items-center border-b border-zinc-800 pb-6">
+                <div className="mb-3 flex h-16 w-16 items-center justify-center rounded-full border border-green-400/40 bg-green-400/10">
+                  <CheckCircleIcon className="h-10 w-10 text-green-400" />
                 </div>
-                <h1 className="text-light-text dark:text-dark-text text-2xl font-bold sm:text-3xl">
+                <h1 className="text-3xl font-black tracking-tight text-white uppercase sm:text-4xl">
                   Order Confirmed!
                 </h1>
-                <p className="mt-2 text-center text-gray-600 dark:text-gray-400">
+                <p className="mt-2 text-center text-zinc-400">
                   The seller has been notified and will receive your order
                   details.
                 </p>
                 {orderData.orderId && (
-                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                  <p className="mt-1 text-sm text-zinc-500">
                     Order ID: {orderData.orderId.substring(0, 8)}...
                   </p>
                 )}
@@ -187,14 +189,14 @@ export default function OrderSummary() {
 
               {orderData.isCart && orderData.cartItems ? (
                 <div className="mb-6">
-                  <h2 className="text-light-text dark:text-dark-text mb-4 text-lg font-bold">
+                  <h2 className="mb-4 text-xl font-black tracking-tight text-white uppercase">
                     Items Ordered
                   </h2>
                   <div className="space-y-4">
                     {orderData.cartItems.map((item, index) => (
                       <div
                         key={index}
-                        className="flex items-center gap-4 rounded-md border border-gray-200 p-3 dark:border-gray-700"
+                        className="flex items-center gap-4 rounded-xl border border-zinc-800 bg-[#111] p-3"
                       >
                         <img
                           src={item.image}
@@ -202,10 +204,8 @@ export default function OrderSummary() {
                           className="h-16 w-16 rounded-md object-cover"
                         />
                         <div className="flex-1">
-                          <h3 className="text-light-text dark:text-dark-text font-semibold">
-                            {item.title}
-                          </h3>
-                          <div className="flex flex-wrap gap-x-3 text-sm text-gray-500 dark:text-gray-400">
+                          <h3 className="font-bold text-white">{item.title}</h3>
+                          <div className="flex flex-wrap gap-x-3 text-sm text-zinc-500">
                             {item.quantity && item.quantity > 1 && (
                               <span>Qty: {item.quantity}</span>
                             )}
@@ -230,7 +230,7 @@ export default function OrderSummary() {
                             )}
                           </div>
                         </div>
-                        <p className="text-light-text dark:text-dark-text font-bold">
+                        <p className="font-black text-white">
                           {item.amount} {item.currency}
                         </p>
                       </div>
@@ -239,10 +239,10 @@ export default function OrderSummary() {
                 </div>
               ) : (
                 <div className="mb-6">
-                  <h2 className="text-light-text dark:text-dark-text mb-4 text-lg font-bold">
+                  <h2 className="mb-4 text-xl font-black tracking-tight text-white uppercase">
                     Product Details
                   </h2>
-                  <div className="flex items-start gap-4 rounded-md border border-gray-200 p-4 dark:border-gray-700">
+                  <div className="flex items-start gap-4 rounded-xl border border-zinc-800 bg-[#111] p-4">
                     {orderData.productImage && (
                       <img
                         src={orderData.productImage}
@@ -251,26 +251,26 @@ export default function OrderSummary() {
                       />
                     )}
                     <div className="flex-1">
-                      <h3 className="text-light-text dark:text-dark-text text-lg font-semibold">
+                      <h3 className="text-lg font-black text-white">
                         {orderData.productTitle}
                       </h3>
                       {orderData.selectedSize && (
-                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                        <p className="text-sm text-zinc-400">
                           Size: {orderData.selectedSize}
                         </p>
                       )}
                       {orderData.selectedVolume && (
-                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                        <p className="text-sm text-zinc-400">
                           Volume: {orderData.selectedVolume}
                         </p>
                       )}
                       {orderData.selectedWeight && (
-                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                        <p className="text-sm text-zinc-400">
                           Weight: {orderData.selectedWeight}
                         </p>
                       )}
                       {orderData.selectedBulkOption && (
-                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                        <p className="text-sm text-zinc-400">
                           Bundle: {orderData.selectedBulkOption} units
                         </p>
                       )}
@@ -280,16 +280,14 @@ export default function OrderSummary() {
               )}
 
               <div className="mb-6">
-                <h2 className="text-light-text dark:text-dark-text mb-4 text-lg font-bold">
+                <h2 className="mb-4 text-xl font-black tracking-tight text-white uppercase">
                   Order Details
                 </h2>
-                <div className="rounded-md border border-gray-200 p-4 dark:border-gray-700">
+                <div className="rounded-xl border border-zinc-800 bg-[#111] p-4">
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between border-b border-gray-100 pb-2 dark:border-gray-700">
-                      <span className="text-gray-600 dark:text-gray-400">
-                        Payment Method
-                      </span>
-                      <span className="text-light-text dark:text-dark-text font-semibold">
+                    <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
+                      <span className="text-zinc-400">Payment Method</span>
+                      <span className="font-bold text-white">
                         {formatPaymentMethod(orderData.paymentMethod)}
                       </span>
                     </div>
@@ -298,38 +296,34 @@ export default function OrderSummary() {
                     orderData.subtotal &&
                     Number(orderData.subtotal) !== Number(orderData.amount) ? (
                       <>
-                        <div className="flex items-center justify-between border-b border-gray-100 pb-2 dark:border-gray-700">
-                          <span className="text-gray-600 dark:text-gray-400">
-                            Subtotal
-                          </span>
-                          <span className="text-light-text dark:text-dark-text">
+                        <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
+                          <span className="text-zinc-400">Subtotal</span>
+                          <span className="text-white">
                             {Number(orderData.subtotal).toLocaleString()}{" "}
                             {orderData.currency}
                           </span>
                         </div>
-                        <div className="flex items-center justify-between border-b border-gray-100 pb-2 dark:border-gray-700">
-                          <span className="text-gray-600 dark:text-gray-400">
-                            Shipping
-                          </span>
+                        <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
+                          <span className="text-zinc-400">Shipping</span>
                           {orderData.freeShippingApplied ? (
                             <span className="flex items-center gap-2">
                               {orderData.originalShippingCost && (
-                                <span className="text-gray-400 line-through dark:text-gray-500">
+                                <span className="text-zinc-600 line-through">
                                   {Number(
                                     orderData.originalShippingCost
                                   ).toLocaleString()}{" "}
                                   {orderData.currency}
                                 </span>
                               )}
-                              <span className="text-light-text dark:text-dark-text">
+                              <span className="text-white">
                                 0 (Free Shipping)
                               </span>
-                              <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                              <span className="rounded-full border border-green-400/30 bg-green-400/10 px-2 py-0.5 text-xs font-black text-green-300 uppercase">
                                 Free
                               </span>
                             </span>
                           ) : (
-                            <span className="text-light-text dark:text-dark-text">
+                            <span className="text-white">
                               {(
                                 Number(orderData.amount) -
                                 Number(orderData.subtotal)
@@ -341,32 +335,28 @@ export default function OrderSummary() {
                       </>
                     ) : orderData.freeShippingApplied ? (
                       <>
-                        <div className="flex items-center justify-between border-b border-gray-100 pb-2 dark:border-gray-700">
-                          <span className="text-gray-600 dark:text-gray-400">
-                            Subtotal
-                          </span>
-                          <span className="text-light-text dark:text-dark-text">
+                        <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
+                          <span className="text-zinc-400">Subtotal</span>
+                          <span className="text-white">
                             {Number(orderData.amount).toLocaleString()}{" "}
                             {orderData.currency}
                           </span>
                         </div>
-                        <div className="flex items-center justify-between border-b border-gray-100 pb-2 dark:border-gray-700">
-                          <span className="text-gray-600 dark:text-gray-400">
-                            Shipping
-                          </span>
+                        <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
+                          <span className="text-zinc-400">Shipping</span>
                           <span className="flex items-center gap-2">
                             {orderData.originalShippingCost && (
-                              <span className="text-gray-400 line-through dark:text-gray-500">
+                              <span className="text-zinc-600 line-through">
                                 {Number(
                                   orderData.originalShippingCost
                                 ).toLocaleString()}{" "}
                                 {orderData.currency}
                               </span>
                             )}
-                            <span className="text-light-text dark:text-dark-text">
+                            <span className="text-white">
                               0 (Free Shipping)
                             </span>
-                            <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                            <span className="rounded-full border border-green-400/30 bg-green-400/10 px-2 py-0.5 text-xs font-black text-green-300 uppercase">
                               Free
                             </span>
                           </span>
@@ -375,11 +365,9 @@ export default function OrderSummary() {
                     ) : orderData.shippingCost &&
                       Number(orderData.shippingCost) > 0 ? (
                       <>
-                        <div className="flex items-center justify-between border-b border-gray-100 pb-2 dark:border-gray-700">
-                          <span className="text-gray-600 dark:text-gray-400">
-                            Subtotal
-                          </span>
-                          <span className="text-light-text dark:text-dark-text">
+                        <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
+                          <span className="text-zinc-400">Subtotal</span>
+                          <span className="text-white">
                             {(
                               Number(orderData.amount) -
                               Number(orderData.shippingCost)
@@ -387,11 +375,9 @@ export default function OrderSummary() {
                             {orderData.currency}
                           </span>
                         </div>
-                        <div className="flex items-center justify-between border-b border-gray-100 pb-2 dark:border-gray-700">
-                          <span className="text-gray-600 dark:text-gray-400">
-                            Shipping
-                          </span>
-                          <span className="text-light-text dark:text-dark-text">
+                        <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
+                          <span className="text-zinc-400">Shipping</span>
+                          <span className="text-white">
                             {Number(orderData.shippingCost).toLocaleString()}{" "}
                             {orderData.currency}
                           </span>
@@ -400,10 +386,10 @@ export default function OrderSummary() {
                     ) : null}
 
                     <div className="flex items-center justify-between pt-1">
-                      <span className="text-light-text dark:text-dark-text text-lg font-bold">
+                      <span className="text-lg font-bold text-white">
                         Total
                       </span>
-                      <span className="text-light-text dark:text-dark-text text-lg font-bold">
+                      <span className="text-lg font-bold text-white">
                         {Number(orderData.amount).toLocaleString()}{" "}
                         {orderData.currency}
                       </span>
@@ -417,44 +403,39 @@ export default function OrderSummary() {
                 (orderData.isCart &&
                   orderData.cartItems?.some((i) => i.pickupLocation))) && (
                 <div className="mb-6">
-                  <h2 className="text-light-text dark:text-dark-text mb-4 text-lg font-bold">
+                  <h2 className="mb-4 text-xl font-black tracking-tight text-white uppercase">
                     Delivery Information
                   </h2>
-                  <div className="space-y-3 rounded-md border border-gray-200 p-4 dark:border-gray-700">
+                  <div className="space-y-3 rounded-xl border border-zinc-800 bg-[#111] p-4">
                     {orderData.shippingAddress && (
                       <div>
-                        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                        <p className="text-sm font-medium text-zinc-500">
                           Shipping Address
                         </p>
-                        <p className="text-light-text dark:text-dark-text">
+                        <p className="text-white">
                           {orderData.shippingAddress}
                         </p>
                       </div>
                     )}
                     {orderData.pickupLocation && (
                       <div>
-                        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                        <p className="text-sm font-medium text-zinc-500">
                           Pickup Location
                         </p>
-                        <p className="text-light-text dark:text-dark-text">
-                          {orderData.pickupLocation}
-                        </p>
+                        <p className="text-white">{orderData.pickupLocation}</p>
                       </div>
                     )}
                     {orderData.isCart &&
                       orderData.cartItems?.some((i) => i.pickupLocation) && (
                         <div>
-                          <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                          <p className="text-sm font-medium text-zinc-500">
                             Pickup Locations
                           </p>
                           {orderData.cartItems
                             ?.filter((i) => i.pickupLocation)
                             .map((item, idx) => (
-                              <p
-                                key={idx}
-                                className="text-light-text dark:text-dark-text"
-                              >
-                                <span className="text-gray-600 dark:text-gray-400">
+                              <p key={idx} className="text-white">
+                                <span className="text-zinc-400">
                                   {item.title}:
                                 </span>{" "}
                                 {item.pickupLocation}
@@ -468,7 +449,7 @@ export default function OrderSummary() {
 
               <div className="flex flex-col gap-3 sm:flex-row">
                 <Button
-                  className={SHOPSTRBUTTONCLASSNAMES + " flex-1"}
+                  className={`${NEO_BTN} flex-1`}
                   onClick={() =>
                     router.push(
                       sfShopSlug ? `/shop/${sfShopSlug}` : "/marketplace"
@@ -480,7 +461,7 @@ export default function OrderSummary() {
                   Continue Shopping
                 </Button>
                 <Button
-                  className="text-light-text dark:text-dark-text flex-1 bg-gray-200 dark:bg-gray-700"
+                  className="flex-1 bg-gray-200 text-white"
                   onClick={() => router.push("/orders")}
                   size="lg"
                   startContent={
@@ -490,7 +471,7 @@ export default function OrderSummary() {
                   Check Order Status
                 </Button>
                 <Button
-                  className="text-light-text dark:text-dark-text flex-1 bg-gray-200 dark:bg-gray-700"
+                  className="flex-1 bg-gray-200 text-white"
                   onClick={() => {
                     const npub = orderData?.sellerPubkey
                       ? nip19.npubEncode(orderData.sellerPubkey)
@@ -511,7 +492,7 @@ export default function OrderSummary() {
 
             {latestProducts.length > 0 && (
               <div className="mt-10">
-                <h2 className="text-light-text dark:text-dark-text mb-6 text-center text-2xl font-bold">
+                <h2 className="mb-6 text-center text-2xl font-bold text-white">
                   More From the Marketplace
                 </h2>
                 <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
