@@ -116,6 +116,20 @@ function extractMeta(
   return undefined;
 }
 
+function normalizeHttpUrl(value: string | undefined, baseUrl: string): string {
+  if (!value) return baseUrl;
+
+  try {
+    const parsed = new URL(value.trim(), baseUrl);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return baseUrl;
+    }
+    return parsed.toString();
+  } catch {
+    return baseUrl;
+  }
+}
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
@@ -203,7 +217,7 @@ export default async function handler(
       }
     }
 
-    ogData.url = extractMeta(html, "og:url") ?? normalizedUrl;
+    ogData.url = normalizeHttpUrl(extractMeta(html, "og:url"), normalizedUrl);
 
     if (ogData.title) {
       cache.set(normalizedUrl, { data: ogData, timestamp: Date.now() });
