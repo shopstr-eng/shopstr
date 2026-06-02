@@ -706,6 +706,15 @@ describe("fetchAllPosts", () => {
       content: "",
       sig: "",
     });
+    const invalidWrongKindListing = makeBaseEvent({
+      id: "relay-invalid-kind",
+      pubkey: "seller-invalid-3",
+      created_at: 230,
+      kind: 0,
+      tags: [],
+      content: "",
+      sig: "sig-invalid-kind",
+    });
 
     global.fetch = jest
       .fn()
@@ -725,6 +734,7 @@ describe("fetchAllPosts", () => {
           validRelayListing,
           invalidNoIdListing,
           invalidNoSigListing,
+          invalidWrongKindListing,
         ]),
     } as any;
     const editProductContext = jest.fn();
@@ -740,11 +750,16 @@ describe("fetchAllPosts", () => {
 
     expect(cacheEventsToDatabase).toHaveBeenCalledWith([validRelayListing]);
     expect(cacheEventsToDatabase).not.toHaveBeenCalledWith(
-      expect.arrayContaining([invalidNoIdListing, invalidNoSigListing])
+      expect.arrayContaining([
+        invalidNoIdListing,
+        invalidNoSigListing,
+        invalidWrongKindListing,
+      ])
     );
     expect(productEvents).toEqual([validRelayListing]);
     expect(productEvents).not.toContain(invalidNoIdListing);
     expect(productEvents).not.toContain(invalidNoSigListing);
+    expect(productEvents).not.toContain(invalidWrongKindListing);
     expect(profileSetFromProducts).toEqual(new Set(["seller-valid"]));
 
     consoleErrorSpy.mockRestore();
