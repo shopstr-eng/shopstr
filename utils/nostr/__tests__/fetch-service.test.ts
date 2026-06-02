@@ -673,6 +673,128 @@ describe("fetchAllPosts", () => {
     jest.clearAllMocks();
   });
 
+  it("ignores invalid relay events and never caches them", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase,
+    }));
+
+    const { fetchAllPosts } = await import("../fetch-service");
+
+    const validRelayListing = makeProductEvent({
+      id: "relay-valid",
+      pubkey: "seller-valid",
+      created_at: 200,
+      tags: [["d", "listing-valid"]],
+      content: "",
+      sig: "sig-relay-valid",
+    });
+    const invalidNoIdListing = makeProductEvent({
+      id: "",
+      pubkey: "seller-invalid-1",
+      created_at: 210,
+      tags: [["d", "listing-invalid-1"]],
+      content: "",
+      sig: "sig-invalid-1",
+    });
+    const invalidNoSigListing = makeProductEvent({
+      id: "relay-invalid-nosig",
+      pubkey: "seller-invalid-2",
+      created_at: 220,
+      tags: [["d", "listing-invalid-2"]],
+      content: "",
+      sig: "",
+    });
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => [],
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => [],
+      }) as typeof global.fetch;
+
+    const nostr = {
+      fetch: jest
+        .fn()
+        .mockResolvedValue([
+          validRelayListing,
+          invalidNoIdListing,
+          invalidNoSigListing,
+        ]),
+    } as any;
+    const editProductContext = jest.fn();
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    const { productEvents, profileSetFromProducts } = await fetchAllPosts(
+      nostr,
+      ["wss://relay.example"],
+      editProductContext
+    );
+
+    expect(cacheEventsToDatabase).toHaveBeenCalledWith([validRelayListing]);
+    expect(cacheEventsToDatabase).not.toHaveBeenCalledWith(
+      expect.arrayContaining([invalidNoIdListing, invalidNoSigListing])
+    );
+    expect(productEvents).toEqual([validRelayListing, invalidNoSigListing]);
+    expect(productEvents).not.toContain(invalidNoIdListing);
+    expect(profileSetFromProducts).toEqual(
+      new Set(["seller-valid", "seller-invalid-2"])
+    );
+
+    consoleErrorSpy.mockRestore();
+  });
+
+  it("handles empty DB responses and empty relay responses", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase,
+    }));
+
+    const { fetchAllPosts } = await import("../fetch-service");
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => [],
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => [],
+      }) as typeof global.fetch;
+
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([]),
+    } as any;
+    const editProductContext = jest.fn();
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    const { productEvents, profileSetFromProducts } = await fetchAllPosts(
+      nostr,
+      ["wss://relay.example"],
+      editProductContext
+    );
+
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(nostr.fetch).toHaveBeenCalledTimes(1);
+    expect(editProductContext).toHaveBeenLastCalledWith([], false);
+    expect(productEvents).toEqual([]);
+    expect(profileSetFromProducts).toEqual(new Set());
+    expect(cacheEventsToDatabase).not.toHaveBeenCalled();
+
+    consoleErrorSpy.mockRestore();
+  });
+
   it("paginates through multiple DB batches before querying relays", async () => {
     const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
 
