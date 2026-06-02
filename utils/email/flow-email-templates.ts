@@ -2,7 +2,8 @@ export type FlowType =
   | "welcome_series"
   | "abandoned_cart"
   | "post_purchase"
-  | "winback";
+  | "winback"
+  | "one_time";
 
 export interface MergeTagData {
   buyer_name?: string;
@@ -316,11 +317,29 @@ const WINBACK_DEFAULTS: FlowStepTemplate[] = [
   },
 ];
 
+const ONE_TIME_DEFAULTS: FlowStepTemplate[] = [
+  {
+    step_order: 1,
+    subject: "A message from {{shop_name}}",
+    body_html: `<h2 style="margin:0 0 16px;color:#111827;font-size:20px;">Hi {{buyer_name}},</h2>
+<p style="margin:0 0 16px;color:#374151;font-size:15px;line-height:1.6;">Write your message here. This is a one-time email you can send to your contacts whenever you like.</p>
+<table role="presentation" cellpadding="0" cellspacing="0" style="margin:24px 0;">
+  <tr>
+    <td style="background-color:#000000;border-radius:6px;padding:12px 24px;">
+      <a href="{{shop_url}}" style="color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;">Visit Our Shop</a>
+    </td>
+  </tr>
+</table>`,
+    delay_hours: 0,
+  },
+];
+
 const DEFAULT_TEMPLATES: Record<FlowType, FlowStepTemplate[]> = {
   welcome_series: WELCOME_SERIES_DEFAULTS,
   abandoned_cart: ABANDONED_CART_DEFAULTS,
   post_purchase: POST_PURCHASE_DEFAULTS,
   winback: WINBACK_DEFAULTS,
+  one_time: ONE_TIME_DEFAULTS,
 };
 
 export function getDefaultFlowSteps(flowType: FlowType): FlowStepTemplate[] {

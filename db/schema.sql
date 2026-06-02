@@ -288,7 +288,7 @@ CREATE TABLE IF NOT EXISTS email_flows (
     id SERIAL PRIMARY KEY,
     seller_pubkey TEXT NOT NULL,
     name TEXT NOT NULL,
-    flow_type TEXT NOT NULL CHECK (flow_type IN ('welcome_series', 'abandoned_cart', 'post_purchase', 'winback')),
+    flow_type TEXT NOT NULL CHECK (flow_type IN ('welcome_series', 'abandoned_cart', 'post_purchase', 'winback', 'one_time')),
     status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'active', 'paused')),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP

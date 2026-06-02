@@ -68,6 +68,7 @@ const FLOW_TYPE_LABELS: Record<string, string> = {
   abandoned_cart: "Abandoned Cart",
   post_purchase: "Post-Purchase",
   winback: "Win-Back",
+  one_time: "One-Time Email",
 };
 
 const FLOW_TYPE_DESCRIPTIONS: Record<string, string> = {
@@ -78,6 +79,8 @@ const FLOW_TYPE_DESCRIPTIONS: Record<string, string> = {
   post_purchase:
     "Follow up after a purchase with tips, thank yous, and review requests",
   winback: "Re-engage customers who haven't purchased in a while",
+  one_time:
+    "Write a one-time email and send it to your contacts manually whenever you want — no automatic trigger",
 };
 
 function formatDelayHours(hours: number): string {

@@ -497,7 +497,7 @@ async function initializeTables(): Promise<void> {
           id SERIAL PRIMARY KEY,
           seller_pubkey TEXT NOT NULL,
           name TEXT NOT NULL,
-          flow_type TEXT NOT NULL CHECK (flow_type IN ('welcome_series', 'abandoned_cart', 'post_purchase', 'winback')),
+          flow_type TEXT NOT NULL CHECK (flow_type IN ('welcome_series', 'abandoned_cart', 'post_purchase', 'winback', 'one_time')),
           status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'active', 'paused')),
           from_name TEXT,
           reply_to TEXT,
@@ -846,6 +846,30 @@ async function initializeTables(): Promise<void> {
         ) THEN
           ALTER TABLE email_flows ADD COLUMN reply_to TEXT;
         END IF;
+      END $$;
+    `);
+
+    // Allow the 'one_time' flow type on databases created before it existed.
+    // Drop any existing CHECK constraint on flow_type (regardless of its
+    // auto-generated name) before adding the canonical one, so this works even
+    // if the prior constraint was named differently.
+    await client.query(`
+      DO $$
+      DECLARE
+        c record;
+      BEGIN
+        FOR c IN
+          SELECT con.conname
+          FROM pg_constraint con
+          JOIN pg_class rel ON rel.oid = con.conrelid
+          WHERE rel.relname = 'email_flows'
+            AND con.contype = 'c'
+            AND pg_get_constraintdef(con.oid) ILIKE '%flow_type%'
+        LOOP
+          EXECUTE format('ALTER TABLE email_flows DROP CONSTRAINT %I', c.conname);
+        END LOOP;
+        ALTER TABLE email_flows ADD CONSTRAINT email_flows_flow_type_check
+          CHECK (flow_type IN ('welcome_series', 'abandoned_cart', 'post_purchase', 'winback', 'one_time'));
       END $$;
     `);
 

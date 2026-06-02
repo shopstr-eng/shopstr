@@ -17,6 +17,7 @@ const VALID_FLOW_TYPES: FlowType[] = [
   "abandoned_cart",
   "post_purchase",
   "winback",
+  "one_time",
 ];
 
 export default async function handler(
