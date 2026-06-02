@@ -742,11 +742,10 @@ describe("fetchAllPosts", () => {
     expect(cacheEventsToDatabase).not.toHaveBeenCalledWith(
       expect.arrayContaining([invalidNoIdListing, invalidNoSigListing])
     );
-    expect(productEvents).toEqual([validRelayListing, invalidNoSigListing]);
+    expect(productEvents).toEqual([validRelayListing]);
     expect(productEvents).not.toContain(invalidNoIdListing);
-    expect(profileSetFromProducts).toEqual(
-      new Set(["seller-valid", "seller-invalid-2"])
-    );
+    expect(productEvents).not.toContain(invalidNoSigListing);
+    expect(profileSetFromProducts).toEqual(new Set(["seller-valid"]));
 
     consoleErrorSpy.mockRestore();
   });

@@ -139,7 +139,7 @@ export const fetchAllPosts = async (
 
       // Merge relay events on top of the accumulated DB products
       for (const event of fetchedEvents) {
-        if (!event || !event.id) continue;
+        if (!event || !event.id || !event.sig || !event.pubkey) continue;
         const key = getEventKey(event);
         const existing = dbProductsMap.get(key);
         if (!existing || event.created_at >= existing.created_at) {
