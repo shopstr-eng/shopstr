@@ -120,7 +120,7 @@ export default async function handler(
       );
       results.buyerEmailSent = await sendOrderConfirmationToBuyer(
         buyerEmail,
-        emailParams,
+        { ...emailParams, sellerContact: sellerEmail || undefined },
         branding,
         sellerEmail || undefined
       );
