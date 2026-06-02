@@ -6,6 +6,12 @@ import {
   SelectItem,
   Spinner,
   Tooltip,
+  Modal,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  Checkbox,
 } from "@heroui/react";
 import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
@@ -33,7 +39,9 @@ import {
   InformationCircleIcon,
   ArrowLeftIcon,
   ClockIcon,
+  PaperAirplaneIcon,
 } from "@heroicons/react/24/outline";
+import { createNip98AuthorizationHeader } from "@/utils/nostr/nip98-auth";
 
 interface FlowStep {
   id?: number;
@@ -82,7 +90,7 @@ function formatDelayHours(hours: number): string {
 }
 
 const EmailFlowsPage = () => {
-  const { pubkey, isLoggedIn } = useContext(SignerContext);
+  const { pubkey, signer, isLoggedIn } = useContext(SignerContext);
   const shopMapContext = useContext(ShopMapContext);
   const profileMapContext = useContext(ProfileMapContext);
 
@@ -134,6 +142,23 @@ const EmailFlowsPage = () => {
   const [sendingTestForStep, setSendingTestForStep] = useState<string | null>(
     null
   );
+  const [sendingContactsForFlow, setSendingContactsForFlow] = useState<
+    number | null
+  >(null);
+  const [contactPickerFlow, setContactPickerFlow] = useState<EmailFlow | null>(
+    null
+  );
+  const [pickerContacts, setPickerContacts] = useState<
+    {
+      email: string;
+      discountCode: string;
+      discountPercentage: number;
+      alreadyReceived: boolean;
+    }[]
+  >([]);
+  const [loadingPickerContacts, setLoadingPickerContacts] = useState(false);
+  const [pickerError, setPickerError] = useState<string | null>(null);
+  const [selectedEmails, setSelectedEmails] = useState<Set<string>>(new Set());
 
   const fetchFlows = useCallback(async () => {
     if (!pubkey) return;
@@ -230,6 +255,151 @@ const EmailFlowsPage = () => {
       }
     } catch {
       setError("Failed to toggle flow status.");
+    }
+  };
+
+  const openContactPicker = async (flow: EmailFlow) => {
+    setError(null);
+    setSuccessMessage(null);
+    if (!signer) {
+      setError("Sign in to send emails to your contacts.");
+      return;
+    }
+    if (flow.status !== "active") {
+      setError("Activate this flow before sending it to your contacts.");
+      return;
+    }
+
+    setContactPickerFlow(flow);
+    setPickerContacts([]);
+    setSelectedEmails(new Set());
+    setPickerError(null);
+    setLoadingPickerContacts(true);
+    try {
+      const url = `${window.location.origin}/api/email/flows/${flow.id}/send-to-contacts`;
+      const authHeader = await createNip98AuthorizationHeader(
+        signer,
+        url,
+        "GET"
+      );
+      const res = await fetch(`/api/email/flows/${flow.id}/send-to-contacts`, {
+        method: "GET",
+        headers: { Authorization: authHeader },
+      });
+      const data = await res.json();
+      if (res.ok) {
+        const contacts = (data.contacts || []) as typeof pickerContacts;
+        setPickerContacts(contacts);
+        // Pre-select everyone who hasn't received the flow yet.
+        setSelectedEmails(
+          new Set(
+            contacts
+              .filter((c) => !c.alreadyReceived)
+              .map((c) => c.email.toLowerCase())
+          )
+        );
+      } else {
+        setPickerError(data.error || "Failed to load contacts.");
+      }
+    } catch {
+      setPickerError("Failed to load contacts.");
+    } finally {
+      setLoadingPickerContacts(false);
+    }
+  };
+
+  const closeContactPicker = () => {
+    setContactPickerFlow(null);
+    setPickerContacts([]);
+    setSelectedEmails(new Set());
+    setPickerError(null);
+  };
+
+  const toggleContactSelection = (email: string) => {
+    const key = email.toLowerCase();
+    setSelectedEmails((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  };
+
+  const selectableEmails = useMemo(
+    () =>
+      pickerContacts
+        .filter((c) => !c.alreadyReceived)
+        .map((c) => c.email.toLowerCase()),
+    [pickerContacts]
+  );
+  const allSelectableSelected =
+    selectableEmails.length > 0 &&
+    selectableEmails.every((e) => selectedEmails.has(e));
+
+  const toggleSelectAll = () => {
+    if (allSelectableSelected) {
+      setSelectedEmails(new Set());
+    } else {
+      setSelectedEmails(new Set(selectableEmails));
+    }
+  };
+
+  const handleSendToContacts = async () => {
+    const flow = contactPickerFlow;
+    if (!flow || !signer) return;
+    if (selectedEmails.size === 0) {
+      setPickerError("Select at least one contact to send to.");
+      return;
+    }
+
+    setSendingContactsForFlow(flow.id);
+    setPickerError(null);
+    try {
+      const emails = pickerContacts
+        .filter((c) => selectedEmails.has(c.email.toLowerCase()))
+        .map((c) => c.email);
+      const url = `${window.location.origin}/api/email/flows/${flow.id}/send-to-contacts`;
+      const body = JSON.stringify({ emails });
+      const authHeader = await createNip98AuthorizationHeader(
+        signer,
+        url,
+        "POST",
+        body
+      );
+      const res = await fetch(`/api/email/flows/${flow.id}/send-to-contacts`, {
+        method: "POST",
+        headers: {
+          Authorization: authHeader,
+          "Content-Type": "application/json",
+        },
+        body,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        if (data.enrolled === 0) {
+          setSuccessMessage("Those contacts have already received this flow.");
+        } else {
+          setSuccessMessage(
+            `Sending "${flow.name}" to ${data.enrolled} contact${
+              data.enrolled === 1 ? "" : "s"
+            }${
+              data.skipped
+                ? ` (skipped ${data.skipped} who already received it)`
+                : ""
+            }. Emails go out within a few minutes.`
+          );
+        }
+        closeContactPicker();
+      } else {
+        setPickerError(data.error || "Failed to send to contacts.");
+      }
+    } catch {
+      setPickerError("Failed to send to contacts.");
+    } finally {
+      setSendingContactsForFlow(null);
     }
   };
 
@@ -910,6 +1080,23 @@ const EmailFlowsPage = () => {
                       </p>
                     </div>
                     <div className="flex gap-2">
+                      <Tooltip
+                        content={
+                          flow.status === "active"
+                            ? "Send to captured contacts who haven't received it yet"
+                            : "Activate the flow to send it to contacts"
+                        }
+                      >
+                        <Button
+                          className={BLUEBUTTONCLASSNAMES}
+                          size="sm"
+                          isDisabled={flow.status !== "active"}
+                          isLoading={sendingContactsForFlow === flow.id}
+                          onClick={() => openContactPicker(flow)}
+                        >
+                          <PaperAirplaneIcon className="h-4 w-4" />
+                        </Button>
+                      </Tooltip>
                       <Tooltip content="Edit steps">
                         <Button
                           className={WHITEBUTTONCLASSNAMES}
@@ -957,6 +1144,110 @@ const EmailFlowsPage = () => {
           )}
         </div>
       </div>
+
+      <Modal
+        isOpen={contactPickerFlow !== null}
+        onClose={closeContactPicker}
+        scrollBehavior="inside"
+        size="lg"
+      >
+        <ModalContent>
+          <ModalHeader className="flex flex-col gap-1">
+            <span>Send to contacts</span>
+            {contactPickerFlow && (
+              <span className="text-sm font-normal text-gray-500">
+                {contactPickerFlow.name}
+              </span>
+            )}
+          </ModalHeader>
+          <ModalBody>
+            {loadingPickerContacts ? (
+              <div className="flex justify-center py-8">
+                <Spinner />
+              </div>
+            ) : pickerError && pickerContacts.length === 0 ? (
+              <p className="py-4 text-center text-sm text-red-500">
+                {pickerError}
+              </p>
+            ) : pickerContacts.length === 0 ? (
+              <p className="py-4 text-center text-sm text-gray-500">
+                You don&apos;t have any captured contacts yet.
+              </p>
+            ) : (
+              <div className="flex flex-col gap-3">
+                <p className="text-sm text-gray-500">
+                  Choose who should receive this flow. Contacts who already
+                  received it are marked and can&apos;t be selected again.
+                </p>
+                <div className="flex items-center justify-between border-b border-gray-200 pb-2">
+                  <Checkbox
+                    isSelected={allSelectableSelected}
+                    isDisabled={selectableEmails.length === 0}
+                    onValueChange={toggleSelectAll}
+                  >
+                    Select all
+                  </Checkbox>
+                  <span className="text-sm text-gray-500">
+                    {selectedEmails.size} selected
+                  </span>
+                </div>
+                <div className="flex flex-col gap-2">
+                  {pickerContacts.map((contact) => (
+                    <div
+                      key={contact.email}
+                      className="flex items-center justify-between gap-2"
+                    >
+                      <Checkbox
+                        isSelected={selectedEmails.has(
+                          contact.email.toLowerCase()
+                        )}
+                        isDisabled={contact.alreadyReceived}
+                        onValueChange={() =>
+                          toggleContactSelection(contact.email)
+                        }
+                      >
+                        <span className="text-sm break-all">
+                          {contact.email}
+                        </span>
+                      </Checkbox>
+                      {contact.alreadyReceived && (
+                        <span className="text-xs whitespace-nowrap text-gray-400">
+                          Already received
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                {pickerError && (
+                  <p className="text-sm text-red-500">{pickerError}</p>
+                )}
+              </div>
+            )}
+          </ModalBody>
+          <ModalFooter>
+            <Button
+              className={WHITEBUTTONCLASSNAMES}
+              onClick={closeContactPicker}
+            >
+              Cancel
+            </Button>
+            <Button
+              className={BLUEBUTTONCLASSNAMES}
+              isDisabled={
+                selectedEmails.size === 0 ||
+                loadingPickerContacts ||
+                sendingContactsForFlow !== null
+              }
+              isLoading={sendingContactsForFlow === contactPickerFlow?.id}
+              onClick={handleSendToContacts}
+            >
+              {selectedEmails.size > 0
+                ? `Send to ${selectedEmails.size}`
+                : "Send"}
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </div>
   );
 };
