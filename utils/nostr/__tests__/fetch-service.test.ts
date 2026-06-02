@@ -9,6 +9,165 @@ const makeBaseEvent = (overrides: Record<string, any> = {}) => ({
   ...overrides,
 });
 
+describe("fetchAllPosts - NIP-99 and relay merge behavior", () => {
+  beforeEach(() => {
+    jest.resetModules();
+    jest.clearAllMocks();
+  });
+
+  it("getEventKey uses d tag for kind 30402 merging", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase,
+    }));
+
+    const { fetchAllPosts } = await import("../fetch-service");
+
+    const cachedA = makeProductEvent({
+      id: "cached-a",
+      pubkey: "seller",
+      created_at: 100,
+      tags: [["d", "tag-1"]],
+      content: "cached-a",
+      sig: "sig-cached-a",
+    });
+    const cachedB = makeProductEvent({
+      id: "cached-b",
+      pubkey: "seller",
+      created_at: 110,
+      tags: [["d", "tag-2"]],
+      content: "cached-b",
+      sig: "sig-cached-b",
+    });
+    const relayNewForA = makeProductEvent({
+      id: "relay-a",
+      pubkey: "seller",
+      created_at: 200,
+      tags: [["d", "tag-1"]],
+      content: "relay-a",
+      sig: "sig-relay-a",
+    });
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValueOnce(makeDbPayload([cachedA, cachedB]))
+      .mockResolvedValueOnce(makeDbPayload([])) as typeof global.fetch;
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([relayNewForA]) } as any;
+    const editProductContext = jest.fn();
+
+    const { productEvents, profileSetFromProducts } = await fetchAllPosts(
+      nostr,
+      ["wss://relay.example"],
+      editProductContext
+    );
+
+    // relay should replace cachedA (same pubkey+d) but not affect cachedB (different d)
+    expect(productEvents).toEqual(
+      expect.arrayContaining([relayNewForA, cachedB])
+    );
+    expect(productEvents).not.toContain(cachedA);
+    expect(cacheEventsToDatabase).toHaveBeenCalledWith([relayNewForA]);
+    expect(profileSetFromProducts).toEqual(new Set(["seller"]));
+  });
+
+  it("includes kind 1 zapsnag notes alongside kind 30402 product events and caches both", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase,
+    }));
+
+    const { fetchAllPosts } = await import("../fetch-service");
+
+    const product = makeProductEvent({
+      id: "prod-1",
+      pubkey: "seller-p",
+      created_at: 150,
+      tags: [["d", "prod-1"]],
+      content: "product",
+      sig: "sig-prod-1",
+    });
+    const zapsnagNote = makeBaseEvent({
+      id: "zapsnag-1",
+      pubkey: "seller-p",
+      created_at: 160,
+      kind: 1,
+      tags: [["t", "shopstr-zapsnag"]],
+      content: "zapsnag note",
+      sig: "sig-zapsnag-1",
+    });
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValueOnce(makeDbPayload([]))
+      .mockResolvedValueOnce(makeDbPayload([])) as typeof global.fetch;
+
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([product, zapsnagNote]),
+    } as any;
+    const editProductContext = jest.fn();
+
+    const { productEvents, profileSetFromProducts } = await fetchAllPosts(
+      nostr,
+      ["wss://relay.example"],
+      editProductContext
+    );
+
+    expect(productEvents).toEqual(
+      expect.arrayContaining([product, zapsnagNote])
+    );
+    expect(cacheEventsToDatabase).toHaveBeenCalledWith([product, zapsnagNote]);
+    expect(profileSetFromProducts).toEqual(new Set(["seller-p"]));
+  });
+
+  it("prefers newer relay events over older DB events for the same NIP-99 product key", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase,
+    }));
+
+    const { fetchAllPosts } = await import("../fetch-service");
+
+    const dbOld = makeProductEvent({
+      id: "db-old",
+      pubkey: "seller-x",
+      created_at: 100,
+      tags: [["d", "same-key"]],
+      content: "db-old",
+      sig: "sig-db-old",
+    });
+    const relayNew = makeProductEvent({
+      id: "relay-newer",
+      pubkey: "seller-x",
+      created_at: 300,
+      tags: [["d", "same-key"]],
+      content: "relay-new",
+      sig: "sig-relay-new",
+    });
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValueOnce(makeDbPayload([dbOld]))
+      .mockResolvedValueOnce(makeDbPayload([])) as typeof global.fetch;
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([relayNew]) } as any;
+    const editProductContext = jest.fn();
+
+    const { productEvents } = await fetchAllPosts(
+      nostr,
+      ["wss://relay.example"],
+      editProductContext
+    );
+
+    expect(productEvents).toEqual(expect.arrayContaining([relayNew]));
+    expect(productEvents).not.toContain(dbOld);
+    expect(cacheEventsToDatabase).toHaveBeenCalledWith([relayNew]);
+  });
+});
+
 const makeProfileEvent = (overrides: Record<string, any> = {}) =>
   makeBaseEvent({
     kind: 0,
