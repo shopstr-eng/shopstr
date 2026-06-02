@@ -63,6 +63,160 @@ const makeDbPayload = <T>(items: T[]) => ({
   json: async () => items,
 });
 
+describe("verifyProfilesNip05", () => {
+  beforeEach(() => {
+    jest.resetModules();
+    jest.clearAllMocks();
+  });
+
+  it("verifies profiles with nip05 values and leaves profiles without nip05 unchanged", async () => {
+    const verifyNip05Identifier = jest
+      .fn()
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false);
+
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(),
+      deleteEvent: jest.fn(),
+      verifyNip05Identifier,
+    }));
+
+    const { verifyProfilesNip05 } = await import("../fetch-service");
+
+    const profileWithNip05 = {
+      pubkey: "pubkey-with-nip05",
+      created_at: 1,
+      content: { nip05: "alice@example.com" },
+      nip05Verified: false,
+    };
+    const profileWithOtherNip05 = {
+      pubkey: "pubkey-with-second-nip05",
+      created_at: 2,
+      content: { nip05: "bob@example.com" },
+      nip05Verified: true,
+    };
+    const profileWithoutNip05 = {
+      pubkey: "pubkey-without-nip05",
+      created_at: 3,
+      content: {},
+      nip05Verified: true,
+    };
+
+    const profileMap = new Map([
+      [profileWithNip05.pubkey, profileWithNip05],
+      [profileWithOtherNip05.pubkey, profileWithOtherNip05],
+      [profileWithoutNip05.pubkey, profileWithoutNip05],
+    ]);
+
+    await verifyProfilesNip05(profileMap, 8);
+
+    expect(verifyNip05Identifier).toHaveBeenCalledTimes(2);
+    expect(verifyNip05Identifier).toHaveBeenNthCalledWith(
+      1,
+      "alice@example.com",
+      "pubkey-with-nip05"
+    );
+    expect(verifyNip05Identifier).toHaveBeenNthCalledWith(
+      2,
+      "bob@example.com",
+      "pubkey-with-second-nip05"
+    );
+    expect(profileMap.get(profileWithNip05.pubkey)?.nip05Verified).toBe(true);
+    expect(profileMap.get(profileWithOtherNip05.pubkey)?.nip05Verified).toBe(
+      false
+    );
+    expect(profileMap.get(profileWithoutNip05.pubkey)?.nip05Verified).toBe(
+      true
+    );
+    expect(Array.from(profileMap.keys())).toEqual([
+      profileWithNip05.pubkey,
+      profileWithOtherNip05.pubkey,
+      profileWithoutNip05.pubkey,
+    ]);
+  });
+
+  it("uses batch processing without changing the output shape", async () => {
+    const verifyNip05Identifier = jest.fn().mockResolvedValue(true);
+
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(),
+      deleteEvent: jest.fn(),
+      verifyNip05Identifier,
+    }));
+
+    const { verifyProfilesNip05 } = await import("../fetch-service");
+
+    const profileMap = new Map(
+      Array.from({ length: 5 }, (_, index) => [
+        `pubkey-${index}`,
+        {
+          pubkey: `pubkey-${index}`,
+          created_at: index,
+          content: { nip05: `user-${index}@example.com` },
+          nip05Verified: false,
+        },
+      ])
+    );
+
+    await verifyProfilesNip05(profileMap, 2);
+
+    expect(verifyNip05Identifier).toHaveBeenCalledTimes(5);
+    expect(Array.from(profileMap.entries())).toHaveLength(5);
+    expect(Array.from(profileMap.values())).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          pubkey: "pubkey-0",
+          content: { nip05: "user-0@example.com" },
+          nip05Verified: true,
+        }),
+        expect.objectContaining({
+          pubkey: "pubkey-4",
+          content: { nip05: "user-4@example.com" },
+          nip05Verified: true,
+        }),
+      ])
+    );
+  });
+
+  it("marks profiles false when verifyNip05Identifier rejects", async () => {
+    const verifyNip05Identifier = jest
+      .fn()
+      .mockRejectedValueOnce(new Error("verification failed"));
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(),
+      deleteEvent: jest.fn(),
+      verifyNip05Identifier,
+    }));
+
+    const { verifyProfilesNip05 } = await import("../fetch-service");
+
+    const profileMap = new Map([
+      [
+        "pubkey-failed",
+        {
+          pubkey: "pubkey-failed",
+          created_at: 1,
+          content: { nip05: "fail@example.com" },
+          nip05Verified: true,
+        },
+      ],
+    ]);
+
+    await verifyProfilesNip05(profileMap, 1);
+
+    expect(verifyNip05Identifier).toHaveBeenCalledWith(
+      "fail@example.com",
+      "pubkey-failed"
+    );
+    expect(profileMap.get("pubkey-failed")?.nip05Verified).toBe(false);
+    consoleErrorSpy.mockRestore();
+  });
+});
+
 describe("getReportTargetIdentifiers", () => {
   beforeEach(() => {
     jest.resetModules();
@@ -517,6 +671,182 @@ describe("fetchAllPosts", () => {
   beforeEach(() => {
     jest.resetModules();
     jest.clearAllMocks();
+  });
+
+  it("paginates through multiple DB batches before querying relays", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase,
+    }));
+
+    const { fetchAllPosts } = await import("../fetch-service");
+
+    const firstDbListing = makeProductEvent({
+      id: "cached-batch-1",
+      pubkey: "seller-a",
+      created_at: 100,
+      tags: [["d", "listing-a"]],
+      content: "",
+      sig: "sig-cached-batch-1",
+    });
+    const secondDbListing = makeProductEvent({
+      id: "cached-batch-2",
+      pubkey: "seller-b",
+      created_at: 200,
+      tags: [["d", "listing-b"]],
+      content: "",
+      sig: "sig-cached-batch-2",
+    });
+    const relayListing = makeProductEvent({
+      id: "relay-listing",
+      pubkey: "seller-c",
+      created_at: 300,
+      tags: [["d", "listing-c"]],
+      content: "",
+      sig: "sig-relay-listing",
+    });
+
+    const firstDbBatch = Array.from({ length: 500 }, (_, index) =>
+      index === 0
+        ? firstDbListing
+        : makeProductEvent({
+            id: `cached-batch-1-${index}`,
+            pubkey: "seller-a",
+            created_at: 100 + index,
+            tags: [["d", `listing-a-${index}`]],
+            content: "",
+            sig: `sig-cached-batch-1-${index}`,
+          })
+    );
+    const secondDbBatch = Array.from({ length: 500 }, (_, index) =>
+      index === 0
+        ? secondDbListing
+        : makeProductEvent({
+            id: `cached-batch-2-${index}`,
+            pubkey: "seller-b",
+            created_at: 200 + index,
+            tags: [["d", `listing-b-${index}`]],
+            content: "",
+            sig: `sig-cached-batch-2-${index}`,
+          })
+    );
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => firstDbBatch,
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => secondDbBatch,
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => [],
+      }) as typeof global.fetch;
+
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([relayListing]),
+    } as any;
+    const editProductContext = jest.fn();
+
+    const { productEvents, profileSetFromProducts } = await fetchAllPosts(
+      nostr,
+      ["wss://relay.example"],
+      editProductContext
+    );
+
+    expect(global.fetch).toHaveBeenCalledTimes(3);
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      1,
+      "/api/db/fetch-products?limit=500&offset=0"
+    );
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      2,
+      "/api/db/fetch-products?limit=500&offset=500"
+    );
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      3,
+      "/api/db/fetch-products?limit=500&offset=1000"
+    );
+    expect(editProductContext).toHaveBeenNthCalledWith(
+      1,
+      expect.arrayContaining([firstDbListing]),
+      true
+    );
+    expect(editProductContext).toHaveBeenNthCalledWith(
+      2,
+      expect.arrayContaining([firstDbListing, secondDbListing]),
+      true
+    );
+    expect(nostr.fetch).toHaveBeenCalledTimes(1);
+    expect(editProductContext).toHaveBeenLastCalledWith(
+      expect.arrayContaining([firstDbListing, secondDbListing, relayListing]),
+      false
+    );
+    expect(productEvents).toEqual(
+      expect.arrayContaining([firstDbListing, secondDbListing, relayListing])
+    );
+    expect(profileSetFromProducts).toEqual(
+      new Set(["seller-a", "seller-b", "seller-c"])
+    );
+    expect(cacheEventsToDatabase).toHaveBeenCalledWith(
+      expect.arrayContaining([relayListing])
+    );
+  });
+
+  it("emits cached DB events to context before relay results arrive", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase,
+    }));
+
+    const { fetchAllPosts } = await import("../fetch-service");
+
+    const cachedListing = makeProductEvent({
+      id: "cached-listing",
+      pubkey: "seller-cache",
+      created_at: 100,
+      tags: [["d", "listing-cache"]],
+      content: "",
+      sig: "sig-cached-listing",
+    });
+    const relayListing = makeProductEvent({
+      id: "relay-listing",
+      pubkey: "seller-relay",
+      created_at: 200,
+      tags: [["d", "listing-relay"]],
+      content: "",
+      sig: "sig-relay-listing",
+    });
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => [cachedListing],
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => [],
+      }) as typeof global.fetch;
+
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([relayListing]),
+    } as any;
+    const editProductContext = jest.fn();
+
+    await fetchAllPosts(nostr, ["wss://relay.example"], editProductContext);
+
+    expect(editProductContext.mock.calls[0]).toEqual([[cachedListing], true]);
+    expect(nostr.fetch).toHaveBeenCalledTimes(1);
+    expect(editProductContext.mock.calls[1][1]).toBe(false);
+    expect(editProductContext.mock.calls[1][0]).toEqual(
+      expect.arrayContaining([cachedListing, relayListing])
+    );
   });
 
   it("merges cached and relay listings by NIP-99 address and caches only valid relay events", async () => {

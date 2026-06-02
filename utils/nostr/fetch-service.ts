@@ -501,7 +501,7 @@ export const fetchShopProfile = async (
   });
 };
 
-async function verifyProfilesNip05(
+export async function verifyProfilesNip05(
   profileMap: Map<string, NipProfile | null>,
   concurrency = 8
 ): Promise<void> {
