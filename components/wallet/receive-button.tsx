@@ -32,6 +32,7 @@ import {
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
 import { NostrNIP46Signer } from "@/utils/nostr/signers/nostr-nip46-signer";
+import { CashuWalletContext } from "@/utils/context/context";
 
 const ReceiveButton = () => {
   const [showReceiveModal, setShowReceiveModal] = useState(false);
@@ -42,6 +43,7 @@ const ReceiveButton = () => {
 
   const { signer } = useContext(SignerContext);
   const { nostr } = useContext(NostrContext);
+  const { cashuPubkey, cashuPrivkey } = useContext(CashuWalletContext);
   const { mints, tokens, history } = getLocalStorageData();
 
   const {
@@ -94,7 +96,12 @@ const ReceiveButton = () => {
         if (!mints.includes(tokenMint)) {
           const updatedMints = [...mints, tokenMint];
           localStorage.setItem("mints", JSON.stringify(updatedMints));
-          await publishWalletEvent(nostr!, signer!);
+          if (cashuPubkey && cashuPrivkey) {
+            await publishWalletEvent(nostr!, signer!, {
+              cashuPubkey,
+              cashuPrivkey,
+            });
+          }
         }
         setIsClaimed(true);
         handleToggleReceiveModal();

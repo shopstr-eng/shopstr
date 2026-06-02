@@ -14,7 +14,11 @@ import {
   XCircleIcon,
 } from "@heroicons/react/24/outline";
 import { useTheme } from "next-themes";
-import { ProfileMapContext, ChatsContext } from "../../utils/context/context";
+import {
+  ProfileMapContext,
+  ChatsContext,
+  CashuWalletContext,
+} from "../../utils/context/context";
 import {
   generateKeys,
   getLocalStorageData,
@@ -51,6 +55,7 @@ export default function ClaimButton({ token }: { token: string }) {
   const chatsContext = useContext(ChatsContext);
   const { signer, pubkey: userPubkey } = useContext(SignerContext);
   const { nostr } = useContext(NostrContext);
+  const { cashuPubkey, cashuPrivkey } = useContext(CashuWalletContext);
 
   const [openClaimTypeModal, setOpenClaimTypeModal] = useState(false);
   const [openRedemptionModal, setOpenRedemptionModal] = useState(false);
@@ -228,7 +233,12 @@ export default function ClaimButton({ token }: { token: string }) {
         if (!mints.includes(tokenMint)) {
           const updatedMints = [...mints, tokenMint];
           localStorage.setItem("mints", JSON.stringify(updatedMints));
-          await publishWalletEvent(nostr!, signer!);
+          if (cashuPubkey && cashuPrivkey) {
+            await publishWalletEvent(nostr!, signer!, {
+              cashuPubkey,
+              cashuPrivkey,
+            });
+          }
         }
         if (isInvalid) {
           setIsInvalidSuccess(true);

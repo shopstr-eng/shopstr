@@ -39,6 +39,7 @@ import {
 import ProtectedRoute from "@/components/utility-components/protected-route";
 import EditAddressForm from "@/components/utility-components/edit-address-form";
 import SavedAddressesList from "@/components/utility-components/saved-addresses-list";
+import { CashuWalletContext } from "@/utils/context/context";
 
 const PreferencesPage = () => {
   const { nostr } = useContext(NostrContext);
@@ -61,6 +62,7 @@ const PreferencesPage = () => {
 
   const [isLoaded, setIsLoaded] = useState(false);
   const { signer } = useContext(SignerContext);
+  const { cashuPubkey, cashuPrivkey } = useContext(CashuWalletContext);
 
   const [showFailureModal, setShowFailureModal] = useState(false);
   const [failureText, setFailureText] = useState("");
@@ -162,7 +164,12 @@ const PreferencesPage = () => {
         } else {
           setMints([newMint, ...mints.filter((mint) => mint !== newMint)]);
         }
-        await publishWalletEvent(nostr!, signer!);
+        if (cashuPubkey && cashuPrivkey) {
+          await publishWalletEvent(nostr!, signer!, {
+            cashuPubkey,
+            cashuPrivkey,
+          });
+        }
         handleToggleMintModal();
       } else {
         setFailureText(
@@ -180,7 +187,12 @@ const PreferencesPage = () => {
 
   const deleteMint = async (mintToDelete: string) => {
     setMints(mints.filter((mint) => mint !== mintToDelete));
-    await publishWalletEvent(nostr!, signer!);
+    if (cashuPubkey && cashuPrivkey) {
+      await publishWalletEvent(nostr!, signer!, {
+        cashuPubkey,
+        cashuPrivkey,
+      });
+    }
   };
 
   useEffect(() => {

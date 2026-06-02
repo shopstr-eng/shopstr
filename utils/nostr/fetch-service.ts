@@ -15,6 +15,7 @@ import {
   getLocalStorageData,
   deleteEvent,
   verifyNip05Identifier,
+  publishWalletEvent,
 } from "@/utils/nostr/nostr-helper-functions";
 import {
   ProductData,
@@ -29,6 +30,7 @@ import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 import { cacheEventsToDatabase } from "@/utils/db/db-client";
 import {
   applyWalletConfigContent,
+  generateCashuWalletKeypair,
   LatestWalletKeypair,
 } from "@/utils/cashu/wallet-config";
 import {
@@ -1880,6 +1882,30 @@ export const fetchCashuWallet = async (
           });
         } catch (error) {
           console.error("Failed to process most recent wallet event:", error);
+        }
+      }
+
+      // Generate a Cashu wallet identity exactly once if none exists yet
+      const hasExistingKeypair =
+        latestKeypair?.cashuPubkey !== undefined ||
+        latestKeypair?.cashuPrivkey !== undefined;
+
+      if (!hasExistingKeypair && signer) {
+        try {
+          const { cashuPubkey, cashuPrivkey } = generateCashuWalletKeypair();
+          await publishWalletEvent(
+            nostr,
+            signer,
+            { cashuPubkey, cashuPrivkey },
+            { mints: cashuMints }
+          );
+          latestKeypair = {
+            createdAt: Math.floor(Date.now() / 1000),
+            cashuPubkey,
+            cashuPrivkey,
+          };
+        } catch (error) {
+          console.error("Failed to generate Cashu wallet identity:", error);
         }
       }
 

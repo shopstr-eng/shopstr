@@ -1,3 +1,5 @@
+import { generateSecretKey, getPublicKey } from "nostr-tools";
+import { bytesToHex } from "@noble/hashes/utils.js";
 import type { WalletConfig } from "@/utils/types/types";
 
 export type LegacyWalletConfig = string[][];
@@ -105,4 +107,28 @@ export function applyWalletConfigContent(
   const parsed = parseWalletConfigContent(data);
   addParsedMints(parsed, mintSet, mints);
   return updateLatestWalletKeypair(latestKeypair, eventCreatedAt, parsed);
+}
+
+export function generateCashuWalletKeypair(): {
+  cashuPubkey: string;
+  cashuPrivkey: string;
+} {
+  const secretKey = generateSecretKey();
+  return {
+    cashuPubkey: getPublicKey(secretKey),
+    cashuPrivkey: bytesToHex(secretKey),
+  };
+}
+
+export function buildWalletConfigV1(
+  cashuPubkey: string,
+  cashuPrivkey: string,
+  mints: string[]
+): WalletConfig {
+  return {
+    version: 1,
+    cashuPubkey,
+    cashuPrivkey,
+    mints,
+  };
 }

@@ -64,6 +64,7 @@ import {
   REPORT_TYPES,
   saveNWCString,
   sendGiftWrappedMessageEvent,
+  publishWalletEvent,
   setLocalStorageDataOnSignIn,
   validateNPubKey,
   validateNSecKey,
@@ -1481,5 +1482,61 @@ describe("createNostrProfileEvent", () => {
       expect.objectContaining({ kind: 0, content: '{"name":"Alice"}' })
     );
     expect(result).toEqual(signedEvent);
+  });
+});
+describe("publishWalletEvent", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    localStorage.clear();
+    localStorage.setItem(
+      "mints",
+      JSON.stringify(["https://local-mint.example"])
+    );
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({}),
+    });
+  });
+
+  it("publishes an encrypted WalletConfig v1 event with merged mints", async () => {
+    let capturedContent: string | undefined;
+    const signer = {
+      getPubKey: jest.fn().mockResolvedValue("wallet-owner-pubkey"),
+      encrypt: jest.fn(async (_pubkey: string, plaintext: string) => {
+        capturedContent = plaintext;
+        return `encrypted:${plaintext}`;
+      }),
+      sign: jest.fn(async (eventTemplate) => ({
+        ...eventTemplate,
+        id: "signed-wallet-event",
+        pubkey: "wallet-owner-pubkey",
+        sig: "signed-sig",
+      })),
+    };
+    const nostr = {
+      publish: jest.fn().mockResolvedValue(undefined),
+    };
+
+    await publishWalletEvent(
+      nostr as any,
+      signer as any,
+      { cashuPubkey: "02pub", cashuPrivkey: "deadbeef" },
+      { mints: ["https://relay-mint.example", "https://local-mint.example"] }
+    );
+
+    expect(signer.encrypt).toHaveBeenCalledWith(
+      "wallet-owner-pubkey",
+      expect.any(String)
+    );
+    expect(capturedContent).toBeDefined();
+    expect(JSON.parse(capturedContent!)).toEqual({
+      version: 1,
+      cashuPubkey: "02pub",
+      cashuPrivkey: "deadbeef",
+      mints: ["https://local-mint.example", "https://relay-mint.example"],
+    });
+    expect(signer.sign).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 17375 })
+    );
   });
 });

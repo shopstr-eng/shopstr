@@ -23,7 +23,6 @@ const makeBaseEvent = (overrides: Record<string, any> = {}) => ({
   sig: "sig",
   ...overrides,
 });
-import { fetchReports } from "../fetch-service";
 import type { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 
 function createMockSigner(overrides: Partial<NostrSigner> = {}): NostrSigner {
@@ -4121,15 +4120,25 @@ describe("fetchCashuWallet", () => {
     );
   });
 
-  it("passes undefined keys through editCashuWalletContext for legacy-only wallet config", async () => {
+  it("generates and publishes a v1 wallet identity for a legacy-only wallet config", async () => {
     const legacyDbConfig = [["mint", "https://legacy-mint.example"]];
 
     const decrypt = jest.fn(async () => JSON.stringify(legacyDbConfig));
+    const publishWalletEvent = jest.fn().mockResolvedValue(undefined);
+    const generateCashuWalletKeypair = jest.fn(() => ({
+      cashuPubkey: "02generated-pk",
+      cashuPrivkey: "generated-sk",
+    }));
 
     jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
       getLocalStorageData: jest.fn(() => ({ tokens: [] })),
       deleteEvent: jest.fn(),
       verifyNip05Identifier: jest.fn(),
+      publishWalletEvent,
+    }));
+    jest.doMock("@/utils/cashu/wallet-config", () => ({
+      ...jest.requireActual("@/utils/cashu/wallet-config"),
+      generateCashuWalletKeypair,
     }));
     jest.doMock("@/utils/db/db-client", () => ({
       cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
@@ -4163,6 +4172,97 @@ describe("fetchCashuWallet", () => {
       fetch: jest.fn().mockResolvedValueOnce([]).mockResolvedValueOnce([]),
     } as any;
     const editCashuWalletContext = jest.fn();
+    const signer = createMockSigner({
+      getPubKey: jest.fn().mockResolvedValue(userPubkey),
+      decrypt,
+    });
+
+    const result = await fetchCashuWallet(
+      nostr,
+      signer,
+      ["wss://relay.example"],
+      editCashuWalletContext
+    );
+
+    expect(generateCashuWalletKeypair).toHaveBeenCalledTimes(1);
+    expect(publishWalletEvent).toHaveBeenCalledTimes(1);
+    expect(publishWalletEvent).toHaveBeenCalledWith(
+      nostr,
+      signer,
+      { cashuPubkey: "02generated-pk", cashuPrivkey: "generated-sk" },
+      { mints: ["https://legacy-mint.example"] }
+    );
+    expect(result.cashuPubkey).toBe("02generated-pk");
+    expect(result.cashuPrivkey).toBe("generated-sk");
+    expect(editCashuWalletContext).toHaveBeenLastCalledWith(
+      [],
+      ["https://legacy-mint.example"],
+      [],
+      false,
+      {
+        cashuPubkey: "02generated-pk",
+        cashuPrivkey: "generated-sk",
+      }
+    );
+  });
+
+  it("does not generate or publish when a v1 wallet identity already exists", async () => {
+    const v1Config = {
+      version: 1 as const,
+      cashuPubkey: "02existing-pk",
+      cashuPrivkey: "existing-sk",
+      mints: ["https://existing-mint.example"],
+    };
+
+    const decrypt = jest.fn(async () => JSON.stringify(v1Config));
+    const publishWalletEvent = jest.fn().mockResolvedValue(undefined);
+    const generateCashuWalletKeypair = jest.fn(() => ({
+      cashuPubkey: "02should-not-be-used",
+      cashuPrivkey: "should-not-be-used",
+    }));
+
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(() => ({ tokens: [] })),
+      deleteEvent: jest.fn(),
+      verifyNip05Identifier: jest.fn(),
+      publishWalletEvent,
+    }));
+    jest.doMock("@/utils/cashu/wallet-config", () => ({
+      ...jest.requireActual("@/utils/cashu/wallet-config"),
+      generateCashuWalletKeypair,
+    }));
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+    jest.doMock("@cashu/cashu-ts", () => ({
+      ...jest.requireActual("@cashu/cashu-ts"),
+      Wallet: jest.fn().mockImplementation(() => ({
+        loadMint: jest.fn().mockResolvedValue(undefined),
+        checkProofsStates: jest.fn().mockResolvedValue([]),
+      })),
+      Mint: jest.fn().mockImplementation(() => ({})),
+    }));
+
+    const { fetchCashuWallet } = await import("../fetch-service");
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [
+        {
+          id: "db-v1",
+          kind: 17375,
+          created_at: 100,
+          content: "encrypted-v1-db",
+          pubkey: userPubkey,
+          sig: "sig-v1",
+        },
+      ],
+    }) as typeof global.fetch;
+
+    const nostr = {
+      fetch: jest.fn().mockResolvedValueOnce([]).mockResolvedValueOnce([]),
+    } as any;
+    const editCashuWalletContext = jest.fn();
 
     const result = await fetchCashuWallet(
       nostr,
@@ -4174,16 +4274,18 @@ describe("fetchCashuWallet", () => {
       editCashuWalletContext
     );
 
-    expect(result.cashuPubkey).toBeUndefined();
-    expect(result.cashuPrivkey).toBeUndefined();
-    expect(editCashuWalletContext).toHaveBeenCalledWith(
+    expect(generateCashuWalletKeypair).not.toHaveBeenCalled();
+    expect(publishWalletEvent).not.toHaveBeenCalled();
+    expect(result.cashuPubkey).toBe("02existing-pk");
+    expect(result.cashuPrivkey).toBe("existing-sk");
+    expect(editCashuWalletContext).toHaveBeenLastCalledWith(
       [],
-      ["https://legacy-mint.example"],
+      ["https://existing-mint.example"],
       [],
       false,
       {
-        cashuPubkey: undefined,
-        cashuPrivkey: undefined,
+        cashuPubkey: "02existing-pk",
+        cashuPrivkey: "existing-sk",
       }
     );
   });

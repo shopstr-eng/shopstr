@@ -1,7 +1,9 @@
 import {
   addParsedMints,
   applyWalletConfigContent,
+  buildWalletConfigV1,
   extractMintsFromLegacy,
+  generateCashuWalletKeypair,
   isLegacyWalletConfig,
   isWalletConfigV1,
   parseWalletConfigContent,
@@ -200,6 +202,37 @@ describe("wallet-config", () => {
         createdAt: 200,
         cashuPubkey: "new-pk",
         cashuPrivkey: "new-sk",
+      });
+    });
+  });
+
+  describe("generateCashuWalletKeypair", () => {
+    it("derives a public key and hex private key from a fresh secret", () => {
+      const { cashuPubkey, cashuPrivkey } = generateCashuWalletKeypair();
+
+      expect(typeof cashuPubkey).toBe("string");
+      expect(cashuPubkey).toMatch(/^[0-9a-f]{64}$/);
+      expect(cashuPrivkey).toMatch(/^[0-9a-f]{64}$/);
+    });
+
+    it("generates a distinct keypair on each call", () => {
+      const first = generateCashuWalletKeypair();
+      const second = generateCashuWalletKeypair();
+
+      expect(first.cashuPrivkey).not.toBe(second.cashuPrivkey);
+      expect(first.cashuPubkey).not.toBe(second.cashuPubkey);
+    });
+  });
+
+  describe("buildWalletConfigV1", () => {
+    it("builds a versioned wallet config payload", () => {
+      expect(
+        buildWalletConfigV1("02abc", "deadbeef", ["https://mint.example"])
+      ).toEqual({
+        version: 1,
+        cashuPubkey: "02abc",
+        cashuPrivkey: "deadbeef",
+        mints: ["https://mint.example"],
       });
     });
   });
