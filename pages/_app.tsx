@@ -34,7 +34,6 @@ import { createNip98AuthorizationHeader } from "@/utils/nostr/nip98-auth";
 import { HeroUIProvider } from "@heroui/react";
 import { ThemeProvider as NextThemesProvider } from "next-themes";
 import {
-  fetchAllPosts,
   fetchReviews,
   fetchShopProfile,
   fetchProfile,
@@ -45,6 +44,7 @@ import {
   fetchAllCommunities,
   fetchGiftWrappedChatsAndMessages,
 } from "@/utils/nostr/fetch-service";
+import { fetchAllPostsAbortable } from "@/utils/nostr/fetch-all-posts-abortable";
 import {
   NostrEvent,
   Community,
@@ -660,7 +660,7 @@ function Shopstr({ props }: { props: AppProps }) {
         const productsPromise = runTask(
           "fetching products",
           () =>
-            fetchAllPosts(
+            fetchAllPostsAbortable(
               nostr!,
               allRelays,
               guardedEditProductContext,
