@@ -331,6 +331,40 @@ function reviewEvent(overrides: Partial<NostrEvent>): NostrEvent {
   };
 }
 
+async function withMockedDbService<T>(
+  client: MockDbClient,
+  callback: (db: DbServiceModule, pool: MockDbPool) => Promise<T>
+): Promise<T> {
+  let result: T | undefined;
+
+  await jest.isolateModulesAsync(async () => {
+    const prev = process.env.DATABASE_URL;
+    process.env.DATABASE_URL = "postgres://test@localhost/testdb";
+    try {
+      const pool: MockDbPool = {
+        connect: jest.fn(async () => client),
+        on: jest.fn(),
+        end: jest.fn(async () => undefined),
+      };
+
+      jest.doMock("pg", () => ({
+        Pool: class {
+          constructor() {
+            return pool;
+          }
+        },
+      }));
+
+      const db = await import("../db-service");
+      result = await callback(db, pool);
+    } finally {
+      process.env.DATABASE_URL = prev;
+    }
+  });
+
+  return result as T;
+}
+
 describe("db-service helpers", () => {
   afterAll(async () => {
     if (sharedPostgresContainer) {
@@ -1199,6 +1233,616 @@ describe("db-service helpers", () => {
           process.env.DATABASE_URL = prev;
         }
       });
+    });
+
+    test("validateDiscountCode returns invalid on query error and releases client", async () => {
+      await jest.isolateModulesAsync(async () => {
+        const prev = process.env.DATABASE_URL;
+        process.env.DATABASE_URL = "postgres://test@localhost/testdb";
+        const errorSpy = jest
+          .spyOn(console, "error")
+          .mockImplementation(() => undefined);
+        try {
+          const client: MockDbClient = {
+            query: jest.fn(async () => {
+              throw new Error("validate discount failed");
+            }),
+            release: jest.fn(),
+          };
+
+          const pool: MockDbPool = {
+            connect: jest.fn(async () => client),
+            on: jest.fn(),
+            end: jest.fn(async () => undefined),
+          };
+
+          jest.doMock("pg", () => ({
+            Pool: class {
+              constructor() {
+                return pool;
+              }
+            },
+          }));
+
+          const mod = await import("../db-service");
+          await expect(
+            mod.validateDiscountCode("SAVE10", "merchant-1")
+          ).resolves.toEqual({ valid: false });
+          expect(client.release).toHaveBeenCalled();
+          expect(errorSpy).toHaveBeenCalledWith(
+            "Failed to validate discount code:",
+            expect.any(Error)
+          );
+        } finally {
+          errorSpy.mockRestore();
+          process.env.DATABASE_URL = prev;
+        }
+      });
+    });
+
+    test("deleteDiscountCode logs, rethrows query errors, and releases client", async () => {
+      await jest.isolateModulesAsync(async () => {
+        const prev = process.env.DATABASE_URL;
+        process.env.DATABASE_URL = "postgres://test@localhost/testdb";
+        const errorSpy = jest
+          .spyOn(console, "error")
+          .mockImplementation(() => undefined);
+        try {
+          const deleteError = new Error("delete discount failed");
+          const client: MockDbClient = {
+            query: jest.fn(async (queryText: string) => {
+              if (queryText.includes("DELETE FROM discount_codes")) {
+                throw deleteError;
+              }
+
+              return { rows: [], rowCount: 1 };
+            }),
+            release: jest.fn(),
+          };
+
+          const pool: MockDbPool = {
+            connect: jest.fn(async () => client),
+            on: jest.fn(),
+            end: jest.fn(async () => undefined),
+          };
+
+          jest.doMock("pg", () => ({
+            Pool: class {
+              constructor() {
+                return pool;
+              }
+            },
+          }));
+
+          const mod = await import("../db-service");
+          await expect(
+            mod.deleteDiscountCode("SAVE10", "merchant-1")
+          ).rejects.toThrow(deleteError);
+          expect(client.release).toHaveBeenCalled();
+          expect(errorSpy).toHaveBeenCalledWith(
+            "Failed to delete discount code:",
+            deleteError
+          );
+        } finally {
+          errorSpy.mockRestore();
+          process.env.DATABASE_URL = prev;
+        }
+      });
+    });
+
+    test("fetchProductByListingSlug returns null on query error and releases client", async () => {
+      await jest.isolateModulesAsync(async () => {
+        const prev = process.env.DATABASE_URL;
+        process.env.DATABASE_URL = "postgres://test@localhost/testdb";
+        const errorSpy = jest
+          .spyOn(console, "error")
+          .mockImplementation(() => undefined);
+        try {
+          const client: MockDbClient = {
+            query: jest.fn(async () => {
+              throw new Error("listing slug failed");
+            }),
+            release: jest.fn(),
+          };
+
+          const pool: MockDbPool = {
+            connect: jest.fn(async () => client),
+            on: jest.fn(),
+            end: jest.fn(async () => undefined),
+          };
+
+          jest.doMock("pg", () => ({
+            Pool: class {
+              constructor() {
+                return pool;
+              }
+            },
+          }));
+
+          const mod = await import("../db-service");
+          await expect(
+            mod.fetchProductByListingSlug("listing-a")
+          ).resolves.toBeNull();
+          expect(client.release).toHaveBeenCalled();
+          expect(errorSpy).toHaveBeenCalledWith(
+            "Failed to fetch product by listing slug:",
+            expect.any(Error)
+          );
+        } finally {
+          errorSpy.mockRestore();
+          process.env.DATABASE_URL = prev;
+        }
+      });
+    });
+
+    test("fetchShopProfileByPubkeyFromDb returns null on query error and releases client", async () => {
+      await jest.isolateModulesAsync(async () => {
+        const prev = process.env.DATABASE_URL;
+        process.env.DATABASE_URL = "postgres://test@localhost/testdb";
+        const errorSpy = jest
+          .spyOn(console, "error")
+          .mockImplementation(() => undefined);
+        try {
+          const client: MockDbClient = {
+            query: jest.fn(async () => {
+              throw new Error("shop profile failed");
+            }),
+            release: jest.fn(),
+          };
+
+          const pool: MockDbPool = {
+            connect: jest.fn(async () => client),
+            on: jest.fn(),
+            end: jest.fn(async () => undefined),
+          };
+
+          jest.doMock("pg", () => ({
+            Pool: class {
+              constructor() {
+                return pool;
+              }
+            },
+          }));
+
+          const mod = await import("../db-service");
+          await expect(
+            mod.fetchShopProfileByPubkeyFromDb("shop-owner")
+          ).resolves.toBeNull();
+          expect(client.release).toHaveBeenCalled();
+          expect(errorSpy).toHaveBeenCalledWith(
+            "Failed to fetch shop profile by pubkey:",
+            expect.any(Error)
+          );
+        } finally {
+          errorSpy.mockRestore();
+          process.env.DATABASE_URL = prev;
+        }
+      });
+    });
+
+    test("fetchProfilePubkeyByNameSlug skips invalid JSON profile content", async () => {
+      await jest.isolateModulesAsync(async () => {
+        const prev = process.env.DATABASE_URL;
+        process.env.DATABASE_URL = "postgres://test@localhost/testdb";
+        try {
+          const client: MockDbClient = {
+            query: jest.fn(async () => ({
+              rows: [
+                { pubkey: "bad-json-pubkey", content: "{" },
+                {
+                  pubkey: "valid-pubkey",
+                  content: JSON.stringify({ name: "Valid Shop" }),
+                },
+              ],
+              rowCount: 2,
+            })),
+            release: jest.fn(),
+          };
+
+          const pool: MockDbPool = {
+            connect: jest.fn(async () => client),
+            on: jest.fn(),
+            end: jest.fn(async () => undefined),
+          };
+
+          jest.doMock("pg", () => ({
+            Pool: class {
+              constructor() {
+                return pool;
+              }
+            },
+          }));
+
+          const mod = await import("../db-service");
+          await expect(
+            mod.fetchProfilePubkeyByNameSlug("Valid-Shop")
+          ).resolves.toBe("valid-pubkey");
+          expect(client.release).toHaveBeenCalled();
+        } finally {
+          process.env.DATABASE_URL = prev;
+        }
+      });
+    });
+
+    test("fetchProfilePubkeyByNameSlug returns null on query error and releases client", async () => {
+      await jest.isolateModulesAsync(async () => {
+        const prev = process.env.DATABASE_URL;
+        process.env.DATABASE_URL = "postgres://test@localhost/testdb";
+        const errorSpy = jest
+          .spyOn(console, "error")
+          .mockImplementation(() => undefined);
+        try {
+          const client: MockDbClient = {
+            query: jest.fn(async () => {
+              throw new Error("profile slug failed");
+            }),
+            release: jest.fn(),
+          };
+
+          const pool: MockDbPool = {
+            connect: jest.fn(async () => client),
+            on: jest.fn(),
+            end: jest.fn(async () => undefined),
+          };
+
+          jest.doMock("pg", () => ({
+            Pool: class {
+              constructor() {
+                return pool;
+              }
+            },
+          }));
+
+          const mod = await import("../db-service");
+          await expect(
+            mod.fetchProfilePubkeyByNameSlug("Shop")
+          ).resolves.toBeNull();
+          expect(client.release).toHaveBeenCalled();
+          expect(errorSpy).toHaveBeenCalledWith(
+            "Failed to fetch profile pubkey by name slug:",
+            expect.any(Error)
+          );
+        } finally {
+          errorSpy.mockRestore();
+          process.env.DATABASE_URL = prev;
+        }
+      });
+    });
+
+    test("fetchShopPubkeyBySlug returns null on query error and releases client", async () => {
+      await jest.isolateModulesAsync(async () => {
+        const prev = process.env.DATABASE_URL;
+        process.env.DATABASE_URL = "postgres://test@localhost/testdb";
+        const errorSpy = jest
+          .spyOn(console, "error")
+          .mockImplementation(() => undefined);
+        try {
+          const client: MockDbClient = {
+            query: jest.fn(async () => {
+              throw new Error("shop slug failed");
+            }),
+            release: jest.fn(),
+          };
+
+          const pool: MockDbPool = {
+            connect: jest.fn(async () => client),
+            on: jest.fn(),
+            end: jest.fn(async () => undefined),
+          };
+
+          jest.doMock("pg", () => ({
+            Pool: class {
+              constructor() {
+                return pool;
+              }
+            },
+          }));
+
+          const mod = await import("../db-service");
+          await expect(mod.fetchShopPubkeyBySlug("shop")).resolves.toBeNull();
+          expect(client.release).toHaveBeenCalled();
+          expect(errorSpy).toHaveBeenCalledWith(
+            "Failed to fetch shop pubkey by slug:",
+            expect.any(Error)
+          );
+        } finally {
+          errorSpy.mockRestore();
+          process.env.DATABASE_URL = prev;
+        }
+      });
+    });
+
+    test("fetchCommunityByPubkeyAndIdentifier returns null on query error and releases client", async () => {
+      await jest.isolateModulesAsync(async () => {
+        const prev = process.env.DATABASE_URL;
+        process.env.DATABASE_URL = "postgres://test@localhost/testdb";
+        const errorSpy = jest
+          .spyOn(console, "error")
+          .mockImplementation(() => undefined);
+        try {
+          const client: MockDbClient = {
+            query: jest.fn(async () => {
+              throw new Error("community lookup failed");
+            }),
+            release: jest.fn(),
+          };
+
+          const pool: MockDbPool = {
+            connect: jest.fn(async () => client),
+            on: jest.fn(),
+            end: jest.fn(async () => undefined),
+          };
+
+          jest.doMock("pg", () => ({
+            Pool: class {
+              constructor() {
+                return pool;
+              }
+            },
+          }));
+
+          const mod = await import("../db-service");
+          await expect(
+            mod.fetchCommunityByPubkeyAndIdentifier(
+              "community-owner",
+              "community-id"
+            )
+          ).resolves.toBeNull();
+          expect(client.release).toHaveBeenCalled();
+          expect(errorSpy).toHaveBeenCalledWith(
+            "Failed to fetch community by pubkey and identifier:",
+            expect.any(Error)
+          );
+        } finally {
+          errorSpy.mockRestore();
+          process.env.DATABASE_URL = prev;
+        }
+      });
+    });
+
+    test("getUnreadMessageCount returns zero on query error and releases client", async () => {
+      const errorSpy = jest
+        .spyOn(console, "error")
+        .mockImplementation(() => undefined);
+      try {
+        const client: MockDbClient = {
+          query: jest.fn(async () => {
+            throw new Error("unread count failed");
+          }),
+          release: jest.fn(),
+        };
+
+        await withMockedDbService(client, async (mod) => {
+          await expect(mod.getUnreadMessageCount("buyer-1")).resolves.toBe(0);
+        });
+
+        expect(client.release).toHaveBeenCalled();
+        expect(errorSpy).toHaveBeenCalledWith(
+          "Failed to get unread message count:",
+          expect.any(Error)
+        );
+      } finally {
+        errorSpy.mockRestore();
+      }
+    });
+
+    test("getOrderParticipants logs, rethrows query errors, and releases client", async () => {
+      const errorSpy = jest
+        .spyOn(console, "error")
+        .mockImplementation(() => undefined);
+      try {
+        const orderError = new Error("order participants failed");
+        const client: MockDbClient = {
+          query: jest.fn(async () => {
+            throw orderError;
+          }),
+          release: jest.fn(),
+        };
+
+        await withMockedDbService(client, async (mod) => {
+          await expect(mod.getOrderParticipants("order-1")).rejects.toThrow(
+            orderError
+          );
+        });
+
+        expect(client.release).toHaveBeenCalled();
+        expect(errorSpy).toHaveBeenCalledWith(
+          "Failed to get order participants:",
+          orderError
+        );
+      } finally {
+        errorSpy.mockRestore();
+      }
+    });
+
+    test("updateOrderStatus logs query errors and releases client", async () => {
+      const errorSpy = jest
+        .spyOn(console, "error")
+        .mockImplementation(() => undefined);
+      try {
+        const client: MockDbClient = {
+          query: jest.fn(async () => {
+            throw new Error("update order status failed");
+          }),
+          release: jest.fn(),
+        };
+
+        await withMockedDbService(client, async (mod) => {
+          await expect(
+            mod.updateOrderStatus("order-1", "paid", "buyer-1", "message-1")
+          ).resolves.toBeUndefined();
+        });
+
+        expect(client.release).toHaveBeenCalled();
+        expect(errorSpy).toHaveBeenCalledWith(
+          "Failed to update order status:",
+          expect.any(Error)
+        );
+      } finally {
+        errorSpy.mockRestore();
+      }
+    });
+
+    test("getOrderStatuses returns empty object on query error and releases client", async () => {
+      const errorSpy = jest
+        .spyOn(console, "error")
+        .mockImplementation(() => undefined);
+      try {
+        const client: MockDbClient = {
+          query: jest.fn(async () => {
+            throw new Error("order statuses failed");
+          }),
+          release: jest.fn(),
+        };
+
+        await withMockedDbService(client, async (mod) => {
+          await expect(
+            mod.getOrderStatuses(["order-1", "order-2"])
+          ).resolves.toEqual({});
+        });
+
+        expect(client.release).toHaveBeenCalled();
+        expect(errorSpy).toHaveBeenCalledWith(
+          "Failed to get order statuses:",
+          expect.any(Error)
+        );
+      } finally {
+        errorSpy.mockRestore();
+      }
+    });
+
+    test("fetchAllProfilesFromDb returns empty array on query error and releases client", async () => {
+      const errorSpy = jest
+        .spyOn(console, "error")
+        .mockImplementation(() => undefined);
+      try {
+        const client: MockDbClient = {
+          query: jest.fn(async () => {
+            throw new Error("fetch profiles failed");
+          }),
+          release: jest.fn(),
+        };
+
+        await withMockedDbService(client, async (mod) => {
+          await expect(mod.fetchAllProfilesFromDb()).resolves.toEqual([]);
+        });
+
+        expect(client.release).toHaveBeenCalled();
+        expect(errorSpy).toHaveBeenCalledWith(
+          "Failed to fetch profiles from database:",
+          expect.any(Error)
+        );
+      } finally {
+        errorSpy.mockRestore();
+      }
+    });
+
+    test("fetchAllWalletEventsFromDb returns empty array on query error and releases client", async () => {
+      const errorSpy = jest
+        .spyOn(console, "error")
+        .mockImplementation(() => undefined);
+      try {
+        const client: MockDbClient = {
+          query: jest.fn(async () => {
+            throw new Error("fetch wallet failed");
+          }),
+          release: jest.fn(),
+        };
+
+        await withMockedDbService(client, async (mod) => {
+          await expect(
+            mod.fetchAllWalletEventsFromDb("wallet-owner")
+          ).resolves.toEqual([]);
+        });
+
+        expect(client.release).toHaveBeenCalled();
+        expect(errorSpy).toHaveBeenCalledWith(
+          "Failed to fetch wallet events from database:",
+          expect.any(Error)
+        );
+      } finally {
+        errorSpy.mockRestore();
+      }
+    });
+
+    test("addDiscountCode logs, rethrows query errors, and releases client", async () => {
+      const errorSpy = jest
+        .spyOn(console, "error")
+        .mockImplementation(() => undefined);
+      try {
+        const discountError = new Error("add discount failed");
+        const client: MockDbClient = {
+          query: jest.fn(async () => {
+            throw discountError;
+          }),
+          release: jest.fn(),
+        };
+
+        await withMockedDbService(client, async (mod) => {
+          await expect(
+            mod.addDiscountCode("SAVE10", "merchant-1", 10)
+          ).rejects.toThrow(discountError);
+        });
+
+        expect(client.release).toHaveBeenCalled();
+        expect(errorSpy).toHaveBeenCalledWith(
+          "Failed to add discount code:",
+          discountError
+        );
+      } finally {
+        errorSpy.mockRestore();
+      }
+    });
+
+    test("getDiscountCodesByPubkey returns empty array on query error and releases client", async () => {
+      const errorSpy = jest
+        .spyOn(console, "error")
+        .mockImplementation(() => undefined);
+      try {
+        const client: MockDbClient = {
+          query: jest.fn(async () => {
+            throw new Error("fetch discounts failed");
+          }),
+          release: jest.fn(),
+        };
+
+        await withMockedDbService(client, async (mod) => {
+          await expect(
+            mod.getDiscountCodesByPubkey("merchant-1")
+          ).resolves.toEqual([]);
+        });
+
+        expect(client.release).toHaveBeenCalled();
+        expect(errorSpy).toHaveBeenCalledWith(
+          "Failed to fetch discount codes:",
+          expect.any(Error)
+        );
+      } finally {
+        errorSpy.mockRestore();
+      }
+    });
+
+    test("validateDiscountCode returns invalid for expired discount code", async () => {
+      const client: MockDbClient = {
+        query: jest.fn(async () => ({
+          rows: [
+            {
+              discount_percentage: "15",
+              expiration: Math.floor(Date.now() / 1000) - 60,
+            },
+          ],
+          rowCount: 1,
+        })),
+        release: jest.fn(),
+      };
+
+      await withMockedDbService(client, async (mod) => {
+        await expect(
+          mod.validateDiscountCode("SAVE15", "merchant-1")
+        ).resolves.toEqual({ valid: false });
+      });
+
+      expect(client.release).toHaveBeenCalled();
     });
 
     test("markMessagesAsRead updates matching rows for author and recipient", async () => {
