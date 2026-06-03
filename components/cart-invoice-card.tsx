@@ -267,6 +267,7 @@ export default function CartInvoiceCard({
   }, [paymentConfirmed]);
 
   const walletContext = useContext(CashuWalletContext);
+  const { cashuPubkey } = walletContext;
 
   const { isOpen, onOpen, onClose } = useDisclosure();
 
@@ -1469,8 +1470,18 @@ export default function CartInvoiceCard({
       const p2pkOutputConfig = buildP2pkOutputConfig(
         sellerProfile?.content?.p2pk,
         buyerProfile?.content,
-        userPubkey ?? ""
+        cashuPubkey
       );
+      if (
+        isSellerP2pkEscrowActive(sellerProfile?.content?.p2pk) &&
+        !p2pkOutputConfig
+      ) {
+        setFailureText(
+          "A Cashu wallet identity is required to pay for an escrow listing. Please wait for your wallet to finish loading and try again."
+        );
+        setShowFailureModal(true);
+        return;
+      }
       const donationPercentage =
         sellerProfile?.content?.shopstr_donation || 2.1;
       const donationAmount = Math.ceil(

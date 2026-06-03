@@ -1,7 +1,7 @@
 import { nip19 } from "nostr-tools";
 import { useEffect, useState, useContext, useMemo } from "react";
 import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs";
-import { ProfileMapContext } from "@/utils/context/context";
+import { CashuWalletContext, ProfileMapContext } from "@/utils/context/context";
 import { useForm, Controller } from "react-hook-form";
 import {
   Button,
@@ -87,6 +87,7 @@ const UserProfilePage = () => {
   const [viewState, setViewState] = useState<"shown" | "hidden">("hidden");
 
   const profileContext = useContext(ProfileMapContext);
+  const { cashuPubkey } = useContext(CashuWalletContext);
   const { handleSubmit, control, reset, watch, setValue, setError } = useForm({
     defaultValues: {
       banner: "",
@@ -109,6 +110,7 @@ const UserProfilePage = () => {
   const watchBanner = watch("banner");
   const watchPicture = watch("picture");
   const watchP2pkEnabled = watch("p2pkEnabled");
+  const watchP2pkPubkey = watch("p2pkPubkey");
 
   const hasCurrentUserProfile =
     !!userPubkey && profileContext.profileData.has(userPubkey);
@@ -170,6 +172,12 @@ const UserProfilePage = () => {
       }
     }
   }, [userPubkey, profileContext.isLoading, profileContext.profileData, reset]);
+
+  useEffect(() => {
+    if (watchP2pkEnabled && cashuPubkey && !watchP2pkPubkey) {
+      setValue("p2pkPubkey", cashuPubkey);
+    }
+  }, [watchP2pkEnabled, cashuPubkey, watchP2pkPubkey, setValue]);
 
   const onSubmit = async (data: {
     [x: string]: any;
@@ -717,7 +725,7 @@ const UserProfilePage = () => {
                     <Controller
                       name="p2pkPubkey"
                       control={control}
-                      render={({ field: { value } }) => (
+                      render={({ field: { onChange, onBlur, value } }) => (
                         <div>
                           <Input
                             className="text-light-text dark:text-dark-text"
@@ -730,13 +738,15 @@ const UserProfilePage = () => {
                             label="P2PK Redeem Pubkey (Cashu wallet key)"
                             labelPlacement="outside"
                             placeholder="Will be auto-filled from your Cashu wallet key"
-                            isReadOnly
+                            onChange={onChange}
+                            onBlur={onBlur}
                             value={value}
                           />
                           <p className="text-default-400 mt-1 mb-4 text-xs">
-                            Auto-filled from your Cashu wallet. This key is used
-                            to claim locked payments &mdash; it is separate from
-                            your Nostr identity.
+                            Auto-filled from your Cashu wallet when available,
+                            but you can change it. This key is used to claim
+                            locked payments &mdash; it is separate from your
+                            Nostr identity.
                           </p>
                         </div>
                       )}
@@ -785,9 +795,10 @@ const UserProfilePage = () => {
                 <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">
                   Optional. Embedded into P2PK payments you make so you (or
                   other keys you list) can manually reclaim after the
-                  seller&apos;s delay. If empty, your paying pubkey is used.
-                  This does not remove the seller&apos;s spend path after the
-                  delay (Cashu NUT-11).
+                  seller&apos;s delay. Your current Cashu wallet pubkey is
+                  always included at checkout, including when you list other
+                  reclaim keys. This does not remove the seller&apos;s spend
+                  path after the delay (Cashu NUT-11).
                 </p>
                 <Controller
                   name="reclaimPubKeys"
@@ -831,7 +842,7 @@ const UserProfilePage = () => {
                       fullWidth
                       label="Reclaim pubkeys (comma separated, optional)"
                       labelPlacement="outside"
-                      placeholder="Leave empty to use your account pubkey when paying"
+                      placeholder="Leave empty to use your Cashu wallet pubkey when paying"
                       isInvalid={!!error}
                       errorMessage={error?.message}
                       onChange={onChange}

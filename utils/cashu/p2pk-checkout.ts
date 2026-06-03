@@ -12,11 +12,17 @@ export type P2pkProfileSettings = NonNullable<ProfileData["content"]["p2pk"]>;
 
 export function getBuyerReclaimKeys(
   buyerContent: ProfileData["content"] | undefined,
-  payerPubkey: string
-): string[] {
-  const keys = buyerContent?.p2pk?.reclaimKeys;
-  if (keys?.length) return keys;
-  return [payerPubkey];
+  buyerCashuPubkey?: string
+): string[] | null {
+  // Escrow reclaim authorizes spending Cashu proofs, so it must use the
+  // buyer's Cashu wallet key. There is no Nostr identity fallback.
+  if (!buyerCashuPubkey) return null;
+
+  const profileKeys = buyerContent?.p2pk?.reclaimKeys?.filter(Boolean) ?? [];
+
+  if (profileKeys.length === 0) return [buyerCashuPubkey];
+  if (profileKeys.includes(buyerCashuPubkey)) return profileKeys;
+  return [...profileKeys, buyerCashuPubkey];
 }
 
 export function buildP2pkSwapOptions(
@@ -38,9 +44,11 @@ export function buildP2pkSwapOptions(
 export function buildP2pkOutputConfig(
   sellerP2pk: P2pkProfileSettings | undefined,
   buyerContent: ProfileData["content"] | undefined,
-  payerPubkey: string
+  buyerCashuPubkey?: string
 ) {
-  const reclaimKeys = getBuyerReclaimKeys(buyerContent, payerPubkey);
+  const reclaimKeys = getBuyerReclaimKeys(buyerContent, buyerCashuPubkey);
+  if (!reclaimKeys) return undefined;
+
   const options = buildP2pkSwapOptions(sellerP2pk, reclaimKeys);
   if (!options) return undefined;
 

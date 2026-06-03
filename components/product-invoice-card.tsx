@@ -180,6 +180,7 @@ export default function ProductInvoiceCard({
   } | null>(null);
 
   const walletContext = useContext(CashuWalletContext);
+  const { cashuPubkey } = walletContext;
 
   const [randomNpubForSender, setRandomNpubForSender] = useState<string>("");
   const [randomNsecForSender, setRandomNsecForSender] = useState<string>("");
@@ -1215,8 +1216,16 @@ export default function ProductInvoiceCard({
     const p2pkOutputConfig = buildP2pkOutputConfig(
       sellerProfile?.content?.p2pk,
       buyerProfile?.content,
-      userPubkey!
+      cashuPubkey
     );
+    if (
+      isSellerP2pkEscrowActive(sellerProfile?.content?.p2pk) &&
+      !p2pkOutputConfig
+    ) {
+      throw new Error(
+        "A Cashu wallet identity is required to pay for an escrow listing. Please wait for your wallet to finish loading and try again."
+      );
+    }
 
     const donationPercentage = sellerProfile?.content?.shopstr_donation || 2.1;
     const donationAmount = Math.ceil((totalPrice * donationPercentage) / 100);
