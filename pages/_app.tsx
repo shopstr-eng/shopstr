@@ -36,7 +36,6 @@ import { createNip98AuthorizationHeader } from "@/utils/nostr/nip98-auth";
 import { HeroUIProvider } from "@heroui/react";
 import { ThemeProvider as NextThemesProvider } from "next-themes";
 import {
-  fetchAllPosts,
   fetchReviews,
   fetchShopProfile,
   fetchProfile,
@@ -48,6 +47,7 @@ import {
   fetchGiftWrappedChatsAndMessages,
   fetchReports,
 } from "@/utils/nostr/fetch-service";
+import { fetchAllPostsAbortable } from "@/utils/nostr/fetch-all-posts-abortable";
 import {
   NostrEvent,
   Community,
@@ -577,6 +577,8 @@ function Shopstr({ props }: { props: AppProps }) {
 
   /** FETCH initial FOLLOWS, RELAYS, PRODUCTS, and PROFILES **/
   useEffect(() => {
+    const abortController = new AbortController();
+
     async function fetchData() {
       const runId = ++initializationRunRef.current;
       const isCurrentRun = () => runId === initializationRunRef.current;
@@ -764,7 +766,13 @@ function Shopstr({ props }: { props: AppProps }) {
 
         const productsPromise = runTask(
           "fetching products",
-          () => fetchAllPosts(nostr!, allRelays, guardedEditProductContext),
+          () =>
+            fetchAllPostsAbortable(
+              nostr!,
+              allRelays,
+              guardedEditProductContext,
+              abortController.signal
+            ),
           () => guardedEditProductContext(null, false)
         );
 
@@ -935,6 +943,10 @@ function Shopstr({ props }: { props: AppProps }) {
     }
 
     fetchData();
+
+    return () => {
+      abortController.abort();
+    };
   }, [nostr, signer, isLoggedIn]);
 
   useEffect(() => {
