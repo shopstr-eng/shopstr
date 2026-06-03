@@ -75,6 +75,13 @@ export const fetchAllPosts = async (
         }
         return event.id;
       };
+      const isValidProductRelayEvent = (
+        event: NostrEvent | null | undefined
+      ): event is NostrEvent =>
+        !!event?.id &&
+        !!event.sig &&
+        !!event.pubkey &&
+        (event.kind === 30402 || event.kind === 1);
 
       // Cascading DB fetch: load batches one at a time, displaying each as it arrives
       let offset = 0;
@@ -128,9 +135,7 @@ export const fetchAllPosts = async (
       }
 
       // Cache valid product events to database
-      const validProductEvents = fetchedEvents.filter(
-        (e) => e.id && e.sig && e.pubkey && (e.kind === 30402 || e.kind === 1)
-      );
+      const validProductEvents = fetchedEvents.filter(isValidProductRelayEvent);
       if (validProductEvents.length > 0) {
         cacheEventsToDatabase(validProductEvents).catch((error) =>
           console.error("Failed to cache products to database:", error)
@@ -139,7 +144,7 @@ export const fetchAllPosts = async (
 
       // Merge relay events on top of the accumulated DB products
       for (const event of fetchedEvents) {
-        if (!event || !event.id) continue;
+        if (!isValidProductRelayEvent(event)) continue;
         const key = getEventKey(event);
         const existing = dbProductsMap.get(key);
         if (!existing || event.created_at >= existing.created_at) {
@@ -501,7 +506,7 @@ export const fetchShopProfile = async (
   });
 };
 
-async function verifyProfilesNip05(
+export async function verifyProfilesNip05(
   profileMap: Map<string, NipProfile | null>,
   concurrency = 8
 ): Promise<void> {

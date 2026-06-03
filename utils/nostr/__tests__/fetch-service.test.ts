@@ -9,6 +9,165 @@ const makeBaseEvent = (overrides: Record<string, any> = {}) => ({
   ...overrides,
 });
 
+describe("fetchAllPosts - NIP-99 and relay merge behavior", () => {
+  beforeEach(() => {
+    jest.resetModules();
+    jest.clearAllMocks();
+  });
+
+  it("getEventKey uses d tag for kind 30402 merging", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase,
+    }));
+
+    const { fetchAllPosts } = await import("../fetch-service");
+
+    const cachedA = makeProductEvent({
+      id: "cached-a",
+      pubkey: "seller",
+      created_at: 100,
+      tags: [["d", "tag-1"]],
+      content: "cached-a",
+      sig: "sig-cached-a",
+    });
+    const cachedB = makeProductEvent({
+      id: "cached-b",
+      pubkey: "seller",
+      created_at: 110,
+      tags: [["d", "tag-2"]],
+      content: "cached-b",
+      sig: "sig-cached-b",
+    });
+    const relayNewForA = makeProductEvent({
+      id: "relay-a",
+      pubkey: "seller",
+      created_at: 200,
+      tags: [["d", "tag-1"]],
+      content: "relay-a",
+      sig: "sig-relay-a",
+    });
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValueOnce(makeDbPayload([cachedA, cachedB]))
+      .mockResolvedValueOnce(makeDbPayload([])) as typeof global.fetch;
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([relayNewForA]) } as any;
+    const editProductContext = jest.fn();
+
+    const { productEvents, profileSetFromProducts } = await fetchAllPosts(
+      nostr,
+      ["wss://relay.example"],
+      editProductContext
+    );
+
+    // relay should replace cachedA (same pubkey+d) but not affect cachedB (different d)
+    expect(productEvents).toEqual(
+      expect.arrayContaining([relayNewForA, cachedB])
+    );
+    expect(productEvents).not.toContain(cachedA);
+    expect(cacheEventsToDatabase).toHaveBeenCalledWith([relayNewForA]);
+    expect(profileSetFromProducts).toEqual(new Set(["seller"]));
+  });
+
+  it("includes kind 1 zapsnag notes alongside kind 30402 product events and caches both", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase,
+    }));
+
+    const { fetchAllPosts } = await import("../fetch-service");
+
+    const product = makeProductEvent({
+      id: "prod-1",
+      pubkey: "seller-p",
+      created_at: 150,
+      tags: [["d", "prod-1"]],
+      content: "product",
+      sig: "sig-prod-1",
+    });
+    const zapsnagNote = makeBaseEvent({
+      id: "zapsnag-1",
+      pubkey: "seller-p",
+      created_at: 160,
+      kind: 1,
+      tags: [["t", "shopstr-zapsnag"]],
+      content: "zapsnag note",
+      sig: "sig-zapsnag-1",
+    });
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValueOnce(makeDbPayload([]))
+      .mockResolvedValueOnce(makeDbPayload([])) as typeof global.fetch;
+
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([product, zapsnagNote]),
+    } as any;
+    const editProductContext = jest.fn();
+
+    const { productEvents, profileSetFromProducts } = await fetchAllPosts(
+      nostr,
+      ["wss://relay.example"],
+      editProductContext
+    );
+
+    expect(productEvents).toEqual(
+      expect.arrayContaining([product, zapsnagNote])
+    );
+    expect(cacheEventsToDatabase).toHaveBeenCalledWith([product, zapsnagNote]);
+    expect(profileSetFromProducts).toEqual(new Set(["seller-p"]));
+  });
+
+  it("prefers newer relay events over older DB events for the same NIP-99 product key", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase,
+    }));
+
+    const { fetchAllPosts } = await import("../fetch-service");
+
+    const dbOld = makeProductEvent({
+      id: "db-old",
+      pubkey: "seller-x",
+      created_at: 100,
+      tags: [["d", "same-key"]],
+      content: "db-old",
+      sig: "sig-db-old",
+    });
+    const relayNew = makeProductEvent({
+      id: "relay-newer",
+      pubkey: "seller-x",
+      created_at: 300,
+      tags: [["d", "same-key"]],
+      content: "relay-new",
+      sig: "sig-relay-new",
+    });
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValueOnce(makeDbPayload([dbOld]))
+      .mockResolvedValueOnce(makeDbPayload([])) as typeof global.fetch;
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([relayNew]) } as any;
+    const editProductContext = jest.fn();
+
+    const { productEvents } = await fetchAllPosts(
+      nostr,
+      ["wss://relay.example"],
+      editProductContext
+    );
+
+    expect(productEvents).toEqual(expect.arrayContaining([relayNew]));
+    expect(productEvents).not.toContain(dbOld);
+    expect(cacheEventsToDatabase).toHaveBeenCalledWith([relayNew]);
+  });
+});
+
 const makeProfileEvent = (overrides: Record<string, any> = {}) =>
   makeBaseEvent({
     kind: 0,
@@ -61,6 +220,160 @@ void fixtureFactories;
 const makeDbPayload = <T>(items: T[]) => ({
   ok: true,
   json: async () => items,
+});
+
+describe("verifyProfilesNip05", () => {
+  beforeEach(() => {
+    jest.resetModules();
+    jest.clearAllMocks();
+  });
+
+  it("verifies profiles with nip05 values and leaves profiles without nip05 unchanged", async () => {
+    const verifyNip05Identifier = jest
+      .fn()
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false);
+
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(),
+      deleteEvent: jest.fn(),
+      verifyNip05Identifier,
+    }));
+
+    const { verifyProfilesNip05 } = await import("../fetch-service");
+
+    const profileWithNip05 = {
+      pubkey: "pubkey-with-nip05",
+      created_at: 1,
+      content: { nip05: "alice@example.com" },
+      nip05Verified: false,
+    };
+    const profileWithOtherNip05 = {
+      pubkey: "pubkey-with-second-nip05",
+      created_at: 2,
+      content: { nip05: "bob@example.com" },
+      nip05Verified: true,
+    };
+    const profileWithoutNip05 = {
+      pubkey: "pubkey-without-nip05",
+      created_at: 3,
+      content: {},
+      nip05Verified: true,
+    };
+
+    const profileMap = new Map([
+      [profileWithNip05.pubkey, profileWithNip05],
+      [profileWithOtherNip05.pubkey, profileWithOtherNip05],
+      [profileWithoutNip05.pubkey, profileWithoutNip05],
+    ]);
+
+    await verifyProfilesNip05(profileMap, 8);
+
+    expect(verifyNip05Identifier).toHaveBeenCalledTimes(2);
+    expect(verifyNip05Identifier).toHaveBeenNthCalledWith(
+      1,
+      "alice@example.com",
+      "pubkey-with-nip05"
+    );
+    expect(verifyNip05Identifier).toHaveBeenNthCalledWith(
+      2,
+      "bob@example.com",
+      "pubkey-with-second-nip05"
+    );
+    expect(profileMap.get(profileWithNip05.pubkey)?.nip05Verified).toBe(true);
+    expect(profileMap.get(profileWithOtherNip05.pubkey)?.nip05Verified).toBe(
+      false
+    );
+    expect(profileMap.get(profileWithoutNip05.pubkey)?.nip05Verified).toBe(
+      true
+    );
+    expect(Array.from(profileMap.keys())).toEqual([
+      profileWithNip05.pubkey,
+      profileWithOtherNip05.pubkey,
+      profileWithoutNip05.pubkey,
+    ]);
+  });
+
+  it("uses batch processing without changing the output shape", async () => {
+    const verifyNip05Identifier = jest.fn().mockResolvedValue(true);
+
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(),
+      deleteEvent: jest.fn(),
+      verifyNip05Identifier,
+    }));
+
+    const { verifyProfilesNip05 } = await import("../fetch-service");
+
+    const profileMap = new Map(
+      Array.from({ length: 5 }, (_, index) => [
+        `pubkey-${index}`,
+        {
+          pubkey: `pubkey-${index}`,
+          created_at: index,
+          content: { nip05: `user-${index}@example.com` },
+          nip05Verified: false,
+        },
+      ])
+    );
+
+    await verifyProfilesNip05(profileMap, 2);
+
+    expect(verifyNip05Identifier).toHaveBeenCalledTimes(5);
+    expect(Array.from(profileMap.entries())).toHaveLength(5);
+    expect(Array.from(profileMap.values())).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          pubkey: "pubkey-0",
+          content: { nip05: "user-0@example.com" },
+          nip05Verified: true,
+        }),
+        expect.objectContaining({
+          pubkey: "pubkey-4",
+          content: { nip05: "user-4@example.com" },
+          nip05Verified: true,
+        }),
+      ])
+    );
+  });
+
+  it("marks profiles false when verifyNip05Identifier rejects", async () => {
+    const verifyNip05Identifier = jest
+      .fn()
+      .mockRejectedValueOnce(new Error("verification failed"));
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(),
+      deleteEvent: jest.fn(),
+      verifyNip05Identifier,
+    }));
+
+    const { verifyProfilesNip05 } = await import("../fetch-service");
+
+    const profileMap = new Map([
+      [
+        "pubkey-failed",
+        {
+          pubkey: "pubkey-failed",
+          created_at: 1,
+          content: { nip05: "fail@example.com" },
+          nip05Verified: true,
+        },
+      ],
+    ]);
+
+    await verifyProfilesNip05(profileMap, 1);
+
+    expect(verifyNip05Identifier).toHaveBeenCalledWith(
+      "fail@example.com",
+      "pubkey-failed"
+    );
+    expect(profileMap.get("pubkey-failed")?.nip05Verified).toBe(false);
+    consoleErrorSpy.mockRestore();
+  });
 });
 
 describe("getReportTargetIdentifiers", () => {
@@ -517,6 +830,318 @@ describe("fetchAllPosts", () => {
   beforeEach(() => {
     jest.resetModules();
     jest.clearAllMocks();
+  });
+
+  it("ignores invalid relay events and never caches them", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase,
+    }));
+
+    const { fetchAllPosts } = await import("../fetch-service");
+
+    const validRelayListing = makeProductEvent({
+      id: "relay-valid",
+      pubkey: "seller-valid",
+      created_at: 200,
+      tags: [["d", "listing-valid"]],
+      content: "",
+      sig: "sig-relay-valid",
+    });
+    const invalidNoIdListing = makeProductEvent({
+      id: "",
+      pubkey: "seller-invalid-1",
+      created_at: 210,
+      tags: [["d", "listing-invalid-1"]],
+      content: "",
+      sig: "sig-invalid-1",
+    });
+    const invalidNoSigListing = makeProductEvent({
+      id: "relay-invalid-nosig",
+      pubkey: "seller-invalid-2",
+      created_at: 220,
+      tags: [["d", "listing-invalid-2"]],
+      content: "",
+      sig: "",
+    });
+    const invalidWrongKindListing = makeBaseEvent({
+      id: "relay-invalid-kind",
+      pubkey: "seller-invalid-3",
+      created_at: 230,
+      kind: 0,
+      tags: [],
+      content: "",
+      sig: "sig-invalid-kind",
+    });
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => [],
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => [],
+      }) as typeof global.fetch;
+
+    const nostr = {
+      fetch: jest
+        .fn()
+        .mockResolvedValue([
+          validRelayListing,
+          invalidNoIdListing,
+          invalidNoSigListing,
+          invalidWrongKindListing,
+        ]),
+    } as any;
+    const editProductContext = jest.fn();
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    const { productEvents, profileSetFromProducts } = await fetchAllPosts(
+      nostr,
+      ["wss://relay.example"],
+      editProductContext
+    );
+
+    expect(cacheEventsToDatabase).toHaveBeenCalledWith([validRelayListing]);
+    expect(cacheEventsToDatabase).not.toHaveBeenCalledWith(
+      expect.arrayContaining([
+        invalidNoIdListing,
+        invalidNoSigListing,
+        invalidWrongKindListing,
+      ])
+    );
+    expect(productEvents).toEqual([validRelayListing]);
+    expect(productEvents).not.toContain(invalidNoIdListing);
+    expect(productEvents).not.toContain(invalidNoSigListing);
+    expect(productEvents).not.toContain(invalidWrongKindListing);
+    expect(profileSetFromProducts).toEqual(new Set(["seller-valid"]));
+
+    consoleErrorSpy.mockRestore();
+  });
+
+  it("handles empty DB responses and empty relay responses", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase,
+    }));
+
+    const { fetchAllPosts } = await import("../fetch-service");
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => [],
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => [],
+      }) as typeof global.fetch;
+
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([]),
+    } as any;
+    const editProductContext = jest.fn();
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    const { productEvents, profileSetFromProducts } = await fetchAllPosts(
+      nostr,
+      ["wss://relay.example"],
+      editProductContext
+    );
+
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(nostr.fetch).toHaveBeenCalledTimes(1);
+    expect(editProductContext).toHaveBeenLastCalledWith([], false);
+    expect(productEvents).toEqual([]);
+    expect(profileSetFromProducts).toEqual(new Set());
+    expect(cacheEventsToDatabase).not.toHaveBeenCalled();
+
+    consoleErrorSpy.mockRestore();
+  });
+
+  it("paginates through multiple DB batches before querying relays", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase,
+    }));
+
+    const { fetchAllPosts } = await import("../fetch-service");
+
+    const firstDbListing = makeProductEvent({
+      id: "cached-batch-1",
+      pubkey: "seller-a",
+      created_at: 100,
+      tags: [["d", "listing-a"]],
+      content: "",
+      sig: "sig-cached-batch-1",
+    });
+    const secondDbListing = makeProductEvent({
+      id: "cached-batch-2",
+      pubkey: "seller-b",
+      created_at: 200,
+      tags: [["d", "listing-b"]],
+      content: "",
+      sig: "sig-cached-batch-2",
+    });
+    const relayListing = makeProductEvent({
+      id: "relay-listing",
+      pubkey: "seller-c",
+      created_at: 300,
+      tags: [["d", "listing-c"]],
+      content: "",
+      sig: "sig-relay-listing",
+    });
+
+    const firstDbBatch = Array.from({ length: 500 }, (_, index) =>
+      index === 0
+        ? firstDbListing
+        : makeProductEvent({
+            id: `cached-batch-1-${index}`,
+            pubkey: "seller-a",
+            created_at: 100 + index,
+            tags: [["d", `listing-a-${index}`]],
+            content: "",
+            sig: `sig-cached-batch-1-${index}`,
+          })
+    );
+    const secondDbBatch = Array.from({ length: 500 }, (_, index) =>
+      index === 0
+        ? secondDbListing
+        : makeProductEvent({
+            id: `cached-batch-2-${index}`,
+            pubkey: "seller-b",
+            created_at: 200 + index,
+            tags: [["d", `listing-b-${index}`]],
+            content: "",
+            sig: `sig-cached-batch-2-${index}`,
+          })
+    );
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => firstDbBatch,
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => secondDbBatch,
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => [],
+      }) as typeof global.fetch;
+
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([relayListing]),
+    } as any;
+    const editProductContext = jest.fn();
+
+    const { productEvents, profileSetFromProducts } = await fetchAllPosts(
+      nostr,
+      ["wss://relay.example"],
+      editProductContext
+    );
+
+    expect(global.fetch).toHaveBeenCalledTimes(3);
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      1,
+      "/api/db/fetch-products?limit=500&offset=0"
+    );
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      2,
+      "/api/db/fetch-products?limit=500&offset=500"
+    );
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      3,
+      "/api/db/fetch-products?limit=500&offset=1000"
+    );
+    expect(editProductContext).toHaveBeenNthCalledWith(
+      1,
+      expect.arrayContaining([firstDbListing]),
+      true
+    );
+    expect(editProductContext).toHaveBeenNthCalledWith(
+      2,
+      expect.arrayContaining([firstDbListing, secondDbListing]),
+      true
+    );
+    expect(nostr.fetch).toHaveBeenCalledTimes(1);
+    expect(editProductContext).toHaveBeenLastCalledWith(
+      expect.arrayContaining([firstDbListing, secondDbListing, relayListing]),
+      false
+    );
+    expect(productEvents).toEqual(
+      expect.arrayContaining([firstDbListing, secondDbListing, relayListing])
+    );
+    expect(profileSetFromProducts).toEqual(
+      new Set(["seller-a", "seller-b", "seller-c"])
+    );
+    expect(cacheEventsToDatabase).toHaveBeenCalledWith(
+      expect.arrayContaining([relayListing])
+    );
+  });
+
+  it("emits cached DB events to context before relay results arrive", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase,
+    }));
+
+    const { fetchAllPosts } = await import("../fetch-service");
+
+    const cachedListing = makeProductEvent({
+      id: "cached-listing",
+      pubkey: "seller-cache",
+      created_at: 100,
+      tags: [["d", "listing-cache"]],
+      content: "",
+      sig: "sig-cached-listing",
+    });
+    const relayListing = makeProductEvent({
+      id: "relay-listing",
+      pubkey: "seller-relay",
+      created_at: 200,
+      tags: [["d", "listing-relay"]],
+      content: "",
+      sig: "sig-relay-listing",
+    });
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => [cachedListing],
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => [],
+      }) as typeof global.fetch;
+
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([relayListing]),
+    } as any;
+    const editProductContext = jest.fn();
+
+    await fetchAllPosts(nostr, ["wss://relay.example"], editProductContext);
+
+    expect(editProductContext.mock.calls[0]).toEqual([[cachedListing], true]);
+    expect(nostr.fetch).toHaveBeenCalledTimes(1);
+    expect(editProductContext.mock.calls[1][1]).toBe(false);
+    expect(editProductContext.mock.calls[1][0]).toEqual(
+      expect.arrayContaining([cachedListing, relayListing])
+    );
   });
 
   it("merges cached and relay listings by NIP-99 address and caches only valid relay events", async () => {
