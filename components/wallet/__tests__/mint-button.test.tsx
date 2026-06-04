@@ -34,9 +34,11 @@ const mockMintProofs = jest.fn();
 jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
   getLocalStorageData: jest.fn(),
   publishProofEvent: jest.fn(),
+  setCachedCashuProofs: jest.fn(),
 }));
 const mockGetLocalStorageData = NostrHelper.getLocalStorageData as jest.Mock;
 const mockPublishProofEvent = NostrHelper.publishProofEvent as jest.Mock;
+const mockSetCachedCashuProofs = NostrHelper.setCachedCashuProofs as jest.Mock;
 
 jest.mock("qrcode", () => ({
   toDataURL: jest.fn(),
@@ -113,6 +115,7 @@ describe("MintButton Component", () => {
     mockGetLocalStorageData.mockReturnValue(mockLocalStorage);
     mockToDataURL.mockResolvedValue("data:image/png;base64,mock-qr-code");
     mockPublishProofEvent.mockResolvedValue(undefined);
+    mockSetCachedCashuProofs.mockReturnValue(undefined);
     Object.defineProperty(navigator, "clipboard", {
       value: { writeText: jest.fn().mockResolvedValue(undefined) },
       writable: true,
@@ -205,6 +208,7 @@ describe("MintButton Component", () => {
 
     await waitFor(() => {
       expect(mockMintProofs).toHaveBeenCalledWith(satsToMint, mockHash);
+      expect(mockSetCachedCashuProofs).toHaveBeenCalledWith(mockProofs);
       expect(screen.getByText("Payment confirmed!")).toBeVisible();
     });
   });
