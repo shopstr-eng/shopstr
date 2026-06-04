@@ -283,7 +283,7 @@ describe("MyListingsPage", () => {
       expect(mockRouterPush).toHaveBeenCalledWith("/settings/shop-profile");
 
       fireEvent.click(screen.getAllByRole("button", { name: "Orders" })[0]!);
-      expect(mockRouterPush).toHaveBeenCalledWith("/orders");
+      expect(mockRouterPush).toHaveBeenCalledWith("/my-listings/orders");
     });
   });
 
