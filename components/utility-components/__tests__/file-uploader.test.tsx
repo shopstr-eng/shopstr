@@ -1,4 +1,3 @@
-import React from "react";
 import { render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom";
 
@@ -7,13 +6,14 @@ import { FileUploaderButton } from "../file-uploader";
 jest.mock(
   "@heroui/react",
   () => ({
-    Button: ({ children, className, onClick, type = "button", ...props }: any) => (
-      <button
-        type={type}
-        className={className}
-        onClick={onClick}
-        {...props}
-      >
+    Button: ({
+      children,
+      className,
+      onClick,
+      type = "button",
+      ...props
+    }: any) => (
+      <button type={type} className={className} onClick={onClick} {...props}>
         {children}
       </button>
     ),

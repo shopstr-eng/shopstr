@@ -9,9 +9,7 @@ import {
   NostrContext,
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
-import {
-  createNostrProfileEvent,
-} from "@/utils/nostr/nostr-helper-functions";
+import { createNostrProfileEvent } from "@/utils/nostr/nostr-helper-functions";
 import { FileUploaderButton } from "@/components/utility-components/file-uploader";
 import { AVATARBADGEBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 
@@ -19,6 +17,14 @@ const mockRouterPush = jest.fn();
 jest.mock("next/router", () => ({
   useRouter: jest.fn(() => ({ push: mockRouterPush })),
 }));
+
+jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
+  createNostrProfileEvent: jest.fn(),
+  getLocalUserProfileKey: (pubkey: string) => `shopstr:user-profile:${pubkey}`,
+  parseLocalProfileFallback: (raw: string | null) =>
+    raw ? { content: JSON.parse(raw), updatedAt: 0 } : null,
+}));
+const mockCreateNostrProfileEvent = createNostrProfileEvent as jest.Mock;
 
 jest.mock(
   "@heroui/react",
@@ -69,7 +75,9 @@ jest.mock(
       </label>
     ),
     SelectItem: ({ children, value, ...props }: any) => {
-      const optionLabel = Array.isArray(children) ? children.join("") : children;
+      const optionLabel = Array.isArray(children)
+        ? children.join("")
+        : children;
       const optionValue =
         value ??
         (typeof optionLabel === "string" && optionLabel.includes("Lightning")
@@ -86,15 +94,6 @@ jest.mock(
   }),
   { virtual: true }
 );
-
-jest.mock("@/utils/nostr/nostr-helper-functions", () => {
-  const actual = jest.requireActual("@/utils/nostr/nostr-helper-functions");
-  return {
-    ...actual,
-    createNostrProfileEvent: jest.fn(),
-  };
-});
-const mockCreateNostrProfileEvent = createNostrProfileEvent as jest.Mock;
 
 jest.mock("@/components/utility-components/file-uploader", () => ({
   FileUploaderButton: jest.fn(
@@ -169,10 +168,9 @@ describe("UserProfileForm", () => {
       expect.objectContaining({
         isIconOnly: true,
         className: AVATARBADGEBUTTONCLASSNAMES,
-        containerClassName:
-          "absolute right-[-0.5rem] bottom-[-0.5rem] z-20",
+        containerClassName: "absolute right-[-0.5rem] bottom-[-0.5rem] z-20",
       }),
-      {}
+      undefined
     );
   });
 

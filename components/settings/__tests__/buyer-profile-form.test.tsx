@@ -43,7 +43,9 @@ jest.mock(
 );
 
 jest.mock("@/components/utility-components/file-uploader", () => ({
-  FileUploaderButton: jest.fn(() => <button data-testid="upload-picture-btn" />),
+  FileUploaderButton: jest.fn(() => (
+    <button data-testid="upload-picture-btn" />
+  )),
 }));
 const mockFileUploaderButton = FileUploaderButton as jest.Mock;
 
@@ -85,10 +87,9 @@ describe("BuyerProfileForm", () => {
       expect.objectContaining({
         isIconOnly: true,
         className: AVATARBADGEBUTTONCLASSNAMES,
-        containerClassName:
-          "absolute right-[-0.5rem] bottom-[-0.5rem] z-20",
+        containerClassName: "absolute right-[-0.5rem] bottom-[-0.5rem] z-20",
       }),
-      {}
+      undefined
     );
   });
 });
