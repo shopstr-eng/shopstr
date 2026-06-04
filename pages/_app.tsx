@@ -31,6 +31,7 @@ import {
   getLocalStorageData,
   getDefaultRelays,
   LogOut,
+  setCachedCashuProofs,
 } from "@/utils/nostr/nostr-helper-functions";
 import { createNip98AuthorizationHeader } from "@/utils/nostr/nip98-auth";
 import { HeroUIProvider } from "@heroui/react";
@@ -909,10 +910,7 @@ function Shopstr({ props }: { props: AppProps }) {
             "mints",
             JSON.stringify(walletResult.cashuMints)
           );
-          localStorage.setItem(
-            "tokens",
-            JSON.stringify(walletResult.cashuProofs)
-          );
+          setCachedCashuProofs(walletResult.cashuProofs);
         }
 
         await runTask("retrying relay publishes", async () => {

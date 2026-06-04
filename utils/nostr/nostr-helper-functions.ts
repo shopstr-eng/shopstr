@@ -1322,6 +1322,19 @@ const LOCALSTORAGECONSTANTS = {
   nwcInfo: "nwcInfo",
 };
 
+let cashuProofCache: Proof[] = [];
+
+export const getCachedCashuProofs = (): Proof[] => [...cashuProofCache];
+
+export const setCachedCashuProofs = (proofs: Proof[] = []) => {
+  cashuProofCache = Array.isArray(proofs) ? [...proofs] : [];
+
+  if (typeof window !== "undefined") {
+    localStorage.removeItem(LOCALSTORAGECONSTANTS.tokens);
+    window.dispatchEvent(new Event("storage"));
+  }
+};
+
 export const setLocalStorageDataOnSignIn = ({
   encryptedPrivateKey,
   relays,
@@ -1353,6 +1366,8 @@ export const setLocalStorageDataOnSignIn = ({
   signer?: NostrSigner;
   migrationComplete?: boolean;
 }) => {
+  setCachedCashuProofs([]);
+
   if (encryptedPrivateKey) {
     localStorage.setItem(
       LOCALSTORAGECONSTANTS.encryptedPrivateKey,
@@ -1587,15 +1602,9 @@ export const getLocalStorageData = (): LocalStorageInterface => {
       );
     }
 
-    tokens = getLocalStorageJson<unknown[]>(LOCALSTORAGECONSTANTS.tokens, [], {
-      removeOnError: true,
-      validate: isArray,
-    });
-    if (
-      tokens.length === 0 &&
-      !localStorage.getItem(LOCALSTORAGECONSTANTS.tokens)
-    ) {
-      localStorage.setItem(LOCALSTORAGECONSTANTS.tokens, JSON.stringify([]));
+    tokens = getCachedCashuProofs();
+    if (localStorage.getItem(LOCALSTORAGECONSTANTS.tokens)) {
+      localStorage.removeItem(LOCALSTORAGECONSTANTS.tokens);
     }
 
     history = getLocalStorageJson<unknown[]>(
@@ -1708,6 +1717,8 @@ export const getLocalStorageData = (): LocalStorageInterface => {
 };
 
 export const LogOut = () => {
+  cashuProofCache = [];
+
   // remove old data
   localStorage.removeItem("npub");
   localStorage.removeItem("signIn");

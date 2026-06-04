@@ -3,11 +3,13 @@ import {
   getDefaultMint,
   getDefaultRelays,
   getLocalStorageData,
+  setCachedCashuProofs,
 } from "../nostr-helper-functions";
 
 describe("getLocalStorageData", () => {
   beforeEach(() => {
     localStorage.clear();
+    setCachedCashuProofs([]);
     jest.restoreAllMocks();
   });
 
@@ -69,5 +71,24 @@ describe("getLocalStorageData", () => {
       type: "nsec",
       encryptedPrivKey: "ncryptsec1mock",
     });
+  });
+
+  it("keeps Cashu proofs out of localStorage and reads the volatile cache", () => {
+    const proofs = [
+      {
+        id: "00d0a1b24d1c1a53",
+        amount: 1,
+        secret: "proof-secret",
+        C: "proof-c",
+      },
+    ] as any;
+
+    localStorage.setItem("tokens", JSON.stringify([{ secret: "legacy" }]));
+    setCachedCashuProofs(proofs);
+
+    const data = getLocalStorageData();
+
+    expect(data.tokens).toEqual(proofs);
+    expect(localStorage.getItem("tokens")).toBeNull();
   });
 });
