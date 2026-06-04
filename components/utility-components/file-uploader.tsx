@@ -42,6 +42,7 @@ export const FileUploaderButton = ({
   disabled,
   isIconOnly,
   className,
+  containerClassName,
   children,
   imgCallbackOnUpload,
   isPlaceholder,
@@ -50,6 +51,7 @@ export const FileUploaderButton = ({
   disabled?: boolean;
   isIconOnly?: boolean;
   className?: string;
+  containerClassName?: string;
   children?: React.ReactNode;
   imgCallbackOnUpload: (imgUrl: string) => void;
   isPlaceholder?: boolean;
@@ -421,8 +423,13 @@ export const FileUploaderButton = ({
     }, 0);
   };
 
+  const wrapperClassName = containerClassName
+    ? `flex w-fit flex-col gap-4 ${containerClassName}`
+    : "flex w-full flex-col gap-4";
+  const dropZoneWidthClassName = containerClassName ? "w-fit" : "w-full";
+
   return (
-    <div className="flex w-full flex-col gap-4">
+    <div className={wrapperClassName}>
       {/* Drag and Drop Zone */}
       <div
         ref={dropZoneRef}
@@ -431,7 +438,7 @@ export const FileUploaderButton = ({
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        className={`relative w-full transition-all duration-300 ${
+        className={`relative ${dropZoneWidthClassName} transition-all duration-300 ${
           isPlaceholder
             ? "border-shopstr-purple dark:border-shopstr-yellow flex h-full min-h-[250px] items-center justify-center rounded-xl border-2 border-dashed p-6"
             : !isDragging && "border-2 border-dashed border-transparent"

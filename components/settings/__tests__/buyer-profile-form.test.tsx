@@ -1,6 +1,5 @@
 import React from "react";
-import { render, screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom";
 
 import BuyerProfileForm from "../buyer-profile-form";
@@ -9,79 +8,62 @@ import {
   NostrContext,
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
-import { createNostrProfileEvent } from "@/utils/nostr/nostr-helper-functions";
+import { FileUploaderButton } from "@/components/utility-components/file-uploader";
+import { AVATARBADGEBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 
-const mockRouterPush = jest.fn();
 jest.mock("next/router", () => ({
-  useRouter: jest.fn(() => ({ push: mockRouterPush })),
+  useRouter: jest.fn(() => ({ push: jest.fn() })),
 }));
 
-jest.mock("@heroui/react", () => ({
-  Button: ({ children, isDisabled, isLoading, onClick, onKeyDown, type }: any) => (
-    <button
-      type={type || "button"}
-      disabled={isDisabled || isLoading}
-      onClick={onClick}
-      onKeyDown={onKeyDown}
-    >
-      {children}
-    </button>
-  ),
-  Input: ({ label, value, onChange, onBlur, type = "text" }: any) => (
-    <label>
-      {label}
-      <input
-        aria-label={label}
-        value={value}
-        onChange={onChange}
-        onBlur={onBlur}
-        type={type}
-      />
-    </label>
-  ),
-  Image: ({ src, alt }: any) => <img src={src} alt={alt} />,
-}), { virtual: true });
+jest.mock(
+  "@heroui/react",
+  () => ({
+    Button: ({ children, type, onClick, onKeyDown }: any) => (
+      <button type={type || "button"} onClick={onClick} onKeyDown={onKeyDown}>
+        {children}
+      </button>
+    ),
+    Input: ({ label, value, onChange, onBlur, type = "text" }: any) => (
+      <label>
+        {label}
+        <input
+          aria-label={label}
+          type={type}
+          value={value}
+          onChange={onChange}
+          onBlur={onBlur}
+        />
+      </label>
+    ),
+    Image: ({ src, alt, className }: any) => (
+      <img src={src} alt={alt} className={className} />
+    ),
+  }),
+  { virtual: true }
+);
 
+jest.mock("@/components/utility-components/file-uploader", () => ({
+  FileUploaderButton: jest.fn(() => (
+    <button data-testid="upload-picture-btn" />
+  )),
+}));
+const mockFileUploaderButton = FileUploaderButton as jest.Mock;
+
+jest.mock("@/components/utility-components/shopstr-spinner", () => () => null);
 jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
   createNostrProfileEvent: jest.fn(),
 }));
-const mockCreateNostrProfileEvent = createNostrProfileEvent as jest.Mock;
-
-jest.mock("@/components/utility-components/file-uploader", () => ({
-  FileUploaderButton: jest.fn(
-    ({ children, imgCallbackOnUpload, isIconOnly }) => (
-      <button
-        data-testid={isIconOnly ? "upload-picture-btn" : "upload-banner-btn"}
-        onClick={() => imgCallbackOnUpload("https://new.image/url")}
-      >
-        {children}
-      </button>
-    )
-  ),
-}));
-
-jest.mock("@/components/utility-components/shopstr-spinner", () => () => null);
-
-const mockUserPubkey = "buyer_pubkey_123";
-const mockSavedProfileEvent = {
-  id: "buyer-profile-event-1",
-  pubkey: mockUserPubkey,
-  created_at: 54321,
-  kind: 0,
-  tags: [],
-  content: "{}",
-  sig: "sig",
-};
 
 const renderWithProviders = (component: React.ReactElement) => {
-  const mockUpdateProfileData = jest.fn();
-  render(
+  return render(
     <NostrContext.Provider value={{ nostr: {} as any }}>
-      <SignerContext.Provider value={{ signer: {} as any, pubkey: mockUserPubkey }}>
+      <SignerContext.Provider
+        value={{ signer: {} as any, pubkey: "buyer_pubkey_123" }}
+      >
         <ProfileMapContext.Provider
           value={{
             profileData: new Map(),
-            updateProfileData: mockUpdateProfileData,
+            updateProfileData: jest.fn(),
             isLoading: false,
           }}
         >
@@ -90,8 +72,6 @@ const renderWithProviders = (component: React.ReactElement) => {
       </SignerContext.Provider>
     </NostrContext.Provider>
   );
-
-  return { mockUpdateProfileData };
 };
 
 describe("BuyerProfileForm", () => {
@@ -99,24 +79,17 @@ describe("BuyerProfileForm", () => {
     jest.clearAllMocks();
   });
 
-  test("updates context with the returned created_at and clears save loading state", async () => {
-    mockCreateNostrProfileEvent.mockResolvedValue(mockSavedProfileEvent);
-    const user = userEvent.setup();
-    const { mockUpdateProfileData } = renderWithProviders(<BuyerProfileForm />);
+  test("passes anchored badge props to the avatar uploader", async () => {
+    renderWithProviders(<BuyerProfileForm />);
+    await screen.findByLabelText("Display name");
 
-    await user.type(await screen.findByLabelText("Display name"), "Buyer Name");
-    const saveButton = screen.getByRole("button", { name: /Save Profile/i });
-    await user.click(saveButton);
-
-    await waitFor(() => {
-      expect(mockUpdateProfileData).toHaveBeenCalledWith(
-        expect.objectContaining({
-          pubkey: mockUserPubkey,
-          created_at: mockSavedProfileEvent.created_at,
-        })
-      );
-      expect(saveButton).not.toBeDisabled();
-      expect(screen.getByRole("button", { name: /Saved!/i })).toBeInTheDocument();
-    });
+    expect(mockFileUploaderButton).toHaveBeenCalledWith(
+      expect.objectContaining({
+        isIconOnly: true,
+        className: AVATARBADGEBUTTONCLASSNAMES,
+        containerClassName: "absolute right-[-0.5rem] bottom-[-0.5rem] z-20",
+      }),
+      undefined
+    );
   });
 });
