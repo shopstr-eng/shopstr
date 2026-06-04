@@ -70,12 +70,21 @@ export default function ClaimButton({ token }: { token: string }) {
 
   const [isInvalidSuccess, setIsInvalidSuccess] = useState(false);
   const [isReceived, setIsReceived] = useState(false);
+  const [isRefunded, setIsRefunded] = useState(false);
   const [isSpent, setIsSpent] = useState(false);
   const [isInvalidToken, setIsInvalidToken] = useState(false);
   const [isDuplicateToken, setIsDuplicateToken] = useState(false);
   const [isP2pkKeyMissing, setIsP2pkKeyMissing] = useState(false);
   const [p2pk, setP2PK] = useState<ParsedP2PK | null>(null);
   const { mints, tokens, history } = getLocalStorageData();
+
+  // True when locktime has expired and the current wallet key is an
+  // authorized refund signer. refundKeys are stored as "02"+x-only (66 chars)
+  // by cashu-ts; cashuPubkey from context is x-only (64 chars).
+  const isRefundEligible = useMemo(() => {
+    if (!p2pk || !p2pk.expired || !cashuPubkey) return false;
+    return p2pk.refundKeys.some((k) => k.slice(-64) === cashuPubkey);
+  }, [p2pk, cashuPubkey]);
 
   const { theme } = useTheme();
 
@@ -193,7 +202,7 @@ export default function ClaimButton({ token }: { token: string }) {
     }
   };
 
-  const receive = async (isInvalid: boolean) => {
+  const receive = async (isInvalid: boolean, isRefund = false) => {
     setOpenClaimTypeModal(false);
     setIsDuplicateToken(false);
     setIsInvalidSuccess(false);
@@ -205,6 +214,8 @@ export default function ClaimButton({ token }: { token: string }) {
       // P2PK locked proofs must be unlocked at the mint before storage.
       // wallet.receive() calls completeSwap() internally, which signs the inputs
       // with privkey and swaps them for fresh unlocked proofs in one mint round-trip.
+      // Both the seller claim path and the buyer refund path use this branch;
+      // the mint is the authority on which signing path is valid.
       if (p2pk) {
         await wallet!.loadMint();
         const freshProofs = await wallet!.receive(proofs, {
@@ -231,7 +242,9 @@ export default function ClaimButton({ token }: { token: string }) {
             });
           }
         }
-        if (isInvalid) {
+        if (isRefund) {
+          setIsRefunded(true);
+        } else if (isInvalid) {
           setIsInvalidSuccess(true);
         } else {
           setIsReceived(true);
@@ -463,6 +476,31 @@ export default function ClaimButton({ token }: { token: string }) {
           <>Claim: {formattedTokenAmount}</>
         )}
       </Button>
+      {isRefundEligible && (
+        <Button
+          className={
+            isRefunded
+              ? "mt-2 min-w-fit cursor-not-allowed bg-gray-400 text-gray-600 opacity-60"
+              : SHOPSTRBUTTONCLASSNAMES + " mt-2 min-w-fit"
+          }
+          onClick={() => receive(false, true)}
+          isDisabled={isRefunded || isRedeeming}
+        >
+          {isRedeeming ? (
+            <>
+              {theme === "dark" ? (
+                <Spinner size={"sm"} color="warning" />
+              ) : (
+                <Spinner size={"sm"} color="secondary" />
+              )}
+            </>
+          ) : isRefunded ? (
+            <>Refunded: {formattedTokenAmount}</>
+          ) : (
+            <>Refund: {formattedTokenAmount}</>
+          )}
+        </Button>
+      )}
       <Modal
         backdrop="blur"
         isOpen={openClaimTypeModal}
@@ -741,6 +779,36 @@ export default function ClaimButton({ token }: { token: string }) {
           </Modal>
         </>
       )}
+      {isRefunded ? (
+        <Modal
+          backdrop="blur"
+          isOpen={isRefunded}
+          onClose={() => setIsRefunded(false)}
+          classNames={{
+            body: "py-6",
+            backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+            header: "border-b-[1px] border-[#292f46]",
+            footer: "border-t-[1px] border-[#292f46]",
+            closeButton: "hover:bg-black/5 active:bg-white/10",
+          }}
+          isDismissable={true}
+          scrollBehavior={"normal"}
+          placement={"center"}
+          size="2xl"
+        >
+          <ModalContent>
+            <ModalHeader className="text-light-text dark:text-dark-text flex items-center justify-center">
+              <CheckCircleIcon className="h-6 w-6 text-green-500" />
+              <div className="ml-2">Refund successful!</div>
+            </ModalHeader>
+            <ModalBody className="text-light-text dark:text-dark-text flex flex-col overflow-hidden">
+              <div className="flex items-center justify-center">
+                Your funds have been returned to your Shopstr wallet.
+              </div>
+            </ModalBody>
+          </ModalContent>
+        </Modal>
+      ) : null}
     </div>
   );
 }

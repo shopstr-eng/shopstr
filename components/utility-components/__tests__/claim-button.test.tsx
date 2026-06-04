@@ -568,3 +568,190 @@ describe("ClaimButton — P2PK redeem path", () => {
     expect(mockSafeSwap).not.toHaveBeenCalled();
   });
 });
+
+// ── Refund path fixtures ──────────────────────────────────────────────────────
+
+// refundKeys use "02"+x-only format (cashu-ts Lt normalization)
+const mockParsedP2PKExpired = {
+  pubkey: "02seller" + "0".repeat(56),
+  locktime: Math.floor(Date.now() / 1000) - 1, // already past
+  refundKeys: ["02" + CASHU_PUBKEY], // buyer's key in refund list
+  expired: true,
+  rawTags: [],
+};
+
+// Same proof but with an expired ParsedP2PK
+const mockParsedP2PKExpiredUnauthorized = {
+  ...mockParsedP2PKExpired,
+  refundKeys: ["02" + "cccccccc".repeat(8)], // different key — not our wallet
+};
+
+const mockParsedP2PKNotExpired = {
+  ...mockParsedP2PKExpired,
+  locktime: Math.floor(Date.now() / 1000) + 86400 * 7,
+  expired: false,
+};
+
+describe("ClaimButton — P2PK refund path", () => {
+  beforeEach(() => {
+    mockGetDecodedToken.mockReturnValue({
+      mint: "https://testmint.com",
+      proofs: [mockP2PKProof],
+    });
+    MockCashuWallet.mockImplementation(() => ({
+      loadMint: jest.fn().mockResolvedValue(undefined),
+      checkProofsStates: jest
+        .fn()
+        .mockResolvedValue([{ state: "UNSPENT", Y: "Y1" }]),
+      receive: jest.fn().mockResolvedValue([mockFreshProof]),
+      createMeltQuoteBolt11: jest.fn(),
+    }));
+  });
+
+  // Helper: render with an expired P2PK proof that authorizes this wallet,
+  // then wait for the sentinel to confirm p2pk state has committed.
+  async function renderExpiredRefundScenario(authorized = true) {
+    mockParseP2PK.mockReturnValue(
+      authorized ? mockParsedP2PKExpired : mockParsedP2PKExpiredUnauthorized
+    );
+    renderClaimButton();
+    await screen.findByTestId("p2pk-detected");
+  }
+
+  test("shows Refund button when locktime expired and wallet key is in refundKeys", async () => {
+    await renderExpiredRefundScenario();
+    expect(
+      await screen.findByRole("button", { name: /^Refund:/i })
+    ).toBeInTheDocument();
+  });
+
+  test("does not show Refund button when locktime has not expired", async () => {
+    mockParseP2PK.mockReturnValue(mockParsedP2PKNotExpired);
+    renderClaimButton();
+    await screen.findByTestId("p2pk-detected");
+    expect(
+      screen.queryByRole("button", { name: /^Refund:/i })
+    ).not.toBeInTheDocument();
+  });
+
+  test("does not show Refund button when wallet key is not in refundKeys", async () => {
+    await renderExpiredRefundScenario(false);
+    expect(
+      screen.queryByRole("button", { name: /^Refund:/i })
+    ).not.toBeInTheDocument();
+  });
+
+  test("calls wallet.loadMint() then wallet.receive() with privkey on refund click", async () => {
+    await renderExpiredRefundScenario();
+    fireEvent.click(screen.getByRole("button", { name: /^Refund:/i }));
+
+    const walletInstance = MockCashuWallet.mock.results[0].value;
+    await waitFor(() => expect(walletInstance.receive).toHaveBeenCalled());
+
+    const loadMintOrder = walletInstance.loadMint.mock.invocationCallOrder[0];
+    const receiveOrder = walletInstance.receive.mock.invocationCallOrder[0];
+    expect(loadMintOrder).toBeLessThan(receiveOrder);
+
+    const [receivedProofs, config] = walletInstance.receive.mock.calls[0];
+    expect(receivedProofs).toEqual([mockP2PKProof]);
+    expect(config.privkey).toBe(CASHU_PRIVKEY);
+  });
+
+  test("stores freshProofs (not locked proofs) in localStorage after refund", async () => {
+    await renderExpiredRefundScenario();
+    fireEvent.click(screen.getByRole("button", { name: /^Refund:/i }));
+
+    await waitFor(() =>
+      expect(Storage.prototype.setItem).toHaveBeenCalledWith(
+        "tokens",
+        JSON.stringify([mockFreshProof])
+      )
+    );
+    expect(Storage.prototype.setItem).not.toHaveBeenCalledWith(
+      "tokens",
+      JSON.stringify([mockP2PKProof])
+    );
+  });
+
+  test("publishes freshProofs (not locked proofs) to Nostr after refund", async () => {
+    await renderExpiredRefundScenario();
+    fireEvent.click(screen.getByRole("button", { name: /^Refund:/i }));
+
+    await waitFor(() =>
+      expect(mockPublishProofEvent).toHaveBeenCalledWith(
+        mockNostr,
+        mockSigner,
+        "https://testmint.com",
+        [mockFreshProof],
+        "in",
+        "100"
+      )
+    );
+  });
+
+  test("shows 'Refund successful!' modal after successful refund", async () => {
+    await renderExpiredRefundScenario();
+    fireEvent.click(screen.getByRole("button", { name: /^Refund:/i }));
+
+    expect(await screen.findByText("Refund successful!")).toBeInTheDocument();
+    expect(screen.getByText(/funds have been returned/i)).toBeInTheDocument();
+  });
+
+  test("refund button shows 'Refunded' text and is disabled after success", async () => {
+    await renderExpiredRefundScenario();
+    fireEvent.click(screen.getByRole("button", { name: /^Refund:/i }));
+
+    await screen.findByText("Refund successful!");
+
+    // The modal opens and the background becomes aria-hidden; query with
+    // hidden:true to confirm the button state regardless of focus trap.
+    const refundBtn = screen.getByRole("button", {
+      name: /^Refunded:/i,
+      hidden: true,
+    });
+    expect(refundBtn).toBeDisabled();
+  });
+
+  test("refund does not open the claim-type modal", async () => {
+    await renderExpiredRefundScenario();
+    fireEvent.click(screen.getByRole("button", { name: /^Refund:/i }));
+
+    await screen.findByText("Refund successful!");
+    expect(
+      screen.queryByText(/claim the token directly/i)
+    ).not.toBeInTheDocument();
+  });
+
+  test("shows error when mint rejects refund (wallet.receive throws)", async () => {
+    MockCashuWallet.mockImplementation(() => ({
+      loadMint: jest.fn().mockResolvedValue(undefined),
+      checkProofsStates: jest.fn().mockResolvedValue([]),
+      receive: jest
+        .fn()
+        .mockRejectedValue(new Error("Locktime not yet expired")),
+      createMeltQuoteBolt11: jest.fn(),
+    }));
+
+    await renderExpiredRefundScenario();
+    fireEvent.click(screen.getByRole("button", { name: /^Refund:/i }));
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: /Invalid Token/i })
+      ).toBeInTheDocument()
+    );
+  });
+
+  test("non-P2PK tokens do not show a Refund button", async () => {
+    mockParseP2PK.mockReturnValue(null);
+    mockGetDecodedToken.mockReturnValue({
+      mint: "https://testmint.com",
+      proofs: [mockProof],
+    });
+    renderClaimButton();
+    await screen.findByRole("button", { name: /^Claim:/i });
+    expect(
+      screen.queryByRole("button", { name: /^Refund:/i })
+    ).not.toBeInTheDocument();
+  });
+});
