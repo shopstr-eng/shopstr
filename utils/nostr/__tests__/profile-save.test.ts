@@ -26,7 +26,7 @@ describe("createNostrProfileEvent", () => {
     created_at: 12345,
     kind: 0,
     tags: [],
-    content: "{\"name\":\"alice\"}",
+    content: '{"name":"alice"}',
     sig: "sig",
   };
 
@@ -38,7 +38,10 @@ describe("createNostrProfileEvent", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     localStorage.clear();
-    localStorage.setItem("writeRelays", JSON.stringify(["wss://relay.example"]));
+    localStorage.setItem(
+      "writeRelays",
+      JSON.stringify(["wss://relay.example"])
+    );
     localStorage.setItem("relays", JSON.stringify([]));
   });
 

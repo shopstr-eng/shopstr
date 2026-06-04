@@ -1059,7 +1059,12 @@ export async function finalizeAndSendNostrEvent(
       return signedEvent;
     }
 
-    await publishEventWithRetryTracking(nostr, signer, signedEvent, allWriteRelays);
+    await publishEventWithRetryTracking(
+      nostr,
+      signer,
+      signedEvent,
+      allWriteRelays
+    );
     return signedEvent;
   } catch (error) {
     throw error;
