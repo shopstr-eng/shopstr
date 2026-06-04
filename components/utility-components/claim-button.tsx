@@ -73,6 +73,7 @@ export default function ClaimButton({ token }: { token: string }) {
   const [isSpent, setIsSpent] = useState(false);
   const [isInvalidToken, setIsInvalidToken] = useState(false);
   const [isDuplicateToken, setIsDuplicateToken] = useState(false);
+  const [isP2pkKeyMissing, setIsP2pkKeyMissing] = useState(false);
   const [p2pk, setP2PK] = useState<ParsedP2PK | null>(null);
   const { mints, tokens, history } = getLocalStorageData();
 
@@ -158,6 +159,10 @@ export default function ClaimButton({ token }: { token: string }) {
   };
 
   const handleClaimButtonClick = async () => {
+    if (p2pk && !cashuPrivkey) {
+      setIsP2pkKeyMissing(true);
+      return;
+    }
     const alreadySpent = await checkProofsSpent();
     if (!alreadySpent) {
       setOpenClaimTypeModal(true);
@@ -177,12 +182,6 @@ export default function ClaimButton({ token }: { token: string }) {
   }, [profileContext, tokenMint, userPubkey]);
 
   const handleClaimType = async (type: string) => {
-    // let spendableProofs: Proof[] = [];
-    if (p2pk) {
-      // Todo after i learn about seller private key: we need to sign the proofs with the signer and return the signed proofs
-      // const signedProofs = await signP2PKProofs(proofs, sellerPrivateKey );
-      // spendableProofs = (here we will most probable send the signed proofs to the mint and if p2pk.pubkey verifies the signed proofs of the sellerPrivateKey then it will return the spendable proofs);
-    }
     if (type === "receive") {
       await receive(false);
     } else if (type === "redeem") {
@@ -203,6 +202,56 @@ export default function ClaimButton({ token }: { token: string }) {
     setIsInvalidToken(false);
     setIsRedeeming(true);
     try {
+      // P2PK locked proofs must be unlocked at the mint before storage.
+      // wallet.receive() calls completeSwap() internally, which signs the inputs
+      // with privkey and swaps them for fresh unlocked proofs in one mint round-trip.
+      if (p2pk) {
+        await wallet!.loadMint();
+        const freshProofs = await wallet!.receive(proofs, {
+          privkey: cashuPrivkey!,
+        });
+        await publishProofEvent(
+          nostr!,
+          signer!,
+          tokenMint,
+          freshProofs,
+          "in",
+          tokenAmount.toString()
+        );
+        localStorage.setItem(
+          "tokens",
+          JSON.stringify([...tokens, ...freshProofs])
+        );
+        if (!mints.includes(tokenMint)) {
+          localStorage.setItem("mints", JSON.stringify([...mints, tokenMint]));
+          if (cashuPubkey && cashuPrivkey) {
+            await publishWalletEvent(nostr!, signer!, {
+              cashuPubkey,
+              cashuPrivkey,
+            });
+          }
+        }
+        if (isInvalid) {
+          setIsInvalidSuccess(true);
+        } else {
+          setIsReceived(true);
+        }
+        setIsRedeeming(false);
+        localStorage.setItem(
+          "history",
+          JSON.stringify([
+            {
+              type: 1,
+              amount: tokenAmount,
+              date: Math.floor(Date.now() / 1000),
+            },
+            ...history,
+          ])
+        );
+        return;
+      }
+
+      // Non-P2PK path: plain proofs are immediately spendable; store directly.
       const proofsStates = await wallet?.checkProofsStates(proofs);
       const spentYs = proofsStates
         ? new Set(
@@ -286,7 +335,10 @@ export default function ClaimButton({ token }: { token: string }) {
           const meltQuoteTotal =
             meltQuote.amount.toNumber() + meltQuote.fee_reserve.toNumber();
           const swapOutcome = await safeSwap(wallet, meltQuoteTotal, proofs, {
-            sendConfig: { includeFees: true },
+            sendConfig: {
+              includeFees: true,
+              ...(p2pk && cashuPrivkey ? { privkey: cashuPrivkey } : {}),
+            },
           });
           if (swapOutcome.status !== "swapped") {
             throw new Error(
@@ -379,6 +431,13 @@ export default function ClaimButton({ token }: { token: string }) {
 
   return (
     <div>
+      {p2pk && (
+        <span
+          data-testid="p2pk-detected"
+          aria-hidden="true"
+          style={{ display: "none" }}
+        />
+      )}
       <Button
         className={
           isRedeemed || isInvalidToken
@@ -549,6 +608,38 @@ export default function ClaimButton({ token }: { token: string }) {
             </ModalContent>
           </Modal>
         </>
+      ) : null}
+      {isP2pkKeyMissing ? (
+        <Modal
+          backdrop="blur"
+          isOpen={isP2pkKeyMissing}
+          onClose={() => setIsP2pkKeyMissing(false)}
+          classNames={{
+            body: "py-6",
+            backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+            header: "border-b-[1px] border-[#292f46]",
+            footer: "border-t-[1px] border-[#292f46]",
+            closeButton: "hover:bg-black/5 active:bg-white/10",
+          }}
+          isDismissable={true}
+          scrollBehavior={"normal"}
+          placement={"center"}
+          size="2xl"
+        >
+          <ModalContent>
+            <ModalHeader className="text-light-text dark:text-dark-text flex items-center justify-center">
+              <XCircleIcon className="h-6 w-6 text-red-500" />
+              <div className="ml-2">Wallet not ready</div>
+            </ModalHeader>
+            <ModalBody className="text-light-text dark:text-dark-text flex flex-col overflow-hidden">
+              <div className="flex items-center justify-center">
+                Unable to claim escrow token: Cashu wallet identity not yet
+                available. Please wait for your wallet to finish loading and try
+                again.
+              </div>
+            </ModalBody>
+          </ModalContent>
+        </Modal>
       ) : null}
       {isSpent ? (
         <>
