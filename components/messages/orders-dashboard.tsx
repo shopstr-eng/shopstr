@@ -1623,7 +1623,7 @@ const OrdersDashboard = ({
                             >
                               {order.status}
                             </span>
-                            {order.status === "pending" && (
+                            {order.isSale && order.status === "pending" && (
                               <button
                                 onClick={() => handleOpenShippingModal(order)}
                                 className="text-shopstr-purple-light hover:text-shopstr-purple dark:text-shopstr-yellow-light dark:hover:text-shopstr-yellow cursor-pointer text-left text-xs underline"

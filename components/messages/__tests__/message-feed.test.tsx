@@ -78,9 +78,9 @@ describe("MessageFeed Component", () => {
     expect(mockUseTabs).toHaveBeenCalledWith(
       expect.objectContaining({ initialTabId: "orders" })
     );
-    expect(
-      mockUseTabs.mock.calls[0][0].tabs[0].children.props.buyerOnly
-    ).toBe(true);
+    expect(mockUseTabs.mock.calls[0][0].tabs[0].children.props.buyerOnly).toBe(
+      true
+    );
     expect(screen.getByText("Orders Messages Content")).toBeInTheDocument();
     expect(
       screen.queryByText("Inquiries Messages Content")
