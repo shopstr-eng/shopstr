@@ -197,10 +197,14 @@ describe("DynamicHead", () => {
         identifier: "some_other_id",
         pubkey: productPubkey,
         kind: 30402,
-        relays: ["wss://relay.shopstr.example", "wss://relay-2.shopstr.example"],
+        relays: [
+          "wss://relay.shopstr.example",
+          "wss://relay-2.shopstr.example",
+        ],
       });
       mockUseRouter.mockReturnValue({
         pathname: `/listing/${relayHintedNaddr}`,
+        asPath: `/listing/${relayHintedNaddr}`,
         query: { productId: [relayHintedNaddr] },
       });
       mockParseTags.mockReturnValue({ title: "Relay Hint Listing" });

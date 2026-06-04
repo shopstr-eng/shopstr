@@ -22,12 +22,8 @@ jest.mock(
     ModalHeader: ({ children }: { children: ReactNode }) => (
       <div>{children}</div>
     ),
-    ModalBody: ({ children }: { children: ReactNode }) => (
-      <div>{children}</div>
-    ),
-    Dropdown: ({ children }: { children: ReactNode }) => (
-      <div>{children}</div>
-    ),
+    ModalBody: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+    Dropdown: ({ children }: { children: ReactNode }) => <div>{children}</div>,
     DropdownTrigger: ({ children }: { children: ReactNode }) => (
       <div>{children}</div>
     ),
@@ -44,6 +40,11 @@ jest.mock(
       children: ReactNode;
       onPress?: () => void;
     }) => <button onClick={onPress}>{children}</button>,
+    useDisclosure: () => ({
+      isOpen: false,
+      onOpen: () => undefined,
+      onClose: () => undefined,
+    }),
   }),
   { virtual: true }
 );
@@ -239,10 +240,7 @@ describe("Listing page direct-load reconciliation", () => {
           removeDeletedProductEvent: jest.fn(),
         }}
       >
-        <ListingPage
-          ogMeta={defaultOgMeta}
-          initialProductEvent={seededEvent}
-        />
+        <ListingPage ogMeta={defaultOgMeta} initialProductEvent={seededEvent} />
       </ProductContext.Provider>
     );
 
@@ -284,10 +282,7 @@ describe("Listing page direct-load reconciliation", () => {
           removeDeletedProductEvent: jest.fn(),
         }}
       >
-        <ListingPage
-          ogMeta={defaultOgMeta}
-          initialProductEvent={seededEvent}
-        />
+        <ListingPage ogMeta={defaultOgMeta} initialProductEvent={seededEvent} />
       </ProductContext.Provider>
     );
 

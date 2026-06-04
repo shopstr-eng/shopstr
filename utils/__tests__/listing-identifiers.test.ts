@@ -81,9 +81,9 @@ describe("listing-identifiers", () => {
   });
 
   test("returns false for malformed naddr identifiers without throwing", () => {
-    expect(eventMatchesListingIdentifier(baseEvent, "naddr1definitelyinvalid")).toBe(
-      false
-    );
+    expect(
+      eventMatchesListingIdentifier(baseEvent, "naddr1definitelyinvalid")
+    ).toBe(false);
   });
 
   test("still matches direct event ids and d tags", () => {

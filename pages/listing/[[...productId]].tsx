@@ -275,9 +275,8 @@ const Listing = ({ initialProductEvent }: ListingPageProps) => {
       }
 
       if (!matchingEvent) {
-        matchingEvent = productContext.productEvents.find(
-          (event: NostrEvent) =>
-            eventMatchesListingIdentifier(event, productIdString)
+        matchingEvent = productContext.productEvents.find((event: NostrEvent) =>
+          eventMatchesListingIdentifier(event, productIdString)
         );
       }
 
