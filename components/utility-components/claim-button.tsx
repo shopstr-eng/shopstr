@@ -17,6 +17,7 @@ import { useTheme } from "next-themes";
 import { ProfileMapContext, ChatsContext } from "../../utils/context/context";
 import {
   generateKeys,
+  getCachedCashuProofs,
   getLocalStorageData,
   publishProofEvent,
   publishWalletEvent,
@@ -68,7 +69,8 @@ export default function ClaimButton({ token }: { token: string }) {
   const [isInvalidToken, setIsInvalidToken] = useState(false);
   const [isDuplicateToken, setIsDuplicateToken] = useState(false);
 
-  const { mints, tokens, history } = getLocalStorageData();
+  const { mints, history } = getLocalStorageData();
+  const tokens = getCachedCashuProofs();
 
   const { theme } = useTheme();
 

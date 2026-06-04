@@ -1,5 +1,6 @@
 import { Proof } from "@cashu/cashu-ts";
 import {
+  getCachedCashuProofs,
   getLocalStorageData,
   publishProofEvent,
   setCachedCashuProofs,
@@ -29,9 +30,9 @@ export async function recoverProofsToBuyerWallet(
   if (typeof window === "undefined") return;
   if (!proofs || proofs.length === 0) return;
 
-  const { tokens, history } = getLocalStorageData();
+  const { history } = getLocalStorageData();
+  const tokens = getCachedCashuProofs();
   const proofArray = [...tokens, ...proofs];
-  setCachedCashuProofs(proofArray);
   window.localStorage.setItem(
     "history",
     JSON.stringify([
@@ -52,6 +53,7 @@ export async function recoverProofsToBuyerWallet(
     "in",
     amount.toString()
   );
+  setCachedCashuProofs(proofArray);
 }
 
 /**

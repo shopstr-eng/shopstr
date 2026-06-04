@@ -11,6 +11,7 @@ import {
 } from "@/utils/cashu/pending-mint-operations";
 import {
   getPendingCashuProofPublishes,
+  getCachedCashuProofs,
   getLocalStorageData,
   publishProofEvent,
   retryPendingCashuProofPublishes,
@@ -74,9 +75,9 @@ export function MintRecoveryBoot(): null {
           },
           onProofsClaimed: async (quote: PendingMintQuote, proofs: Proof[]) => {
             if (cancelled) return;
-            const { tokens, history } = getLocalStorageData();
+            const { history } = getLocalStorageData();
+            const tokens = getCachedCashuProofs();
             const proofArray = [...tokens, ...proofs];
-            setCachedCashuProofs(proofArray);
             window.localStorage.setItem(
               "history",
               JSON.stringify([
@@ -96,6 +97,7 @@ export function MintRecoveryBoot(): null {
               "in",
               quote.amount.toString()
             );
+            setCachedCashuProofs(proofArray);
           },
         });
 

@@ -6,12 +6,14 @@ import {
 } from "../wallet-recovery";
 
 jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
+  getCachedCashuProofs: jest.fn(() => []),
   getLocalStorageData: jest.fn(() => ({ tokens: [], history: [] })),
   publishProofEvent: jest.fn(),
   setCachedCashuProofs: jest.fn(),
 }));
 
 const helpers = jest.requireMock("@/utils/nostr/nostr-helper-functions") as {
+  getCachedCashuProofs: jest.Mock;
   getLocalStorageData: jest.Mock;
   publishProofEvent: jest.Mock;
   setCachedCashuProofs: jest.Mock;
@@ -28,9 +30,11 @@ const mkProof = (secret: string, amount = 10): Proof =>
 describe("recoverProofsToBuyerWallet", () => {
   beforeEach(() => {
     window.localStorage.clear();
+    helpers.getCachedCashuProofs.mockReset();
     helpers.getLocalStorageData.mockReset();
     helpers.publishProofEvent.mockReset();
     helpers.setCachedCashuProofs.mockReset();
+    helpers.getCachedCashuProofs.mockReturnValue([]);
     helpers.getLocalStorageData.mockReturnValue({ tokens: [], history: [] });
     helpers.publishProofEvent.mockResolvedValue(undefined);
   });
@@ -53,8 +57,9 @@ describe("recoverProofsToBuyerWallet", () => {
   });
 
   it("preserves existing wallet contents", async () => {
+    helpers.getCachedCashuProofs.mockReturnValue([mkProof("existing", 1)]);
     helpers.getLocalStorageData.mockReturnValue({
-      tokens: [mkProof("existing", 1)],
+      tokens: [],
       history: [{ type: 3, amount: 1, date: 1 }],
     });
     await recoverProofsToBuyerWallet(
@@ -82,9 +87,7 @@ describe("recoverProofsToBuyerWallet", () => {
         5
       )
     ).rejects.toThrow("relay down");
-    expect(helpers.setCachedCashuProofs).toHaveBeenCalledWith([
-      mkProof("s1", 5),
-    ]);
+    expect(helpers.setCachedCashuProofs).not.toHaveBeenCalled();
     expect(window.localStorage.getItem("tokens")).toBeNull();
   });
 

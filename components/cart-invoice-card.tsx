@@ -59,6 +59,7 @@ import {
   constructMessageGiftWrap,
   sendGiftWrappedMessageEvent,
   generateKeys,
+  getCachedCashuProofs,
   getLocalStorageData,
   publishProofEvent,
   setCachedCashuProofs,
@@ -115,7 +116,8 @@ export default function CartInvoiceCard({
   setCashuPaymentSent?: (cashuPaymentSent: boolean) => void;
   setCashuPaymentFailed?: (cashuPaymentFailed: boolean) => void;
 }) {
-  const { mints, tokens, history } = getLocalStorageData();
+  const { mints, history } = getLocalStorageData();
+  const tokens = getCachedCashuProofs();
   const {
     isLoggedIn,
     pubkey: userPubkey,
@@ -2411,7 +2413,6 @@ export default function CartInvoiceCard({
       } else {
         proofArray = [...remainingProofs];
       }
-      setCachedCashuProofs(proofArray);
       localStorage.setItem(
         "history",
         JSON.stringify([
@@ -2428,6 +2429,7 @@ export default function CartInvoiceCard({
         price.toString(),
         deletedEventIds
       );
+      setCachedCashuProofs(proofArray);
       localStorage.setItem("cart", JSON.stringify([]));
       setOrderConfirmed(true);
       setPaymentConfirmed(true);

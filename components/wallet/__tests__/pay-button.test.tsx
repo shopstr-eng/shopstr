@@ -13,6 +13,7 @@ import {
   NostrContext,
 } from "@/components/utility-components/nostr-context-provider";
 import {
+  getCachedCashuProofs,
   getLocalStorageData,
   publishProofEvent,
   setCachedCashuProofs,
@@ -24,6 +25,7 @@ jest.mock("next-themes", () => ({
 }));
 
 jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
+  getCachedCashuProofs: jest.fn(),
   getLocalStorageData: jest.fn(),
   publishProofEvent: jest.fn(),
   setCachedCashuProofs: jest.fn(),
@@ -122,10 +124,11 @@ describe("PayButton Component", () => {
     localStorageMock.clear();
 
     localStorageMock.setItem("history", JSON.stringify([]));
+    (getCachedCashuProofs as jest.Mock).mockReturnValue(initialTokens);
 
     (getLocalStorageData as jest.Mock).mockImplementation(() => ({
       mints: ["https://legend.lnbits.com/cashu/api/v1/4gr9XkQ8ez543F4L6f5UqA"],
-      tokens: initialTokens,
+      tokens: [],
       history: JSON.parse(localStorageMock.getItem("history") || "[]"),
     }));
   });

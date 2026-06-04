@@ -32,10 +32,12 @@ const mockMintProofs = jest.fn();
 (CashuMint as unknown as jest.Mock).mockImplementation(() => ({}));
 
 jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
+  getCachedCashuProofs: jest.fn(),
   getLocalStorageData: jest.fn(),
   publishProofEvent: jest.fn(),
   setCachedCashuProofs: jest.fn(),
 }));
+const mockGetCachedCashuProofs = NostrHelper.getCachedCashuProofs as jest.Mock;
 const mockGetLocalStorageData = NostrHelper.getLocalStorageData as jest.Mock;
 const mockPublishProofEvent = NostrHelper.publishProofEvent as jest.Mock;
 const mockSetCachedCashuProofs = NostrHelper.setCachedCashuProofs as jest.Mock;
@@ -112,6 +114,7 @@ const mockWebLN = {
 describe("MintButton Component", () => {
   beforeEach(() => {
     jest.useFakeTimers();
+    mockGetCachedCashuProofs.mockReturnValue([]);
     mockGetLocalStorageData.mockReturnValue(mockLocalStorage);
     mockToDataURL.mockResolvedValue("data:image/png;base64,mock-qr-code");
     mockPublishProofEvent.mockResolvedValue(undefined);

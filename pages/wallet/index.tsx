@@ -1,6 +1,9 @@
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/router";
-import { getLocalStorageData } from "@/utils/nostr/nostr-helper-functions";
+import {
+  getCachedCashuProofs,
+  getLocalStorageData,
+} from "@/utils/nostr/nostr-helper-functions";
 import MintButton from "../../components/wallet/mint-button";
 import ReceiveButton from "../../components/wallet/receive-button";
 import SendButton from "../../components/wallet/send-button";
@@ -23,7 +26,8 @@ const Wallet = () => {
   const router = useRouter();
 
   const localStorageData = useMemo(() => getLocalStorageData(), []);
-  const { mints, tokens } = localStorageData;
+  const { mints } = localStorageData;
+  const tokens = getCachedCashuProofs();
 
   useEffect(() => {
     const currentMint = new CashuMint(mints[0]!);
@@ -74,7 +78,7 @@ const Wallet = () => {
 
   useEffect(() => {
     const interval = setInterval(() => {
-      const { tokens: newTokens } = getLocalStorageData();
+      const newTokens = getCachedCashuProofs();
       if (newTokens) {
         const tokensTotal =
           newTokens.length >= 1

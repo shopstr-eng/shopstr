@@ -15,6 +15,7 @@ import {
 } from "@/components/utility-components/nostr-context-provider";
 import { getDecodedToken, Wallet as CashuWallet } from "@cashu/cashu-ts";
 import {
+  getCachedCashuProofs,
   getLocalStorageData,
   publishProofEvent,
   publishWalletEvent,
@@ -25,6 +26,7 @@ import { NostrNIP46Signer } from "@/utils/nostr/signers/nostr-nip46-signer";
 jest.setTimeout(15000);
 
 jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
+  getCachedCashuProofs: jest.fn(),
   getLocalStorageData: jest.fn(),
   publishProofEvent: jest.fn(),
   publishWalletEvent: jest.fn(),
@@ -48,6 +50,7 @@ jest.mock("@heroicons/react/24/outline", () => ({
 }));
 
 const mockGetLocalStorageData = getLocalStorageData as jest.Mock;
+const mockGetCachedCashuProofs = getCachedCashuProofs as jest.Mock;
 const mockGetDecodedToken = getDecodedToken as jest.Mock;
 const mockPublishProofEvent = publishProofEvent as jest.Mock;
 const mockPublishWalletEvent = publishWalletEvent as jest.Mock;
@@ -84,6 +87,7 @@ describe("ReceiveButton", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     Storage.prototype.setItem = jest.fn();
+    mockGetCachedCashuProofs.mockReturnValue([]);
     mockGetLocalStorageData.mockReturnValue({
       mints: [],
       tokens: [],
@@ -233,9 +237,10 @@ describe("ReceiveButton", () => {
       secret: "secret",
       C: "C1",
     };
+    mockGetCachedCashuProofs.mockReturnValue([mockProof]);
     mockGetLocalStorageData.mockReturnValue({
       mints: [],
-      tokens: [mockProof],
+      tokens: [],
       history: [],
     });
     mockGetDecodedToken.mockReturnValue({

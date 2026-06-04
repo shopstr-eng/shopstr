@@ -18,6 +18,7 @@ import {
   Spinner,
 } from "@heroui/react";
 import {
+  getCachedCashuProofs,
   getLocalStorageData,
   publishProofEvent,
   setCachedCashuProofs,
@@ -51,7 +52,8 @@ const PayButton = () => {
   const { signer } = useContext(SignerContext);
   const { nostr } = useContext(NostrContext);
 
-  const { mints, tokens, history } = getLocalStorageData();
+  const { mints, history } = getLocalStorageData();
+  const tokens = getCachedCashuProofs();
 
   const { theme } = useTheme();
 
@@ -191,7 +193,6 @@ const PayButton = () => {
       } else {
         proofArray = [...remainingProofs];
       }
-      setCachedCashuProofs(proofArray);
       const filteredTokenAmount = filteredProofs.reduce(
         (acc, token: Proof) => acc + token.amount.toNumber(),
         0
@@ -217,6 +218,7 @@ const PayButton = () => {
         transactionAmount.toString(),
         deletedEventIds
       );
+      setCachedCashuProofs(proofArray);
       setIsPaid(true);
       setIsRedeeming(false);
       handleTogglePayModal();

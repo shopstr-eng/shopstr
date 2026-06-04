@@ -48,6 +48,7 @@ import {
   constructMessageSeal,
   constructMessageGiftWrap,
   sendGiftWrappedMessageEvent,
+  getCachedCashuProofs,
   getLocalStorageData,
   publishProofEvent,
   generateKeys,
@@ -101,7 +102,8 @@ export default function ProductInvoiceCard({
   discountPercentage?: number;
   originalPrice?: number;
 }) {
-  const { mints, tokens, history } = getLocalStorageData();
+  const { mints, history } = getLocalStorageData();
+  const tokens = getCachedCashuProofs();
   const {
     pubkey: userPubkey,
     npub: userNPub,
@@ -1942,7 +1944,6 @@ export default function ProductInvoiceCard({
       } else {
         proofArray = [...remainingProofs];
       }
-      setCachedCashuProofs(proofArray);
       localStorage.setItem(
         "history",
         JSON.stringify([
@@ -1959,6 +1960,7 @@ export default function ProductInvoiceCard({
         price.toString(),
         deletedEventIds
       );
+      setCachedCashuProofs(proofArray);
       setCashuPaymentSent(true);
       setPaymentConfirmed(true);
     } catch {

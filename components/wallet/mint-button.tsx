@@ -22,6 +22,7 @@ import {
 } from "@heroui/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
+  getCachedCashuProofs,
   getLocalStorageData,
   publishProofEvent,
   setCachedCashuProofs,
@@ -60,7 +61,8 @@ const MintButton = () => {
   const { signer } = useContext(SignerContext);
   const { nostr } = useContext(NostrContext);
 
-  const { mints, tokens, history } = getLocalStorageData();
+  const { mints, history } = getLocalStorageData();
+  const tokens = getCachedCashuProofs();
 
   const {
     handleSubmit: handleMintSubmit,
@@ -209,7 +211,6 @@ const MintButton = () => {
         );
         if (proofs && proofs.length > 0) {
           const proofArray = [...tokens, ...proofs];
-          setCachedCashuProofs(proofArray);
           localStorage.setItem(
             "history",
             JSON.stringify([
@@ -229,6 +230,7 @@ const MintButton = () => {
             "in",
             numSats.toString()
           );
+          setCachedCashuProofs(proofArray);
           markMintQuoteClaimed(hash);
           setPaymentConfirmed(true);
           setQrCodeUrl(null);
