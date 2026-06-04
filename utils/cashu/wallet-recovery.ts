@@ -44,24 +44,14 @@ export async function recoverProofsToBuyerWallet(
     ])
   );
 
-  // Best-effort wallet event publish; sendGiftWrappedMessageEvent /
-  // publishProofEvent already cache to DB first so durability does not depend
-  // on relay reachability here.
-  try {
-    await publishProofEvent(
-      nostr,
-      signer,
-      mintUrl,
-      proofs,
-      "in",
-      amount.toString()
-    );
-  } catch (err) {
-    console.warn(
-      "[wallet-recovery] proof event publish failed; tokens are held in memory:",
-      err
-    );
-  }
+  await publishProofEvent(
+    nostr,
+    signer,
+    mintUrl,
+    proofs,
+    "in",
+    amount.toString()
+  );
 }
 
 /**

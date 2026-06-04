@@ -183,18 +183,25 @@ describe("db-client", () => {
   });
 
   // Error / catch branches
-  it("cacheEventToDatabase logs error when response not ok", async () => {
+  it("cacheEventToDatabase throws when response is not ok", async () => {
     fetchMock.mockResolvedValue({ ok: false } as Response);
     const errSpy = jest.spyOn(console, "error").mockImplementation(() => {});
-    await cacheEventToDatabase({ id: "e2" } as any);
-    expect(errSpy).toHaveBeenCalledWith("Failed to cache event to database");
+    await expect(cacheEventToDatabase({ id: "e2" } as any)).rejects.toThrow(
+      "Failed to cache event to database"
+    );
+    expect(errSpy).toHaveBeenCalledWith(
+      "Failed to cache event to database:",
+      expect.any(Error)
+    );
     errSpy.mockRestore();
   });
 
-  it("cacheEventToDatabase logs error when fetch throws", async () => {
+  it("cacheEventToDatabase rethrows when fetch throws", async () => {
     fetchMock.mockRejectedValue(new Error("network"));
     const errSpy = jest.spyOn(console, "error").mockImplementation(() => {});
-    await cacheEventToDatabase({ id: "e3" } as any);
+    await expect(cacheEventToDatabase({ id: "e3" } as any)).rejects.toThrow(
+      "network"
+    );
     expect(errSpy).toHaveBeenCalled();
     expect(errSpy.mock.calls[0]?.[0]).toMatch(
       /Failed to cache event to database:/

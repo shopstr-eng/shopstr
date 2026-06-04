@@ -70,6 +70,7 @@ import {
 import { retryFailedRelayPublishes } from "@/utils/nostr/retry-service";
 import { MintRecoveryBoot } from "@/components/utility-components/mint-recovery-boot";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
+import { migrateLegacyCashuProofsToWallet } from "@/utils/cashu/legacy-proof-migration";
 
 const mergeReportEvents = (
   existingReports: NostrEvent[],
@@ -905,12 +906,41 @@ function Shopstr({ props }: { props: AppProps }) {
           );
         }
 
-        if (walletResult?.cashuMints?.length && walletResult.cashuProofs) {
+        if (walletResult?.cashuMints?.length) {
           localStorage.setItem(
             "mints",
             JSON.stringify(walletResult.cashuMints)
           );
+        }
+
+        if (walletResult?.cashuProofs) {
           setCachedCashuProofs(walletResult.cashuProofs);
+        }
+
+        if (walletResult && signer && nostr) {
+          const persistedProofs = walletResult.proofEvents.flatMap(
+            (proofEvent) => proofEvent.proofs ?? []
+          );
+          const migrationResult = await migrateLegacyCashuProofsToWallet(
+            nostr!,
+            signer!,
+            { persistedProofs }
+          );
+          if (
+            migrationResult.migrated > 0 ||
+            migrationResult.alreadyPersisted > 0
+          ) {
+            setCachedCashuProofs(getLocalStorageData().tokens as Proof[]);
+          }
+          if (
+            migrationResult.remaining > 0 ||
+            migrationResult.failedMints.length > 0
+          ) {
+            console.warn(
+              "[cashu-migration] legacy proofs remain pending migration:",
+              migrationResult
+            );
+          }
         }
 
         await runTask("retrying relay publishes", async () => {

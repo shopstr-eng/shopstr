@@ -71,7 +71,7 @@ describe("recoverProofsToBuyerWallet", () => {
     expect(window.localStorage.getItem("tokens")).toBeNull();
   });
 
-  it("does not throw when proof event publish fails", async () => {
+  it("throws when proof event publish fails so pending recovery can retry", async () => {
     helpers.publishProofEvent.mockRejectedValueOnce(new Error("relay down"));
     await expect(
       recoverProofsToBuyerWallet(
@@ -81,7 +81,7 @@ describe("recoverProofsToBuyerWallet", () => {
         [mkProof("s1", 5)],
         5
       )
-    ).resolves.toBeUndefined();
+    ).rejects.toThrow("relay down");
     expect(helpers.setCachedCashuProofs).toHaveBeenCalledWith([
       mkProof("s1", 5),
     ]);

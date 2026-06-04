@@ -798,12 +798,13 @@ export async function publishProofEvent(
   proofs: Proof[],
   direction: "in" | "out",
   amount: string,
-  deletedEventsArray?: string[]
+  deletedEventsArray?: string[],
+  options: { queueOnFailure?: boolean } = {}
 ) {
   try {
     const userPubkey = await signer?.getPubKey?.();
 
-    let signedEvent;
+    let signedEvent: NostrEvent | undefined;
     if (proofs.length > 0) {
       const tokenArray = {
         mint: mint,
@@ -835,8 +836,26 @@ export async function publishProofEvent(
       signedEvent && signedEvent.id ? signedEvent.id : "",
       deletedEventsArray
     );
-  } catch {
-    return;
+    return signedEvent;
+  } catch (error) {
+    if (
+      options.queueOnFailure !== false &&
+      direction === "in" &&
+      proofs.length > 0
+    ) {
+      await queuePendingCashuProofPublish(signer, {
+        mint,
+        proofs,
+        direction,
+        amount,
+        deletedEventsArray,
+        lastErrorMessage:
+          error instanceof Error ? error.message : String(error),
+      }).catch((queueError) =>
+        console.warn("Failed to queue Cashu proof publish retry:", queueError)
+      );
+    }
+    throw error;
   }
 }
 
@@ -1320,20 +1339,305 @@ const LOCALSTORAGECONSTANTS = {
   signer: "signer",
   nwcString: "nwcString",
   nwcInfo: "nwcInfo",
+  pendingProofPublishes: "shopstr.pendingProofPublishes",
 };
 
 let cashuProofCache: Proof[] = [];
 
+type PendingCashuProofPublish = {
+  id: string;
+  mint: string;
+  encryptedProofs: string;
+  proofKeys: string[];
+  direction: "in" | "out";
+  amount: string;
+  deletedEventsArray?: string[];
+  createdAt: number;
+  attempts: number;
+  lastAttemptAt?: number;
+  lastErrorMessage?: string;
+};
+
+const getProofKey = (proof: Partial<Proof>): string | undefined => {
+  if (typeof proof.secret === "string" && proof.secret.length > 0) {
+    return `secret:${proof.secret}`;
+  }
+  if (typeof proof.C === "string" && proof.C.length > 0) {
+    return `C:${proof.C}`;
+  }
+  return undefined;
+};
+
+const isCashuProofLike = (value: unknown): value is Proof => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+
+  const proof = value as {
+    id?: unknown;
+    amount?: unknown;
+    secret?: unknown;
+    C?: unknown;
+  };
+
+  return (
+    typeof proof.id === "string" &&
+    proof.amount !== undefined &&
+    typeof proof.secret === "string" &&
+    typeof proof.C === "string"
+  );
+};
+
+const getUniqueCashuProofs = (proofs: Proof[]): Proof[] => {
+  const seenProofs = new Set<string>();
+  const uniqueProofs: Proof[] = [];
+
+  for (const proof of proofs) {
+    const proofKey = getProofKey(proof);
+    if (!proofKey || seenProofs.has(proofKey)) continue;
+    seenProofs.add(proofKey);
+    uniqueProofs.push(proof);
+  }
+
+  return uniqueProofs;
+};
+
+const writeLegacyCashuProofs = (proofs: Proof[]) => {
+  if (typeof window === "undefined") return;
+
+  if (proofs.length === 0) {
+    localStorage.removeItem(LOCALSTORAGECONSTANTS.tokens);
+    return;
+  }
+
+  localStorage.setItem(LOCALSTORAGECONSTANTS.tokens, JSON.stringify(proofs));
+};
+
+export const getStoredLegacyCashuProofs = (): Proof[] => {
+  if (typeof window === "undefined") return [];
+
+  const storedProofs = localStorage.getItem(LOCALSTORAGECONSTANTS.tokens);
+  if (!storedProofs) return [];
+
+  try {
+    const parsedProofs = JSON.parse(storedProofs);
+    if (!Array.isArray(parsedProofs)) {
+      localStorage.removeItem(LOCALSTORAGECONSTANTS.tokens);
+      return [];
+    }
+
+    const validProofs = getUniqueCashuProofs(
+      parsedProofs.filter(isCashuProofLike)
+    );
+
+    if (validProofs.length !== parsedProofs.length) {
+      writeLegacyCashuProofs(validProofs);
+    }
+
+    return validProofs;
+  } catch {
+    localStorage.removeItem(LOCALSTORAGECONSTANTS.tokens);
+    return [];
+  }
+};
+
+export const removeStoredLegacyCashuProofs = (proofsToRemove: Proof[]) => {
+  if (typeof window === "undefined" || proofsToRemove.length === 0) return;
+
+  const proofKeysToRemove = new Set(
+    proofsToRemove.map(getProofKey).filter(Boolean)
+  );
+  const remainingProofs = getStoredLegacyCashuProofs().filter((proof) => {
+    const proofKey = getProofKey(proof);
+    return !proofKey || !proofKeysToRemove.has(proofKey);
+  });
+
+  writeLegacyCashuProofs(remainingProofs);
+};
+
 export const getCachedCashuProofs = (): Proof[] => [...cashuProofCache];
 
 export const setCachedCashuProofs = (proofs: Proof[] = []) => {
-  cashuProofCache = Array.isArray(proofs) ? [...proofs] : [];
+  cashuProofCache = Array.isArray(proofs)
+    ? getUniqueCashuProofs([...proofs])
+    : [];
 
   if (typeof window !== "undefined") {
-    localStorage.removeItem(LOCALSTORAGECONSTANTS.tokens);
     window.dispatchEvent(new Event("storage"));
   }
 };
+
+const readPendingCashuProofPublishes = (): PendingCashuProofPublish[] => {
+  if (typeof window === "undefined") return [];
+
+  try {
+    const storedPublishes = localStorage.getItem(
+      LOCALSTORAGECONSTANTS.pendingProofPublishes
+    );
+    if (!storedPublishes) return [];
+
+    const parsedPublishes = JSON.parse(storedPublishes);
+    if (!Array.isArray(parsedPublishes)) return [];
+
+    return parsedPublishes.filter(
+      (publish): publish is PendingCashuProofPublish =>
+        publish &&
+        typeof publish === "object" &&
+        typeof publish.id === "string" &&
+        typeof publish.mint === "string" &&
+        typeof publish.encryptedProofs === "string" &&
+        Array.isArray(publish.proofKeys) &&
+        (publish.direction === "in" || publish.direction === "out") &&
+        typeof publish.amount === "string" &&
+        typeof publish.createdAt === "number" &&
+        typeof publish.attempts === "number"
+    );
+  } catch {
+    return [];
+  }
+};
+
+const writePendingCashuProofPublishes = (
+  pendingPublishes: PendingCashuProofPublish[]
+) => {
+  if (typeof window === "undefined") return;
+
+  if (pendingPublishes.length === 0) {
+    localStorage.removeItem(LOCALSTORAGECONSTANTS.pendingProofPublishes);
+    return;
+  }
+
+  localStorage.setItem(
+    LOCALSTORAGECONSTANTS.pendingProofPublishes,
+    JSON.stringify(pendingPublishes)
+  );
+};
+
+export const getPendingCashuProofPublishes = () =>
+  readPendingCashuProofPublishes();
+
+export async function queuePendingCashuProofPublish(
+  signer: NostrSigner,
+  {
+    mint,
+    proofs,
+    direction,
+    amount,
+    deletedEventsArray,
+    lastErrorMessage,
+  }: {
+    mint: string;
+    proofs: Proof[];
+    direction: "in" | "out";
+    amount: string;
+    deletedEventsArray?: string[];
+    lastErrorMessage?: string;
+  }
+) {
+  if (typeof window === "undefined" || proofs.length === 0) return;
+
+  const proofKeys = proofs.map(getProofKey).filter(Boolean) as string[];
+  if (proofKeys.length === 0) return;
+
+  const userPubkey = await signer.getPubKey();
+  const encryptedProofs = await signer.encrypt(
+    userPubkey,
+    JSON.stringify(proofs)
+  );
+  const pendingPublishes = readPendingCashuProofPublishes();
+  const existingIndex = pendingPublishes.findIndex(
+    (publish) =>
+      publish.mint === mint &&
+      publish.direction === direction &&
+      publish.proofKeys.some((proofKey) => proofKeys.includes(proofKey))
+  );
+
+  const nextPublish: PendingCashuProofPublish = {
+    id: existingIndex >= 0 ? pendingPublishes[existingIndex]!.id : uuidv4(),
+    mint,
+    encryptedProofs,
+    proofKeys,
+    direction,
+    amount,
+    deletedEventsArray,
+    createdAt:
+      existingIndex >= 0
+        ? pendingPublishes[existingIndex]!.createdAt
+        : Date.now(),
+    attempts:
+      existingIndex >= 0 ? pendingPublishes[existingIndex]!.attempts : 0,
+    lastErrorMessage,
+  };
+
+  if (existingIndex >= 0) {
+    pendingPublishes[existingIndex] = {
+      ...pendingPublishes[existingIndex]!,
+      ...nextPublish,
+    };
+  } else {
+    pendingPublishes.push(nextPublish);
+  }
+
+  writePendingCashuProofPublishes(pendingPublishes);
+}
+
+export async function retryPendingCashuProofPublishes(
+  nostr: NostrManager,
+  signer: NostrSigner
+): Promise<{ total: number; recovered: number; failed: number }> {
+  const pendingPublishes = readPendingCashuProofPublishes();
+  const result = {
+    total: pendingPublishes.length,
+    recovered: 0,
+    failed: 0,
+  };
+  if (pendingPublishes.length === 0) return result;
+
+  const remainingPublishes: PendingCashuProofPublish[] = [];
+  const userPubkey = await signer.getPubKey();
+
+  for (const pendingPublish of pendingPublishes) {
+    try {
+      const decryptedProofs = await signer.decrypt(
+        userPubkey,
+        pendingPublish.encryptedProofs
+      );
+      const proofs = getUniqueCashuProofs(
+        JSON.parse(decryptedProofs).filter(isCashuProofLike)
+      );
+
+      if (proofs.length === 0) {
+        result.recovered++;
+        continue;
+      }
+
+      setCachedCashuProofs([...getCachedCashuProofs(), ...proofs]);
+      await publishProofEvent(
+        nostr,
+        signer,
+        pendingPublish.mint,
+        proofs,
+        pendingPublish.direction,
+        pendingPublish.amount,
+        pendingPublish.deletedEventsArray,
+        { queueOnFailure: false }
+      );
+      result.recovered++;
+    } catch (error) {
+      result.failed++;
+      remainingPublishes.push({
+        ...pendingPublish,
+        attempts: pendingPublish.attempts + 1,
+        lastAttemptAt: Date.now(),
+        lastErrorMessage:
+          error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  writePendingCashuProofPublishes(remainingPublishes);
+  return result;
+}
 
 export const setLocalStorageDataOnSignIn = ({
   encryptedPrivateKey,
@@ -1602,10 +1906,10 @@ export const getLocalStorageData = (): LocalStorageInterface => {
       );
     }
 
-    tokens = getCachedCashuProofs();
-    if (localStorage.getItem(LOCALSTORAGECONSTANTS.tokens)) {
-      localStorage.removeItem(LOCALSTORAGECONSTANTS.tokens);
-    }
+    tokens = getUniqueCashuProofs([
+      ...getCachedCashuProofs(),
+      ...getStoredLegacyCashuProofs(),
+    ]);
 
     history = getLocalStorageJson<unknown[]>(
       LOCALSTORAGECONSTANTS.history,
