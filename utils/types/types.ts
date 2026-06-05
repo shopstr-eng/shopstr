@@ -134,6 +134,19 @@ export interface SavedAddress {
   isDefault: boolean;
 }
 
+export interface SavedAddress {
+  id: string;
+  label: string;
+  name: string;
+  address: string;
+  unit?: string;
+  city: string;
+  state: string;
+  zip: string;
+  country: string;
+  isDefault: boolean;
+}
+
 declare global {
   interface Window {
     nostr: {

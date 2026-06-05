@@ -194,7 +194,7 @@ describe("StallPage", () => {
       );
 
       fireEvent.click(screen.getAllByRole("button", { name: "Orders" })[0]!);
-      expect(mockRouterPush).toHaveBeenCalledWith("/orders");
+      expect(mockRouterPush).toHaveBeenCalledWith("/my-listings/orders");
     });
   });
 

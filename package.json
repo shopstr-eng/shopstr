@@ -33,7 +33,8 @@
     "test:coverage": "jest --coverage --ci --runInBand",
     "test:integration": "RUN_TESTCONTAINERS=1 jest utils/db/__tests__/db-service.test.ts --runInBand",
     "test:watch": "jest --watch",
-    "prepare": "husky"
+    "prepare": "husky",
+    "pre-commit": "node scripts/run-staged-checks.mjs"
   },
   "dependencies": {
     "@braintree/sanitize-url": "7.1.2",
@@ -85,6 +86,7 @@
     "zod": "4.0.17"
   },
   "devDependencies": {
+    "@testcontainers/postgresql": "12.0.1",
     "@testing-library/dom": "10.4.1",
     "@testing-library/jest-dom": "6.9.1",
     "@testing-library/react": "16.3.2",
@@ -105,7 +107,6 @@
     "pg-mem": "3.0.14",
     "prettier": "3.8.3",
     "prettier-plugin-tailwindcss": "0.8.0",
-    "@testcontainers/postgresql": "12.0.1",
     "turbo": "2.5.8",
     "typescript": "6.0.3"
   },
