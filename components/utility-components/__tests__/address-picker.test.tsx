@@ -306,9 +306,9 @@ describe("AddressPicker", () => {
     render(<AddressPicker onSelect={mockOnSelect} forceExpanded />);
     fireEvent.click(screen.getByText("+ Add another address"));
     fireEvent.click(screen.getByText("Save & Use"));
-    expect(
-      screen.getByRole("alert")
-    ).toHaveTextContent("Please fill out all required fields.");
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Please fill out all required fields."
+    );
   });
 
   it("calls saveAddress and onSelect when valid new address is saved", async () => {

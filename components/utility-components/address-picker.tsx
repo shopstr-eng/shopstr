@@ -54,9 +54,8 @@ export default function AddressPicker({
   const [viewingId, setViewingId] = useState<string>("");
   const [isAddingNew, setIsAddingNew] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
-  const [newAddr, setNewAddr] = useState<Omit<SavedAddress, "id" | "isDefault">>(
-    EMPTY_ADDRESS_FORM
-  );
+  const [newAddr, setNewAddr] =
+    useState<Omit<SavedAddress, "id" | "isDefault">>(EMPTY_ADDRESS_FORM);
   const [formError, setFormError] = useState<string>("");
 
   const loadAddresses = () => {
@@ -151,8 +150,8 @@ export default function AddressPicker({
   };
 
   const renderAddressDetails = (addr: SavedAddress) => (
-    <div className="space-y-1 text-sm text-default-500">
-      <p className="font-semibold text-foreground">{addr.name}</p>
+    <div className="text-default-500 space-y-1 text-sm">
+      <p className="text-foreground font-semibold">{addr.name}</p>
       <p>
         {addr.address}
         {addr.unit ? `, ${addr.unit}` : ""}
@@ -237,7 +236,7 @@ export default function AddressPicker({
             />
           </div>
           {formError && (
-            <p role="alert" className="text-sm text-danger">
+            <p role="alert" className="text-danger text-sm">
               {formError}
             </p>
           )}
@@ -265,7 +264,7 @@ export default function AddressPicker({
           key={addr.id}
           className={`border ${
             selectedId === addr.id
-              ? "border-shopstr-purple bg-gray-50 dark:border-shopstr-yellow dark:bg-zinc-800"
+              ? "border-shopstr-purple dark:border-shopstr-yellow bg-gray-50 dark:bg-zinc-800"
               : "border-default-200 dark:border-zinc-800"
           }`}
         >
@@ -284,7 +283,7 @@ export default function AddressPicker({
                     </Chip>
                   )}
                 </div>
-                <p className="mt-1 text-sm text-default-500">{addr.name}</p>
+                <p className="text-default-500 mt-1 text-sm">{addr.name}</p>
               </button>
 
               <div className="flex gap-2">
@@ -304,7 +303,7 @@ export default function AddressPicker({
             </div>
 
             {viewingId === addr.id && (
-              <div className="mt-3 rounded-large bg-default-100/40 p-3 dark:bg-zinc-900/70">
+              <div className="rounded-large bg-default-100/40 mt-3 p-3 dark:bg-zinc-900/70">
                 {renderAddressDetails(addr)}
               </div>
             )}
@@ -326,7 +325,7 @@ export default function AddressPicker({
             }
             className={`border-2 ${
               selectable && selectedId === addr.id
-                ? "border-shopstr-purple bg-gray-50 dark:border-shopstr-yellow dark:bg-zinc-800"
+                ? "border-shopstr-purple dark:border-shopstr-yellow bg-gray-50 dark:bg-zinc-800"
                 : "border-default-200 dark:border-zinc-800"
             }`}
           >
@@ -358,7 +357,7 @@ export default function AddressPicker({
                     title="Set as default"
                   >
                     {addr.isDefault ? (
-                      <StarIconSolid className="h-4 w-4 text-shopstr-purple dark:text-shopstr-yellow" />
+                      <StarIconSolid className="text-shopstr-purple dark:text-shopstr-yellow h-4 w-4" />
                     ) : (
                       <StarIcon className="h-4 w-4" />
                     )}
@@ -376,7 +375,7 @@ export default function AddressPicker({
                 </div>
               </div>
               <div
-                className={`${selectable ? "pl-8" : ""} text-sm text-default-500`}
+                className={`${selectable ? "pl-8" : ""} text-default-500 text-sm`}
               >
                 {renderAddressDetails(addr)}
               </div>
@@ -410,7 +409,7 @@ export default function AddressPicker({
         <Button
           size="sm"
           variant="light"
-          className="w-full font-semibold text-shopstr-purple dark:text-shopstr-yellow"
+          className="text-shopstr-purple dark:text-shopstr-yellow w-full font-semibold"
           onClick={() => setIsAddingNew(true)}
         >
           + Add another address
@@ -429,11 +428,11 @@ export default function AddressPicker({
     <div className="w-full py-2">
       <button
         type="button"
-        className="flex w-full items-center justify-between rounded-large border border-gray-200 bg-content1 px-4 py-4 text-left shadow-sm dark:border-zinc-800"
+        className="rounded-large bg-content1 flex w-full items-center justify-between border border-gray-200 px-4 py-4 text-left shadow-sm dark:border-zinc-800"
         onClick={() => setIsExpanded((current) => !current)}
       >
-        <span className="flex items-center gap-3 font-semibold text-md">
-          <StarIcon className="h-5 w-5 text-shopstr-purple dark:text-shopstr-yellow" />
+        <span className="text-md flex items-center gap-3 font-semibold">
+          <StarIcon className="text-shopstr-purple dark:text-shopstr-yellow h-5 w-5" />
           <span>Use a saved address</span>
         </span>
         <span

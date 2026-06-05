@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom";
 
-import SellerOrdersView from "../orders";
+import SellerOrdersView from "@/pages/my-listings/orders";
 
 jest.mock("@/components/messages/orders-dashboard", () => {
   return function MockOrdersDashboard({
