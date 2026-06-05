@@ -1,6 +1,14 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getOrderParticipants, updateOrderStatus } from "@/utils/db/db-service";
 import { verifyNip98Request } from "@/utils/nostr/nip98-auth";
+import { applyRateLimit } from "@/utils/rate-limit";
+
+// Order status writes sit on the buyer/seller critical path. The per-IP
+// limit is generous (a buyer + seller behind shared NAT can both work many
+// orders at once); the per-pubkey limit is the meaningful authority bound
+// since we only call it after NIP-98 verification.
+const PER_IP_LIMIT = { limit: 300, windowMs: 60 * 1000 };
+const PER_PUBKEY_LIMIT = { limit: 200, windowMs: 60 * 1000 };
 
 const SELLER_MANAGED_STATUSES = new Set(["confirmed", "shipped", "completed"]);
 const BUYER_MANAGED_STATUSES = new Set(["canceled"]);
@@ -37,10 +45,23 @@ export default async function handler(
     return res.status(405).json({ error: "Method not allowed" });
   }
 
+  if (!applyRateLimit(req, res, "update-order-status:ip", PER_IP_LIMIT)) return;
+
   const authResult = await verifyNip98Request(req, "POST", req.body);
   if (!authResult.ok) {
     return res.status(401).json({ error: authResult.error });
   }
+
+  if (
+    !applyRateLimit(
+      req,
+      res,
+      "update-order-status:pubkey",
+      PER_PUBKEY_LIMIT,
+      authResult.pubkey
+    )
+  )
+    return;
 
   const { orderId, status, messageId } = req.body;
 

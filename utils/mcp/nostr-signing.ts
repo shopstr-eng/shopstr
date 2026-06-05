@@ -5,7 +5,7 @@ import {
   nip19,
   nip44,
 } from "nostr-tools";
-import { hexToBytes } from "@noble/hashes/utils";
+import { hexToBytes } from "@noble/hashes/utils.js";
 import { SimplePool } from "nostr-tools";
 import {
   createCipheriv,
@@ -21,6 +21,27 @@ import {
 } from "@/utils/nostr/nostr-helper-functions";
 
 const ALGORITHM = "aes-256-gcm";
+
+export const MCP_RELAY_ALLOWLIST = new Set([
+  "wss://relay.damus.io",
+  "wss://nos.lol",
+  "wss://purplepag.es",
+  "wss://relay.primal.net",
+  "wss://relay.nostr.band",
+  "wss://sendit.nosflare.com",
+]);
+
+function filterAllowedRelays(urls: string[]): string[] {
+  const allowed: string[] = [];
+  for (const url of urls) {
+    if (MCP_RELAY_ALLOWLIST.has(url)) {
+      allowed.push(url);
+    } else {
+      console.warn(`MCP relay blocked (not in allowlist): ${url}`);
+    }
+  }
+  return allowed;
+}
 
 function getEncryptionKey(): Uint8Array {
   const envKey = process.env.MCP_ENCRYPTION_KEY;
@@ -112,7 +133,11 @@ export class McpRelayManager {
 
   constructor(relayUrls?: string[]) {
     this.pool = new SimplePool();
-    this.relayUrls = relayUrls || withBlastr(getDefaultRelays());
+    const raw = relayUrls || withBlastr(getDefaultRelays());
+    this.relayUrls = filterAllowedRelays(raw);
+    if (this.relayUrls.length === 0) {
+      throw new Error("MCP relay allowlist produced no valid relays");
+    }
   }
 
   getRelayUrls(): string[] {
@@ -154,7 +179,8 @@ export async function signAndPublishEvent(
       await trackFailedRelayPublish(
         signedEvent.id,
         signedEvent,
-        manager.getRelayUrls()
+        manager.getRelayUrls(),
+        signer
       );
     } catch (trackError) {
       console.error("Failed to track failed relay publish:", trackError);

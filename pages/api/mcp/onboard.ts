@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { generateSecretKey, getPublicKey, nip19 } from "nostr-tools";
-import { bytesToHex, hexToBytes } from "@noble/hashes/utils";
+import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
 import {
   createApiKey,
   initializeApiKeysTable,
@@ -16,6 +16,7 @@ import {
   extractSignedEventFromRequest,
   verifyAndConsumeSignedRequestProof,
 } from "@/utils/mcp/request-proof-server";
+import { getRequestIp } from "@/utils/rate-limit";
 
 let tablesReady = false;
 const MCP_STREAMABLE_HTTP_ACCEPT = "application/json, text/event-stream";
@@ -254,10 +255,7 @@ export default async function handler(
     return res.status(405).json({ error: "Method not allowed. Use POST." });
   }
 
-  const ip =
-    (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ||
-    req.socket.remoteAddress ||
-    "unknown";
+  const ip = getRequestIp(req);
 
   if (!checkOnboardRateLimit(ip)) {
     return res.status(429).json({

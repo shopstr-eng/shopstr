@@ -1,5 +1,6 @@
 import Head from "next/head";
 import { useRouter } from "next/router";
+import { safeJsonLdString } from "@/utils/safe-json-ld";
 
 const organizationSchema = {
   "@context": "https://schema.org",
@@ -89,20 +90,20 @@ export default function StructuredData() {
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
-          __html: JSON.stringify(organizationSchema),
+          __html: safeJsonLdString(organizationSchema),
         }}
       />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
-          __html: JSON.stringify(websiteSchema),
+          __html: safeJsonLdString(websiteSchema),
         }}
       />
       {isHomePage && (
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
-            __html: JSON.stringify(homepageFaqSchema),
+            __html: safeJsonLdString(homepageFaqSchema),
           }}
         />
       )}

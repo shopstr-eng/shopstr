@@ -17,6 +17,10 @@ import {
   extractSignedEventFromRequest,
   verifyAndConsumeSignedRequestProof,
 } from "@/utils/mcp/request-proof-server";
+import { applyRateLimit } from "@/utils/rate-limit";
+
+// Sensitive credential management; tight per-IP cap.
+const RATE_LIMIT = { limit: 30, windowMs: 60 * 1000 };
 
 let tablesReady = false;
 
@@ -47,6 +51,8 @@ export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
+  if (!applyRateLimit(req, res, "mcp-api-keys", RATE_LIMIT)) return;
+
   await ensureTables();
 
   if (req.method === "POST") {

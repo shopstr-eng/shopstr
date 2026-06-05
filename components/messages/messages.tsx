@@ -48,6 +48,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
 
   const [showFailureModal, setShowFailureModal] = useState(false);
   const [failureText, setFailureText] = useState("");
+  const [initialMessage, setInitialMessage] = useState("");
 
   const [randomNpubForSender, setRandomNpubForSender] = useState<string>("");
   const [randomNsecForSender, setRandomNsecForSender] = useState<string>("");
@@ -85,14 +86,26 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
         const decryptedChats = await getDecryptedChatsFromContext();
         const passedNPubkey = router.query.pk ? router.query.pk : null;
         if (passedNPubkey) {
-          const pubkey = decryptNpub(passedNPubkey as string) as string;
-          if (!decryptedChats.has(pubkey)) {
-            decryptedChats.set(pubkey as string, {
-              unreadCount: 0,
-              decryptedChat: [],
-            });
+          const pubkey = decryptNpub(passedNPubkey as string);
+          if (pubkey) {
+            if (!decryptedChats.has(pubkey)) {
+              decryptedChats.set(pubkey, {
+                unreadCount: 0,
+                decryptedChat: [],
+              });
+            }
+            enterChat(pubkey);
+            const productTitle = router.query.productTitle as
+              | string
+              | undefined;
+            const productUrl = router.query.productUrl as string | undefined;
+            if (productTitle) {
+              const draftText = productUrl
+                ? `Re: "${productTitle}" — ${productUrl}\n\n`
+                : `Re: "${productTitle}"\n\n`;
+              setInitialMessage(draftText);
+            }
           }
-          enterChat(pubkey);
         }
         setChatsMap(decryptedChats);
         if (currentChatPubkey) {
@@ -298,8 +311,12 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
         decodedRandomPrivkeyForReceiver.data as Uint8Array,
         currentChatPubkey
       );
-      await sendGiftWrappedMessageEvent(nostr!, senderGiftWrappedEvent);
-      await sendGiftWrappedMessageEvent(nostr!, receiverGiftWrappedEvent);
+      await sendGiftWrappedMessageEvent(nostr!, senderGiftWrappedEvent, signer);
+      await sendGiftWrappedMessageEvent(
+        nostr!,
+        receiverGiftWrappedEvent,
+        signer
+      );
       chatsContext.addNewlyCreatedMessageEvent(
         {
           ...giftWrappedMessageEvent,
@@ -397,6 +414,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
               isSendingDMLoading={isSendingDMLoading}
               handleSendMessage={handleSendGiftWrappedMessage}
               isPayment={isPayment}
+              initialMessage={initialMessage}
             />
           </div>
         )}

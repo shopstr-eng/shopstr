@@ -6,6 +6,7 @@ import {
   DropdownMenu,
   DropdownItem,
   Button,
+  useDisclosure,
 } from "@heroui/react";
 import {
   ArrowTopRightOnSquareIcon,
@@ -21,6 +22,8 @@ import { ProductData } from "@/utils/parsers/product-parser-functions";
 import { ProfileWithDropdown } from "./profile/profile-dropdown";
 import { useRouter } from "next/router";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
+import SignInModal from "../sign-in/SignInModal";
+import useReportEventFlow from "./use-report-event-flow";
 
 export default function ProductCard({
   productData,
@@ -39,7 +42,15 @@ export default function ProductCard({
 
   const router = useRouter();
   const { pubkey: userPubkey } = useContext(SignerContext);
+  const { isOpen, onOpen, onClose } = useDisclosure();
   if (!productData) return null;
+
+  const { openReportFlow, reportFlowUi } = useReportEventFlow({
+    targetLabel: "listing",
+    reportedPubkey: productData.pubkey,
+    reportedEventId: productData.id,
+    onRequireLogin: onOpen,
+  });
 
   const isZapsnag =
     productData.d === "zapsnag" || productData.categories?.includes("zapsnag");
@@ -180,77 +191,111 @@ export default function ProductCard({
       </div>
       <div className="flex flex-col p-4">
         {router.pathname !== "/" && (
-          <div className="mb-2 flex items-center justify-between">
-            <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
-              <h2 className="text-light-text dark:text-dark-text min-w-0 truncate text-xl font-semibold">
+          <>
+            {/* Title row */}
+            <div className="mb-1 flex items-start justify-between gap-2">
+              <h2 className="text-light-text dark:text-dark-text line-clamp-2 min-w-0 flex-1 text-base leading-snug font-semibold">
                 {productData.title}
               </h2>
-              {isZapsnag && productData.pubkey === userPubkey && (
-                <button
-                  onClick={handleNjumpClick}
-                  className="inline-flex flex-shrink-0 items-center text-xs text-purple-600 underline hover:text-purple-800 dark:text-yellow-500 dark:hover:text-yellow-700"
-                  title="Track Sales on Nostr"
-                  aria-label="Open Flash Sale in Nostr client"
-                >
-                  <span>View on Nostr</span>
-                  <ArrowTopRightOnSquareIcon className="ml-1 h-4 w-4" />
-                </button>
-              )}
+              <div className="flex flex-shrink-0 items-center gap-1">
+                {isZapsnag && productData.pubkey === userPubkey && (
+                  <button
+                    onClick={handleNjumpClick}
+                    className="inline-flex items-center text-xs text-purple-600 underline hover:text-purple-800 dark:text-yellow-500 dark:hover:text-yellow-700"
+                    title="Track Sales on Nostr"
+                    aria-label="Open Flash Sale in Nostr client"
+                  >
+                    <span>View on Nostr</span>
+                    <ArrowTopRightOnSquareIcon className="ml-1 h-4 w-4" />
+                  </button>
+                )}
+                {productData.rawEvent && (
+                  <Dropdown>
+                    <DropdownTrigger>
+                      <Button
+                        isIconOnly
+                        variant="light"
+                        size="sm"
+                        className="h-8 min-w-8"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                        }}
+                      >
+                        <EllipsisVerticalIcon className="h-6 w-6 text-gray-500" />
+                      </Button>
+                    </DropdownTrigger>
+                    <DropdownMenu aria-label="Event Actions">
+                      <DropdownItem
+                        key="view-raw"
+                        onPress={() => setShowRawEventModal(true)}
+                      >
+                        View Raw Event
+                      </DropdownItem>
+                      <DropdownItem
+                        key="view-id"
+                        onPress={() => setShowEventIdModal(true)}
+                      >
+                        View Event ID
+                      </DropdownItem>
+                      {productData.pubkey !== userPubkey ? (
+                        <DropdownItem
+                          key="report-listing"
+                          className="text-danger"
+                          color="danger"
+                          onPress={openReportFlow}
+                        >
+                          Report Listing
+                        </DropdownItem>
+                      ) : null}
+                    </DropdownMenu>
+                  </Dropdown>
+                )}
+              </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              {isExpired && (
-                <Chip color="warning" size="sm" variant="flat">
-                  Outdated
-                </Chip>
-              )}
-              {productData.status === "active" && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900 dark:text-green-300">
-                  Active
-                </span>
-              )}
-              {productData.status === "sold" && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900 dark:text-red-300">
-                  Sold
-                </span>
-              )}
-              {productData.rawEvent && (
-                <Dropdown>
-                  <DropdownTrigger>
-                    <Button
-                      isIconOnly
-                      variant="light"
-                      size="sm"
-                      className="h-8 min-w-8"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                      }}
-                    >
-                      <EllipsisVerticalIcon className="h-6 w-6 text-gray-500" />
-                    </Button>
-                  </DropdownTrigger>
-                  <DropdownMenu aria-label="Event Actions">
-                    <DropdownItem
-                      key="view-raw"
-                      onPress={() => setShowRawEventModal(true)}
-                    >
-                      View Raw Event
-                    </DropdownItem>
-                    <DropdownItem
-                      key="view-id"
-                      onPress={() => setShowEventIdModal(true)}
-                    >
-                      View Event ID
-                    </DropdownItem>
-                  </DropdownMenu>
-                </Dropdown>
+            {/* Status badges */}
+            {(isExpired ||
+              router.pathname === "/my-listings" ||
+              productData.status === "sold") && (
+              <div className="mb-2 flex items-center gap-2">
+                {isExpired && (
+                  <Chip color="warning" size="sm" variant="flat">
+                    Outdated
+                  </Chip>
+                )}
+                {router.pathname === "/my-listings" &&
+                  productData.status === "active" && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900 dark:text-green-300">
+                      Active
+                    </span>
+                  )}
+                {productData.status === "sold" && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900 dark:text-red-300">
+                    Sold
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Price */}
+            <div className="mb-3">
+              {!isZapsnag ? (
+                <CompactPriceDisplay monetaryInfo={productData} />
+              ) : (
+                <div className="flex items-center justify-center rounded-md bg-black/10 px-2 py-1 dark:bg-white/10">
+                  <span className="text-shopstr-purple dark:text-shopstr-yellow text-sm font-bold">
+                    ⚡ {productData.price} {productData.currency}
+                  </span>
+                </div>
               )}
             </div>
-          </div>
+          </>
         )}
+
+        {/* Seller – supporting text */}
         <div
-          className="mb-3"
+          className="mb-2"
           data-profile-dropdown
           onClick={(e) => {
             e.stopPropagation();
@@ -261,12 +306,14 @@ export default function ProductCard({
             dropDownKeys={
               productData.pubkey === userPubkey
                 ? ["shop_profile"]
-                : ["shop", "inquiry", "copy_npub"]
+                : ["shop", "inquiry", "copy_npub", "report_profile"]
             }
           />
         </div>
+
+        {/* Location */}
         {router.pathname !== "/" && (
-          <div className="mt-1 flex items-center justify-between">
+          <div className="mt-1">
             <Chip
               key={productData.location}
               startContent={locationAvatar(productData.location)}
@@ -274,15 +321,6 @@ export default function ProductCard({
             >
               {productData.location}
             </Chip>
-            {!isZapsnag ? (
-              <CompactPriceDisplay monetaryInfo={productData} />
-            ) : (
-              <div className="flex items-center justify-center rounded-md bg-black/10 px-2 py-1 dark:bg-white/10">
-                <span className="text-shopstr-purple dark:text-shopstr-yellow text-sm font-bold">
-                  ⚡ {productData.price} {productData.currency}
-                </span>
-              </div>
-            )}
           </div>
         )}
       </div>
@@ -327,6 +365,8 @@ export default function ProductCard({
         onClose={() => setShowEventIdModal(false)}
         rawEvent={productData.rawEvent}
       />
+      {reportFlowUi}
+      <SignInModal isOpen={isOpen} onClose={onClose} />
     </div>
   );
 }

@@ -52,6 +52,7 @@ const ChatPanel = ({
   chatsMap,
   isSendingDMLoading,
   isPayment,
+  initialMessage,
 }: {
   handleGoBack: () => void;
   handleSendMessage: (message: string) => Promise<void>;
@@ -59,6 +60,7 @@ const ChatPanel = ({
   chatsMap: Map<string, ChatObject>;
   isSendingDMLoading: boolean;
   isPayment: boolean;
+  initialMessage?: string;
 }) => {
   const FIELD_LABELS: Record<string, string> = {
     tracking: "Tracking number",
@@ -149,6 +151,12 @@ const ChatPanel = ({
   }, [currentChatPubkey, chatsMap]);
 
   useEffect(() => {
+    if (initialMessage) {
+      setMessageInput(initialMessage);
+    }
+  }, [initialMessage]);
+
+  useEffect(() => {
     bottomDivRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isSendingDMLoading]);
 
@@ -224,7 +232,7 @@ const ChatPanel = ({
         buyerPubkey
       );
 
-      await sendGiftWrappedMessageEvent(nostr, giftWrappedEvent);
+      await sendGiftWrappedMessageEvent(nostr, giftWrappedEvent, signer);
     } catch (error) {
       console.error("Error marking order as completed:", error);
     }
@@ -301,7 +309,7 @@ const ChatPanel = ({
         decodedRandomPrivkeyForReceiver.data as Uint8Array,
         buyerPubkey
       );
-      await sendGiftWrappedMessageEvent(nostr!, giftWrappedEvent);
+      await sendGiftWrappedMessageEvent(nostr!, giftWrappedEvent, signer);
       handleToggleShippingModal();
     } catch (error) {
       console.error(error);

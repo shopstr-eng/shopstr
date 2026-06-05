@@ -1,5 +1,6 @@
 import Head from "next/head";
 import Link from "next/link";
+import { safeJsonLdString } from "@/utils/safe-json-ld";
 import {
   CodeBracketIcon,
   GlobeAltIcon,
@@ -64,10 +65,9 @@ export default function Contact() {
           name="description"
           content="Contact the Shopstr team via Nostr, GitHub, or X. We are a decentralized open-source project — all communication happens on open protocols."
         />
-        <link rel="canonical" href="https://shopstr.market/contact" />
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
+          dangerouslySetInnerHTML={{ __html: safeJsonLdString(structuredData) }}
         />
       </Head>
 
