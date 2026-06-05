@@ -618,6 +618,191 @@ describe("fetch-service report helpers", () => {
   });
 });
 
+describe("fetchReports", () => {
+  beforeEach(() => {
+    jest.resetModules();
+    jest.clearAllMocks();
+  });
+
+  it("includes reports matched by listing e-tag and reports matched by seller p-tag", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+    jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
+
+    const { fetchReports } = await import("../fetch-service");
+
+    const productA = makeProductEvent({
+      id: "prod-a",
+      pubkey: "seller-a",
+      created_at: 1,
+      tags: [["d", "item-a"]],
+      sig: "sig-prod-a",
+    });
+    const productB = makeProductEvent({
+      id: "prod-b",
+      pubkey: "seller-b",
+      created_at: 2,
+      tags: [["d", "item-b"]],
+      sig: "sig-prod-b",
+    });
+    const reportByETag = makeReportEvent({
+      id: "report-e",
+      pubkey: "reporter-1",
+      created_at: 10,
+      tags: [["e", "prod-a", "spam"]],
+      sig: "sig-report-e",
+    });
+    const reportByPTag = makeReportEvent({
+      id: "report-p",
+      pubkey: "reporter-2",
+      created_at: 11,
+      tags: [["p", "seller-b", "impersonation"]],
+      sig: "sig-report-p",
+    });
+    const reportIrrelevant = makeReportEvent({
+      id: "report-irrelevant",
+      pubkey: "reporter-3",
+      created_at: 12,
+      tags: [["p", "unknown-seller", "spam"]],
+      sig: "sig-irrelevant",
+    });
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(
+        makeDbPayload([reportByETag, reportByPTag, reportIrrelevant])
+      ) as typeof global.fetch;
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([]) } as any;
+    const editReportsContext = jest.fn();
+
+    const { reportEvents } = await fetchReports(
+      nostr,
+      ["wss://relay.example"],
+      [productA, productB] as any,
+      editReportsContext
+    );
+
+    expect(reportEvents.map((e) => e.id)).toEqual(
+      expect.arrayContaining(["report-e", "report-p"])
+    );
+    expect(reportEvents.map((e) => e.id)).not.toContain("report-irrelevant");
+  });
+
+  it("discards DB report rows that reference neither loaded product IDs nor seller pubkeys", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+    jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
+
+    const { fetchReports } = await import("../fetch-service");
+
+    const product = makeProductEvent({
+      id: "known-listing",
+      pubkey: "known-seller",
+      created_at: 1,
+      tags: [["d", "item"]],
+      sig: "sig-product",
+    });
+    const relevantByEventId = makeReportEvent({
+      id: "relevant-e",
+      pubkey: "reporter-1",
+      created_at: 10,
+      tags: [["e", "known-listing", "spam"]],
+      sig: "sig-relevant-e",
+    });
+    const irrelevantWrongSeller = makeReportEvent({
+      id: "irrelevant-seller",
+      pubkey: "reporter-2",
+      created_at: 11,
+      tags: [["p", "stranger-seller", "spam"]],
+      sig: "sig-irrelevant-seller",
+    });
+    const irrelevantWrongListing = makeReportEvent({
+      id: "irrelevant-listing",
+      pubkey: "reporter-3",
+      created_at: 12,
+      tags: [["e", "unknown-listing", "spam"]],
+      sig: "sig-irrelevant-listing",
+    });
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(
+        makeDbPayload([
+          relevantByEventId,
+          irrelevantWrongSeller,
+          irrelevantWrongListing,
+        ])
+      ) as typeof global.fetch;
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([]) } as any;
+    const editReportsContext = jest.fn();
+
+    const { reportEvents } = await fetchReports(
+      nostr,
+      ["wss://relay.example"],
+      [product] as any,
+      editReportsContext
+    );
+
+    expect(reportEvents).toHaveLength(1);
+    expect(reportEvents[0]?.id).toBe("relevant-e");
+  });
+
+  it("additionalProfilePubkeys expands the seller-pubkey match set for DB query and relay filter", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+    jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
+
+    const { fetchReports } = await import("../fetch-service");
+
+    const product = makeProductEvent({
+      id: "listing-1",
+      pubkey: "seller-1",
+      created_at: 1,
+      tags: [["d", "item"]],
+      sig: "sig-product",
+    });
+    const extraReviewerReport = makeReportEvent({
+      id: "report-extra",
+      pubkey: "reporter-x",
+      created_at: 20,
+      tags: [["p", "extra-reviewer", "spam"]],
+      sig: "sig-extra",
+    });
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(
+        makeDbPayload([extraReviewerReport])
+      ) as typeof global.fetch;
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([]) } as any;
+    const editReportsContext = jest.fn();
+
+    const { reportEvents } = await fetchReports(
+      nostr,
+      ["wss://relay.example"],
+      [product] as any,
+      editReportsContext,
+      ["extra-reviewer"]
+    );
+
+    expect(reportEvents.map((e) => e.id)).toContain("report-extra");
+
+    const dbUrl = (global.fetch as jest.Mock).mock.calls[0]?.[0] as string;
+    expect(dbUrl).toContain("p=extra-reviewer");
+
+    expect(nostr.fetch).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kinds: [1984],
+          "#p": expect.arrayContaining(["extra-reviewer"]),
+        }),
+      ]),
+      {},
+      ["wss://relay.example"]
+    );
+  });
+});
+
 describe("fetchProfile", () => {
   const pubkey =
     "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
