@@ -32,7 +32,6 @@ export default function EditAddressForm({
   };
 
   const isNewAddress = !address;
-  const pageTitle = isNewAddress ? "Add New Address" : "Edit Address";
 
   const { control, handleSubmit } = useForm<SavedAddress>({
     defaultValues: {

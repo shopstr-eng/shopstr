@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, type JSX } from "react";
 import {
   Select,
   SelectItem,
