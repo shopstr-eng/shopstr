@@ -801,6 +801,256 @@ describe("fetchReports", () => {
       ["wss://relay.example"]
     );
   });
+
+  it("emits DB-cached reports to context before relay results arrive", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+    jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
+
+    const { fetchReports } = await import("../fetch-service");
+
+    const product = makeProductEvent({
+      id: "listing-db-first",
+      pubkey: "seller-db-first",
+      created_at: 1,
+      tags: [["d", "item-db-first"]],
+      sig: "sig-product-db-first",
+    });
+    const dbReport = makeReportEvent({
+      id: "report-from-db",
+      pubkey: "reporter-db",
+      created_at: 50,
+      tags: [["e", "listing-db-first", "spam"]],
+      sig: "sig-db-report",
+    });
+    const relayReport = makeReportEvent({
+      id: "report-from-relay",
+      pubkey: "reporter-relay",
+      created_at: 60,
+      tags: [["p", "seller-db-first", "impersonation"]],
+      sig: "sig-relay-report",
+    });
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(makeDbPayload([dbReport])) as typeof global.fetch;
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([relayReport]) } as any;
+    const editReportsContext = jest.fn();
+
+    await fetchReports(
+      nostr,
+      ["wss://relay.example"],
+      [product] as any,
+      editReportsContext
+    );
+
+    expect(editReportsContext).toHaveBeenCalledTimes(2);
+    // First call is DB-only, before relay completes
+    expect(editReportsContext.mock.calls[0]).toEqual([
+      [expect.objectContaining({ id: "report-from-db" })],
+      false,
+    ]);
+    // Final call includes both DB and relay reports
+    expect(editReportsContext).toHaveBeenLastCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "report-from-db" }),
+        expect.objectContaining({ id: "report-from-relay" }),
+      ]),
+      false
+    );
+  });
+
+  it("passes separate p-based and e-based filter objects to relay fetch", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+    jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
+
+    const { fetchReports } = await import("../fetch-service");
+
+    const productA = makeProductEvent({
+      id: "prod-pfilter-a",
+      pubkey: "seller-pfilter-a",
+      created_at: 1,
+      tags: [["d", "item-pfilter-a"]],
+      sig: "sig-pfilter-a",
+    });
+    const productB = makeProductEvent({
+      id: "prod-pfilter-b",
+      pubkey: "seller-pfilter-b",
+      created_at: 2,
+      tags: [["d", "item-pfilter-b"]],
+      sig: "sig-pfilter-b",
+    });
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(makeDbPayload([])) as typeof global.fetch;
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([]) } as any;
+    const editReportsContext = jest.fn();
+
+    await fetchReports(
+      nostr,
+      ["wss://relay.example"],
+      [productA, productB] as any,
+      editReportsContext
+    );
+
+    const filters = nostr.fetch.mock.calls[0][0] as any[];
+    expect(filters).toHaveLength(2);
+    const pFilter = filters.find((f) => "#p" in f);
+    const eFilter = filters.find((f) => "#e" in f);
+    expect(pFilter).toMatchObject({
+      kinds: [1984],
+      "#p": expect.arrayContaining(["seller-pfilter-a", "seller-pfilter-b"]),
+    });
+    expect(eFilter).toMatchObject({
+      kinds: [1984],
+      "#e": expect.arrayContaining(["prod-pfilter-a", "prod-pfilter-b"]),
+    });
+  });
+
+  it("keeps the relay version of a report when the relay event has a higher created_at", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+    jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
+
+    const { fetchReports } = await import("../fetch-service");
+
+    const product = makeProductEvent({
+      id: "listing-merge",
+      pubkey: "seller-merge",
+      created_at: 1,
+      tags: [["d", "item-merge"]],
+      sig: "sig-product-merge",
+    });
+    const dbVersion = makeReportEvent({
+      id: "shared-report-id",
+      pubkey: "reporter-merge",
+      created_at: 100,
+      tags: [["e", "listing-merge", "spam"]],
+      content: "db-content",
+      sig: "sig-db-version",
+    });
+    const relayVersionNewer = makeReportEvent({
+      id: "shared-report-id",
+      pubkey: "reporter-merge",
+      created_at: 200,
+      tags: [["e", "listing-merge", "spam"]],
+      content: "relay-content",
+      sig: "sig-relay-version",
+    });
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(makeDbPayload([dbVersion])) as typeof global.fetch;
+
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([relayVersionNewer]),
+    } as any;
+    const editReportsContext = jest.fn();
+
+    const { reportEvents } = await fetchReports(
+      nostr,
+      ["wss://relay.example"],
+      [product] as any,
+      editReportsContext
+    );
+
+    expect(reportEvents).toHaveLength(1);
+    expect(reportEvents[0]).toMatchObject({
+      id: "shared-report-id",
+      content: "relay-content",
+      created_at: 200,
+    });
+  });
+
+  it("returns an empty result and skips relay fetch when products array is empty", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+    jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
+
+    const { fetchReports } = await import("../fetch-service");
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(makeDbPayload([])) as typeof global.fetch;
+    const nostr = { fetch: jest.fn() } as any;
+    const editReportsContext = jest.fn();
+
+    const { reportEvents } = await fetchReports(
+      nostr,
+      ["wss://relay.example"],
+      [],
+      editReportsContext
+    );
+
+    expect(reportEvents).toEqual([]);
+    expect(nostr.fetch).not.toHaveBeenCalled();
+    expect(editReportsContext).toHaveBeenCalledWith([], false);
+  });
+
+  it("caches only relay events that are valid kind 1984 with id, sig, and pubkey", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+    jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
+
+    const { fetchReports } = await import("../fetch-service");
+
+    const product = makeProductEvent({
+      id: "listing-cache-valid",
+      pubkey: "seller-cache-valid",
+      created_at: 1,
+      tags: [["d", "item-cache-valid"]],
+      sig: "sig-product-cache-valid",
+    });
+    const validReport = makeReportEvent({
+      id: "valid-report-cache",
+      pubkey: "reporter-valid-cache",
+      created_at: 10,
+      tags: [["p", "seller-cache-valid", "spam"]],
+      sig: "sig-valid-cache",
+    });
+    const missingId = makeReportEvent({
+      id: "",
+      pubkey: "reporter-noid",
+      created_at: 11,
+      tags: [["p", "seller-cache-valid", "spam"]],
+      sig: "sig-noid",
+    });
+    const missingSig = makeReportEvent({
+      id: "report-nosig",
+      pubkey: "reporter-nosig",
+      created_at: 12,
+      tags: [["p", "seller-cache-valid", "spam"]],
+      sig: "",
+    });
+    const wrongKind = makeBaseEvent({
+      id: "report-wrongkind",
+      pubkey: "reporter-wrongkind",
+      created_at: 13,
+      kind: 1,
+      tags: [["p", "seller-cache-valid", "spam"]],
+      sig: "sig-wrongkind",
+    });
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(makeDbPayload([])) as typeof global.fetch;
+
+    const nostr = {
+      fetch: jest
+        .fn()
+        .mockResolvedValue([validReport, missingId, missingSig, wrongKind]),
+    } as any;
+    const editReportsContext = jest.fn();
+
+    await fetchReports(
+      nostr,
+      ["wss://relay.example"],
+      [product] as any,
+      editReportsContext
+    );
+
+    expect(cacheEventsToDatabase).toHaveBeenCalledTimes(1);
+    expect(cacheEventsToDatabase).toHaveBeenCalledWith([validReport]);
+  });
 });
 
 describe("fetchProfile", () => {
