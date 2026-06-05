@@ -14,6 +14,7 @@ import {
   CommunityRelays,
   NostrEvent,
   ProductFormValues,
+  SavedAddress,
 } from "@/utils/types/types";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
 import { Proof } from "@cashu/cashu-ts";
@@ -1340,6 +1341,7 @@ const LOCALSTORAGECONSTANTS = {
   signer: "signer",
   nwcString: "nwcString",
   nwcInfo: "nwcInfo",
+  savedAddresses: "savedAddresses",
 };
 
 export const setLocalStorageDataOnSignIn = ({
@@ -1463,6 +1465,7 @@ export interface LocalStorageInterface {
   nwcString?: string | null;
   nwcInfo?: string | null;
   migrationComplete?: boolean;
+  savedAddresses: SavedAddress[];
 }
 
 function isStoredSignerData(
@@ -1525,6 +1528,7 @@ export const getLocalStorageData = (): LocalStorageInterface => {
   let migrationComplete;
   let nwcString;
   let nwcInfo;
+  let savedAddresses: SavedAddress[] = [];
 
   if (typeof window !== "undefined") {
     encryptedPrivateKey = localStorage.getItem(
@@ -1704,6 +1708,14 @@ export const getLocalStorageData = (): LocalStorageInterface => {
       ? localStorage.getItem(LOCALSTORAGECONSTANTS.nwcInfo)
       : null;
     migrationComplete = localStorage.getItem("migrationComplete") === "true";
+    savedAddresses = getLocalStorageJson<SavedAddress[]>(
+      LOCALSTORAGECONSTANTS.savedAddresses,
+      [],
+      {
+        removeOnError: true,
+        validate: (value): value is SavedAddress[] => Array.isArray(value),
+      }
+    );
   }
   return {
     signInMethod: signInMethod as string,
@@ -1724,6 +1736,7 @@ export const getLocalStorageData = (): LocalStorageInterface => {
     nwcString: nwcString as string | null,
     nwcInfo: nwcInfo as string | null,
     migrationComplete: migrationComplete || false,
+    savedAddresses,
   };
 };
 
@@ -1884,3 +1897,10 @@ export const parseLocalProfileFallback = (
 
   return null;
 };
+
+export {
+  getSavedAddresses,
+  saveAddress,
+  deleteAddress,
+  setDefaultAddress,
+} from "@/utils/nostr/saved-address-helpers";
