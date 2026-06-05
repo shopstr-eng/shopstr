@@ -21,7 +21,6 @@ import {
   parseTags,
 } from "@/utils/parsers/product-parser-functions";
 import { productSatisfiesSearchFilter } from "@/utils/parsers/product-filter-helpers";
-import { parseZapsnagNote } from "@/utils/parsers/zapsnag-parser";
 import { parseCommunityEvent } from "../parsers/community-parser-functions";
 import { calculateWeightedScore } from "@/utils/parsers/review-parser-functions";
 import { hashToCurve } from "@cashu/cashu-ts";
@@ -44,7 +43,10 @@ interface NipProfile {
 type SearchFilter = Filter & { search: string };
 
 const PRODUCT_SEARCH_LIMIT = 100;
+export const NIP50_SEARCH_TIMEOUT_MS = 10_000;
 export const DEFAULT_NIP50_SEARCH_RELAYS = [
+  "wss://relay.nostr.band",
+  "wss://nostr.wine",
   "wss://relay.noswhere.com",
   "wss://search.nos.today",
   "wss://antiprimal.net",
@@ -72,6 +74,23 @@ function getUniqueRelayUrls(relays: string[]): string[] {
   }
 
   return Array.from(relayMap.values());
+}
+
+function getNip50SearchRelays(relays: string[]): string[] {
+  const knownSearchRelaySet = new Set(
+    DEFAULT_NIP50_SEARCH_RELAYS.map((relay) => relay.toLowerCase())
+  );
+  const selectedSearchRelays = getUniqueRelayUrls(relays).filter((relay) =>
+    knownSearchRelaySet.has(relay.toLowerCase())
+  );
+  const selectedSearchRelaySet = new Set(
+    selectedSearchRelays.map((relay) => relay.toLowerCase())
+  );
+  const backupSearchRelays = DEFAULT_NIP50_SEARCH_RELAYS.filter(
+    (relay) => !selectedSearchRelaySet.has(relay.toLowerCase())
+  );
+
+  return [...selectedSearchRelays, ...backupSearchRelays];
 }
 
 export function getProductEventKey(event: NostrEvent): string {
@@ -128,11 +147,6 @@ export function buildNip50ProductSearchFilters(
       ...baseFilter,
       kinds: [30402],
     },
-    {
-      ...baseFilter,
-      kinds: [1],
-      "#t": ["shopstr-zapsnag", "zapsnag"],
-    },
   ];
 }
 
@@ -146,17 +160,6 @@ function eventMatchesProductSearch(
       !!parsedProduct &&
       productSatisfiesSearchFilter(parsedProduct, searchQuery)
     );
-  }
-
-  if (event.kind === 1) {
-    const tags = event.tags
-      ?.filter((tag) => tag[0] === "t")
-      .map((tag) => tag[1]);
-    if (!tags?.some((tag) => tag === "shopstr-zapsnag" || tag === "zapsnag")) {
-      return false;
-    }
-
-    return productSatisfiesSearchFilter(parseZapsnagNote(event), searchQuery);
   }
 
   return false;
@@ -175,23 +178,17 @@ export async function fetchNip50ProductSearch(
     return { productEvents: [] };
   }
 
-  const primaryRelays = getUniqueRelayUrls(relays);
-  const primaryRelaySet = new Set(
-    primaryRelays.map((relay) => relay.toLowerCase())
-  );
-  const fallbackRelays = getUniqueRelayUrls(
-    DEFAULT_NIP50_SEARCH_RELAYS.filter(
-      (relay) => !primaryRelaySet.has(normalizeRelayUrl(relay).toLowerCase())
-    )
-  );
+  const searchRelays = getNip50SearchRelays(relays);
 
   const fetchSearchEvents = (targetRelays: string[]) => {
     if (targetRelays.length === 0) return Promise.resolve([]);
 
-    return nostr.fetch(filters, {}, targetRelays).catch((error) => {
-      console.warn("Failed to search products with NIP-50 relays:", error);
-      return [];
-    });
+    return nostr
+      .fetch(filters, {}, targetRelays, NIP50_SEARCH_TIMEOUT_MS)
+      .catch((error) => {
+        console.warn("Failed to search products with NIP-50 relays:", error);
+        return [];
+      });
   };
 
   const filterSearchProductEvents = (events: NostrEvent[]) =>
@@ -200,24 +197,15 @@ export async function fetchNip50ProductSearch(
         event.id &&
         event.sig &&
         event.pubkey &&
-        (event.kind === 30402 || event.kind === 1)
+        event.kind === 30402
     );
 
   let searchProductEvents = filterSearchProductEvents(
-    await fetchSearchEvents(primaryRelays)
+    await fetchSearchEvents(searchRelays)
   );
   let relevantSearchProductEvents = searchProductEvents.filter((event) =>
     eventMatchesProductSearch(event, searchQuery)
   );
-
-  if (relevantSearchProductEvents.length === 0) {
-    searchProductEvents = filterSearchProductEvents(
-      await fetchSearchEvents(fallbackRelays)
-    );
-    relevantSearchProductEvents = searchProductEvents.filter((event) =>
-      eventMatchesProductSearch(event, searchQuery)
-    );
-  }
 
   const cacheableProductEvents = relevantSearchProductEvents.filter(
     (event) => event.kind === 30402

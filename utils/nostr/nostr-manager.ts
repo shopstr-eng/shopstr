@@ -171,9 +171,10 @@ export class NostrManager {
   public async fetch(
     filters: NostrFilter[],
     params?: SubscribeManyParams,
-    relayUrls?: string[]
+    relayUrls?: string[],
+    timeout?: number
   ): Promise<NostrEvent[]> {
-    return await newPromiseWithTimeout(async (resolve, _reject) => {
+    return await newPromiseWithTimeout(async (resolve, _reject, abortSignal) => {
       if (!params) {
         params = {};
       }
@@ -199,6 +200,10 @@ export class NostrManager {
         await sub.close();
       };
 
+      abortSignal.addEventListener("abort", () => {
+        closeSubIfNeeded().catch(console.error);
+      });
+
       params.onevent = (event: NostrEvent) => {
         fetchedEvents.push(event);
         return onEvent!(event);
@@ -214,7 +219,10 @@ export class NostrManager {
       };
 
       sub = await this.subscribe(filters, params, relayUrls);
-    });
+      if (abortSignal.aborted) {
+        await closeSubIfNeeded();
+      }
+    }, { timeout });
   }
 
   public async publish(event: NostrEvent, relayUrls?: string[]): Promise<void> {

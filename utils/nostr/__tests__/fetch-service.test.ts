@@ -4,6 +4,7 @@ import {
   DEFAULT_NIP50_SEARCH_RELAYS,
   dedupeProductEvents,
   fetchNip50ProductSearch,
+  NIP50_SEARCH_TIMEOUT_MS,
 } from "../fetch-service";
 
 jest.mock("@/utils/db/db-client", () => ({
@@ -507,7 +508,7 @@ describe("fetch-service NIP-50 search helpers", () => {
     jest.clearAllMocks();
   });
 
-  it("builds NIP-50 search filters for marketplace listings and flash sales", () => {
+  it("builds NIP-50 search filters only for marketplace listings", () => {
     expect(
       buildNip50ProductSearchFilters("  cold   brew  ", {
         authors: ["seller-1"],
@@ -516,13 +517,6 @@ describe("fetch-service NIP-50 search helpers", () => {
     ).toEqual([
       {
         kinds: [30402],
-        search: "cold brew",
-        limit: 25,
-        authors: ["seller-1"],
-      },
-      {
-        kinds: [1],
-        "#t": ["shopstr-zapsnag", "zapsnag"],
         search: "cold brew",
         limit: 25,
         authors: ["seller-1"],
@@ -600,10 +594,10 @@ describe("fetch-service NIP-50 search helpers", () => {
     expect(nostr.fetch).toHaveBeenCalledWith(
       expect.arrayContaining([
         expect.objectContaining({ kinds: [30402], search: "coffee" }),
-        expect.objectContaining({ kinds: [1], search: "coffee" }),
       ]),
       {},
-      ["wss://relay.example"]
+      DEFAULT_NIP50_SEARCH_RELAYS,
+      NIP50_SEARCH_TIMEOUT_MS
     );
     expect(result.productEvents).toEqual([newer]);
     expect(cacheEventsToDatabase).toHaveBeenCalledWith([older, newer]);
@@ -699,8 +693,53 @@ describe("fetch-service NIP-50 search helpers", () => {
     expect(cacheEventsToDatabase).toHaveBeenCalledWith([relevant]);
   });
 
-  it("falls back to default NIP-50 relays when selected relays return no relevant product results", async () => {
-    const fallbackListing = {
+  it("preserves relay relevance order for distinct NIP-50 search results", async () => {
+    const firstRelayResult = {
+      id: "older-but-more-relevant",
+      pubkey: "seller-1",
+      created_at: 10,
+      kind: 30402,
+      tags: [
+        ["d", "coffee-1"],
+        ["title", "Coffee Beans"],
+        ["price", "12", "USD"],
+      ],
+      content: "Top-ranked coffee result",
+      sig: "sig-older",
+    };
+    const secondRelayResult = {
+      id: "newer-but-less-relevant",
+      pubkey: "seller-2",
+      created_at: 100,
+      kind: 30402,
+      tags: [
+        ["d", "coffee-2"],
+        ["title", "Coffee Roaster"],
+        ["price", "20", "USD"],
+      ],
+      content: "Second-ranked coffee result",
+      sig: "sig-newer",
+    };
+    const nostr = {
+      fetch: jest
+        .fn()
+        .mockResolvedValue([firstRelayResult, secondRelayResult]),
+    };
+
+    const result = await fetchNip50ProductSearch(
+      nostr as unknown as NostrManager,
+      [],
+      "coffee"
+    );
+
+    expect(result.productEvents).toEqual([
+      firstRelayResult,
+      secondRelayResult,
+    ]);
+  });
+
+  it("routes search to curated NIP-50 relays instead of general user relays", async () => {
+    const searchListing = {
       id: "fallback-product",
       pubkey: "fallback-seller",
       created_at: 30,
@@ -714,32 +753,49 @@ describe("fetch-service NIP-50 search helpers", () => {
       sig: "sig-fallback",
     };
     const nostr = {
-      fetch: jest
-        .fn()
-        .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([fallbackListing]),
+      fetch: jest.fn().mockResolvedValue([searchListing]),
     };
 
     const result = await fetchNip50ProductSearch(
       nostr as unknown as NostrManager,
-      ["wss://relay.without-search.example"],
+      ["wss://relay.damus.io", "wss://nos.lol"],
       "coffee"
     );
 
-    expect(nostr.fetch).toHaveBeenNthCalledWith(
-      1,
+    expect(nostr.fetch).toHaveBeenCalledWith(
       expect.any(Array),
       {},
-      ["wss://relay.without-search.example"]
+      DEFAULT_NIP50_SEARCH_RELAYS,
+      NIP50_SEARCH_TIMEOUT_MS
     );
-    expect(nostr.fetch).toHaveBeenNthCalledWith(
-      2,
+    expect(result.productEvents).toEqual([searchListing]);
+    expect(cacheEventsToDatabase).toHaveBeenCalledWith([searchListing]);
+  });
+
+  it("keeps known selected NIP-50 relays while dropping unsupported selected relays", async () => {
+    const selectedSearchRelay = "wss://relay.nostr.band";
+    const searchRelays = [
+      selectedSearchRelay,
+      ...DEFAULT_NIP50_SEARCH_RELAYS.filter(
+        (relay) => relay !== selectedSearchRelay
+      ),
+    ];
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([]),
+    };
+
+    await fetchNip50ProductSearch(
+      nostr as unknown as NostrManager,
+      ["wss://relay.damus.io", "relay.nostr.band/", "wss://nos.lol"],
+      "coffee"
+    );
+
+    expect(nostr.fetch).toHaveBeenCalledWith(
       expect.any(Array),
       {},
-      DEFAULT_NIP50_SEARCH_RELAYS
+      searchRelays,
+      NIP50_SEARCH_TIMEOUT_MS
     );
-    expect(result.productEvents).toEqual([fallbackListing]);
-    expect(cacheEventsToDatabase).toHaveBeenCalledWith([fallbackListing]);
   });
 
   it("uses default NIP-50 relays when no selected relays are available", async () => {
@@ -769,12 +825,13 @@ describe("fetch-service NIP-50 search helpers", () => {
     expect(nostr.fetch).toHaveBeenCalledWith(
       expect.any(Array),
       {},
-      DEFAULT_NIP50_SEARCH_RELAYS
+      DEFAULT_NIP50_SEARCH_RELAYS,
+      NIP50_SEARCH_TIMEOUT_MS
     );
     expect(result.productEvents).toEqual([fallbackListing]);
   });
 
-  it("returns matching zapsnag notes from NIP-50 search without caching them as products", async () => {
+  it("ignores non-listing events returned by NIP-50 search relays", async () => {
     const zapsnagNote = {
       id: "zapsnag-coffee",
       pubkey: "seller-1",
@@ -795,7 +852,7 @@ describe("fetch-service NIP-50 search helpers", () => {
       "coffee"
     );
 
-    expect(result.productEvents).toEqual([zapsnagNote]);
+    expect(result.productEvents).toEqual([]);
     expect(cacheEventsToDatabase).not.toHaveBeenCalled();
   });
 });

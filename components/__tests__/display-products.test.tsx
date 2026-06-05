@@ -12,6 +12,10 @@ import {
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
 import { NostrEvent, NostrManager } from "@/utils/nostr/nostr-manager";
+import {
+  DEFAULT_NIP50_SEARCH_RELAYS,
+  NIP50_SEARCH_TIMEOUT_MS,
+} from "@/utils/nostr/fetch-service";
 
 jest.mock("next/router", () => ({
   __esModule: true,
@@ -263,7 +267,8 @@ describe("DisplayProducts search filtering", () => {
           expect.objectContaining({ kinds: [30402], search: "coffee" }),
         ]),
         {},
-        ["wss://relay.example"]
+        DEFAULT_NIP50_SEARCH_RELAYS,
+        NIP50_SEARCH_TIMEOUT_MS
       );
       expect(screen.getByText("Relay Coffee Beans")).toBeInTheDocument();
     });
@@ -339,7 +344,8 @@ describe("DisplayProducts search filtering", () => {
           }),
         ]),
         {},
-        ["wss://relay.example"]
+        DEFAULT_NIP50_SEARCH_RELAYS,
+        NIP50_SEARCH_TIMEOUT_MS
       );
       expect(screen.getByText("Seller Coffee")).toBeInTheDocument();
     });
@@ -361,7 +367,7 @@ describe("DisplayProducts search filtering", () => {
     expect(nostr.fetch).not.toHaveBeenCalled();
   });
 
-  it("shows zapsnag notes returned by NIP-50 relay search", async () => {
+  it("does not show zapsnag notes returned by NIP-50 relay search", async () => {
     const nostr = {
       fetch: jest.fn().mockResolvedValue([
         {
@@ -380,11 +386,8 @@ describe("DisplayProducts search filtering", () => {
     renderDisplayProducts({ nostr });
 
     await waitFor(() => {
-      expect(screen.getByText("Coffee beans")).toBeInTheDocument();
-      expect(screen.getByTestId("product-zapsnag-coffee")).toHaveAttribute(
-        "href",
-        "/listing/zapsnag-coffee"
-      );
+      expect(screen.getByText("No products found...")).toBeInTheDocument();
+      expect(screen.queryByText("Coffee beans")).not.toBeInTheDocument();
     });
   });
 
@@ -588,6 +591,45 @@ describe("DisplayProducts search filtering", () => {
       expect(screen.queryByText("Old Coffee")).not.toBeInTheDocument();
       expect(addNewlyCreatedProductEvent).not.toHaveBeenCalled();
       expect(removeDeletedProductEvent).not.toHaveBeenCalled();
+    });
+  });
+
+  it("deduplicates the same addressable listing across NIP-50 and product context", async () => {
+    const sellerPubkey = "a".repeat(64);
+    const relayProduct = {
+      id: "relay-product",
+      pubkey: sellerPubkey,
+      created_at: 10,
+      kind: 30402,
+      tags: [
+        ["d", "coffee"],
+        ["title", "Deduped Coffee"],
+        ["price", "12", "USD"],
+        ["image", "https://example.com/relay-coffee.png"],
+      ],
+      content: "Coffee from relay search",
+      sig: "relay-sig",
+    };
+    const localProduct = {
+      ...relayProduct,
+      id: "local-product",
+      created_at: 20,
+      content: "Coffee from product context",
+      sig: "local-sig",
+    };
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([relayProduct]),
+    };
+
+    renderDisplayProducts({
+      nostr,
+      productEvents: [localProduct],
+    });
+
+    await waitFor(() => {
+      expect(screen.getAllByText("Deduped Coffee")).toHaveLength(1);
+      expect(screen.queryByTestId("product-relay-product")).not.toBeInTheDocument();
+      expect(screen.getByTestId("product-local-product")).toBeInTheDocument();
     });
   });
 });
