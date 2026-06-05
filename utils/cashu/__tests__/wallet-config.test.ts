@@ -2,6 +2,7 @@ import {
   addParsedMints,
   applyWalletConfigContent,
   buildWalletConfigV1,
+  deriveCashuPubkey,
   extractMintsFromLegacy,
   generateCashuWalletKeypair,
   isLegacyWalletConfig,
@@ -9,6 +10,13 @@ import {
   parseWalletConfigContent,
   updateLatestWalletKeypair,
 } from "../wallet-config";
+
+const CASHU_PRIVKEY = "1".repeat(64);
+const CASHU_PUBKEY = deriveCashuPubkey(CASHU_PRIVKEY)!;
+const OLD_CASHU_PRIVKEY = "2".repeat(64);
+const OLD_CASHU_PUBKEY = deriveCashuPubkey(OLD_CASHU_PRIVKEY)!;
+const NEW_CASHU_PRIVKEY = "3".repeat(64);
+const NEW_CASHU_PUBKEY = deriveCashuPubkey(NEW_CASHU_PRIVKEY)!;
 
 describe("wallet-config", () => {
   describe("isLegacyWalletConfig", () => {
@@ -20,8 +28,8 @@ describe("wallet-config", () => {
       expect(
         isLegacyWalletConfig({
           version: 1,
-          cashuPubkey: "pk",
-          cashuPrivkey: "sk",
+          cashuPubkey: CASHU_PUBKEY,
+          cashuPrivkey: CASHU_PRIVKEY,
           mints: [],
         })
       ).toBe(false);
@@ -33,8 +41,8 @@ describe("wallet-config", () => {
       expect(
         isWalletConfigV1({
           version: 1,
-          cashuPubkey: "pk",
-          cashuPrivkey: "sk",
+          cashuPubkey: CASHU_PUBKEY,
+          cashuPrivkey: CASHU_PRIVKEY,
           mints: [],
         })
       ).toBe(true);
@@ -65,11 +73,14 @@ describe("wallet-config", () => {
     it("parses legacy wallet config", () => {
       expect(
         parseWalletConfigContent([
+          ["privkey", CASHU_PRIVKEY],
           ["mint", "https://a"],
           ["mint", "https://b"],
         ])
       ).toEqual({
         mints: ["https://a", "https://b"],
+        cashuPrivkey: CASHU_PRIVKEY,
+        cashuPubkey: CASHU_PUBKEY,
       });
     });
 
@@ -77,14 +88,27 @@ describe("wallet-config", () => {
       expect(
         parseWalletConfigContent({
           version: 1,
-          cashuPubkey: "02abc",
-          cashuPrivkey: "deadbeef",
+          cashuPubkey: CASHU_PUBKEY,
+          cashuPrivkey: CASHU_PRIVKEY,
           mints: ["https://mint.example"],
         })
       ).toEqual({
         mints: ["https://mint.example"],
-        cashuPubkey: "02abc",
-        cashuPrivkey: "deadbeef",
+        cashuPubkey: CASHU_PUBKEY,
+        cashuPrivkey: CASHU_PRIVKEY,
+      });
+    });
+
+    it("derives a Cashu pubkey from official NIP-60 tuple content", () => {
+      expect(
+        parseWalletConfigContent([
+          ["privkey", CASHU_PRIVKEY],
+          ["mint", "https://mint.example"],
+        ])
+      ).toEqual({
+        mints: ["https://mint.example"],
+        cashuPrivkey: CASHU_PRIVKEY,
+        cashuPubkey: CASHU_PUBKEY,
       });
     });
 
@@ -98,14 +122,14 @@ describe("wallet-config", () => {
       expect(
         parseWalletConfigContent({
           version: 1,
-          cashuPubkey: "02abc",
-          cashuPrivkey: "deadbeef",
+          cashuPubkey: CASHU_PUBKEY,
+          cashuPrivkey: CASHU_PRIVKEY,
           mints: [],
         })
       ).toEqual({
         mints: [],
-        cashuPubkey: "02abc",
-        cashuPrivkey: "deadbeef",
+        cashuPubkey: CASHU_PUBKEY,
+        cashuPrivkey: CASHU_PRIVKEY,
       });
     });
 
@@ -131,24 +155,24 @@ describe("wallet-config", () => {
     it("selects keypair from newest v1 event by created_at", () => {
       const older = updateLatestWalletKeypair(null, 100, {
         mints: ["https://old"],
-        cashuPubkey: "old-pk",
-        cashuPrivkey: "old-sk",
+        cashuPubkey: OLD_CASHU_PUBKEY,
+        cashuPrivkey: OLD_CASHU_PRIVKEY,
       });
       const newer = updateLatestWalletKeypair(older, 200, {
         mints: ["https://new"],
-        cashuPubkey: "new-pk",
-        cashuPrivkey: "new-sk",
+        cashuPubkey: NEW_CASHU_PUBKEY,
+        cashuPrivkey: NEW_CASHU_PRIVKEY,
       });
       const ignored = updateLatestWalletKeypair(newer, 150, {
         mints: ["https://ignored"],
-        cashuPubkey: "ignored-pk",
-        cashuPrivkey: "ignored-sk",
+        cashuPubkey: CASHU_PUBKEY,
+        cashuPrivkey: CASHU_PRIVKEY,
       });
 
       expect(ignored).toEqual({
         createdAt: 200,
-        cashuPubkey: "new-pk",
-        cashuPrivkey: "new-sk",
+        cashuPubkey: NEW_CASHU_PUBKEY,
+        cashuPrivkey: NEW_CASHU_PRIVKEY,
       });
     });
 
@@ -175,8 +199,8 @@ describe("wallet-config", () => {
       latest = applyWalletConfigContent(
         JSON.stringify({
           version: 1,
-          cashuPubkey: "old-pk",
-          cashuPrivkey: "old-sk",
+          cashuPubkey: OLD_CASHU_PUBKEY,
+          cashuPrivkey: OLD_CASHU_PRIVKEY,
           mints: ["https://old"],
         }),
         100,
@@ -187,8 +211,8 @@ describe("wallet-config", () => {
       latest = applyWalletConfigContent(
         JSON.stringify({
           version: 1,
-          cashuPubkey: "new-pk",
-          cashuPrivkey: "new-sk",
+          cashuPubkey: NEW_CASHU_PUBKEY,
+          cashuPrivkey: NEW_CASHU_PRIVKEY,
           mints: ["https://new", "https://legacy"],
         }),
         200,
@@ -200,8 +224,8 @@ describe("wallet-config", () => {
       expect(mints).toEqual(["https://legacy", "https://old", "https://new"]);
       expect(latest).toEqual({
         createdAt: 200,
-        cashuPubkey: "new-pk",
-        cashuPrivkey: "new-sk",
+        cashuPubkey: NEW_CASHU_PUBKEY,
+        cashuPrivkey: NEW_CASHU_PRIVKEY,
       });
     });
   });
@@ -225,15 +249,13 @@ describe("wallet-config", () => {
   });
 
   describe("buildWalletConfigV1", () => {
-    it("builds a versioned wallet config payload", () => {
+    it("builds an official NIP-60 tuple wallet config payload", () => {
       expect(
-        buildWalletConfigV1("02abc", "deadbeef", ["https://mint.example"])
-      ).toEqual({
-        version: 1,
-        cashuPubkey: "02abc",
-        cashuPrivkey: "deadbeef",
-        mints: ["https://mint.example"],
-      });
+        buildWalletConfigV1(CASHU_PRIVKEY, ["https://mint.example"])
+      ).toEqual([
+        ["privkey", CASHU_PRIVKEY],
+        ["mint", "https://mint.example"],
+      ]);
     });
   });
 });

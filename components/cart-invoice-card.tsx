@@ -43,6 +43,8 @@ import { safeMeltProofs } from "@/utils/cashu/melt-retry-service";
 import { safeSwap } from "@/utils/cashu/swap-retry-service";
 import {
   buildP2pkOutputConfig,
+  checkMintP2pkSupport,
+  getP2pkCheckoutPolicyError,
   isSellerP2pkEscrowActive,
 } from "@/utils/cashu/p2pk-checkout";
 import { withMintRetry } from "@/utils/cashu/mint-retry-service";
@@ -58,6 +60,7 @@ import {
   withDeadline,
   isTimeoutError,
 } from "@/utils/cashu/wallet-recovery";
+import { persistBuyerP2pkEscrowRecord } from "@/utils/cashu/p2pk-escrow-records";
 import {
   constructGiftWrappedEvent,
   constructMessageSeal,
@@ -1467,15 +1470,36 @@ export default function CartInvoiceCard({
       const buyerProfile = userPubkey
         ? profileContext.profileData.get(userPubkey)
         : undefined;
+      const sellerP2pk = sellerProfile?.content?.p2pk;
+      const policyError = getP2pkCheckoutPolicyError(sellerP2pk, tokenAmount);
+      if (policyError) {
+        setFailureText(policyError);
+        setShowFailureModal(true);
+        return;
+      }
+      if (isSellerP2pkEscrowActive(sellerP2pk)) {
+        const selectedMint = mints[0];
+        if (!selectedMint) {
+          setFailureText("A Cashu mint is required for escrow checkout.");
+          setShowFailureModal(true);
+          return;
+        }
+        const mintSupport = await checkMintP2pkSupport(selectedMint);
+        if (!mintSupport.supported) {
+          setFailureText(
+            mintSupport.reason ??
+              "This mint does not advertise P2PK escrow support."
+          );
+          setShowFailureModal(true);
+          return;
+        }
+      }
       const p2pkOutputConfig = buildP2pkOutputConfig(
-        sellerProfile?.content?.p2pk,
+        sellerP2pk,
         buyerProfile?.content,
         cashuPubkey
       );
-      if (
-        isSellerP2pkEscrowActive(sellerProfile?.content?.p2pk) &&
-        !p2pkOutputConfig
-      ) {
+      if (isSellerP2pkEscrowActive(sellerP2pk) && !p2pkOutputConfig) {
         setFailureText(
           "A Cashu wallet identity is required to pay for an escrow listing. Please wait for your wallet to finish loading and try again."
         );
@@ -1640,6 +1664,19 @@ export default function CartInvoiceCard({
           proofs: send,
         });
         remainingProofs = keep;
+      }
+
+      if (p2pkOutputConfig && sellerToken) {
+        await persistBuyerP2pkEscrowRecord(nostr, signer, {
+          orderId,
+          mint: mints[0]!,
+          token: sellerToken,
+          amount: sellerAmount,
+          sellerPubkey: p2pkOutputConfig.send.options.pubkey,
+          locktime: p2pkOutputConfig.send.options.locktime,
+          refundKeys: p2pkOutputConfig.send.options.refundKeys,
+          createdAt: Math.floor(Date.now() / 1000),
+        });
       }
 
       // Step 1: Send payment message (if applicable)

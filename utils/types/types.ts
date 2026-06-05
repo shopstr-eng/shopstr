@@ -293,9 +293,12 @@ export interface ParsedP2PK {
   refundKeys: string[];
   expired: boolean;
   rawTags: any[];
+  proofCount?: number;
 }
 
-export type WalletConfig = {
+export type WalletConfig = string[][];
+
+export type TemporaryWalletConfigV1 = {
   version: 1;
   cashuPubkey: string;
   cashuPrivkey: string;

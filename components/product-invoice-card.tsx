@@ -32,6 +32,8 @@ import { safeMeltProofs } from "@/utils/cashu/melt-retry-service";
 import { safeSwap } from "@/utils/cashu/swap-retry-service";
 import {
   buildP2pkOutputConfig,
+  checkMintP2pkSupport,
+  getP2pkCheckoutPolicyError,
   isSellerP2pkEscrowActive,
 } from "@/utils/cashu/p2pk-checkout";
 import { withMintRetry } from "@/utils/cashu/mint-retry-service";
@@ -47,6 +49,7 @@ import {
   withDeadline,
   isTimeoutError,
 } from "@/utils/cashu/wallet-recovery";
+import { persistBuyerP2pkEscrowRecord } from "@/utils/cashu/p2pk-escrow-records";
 import {
   constructGiftWrappedEvent,
   constructMessageSeal,
@@ -1213,15 +1216,30 @@ export default function ProductInvoiceCard({
 
     const sellerProfile = profileContext.profileData.get(productData.pubkey);
     const buyerProfile = profileContext.profileData.get(userPubkey!);
+    const sellerP2pk = sellerProfile?.content?.p2pk;
+    const policyError = getP2pkCheckoutPolicyError(sellerP2pk, totalPrice);
+    if (policyError) {
+      throw new Error(policyError);
+    }
+    if (isSellerP2pkEscrowActive(sellerP2pk)) {
+      const selectedMint = mints[0];
+      if (!selectedMint) {
+        throw new Error("A Cashu mint is required for escrow checkout.");
+      }
+      const mintSupport = await checkMintP2pkSupport(selectedMint);
+      if (!mintSupport.supported) {
+        throw new Error(
+          mintSupport.reason ??
+            "This mint does not advertise P2PK escrow support."
+        );
+      }
+    }
     const p2pkOutputConfig = buildP2pkOutputConfig(
-      sellerProfile?.content?.p2pk,
+      sellerP2pk,
       buyerProfile?.content,
       cashuPubkey
     );
-    if (
-      isSellerP2pkEscrowActive(sellerProfile?.content?.p2pk) &&
-      !p2pkOutputConfig
-    ) {
+    if (isSellerP2pkEscrowActive(sellerP2pk) && !p2pkOutputConfig) {
       throw new Error(
         "A Cashu wallet identity is required to pay for an escrow listing. Please wait for your wallet to finish loading and try again."
       );
@@ -1283,6 +1301,19 @@ export default function ProductInvoiceCard({
 
     if (pendingOrderRef.current && !pendingOrderRef.current.orderId) {
       pendingOrderRef.current.orderId = orderId;
+    }
+
+    if (p2pkOutputConfig && sellerToken) {
+      await persistBuyerP2pkEscrowRecord(nostr, signer, {
+        orderId,
+        mint: mints[0]!,
+        token: sellerToken,
+        amount: sellerAmount,
+        sellerPubkey: p2pkOutputConfig.send.options.pubkey,
+        locktime: p2pkOutputConfig.send.options.locktime,
+        refundKeys: p2pkOutputConfig.send.options.refundKeys,
+        createdAt: Math.floor(Date.now() / 1000),
+      });
     }
 
     const paymentPreference =

@@ -1887,7 +1887,7 @@ export const fetchCashuWallet = async (
 
       // Generate a Cashu wallet identity exactly once if none exists yet
       const hasExistingKeypair =
-        latestKeypair?.cashuPubkey !== undefined ||
+        latestKeypair?.cashuPubkey !== undefined &&
         latestKeypair?.cashuPrivkey !== undefined;
 
       if (!hasExistingKeypair && signer) {
@@ -2132,7 +2132,8 @@ export const fetchCashuWallet = async (
         proofEvents: proofEvents,
         cashuMints: cashuMints,
         cashuProofs: cashuProofs,
-        ...(latestKeypair?.cashuPubkey !== undefined
+        ...(latestKeypair?.cashuPubkey !== undefined &&
+        latestKeypair?.cashuPrivkey !== undefined
           ? {
               cashuPubkey: latestKeypair.cashuPubkey,
               cashuPrivkey: latestKeypair.cashuPrivkey,

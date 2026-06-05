@@ -1498,7 +1498,7 @@ describe("publishWalletEvent", () => {
     });
   });
 
-  it("publishes an encrypted WalletConfig v1 event with merged mints", async () => {
+  it("publishes an encrypted NIP-60 wallet event with explicit mints", async () => {
     let capturedContent: string | undefined;
     const signer = {
       getPubKey: jest.fn().mockResolvedValue("wallet-owner-pubkey"),
@@ -1520,7 +1520,7 @@ describe("publishWalletEvent", () => {
     await publishWalletEvent(
       nostr as any,
       signer as any,
-      { cashuPubkey: "02pub", cashuPrivkey: "deadbeef" },
+      { cashuPubkey: "02pub", cashuPrivkey: "1".repeat(64) },
       { mints: ["https://relay-mint.example", "https://local-mint.example"] }
     );
 
@@ -1529,12 +1529,11 @@ describe("publishWalletEvent", () => {
       expect.any(String)
     );
     expect(capturedContent).toBeDefined();
-    expect(JSON.parse(capturedContent!)).toEqual({
-      version: 1,
-      cashuPubkey: "02pub",
-      cashuPrivkey: "deadbeef",
-      mints: ["https://local-mint.example", "https://relay-mint.example"],
-    });
+    expect(JSON.parse(capturedContent!)).toEqual([
+      ["privkey", "1".repeat(64)],
+      ["mint", "https://relay-mint.example"],
+      ["mint", "https://local-mint.example"],
+    ]);
     expect(signer.sign).toHaveBeenCalledWith(
       expect.objectContaining({ kind: 17375 })
     );

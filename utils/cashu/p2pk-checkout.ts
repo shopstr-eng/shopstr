@@ -10,33 +10,176 @@ import {
 
 export type P2pkProfileSettings = NonNullable<ProfileData["content"]["p2pk"]>;
 
+export type P2pkProofSetParseResult = {
+  p2pk: ParsedP2PK | null;
+  invalidReason?: string;
+};
+
+const HEX_32_BYTE = /^[0-9a-f]{64}$/;
+const COMPRESSED_HEX_33_BYTE = /^(02|03)[0-9a-f]{64}$/;
+const DEFAULT_P2PK_ESCROW_MAX_SATS = 100;
+
+export function normalizeCashuPubkey(pubkey?: string | null): string | null {
+  if (!pubkey) return null;
+
+  const normalized = pubkey.trim().toLowerCase();
+  if (HEX_32_BYTE.test(normalized)) return normalized;
+  if (COMPRESSED_HEX_33_BYTE.test(normalized)) return normalized.slice(2);
+
+  return null;
+}
+
+export function pubkeysEqual(
+  left?: string | null,
+  right?: string | null
+): boolean {
+  const normalizedLeft = normalizeCashuPubkey(left);
+  const normalizedRight = normalizeCashuPubkey(right);
+  return Boolean(normalizedLeft && normalizedLeft === normalizedRight);
+}
+
+export function isCashuCompatiblePubkey(pubkey?: string | null): boolean {
+  return normalizeCashuPubkey(pubkey) !== null;
+}
+
+export function isP2pkEscrowFeatureEnabled(): boolean {
+  return process.env.NEXT_PUBLIC_P2PK_ESCROW_ENABLED === "true";
+}
+
+export function getP2pkEscrowMaxSats(): number {
+  const configured = Number(process.env.NEXT_PUBLIC_P2PK_ESCROW_MAX_SATS);
+  if (!Number.isFinite(configured) || configured <= 0) {
+    return DEFAULT_P2PK_ESCROW_MAX_SATS;
+  }
+
+  return Math.min(Math.floor(configured), DEFAULT_P2PK_ESCROW_MAX_SATS);
+}
+
+export function getP2pkTestLocktimeSeconds(): number | undefined {
+  const configured = Number(
+    process.env.NEXT_PUBLIC_P2PK_ESCROW_TEST_LOCKTIME_SECONDS
+  );
+
+  if (!Number.isFinite(configured) || configured <= 0) {
+    return undefined;
+  }
+
+  return Math.floor(configured);
+}
+
+export function getP2pkCheckoutPolicyError(
+  sellerP2pk: P2pkProfileSettings | undefined,
+  amountSats: number
+): string | null {
+  if (!isSellerP2pkEscrowActive(sellerP2pk)) return null;
+
+  if (!isP2pkEscrowFeatureEnabled()) {
+    return "P2PK escrow checkout is not enabled for this deployment.";
+  }
+
+  const maxSats = getP2pkEscrowMaxSats();
+  if (amountSats > maxSats) {
+    return `P2PK escrow test checkout is limited to ${maxSats} sats.`;
+  }
+
+  return null;
+}
+
+function nutSettingSupported(setting: unknown): boolean {
+  if (setting === true) return true;
+
+  return (
+    typeof setting === "object" &&
+    setting !== null &&
+    (setting as { supported?: unknown }).supported === true
+  );
+}
+
+export function mintInfoSupportsP2pk(info: unknown): boolean {
+  const nuts =
+    typeof info === "object" && info !== null
+      ? (info as { nuts?: Record<string, unknown> }).nuts
+      : undefined;
+
+  if (!nuts || typeof nuts !== "object") return false;
+
+  return nutSettingSupported(nuts["10"]) && nutSettingSupported(nuts["11"]);
+}
+
+export async function checkMintP2pkSupport(
+  mintUrl: string,
+  fetchImpl: typeof fetch = fetch
+): Promise<{ supported: boolean; reason?: string }> {
+  try {
+    const baseUrl = mintUrl.replace(/\/+$/, "");
+    const response = await fetchImpl(`${baseUrl}/v1/info`);
+    if (!response.ok) {
+      return {
+        supported: false,
+        reason: "Could not verify mint P2PK support.",
+      };
+    }
+
+    const mintInfo = await response.json();
+    if (!mintInfoSupportsP2pk(mintInfo)) {
+      return {
+        supported: false,
+        reason:
+          "This mint does not advertise NUT-10 and NUT-11 support, so escrow checkout is blocked.",
+      };
+    }
+
+    return { supported: true };
+  } catch {
+    return {
+      supported: false,
+      reason: "Could not verify mint P2PK support.",
+    };
+  }
+}
+
 export function getBuyerReclaimKeys(
   buyerContent: ProfileData["content"] | undefined,
   buyerCashuPubkey?: string
 ): string[] | null {
   // Escrow reclaim authorizes spending Cashu proofs, so it must use the
   // buyer's Cashu wallet key. There is no Nostr identity fallback.
-  if (!buyerCashuPubkey) return null;
+  const normalizedBuyerKey = normalizeCashuPubkey(buyerCashuPubkey);
+  if (!normalizedBuyerKey) return null;
 
   const profileKeys = buyerContent?.p2pk?.reclaimKeys?.filter(Boolean) ?? [];
+  const normalizedProfileKeys: string[] = [];
+  for (const profileKey of profileKeys) {
+    const normalizedProfileKey = normalizeCashuPubkey(profileKey);
+    if (!normalizedProfileKey) return null;
+    if (!normalizedProfileKeys.includes(normalizedProfileKey)) {
+      normalizedProfileKeys.push(normalizedProfileKey);
+    }
+  }
 
-  if (profileKeys.length === 0) return [buyerCashuPubkey];
-  if (profileKeys.includes(buyerCashuPubkey)) return profileKeys;
-  return [...profileKeys, buyerCashuPubkey];
+  if (normalizedProfileKeys.length === 0) return [normalizedBuyerKey];
+  if (normalizedProfileKeys.includes(normalizedBuyerKey)) {
+    return normalizedProfileKeys;
+  }
+  return [...normalizedProfileKeys, normalizedBuyerKey];
 }
 
 export function buildP2pkSwapOptions(
   sellerP2pk: P2pkProfileSettings | undefined,
   buyerReclaimKeys: string[]
 ): { pubkey: string; locktime: number; refundKeys: string[] } | undefined {
-  if (!sellerP2pk?.enabled || !sellerP2pk.pubkey) return undefined;
+  const sellerPubkey = normalizeCashuPubkey(sellerP2pk?.pubkey);
+  if (!sellerP2pk?.enabled || !sellerPubkey) return undefined;
 
   const days = sellerP2pk.refundDelayDays;
   if (!days || days <= 0) return undefined;
 
+  const testLocktimeSeconds = getP2pkTestLocktimeSeconds();
+  const locktimeOffsetSeconds = testLocktimeSeconds ?? days * 24 * 60 * 60;
+
   return {
-    pubkey: sellerP2pk.pubkey,
-    locktime: Math.floor(Date.now() / 1000) + days * 24 * 60 * 60,
+    pubkey: sellerPubkey,
+    locktime: Math.floor(Date.now() / 1000) + locktimeOffsetSeconds,
     refundKeys: buyerReclaimKeys, // cashu-ts / NUT-11 reclaim path
   };
 }
@@ -79,15 +222,24 @@ export function parseP2PK(proof: Proof): ParsedP2PK | null {
       return null;
     }
 
-    const pubkey = getDataField(proof.secret);
+    const pubkey = normalizeCashuPubkey(getDataField(proof.secret));
+    if (!pubkey) return null;
 
     const tags = getTags(proof.secret) as P2PKTag[];
 
     const locktime = getTagInt(proof.secret, "locktime") ?? 0;
 
-    const refundKeys = tags
-      .filter((tag) => tag[0] === "refund" && typeof tag[1] === "string")
-      .map((tag) => tag[1] as string);
+    const refundKeys: string[] = [];
+    for (const tag of tags) {
+      if (tag[0] !== "refund") continue;
+
+      for (const value of tag.slice(1)) {
+        if (typeof value !== "string") return null;
+        const refundKey = normalizeCashuPubkey(value);
+        if (!refundKey) return null;
+        refundKeys.push(refundKey);
+      }
+    }
 
     const now = Math.floor(Date.now() / 1000);
 
@@ -101,4 +253,71 @@ export function parseP2PK(proof: Proof): ParsedP2PK | null {
   } catch {
     return null;
   }
+}
+
+function hasP2pkKind(proof: Proof): boolean {
+  try {
+    return getSecretKind(proof.secret) === "P2PK";
+  } catch {
+    return false;
+  }
+}
+
+function p2pkConstraintFingerprint(p2pk: ParsedP2PK): string {
+  return JSON.stringify({
+    pubkey: normalizeCashuPubkey(p2pk.pubkey),
+    locktime: p2pk.locktime,
+    refundKeys: p2pk.refundKeys.map(normalizeCashuPubkey).sort(),
+  });
+}
+
+export function parseP2PKProofSet(proofs: Proof[]): P2pkProofSetParseResult {
+  let parsedP2pk: ParsedP2PK | null = null;
+  let fingerprint: string | null = null;
+  let sawPlainProof = false;
+
+  for (const proof of proofs) {
+    const proofHasP2pkKind = hasP2pkKind(proof);
+    const parsedProof = parseP2PK(proof);
+
+    if (proofHasP2pkKind && !parsedProof) {
+      return {
+        p2pk: null,
+        invalidReason: "Malformed P2PK proof.",
+      };
+    }
+
+    if (!parsedProof) {
+      sawPlainProof = true;
+      if (parsedP2pk) {
+        return {
+          p2pk: null,
+          invalidReason: "Token mixes P2PK and non-P2PK proofs.",
+        };
+      }
+      continue;
+    }
+
+    if (sawPlainProof) {
+      return {
+        p2pk: null,
+        invalidReason: "Token mixes P2PK and non-P2PK proofs.",
+      };
+    }
+
+    const nextFingerprint = p2pkConstraintFingerprint(parsedProof);
+    if (fingerprint && fingerprint !== nextFingerprint) {
+      return {
+        p2pk: null,
+        invalidReason: "Token contains inconsistent P2PK proof locks.",
+      };
+    }
+
+    fingerprint = nextFingerprint;
+    parsedP2pk = parsedProof;
+  }
+
+  return {
+    p2pk: parsedP2pk ? { ...parsedP2pk, proofCount: proofs.length } : null,
+  };
 }

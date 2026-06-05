@@ -46,7 +46,7 @@ import {
   NostrContext,
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
-import { parseP2PK } from "@/utils/cashu/p2pk-checkout";
+import { parseP2PKProofSet, pubkeysEqual } from "@/utils/cashu/p2pk-checkout";
 import { ParsedP2PK } from "@/utils/types/types";
 
 export default function ClaimButton({ token }: { token: string }) {
@@ -83,19 +83,20 @@ export default function ClaimButton({ token }: { token: string }) {
   // by cashu-ts; cashuPubkey from context is x-only (64 chars).
   const isRefundEligible = useMemo(() => {
     if (!p2pk || !p2pk.expired || !cashuPubkey) return false;
-    return p2pk.refundKeys.some((k) => k.slice(-64) === cashuPubkey);
+    return p2pk.refundKeys.some((k) => pubkeysEqual(k, cashuPubkey));
   }, [p2pk, cashuPubkey]);
 
   const { theme } = useTheme();
 
   useEffect(() => {
     if (proofs.length > 0) {
-      const parsedP2pk = parseP2PK(proofs[0] as Proof);
-      if (parsedP2pk) {
-        setP2PK(parsedP2pk);
-      } else {
+      const parsedP2pk = parseP2PKProofSet(proofs);
+      if (parsedP2pk.invalidReason) {
         setP2PK(null);
+        setIsInvalidToken(true);
+        return;
       }
+      setP2PK(parsedP2pk.p2pk);
     }
   }, [proofs]);
 
@@ -122,6 +123,7 @@ export default function ClaimButton({ token }: { token: string }) {
 
   useEffect(() => {
     try {
+      setIsInvalidToken(false);
       const decodedToken = getDecodedToken(token, []);
       const mint = decodedToken.mint;
       setTokenMint(mint);
@@ -234,12 +236,15 @@ export default function ClaimButton({ token }: { token: string }) {
           JSON.stringify([...tokens, ...freshProofs])
         );
         if (!mints.includes(tokenMint)) {
-          localStorage.setItem("mints", JSON.stringify([...mints, tokenMint]));
-          if (cashuPubkey && cashuPrivkey) {
-            await publishWalletEvent(nostr!, signer!, {
-              cashuPubkey,
-              cashuPrivkey,
-            });
+          const updatedMints = [...mints, tokenMint];
+          localStorage.setItem("mints", JSON.stringify(updatedMints));
+          if (cashuPrivkey) {
+            await publishWalletEvent(
+              nostr!,
+              signer!,
+              { cashuPubkey, cashuPrivkey },
+              { mints: updatedMints }
+            );
           }
         }
         if (isRefund) {
@@ -295,11 +300,13 @@ export default function ClaimButton({ token }: { token: string }) {
         if (!mints.includes(tokenMint)) {
           const updatedMints = [...mints, tokenMint];
           localStorage.setItem("mints", JSON.stringify(updatedMints));
-          if (cashuPubkey && cashuPrivkey) {
-            await publishWalletEvent(nostr!, signer!, {
-              cashuPubkey,
-              cashuPrivkey,
-            });
+          if (cashuPrivkey) {
+            await publishWalletEvent(
+              nostr!,
+              signer!,
+              { cashuPubkey, cashuPrivkey },
+              { mints: updatedMints }
+            );
           }
         }
         if (isInvalid) {

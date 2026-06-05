@@ -3995,16 +3995,22 @@ describe("fetchCashuWallet", () => {
   });
 
   it("returns v1 keypair and merged mints through DB and relay wallet config loading", async () => {
+    const { deriveCashuPubkey } = jest.requireActual(
+      "@/utils/cashu/wallet-config"
+    ) as typeof import("@/utils/cashu/wallet-config");
+    const oldPrivkey = "2".repeat(64);
+    const newPrivkey = "3".repeat(64);
+    const newPubkey = deriveCashuPubkey(newPrivkey)!;
     const v1RelayConfig = {
       version: 1 as const,
-      cashuPubkey: "02new-pk",
-      cashuPrivkey: "new-sk",
+      cashuPubkey: "ignored-temp-object-pubkey",
+      cashuPrivkey: newPrivkey,
       mints: ["https://relay-mint.example"],
     };
     const v1OlderDbConfig = {
       version: 1 as const,
-      cashuPubkey: "02old-pk",
-      cashuPrivkey: "old-sk",
+      cashuPubkey: "ignored-old-temp-object-pubkey",
+      cashuPrivkey: oldPrivkey,
       mints: ["https://old-mint.example"],
     };
     const legacyDbConfig = [["mint", "https://legacy-mint.example"]];
@@ -4105,8 +4111,8 @@ describe("fetchCashuWallet", () => {
       "https://legacy-mint.example",
       "https://relay-mint.example",
     ]);
-    expect(result.cashuPubkey).toBe("02new-pk");
-    expect(result.cashuPrivkey).toBe("new-sk");
+    expect(result.cashuPubkey).toBe(newPubkey);
+    expect(result.cashuPrivkey).toBe(newPrivkey);
     expect(result.cashuProofs).toEqual([]);
     expect(editCashuWalletContext).toHaveBeenCalledWith(
       [],
@@ -4114,8 +4120,8 @@ describe("fetchCashuWallet", () => {
       [],
       false,
       {
-        cashuPubkey: "02new-pk",
-        cashuPrivkey: "new-sk",
+        cashuPubkey: newPubkey,
+        cashuPrivkey: newPrivkey,
       }
     );
   });
@@ -4207,10 +4213,15 @@ describe("fetchCashuWallet", () => {
   });
 
   it("does not generate or publish when a v1 wallet identity already exists", async () => {
+    const { deriveCashuPubkey } = jest.requireActual(
+      "@/utils/cashu/wallet-config"
+    ) as typeof import("@/utils/cashu/wallet-config");
+    const existingPrivkey = "4".repeat(64);
+    const existingPubkey = deriveCashuPubkey(existingPrivkey)!;
     const v1Config = {
       version: 1 as const,
-      cashuPubkey: "02existing-pk",
-      cashuPrivkey: "existing-sk",
+      cashuPubkey: "ignored-existing-temp-object-pubkey",
+      cashuPrivkey: existingPrivkey,
       mints: ["https://existing-mint.example"],
     };
 
@@ -4276,16 +4287,16 @@ describe("fetchCashuWallet", () => {
 
     expect(generateCashuWalletKeypair).not.toHaveBeenCalled();
     expect(publishWalletEvent).not.toHaveBeenCalled();
-    expect(result.cashuPubkey).toBe("02existing-pk");
-    expect(result.cashuPrivkey).toBe("existing-sk");
+    expect(result.cashuPubkey).toBe(existingPubkey);
+    expect(result.cashuPrivkey).toBe(existingPrivkey);
     expect(editCashuWalletContext).toHaveBeenLastCalledWith(
       [],
       ["https://existing-mint.example"],
       [],
       false,
       {
-        cashuPubkey: "02existing-pk",
-        cashuPrivkey: "existing-sk",
+        cashuPubkey: existingPubkey,
+        cashuPrivkey: existingPrivkey,
       }
     );
   });

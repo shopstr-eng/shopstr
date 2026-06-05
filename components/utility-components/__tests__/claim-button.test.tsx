@@ -1,4 +1,3 @@
-import React from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import ClaimButton from "../claim-button";
@@ -18,7 +17,7 @@ import {
   publishWalletEvent,
   generateKeys,
 } from "@/utils/nostr/nostr-helper-functions";
-import { parseP2PK } from "@/utils/cashu/p2pk-checkout";
+import { parseP2PKProofSet } from "@/utils/cashu/p2pk-checkout";
 import { safeSwap } from "@/utils/cashu/swap-retry-service";
 import { safeMeltProofs } from "@/utils/cashu/melt-retry-service";
 
@@ -50,8 +49,66 @@ jest.mock("@cashu/cashu-ts", () => ({
   })),
 }));
 
+jest.mock("@heroui/react", () => {
+  const React = require("react");
+  const Passthrough = ({ children }: { children: any }) =>
+    React.createElement("div", null, children);
+
+  return {
+    Modal: ({
+      children,
+      isDismissable,
+      isOpen,
+      onClose,
+    }: {
+      children: any;
+      isDismissable?: boolean;
+      isOpen: boolean;
+      onClose?: () => void;
+    }) =>
+      isOpen
+        ? React.createElement(
+            "div",
+            { role: "dialog" },
+            isDismissable
+              ? React.createElement(
+                  "button",
+                  { onClick: onClose, type: "button" },
+                  "Close"
+                )
+              : null,
+            children
+          )
+        : null,
+    ModalContent: Passthrough,
+    ModalBody: Passthrough,
+    ModalHeader: Passthrough,
+    Button: ({
+      children,
+      isDisabled,
+      onClick,
+      startContent,
+    }: {
+      children: any;
+      isDisabled?: boolean;
+      onClick?: () => void;
+      startContent?: any;
+    }) =>
+      React.createElement(
+        "button",
+        { disabled: isDisabled, onClick, type: "button" },
+        startContent,
+        children
+      ),
+    Spinner: () => React.createElement("span", { "data-testid": "spinner" }),
+  };
+});
+
 jest.mock("@/utils/cashu/p2pk-checkout", () => ({
-  parseP2PK: jest.fn().mockReturnValue(null),
+  parseP2PKProofSet: jest.fn().mockReturnValue({ p2pk: null }),
+  pubkeysEqual: jest.fn(
+    (left?: string, right?: string) => left?.slice(-64) === right?.slice(-64)
+  ),
 }));
 
 jest.mock("@/utils/cashu/swap-retry-service", () => ({
@@ -95,7 +152,7 @@ const mockGetDecodedToken = getDecodedToken as jest.Mock;
 const mockPublishProofEvent = publishProofEvent as jest.Mock;
 const mockPublishWalletEvent = publishWalletEvent as jest.Mock;
 const mockGenerateKeys = generateKeys as jest.Mock;
-const mockParseP2PK = parseP2PK as jest.Mock;
+const mockParseP2PKProofSet = parseP2PKProofSet as jest.Mock;
 const mockSafeSwap = safeSwap as jest.Mock;
 const mockSafeMeltProofs = safeMeltProofs as jest.Mock;
 const MockCashuWallet = CashuWallet as jest.Mock;
@@ -238,7 +295,7 @@ beforeEach(() => {
     mint: "https://testmint.com",
     proofs: [mockProof],
   });
-  mockParseP2PK.mockReturnValue(null);
+  mockParseP2PKProofSet.mockReturnValue({ p2pk: null });
   MockCashuWallet.mockImplementation(() => ({
     loadMint: jest.fn().mockResolvedValue(undefined),
     checkProofsStates: jest
@@ -289,7 +346,7 @@ describe("ClaimButton — non-P2PK token (regression)", () => {
       JSON.stringify([mockProof])
     );
     // wallet.receive must NOT be called for plain proofs
-    const walletInstance = MockCashuWallet.mock.results[0].value;
+    const walletInstance = MockCashuWallet.mock.results[0]!.value;
     expect(walletInstance.receive).not.toHaveBeenCalled();
   });
 
@@ -328,7 +385,7 @@ describe("ClaimButton — P2PK guard: missing cashuPrivkey", () => {
       mint: "https://testmint.com",
       proofs: [mockP2PKProof],
     });
-    mockParseP2PK.mockReturnValue(mockParsedP2PK);
+    mockParseP2PKProofSet.mockReturnValue({ p2pk: mockParsedP2PK });
 
     renderClaimButton("cashuAtoken", { cashuPrivkey: false });
 
@@ -357,7 +414,7 @@ describe("ClaimButton — P2PK guard: missing cashuPrivkey", () => {
 
     await screen.findByText(/Wallet not ready/i);
 
-    const walletInstance = MockCashuWallet.mock.results[0].value;
+    const walletInstance = MockCashuWallet.mock.results[0]!.value;
     expect(walletInstance.receive).not.toHaveBeenCalled();
   });
 
@@ -381,7 +438,7 @@ describe("ClaimButton — P2PK receive path", () => {
       mint: "https://testmint.com",
       proofs: [mockP2PKProof],
     });
-    mockParseP2PK.mockReturnValue(mockParsedP2PK);
+    mockParseP2PKProofSet.mockReturnValue({ p2pk: mockParsedP2PK });
     MockCashuWallet.mockImplementation(() => ({
       loadMint: jest.fn().mockResolvedValue(undefined),
       checkProofsStates: jest
@@ -398,7 +455,7 @@ describe("ClaimButton — P2PK receive path", () => {
     fireEvent.click(await screen.findByRole("button", { name: /Claim/i }));
     fireEvent.click(await screen.findByRole("button", { name: /^Receive$/i }));
 
-    const walletInstance = MockCashuWallet.mock.results[0].value;
+    const walletInstance = MockCashuWallet.mock.results[0]!.value;
     await waitFor(() => expect(walletInstance.receive).toHaveBeenCalled());
     // loadMint must be called before receive
     const loadMintOrder = walletInstance.loadMint.mock.invocationCallOrder[0];
@@ -412,7 +469,7 @@ describe("ClaimButton — P2PK receive path", () => {
     fireEvent.click(await screen.findByRole("button", { name: /Claim/i }));
     fireEvent.click(await screen.findByRole("button", { name: /^Receive$/i }));
 
-    const walletInstance = MockCashuWallet.mock.results[0].value;
+    const walletInstance = MockCashuWallet.mock.results[0]!.value;
     await waitFor(() => expect(walletInstance.receive).toHaveBeenCalled());
 
     const [receivedProofs, config] = walletInstance.receive.mock.calls[0];
@@ -504,7 +561,7 @@ describe("ClaimButton — P2PK redeem path", () => {
       mint: "https://testmint.com",
       proofs: [mockP2PKProof],
     });
-    mockParseP2PK.mockReturnValue(mockParsedP2PK);
+    mockParseP2PKProofSet.mockReturnValue({ p2pk: mockParsedP2PK });
     MockCashuWallet.mockImplementation(() => ({
       loadMint: jest.fn().mockResolvedValue(undefined),
       checkProofsStates: jest
@@ -559,7 +616,7 @@ describe("ClaimButton — P2PK redeem path", () => {
     fireEvent.click(await screen.findByRole("button", { name: /Claim/i }));
     fireEvent.click(await screen.findByRole("button", { name: /^Redeem$/i }));
 
-    const walletInstance = MockCashuWallet.mock.results[0].value;
+    const walletInstance = MockCashuWallet.mock.results[0]!.value;
     await waitFor(() => expect(walletInstance.receive).toHaveBeenCalled());
 
     const [, config] = walletInstance.receive.mock.calls[0];
@@ -611,9 +668,11 @@ describe("ClaimButton — P2PK refund path", () => {
   // Helper: render with an expired P2PK proof that authorizes this wallet,
   // then wait for the sentinel to confirm p2pk state has committed.
   async function renderExpiredRefundScenario(authorized = true) {
-    mockParseP2PK.mockReturnValue(
-      authorized ? mockParsedP2PKExpired : mockParsedP2PKExpiredUnauthorized
-    );
+    mockParseP2PKProofSet.mockReturnValue({
+      p2pk: authorized
+        ? mockParsedP2PKExpired
+        : mockParsedP2PKExpiredUnauthorized,
+    });
     renderClaimButton();
     await screen.findByTestId("p2pk-detected");
   }
@@ -626,7 +685,7 @@ describe("ClaimButton — P2PK refund path", () => {
   });
 
   test("does not show Refund button when locktime has not expired", async () => {
-    mockParseP2PK.mockReturnValue(mockParsedP2PKNotExpired);
+    mockParseP2PKProofSet.mockReturnValue({ p2pk: mockParsedP2PKNotExpired });
     renderClaimButton();
     await screen.findByTestId("p2pk-detected");
     expect(
@@ -645,7 +704,7 @@ describe("ClaimButton — P2PK refund path", () => {
     await renderExpiredRefundScenario();
     fireEvent.click(screen.getByRole("button", { name: /^Refund:/i }));
 
-    const walletInstance = MockCashuWallet.mock.results[0].value;
+    const walletInstance = MockCashuWallet.mock.results[0]!.value;
     await waitFor(() => expect(walletInstance.receive).toHaveBeenCalled());
 
     const loadMintOrder = walletInstance.loadMint.mock.invocationCallOrder[0];
@@ -743,7 +802,7 @@ describe("ClaimButton — P2PK refund path", () => {
   });
 
   test("non-P2PK tokens do not show a Refund button", async () => {
-    mockParseP2PK.mockReturnValue(null);
+    mockParseP2PKProofSet.mockReturnValue({ p2pk: null });
     mockGetDecodedToken.mockReturnValue({
       mint: "https://testmint.com",
       proofs: [mockProof],

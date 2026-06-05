@@ -37,6 +37,89 @@ jest.mock("@cashu/cashu-ts", () => ({
     checkProofsStates: jest.fn(),
   })),
 }));
+jest.mock("@heroui/react", () => {
+  const React = require("react");
+  const Passthrough = ({ children }: { children: any }) =>
+    React.createElement("div", null, children);
+
+  return {
+    Modal: ({
+      children,
+      isDismissable,
+      isOpen,
+      onClose,
+    }: {
+      children: any;
+      isDismissable?: boolean;
+      isOpen: boolean;
+      onClose?: () => void;
+    }) =>
+      isOpen
+        ? React.createElement(
+            "div",
+            { role: "dialog" },
+            isDismissable
+              ? React.createElement(
+                  "button",
+                  { onClick: onClose, type: "button" },
+                  "Close"
+                )
+              : null,
+            children
+          )
+        : null,
+    ModalContent: Passthrough,
+    ModalHeader: Passthrough,
+    ModalBody: Passthrough,
+    ModalFooter: Passthrough,
+    Button: ({
+      children,
+      isDisabled,
+      onClick,
+      startContent,
+      type,
+    }: {
+      children: any;
+      isDisabled?: boolean;
+      onClick?: () => void;
+      startContent?: any;
+      type?: "button" | "submit";
+    }) =>
+      React.createElement(
+        "button",
+        { disabled: isDisabled, onClick, type: type ?? "button" },
+        startContent,
+        children
+      ),
+    Textarea: ({
+      label,
+      value,
+      onChange,
+      onBlur,
+      placeholder,
+      errorMessage,
+    }: {
+      label?: string;
+      value?: string;
+      onChange?: (event: unknown) => void;
+      onBlur?: () => void;
+      placeholder?: string;
+      errorMessage?: string;
+    }) =>
+      React.createElement(
+        React.Fragment,
+        null,
+        React.createElement("textarea", {
+          "aria-label": label,
+          onBlur,
+          onChange,
+          placeholder,
+          value,
+        }),
+        errorMessage ? React.createElement("div", null, errorMessage) : null
+      ),
+  };
+});
 jest.mock("@/utils/nostr/signers/nostr-nip46-signer");
 jest.mock("@heroicons/react/24/outline", () => ({
   ArrowDownTrayIcon: () => <div data-testid="arrow-icon" />,

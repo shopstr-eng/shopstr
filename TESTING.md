@@ -55,9 +55,39 @@ The project uses:
 Additional environment variables used by tests
 
 - **`RUN_TESTCONTAINERS`**: Set to exactly `1` to enable Testcontainers-backed integration tests. These tests will start real containers (e.g., Postgres) via Testcontainers and therefore require Docker to be available on the host or CI runner. Tests that require real Postgres are skipped by default locally.
+- **`NEXT_PUBLIC_P2PK_ESCROW_ENABLED`**: Set to exactly `true` to enable P2PK escrow checkout on a deploy preview or staging deployment.
+- **`NEXT_PUBLIC_P2PK_ESCROW_MAX_SATS`**: Optional P2PK escrow checkout cap. The app defaults to 100 sats and clamps higher configured values back to 100.
+- **`NEXT_PUBLIC_P2PK_ESCROW_TEST_LOCKTIME_SECONDS`**: Optional short locktime override for deploy-preview testing. Do not set this in production.
 
 Transformed dependencies include: `dexie`, `nostr-tools`, `@noble/*`, `@scure/*`,
 `@getalby/lightning-tools`, `@cashu/cashu-ts`, and `uuid`.
+
+## P2PK Escrow Real-Money Staging Runbook
+
+Run this only on a deploy preview or staging deployment with
+`NEXT_PUBLIC_P2PK_ESCROW_ENABLED=true`, a max value of 100 sats or less, and a
+known allowlisted mint whose NUT-06 `/v1/info` advertises NUT-10, NUT-11, and
+NUT-07 support. Use two fresh real Shopstr accounts with NIP-44-capable signers
+and generated Cashu wallet identities.
+
+Record order IDs, public event IDs, mint URL, sats amount, locktime, and proof
+state outcomes. Never record or paste Cashu private keys, encoded tokens,
+proof secrets, proof `C` values, or wallet event plaintext.
+
+1. Seller wallet claim: Buyer A pays an escrow listing under the cap. Seller B
+   claims the P2PK token into the Shopstr wallet before locktime. Verify the
+   original proofs become spent at the mint and fresh seller proofs appear.
+2. Seller Lightning redeem: Buyer A pays another low-value escrow listing.
+   Seller B redeems the P2PK token to a real low-value Lightning address. Verify
+   melt success, change handling, and spent original proofs.
+3. Buyer reclaim: Buyer A pays an escrow listing and Seller B does not claim.
+   Wait for the short test locktime. Buyer A confirms the refund/reclaim UI is
+   available from the escrow record, reclaims into the wallet, and then verifies
+   a later seller claim fails because the proofs are spent.
+4. Negative checks: unsupported mint blocks checkout, missing Cashu wallet
+   identity blocks checkout/claim, wrong refund key does not show reclaim,
+   duplicate or spent token handling remains correct, and no private keys,
+   tokens, or proofs appear in console, DB logs, screenshots, or artifacts.
 
 ## Viewing Coverage Reports
 

@@ -96,11 +96,13 @@ const ReceiveButton = () => {
         if (!mints.includes(tokenMint)) {
           const updatedMints = [...mints, tokenMint];
           localStorage.setItem("mints", JSON.stringify(updatedMints));
-          if (cashuPubkey && cashuPrivkey) {
-            await publishWalletEvent(nostr!, signer!, {
-              cashuPubkey,
-              cashuPrivkey,
-            });
+          if (cashuPrivkey) {
+            await publishWalletEvent(
+              nostr!,
+              signer!,
+              { cashuPubkey, cashuPrivkey },
+              { mints: updatedMints }
+            );
           }
         }
         setIsClaimed(true);

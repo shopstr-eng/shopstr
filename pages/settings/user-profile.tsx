@@ -35,14 +35,21 @@ import {
 import { FileUploaderButton } from "@/components/utility-components/file-uploader";
 import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
 import ProtectedRoute from "@/components/utility-components/protected-route";
+import { normalizeCashuPubkey } from "@/utils/cashu/p2pk-checkout";
 
 function decodeNpubOrHexPubkey(value: string): string {
-  if (/^[0-9A-Fa-f]{64}$/.test(value)) return value;
+  const cashuPubkey = normalizeCashuPubkey(value);
+  if (cashuPubkey) return cashuPubkey;
+
   const decoded = nip19.decode(value);
   if (decoded.type !== "npub") {
     throw new Error("Must be npub");
   }
-  return decoded.data as string;
+  const decodedCashuPubkey = normalizeCashuPubkey(decoded.data as string);
+  if (!decodedCashuPubkey) {
+    throw new Error("Must be Cashu-compatible pubkey");
+  }
+  return decodedCashuPubkey;
 }
 
 function profileContentToFormValues(content: Record<string, unknown>) {
@@ -240,7 +247,9 @@ const UserProfilePage = () => {
         try {
           mainHex = decodeNpubOrHexPubkey(rawPubkey);
         } catch {
-          setError("p2pkPubkey", { message: "Must be valid hex or npub" });
+          setError("p2pkPubkey", {
+            message: "Must be a Cashu-compatible pubkey",
+          });
           setIsUploadingProfile(false);
           return;
         }
@@ -744,9 +753,9 @@ const UserProfilePage = () => {
                           />
                           <p className="text-default-400 mt-1 mb-4 text-xs">
                             Auto-filled from your Cashu wallet when available,
-                            but you can change it. This key is used to claim
-                            locked payments &mdash; it is separate from your
-                            Nostr identity.
+                            with no Nostr identity fallback. This key is used to
+                            claim locked payments &mdash; it is separate from
+                            your Nostr identity.
                           </p>
                         </div>
                       )}
@@ -794,11 +803,11 @@ const UserProfilePage = () => {
                 </p>
                 <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">
                   Optional. Embedded into P2PK payments you make so you (or
-                  other keys you list) can manually reclaim after the
-                  seller&apos;s delay. Your current Cashu wallet pubkey is
-                  always included at checkout, including when you list other
-                  reclaim keys. This does not remove the seller&apos;s spend
-                  path after the delay (Cashu NUT-11).
+                  advanced external Cashu-compatible keys you list) can manually
+                  reclaim after the seller&apos;s delay. Your current Cashu
+                  wallet pubkey is always included at checkout. This does not
+                  remove the seller&apos;s spend path after the delay (Cashu
+                  NUT-11).
                 </p>
                 <Controller
                   name="reclaimPubKeys"
@@ -814,16 +823,7 @@ const UserProfilePage = () => {
                         try {
                           decodeNpubOrHexPubkey(trimmed);
                         } catch {
-                          try {
-                            if (!/^[0-9A-Fa-f]{64}$/.test(trimmed)) {
-                              const decoded = nip19.decode(trimmed);
-                              if (decoded.type !== "npub") {
-                                return "Reclaim keys must be npub";
-                              }
-                            }
-                          } catch {
-                            return `Invalid reclaim key: ${trimmed}`;
-                          }
+                          return `Invalid Cashu reclaim key: ${trimmed}`;
                         }
                       }
                       return true;

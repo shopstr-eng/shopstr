@@ -154,22 +154,31 @@ const PreferencesPage = () => {
     setShowMintModal(!showMintModal);
   };
 
+  const publishUpdatedWalletMints = async (updatedMints: string[]) => {
+    if (cashuPrivkey) {
+      await publishWalletEvent(
+        nostr!,
+        signer!,
+        { cashuPubkey, cashuPrivkey },
+        { mints: updatedMints }
+      );
+    }
+  };
+
   const replaceMint = async (newMint: string) => {
     try {
       // Perform a fetch request to the specified mint URL
       const response = await fetch(newMint + "/keys");
       if (response.ok) {
+        const updatedMints = !mints.includes(newMint)
+          ? [newMint, ...mints]
+          : [newMint, ...mints.filter((mint) => mint !== newMint)];
         if (!mints.includes(newMint)) {
-          setMints([newMint, ...mints]);
+          setMints(updatedMints);
         } else {
-          setMints([newMint, ...mints.filter((mint) => mint !== newMint)]);
+          setMints(updatedMints);
         }
-        if (cashuPubkey && cashuPrivkey) {
-          await publishWalletEvent(nostr!, signer!, {
-            cashuPubkey,
-            cashuPrivkey,
-          });
-        }
+        await publishUpdatedWalletMints(updatedMints);
         handleToggleMintModal();
       } else {
         setFailureText(
@@ -186,13 +195,9 @@ const PreferencesPage = () => {
   };
 
   const deleteMint = async (mintToDelete: string) => {
-    setMints(mints.filter((mint) => mint !== mintToDelete));
-    if (cashuPubkey && cashuPrivkey) {
-      await publishWalletEvent(nostr!, signer!, {
-        cashuPubkey,
-        cashuPrivkey,
-      });
-    }
+    const updatedMints = mints.filter((mint) => mint !== mintToDelete);
+    setMints(updatedMints);
+    await publishUpdatedWalletMints(updatedMints);
   };
 
   useEffect(() => {

@@ -1,8 +1,11 @@
 import { generateSecretKey, getPublicKey } from "nostr-tools";
-import { bytesToHex } from "@noble/hashes/utils.js";
-import type { WalletConfig } from "@/utils/types/types";
+import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
+import type {
+  TemporaryWalletConfigV1,
+  WalletConfig,
+} from "@/utils/types/types";
 
-export type LegacyWalletConfig = string[][];
+export type Nip60WalletConfig = WalletConfig;
 
 export type ParsedWalletConfig = {
   mints: string[];
@@ -10,22 +13,22 @@ export type ParsedWalletConfig = {
   cashuPrivkey?: string;
 };
 
-export function isLegacyWalletConfig(
-  data: unknown
-): data is LegacyWalletConfig {
+export function isLegacyWalletConfig(data: unknown): data is Nip60WalletConfig {
   return Array.isArray(data);
 }
 
-export function isWalletConfigV1(data: unknown): data is WalletConfig {
+export function isWalletConfigV1(
+  data: unknown
+): data is TemporaryWalletConfigV1 {
   return (
     typeof data === "object" &&
     data !== null &&
     !Array.isArray(data) &&
-    (data as WalletConfig).version === 1
+    (data as TemporaryWalletConfigV1).version === 1
   );
 }
 
-export function extractMintsFromLegacy(data: LegacyWalletConfig): string[] {
+export function extractMintsFromLegacy(data: Nip60WalletConfig): string[] {
   const mints: string[] = [];
   for (const entry of data) {
     if (entry[0] === "mint" && typeof entry[1] === "string") {
@@ -35,9 +38,48 @@ export function extractMintsFromLegacy(data: LegacyWalletConfig): string[] {
   return mints;
 }
 
+export function extractPrivkeyFromNip60(
+  data: Nip60WalletConfig
+): string | undefined {
+  const privkey = data.find(
+    (entry) => entry[0] === "privkey" && typeof entry[1] === "string"
+  )?.[1];
+
+  return normalizeCashuPrivkey(privkey);
+}
+
+export function normalizeCashuPrivkey(privkey?: string): string | undefined {
+  const normalized = privkey?.trim().toLowerCase();
+  return normalized && /^[0-9a-f]{64}$/.test(normalized)
+    ? normalized
+    : undefined;
+}
+
+export function deriveCashuPubkey(cashuPrivkey?: string): string | undefined {
+  const normalizedPrivkey = normalizeCashuPrivkey(cashuPrivkey);
+  if (!normalizedPrivkey) return undefined;
+
+  try {
+    return getPublicKey(hexToBytes(normalizedPrivkey));
+  } catch {
+    return undefined;
+  }
+}
+
 export function parseWalletConfigContent(data: unknown): ParsedWalletConfig {
   if (isLegacyWalletConfig(data)) {
-    return { mints: extractMintsFromLegacy(data) };
+    const cashuPrivkey = extractPrivkeyFromNip60(data);
+    const cashuPubkey = deriveCashuPubkey(cashuPrivkey);
+    const parsed: ParsedWalletConfig = {
+      mints: extractMintsFromLegacy(data),
+    };
+    if (cashuPrivkey && cashuPubkey) {
+      parsed.cashuPrivkey = cashuPrivkey;
+      parsed.cashuPubkey = cashuPubkey;
+    }
+    return {
+      ...parsed,
+    };
   }
 
   if (isWalletConfigV1(data)) {
@@ -45,13 +87,18 @@ export function parseWalletConfigContent(data: unknown): ParsedWalletConfig {
       ? data.mints.filter((mint): mint is string => typeof mint === "string")
       : [];
 
-    return {
+    const cashuPrivkey = normalizeCashuPrivkey(data.cashuPrivkey);
+    const cashuPubkey = cashuPrivkey
+      ? deriveCashuPubkey(cashuPrivkey)
+      : typeof data.cashuPubkey === "string"
+        ? data.cashuPubkey
+        : undefined;
+    const parsed: ParsedWalletConfig = {
       mints,
-      cashuPubkey:
-        typeof data.cashuPubkey === "string" ? data.cashuPubkey : undefined,
-      cashuPrivkey:
-        typeof data.cashuPrivkey === "string" ? data.cashuPrivkey : undefined,
     };
+    if (cashuPrivkey) parsed.cashuPrivkey = cashuPrivkey;
+    if (cashuPubkey) parsed.cashuPubkey = cashuPubkey;
+    return parsed;
   }
 
   return { mints: [] };
@@ -81,7 +128,7 @@ export function updateLatestWalletKeypair(
   eventCreatedAt: number,
   parsed: ParsedWalletConfig
 ): LatestWalletKeypair | null {
-  if (parsed.cashuPubkey === undefined) {
+  if (parsed.cashuPubkey === undefined || parsed.cashuPrivkey === undefined) {
     return current;
   }
 
@@ -121,14 +168,11 @@ export function generateCashuWalletKeypair(): {
 }
 
 export function buildWalletConfigV1(
-  cashuPubkey: string,
   cashuPrivkey: string,
   mints: string[]
 ): WalletConfig {
-  return {
-    version: 1,
-    cashuPubkey,
-    cashuPrivkey,
-    mints,
-  };
+  return [
+    ["privkey", normalizeCashuPrivkey(cashuPrivkey) ?? cashuPrivkey],
+    ...mints.filter(Boolean).map((mint) => ["mint", mint]),
+  ];
 }

@@ -28,6 +28,7 @@ import { ProfileWithDropdown } from "@/components/utility-components/profile/pro
 import ClaimButton from "@/components/utility-components/claim-button";
 import DisplayProductModal from "@/components/display-product-modal";
 import AddressChangeModal from "@/components/utility-components/address-change-modal";
+import { getLocalBuyerP2pkEscrowRecords } from "@/utils/cashu/p2pk-escrow-records";
 import parseTags, {
   ProductData,
 } from "@/utils/parsers/product-parser-functions";
@@ -635,6 +636,16 @@ const OrdersDashboard = ({
       }
 
       const consolidatedOrders = Array.from(consolidatedOrdersMap.values());
+      const localEscrowRecords = getLocalBuyerP2pkEscrowRecords();
+      for (const escrowRecord of localEscrowRecords) {
+        const order = consolidatedOrders.find(
+          (item) => item.orderId === escrowRecord.orderId
+        );
+        if (order && !order.paymentToken) {
+          order.paymentToken = escrowRecord.token;
+          order.paymentMethod = order.paymentMethod || "ecash";
+        }
+      }
       consolidatedOrders.sort((a, b) => b.timestamp - a.timestamp);
 
       const returnRequestOrderIds = new Set<string>();
