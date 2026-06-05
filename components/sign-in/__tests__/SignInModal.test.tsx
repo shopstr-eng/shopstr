@@ -8,6 +8,24 @@ import * as nostrHelpers from "@/utils/nostr/nostr-helper-functions";
 import { NostrNSecSigner } from "@/utils/nostr/signers/nostr-nsec-signer";
 
 jest.mock("next/router", () => ({ useRouter: jest.fn() }));
+// uuid v14 / @scure/base ship ESM-only and are pulled in transitively via the
+// real nostr-manager / nsec signer import chain; mock them so Jest doesn't try
+// to parse the untransformed ESM modules. Not exercised by these tests.
+jest.mock("uuid", () => ({ v4: () => "mock-uuid-1234" }));
+jest.mock("nostr-tools/nip49", () => ({
+  decrypt: jest.fn(),
+  encrypt: jest.fn(),
+}));
+// The real nostr-tools pulls in @noble/curves (ESM-only) which Jest can't parse
+// here; the tested flows use a mocked newSigner / spied getEncryptedNSEC and
+// never call real nostr-tools functions, so a lightweight mock is sufficient.
+jest.mock("nostr-tools", () => ({
+  getPublicKey: jest.fn(),
+  generateSecretKey: jest.fn(),
+  finalizeEvent: jest.fn(),
+  nip19: {},
+  nip44: {},
+}));
 jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
   validateNSecKey: jest.fn(),
   parseBunkerToken: jest.fn(),
@@ -80,6 +98,10 @@ describe("SignInModal", () => {
     const { user, push } = renderModal();
     const btn = screen.getAllByRole("button", { name: /sign up/i })[0]!;
     await user.click(btn);
+    // Downstream nests "Create New Account" under the Nostr sign-up sub-view.
+    await user.click(
+      screen.getByRole("button", { name: /sign up with nostr/i })
+    );
     await user.click(
       screen.getByRole("button", { name: /create new account/i })
     );
@@ -99,7 +121,14 @@ describe("SignInModal", () => {
         screen.getByRole("button", { name: /extension sign-in/i })
       );
       await waitFor(() => {
+        expect(mockNewSigner).toHaveBeenCalledWith("nip07", {});
         expect(signer.getPubKey).toHaveBeenCalled();
+        expect(helpers.setLocalStorageDataOnSignIn).toHaveBeenCalledWith({
+          signer,
+          relays: mockRelays.relayList,
+          readRelays: mockRelays.readRelayList,
+          writeRelays: mockRelays.writeRelayList,
+        });
         expect(push).toHaveBeenCalledWith("/marketplace");
       });
     });
@@ -150,7 +179,20 @@ describe("SignInModal", () => {
       await user.type(input, "bunker://valid-token");
 
       await user.click(screen.getByTestId("bunker-submit-btn"));
-      await waitFor(() => expect(push).toHaveBeenCalledWith("/marketplace"));
+      await waitFor(() => {
+        expect(mockNewSigner).toHaveBeenCalledWith("nip46", {
+          bunker: "bunker://valid-token",
+        });
+        expect(signer.connect).toHaveBeenCalled();
+        expect(signer.getPubKey).toHaveBeenCalled();
+        expect(helpers.setLocalStorageDataOnSignIn).toHaveBeenCalledWith({
+          signer,
+          relays: mockRelays.relayList,
+          readRelays: mockRelays.readRelayList,
+          writeRelays: mockRelays.writeRelayList,
+        });
+        expect(push).toHaveBeenCalledWith("/marketplace");
+      });
     });
 
     it("shows a failure modal on connection error", async () => {
@@ -209,7 +251,20 @@ describe("SignInModal", () => {
 
       act(() => jest.runAllTimers());
 
-      await waitFor(() => expect(push).toHaveBeenCalledWith("/marketplace"));
+      await waitFor(() => {
+        expect(mockNewSigner).toHaveBeenCalledWith("nsec", {
+          encryptedPrivKey: "encrypted-key",
+          pubkey: "test-pubkey",
+        });
+        expect(signer.getPubKey).toHaveBeenCalled();
+        expect(helpers.setLocalStorageDataOnSignIn).toHaveBeenCalledWith({
+          signer,
+          relays: mockRelays.relayList,
+          readRelays: mockRelays.readRelayList,
+          writeRelays: mockRelays.writeRelayList,
+        });
+        expect(push).toHaveBeenCalledWith("/marketplace");
+      });
     });
 
     it("shows a failure modal if passphrase is empty", async () => {

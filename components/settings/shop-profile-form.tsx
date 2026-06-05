@@ -817,7 +817,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
   }, [isSaved, settingsSnapshot]);
 
   const onSubmit = async (data: { [x: string]: string }) => {
-    if (!shopSlug || shopSlug.trim() === "") {
+    if (!isOnboarding && (!shopSlug || shopSlug.trim() === "")) {
       setShopSlugRequired(true);
       return;
     }
@@ -3354,12 +3354,6 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
             className={`w-full text-lg ${BLUEBUTTONCLASSNAMES}`}
             type="submit"
             size="lg"
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                handleSubmit(onSubmit as any)();
-              }
-            }}
             isDisabled={isUploadingShopProfile}
             isLoading={isUploadingShopProfile}
           >

@@ -4,8 +4,8 @@ import { useForm, Controller } from "react-hook-form";
 import { Button, Input, Image } from "@heroui/react";
 import { ProfileMapContext } from "@/utils/context/context";
 import {
+  AVATARBADGEBUTTONCLASSNAMES,
   BLUEBUTTONCLASSNAMES,
-  WHITEBUTTONCLASSNAMES,
 } from "@/utils/STATIC-VARIABLES";
 import {
   SignerContext,
@@ -113,33 +113,32 @@ const BuyerProfileForm = ({ isOnboarding }: BuyerProfileFormProps) => {
   return (
     <>
       <div className="mb-8 flex justify-center">
-        <div className="relative">
-          <div className="relative h-24 w-24">
-            {watchPicture ? (
-              <Image
-                src={watchPicture}
-                alt="User Profile Picture"
-                className="h-full w-full rounded-full object-cover"
-                classNames={{
-                  wrapper: "!max-w-full w-full h-full",
-                }}
-              />
-            ) : (
-              <Image
-                src={defaultImage}
-                alt="User Profile Picture"
-                className="h-full w-full rounded-full object-cover"
-                classNames={{
-                  wrapper: "!max-w-full w-full h-full",
-                }}
-              />
-            )}
-          </div>
+        <div className="relative h-24 w-24 overflow-visible">
           <FileUploaderButton
             isIconOnly
-            className={`absolute right-0 bottom-0 z-20 !h-10 !w-10 !min-w-10 ${WHITEBUTTONCLASSNAMES}`}
+            className={AVATARBADGEBUTTONCLASSNAMES}
+            containerClassName="absolute right-[-0.5rem] bottom-[-0.5rem] z-20"
             imgCallbackOnUpload={(imgUrl) => setValue("picture", imgUrl)}
           />
+          {watchPicture ? (
+            <Image
+              src={watchPicture}
+              alt="User Profile Picture"
+              className="h-24 w-24 rounded-full object-cover"
+              classNames={{
+                wrapper: "!max-w-full w-full h-full",
+              }}
+            />
+          ) : (
+            <Image
+              src={defaultImage}
+              alt="User Profile Picture"
+              className="h-24 w-24 rounded-full object-cover"
+              classNames={{
+                wrapper: "!max-w-full w-full h-full",
+              }}
+            />
+          )}
         </div>
       </div>
 

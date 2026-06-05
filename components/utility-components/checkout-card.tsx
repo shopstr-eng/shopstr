@@ -26,6 +26,7 @@ import { locationAvatar } from "./dropdowns/location-dropdown";
 import {
   ArrowLongDownIcon,
   EllipsisVerticalIcon,
+  ExclamationTriangleIcon,
 } from "@heroicons/react/24/outline";
 import BeefInitiativeBadge from "./beef-initiative-badge";
 import {
@@ -48,6 +49,7 @@ import ZapsnagButton from "@/components/ZapsnagButton";
 import { RawEventModal, EventIdModal } from "./modals/event-modals";
 import SubscriptionPricingCards from "./subscription-pricing-cards";
 import SellerReviewReply from "./seller-review-reply";
+import useReportEventFlow from "./use-report-event-flow";
 import { getLocalStorageJson } from "@/utils/safe-json";
 import { CartDiscountsMap, isCartDiscountsMap } from "@/utils/cart-discounts";
 import { getAffiliateRefCookie } from "./affiliate-ref-tracker";
@@ -77,6 +79,13 @@ export default function CheckoutCard({
   const productEventContext = useContext(ProductContext);
   const shopMapContext = useContext(ShopMapContext);
   const { isOpen, onOpen, onClose } = useDisclosure();
+  const { openReportFlow, reportFlowUi } = useReportEventFlow({
+    targetLabel: "Listing",
+    reportedPubkey: productData?.pubkey,
+    reportedEventId: productData?.id,
+    onRequireLogin: onOpen,
+  });
+  const isOwnListing = productData?.pubkey === userPubkey;
   const [showFreeShippingNotification, setShowFreeShippingNotification] =
     useState(false);
   const [showRawEventModal, setShowRawEventModal] = useState(false);
@@ -865,7 +874,7 @@ export default function CheckoutCard({
                     dropDownKeys={
                       productData.pubkey === userPubkey
                         ? ["shop_profile"]
-                        : ["shop", "inquiry", "copy_npub"]
+                        : ["shop", "inquiry", "copy_npub", "report_profile"]
                     }
                   />
                   {merchantQuality !== "" && (
@@ -924,6 +933,18 @@ export default function CheckoutCard({
                         >
                           View Event ID
                         </DropdownItem>
+                        {!isOwnListing ? (
+                          <DropdownItem
+                            key="report-listing"
+                            className="!text-red-600 data-[hover=true]:!bg-red-600 data-[hover=true]:!text-white"
+                            startContent={
+                              <ExclamationTriangleIcon className="h-5 w-5" />
+                            }
+                            onPress={() => openReportFlow()}
+                          >
+                            Report Listing
+                          </DropdownItem>
+                        ) : null}
                       </DropdownMenu>
                     </Dropdown>
                   )}
@@ -1251,7 +1272,12 @@ export default function CheckoutCard({
                               dropDownKeys={
                                 reviewerPubkey === userPubkey
                                   ? ["shop_profile"]
-                                  : ["shop", "inquiry", "copy_npub"]
+                                  : [
+                                      "shop",
+                                      "inquiry",
+                                      "copy_npub",
+                                      "report_profile",
+                                    ]
                               }
                             />
                           </div>
@@ -1400,6 +1426,7 @@ export default function CheckoutCard({
           shopData={shopMapContext.shopData}
           cart={cart}
         />
+        {reportFlowUi}
       </div>
     </div>
   );

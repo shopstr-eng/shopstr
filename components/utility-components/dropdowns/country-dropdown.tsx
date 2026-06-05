@@ -11,7 +11,7 @@ const CountryDropdown = ({
 }) => {
   const countryOptions = useMemo(() => {
     const headingClasses =
-      "flex w-full sticky top-1 z-20 py-1.5 px-2 bg-white text-black font-semibold shadow-small rounded-small";
+      "flex w-full py-1.5 px-2 bg-white text-black font-semibold shadow-small rounded-small";
 
     const countryOptions = (
       <SelectSection

@@ -15,6 +15,8 @@ import {
   ChatsMap,
   ReviewsContextInterface,
   ReviewsContext,
+  ReportsContextInterface,
+  ReportsContext,
   FollowsContextInterface,
   FollowsContext,
   RelaysContextInterface,
@@ -37,6 +39,7 @@ import { ThemeProvider as NextThemesProvider } from "next-themes";
 import {
   fetchAllPosts,
   fetchReviews,
+  fetchReports,
   fetchShopProfile,
   fetchProfile,
   fetchAllFollows,
@@ -48,6 +51,7 @@ import {
   fetchStorefrontData,
   fetchStorefrontChats,
 } from "@/utils/nostr/fetch-service";
+import { fetchAllPostsAbortable } from "@/utils/nostr/fetch-all-posts-abortable";
 import {
   NostrEvent,
   Community,
@@ -72,6 +76,25 @@ import { retryFailedRelayPublishes } from "@/utils/nostr/retry-service";
 import { MintRecoveryBoot } from "@/components/utility-components/mint-recovery-boot";
 import AffiliateRefTracker from "@/components/utility-components/affiliate-ref-tracker";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
+
+const mergeReportEvents = (
+  existing: NostrEvent[],
+  incoming: NostrEvent[]
+): NostrEvent[] => {
+  const reportEventsMap = new Map<string, NostrEvent>();
+  for (const event of existing) {
+    reportEventsMap.set(event.id, event);
+  }
+  for (const event of incoming) {
+    const current = reportEventsMap.get(event.id);
+    if (!current || event.created_at >= current.created_at) {
+      reportEventsMap.set(event.id, event);
+    }
+  }
+  return Array.from(reportEventsMap.values()).sort(
+    (a, b) => b.created_at - a.created_at
+  );
+};
 
 // Run a callback after the browser has had a chance to paint, yielding the
 // main thread first so the visible UI shows before heavy work (e.g. decrypting
@@ -189,6 +212,27 @@ function MilkMarket({ props }: { props: AppProps }) {
             reviewReplies.set(reviewEventId, [...existing, reply]);
           }
           return { ...prev, reviewReplies };
+        });
+      },
+    }
+  );
+
+  const [reportsContext, setReportsContext] = useState<ReportsContextInterface>(
+    {
+      reportEvents: [],
+      isLoading: true,
+      addReportEvent: (reportEvent: NostrEvent) => {
+        setReportsContext((prev) => {
+          if (prev.reportEvents.some((event) => event.id === reportEvent.id)) {
+            return prev;
+          }
+          return {
+            ...prev,
+            reportEvents: [reportEvent, ...prev.reportEvents].sort(
+              (a, b) => b.created_at - a.created_at
+            ),
+            isLoading: false,
+          };
         });
       },
     }
@@ -401,6 +445,19 @@ function MilkMarket({ props }: { props: AppProps }) {
         isLoading,
         reviewEventIds: reviewEventIds ?? prev.reviewEventIds,
         reviewReplies: reviewReplies ?? prev.reviewReplies,
+      };
+    });
+  };
+
+  const editReportsContext = (
+    reportEvents: NostrEvent[],
+    isLoading: boolean
+  ) => {
+    setReportsContext((prev) => {
+      return {
+        ...prev,
+        reportEvents: mergeReportEvents(prev.reportEvents, reportEvents),
+        isLoading,
       };
     });
   };
@@ -747,6 +804,8 @@ function MilkMarket({ props }: { props: AppProps }) {
 
   /** FETCH initial FOLLOWS, RELAYS, PRODUCTS, and PROFILES **/
   useEffect(() => {
+    const abortController = new AbortController();
+
     async function fetchData() {
       const runId = ++initializationRunRef.current;
       const isCurrentRun = () => runId === initializationRunRef.current;
@@ -777,6 +836,7 @@ function MilkMarket({ props }: { props: AppProps }) {
       const {
         guardedEditProductContext,
         guardedEditReviewsContext,
+        guardedEditReportsContext,
         guardedEditShopContext,
         guardedEditProfileContext,
         guardedEditChatContext,
@@ -788,6 +848,7 @@ function MilkMarket({ props }: { props: AppProps }) {
       } = createGuardedEditors({
         guardedEditProductContext: editProductContext,
         guardedEditReviewsContext: editReviewsContext,
+        guardedEditReportsContext: editReportsContext,
         guardedEditShopContext: editShopContext,
         guardedEditProfileContext: editProfileContext,
         guardedEditChatContext: editChatContext,
@@ -1032,7 +1093,13 @@ function MilkMarket({ props }: { props: AppProps }) {
 
         const productsPromise = runTask(
           "fetching products",
-          () => fetchAllPosts(nostr!, allRelays, guardedEditProductContext),
+          () =>
+            fetchAllPostsAbortable(
+              nostr!,
+              allRelays,
+              guardedEditProductContext,
+              abortController.signal
+            ),
           () => guardedEditProductContext(null, false)
         );
 
@@ -1119,6 +1186,18 @@ function MilkMarket({ props }: { props: AppProps }) {
               ),
             () => guardedEditReviewsContext(new Map(), new Map(), false)
           ),
+          runTask(
+            "fetching reports",
+            () =>
+              fetchReports(
+                nostr!,
+                allRelays,
+                productEvents,
+                guardedEditReportsContext,
+                pubkeysToFetchProfilesFor
+              ),
+            () => guardedEditReportsContext([], false)
+          ),
         ]);
 
         if (!isCurrentRun()) return;
@@ -1167,6 +1246,7 @@ function MilkMarket({ props }: { props: AppProps }) {
         if (!isCurrentRun()) return;
         guardedEditProductContext(null, false);
         guardedEditReviewsContext(new Map(), new Map(), false);
+        guardedEditReportsContext([], false);
         guardedEditShopContext(new Map(), false);
         guardedEditProfileContext(new Map(), false);
         guardedEditChatContext(new Map(), false);
@@ -1179,6 +1259,10 @@ function MilkMarket({ props }: { props: AppProps }) {
     }
 
     fetchData();
+
+    return () => {
+      abortController.abort();
+    };
   }, [nostr, signer, isLoggedIn]);
 
   // When navigating between storefront pages, refetch for the new shop
@@ -1322,6 +1406,19 @@ function MilkMarket({ props }: { props: AppProps }) {
           } catch (error) {
             console.error("Error fetching reviews:", error);
             editReviewsContext(new Map(), new Map(), false);
+          }
+
+          try {
+            await fetchReports(
+              nostr!,
+              allRelays,
+              productEvents,
+              editReportsContext,
+              pubkeysToFetchProfilesFor
+            );
+          } catch (error) {
+            console.error("Error fetching reports:", error);
+            editReportsContext([], false);
           }
 
           try {
@@ -1496,6 +1593,7 @@ function MilkMarket({ props }: { props: AppProps }) {
               <FollowsContext.Provider value={followsContext}>
                 <ProductContext.Provider value={productContext}>
                   <ReviewsContext.Provider value={reviewsContext}>
+                    <ReportsContext.Provider value={reportsContext}>
                     <ProfileMapContext.Provider value={profileContext}>
                       <ShopMapContext.Provider value={shopContext}>
                         <ChatsContext.Provider
@@ -1581,6 +1679,7 @@ function MilkMarket({ props }: { props: AppProps }) {
                         </ChatsContext.Provider>
                       </ShopMapContext.Provider>
                     </ProfileMapContext.Provider>
+                    </ReportsContext.Provider>
                   </ReviewsContext.Provider>
                 </ProductContext.Provider>
               </FollowsContext.Provider>

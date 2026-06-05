@@ -22,6 +22,27 @@ import {
 
 const ALGORITHM = "aes-256-gcm";
 
+export const MCP_RELAY_ALLOWLIST = new Set([
+  "wss://relay.damus.io",
+  "wss://nos.lol",
+  "wss://purplepag.es",
+  "wss://relay.primal.net",
+  "wss://relay.nostr.band",
+  "wss://sendit.nosflare.com",
+]);
+
+function filterAllowedRelays(urls: string[]): string[] {
+  const allowed: string[] = [];
+  for (const url of urls) {
+    if (MCP_RELAY_ALLOWLIST.has(url)) {
+      allowed.push(url);
+    } else {
+      console.warn(`MCP relay blocked (not in allowlist): ${url}`);
+    }
+  }
+  return allowed;
+}
+
 function getEncryptionKey(): Uint8Array {
   const envKey = process.env.MCP_ENCRYPTION_KEY;
   if (!envKey) {
@@ -112,7 +133,11 @@ export class McpRelayManager {
 
   constructor(relayUrls?: string[]) {
     this.pool = new SimplePool();
-    this.relayUrls = relayUrls || withBlastr(getDefaultRelays());
+    const raw = relayUrls || withBlastr(getDefaultRelays());
+    this.relayUrls = filterAllowedRelays(raw);
+    if (this.relayUrls.length === 0) {
+      throw new Error("MCP relay allowlist produced no valid relays");
+    }
   }
 
   getRelayUrls(): string[] {

@@ -40,6 +40,8 @@ jest.mock("next/navigation", () => ({
   useSearchParams: () => mockSearchParams,
 }));
 
+const STOREFRONT_AUTH_KEY = "storefront_auth_key";
+
 const renderComponent = (isLoggedIn: boolean, hasQueryParam: boolean) => {
   mockSearchParams.has.mockReturnValue(hasQueryParam);
   return render(
@@ -57,6 +59,17 @@ const renderComponent = (isLoggedIn: boolean, hasQueryParam: boolean) => {
 describe("StallFeed", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    global.fetch = jest.fn(() =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ value: STOREFRONT_AUTH_KEY }),
+      })
+    ) as jest.Mock;
+  });
+
+  afterEach(() => {
+    (global.fetch as jest.Mock).mockRestore?.();
+    localStorage.clear();
   });
 
   test("renders child components and modal is initially closed", () => {
@@ -68,10 +81,11 @@ describe("StallFeed", () => {
     expect(screen.queryByTestId("modal-content")).not.toBeInTheDocument();
   });
 
-  test("shows modal on load if user is logged in and 'addNewListing' param is present", () => {
+  test("shows modal on load if user is logged in and 'addNewListing' param is present", async () => {
+    localStorage.setItem(STOREFRONT_AUTH_KEY, "true");
     renderComponent(true, true);
 
-    expect(screen.getByTestId("modal-content")).toBeInTheDocument();
+    expect(await screen.findByTestId("modal-content")).toBeInTheDocument();
     expect(screen.getByText("Modal is Open")).toBeInTheDocument();
   });
 
@@ -87,9 +101,10 @@ describe("StallFeed", () => {
     expect(screen.queryByTestId("modal-content")).not.toBeInTheDocument();
   });
 
-  test("hides modal and calls router.push when toggle handler is invoked", () => {
+  test("hides modal and calls router.push when toggle handler is invoked", async () => {
+    localStorage.setItem(STOREFRONT_AUTH_KEY, "true");
     renderComponent(true, true);
-    expect(screen.getByTestId("modal-content")).toBeInTheDocument();
+    expect(await screen.findByTestId("modal-content")).toBeInTheDocument();
 
     const closeButton = screen.getByText("Close Modal");
 

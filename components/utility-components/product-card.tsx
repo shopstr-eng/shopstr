@@ -7,10 +7,12 @@ import {
   DropdownMenu,
   DropdownItem,
   Button,
+  useDisclosure,
 } from "@heroui/react";
 import {
   ArrowTopRightOnSquareIcon,
   EllipsisVerticalIcon,
+  ExclamationTriangleIcon,
 } from "@heroicons/react/24/outline";
 import { RawEventModal, EventIdModal } from "./modals/event-modals";
 import { nip19 } from "nostr-tools";
@@ -23,6 +25,8 @@ import { ProfileWithDropdown } from "./profile/profile-dropdown";
 import { useRouter } from "next/router";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import BeefInitiativeBadge from "./beef-initiative-badge";
+import useReportEventFlow from "./use-report-event-flow";
+import SignInModal from "../sign-in/SignInModal";
 
 export default function ProductCard({
   productData,
@@ -41,7 +45,20 @@ export default function ProductCard({
 
   const router = useRouter();
   const { pubkey: userPubkey } = useContext(SignerContext);
+  const {
+    isOpen: isSignInOpen,
+    onOpen: onSignInOpen,
+    onClose: onSignInClose,
+  } = useDisclosure();
+  const { openReportFlow, reportFlowUi } = useReportEventFlow({
+    targetLabel: "Listing",
+    reportedPubkey: productData?.pubkey,
+    reportedEventId: productData?.id,
+    onRequireLogin: onSignInOpen,
+  });
   if (!productData) return null;
+
+  const isOwnListing = productData.pubkey === userPubkey;
 
   const isZapsnag =
     productData.d === "zapsnag" || productData.categories?.includes("zapsnag");
@@ -241,6 +258,18 @@ export default function ProductCard({
                       >
                         View Event ID
                       </DropdownItem>
+                      {!isOwnListing ? (
+                        <DropdownItem
+                          key="report-listing"
+                          className="rounded-md !text-red-600 data-[hover=true]:!bg-red-600 data-[hover=true]:!text-white"
+                          startContent={
+                            <ExclamationTriangleIcon className="h-5 w-5" />
+                          }
+                          onPress={() => openReportFlow()}
+                        >
+                          Report Listing
+                        </DropdownItem>
+                      ) : null}
                     </DropdownMenu>
                   </Dropdown>
                 )}
@@ -303,7 +332,7 @@ export default function ProductCard({
             dropDownKeys={
               productData.pubkey === userPubkey
                 ? ["shop_profile"]
-                : ["shop", "inquiry", "copy_npub"]
+                : ["shop", "inquiry", "copy_npub", "report_profile"]
             }
             bg="light"
           />
@@ -367,6 +396,8 @@ export default function ProductCard({
         onClose={() => setShowEventIdModal(false)}
         rawEvent={productData.rawEvent}
       />
+      <SignInModal isOpen={isSignInOpen} onClose={onSignInClose} />
+      {reportFlowUi}
     </div>
   );
 }

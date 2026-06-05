@@ -20,6 +20,7 @@ import {
   SelectItem,
   Input,
   Spinner,
+  Checkbox,
 } from "@heroui/react";
 import {
   BanknotesIcon,
@@ -66,10 +67,12 @@ import {
   constructGiftWrappedEvent,
   constructMessageSeal,
   constructMessageGiftWrap,
+  getSavedAddresses,
   sendGiftWrappedMessageEvent,
   getLocalStorageData,
   publishProofEvent,
   generateKeys,
+  saveAddress,
 } from "@/utils/nostr/nostr-helper-functions";
 import { LightningAddress } from "@getalby/lightning-tools";
 import QRCode from "qrcode";
@@ -83,11 +86,16 @@ import SignInModal from "./sign-in/SignInModal";
 import currencySelection from "../public/currencySelection.json";
 import FailureModal from "@/components/utility-components/failure-modal";
 import CountryDropdown from "./utility-components/dropdowns/country-dropdown";
+import AddressPicker from "./utility-components/address-picker";
 import {
   NostrContext,
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
-import { ShippingFormData, ContactFormData } from "@/utils/types/types";
+import {
+  ShippingFormData,
+  ContactFormData,
+  SavedAddress,
+} from "@/utils/types/types";
 import { Controller } from "react-hook-form";
 import StripeCardForm from "./utility-components/stripe-card-form";
 
@@ -528,6 +536,7 @@ export default function ProductInvoiceCard({
     handleSubmit: handleFormSubmit,
     control: formControl,
     watch,
+    setValue,
   } = useForm();
 
   // Watch form values to validate completion
@@ -535,6 +544,36 @@ export default function ProductInvoiceCard({
   const [selectedPickupLocation, setSelectedPickupLocation] = useState<
     string | null
   >(null);
+  const [saveDetails, setSaveDetails] = useState(false);
+  const [saveAddressLabel, setSaveAddressLabel] = useState("");
+  const [selectedSavedAddressId, setSelectedSavedAddressId] = useState<
+    string | null
+  >(null);
+  const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
+
+  useEffect(() => {
+    const loadSavedAddresses = () => {
+      setSavedAddresses(getSavedAddresses());
+    };
+
+    loadSavedAddresses();
+    window.addEventListener("storage", loadSavedAddresses);
+
+    return () => {
+      window.removeEventListener("storage", loadSavedAddresses);
+    };
+  }, []);
+
+  const applySavedAddress = (address: SavedAddress) => {
+    setValue("Name", address.name);
+    setValue("Address", address.address);
+    setValue("Unit", address.unit || "");
+    setValue("City", address.city);
+    setValue("Postal Code", address.zip);
+    setValue("State/Province", address.state);
+    setValue("Country", address.country);
+    setSelectedSavedAddressId(address.id);
+  };
 
   const [isStripeMerchant, setIsStripeMerchant] = useState(
     productData.pubkey === process.env.NEXT_PUBLIC_MILK_MARKET_PK
@@ -698,6 +737,7 @@ export default function ProductInvoiceCard({
         watchedValues["Postal Code"]?.trim() &&
         watchedValues["State/Province"]?.trim() &&
         watchedValues.Country?.trim() &&
+        (!saveDetails || saveAddressLabel.trim()) &&
         (!productData.required || watchedValues.Required?.trim())
       );
     } else if (formType === "contact") {
@@ -716,6 +756,8 @@ export default function ProductInvoiceCard({
     productData.required,
     requiresPickupLocation,
     selectedPickupLocation,
+    saveDetails,
+    saveAddressLabel,
   ]);
 
   const [stripeSubscriptionId, setStripeSubscriptionId] = useState<
@@ -1144,6 +1186,26 @@ export default function ProductInvoiceCard({
           shippingState: data["State/Province"],
           shippingCountry: data["Country"],
         };
+      }
+
+      if (
+        saveDetails &&
+        formType === "shipping" &&
+        paymentData.shippingName &&
+        paymentData.shippingAddress
+      ) {
+        saveAddress({
+          id: selectedSavedAddressId || undefined,
+          name: paymentData.shippingName,
+          address: paymentData.shippingAddress,
+          unit: paymentData.shippingUnitNo || "",
+          city: paymentData.shippingCity,
+          state: paymentData.shippingState,
+          zip: paymentData.shippingPostalCode,
+          country: paymentData.shippingCountry,
+          label: saveAddressLabel.trim(),
+          isDefault: false,
+        });
       }
 
       if (paymentType === "fiat") {
@@ -4397,6 +4459,15 @@ export default function ProductInvoiceCard({
       <div className="space-y-4">
         {formType === "shipping" && (
           <>
+            {savedAddresses.length > 0 && (
+              <AddressPicker
+                compact
+                autoSelect={false}
+                allowInlineAdd={false}
+                onSelect={applySavedAddress}
+              />
+            )}
+
             <Controller
               name="Name"
               control={formControl}
@@ -4615,6 +4686,36 @@ export default function ProductInvoiceCard({
                   />
                 )}
               />
+            </div>
+
+            <div className="space-y-3">
+              <Checkbox
+                isSelected={saveDetails}
+                onValueChange={setSaveDetails}
+                classNames={{
+                  label: "text-black",
+                  wrapper:
+                    "before:border-2 before:border-black after:bg-primary-yellow",
+                }}
+              >
+                Save this address for future orders
+              </Checkbox>
+
+              {saveDetails && (
+                <Input
+                  variant="bordered"
+                  fullWidth={true}
+                  label={<span className="text-light-text">Address Label</span>}
+                  placeholder="e.g. Home, Office"
+                  labelPlacement="inside"
+                  isRequired={true}
+                  classNames={{
+                    inputWrapper: "border-2 border-black rounded-md shadow-neo",
+                  }}
+                  value={saveAddressLabel}
+                  onValueChange={setSaveAddressLabel}
+                />
+              )}
             </div>
           </>
         )}

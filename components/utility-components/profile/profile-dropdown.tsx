@@ -19,12 +19,14 @@ import {
   CheckIcon,
   ClipboardIcon,
   Cog6ToothIcon,
+  ExclamationTriangleIcon,
   UserIcon,
 } from "@heroicons/react/24/outline";
 import { useRouter } from "next/router";
 import NextLink from "next/link";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import SignInModal from "../../sign-in/SignInModal";
+import useReportEventFlow from "../use-report-event-flow";
 import { copyToClipboard } from "@/utils/clipboard";
 import { ProfileData } from "@/utils/types/types";
 
@@ -38,7 +40,10 @@ type DropDownKeys =
   | "settings"
   | "user_profile"
   | "logout"
-  | "copy_npub";
+  | "copy_npub"
+  | "report_profile";
+
+type DropdownActionItem = DropdownItemProps & { label: string };
 
 const fetchedProfileContentCache = new Map<string, ProfileData["content"]>();
 const inFlightProfileRequests = new Map<
@@ -107,9 +112,22 @@ export const ProfileWithDropdown = ({
   const { isLoggedIn } = useContext(SignerContext);
   const { isOpen, onOpen, onClose } = useDisclosure();
 
+  const { openReportFlow, reportFlowUi } = useReportEventFlow({
+    targetLabel: "Profile",
+    reportedPubkey: pubkey,
+    onRequireLogin: onOpen,
+  });
+
   const handleDropdownAction = (action: () => void) => {
     setIsDropdownOpen(false);
     action();
+  };
+
+  const handleReportDropdownAction = () => {
+    setIsDropdownOpen(false);
+    setTimeout(() => {
+      openReportFlow();
+    }, 0);
   };
 
   useEffect(() => {
@@ -192,7 +210,7 @@ export const ProfileWithDropdown = ({
     : "";
 
   const DropDownItems: {
-    [key in DropDownKeys]: DropdownItemProps & { label: string };
+    [key in DropDownKeys]: DropdownActionItem;
   } = {
     shop: {
       key: "shop",
@@ -349,6 +367,21 @@ export const ProfileWithDropdown = ({
       },
       label: isNPubCopied ? "Copied!" : "Copy npub",
     },
+    report_profile: {
+      key: "report_profile",
+      color: "danger",
+      className:
+        "!text-red-600 hover:!bg-red-600 hover:!text-white font-bold data-[hover=true]:!bg-red-600 data-[hover=true]:!text-white",
+      startContent: (
+        <ExclamationTriangleIcon
+          className={"h-5 w-5 !text-red-600 group-hover:!text-white"}
+        />
+      ),
+      onPress: () => {
+        handleReportDropdownAction();
+      },
+      label: "Report Profile",
+    },
   };
 
   return (
@@ -422,6 +455,7 @@ export const ProfileWithDropdown = ({
         </Dropdown>
       </div>
       <SignInModal isOpen={isOpen} onClose={onClose} />
+      {reportFlowUi}
     </>
   );
 };

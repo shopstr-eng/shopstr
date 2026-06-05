@@ -20,6 +20,7 @@ import {
   SelectItem,
   Input,
   Spinner,
+  Checkbox,
 } from "@heroui/react";
 import {
   BanknotesIcon,
@@ -59,10 +60,12 @@ import {
   constructGiftWrappedEvent,
   constructMessageSeal,
   constructMessageGiftWrap,
+  getSavedAddresses,
   sendGiftWrappedMessageEvent,
   generateKeys,
   getLocalStorageData,
   publishProofEvent,
+  saveAddress,
 } from "@/utils/nostr/nostr-helper-functions";
 import { LightningAddress } from "@getalby/lightning-tools";
 import QRCode from "qrcode";
@@ -76,6 +79,7 @@ import { BLUEBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import SignInModal from "./sign-in/SignInModal";
 import FailureModal from "@/components/utility-components/failure-modal";
 import CountryDropdown from "./utility-components/dropdowns/country-dropdown";
+import AddressPicker from "./utility-components/address-picker";
 import {
   NostrContext,
   SignerContext,
@@ -84,6 +88,7 @@ import {
   ShippingFormData,
   ContactFormData,
   CombinedFormData,
+  SavedAddress,
   ShopProfile,
 } from "@/utils/types/types";
 import { Controller } from "react-hook-form";
@@ -243,6 +248,12 @@ export default function CartInvoiceCard({
 
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
   const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
+  const [saveDetails, setSaveDetails] = useState(false);
+  const [saveAddressLabel, setSaveAddressLabel] = useState("");
+  const [selectedSavedAddressId, setSelectedSavedAddressId] = useState<
+    string | null
+  >(null);
+  const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
   const [invoice, setInvoice] = useState("");
   const [copiedToClipboard, setCopiedToClipboard] = useState(false);
   // Wall-clock deadline (ms) the Lightning polling loop will give up at; null
@@ -883,6 +894,7 @@ export default function CartInvoiceCard({
     handleSubmit: handleFormSubmit,
     control: formControl,
     watch,
+    setValue,
   } = useForm();
 
   // Watch form values to validate completion
@@ -1427,6 +1439,30 @@ export default function CartInvoiceCard({
     }
   }, [products]);
 
+  useEffect(() => {
+    const loadSavedAddresses = () => {
+      setSavedAddresses(getSavedAddresses());
+    };
+
+    loadSavedAddresses();
+    window.addEventListener("storage", loadSavedAddresses);
+
+    return () => {
+      window.removeEventListener("storage", loadSavedAddresses);
+    };
+  }, []);
+
+  const applySavedAddress = (address: SavedAddress) => {
+    setValue("Name", address.name);
+    setValue("Address", address.address);
+    setValue("Unit", address.unit || "");
+    setValue("City", address.city);
+    setValue("Postal Code", address.zip);
+    setValue("State/Province", address.state);
+    setValue("Country", address.country);
+    setSelectedSavedAddressId(address.id);
+  };
+
   // Check if any products have pickup locations
   const productsWithPickupLocations = useMemo(() => {
     return products.filter(
@@ -1626,6 +1662,7 @@ export default function CartInvoiceCard({
         watchedValues["Postal Code"]?.trim() &&
         watchedValues["State/Province"]?.trim() &&
         watchedValues.Country?.trim() &&
+        (!saveDetails || saveAddressLabel.trim()) &&
         (!requiredInfo || watchedValues.Required?.trim()) &&
         pickupLocationValid
       );
@@ -1639,6 +1676,7 @@ export default function CartInvoiceCard({
         watchedValues["Postal Code"]?.trim() &&
         watchedValues["State/Province"]?.trim() &&
         watchedValues.Country?.trim() &&
+        (!saveDetails || saveAddressLabel.trim()) &&
         (!requiredInfo || watchedValues.Required?.trim()) &&
         pickupLocationValid
       );
@@ -1651,6 +1689,8 @@ export default function CartInvoiceCard({
     requiredInfo,
     productsWithPickupLocations,
     shippingPickupPreference,
+    saveDetails,
+    saveAddressLabel,
   ]);
 
   const generateNewKeys = async () => {
@@ -2069,6 +2109,26 @@ export default function CartInvoiceCard({
           shippingState: data["State/Province"],
           shippingCountry: data["Country"],
         };
+      }
+
+      if (
+        saveDetails &&
+        (formType === "shipping" || formType === "combined") &&
+        paymentData.shippingName &&
+        paymentData.shippingAddress
+      ) {
+        saveAddress({
+          id: selectedSavedAddressId || undefined,
+          name: paymentData.shippingName,
+          address: paymentData.shippingAddress,
+          unit: paymentData.shippingUnitNo || "",
+          city: paymentData.shippingCity,
+          state: paymentData.shippingState,
+          zip: paymentData.shippingPostalCode,
+          country: paymentData.shippingCountry,
+          label: saveAddressLabel.trim(),
+          isDefault: false,
+        });
       }
 
       if (paymentType === "fiat") {
@@ -5695,6 +5755,15 @@ export default function CartInvoiceCard({
       <div className="space-y-4">
         {(formType === "shipping" || formType === "combined") && (
           <>
+            {savedAddresses.length > 0 && (
+              <AddressPicker
+                compact
+                autoSelect={false}
+                allowInlineAdd={false}
+                onSelect={applySavedAddress}
+              />
+            )}
+
             <Controller
               name="Name"
               control={formControl}
@@ -5930,6 +5999,39 @@ export default function CartInvoiceCard({
                   />
                 )}
               />
+            </div>
+
+            <div className="space-y-3">
+              <Checkbox
+                isSelected={saveDetails}
+                onValueChange={setSaveDetails}
+                classNames={{
+                  label: "text-black",
+                  wrapper:
+                    "before:border-2 before:border-black after:bg-primary-yellow",
+                }}
+              >
+                Save this address for future orders
+              </Checkbox>
+
+              {saveDetails && (
+                <Input
+                  classNames={{
+                    inputWrapper:
+                      "border-2 border-black rounded-md shadow-neo !bg-white hover:!bg-white focus-within:!bg-white data-[hover=true]:!bg-white group-data-[focus=true]:!bg-white",
+                    input: "!text-black placeholder:text-gray-400",
+                    label: "text-gray-600",
+                    innerWrapper: "!bg-white",
+                  }}
+                  fullWidth={true}
+                  label={<span>Address Label</span>}
+                  placeholder="e.g. Home, Office"
+                  labelPlacement="inside"
+                  isRequired={true}
+                  value={saveAddressLabel}
+                  onValueChange={setSaveAddressLabel}
+                />
+              )}
             </div>
           </>
         )}
