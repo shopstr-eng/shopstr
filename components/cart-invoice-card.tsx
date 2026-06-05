@@ -406,6 +406,8 @@ export default function CartInvoiceCard({
     selectedSize?: string;
     selectedVolume?: string;
     selectedWeight?: string;
+    selectedVariant?: string;
+    variantLabel?: string;
     selectedBulkOption?: string;
     donationAmount?: number;
     donationPercentage?: number;
@@ -438,6 +440,8 @@ export default function CartInvoiceCard({
     selectedSize?: string;
     selectedVolume?: string;
     selectedWeight?: string;
+    selectedVariant?: string;
+    variantLabel?: string;
     selectedBulkOption?: string;
     includeBuyerEmail?: boolean;
     subscriptionFrequency?: string;
@@ -469,6 +473,8 @@ export default function CartInvoiceCard({
           selectedSize: params.selectedSize,
           selectedVolume: params.selectedVolume,
           selectedWeight: params.selectedWeight,
+          selectedVariant: params.selectedVariant,
+          variantLabel: params.variantLabel,
           selectedBulkOption: params.selectedBulkOption,
           subscriptionFrequency: params.subscriptionFrequency,
           productId: params.productId,
@@ -574,6 +580,8 @@ export default function CartInvoiceCard({
         selectedSize: p.selectedSize || undefined,
         selectedVolume: p.selectedVolume || undefined,
         selectedWeight: p.selectedWeight || undefined,
+        selectedVariant: p.selectedVariant || undefined,
+        variantLabel: p.variantLabel || undefined,
         selectedBulkOption: p.selectedBulkOption
           ? String(p.selectedBulkOption)
           : undefined,
@@ -1839,6 +1847,8 @@ export default function CartInvoiceCard({
         selectedSize: product.selectedSize,
         selectedVolume: product.selectedVolume,
         selectedWeight: product.selectedWeight,
+        selectedVariant: product.selectedVariant,
+        variantLabel: product.variantLabel,
         selectedBulkOption: product.selectedBulkOption,
         subscriptionInfo,
       };
@@ -1866,6 +1876,8 @@ export default function CartInvoiceCard({
         selectedSize: product.selectedSize,
         selectedVolume: product.selectedVolume,
         selectedWeight: product.selectedWeight,
+        selectedVariant: product.selectedVariant,
+        variantLabel: product.variantLabel,
         selectedBulkOption: product.selectedBulkOption,
       };
     } else if (isDonation) {
@@ -1906,6 +1918,8 @@ export default function CartInvoiceCard({
         selectedSize: product.selectedSize,
         selectedVolume: product.selectedVolume,
         selectedWeight: product.selectedWeight,
+        selectedVariant: product.selectedVariant,
+        variantLabel: product.variantLabel,
         selectedBulkOption: product.selectedBulkOption,
       };
     }
@@ -2118,6 +2132,10 @@ export default function CartInvoiceCard({
               if (p.selectedSize) parts.push(`Size: ${p.selectedSize}`);
               if (p.selectedVolume) parts.push(`Volume: ${p.selectedVolume}`);
               if (p.selectedWeight) parts.push(`Weight: ${p.selectedWeight}`);
+              if (p.selectedVariant)
+                parts.push(
+                  `${p.variantLabel || "Option"}: ${p.selectedVariant}`
+                );
               if (p.selectedBulkOption)
                 parts.push(`Bundle: ${p.selectedBulkOption} units`);
               const qty = quantities[p.id];
@@ -2578,11 +2596,14 @@ export default function CartInvoiceCard({
               product.selectedSize ||
               product.selectedVolume ||
               product.selectedWeight ||
+              product.selectedVariant ||
               product.selectedBulkOption
                 ? {
                     size: product.selectedSize || undefined,
                     volume: product.selectedVolume || undefined,
                     weight: product.selectedWeight || undefined,
+                    selectedVariant: product.selectedVariant || undefined,
+                    variantLabel: product.variantLabel || undefined,
                     bulk: product.selectedBulkOption || undefined,
                   }
                 : undefined,
@@ -4245,6 +4266,14 @@ export default function CartInvoiceCard({
                   productDetails += " weighing " + product.selectedWeight;
                 }
               }
+              if (product.selectedVariant) {
+                productDetails +=
+                  " (" +
+                  (product.variantLabel || "Option") +
+                  ": " +
+                  product.selectedVariant +
+                  ")";
+              }
               if (product.selectedBulkOption) {
                 if (productDetails) {
                   productDetails +=
@@ -4401,6 +4430,14 @@ export default function CartInvoiceCard({
                   productDetails += " weighing " + product.selectedWeight;
                 }
               }
+              if (product.selectedVariant) {
+                productDetails +=
+                  " (" +
+                  (product.variantLabel || "Option") +
+                  ": " +
+                  product.selectedVariant +
+                  ")";
+              }
               if (product.selectedBulkOption) {
                 if (productDetails) {
                   productDetails +=
@@ -4497,6 +4534,14 @@ export default function CartInvoiceCard({
             } else {
               productDetails += " weighing " + product.selectedWeight;
             }
+          }
+          if (product.selectedVariant) {
+            productDetails +=
+              " (" +
+              (product.variantLabel || "Option") +
+              ": " +
+              product.selectedVariant +
+              ")";
           }
           if (product.selectedBulkOption) {
             if (productDetails) {
@@ -4826,6 +4871,14 @@ export default function CartInvoiceCard({
                 productDetails += " weighing " + product.selectedWeight;
               }
             }
+            if (product.selectedVariant) {
+              productDetails +=
+                " (" +
+                (product.variantLabel || "Option") +
+                ": " +
+                product.selectedVariant +
+                ")";
+            }
             if (product.selectedBulkOption) {
               if (productDetails) {
                 productDetails +=
@@ -4978,6 +5031,14 @@ export default function CartInvoiceCard({
               productDetails += " weighing " + product.selectedWeight;
             }
           }
+          if (product.selectedVariant) {
+            productDetails +=
+              " (" +
+              (product.variantLabel || "Option") +
+              ": " +
+              product.selectedVariant +
+              ")";
+          }
           if (product.selectedBulkOption) {
             if (productDetails) {
               productDetails +=
@@ -5057,6 +5118,14 @@ export default function CartInvoiceCard({
             } else {
               productDetails += " weighing " + product.selectedWeight;
             }
+          }
+          if (product.selectedVariant) {
+            productDetails +=
+              " (" +
+              (product.variantLabel || "Option") +
+              ": " +
+              product.selectedVariant +
+              ")";
           }
           if (product.selectedBulkOption) {
             if (productDetails) {
@@ -5987,6 +6056,12 @@ export default function CartInvoiceCard({
                           Weight: {product.selectedWeight}
                         </p>
                       )}
+                      {product.selectedVariant && (
+                        <p className="text-sm text-gray-600">
+                          {product.variantLabel || "Option"}:{" "}
+                          {product.selectedVariant}
+                        </p>
+                      )}
                       {product.selectedBulkOption && (
                         <p className="text-sm text-gray-600">
                           Bundle: {product.selectedBulkOption} units
@@ -6412,6 +6487,12 @@ export default function CartInvoiceCard({
                     {product.selectedWeight && (
                       <p className="text-sm text-gray-600">
                         Weight: {product.selectedWeight}
+                      </p>
+                    )}
+                    {product.selectedVariant && (
+                      <p className="text-sm text-gray-600">
+                        {product.variantLabel || "Option"}:{" "}
+                        {product.selectedVariant}
                       </p>
                     )}
                     {product.selectedBulkOption && (

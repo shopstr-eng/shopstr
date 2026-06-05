@@ -19,6 +19,8 @@ import {
   DropdownTrigger,
   DropdownMenu,
   DropdownItem,
+  Select,
+  SelectItem,
 } from "@heroui/react";
 import { locationAvatar } from "./dropdowns/location-dropdown";
 import {
@@ -90,6 +92,9 @@ export default function CheckoutCard({
     undefined
   );
   const [hasSizes, setHasSizes] = useState(false);
+  const [selectedVariant, setSelectedVariant] = useState<string | undefined>(
+    undefined
+  );
   const [isAdded, setIsAdded] = useState(false);
 
   const [merchantReview, setMerchantReview] = useState(0);
@@ -149,11 +154,12 @@ export default function CheckoutCard({
 
   const hasVolumes = productData.volumes && productData.volumes.length > 0;
   const hasWeights = productData.weights && productData.weights.length > 0;
+  const hasVariants = !!productData.variants && productData.variants.length > 0;
 
   const activeBulkPrices = (() => {
-    const selectedVariant = selectedVolume || selectedWeight;
-    if (selectedVariant && productData.variantBulkPrices) {
-      const variantTiers = productData.variantBulkPrices.get(selectedVariant);
+    const selectedDimension = selectedVolume || selectedWeight;
+    if (selectedDimension && productData.variantBulkPrices) {
+      const variantTiers = productData.variantBulkPrices.get(selectedDimension);
       if (variantTiers && variantTiers.size > 0) return variantTiers;
     }
     if (productData.bulkPrices && productData.bulkPrices.size > 0) {
@@ -335,6 +341,9 @@ export default function CheckoutCard({
 
     if (selectedSize) {
       productToAdd.selectedSize = selectedSize;
+    }
+    if (selectedVariant) {
+      productToAdd.selectedVariant = selectedVariant;
     }
     if (selectedVolume) {
       productToAdd.selectedVolume = selectedVolume;
@@ -611,6 +620,116 @@ export default function CheckoutCard({
     );
   };
 
+  const handleSelectVariant = (variant: string) => {
+    setSelectedVariant(variant);
+    // Nice-to-have: shift the highlighted image to the one linked to this
+    // variant option (if the seller associated one when listing).
+    const linkedImage = productData.variantImages?.get(variant);
+    if (linkedImage && productData.images.includes(linkedImage)) {
+      setSelectedImage(linkedImage);
+      const linkedIndex = productData.images.indexOf(linkedImage);
+      if (linkedIndex >= 0) {
+        setCarouselStart(linkedIndex);
+      }
+    }
+  };
+
+  const renderVariantGrid = () => {
+    const variantLabel = productData.variantLabel || "Option";
+    const options = productData.variants || [];
+
+    if (productData.variantDisplay === "dropdown") {
+      return (
+        <div className="mb-4">
+          <p className="mb-2 text-sm font-semibold text-black">
+            {`Select ${variantLabel}:`}
+          </p>
+          <Select
+            aria-label={`Select ${variantLabel}`}
+            placeholder={`Choose ${variantLabel.toLowerCase()}`}
+            selectedKeys={
+              selectedVariant ? new Set([selectedVariant]) : new Set([])
+            }
+            onSelectionChange={(keys) => {
+              const key = Array.from(keys as Set<string>)[0];
+              if (key) handleSelectVariant(key);
+            }}
+            classNames={{
+              trigger:
+                "border-2 border-black rounded-md shadow-none bg-white data-[hover=true]:bg-white data-[focus=true]:bg-white",
+              listbox:
+                "bg-white [&_li]:!bg-white [&_li:hover]:!bg-primary-yellow [&_li[data-hover=true]]:!bg-primary-yellow",
+              value: "!text-black",
+            }}
+          >
+            {options.map((variant) => (
+              <SelectItem key={variant}>{variant}</SelectItem>
+            ))}
+          </Select>
+        </div>
+      );
+    }
+
+    return (
+      <div className="mb-4">
+        <p className="mb-2 text-sm font-semibold text-black">
+          {`Select ${variantLabel}:`}
+          {selectedVariant ? (
+            <span className="font-normal text-gray-600">
+              {` ${selectedVariant}`}
+            </span>
+          ) : null}
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {options.map((variant) => {
+            const optionImage = productData.variantImages?.get(variant);
+            const isSelected = selectedVariant === variant;
+            if (optionImage) {
+              return (
+                <button
+                  key={variant}
+                  type="button"
+                  title={variant}
+                  aria-label={variant}
+                  onClick={() => handleSelectVariant(variant)}
+                  className={`flex flex-col items-center gap-1 rounded-md border-2 p-1 transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
+                    isSelected
+                      ? "border-primary-yellow shadow-neo"
+                      : "border-black"
+                  } bg-white`}
+                >
+                  <img
+                    src={optionImage}
+                    alt={variant}
+                    className="h-14 w-14 rounded object-cover"
+                    style={{ aspectRatio: "1 / 1" }}
+                  />
+                  <span className="max-w-[64px] truncate text-xs font-bold text-black">
+                    {variant}
+                  </span>
+                </button>
+              );
+            }
+            return (
+              <button
+                key={variant}
+                type="button"
+                className={`shadow-neo rounded-md border-2 border-black px-3 py-2 text-sm font-bold transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
+                  isSelected
+                    ? "bg-primary-yellow text-black"
+                    : "bg-white text-black"
+                }`}
+                onClick={() => handleSelectVariant(variant)}
+              >
+                {variant}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
   const isSatsCurrency =
     productData.currency.toLowerCase() === "sats" ||
     productData.currency.toLowerCase() === "sat";
@@ -665,6 +784,7 @@ export default function CheckoutCard({
     price: effectivePrice,
     totalCost: effectiveTotal,
     originalPrice: currentPrice,
+    selectedVariant: selectedVariant || undefined,
     discountPercentage: appliedDiscount,
     weightPrice:
       selectedWeight && productData.weightPrices
@@ -890,6 +1010,9 @@ export default function CheckoutCard({
                 {/* Size Grid */}
                 {hasSizes && renderSizeGrid()}
 
+                {/* Variant Selector */}
+                {hasVariants && renderVariantGrid()}
+
                 {hasBulkPrices && activeBulkPrices && (
                   <BulkSelector
                     bulkPrices={activeBulkPrices}
@@ -1028,7 +1151,8 @@ export default function CheckoutCard({
                             className={`bg-primary-yellow shadow-neo rounded-md border-2 border-black px-6 py-2 font-bold text-black transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
                               (hasSizes && !selectedSize) ||
                               (hasVolumes && !selectedVolume) ||
-                              (hasWeights && !selectedWeight)
+                              (hasWeights && !selectedWeight) ||
+                              (hasVariants && !selectedVariant)
                                 ? "cursor-not-allowed opacity-50"
                                 : ""
                             }`}
@@ -1037,6 +1161,7 @@ export default function CheckoutCard({
                               (hasSizes && !selectedSize) ||
                               (hasVolumes && !selectedVolume) ||
                               (hasWeights && !selectedWeight) ||
+                              (hasVariants && !selectedVariant) ||
                               isExpired
                             }
                             size="lg"
@@ -1050,7 +1175,8 @@ export default function CheckoutCard({
                               isAdded ||
                               (hasSizes && !selectedSize) ||
                               (hasVolumes && !selectedVolume) ||
-                              (hasWeights && !selectedWeight)
+                              (hasWeights && !selectedWeight) ||
+                              (hasVariants && !selectedVariant)
                                 ? "cursor-not-allowed opacity-50"
                                 : ""
                             }`}
@@ -1060,6 +1186,7 @@ export default function CheckoutCard({
                               (hasSizes && !selectedSize) ||
                               (hasVolumes && !selectedVolume) ||
                               (hasWeights && !selectedWeight) ||
+                              (hasVariants && !selectedVariant) ||
                               isExpired
                             }
                             size="lg"
@@ -1215,6 +1342,8 @@ export default function CheckoutCard({
               selectedSize={selectedSize}
               selectedVolume={selectedVolume}
               selectedWeight={selectedWeight}
+              selectedVariant={selectedVariant}
+              variantLabel={productData.variantLabel}
               selectedBulkOption={
                 selectedBulkOption ? parseInt(selectedBulkOption) : undefined
               }

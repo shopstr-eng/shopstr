@@ -106,6 +106,8 @@ interface OrderData {
   selectedSize?: string;
   selectedVolume?: string;
   selectedWeight?: string;
+  selectedVariant?: string;
+  variantLabel?: string;
   selectedBulkOption?: number;
   paymentToken?: string;
   paymentMethod?: string;
@@ -416,6 +418,8 @@ const OrdersDashboard = ({
             const selectedSize = tagsMap.get("size");
             const selectedVolume = tagsMap.get("volume");
             const selectedWeight = tagsMap.get("weight");
+            const selectedVariant = tagsMap.get("variant");
+            const variantLabel = tagsMap.get("variant_label");
             const bulkTag = messageEvent.tags.find((tag) => tag[0] === "bulk");
             const selectedBulkOption =
               bulkTag && bulkTag[1] ? parseInt(bulkTag[1]) : undefined;
@@ -516,6 +520,8 @@ const OrdersDashboard = ({
               selectedSize,
               selectedVolume,
               selectedWeight,
+              selectedVariant,
+              variantLabel,
               selectedBulkOption,
               paymentToken,
               paymentMethod,
@@ -690,6 +696,8 @@ const OrdersDashboard = ({
             selectedSize: order.selectedSize || existing.selectedSize,
             selectedVolume: order.selectedVolume || existing.selectedVolume,
             selectedWeight: order.selectedWeight || existing.selectedWeight,
+            selectedVariant: order.selectedVariant || existing.selectedVariant,
+            variantLabel: order.variantLabel || existing.variantLabel,
             selectedBulkOption:
               order.selectedBulkOption || existing.selectedBulkOption,
             paymentToken: order.paymentToken || existing.paymentToken,
@@ -2125,6 +2133,10 @@ const OrdersDashboard = ({
                               specs.push(`Volume: ${order.selectedVolume}`);
                             if (order.selectedWeight)
                               specs.push(`Weight: ${order.selectedWeight}`);
+                            if (order.selectedVariant)
+                              specs.push(
+                                `${order.variantLabel || "Option"}: ${order.selectedVariant}`
+                              );
                             if (order.selectedBulkOption)
                               specs.push(
                                 `Bundle: ${order.selectedBulkOption} units`

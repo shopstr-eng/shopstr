@@ -143,6 +143,8 @@ function buildProductDescriptors(params: {
   selectedSize?: string;
   selectedVolume?: string;
   selectedWeight?: string;
+  selectedVariant?: string;
+  variantLabel?: string;
   selectedBulkOption?: string;
 }): string {
   const descriptors: string[] = [];
@@ -152,6 +154,10 @@ function buildProductDescriptors(params: {
     descriptors.push(`Volume: ${esc(params.selectedVolume)}`);
   if (params.selectedWeight)
     descriptors.push(`Weight: ${esc(params.selectedWeight)}`);
+  if (params.selectedVariant)
+    descriptors.push(
+      `${esc(params.variantLabel || "Option")}: ${esc(params.selectedVariant)}`
+    );
   if (params.selectedBulkOption)
     descriptors.push(`Bundle: ${esc(params.selectedBulkOption)} units`);
   if (descriptors.length === 0) return "";
@@ -216,6 +222,8 @@ export interface OrderEmailParams {
   selectedSize?: string;
   selectedVolume?: string;
   selectedWeight?: string;
+  selectedVariant?: string;
+  variantLabel?: string;
   selectedBulkOption?: string;
   buyerContact?: string;
   buyerEmail?: string;

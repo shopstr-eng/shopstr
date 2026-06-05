@@ -47,6 +47,8 @@ export default async function handler(
     selectedSize,
     selectedVolume,
     selectedWeight,
+    selectedVariant,
+    variantLabel,
     selectedBulkOption,
     subscriptionFrequency,
     productId,
@@ -75,6 +77,8 @@ export default async function handler(
     selectedSize,
     selectedVolume,
     selectedWeight,
+    selectedVariant,
+    variantLabel,
     selectedBulkOption,
     subscriptionFrequency,
     donationAmount:

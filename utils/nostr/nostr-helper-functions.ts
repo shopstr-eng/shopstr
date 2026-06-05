@@ -327,6 +327,8 @@ export async function constructGiftWrappedEvent(
     selectedSize?: string;
     selectedVolume?: string;
     selectedWeight?: string;
+    selectedVariant?: string;
+    variantLabel?: string;
     selectedBulkOption?: number;
     subscriptionInfo?: {
       enabled: boolean;
@@ -364,6 +366,8 @@ export async function constructGiftWrappedEvent(
     selectedSize,
     selectedVolume,
     selectedWeight,
+    selectedVariant,
+    variantLabel,
     selectedBulkOption,
     subscriptionInfo,
   } = options;
@@ -403,6 +407,9 @@ export async function constructGiftWrappedEvent(
     if (selectedSize) tags.push(["size", selectedSize]);
     if (selectedVolume) tags.push(["volume", selectedVolume]);
     if (selectedWeight) tags.push(["weight", selectedWeight]);
+    if (selectedVariant) tags.push(["variant", selectedVariant]);
+    if (selectedVariant && variantLabel)
+      tags.push(["variant_label", variantLabel]);
     if (selectedBulkOption) tags.push(["bulk", selectedBulkOption.toString()]);
     if (
       donationAmount &&
