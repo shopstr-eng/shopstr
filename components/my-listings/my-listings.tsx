@@ -1,5 +1,3 @@
-/* eslint-disable @next/next/no-img-element */
-
 import router from "next/router";
 import { useContext, useState, useEffect, useRef } from "react";
 import DisplayProducts from "../display-products";
@@ -67,7 +65,7 @@ const MyListingsPage = () => {
 
   const handleViewOrders = () => {
     if (usersPubkey) {
-      router.push("/orders");
+      router.push("/my-listings/orders");
     } else {
       onOpen();
     }

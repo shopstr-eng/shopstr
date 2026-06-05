@@ -4,7 +4,7 @@ import { useRouter } from "next/router";
 import { nip19 } from "nostr-tools";
 import type { ReactNode } from "react";
 
-import ListingPage from "../[[...productId]]";
+import ListingPage from "@/pages/listing/[[...productId]]";
 import { ProductContext } from "@/utils/context/context";
 import { NostrEvent } from "@/utils/types/types";
 

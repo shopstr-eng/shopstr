@@ -37,8 +37,8 @@ jest.mock("@/components/storefront/storefront-layout", () => ({
   ),
 }));
 
-import ShopPage from "../[slug]";
-import ShopSubPage from "../[...shopPath]";
+import ShopPage from "@/pages/shop/[slug]";
+import ShopSubPage from "@/pages/shop/[...shopPath]";
 
 const mockUseRouter = useRouter as jest.Mock;
 type ShopContextValue = ComponentProps<typeof ShopMapContext.Provider>["value"];
