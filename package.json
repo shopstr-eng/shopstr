@@ -23,7 +23,8 @@
     "test:coverage": "jest --coverage --ci --runInBand",
     "test:integration": "RUN_TESTCONTAINERS=1 jest utils/db/__tests__/db-service.test.ts --runInBand",
     "test:watch": "jest --watch",
-    "prepare": "husky"
+    "prepare": "husky",
+    "pre-commit": "node scripts/run-staged-checks.mjs"
   },
   "dependencies": {
     "@braintree/sanitize-url": "7.1.2",
