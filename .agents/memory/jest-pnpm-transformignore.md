@@ -5,14 +5,14 @@ description: Decision — allowlist ESM deps with two explicit transformIgnorePa
 
 # Jest transformIgnorePatterns under pnpm
 
-**Rule:** When allowlisting ESM-only deps (nostr-tools, @noble/*, @scure/*,
-@getalby/*, @cashu/*, uuid, dexie) so Jest transforms them, use TWO explicit
+**Rule:** When allowlisting ESM-only deps (nostr-tools, @noble/_, @scure/_,
+@getalby/_, @cashu/_, uuid, dexie) so Jest transforms them, use TWO explicit
 `transformIgnorePatterns` — one for the pnpm `.pnpm/<pkg>/node_modules/` layout
 and one for the classic/hoisted layout — each with its own negative lookahead.
 Do NOT collapse them into a single pattern with an optional pnpm group.
 
 **Why:** Patterns match anywhere in the path (unanchored). A single pattern with
-an *optional* `.pnpm/.../node_modules/` group lets the regex engine backtrack and
+an _optional_ `.pnpm/.../node_modules/` group lets the regex engine backtrack and
 re-anchor at the OUTER `node_modules/`, where the next segment is `.pnpm` (not in
 the allowlist) — so an allowlisted nested ESM dep gets ignored/untransformed and
 any test that imports the real module dies with "Cannot use import statement

@@ -16,3 +16,4 @@
 - [Cashu API-drift guardrail](cashu-api-contract-guardrail.md) — mocked Send/Mint tests stay green when @cashu/cashu-ts renames methods; a real-library contract test is the only thing that catches the drift.
 - [Jest transformIgnorePatterns under pnpm](jest-pnpm-transformignore.md) — one optional-group ESM-allowlist regex backtracks and wrongly ignores nested @noble/curves ESM; use two explicit patterns (pnpm + classic) or real-nostr-tools tests crash.
 - [Upstream parity + dev OOM](upstream-parity-and-dev-oom.md) — record git parity with upstream via `merge -s ours` (hand-off, not main agent); dev server dying after pnpm install is a 1GB cold-compile OOM, not a regression.
+- [Tests must not live under pages/](nextjs-tests-under-pages.md) — a Jest test colocated in pages/ builds as a route and crashes `next build` with "expect is not defined" (dev is fine); keep tests in top-level **tests**/.

@@ -206,9 +206,7 @@ describe("StallPage", () => {
     test("switches between Listings and Discounts sections", () => {
       expect(screen.getByTestId("display-products-mock")).toBeInTheDocument();
 
-      fireEvent.click(
-        screen.getAllByRole("button", { name: "Discounts" })[0]!
-      );
+      fireEvent.click(screen.getAllByRole("button", { name: "Discounts" })[0]!);
       expect(
         screen.queryByTestId("display-products-mock")
       ).not.toBeInTheDocument();

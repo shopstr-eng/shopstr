@@ -40,7 +40,7 @@ const EMPTY_ADDRESS_FORM: Omit<SavedAddress, "id" | "isDefault"> = {
 };
 
 const DefaultBadge = () => (
-  <span className="rounded border-2 border-black bg-primary-yellow px-2 py-0.5 text-xs font-bold text-black">
+  <span className="bg-primary-yellow rounded border-2 border-black px-2 py-0.5 text-xs font-bold text-black">
     Default
   </span>
 );
@@ -242,7 +242,7 @@ export default function AddressPicker({
             />
           </div>
           {formError && (
-            <p role="alert" className="text-sm text-danger">
+            <p role="alert" className="text-danger text-sm">
               {formError}
             </p>
           )}
@@ -275,7 +275,7 @@ export default function AddressPicker({
           key={addr.id}
           className={`border-2 ${
             selectedId === addr.id
-              ? "border-black bg-primary-yellow/20"
+              ? "bg-primary-yellow/20 border-black"
               : "border-black"
           }`}
         >
@@ -333,7 +333,7 @@ export default function AddressPicker({
             }
             className={`border-2 ${
               selectable && selectedId === addr.id
-                ? "border-black bg-primary-yellow/20"
+                ? "bg-primary-yellow/20 border-black"
                 : "border-black"
             }`}
           >
@@ -432,10 +432,10 @@ export default function AddressPicker({
     <div className="w-full py-2">
       <button
         type="button"
-        className="flex w-full items-center justify-between rounded-md border-2 border-black bg-white px-4 py-4 text-left shadow-neo"
+        className="shadow-neo flex w-full items-center justify-between rounded-md border-2 border-black bg-white px-4 py-4 text-left"
         onClick={() => setIsExpanded((current) => !current)}
       >
-        <span className="flex items-center gap-3 text-md font-semibold text-black">
+        <span className="text-md flex items-center gap-3 font-semibold text-black">
           <StarIcon className="h-5 w-5 text-black" />
           <span>Use a saved address</span>
         </span>

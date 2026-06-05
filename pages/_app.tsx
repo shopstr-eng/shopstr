@@ -1594,66 +1594,76 @@ function MilkMarket({ props }: { props: AppProps }) {
                 <ProductContext.Provider value={productContext}>
                   <ReviewsContext.Provider value={reviewsContext}>
                     <ReportsContext.Provider value={reportsContext}>
-                    <ProfileMapContext.Provider value={profileContext}>
-                      <ShopMapContext.Provider value={shopContext}>
-                        <ChatsContext.Provider
-                          value={
-                            {
-                              chatsMap: chatsMap,
-                              isLoading: isChatLoading,
-                              addNewlyCreatedMessageEvent:
-                                addNewlyCreatedMessageEvent,
-                              markAllMessagesAsRead: markAllMessagesAsRead,
-                              newOrderIds: newOrderIds,
-                            } as ChatsContextInterface
-                          }
-                        >
-                          {!isCustomDomainVisit &&
-                            router.pathname !== "/" &&
-                            router.pathname !== "/producer-guide" &&
-                            router.pathname !== "/faq" &&
-                            router.pathname !== "/terms" &&
-                            router.pathname !== "/privacy" &&
-                            router.pathname !== "/about" &&
-                            router.pathname !== "/contact" &&
-                            !router.pathname.startsWith("/stall/") &&
-                            !(router.asPath ?? "").startsWith("/stall/") && (
-                              <TopNav
-                                setFocusedPubkey={setFocusedPubkey}
-                                setSelectedSection={setSelectedSection}
-                              />
-                            )}
-                          <div className="flex">
-                            <main className="flex-1">
-                              <CustomDomainProvider
-                                value={domainState.isCustomDomain}
-                                isResolved={domainState.isResolved}
-                              >
-                                {storefrontLoadPubkey ? (
-                                  <StorefrontThemeWrapper
-                                    sellerPubkey={storefrontLoadPubkey}
-                                    // Wrapper internally decides whether to render storefront chrome
-                                    // based on isCustomDomain — but its mount/unmount is stable.
-                                    //
-                                    // Suppress chrome for /stall/* pages: they render
-                                    // <StorefrontLayout> themselves, which already paints
-                                    // its own nav + footer. Wrapping them in another set
-                                    // of chrome doubled the footer (and nav) on custom
-                                    // domains once the SSR pubkey seed started populating
-                                    // `storefrontLoadPubkey` on first render. The
-                                    // `useInsideStorefrontChrome` guard inside the wrapper
-                                    // only catches nested <StorefrontThemeWrapper> calls
-                                    // (e.g. /listing, /cart), not StorefrontLayout.
-                                    renderChrome={
-                                      domainState.isCustomDomain &&
-                                      !router.pathname.startsWith("/stall/")
-                                    }
-                                  >
-                                    {/* Stable key on both branches so if
+                      <ProfileMapContext.Provider value={profileContext}>
+                        <ShopMapContext.Provider value={shopContext}>
+                          <ChatsContext.Provider
+                            value={
+                              {
+                                chatsMap: chatsMap,
+                                isLoading: isChatLoading,
+                                addNewlyCreatedMessageEvent:
+                                  addNewlyCreatedMessageEvent,
+                                markAllMessagesAsRead: markAllMessagesAsRead,
+                                newOrderIds: newOrderIds,
+                              } as ChatsContextInterface
+                            }
+                          >
+                            {!isCustomDomainVisit &&
+                              router.pathname !== "/" &&
+                              router.pathname !== "/producer-guide" &&
+                              router.pathname !== "/faq" &&
+                              router.pathname !== "/terms" &&
+                              router.pathname !== "/privacy" &&
+                              router.pathname !== "/about" &&
+                              router.pathname !== "/contact" &&
+                              !router.pathname.startsWith("/stall/") &&
+                              !(router.asPath ?? "").startsWith("/stall/") && (
+                                <TopNav
+                                  setFocusedPubkey={setFocusedPubkey}
+                                  setSelectedSection={setSelectedSection}
+                                />
+                              )}
+                            <div className="flex">
+                              <main className="flex-1">
+                                <CustomDomainProvider
+                                  value={domainState.isCustomDomain}
+                                  isResolved={domainState.isResolved}
+                                >
+                                  {storefrontLoadPubkey ? (
+                                    <StorefrontThemeWrapper
+                                      sellerPubkey={storefrontLoadPubkey}
+                                      // Wrapper internally decides whether to render storefront chrome
+                                      // based on isCustomDomain — but its mount/unmount is stable.
+                                      //
+                                      // Suppress chrome for /stall/* pages: they render
+                                      // <StorefrontLayout> themselves, which already paints
+                                      // its own nav + footer. Wrapping them in another set
+                                      // of chrome doubled the footer (and nav) on custom
+                                      // domains once the SSR pubkey seed started populating
+                                      // `storefrontLoadPubkey` on first render. The
+                                      // `useInsideStorefrontChrome` guard inside the wrapper
+                                      // only catches nested <StorefrontThemeWrapper> calls
+                                      // (e.g. /listing, /cart), not StorefrontLayout.
+                                      renderChrome={
+                                        domainState.isCustomDomain &&
+                                        !router.pathname.startsWith("/stall/")
+                                      }
+                                    >
+                                      {/* Stable key on both branches so if
                                                   the wrapper ever flips in/out
                                                   (e.g. _error.tsx paths) React
                                                   treats the page as the same
                                                   element instead of remounting. */}
+                                      <Component
+                                        key="page"
+                                        {...pageProps}
+                                        focusedPubkey={focusedPubkey}
+                                        setFocusedPubkey={setFocusedPubkey}
+                                        selectedSection={selectedSection}
+                                        setSelectedSection={setSelectedSection}
+                                      />
+                                    </StorefrontThemeWrapper>
+                                  ) : (
                                     <Component
                                       key="page"
                                       {...pageProps}
@@ -1662,23 +1672,13 @@ function MilkMarket({ props }: { props: AppProps }) {
                                       selectedSection={selectedSection}
                                       setSelectedSection={setSelectedSection}
                                     />
-                                  </StorefrontThemeWrapper>
-                                ) : (
-                                  <Component
-                                    key="page"
-                                    {...pageProps}
-                                    focusedPubkey={focusedPubkey}
-                                    setFocusedPubkey={setFocusedPubkey}
-                                    selectedSection={selectedSection}
-                                    setSelectedSection={setSelectedSection}
-                                  />
-                                )}
-                              </CustomDomainProvider>
-                            </main>
-                          </div>
-                        </ChatsContext.Provider>
-                      </ShopMapContext.Provider>
-                    </ProfileMapContext.Provider>
+                                  )}
+                                </CustomDomainProvider>
+                              </main>
+                            </div>
+                          </ChatsContext.Provider>
+                        </ShopMapContext.Provider>
+                      </ProfileMapContext.Provider>
                     </ReportsContext.Provider>
                   </ReviewsContext.Provider>
                 </ProductContext.Provider>

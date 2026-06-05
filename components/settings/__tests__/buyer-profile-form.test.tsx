@@ -41,7 +41,9 @@ jest.mock(
 );
 
 jest.mock("@/components/utility-components/file-uploader", () => ({
-  FileUploaderButton: jest.fn(() => <button data-testid="upload-picture-btn" />),
+  FileUploaderButton: jest.fn(() => (
+    <button data-testid="upload-picture-btn" />
+  )),
 }));
 const mockFileUploaderButton = FileUploaderButton as jest.Mock;
 

@@ -29,7 +29,9 @@ const isFunction = (value: unknown): boolean => typeof value === "function";
 
 const hasPrototypeMethod = (ctor: unknown, name: string): boolean =>
   isFunction(ctor) &&
-  isFunction((ctor as { prototype: Record<string, unknown> }).prototype?.[name]);
+  isFunction(
+    (ctor as { prototype: Record<string, unknown> }).prototype?.[name]
+  );
 
 describe("@cashu/cashu-ts API contract (wallet Send/Mint flows)", () => {
   it("exports the constructors and helpers the wallet flows import", () => {

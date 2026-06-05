@@ -107,9 +107,9 @@ describe("MessageFeed Component", () => {
     // Upstream 86fdb9a asserts the Orders tab wires buyerOnly:true. Downstream
     // has no buyer/seller split — the single OrdersDashboard is scoped via
     // filterBySellerPubkey — so we assert that prop is wired instead.
-    expect(
-      mockUseTabs.mock.calls[0]![0].tabs[0].children.props
-    ).toHaveProperty("filterBySellerPubkey");
+    expect(mockUseTabs.mock.calls[0]![0].tabs[0].children.props).toHaveProperty(
+      "filterBySellerPubkey"
+    );
     expect(screen.getByText("Orders Messages Content")).toBeInTheDocument();
     expect(
       screen.queryByText("Inquiries Messages Content")

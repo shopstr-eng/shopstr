@@ -461,9 +461,7 @@ export function registerReadTools(server: McpServer, context?: ToolContext) {
                     responseTimeMs: Date.now() - startTime,
                     dataSource: "cached_db",
                     dataFreshness: product.createdAt
-                      ? new Date(
-                          Number(product.createdAt) * 1000
-                        ).toISOString()
+                      ? new Date(Number(product.createdAt) * 1000).toISOString()
                       : null,
                     resultCount: 1,
                   },

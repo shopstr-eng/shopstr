@@ -100,7 +100,9 @@ describe("MarketProfileForm", () => {
 
   test("displays the form after initial data load", async () => {
     renderWithProviders(<MarketProfileForm />);
-    expect(await screen.findByPlaceholderText("Add your display name...")).toBeInTheDocument();
+    expect(
+      await screen.findByPlaceholderText("Add your display name...")
+    ).toBeInTheDocument();
   });
 
   test("populates the form with existing profile data, including images", async () => {
@@ -114,7 +116,9 @@ describe("MarketProfileForm", () => {
 
   test("does not fetch profile if userPubkey is missing", async () => {
     renderWithProviders(<MarketProfileForm />, new Map(), undefined);
-    expect(await screen.findByPlaceholderText("Add your display name...")).toBeInTheDocument();
+    expect(
+      await screen.findByPlaceholderText("Add your display name...")
+    ).toBeInTheDocument();
   });
 
   test("displays default image when no picture is available", async () => {
@@ -133,7 +137,10 @@ describe("MarketProfileForm", () => {
       <MarketProfileForm />
     );
 
-    await user.type(await screen.findByPlaceholderText("Add your display name..."), "New Name");
+    await user.type(
+      await screen.findByPlaceholderText("Add your display name..."),
+      "New Name"
+    );
     await user.click(screen.getByRole("button", { name: /Save Profile/i }));
 
     await waitFor(() => {

@@ -10,6 +10,7 @@ HeroUI `Input`/`Select` (no `htmlFor`/`id` or `aria-label`). So Testing Library
 "no form control was found associated to that label".
 
 **How to apply (in tests):**
+
 - Text `Input`: query by its `placeholder` (e.g. `findByPlaceholderText("Add your display name...")`).
 - `type="number"` `Input`: query by `getByRole("spinbutton")`.
 - HeroUI `Select` with no `label` prop: its trigger is a `button` whose

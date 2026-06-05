@@ -429,9 +429,7 @@ export const FileUploaderButton = ({
 
   const wrapperClassName = containerClassName
     ? `flex w-fit flex-col gap-4 ${containerClassName}`
-    : `flex flex-col gap-4 ${
-        isPlaceholder || isProductUpload ? "w-full" : ""
-      }`;
+    : `flex flex-col gap-4 ${isPlaceholder || isProductUpload ? "w-full" : ""}`;
 
   return (
     <div className={wrapperClassName}>

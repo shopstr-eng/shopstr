@@ -14,9 +14,10 @@ by hand and adapt them.
 
 **Why:** a blind merge produces massive conflicts and silently regresses diverged
 downstream work (custom stall/storefront, cart/invoice totals, order DMs, reporting,
-_app SSR ogMeta). The user explicitly wants only genuine refinements, styled to match.
+\_app SSR ogMeta). The user explicitly wants only genuine refinements, styled to match.
 
 **How to apply:**
+
 - Safe to port (touch files that barely diverged): security/input hardening
   (og-preview URL normalization, fetch-service event validation, order-status API
   bounds), small self-contained UX (api-key show/hide, passphrase show/hide,
@@ -33,6 +34,7 @@ _app SSR ogMeta). The user explicitly wants only genuine refinements, styled to 
 - Don't port upstream test files; they assert upstream code shape.
 
 ## Gotchas
+
 - `FollowsContextInterface` exposes `firstDegreeFollowsLength` (number), `followList`,
   `isLoading`. The `ln` field only appears in test mocks (mm-slider tests) — real code
   uses `firstDegreeFollowsLength`.
@@ -42,3 +44,7 @@ _app SSR ogMeta). The user explicitly wants only genuine refinements, styled to 
   `onKeyDown`/`onClick` call `e.stopPropagation()` so typing doesn't trigger item
   selection; filter the `SelectItem`s by the search value. Remove `sticky top-1 z-20`
   from section heading classes when adding a search input or it overlaps the input.
+
+## Verify silent auto-merges after resolving
+
+Resolving conflicts →ours only covers files git flagged as conflicts. Files upstream changed in regions downstream didn't touch **auto-merge with no conflict markers** and silently inject upstream code (incl. duplicate `export interface` blocks when both sides added the same type). After a big merge, run `git diff --stat <pre-merge-downstream-tip> HEAD` and review every non-test production file in the list — that is the only way to catch auto-merged behavior changes. **Why:** a duplicate `SavedAddress` interface and a `fetchAllFollows` rewrite both reached the committed merge without ever showing a conflict marker.

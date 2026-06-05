@@ -54,7 +54,12 @@ const LocationDropdown = ({
       country.country.toLowerCase().includes(q)
     );
 
-    const regionalOptionsList = ["Worldwide", "US & Canada", "Europe", "Online"];
+    const regionalOptionsList = [
+      "Worldwide",
+      "US & Canada",
+      "Europe",
+      "Online",
+    ];
 
     const filteredRegional = regionalOptionsList.filter((regional) =>
       regional.toLowerCase().includes(q)

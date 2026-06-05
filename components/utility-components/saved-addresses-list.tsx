@@ -47,13 +47,13 @@ export default function SavedAddressesList({
         {addresses.map((addr) => (
           <div
             key={addr.id}
-            className="flex items-start justify-between rounded-md border-2 border-black bg-white p-3 shadow-neo"
+            className="shadow-neo flex items-start justify-between rounded-md border-2 border-black bg-white p-3"
           >
             <div className="flex-1">
               <div className="flex items-center gap-2">
                 <h4 className="font-semibold text-black">{addr.label}</h4>
                 {addr.isDefault && (
-                  <span className="rounded border-2 border-black bg-primary-yellow px-2 py-1 text-xs font-bold text-black">
+                  <span className="bg-primary-yellow rounded border-2 border-black px-2 py-1 text-xs font-bold text-black">
                     Default
                   </span>
                 )}
