@@ -628,7 +628,9 @@ describe("DisplayProducts search filtering", () => {
 
     await waitFor(() => {
       expect(screen.getAllByText("Deduped Coffee")).toHaveLength(1);
-      expect(screen.queryByTestId("product-relay-product")).not.toBeInTheDocument();
+      expect(
+        screen.queryByTestId("product-relay-product")
+      ).not.toBeInTheDocument();
       expect(screen.getByTestId("product-local-product")).toBeInTheDocument();
     });
   });

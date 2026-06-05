@@ -721,9 +721,7 @@ describe("fetch-service NIP-50 search helpers", () => {
       sig: "sig-newer",
     };
     const nostr = {
-      fetch: jest
-        .fn()
-        .mockResolvedValue([firstRelayResult, secondRelayResult]),
+      fetch: jest.fn().mockResolvedValue([firstRelayResult, secondRelayResult]),
     };
 
     const result = await fetchNip50ProductSearch(
@@ -732,10 +730,7 @@ describe("fetch-service NIP-50 search helpers", () => {
       "coffee"
     );
 
-    expect(result.productEvents).toEqual([
-      firstRelayResult,
-      secondRelayResult,
-    ]);
+    expect(result.productEvents).toEqual([firstRelayResult, secondRelayResult]);
   });
 
   it("routes search to curated NIP-50 relays instead of general user relays", async () => {

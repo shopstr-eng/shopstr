@@ -193,11 +193,7 @@ export async function fetchNip50ProductSearch(
 
   const filterSearchProductEvents = (events: NostrEvent[]) =>
     events.filter(
-      (event) =>
-        event.id &&
-        event.sig &&
-        event.pubkey &&
-        event.kind === 30402
+      (event) => event.id && event.sig && event.pubkey && event.kind === 30402
     );
 
   let searchProductEvents = filterSearchProductEvents(
