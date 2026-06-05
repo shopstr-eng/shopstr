@@ -1,6 +1,7 @@
 import { NostrEvent, NostrManager } from "../nostr-manager";
 import {
   buildNip50ProductSearchFilters,
+  DEFAULT_NIP50_SEARCH_RELAYS,
   dedupeProductEvents,
   fetchNip50ProductSearch,
 } from "../fetch-service";
@@ -643,8 +644,12 @@ describe("fetch-service NIP-50 search helpers", () => {
       return result;
     });
 
-    await Promise.resolve();
+    for (let index = 0; index < 5 && !resolveCache; index += 1) {
+      await Promise.resolve();
+    }
+
     expect(didResolve).toBe(false);
+    expect(resolveCache).toBeDefined();
 
     resolveCache();
     const result = await searchPromise;
@@ -692,6 +697,81 @@ describe("fetch-service NIP-50 search helpers", () => {
 
     expect(result.productEvents).toEqual([relevant]);
     expect(cacheEventsToDatabase).toHaveBeenCalledWith([relevant]);
+  });
+
+  it("falls back to default NIP-50 relays when selected relays return no relevant product results", async () => {
+    const fallbackListing = {
+      id: "fallback-product",
+      pubkey: "fallback-seller",
+      created_at: 30,
+      kind: 30402,
+      tags: [
+        ["d", "fallback-coffee"],
+        ["title", "Fallback Coffee Beans"],
+        ["price", "12", "USD"],
+      ],
+      content: "fallback coffee",
+      sig: "sig-fallback",
+    };
+    const nostr = {
+      fetch: jest
+        .fn()
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([fallbackListing]),
+    };
+
+    const result = await fetchNip50ProductSearch(
+      nostr as unknown as NostrManager,
+      ["wss://relay.without-search.example"],
+      "coffee"
+    );
+
+    expect(nostr.fetch).toHaveBeenNthCalledWith(
+      1,
+      expect.any(Array),
+      {},
+      ["wss://relay.without-search.example"]
+    );
+    expect(nostr.fetch).toHaveBeenNthCalledWith(
+      2,
+      expect.any(Array),
+      {},
+      DEFAULT_NIP50_SEARCH_RELAYS
+    );
+    expect(result.productEvents).toEqual([fallbackListing]);
+    expect(cacheEventsToDatabase).toHaveBeenCalledWith([fallbackListing]);
+  });
+
+  it("uses default NIP-50 relays when no selected relays are available", async () => {
+    const fallbackListing = {
+      id: "default-product",
+      pubkey: "fallback-seller",
+      created_at: 40,
+      kind: 30402,
+      tags: [
+        ["d", "default-coffee"],
+        ["title", "Default Coffee Beans"],
+        ["price", "12", "USD"],
+      ],
+      content: "default coffee",
+      sig: "sig-default",
+    };
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([fallbackListing]),
+    };
+
+    const result = await fetchNip50ProductSearch(
+      nostr as unknown as NostrManager,
+      [],
+      "coffee"
+    );
+
+    expect(nostr.fetch).toHaveBeenCalledWith(
+      expect.any(Array),
+      {},
+      DEFAULT_NIP50_SEARCH_RELAYS
+    );
+    expect(result.productEvents).toEqual([fallbackListing]);
   });
 
   it("returns matching zapsnag notes from NIP-50 search without caching them as products", async () => {

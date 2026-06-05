@@ -117,12 +117,6 @@ const DisplayProducts = ({
 
     const relaysToSearch = searchRelaysKey ? searchRelaysKey.split("|") : [];
 
-    if (relaysToSearch.length === 0) {
-      setNip50ProductEvents([]);
-      setIsNip50SearchLoading(false);
-      return;
-    }
-
     let didCancel = false;
     setIsNip50SearchLoading(true);
 

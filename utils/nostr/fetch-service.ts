@@ -44,6 +44,35 @@ interface NipProfile {
 type SearchFilter = Filter & { search: string };
 
 const PRODUCT_SEARCH_LIMIT = 100;
+export const DEFAULT_NIP50_SEARCH_RELAYS = [
+  "wss://relay.noswhere.com",
+  "wss://search.nos.today",
+  "wss://antiprimal.net",
+  "wss://relay.ditto.pub",
+];
+
+function normalizeRelayUrl(relay: string): string {
+  const trimmedRelay = relay.trim();
+  if (!trimmedRelay) return "";
+
+  const relayWithProtocol = /^wss?:\/\//i.test(trimmedRelay)
+    ? trimmedRelay
+    : `wss://${trimmedRelay}`;
+
+  return relayWithProtocol.replace(/\/+$/, "");
+}
+
+function getUniqueRelayUrls(relays: string[]): string[] {
+  const relayMap = new Map<string, string>();
+
+  for (const relay of relays) {
+    const normalizedRelay = normalizeRelayUrl(relay);
+    if (!normalizedRelay) continue;
+    relayMap.set(normalizedRelay.toLowerCase(), normalizedRelay);
+  }
+
+  return Array.from(relayMap.values());
+}
 
 export function getProductEventKey(event: NostrEvent): string {
   if (event.kind === 30402) {
@@ -142,21 +171,54 @@ export async function fetchNip50ProductSearch(
   productEvents: NostrEvent[];
 }> {
   const filters = buildNip50ProductSearchFilters(searchQuery, options);
-  if (!filters.length || !relays.length) {
+  if (!filters.length) {
     return { productEvents: [] };
   }
 
-  const fetchedEvents = await nostr.fetch(filters, {}, relays);
-  const searchProductEvents = fetchedEvents.filter(
-    (event) =>
-      event.id &&
-      event.sig &&
-      event.pubkey &&
-      (event.kind === 30402 || event.kind === 1)
+  const primaryRelays = getUniqueRelayUrls(relays);
+  const primaryRelaySet = new Set(
+    primaryRelays.map((relay) => relay.toLowerCase())
   );
-  const relevantSearchProductEvents = searchProductEvents.filter((event) =>
+  const fallbackRelays = getUniqueRelayUrls(
+    DEFAULT_NIP50_SEARCH_RELAYS.filter(
+      (relay) => !primaryRelaySet.has(normalizeRelayUrl(relay).toLowerCase())
+    )
+  );
+
+  const fetchSearchEvents = (targetRelays: string[]) => {
+    if (targetRelays.length === 0) return Promise.resolve([]);
+
+    return nostr.fetch(filters, {}, targetRelays).catch((error) => {
+      console.warn("Failed to search products with NIP-50 relays:", error);
+      return [];
+    });
+  };
+
+  const filterSearchProductEvents = (events: NostrEvent[]) =>
+    events.filter(
+      (event) =>
+        event.id &&
+        event.sig &&
+        event.pubkey &&
+        (event.kind === 30402 || event.kind === 1)
+    );
+
+  let searchProductEvents = filterSearchProductEvents(
+    await fetchSearchEvents(primaryRelays)
+  );
+  let relevantSearchProductEvents = searchProductEvents.filter((event) =>
     eventMatchesProductSearch(event, searchQuery)
   );
+
+  if (relevantSearchProductEvents.length === 0) {
+    searchProductEvents = filterSearchProductEvents(
+      await fetchSearchEvents(fallbackRelays)
+    );
+    relevantSearchProductEvents = searchProductEvents.filter((event) =>
+      eventMatchesProductSearch(event, searchQuery)
+    );
+  }
+
   const cacheableProductEvents = relevantSearchProductEvents.filter(
     (event) => event.kind === 30402
   );
