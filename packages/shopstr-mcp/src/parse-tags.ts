@@ -52,7 +52,7 @@ function getCappedTagValues(
   return results;
 }
 
-//  Extract capped, structured image objects from image tags according toGamma spec: ["image", "<url>", "<dimensions>", "<sorting-order>"]
+//  Extract capped, structured image objects from image tags according to Gamma spec: ["image", "<url>", "<dimensions>", "<sorting-order>"]
 function getCappedImages(tags: string[][]): ProductImage[] {
   const images: ProductImage[] = [];
   for (const tag of tags) {

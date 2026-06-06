@@ -1,6 +1,6 @@
 import type { NostrEvent } from "./types.js";
 
-// Add a window of 15 min in future to prevent from a event from far future to override a valid event caused by a malicious client.
+// Add a window of 15 min in future to prevent an event from far future to override a valid event caused by a malicious client.
 const MAX_FUTURE_SKEW_S = 15 * 60;
 
 function isBetterEvent(candidate: NostrEvent, existing: NostrEvent): boolean {

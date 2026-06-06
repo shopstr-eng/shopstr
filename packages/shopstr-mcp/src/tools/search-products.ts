@@ -186,7 +186,8 @@ export async function handleSearchProducts(
     }
   }
 
-  const responseLimit = Math.min(filters.limit, PRODUCT_RESPONSE_BUDGET);
+  const requestedLimit = filters.limit ?? PRODUCT_RESPONSE_BUDGET;
+  const responseLimit = Math.min(requestedLimit, PRODUCT_RESPONSE_BUDGET);
   const returnedProducts = products.slice(0, responseLimit);
   const truncated = returnedProducts.length < products.length;
   const hints = buildSearchHints(

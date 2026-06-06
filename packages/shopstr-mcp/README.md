@@ -92,6 +92,7 @@ npm --prefix packages/shopstr-mcp test
 ```
 
 ## For Verification
+
 ```sh
 npx @modelcontextprotocol/inspector node shopstr/packages/shopstr-mcp/dist/index.js
 ```
