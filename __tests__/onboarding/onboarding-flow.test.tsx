@@ -69,12 +69,12 @@ jest.mock("@/utils/nostr/signers/nostr-nsec-signer", () => ({
 }));
 
 // Import pages after mocks are registered.
-import OnboardingChoosePlan from "../choose-plan";
-import UserTypeSelection from "../user-type";
-import NewAccount from "../new-account";
-import OnboardingMarketProfile from "../market-profile";
-import OnboardingShopProfile from "../shop-profile";
-import OnboardingStripeConnect from "../stripe-connect";
+import OnboardingChoosePlan from "@/pages/onboarding/choose-plan";
+import UserTypeSelection from "@/pages/onboarding/user-type";
+import NewAccount from "@/pages/onboarding/new-account";
+import OnboardingMarketProfile from "@/pages/onboarding/market-profile";
+import OnboardingShopProfile from "@/pages/onboarding/shop-profile";
+import OnboardingStripeConnect from "@/pages/onboarding/stripe-connect";
 
 const relaysValue = {
   relayList: [],
