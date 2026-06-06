@@ -233,7 +233,10 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
       const response = await fetch("/api/validate-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password: storefrontPasswordInput.trim() }),
+        body: JSON.stringify({
+          password: storefrontPasswordInput.trim(),
+          pubkey: userPubkey,
+        }),
       });
       const data = await response.json();
       if (data.valid) {

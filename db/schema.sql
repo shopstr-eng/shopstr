@@ -669,3 +669,10 @@ BEGIN
     ON affiliate_codes (seller_pubkey, UPPER(code));
 END
 $aff_migrate$;
+
+-- Authed sellers table: pubkeys that have entered the listing password.
+-- The marketplace only displays products from pubkeys recorded here.
+CREATE TABLE IF NOT EXISTS authed_sellers (
+    pubkey TEXT PRIMARY KEY,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);

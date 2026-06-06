@@ -173,7 +173,68 @@ export async function incrementFailedRelayPublishRetryForOwner(
   }
 }
 
-// Initialize the database connection pool
+// Sellers who entered the listing password before server-side tracking
+// existed. They have no row in authed_sellers, so seed them once on setup.
+const SEED_AUTHED_SELLER_PUBKEYS = [
+  "1be3f173f0b0ddcab5f5b98ca0cdd857c3454ce67dbdaf2dd694d4b4415d7361",
+  "76fcec0e0638351f1d0e0dc4ebaf6dd3d67404126d664547674070f3175273d9",
+];
+
+// Tracks which npubs have successfully entered the listing password. The
+// marketplace only displays products from pubkeys recorded here.
+export async function ensureAuthedSellersTable(
+  client: PoolClient
+): Promise<void> {
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS authed_sellers (
+      pubkey TEXT PRIMARY KEY,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  await client.query(
+    `INSERT INTO authed_sellers (pubkey)
+     SELECT UNNEST($1::text[])
+     ON CONFLICT (pubkey) DO NOTHING`,
+    [SEED_AUTHED_SELLER_PUBKEYS]
+  );
+}
+
+// Records that the given pubkey has entered the listing password. No-op for
+// missing or malformed (non hex-64) pubkeys.
+export async function recordAuthedSeller(pubkey: string): Promise<void> {
+  if (!pubkey || !/^[0-9a-f]{64}$/.test(pubkey)) return;
+
+  const dbPool = getDbPool();
+  let client;
+  try {
+    client = await dbPool.connect();
+    await ensureAuthedSellersTable(client);
+    await client.query(
+      `INSERT INTO authed_sellers (pubkey)
+       VALUES ($1)
+       ON CONFLICT (pubkey) DO NOTHING`,
+      [pubkey]
+    );
+  } finally {
+    if (client) client.release();
+  }
+}
+
+// Returns the list of pubkeys that have entered the listing password.
+export async function getAuthedSellerPubkeys(): Promise<string[]> {
+  const dbPool = getDbPool();
+  let client;
+  try {
+    client = await dbPool.connect();
+    await ensureAuthedSellersTable(client);
+    const result = await client.query(`SELECT pubkey FROM authed_sellers`);
+    return result.rows.map((row) => row.pubkey as string);
+  } finally {
+    if (client) client.release();
+  }
+}
+
 export function getDbPool(): Pool {
   if (!pool) {
     const databaseUrl = process.env.DATABASE_URL;
@@ -1077,6 +1138,8 @@ async function initializeTables(): Promise<void> {
       END
       $sub_migrate_inline$;
     `);
+
+    await ensureAuthedSellersTable(client);
 
     tablesInitialized = true;
     initializingTables = false;

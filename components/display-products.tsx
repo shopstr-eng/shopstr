@@ -52,11 +52,37 @@ const DisplayProducts = ({
   const [filteredProducts, setFilteredProducts] = useState<ProductData[]>([]);
   const [totalPages, setTotalPages] = useState(1);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [authedSellers, setAuthedSellers] = useState<Set<string> | null>(null);
 
   const router = useRouter();
 
   const { nostr } = useContext(NostrContext);
   const { signer, pubkey: userPubkey } = useContext(SignerContext);
+
+  // Load the set of sellers who have entered the listing password. Products
+  // from any other pubkey are hidden from the marketplace.
+  useEffect(() => {
+    let cancelled = false;
+    const fetchAuthedSellers = async () => {
+      try {
+        const response = await fetch("/api/authed-sellers");
+        const data = response.ok ? await response.json() : null;
+        if (cancelled) return;
+        // Fail closed: any non-OK response or malformed payload results in an
+        // empty allowlist (no products shown) rather than showing everyone.
+        setAuthedSellers(
+          new Set<string>(Array.isArray(data?.pubkeys) ? data.pubkeys : [])
+        );
+      } catch (error) {
+        console.error("Failed to fetch authed sellers:", error);
+        if (!cancelled) setAuthedSellers(new Set<string>());
+      }
+    };
+    fetchAuthedSellers();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Load saved page from session storage on mount
   useEffect(() => {
@@ -153,12 +179,13 @@ const DisplayProducts = ({
       if (!product.currency) return false;
       if (product.images.length === 0) return false;
       if (product.contentWarning) return false;
-      if (
-        product.pubkey ===
-          "3da2082b7aa5b76a8f0c134deab3f7848c3b5e3a3079c65947d88422b69c1755" &&
-        userPubkey !== product.pubkey
-      ) {
-        return false;
+      // Only show products from sellers who have entered the listing password.
+      // A seller can always see their own products. Fail closed while the
+      // allowlist is still loading (authedSellers === null).
+      if (userPubkey !== product.pubkey) {
+        if (!authedSellers || !authedSellers.has(product.pubkey)) {
+          return false;
+        }
       }
       return true;
     });
@@ -200,6 +227,8 @@ const DisplayProducts = ({
     selectedCategories,
     focusedPubkey,
     isInitialized,
+    authedSellers,
+    userPubkey,
   ]);
 
   // Scroll effect only on page change
