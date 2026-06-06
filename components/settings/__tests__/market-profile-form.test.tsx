@@ -85,11 +85,24 @@ describe("MarketProfileForm", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     localStorage.clear();
+    global.fetch = jest.fn(() =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({}),
+      })
+    ) as jest.Mock;
+  });
+
+  afterEach(() => {
+    (global.fetch as jest.Mock).mockRestore?.();
+    localStorage.clear();
   });
 
   test("displays the form after initial data load", async () => {
     renderWithProviders(<MarketProfileForm />);
-    expect(await screen.findByLabelText("Display name")).toBeInTheDocument();
+    expect(
+      await screen.findByPlaceholderText("Add your display name...")
+    ).toBeInTheDocument();
   });
 
   test("populates the form with existing profile data, including images", async () => {
@@ -97,18 +110,20 @@ describe("MarketProfileForm", () => {
     expect(await screen.findByDisplayValue("Test User")).toBeInTheDocument();
     expect(screen.getByDisplayValue("testuser")).toBeInTheDocument();
 
-    const profileImage = screen.getByAltText("user profile picture");
+    const profileImage = screen.getByAltText("User Profile Picture");
     expect(profileImage).toHaveAttribute("src", "https://existing.picture/url");
   });
 
   test("does not fetch profile if userPubkey is missing", async () => {
     renderWithProviders(<MarketProfileForm />, new Map(), undefined);
-    expect(await screen.findByLabelText("Display name")).toBeInTheDocument();
+    expect(
+      await screen.findByPlaceholderText("Add your display name...")
+    ).toBeInTheDocument();
   });
 
   test("displays default image when no picture is available", async () => {
     renderWithProviders(<MarketProfileForm />, new Map());
-    const profileImage = await screen.findByAltText("user profile picture");
+    const profileImage = await screen.findByAltText("User Profile Picture");
     expect(profileImage).toHaveAttribute(
       "src",
       `https://robohash.org/${mockUserPubkey}`
@@ -122,7 +137,10 @@ describe("MarketProfileForm", () => {
       <MarketProfileForm />
     );
 
-    await user.type(await screen.findByLabelText("Display name"), "New Name");
+    await user.type(
+      await screen.findByPlaceholderText("Add your display name..."),
+      "New Name"
+    );
     await user.click(screen.getByRole("button", { name: /Save Profile/i }));
 
     await waitFor(() => {
@@ -137,7 +155,7 @@ describe("MarketProfileForm", () => {
     renderWithProviders(<MarketProfileForm isOnboarding={true} />);
 
     await user.type(
-      await screen.findByLabelText("Display name"),
+      await screen.findByPlaceholderText("Add your display name..."),
       "Onboarding User"
     );
     await user.click(screen.getByRole("button", { name: /Save Profile/i }));
@@ -153,6 +171,7 @@ describe("MarketProfileForm", () => {
     mockCreateNostrProfileEvent.mockReturnValue(new Promise(() => {}));
     const user = userEvent.setup();
     renderWithProviders(<MarketProfileForm />);
+    await screen.findByPlaceholderText("Add your display name...");
 
     const saveButton = screen.getByRole("button", { name: /Save Profile/i });
     await user.click(saveButton);
@@ -165,18 +184,18 @@ describe("MarketProfileForm", () => {
   test("updates the profile picture via uploader", async () => {
     const user = userEvent.setup();
     renderWithProviders(<MarketProfileForm />);
-    await screen.findByLabelText("Display name");
+    await screen.findByPlaceholderText("Add your display name...");
 
     const uploadPictureBtn = screen.getByTestId("upload-picture-btn");
     await user.click(uploadPictureBtn);
-    const newProfileImage = await screen.findByAltText("user profile picture");
+    const newProfileImage = await screen.findByAltText("User Profile Picture");
     expect(newProfileImage).toHaveAttribute("src", "https://new.image/url");
   });
 
   test("handles fiat payment option changes correctly", async () => {
     const user = userEvent.setup();
     renderWithProviders(<MarketProfileForm />);
-    await screen.findByLabelText("Display name");
+    await screen.findByPlaceholderText("Add your display name...");
 
     const venmoCheckbox = screen.getByLabelText("Venmo");
 
@@ -201,10 +220,10 @@ describe("MarketProfileForm", () => {
     mockCreateNostrProfileEvent.mockResolvedValue({});
     const user = userEvent.setup();
     renderWithProviders(<MarketProfileForm />);
-    await screen.findByLabelText("Display name");
+    await screen.findByPlaceholderText("Add your display name...");
 
     const paymentSelect = screen.getByRole("button", {
-      name: /Payment preference \(for sellers\)/i,
+      name: /Local Currency \(Fiat\)/i,
     });
     await user.click(paymentSelect);
     const lightningOption = await screen.findByRole("option", {
@@ -216,7 +235,7 @@ describe("MarketProfileForm", () => {
       expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
     });
 
-    const donationInput = screen.getByLabelText(/Milk Market donation %/);
+    const donationInput = screen.getByRole("spinbutton");
     await user.clear(donationInput);
     await user.type(donationInput, "5.5");
 

@@ -8,7 +8,6 @@ import {
   Input,
   useDisclosure,
 } from "@heroui/react";
-import { BoltIcon } from "@heroicons/react/24/outline";
 import { LightningAddress } from "@getalby/lightning-tools";
 import { NostrWebLNProvider } from "@getalby/sdk";
 import {
@@ -274,7 +273,13 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
       <Button
         className={`${PRIMARYBUTTONCLASSNAMES} w-full text-lg font-bold disabled:opacity-50`}
         onClick={onOpen}
-        startContent={!isSoldOut ? <BoltIcon className="h-6 w-6" /> : null}
+        startContent={
+          !isSoldOut ? (
+            <span aria-hidden="true" className="text-2xl leading-none">
+              ⚡
+            </span>
+          ) : null
+        }
         isDisabled={isSoldOut || isCheckingInventory}
       >
         {isCheckingInventory

@@ -1,6 +1,5 @@
 import { useContext, useEffect, useState } from "react";
 import { Button, Input, Card, CardBody, CardHeader, Chip } from "@heroui/react";
-import { TrashIcon } from "@heroicons/react/24/outline";
 import { BLUEBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { formatCurrentDateTimeLocalValue } from "@/utils/datetime-local";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
@@ -394,11 +393,12 @@ export default function DiscountCodes() {
                     >
                       <Button
                         isIconOnly
+                        aria-label="Delete discount code"
                         color="danger"
                         variant="light"
                         size="sm"
                       >
-                        <TrashIcon className="h-5 w-5" />
+                        {"🗑️"}
                       </Button>
                     </ConfirmActionDropdown>
                   </div>

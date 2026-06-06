@@ -98,6 +98,7 @@ export default function ProductForm({
   const [subscriptionFrequencies, setSubscriptionFrequencies] = useState<
     string[]
   >([]);
+  const [variantOptionInput, setVariantOptionInput] = useState("");
   const [showStripeConnectModal, setShowStripeConnectModal] = useState(false);
   const [hasStripeAccount, setHasStripeAccount] = useState<boolean | null>(
     null
@@ -139,6 +140,14 @@ export default function ProductForm({
           "Weight Prices": oldValues.weightPrices
             ? oldValues.weightPrices
             : new Map<string, number>(),
+          "Variant Label": oldValues.variantLabel ? oldValues.variantLabel : "",
+          "Variant Options": oldValues.variants ? oldValues.variants : [],
+          "Variant Images": oldValues.variantImages
+            ? oldValues.variantImages
+            : new Map<string, string>(),
+          "Variant Display": oldValues.variantDisplay
+            ? oldValues.variantDisplay
+            : "buttons",
           "Bulk Pricing Enabled": oldValues.bulkPrices
             ? oldValues.bulkPrices.size > 0
             : oldValues.variantBulkPrices
@@ -379,6 +388,40 @@ export default function ProductForm({
         tags.push(["weight", weight, price.toString()]);
       });
     }
+    if (data["Variant Options"]) {
+      const variantOptions = Array.isArray(data["Variant Options"])
+        ? (data["Variant Options"] as string[])
+        : (data["Variant Options"] as string).split(",").filter(Boolean);
+      const trimmedOptions = variantOptions
+        .map((option) => option.trim())
+        .filter(Boolean);
+      if (trimmedOptions.length > 0) {
+        const variantLabel = ((data["Variant Label"] as string) || "").trim();
+        if (variantLabel) {
+          tags.push(["variant_label", variantLabel]);
+        }
+        const variantImages = data["Variant Images"] as unknown as Map<
+          string,
+          string
+        >;
+        trimmedOptions.forEach((option) => {
+          const image = variantImages?.get(option);
+          if (image) {
+            tags.push(["variant", option, image]);
+          } else {
+            tags.push(["variant", option]);
+          }
+        });
+        const variantDisplay = (
+          (data["Variant Display"] as string) || "buttons"
+        ).trim();
+        tags.push([
+          "variant_display",
+          variantDisplay === "dropdown" ? "dropdown" : "buttons",
+        ]);
+      }
+    }
+
     if (data["Bulk Pricing Enabled"]) {
       const volumesRaw = data["Volumes"];
       const weightsRaw = data["Weights"];
@@ -1617,6 +1660,252 @@ export default function ProductForm({
                           Note: Weight prices will override the main product
                           price when selected.
                         </div>
+                      )}
+                    </div>
+                  );
+                }}
+              />
+
+              <Controller
+                name="Variant Label"
+                control={control}
+                render={({ field: { onChange, onBlur, value } }) => (
+                  <div className="mb-4">
+                    <label className="mb-2 block text-base font-semibold text-black">
+                      Variant Name (optional)
+                    </label>
+                    <p className="mb-1 text-xs text-gray-500">
+                      A label for the option buyers will choose (e.g. Color,
+                      Flavor, Style). Variants are recorded on the order but do
+                      not change price, shipping, or inventory.
+                    </p>
+                    <Input
+                      placeholder="e.g. Color"
+                      value={(value as string) || ""}
+                      onChange={(e) => onChange(e.target.value)}
+                      onBlur={onBlur}
+                      classNames={{
+                        input: "!text-black",
+                        inputWrapper:
+                          "border-2 border-black rounded-md shadow-none !bg-white data-[hover=true]:!bg-white data-[focus=true]:!bg-white data-[invalid=true]:!bg-white",
+                      }}
+                    />
+                  </div>
+                )}
+              />
+
+              <Controller
+                name="Variant Options"
+                control={control}
+                render={({ field: { onChange, value } }) => {
+                  const options: string[] = Array.isArray(value)
+                    ? (value as string[])
+                    : typeof value === "string"
+                      ? (value as string).split(",").filter(Boolean)
+                      : [];
+
+                  const addOption = () => {
+                    const trimmed = variantOptionInput.trim();
+                    if (!trimmed || options.includes(trimmed)) {
+                      setVariantOptionInput("");
+                      return;
+                    }
+                    onChange([...options, trimmed]);
+                    setVariantOptionInput("");
+                  };
+
+                  const removeOption = (option: string) => {
+                    onChange(options.filter((o) => o !== option));
+                  };
+
+                  return (
+                    <div className="mb-4">
+                      <label className="mb-2 block text-base font-semibold text-black">
+                        Variant Options (optional)
+                      </label>
+                      <div className="flex gap-2">
+                        <Input
+                          placeholder="e.g. Red"
+                          value={variantOptionInput}
+                          onChange={(e) =>
+                            setVariantOptionInput(e.target.value)
+                          }
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              addOption();
+                            }
+                          }}
+                          classNames={{
+                            input: "!text-black",
+                            inputWrapper:
+                              "border-2 border-black rounded-md shadow-none !bg-white data-[hover=true]:!bg-white data-[focus=true]:!bg-white data-[invalid=true]:!bg-white",
+                          }}
+                        />
+                        <Button
+                          type="button"
+                          onClick={addOption}
+                          className={BLUEBUTTONCLASSNAMES}
+                        >
+                          Add
+                        </Button>
+                      </div>
+                      {options.length > 0 && (
+                        <Controller
+                          name="Variant Images"
+                          control={control}
+                          render={({
+                            field: {
+                              onChange: onImagesChange,
+                              value: imagesValue = new Map<string, string>(),
+                            },
+                          }) => {
+                            const imageMap =
+                              imagesValue instanceof Map
+                                ? (imagesValue as Map<string, string>)
+                                : new Map<string, string>();
+                            const setOptionImage = (
+                              option: string,
+                              image: string
+                            ) => {
+                              const next = new Map(imageMap);
+                              if (image) {
+                                next.set(option, image);
+                              } else {
+                                next.delete(option);
+                              }
+                              onImagesChange(next);
+                            };
+                            return (
+                              <div className="mt-3 flex flex-col gap-2">
+                                {options.map((option) => {
+                                  const selectedImage = imageMap.get(option);
+                                  const selectedIndex = selectedImage
+                                    ? images.indexOf(selectedImage)
+                                    : -1;
+                                  return (
+                                    <div
+                                      key={option}
+                                      className="flex items-center gap-2 rounded-md border-2 border-black bg-white p-2"
+                                    >
+                                      <span className="flex-1 font-semibold text-black">
+                                        {option}
+                                      </span>
+                                      {images.length > 0 && (
+                                        <Select
+                                          aria-label={`Image for ${option}`}
+                                          placeholder="Link image (optional)"
+                                          className="max-w-[200px]"
+                                          classNames={{
+                                            trigger:
+                                              "border-2 border-black rounded-md shadow-none bg-white data-[hover=true]:bg-white",
+                                            listbox:
+                                              "bg-white [&_li]:!bg-white [&_li:hover]:!bg-primary-yellow [&_li[data-hover=true]]:!bg-primary-yellow",
+                                            value: "!text-black",
+                                          }}
+                                          selectedKeys={
+                                            selectedIndex >= 0
+                                              ? new Set([String(selectedIndex)])
+                                              : new Set([])
+                                          }
+                                          onSelectionChange={(keys) => {
+                                            const key = Array.from(
+                                              keys as Set<string>
+                                            )[0];
+                                            const idx =
+                                              key !== undefined
+                                                ? parseInt(key)
+                                                : -1;
+                                            setOptionImage(
+                                              option,
+                                              idx >= 0 ? images[idx]! : ""
+                                            );
+                                          }}
+                                        >
+                                          {images.map((_image, index) => (
+                                            <SelectItem key={String(index)}>
+                                              {`Image ${index + 1}`}
+                                            </SelectItem>
+                                          ))}
+                                        </Select>
+                                      )}
+                                      <Button
+                                        isIconOnly
+                                        type="button"
+                                        variant="light"
+                                        aria-label={`Remove ${option}`}
+                                        onClick={() => {
+                                          removeOption(option);
+                                          setOptionImage(option, "");
+                                        }}
+                                      >
+                                        <TrashIcon className="h-5 w-5 text-red-500" />
+                                      </Button>
+                                    </div>
+                                  );
+                                })}
+                                {images.length > 0 && (
+                                  <p className="text-xs text-gray-500">
+                                    Linking an image highlights it when a buyer
+                                    selects that option.
+                                  </p>
+                                )}
+                              </div>
+                            );
+                          }}
+                        />
+                      )}
+                      {options.length > 0 && (
+                        <Controller
+                          name="Variant Display"
+                          control={control}
+                          render={({
+                            field: {
+                              onChange: onDisplayChange,
+                              value: displayValue,
+                            },
+                          }) => {
+                            const mode =
+                              displayValue === "dropdown"
+                                ? "dropdown"
+                                : "buttons";
+                            return (
+                              <div className="mt-3">
+                                <p className="mb-1 text-xs font-semibold text-black">
+                                  How buyers pick this option
+                                </p>
+                                <div className="flex gap-2">
+                                  <Button
+                                    type="button"
+                                    onClick={() => onDisplayChange("buttons")}
+                                    className={`shadow-neo rounded-md border-2 border-black px-3 py-2 text-sm font-bold ${
+                                      mode === "buttons"
+                                        ? "bg-primary-yellow text-black"
+                                        : "bg-white text-black"
+                                    }`}
+                                  >
+                                    Selectable buttons
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    onClick={() => onDisplayChange("dropdown")}
+                                    className={`shadow-neo rounded-md border-2 border-black px-3 py-2 text-sm font-bold ${
+                                      mode === "dropdown"
+                                        ? "bg-primary-yellow text-black"
+                                        : "bg-white text-black"
+                                    }`}
+                                  >
+                                    Dropdown
+                                  </Button>
+                                </div>
+                                <p className="mt-1 text-xs text-gray-500">
+                                  Buttons show image swatches when an option has
+                                  a linked image.
+                                </p>
+                              </div>
+                            );
+                          }}
+                        />
                       )}
                     </div>
                   );

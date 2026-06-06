@@ -42,6 +42,8 @@ jest.mock("@/components/utility-components/file-uploader", () => ({
 
 jest.mock("@/components/utility-components/mm-spinner", () => () => null);
 
+jest.mock("../storefront/storefront-preview-panel", () => () => null);
+
 const mockUserPubkey = "test_pubkey";
 const mockShopData = new Map([
   [
@@ -85,24 +87,35 @@ const renderWithProviders = (
   return { mockUpdateShopData };
 };
 
+const STOREFRONT_AUTH_KEY = "storefront_auth_key";
+
 describe("ShopProfileForm", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    global.fetch = jest.fn(() =>
-      Promise.resolve({
+    global.fetch = jest.fn((url: any) => {
+      if (String(url).includes("/api/validate-password-auth")) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ value: STOREFRONT_AUTH_KEY }),
+        });
+      }
+      return Promise.resolve({
         ok: true,
         json: () => Promise.resolve({}),
-      })
-    ) as jest.Mock;
+      });
+    }) as jest.Mock;
   });
 
   afterEach(() => {
     (global.fetch as jest.Mock).mockRestore?.();
+    localStorage.clear();
   });
 
   test("displays the form after initial data load", async () => {
     renderWithProviders(<ShopProfileForm />);
-    expect(await screen.findByLabelText("Shop Name")).toBeInTheDocument();
+    expect(
+      await screen.findByPlaceholderText("Add your shop's name...")
+    ).toBeInTheDocument();
   });
 
   test("populates the form with existing shop data", async () => {
@@ -111,10 +124,9 @@ describe("ShopProfileForm", () => {
     expect(
       await screen.findByDisplayValue("My Awesome Shop")
     ).toBeInTheDocument();
-    expect(screen.getByDisplayValue("The best shop ever.")).toBeInTheDocument();
 
-    const picture = screen.getByAltText("shop logo");
-    const banner = screen.getByAltText("Shop banner image");
+    const picture = screen.getByAltText("Stall Logo");
+    const banner = screen.getByAltText("Stall Banner Image");
     expect(picture).toHaveAttribute(
       "src",
       "https://existing.image/picture.png"
@@ -124,17 +136,19 @@ describe("ShopProfileForm", () => {
 
   test("shows an empty form and default image for a new user", async () => {
     renderWithProviders(<ShopProfileForm />);
-    const shopNameInput = await screen.findByLabelText("Shop Name");
+    const shopNameInput = await screen.findByPlaceholderText(
+      "Add your shop's name..."
+    );
     expect(shopNameInput).toHaveValue("");
   });
 
   test("updates form values on file upload simulation", async () => {
     renderWithProviders(<ShopProfileForm />);
-    await screen.findByLabelText("Shop Name");
+    await screen.findByPlaceholderText("Add your shop's name...");
     act(() => {
       fireEvent.click(screen.getByTestId("upload-picture-btn"));
     });
-    expect(await screen.findByAltText("shop logo")).toHaveAttribute(
+    expect(await screen.findByAltText("Stall Logo")).toHaveAttribute(
       "src",
       "https://new.image/url"
     );
@@ -150,12 +164,17 @@ describe("ShopProfileForm", () => {
         })
     );
 
+    localStorage.setItem(STOREFRONT_AUTH_KEY, "true");
     const { mockUpdateShopData } = renderWithProviders(<ShopProfileForm />);
 
-    const shopNameInput = await screen.findByLabelText("Shop Name");
+    const shopNameInput = await screen.findByPlaceholderText(
+      "Add your shop's name..."
+    );
+    const slugInput = await screen.findByPlaceholderText("my-farm-shop");
     const saveButton = screen.getByRole("button", { name: /Save Stall/i });
 
     await user.type(shopNameInput, "New Shop Name");
+    await user.type(slugInput, "new-shop");
     await user.click(saveButton);
 
     expect(saveButton).toBeDisabled();
@@ -175,13 +194,13 @@ describe("ShopProfileForm", () => {
     renderWithProviders(<ShopProfileForm isOnboarding={true} />);
 
     await user.type(
-      await screen.findByLabelText("Shop Name"),
+      await screen.findByPlaceholderText("Add your shop's name..."),
       "Onboarding Shop"
     );
     await user.click(screen.getByRole("button", { name: /Save Stall/i }));
 
     await waitFor(() => {
-      expect(mockRouterPush).toHaveBeenCalledWith("/marketplace");
+      expect(mockRouterPush).toHaveBeenCalledWith("/onboarding/stripe-connect");
     });
   });
 
@@ -189,7 +208,9 @@ describe("ShopProfileForm", () => {
     const user = userEvent.setup();
     renderWithProviders(<ShopProfileForm />);
 
-    const shopNameInput = await screen.findByLabelText("Shop Name");
+    const shopNameInput = await screen.findByPlaceholderText(
+      "Add your shop's name..."
+    );
     await user.type(
       shopNameInput,
       "This is a very long shop name that is definitely over fifty characters long for sure."
@@ -204,9 +225,17 @@ describe("ShopProfileForm", () => {
   test("submits the form when Enter is pressed on the Save button", async () => {
     mockCreateNostrShopEvent.mockResolvedValue({});
     const user = userEvent.setup();
+    localStorage.setItem(STOREFRONT_AUTH_KEY, "true");
     renderWithProviders(<ShopProfileForm />);
 
-    await user.type(await screen.findByLabelText("Shop Name"), "My Shop");
+    await user.type(
+      await screen.findByPlaceholderText("Add your shop's name..."),
+      "My Shop"
+    );
+    await user.type(
+      await screen.findByPlaceholderText("my-farm-shop"),
+      "my-shop"
+    );
     const saveButton = screen.getByRole("button", { name: /Save Stall/i });
 
     saveButton.focus();

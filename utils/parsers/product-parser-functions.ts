@@ -28,6 +28,11 @@ export type ProductData = {
   volumePrices?: Map<string, number>;
   weights?: string[];
   weightPrices?: Map<string, number>;
+  variantLabel?: string;
+  variants?: string[];
+  variantImages?: Map<string, string>;
+  variantDisplay?: "buttons" | "dropdown";
+  selectedVariant?: string;
   condition?: string;
   status?: string;
   selectedSize?: string;
@@ -59,7 +64,7 @@ export const parseTags = (productEvent: NostrEvent) => {
     pubkey: "",
     createdAt: 0,
     title: "",
-    summary: "",
+    summary: productEvent.content || "",
     publishedAt: "",
     images: [],
     categories: [],
@@ -81,7 +86,11 @@ export const parseTags = (productEvent: NostrEvent) => {
         parsedData.title = values[0]!;
         break;
       case "summary":
-        parsedData.summary = values[0]!;
+        // NIP-99 uses event content as primary description.
+        // Keep summary tag as backward-compatible fallback when content is empty or whitespace.
+        if (!parsedData.summary.trim()) {
+          parsedData.summary = values[0]!;
+        }
         break;
       case "published_at":
         parsedData.publishedAt = values[0]!;
@@ -192,6 +201,25 @@ export const parseTags = (productEvent: NostrEvent) => {
             );
           }
         }
+        break;
+      case "variant_label":
+        parsedData.variantLabel = values[0];
+        break;
+      case "variant":
+        if (values[0]) {
+          if (!parsedData.variants) {
+            parsedData.variants = [];
+            parsedData.variantImages = new Map<string, string>();
+          }
+          parsedData.variants.push(values[0]);
+          if (values[1]) {
+            parsedData.variantImages!.set(values[0], values[1]);
+          }
+        }
+        break;
+      case "variant_display":
+        parsedData.variantDisplay =
+          values[0] === "dropdown" ? "dropdown" : "buttons";
         break;
       case "condition":
         parsedData.condition = values[0];

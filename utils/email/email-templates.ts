@@ -143,6 +143,8 @@ function buildProductDescriptors(params: {
   selectedSize?: string;
   selectedVolume?: string;
   selectedWeight?: string;
+  selectedVariant?: string;
+  variantLabel?: string;
   selectedBulkOption?: string;
 }): string {
   const descriptors: string[] = [];
@@ -152,6 +154,10 @@ function buildProductDescriptors(params: {
     descriptors.push(`Volume: ${esc(params.selectedVolume)}`);
   if (params.selectedWeight)
     descriptors.push(`Weight: ${esc(params.selectedWeight)}`);
+  if (params.selectedVariant)
+    descriptors.push(
+      `${esc(params.variantLabel || "Option")}: ${esc(params.selectedVariant)}`
+    );
   if (params.selectedBulkOption)
     descriptors.push(`Bundle: ${esc(params.selectedBulkOption)} units`);
   if (descriptors.length === 0) return "";
@@ -216,8 +222,12 @@ export interface OrderEmailParams {
   selectedSize?: string;
   selectedVolume?: string;
   selectedWeight?: string;
+  selectedVariant?: string;
+  variantLabel?: string;
   selectedBulkOption?: string;
   buyerContact?: string;
+  buyerEmail?: string;
+  sellerContact?: string;
   subscriptionFrequency?: string;
   donationAmount?: number;
   donationPercentage?: number;
@@ -270,6 +280,19 @@ export function orderConfirmationEmail(
       </tr>`
     : "";
 
+  const sellerContactSection = params.sellerContact
+    ? `<tr>
+        <td style="padding:16px 0;border-top:1px solid #e5e7eb;">
+          <p style="margin:0 0 4px;color:#6b7280;font-size:13px;text-transform:uppercase;letter-spacing:0.05em;">Seller Contact</p>
+          <p style="margin:0;color:#111827;font-size:15px;"><a href="mailto:${esc(
+            params.sellerContact
+          )}" style="color:#111827;text-decoration:underline;">${esc(
+            params.sellerContact
+          )}</a></p>
+        </td>
+      </tr>`
+    : "";
+
   const body = `
     <h2 style="margin:0 0 16px;color:#111827;font-size:20px;">${greeting}</h2>
     <p style="margin:0 0 24px;color:#374151;font-size:15px;line-height:1.6;">Your order has been confirmed! Here are the details:</p>
@@ -310,6 +333,7 @@ export function orderConfirmationEmail(
       ${buildDonationSection(params)}
       ${subscriptionSection}
       ${deliverySection}
+      ${sellerContactSection}
     </table>
     <p style="margin:0;color:#374151;font-size:15px;line-height:1.6;">The seller has been notified and you'll receive updates about your order via email.</p>`;
 
@@ -355,6 +379,19 @@ export function sellerNewOrderEmail(
       </tr>`
     : "";
 
+  const buyerEmailSection = params.buyerEmail
+    ? `<tr>
+        <td style="padding:16px 0;border-top:1px solid #e5e7eb;">
+          <p style="margin:0 0 4px;color:#6b7280;font-size:13px;text-transform:uppercase;letter-spacing:0.05em;">Buyer Email</p>
+          <p style="margin:0;color:#111827;font-size:15px;"><a href="mailto:${esc(
+            params.buyerEmail
+          )}" style="color:#111827;text-decoration:underline;">${esc(
+            params.buyerEmail
+          )}</a></p>
+        </td>
+      </tr>`
+    : "";
+
   const body = `
     <h2 style="margin:0 0 16px;color:#111827;font-size:20px;">New Order Received!</h2>
     <p style="margin:0 0 24px;color:#374151;font-size:15px;line-height:1.6;">${buyerInfo} has placed an order for your product.</p>
@@ -396,6 +433,7 @@ export function sellerNewOrderEmail(
       ${subscriptionSection}
       ${deliverySection}
       ${buyerContactSection}
+      ${buyerEmailSection}
     </table>
     <p style="margin:0;color:#374151;font-size:15px;line-height:1.6;">Please check your Milk Market orders dashboard for full details and to manage this order.</p>`;
 

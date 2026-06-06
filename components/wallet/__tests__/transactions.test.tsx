@@ -8,14 +8,6 @@ jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
   getLocalStorageData: jest.fn(() => ({ history: [] })),
 }));
 
-jest.mock("@heroicons/react/24/outline", () => ({
-  ArrowDownTrayIcon: () => <div data-testid="icon-deposit" />,
-  ArrowUpTrayIcon: () => <div data-testid="icon-withdraw" />,
-  BanknotesIcon: () => <div data-testid="icon-nutsack" />,
-  BoltIcon: () => <div data-testid="icon-lightning" />,
-  ShoppingBagIcon: () => <div data-testid="icon-purchase" />,
-}));
-
 const mockedGetLocalStorageData = getLocalStorageData as jest.Mock;
 
 describe("Transactions", () => {
@@ -30,10 +22,12 @@ describe("Transactions", () => {
 
   it("should render headers but no transactions when history is empty", () => {
     render(<Transactions />);
-    expect(screen.getByText("Type")).toBeInTheDocument();
-    expect(screen.getByText("Amount")).toBeInTheDocument();
-    expect(screen.getByText("Date")).toBeInTheDocument();
-    expect(screen.queryAllByRole("row")).toHaveLength(1);
+    expect(screen.getByText("TYPE")).toBeInTheDocument();
+    expect(screen.getByText("AMOUNT")).toBeInTheDocument();
+    expect(screen.getByText("DATE")).toBeInTheDocument();
+    expect(screen.getByText("No transactions yet.")).toBeInTheDocument();
+    // header row + empty-state row
+    expect(screen.queryAllByRole("row")).toHaveLength(2);
   });
 
   it("should render transactions from localStorage on initial load", () => {
@@ -47,8 +41,8 @@ describe("Transactions", () => {
 
     expect(screen.getByText("1000 sats")).toBeInTheDocument();
     expect(screen.getByText("500 sats")).toBeInTheDocument();
-    expect(screen.getByTestId("icon-deposit")).toBeInTheDocument();
-    expect(screen.getByTestId("icon-withdraw")).toBeInTheDocument();
+    expect(screen.getByText("📥")).toBeInTheDocument();
+    expect(screen.getByText("📤")).toBeInTheDocument();
   });
 
   it("should correctly render an icon for each transaction type", () => {
@@ -63,11 +57,11 @@ describe("Transactions", () => {
 
     render(<Transactions />);
 
-    expect(screen.getByTestId("icon-deposit")).toBeInTheDocument();
-    expect(screen.getByTestId("icon-withdraw")).toBeInTheDocument();
-    expect(screen.getByTestId("icon-nutsack")).toBeInTheDocument();
-    expect(screen.getByTestId("icon-lightning")).toBeInTheDocument();
-    expect(screen.getByTestId("icon-purchase")).toBeInTheDocument();
+    expect(screen.getByText("📥")).toBeInTheDocument();
+    expect(screen.getByText("📤")).toBeInTheDocument();
+    expect(screen.getByText("🥜")).toBeInTheDocument();
+    expect(screen.getByText("⚡")).toBeInTheDocument();
+    expect(screen.getByText("🛍️")).toBeInTheDocument();
   });
 
   it("should poll for new transactions and update the view", async () => {

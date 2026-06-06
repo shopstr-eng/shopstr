@@ -50,6 +50,35 @@ export async function cacheEventToDatabase(event: NostrEvent): Promise<void> {
   }
 }
 
+// Ask the server to publish already-signed order gift-wraps to the recipient
+// seller's own relays. Primary, origin/login-independent delivery path that
+// fixes custom-domain orders. Relative URL so it works on custom domains too;
+// keepalive so it still completes if the page navigates after checkout.
+// Non-fatal: failures must never block the payment flow.
+export async function deliverOrderEventsServerSide(
+  events: NostrEvent[]
+): Promise<void> {
+  if (!events || events.length === 0) return;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 12000);
+  try {
+    const response = await fetch("/api/nostr/publish-order-event", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ events }),
+      signal: controller.signal,
+      keepalive: true,
+    });
+    if (!response.ok) {
+      console.warn("Server-side order delivery responded with an error");
+    }
+  } catch (error) {
+    console.warn("Server-side order delivery failed (non-fatal):", error);
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 const CACHE_EVENTS_CHUNK_SIZE = 50;
 
 export async function cacheEventsToDatabase(

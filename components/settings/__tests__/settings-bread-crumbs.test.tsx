@@ -20,14 +20,14 @@ describe("SettingsBreadCrumbs", () => {
 
   test("renders correctly for a nested path", () => {
     mockedUseRouter.mockReturnValue({
-      pathname: "/settings/user-profile",
+      pathname: "/settings/market-profile",
       push: mockRouterPush,
     });
 
     render(<SettingsBreadCrumbs />);
 
     expect(screen.getByText("Settings")).toBeInTheDocument();
-    expect(screen.getByText("User Profile")).toBeInTheDocument();
+    expect(screen.getByText("Market Profile")).toBeInTheDocument();
   });
 
   test("applies correct opacity styles for active and inactive items", () => {
@@ -39,7 +39,7 @@ describe("SettingsBreadCrumbs", () => {
     render(<SettingsBreadCrumbs />);
 
     const settingsItem = screen.getByText("Settings");
-    const shopProfileItem = screen.getByText("Shop Profile");
+    const shopProfileItem = screen.getByText("Stall Profile");
 
     expect(settingsItem).toHaveClass("opacity-50");
 
@@ -57,7 +57,7 @@ describe("SettingsBreadCrumbs", () => {
     const settingsItem = screen.getByText("Settings");
 
     expect(settingsItem).toBeInTheDocument();
-    expect(screen.queryByText("User Profile")).not.toBeInTheDocument();
+    expect(screen.queryByText("Market Profile")).not.toBeInTheDocument();
 
     expect(settingsItem).not.toHaveClass("opacity-50");
   });

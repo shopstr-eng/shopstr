@@ -27,6 +27,7 @@ import {
   useIsCustomDomain,
 } from "@/utils/storefront/custom-domain-context";
 import { usePublicMembershipStatus } from "@/utils/pro/use-public-membership";
+import { getStorefrontCartQuantity } from "@/utils/storefront-cart";
 
 const DEFAULT_COLORS: StorefrontColorScheme = {
   primary: "#FFD23F",
@@ -120,17 +121,7 @@ function StorefrontThemeWrapperInner({
 
   useEffect(() => {
     const sync = () => {
-      const cart = localStorage.getItem("cart");
-      if (!cart) {
-        setCartQuantity(0);
-        return;
-      }
-      const items = JSON.parse(cart) as { pubkey?: string }[];
-      setCartQuantity(
-        sellerPubkey
-          ? items.filter((p) => p.pubkey === sellerPubkey).length
-          : items.length
-      );
+      setCartQuantity(getStorefrontCartQuantity(sellerPubkey));
     };
     sync();
     const interval = setInterval(sync, 1000);

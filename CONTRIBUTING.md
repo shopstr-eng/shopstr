@@ -233,6 +233,32 @@ Before committing, run all quality checks:
 pnpm run lint-all
 ```
 
+## Git Hooks & Pre-commit Checks
+
+This project uses [Husky](https://typicode.github.io/husky/) to run quality
+checks before each commit.
+
+The pre-commit hook runs staged-file checks for fast feedback, then runs the
+full lint and formatting checks:
+
+- ESLint fixes staged TypeScript files
+- Prettier formats staged TypeScript, CSS, Markdown, JSON, and YAML files
+- Jest runs tests related to staged JavaScript and TypeScript files
+
+If a check fails, fix the issue and commit again. To run the hook manually:
+
+```bash
+npm run pre-commit
+npm run lint
+npm run format:check
+```
+
+Only bypass hooks when absolutely necessary:
+
+```bash
+git commit --no-verify -m "your commit message"
+```
+
 ## Testing
 
 Jest CI runs on every PR with coverage thresholds for the high-risk modules

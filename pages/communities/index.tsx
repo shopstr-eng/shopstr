@@ -3,7 +3,6 @@ import { CommunityContext } from "@/utils/context/context";
 import CommunityCard from "@/components/communities/CommunityCard";
 import { Input, Divider } from "@heroui/react";
 import MilkMarketSpinner from "@/components/utility-components/mm-spinner";
-import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 
 const CommunitiesDiscoveryPage = () => {
@@ -57,7 +56,12 @@ const CommunitiesDiscoveryPage = () => {
                     "border-4 border-black shadow-neo bg-white rounded-lg h-14",
                 }}
                 startContent={
-                  <MagnifyingGlassIcon className="pointer-events-none h-5 w-5 flex-shrink-0 text-black" />
+                  <span
+                    aria-hidden="true"
+                    className="pointer-events-none flex-shrink-0 text-lg leading-none"
+                  >
+                    🔍
+                  </span>
                 }
               />
             </div>

@@ -11,12 +11,9 @@ import {
   SelectItem,
 } from "@heroui/react";
 import {
-  CheckIcon,
-  ClipboardIcon,
-  EyeSlashIcon,
-  EyeIcon,
-} from "@heroicons/react/24/outline";
-import { PRIMARYBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+  AVATARBADGEBUTTONCLASSNAMES,
+  PRIMARYBUTTONCLASSNAMES,
+} from "@/utils/STATIC-VARIABLES";
 import {
   SignerContext,
   NostrContext,
@@ -198,23 +195,22 @@ const UserProfilePage = () => {
                   </FileUploaderButton>
                 </div>
                 <div className="flex items-center justify-center">
-                  <div className="relative z-20 mt-[-3rem] h-24 w-24">
-                    <div className="">
-                      <FileUploaderButton
-                        isIconOnly
-                        className={`absolute right-[-0.5rem] bottom-[-0.5rem] z-20 ${PRIMARYBUTTONCLASSNAMES}`}
-                        imgCallbackOnUpload={(imgUrl) =>
-                          setValue("picture", imgUrl)
-                        }
-                      />
-                      <Image
-                        key={profileImageSrc}
-                        src={profileImageSrc}
-                        alt="user profile picture"
-                        radius="full"
-                        className="h-24 w-24 object-cover"
-                      />
-                    </div>
+                  <div className="relative z-20 mt-[-3rem] h-24 w-24 overflow-visible">
+                    <FileUploaderButton
+                      isIconOnly
+                      className={AVATARBADGEBUTTONCLASSNAMES}
+                      containerClassName="absolute right-[-0.5rem] bottom-[-0.5rem] z-20"
+                      imgCallbackOnUpload={(imgUrl) =>
+                        setValue("picture", imgUrl)
+                      }
+                    />
+                    <Image
+                      key={profileImageSrc}
+                      src={profileImageSrc}
+                      alt="user profile picture"
+                      radius="full"
+                      className="h-24 w-24 rounded-full object-cover"
+                    />
                   </div>
                 </div>
               </div>
@@ -236,17 +232,19 @@ const UserProfilePage = () => {
                   {userNPub}
                 </span>
                 {isNPubCopied ? (
-                  <CheckIcon
-                    width={15}
-                    height={15}
-                    className="text-light-text dark:text-dark-text flex-shrink-0"
-                  />
+                  <span
+                    aria-hidden="true"
+                    className="flex-shrink-0 text-sm leading-none"
+                  >
+                    ✔️
+                  </span>
                 ) : (
-                  <ClipboardIcon
-                    width={15}
-                    height={15}
-                    className="text-light-text dark:text-dark-text flex-shrink-0 hover:text-purple-700 dark:hover:text-yellow-700"
-                  />
+                  <span
+                    aria-hidden="true"
+                    className="flex-shrink-0 text-sm leading-none"
+                  >
+                    📋
+                  </span>
                 )}
               </div>
 
@@ -261,16 +259,17 @@ const UserProfilePage = () => {
                       : "***************************************************************"}
                   </span>
                   {isNSecCopied ? (
-                    <CheckIcon
-                      width={15}
-                      height={15}
-                      className="text-light-text dark:text-dark-text flex-shrink-0"
-                    />
+                    <span
+                      aria-hidden="true"
+                      className="flex-shrink-0 text-sm leading-none"
+                    >
+                      ✔️
+                    </span>
                   ) : (
-                    <ClipboardIcon
-                      width={15}
-                      height={15}
-                      className="text-light-text dark:text-dark-text flex-shrink-0 hover:text-purple-700 dark:hover:text-yellow-700"
+                    <button
+                      type="button"
+                      aria-label="Copy nsec"
+                      className="flex-shrink-0 cursor-pointer text-sm leading-none"
                       onClick={() => {
                         navigator.clipboard.writeText(userNSec);
                         setIsNSecCopied(true);
@@ -278,18 +277,26 @@ const UserProfilePage = () => {
                           setIsNSecCopied(false);
                         }, 2100);
                       }}
-                    />
+                    >
+                      📋
+                    </button>
                   )}
                   {viewState === "shown" ? (
-                    <EyeSlashIcon
-                      className="text-light-text dark:text-dark-text h-6 w-6 flex-shrink-0 px-1 hover:text-purple-700 dark:hover:text-yellow-700"
+                    <button
+                      type="button"
+                      aria-label="Hide nsec"
+                      className="flex-shrink-0 cursor-pointer px-1 text-xl leading-none"
                       onClick={() => {
                         setViewState("hidden");
                       }}
-                    />
+                    >
+                      👁️⃠
+                    </button>
                   ) : (
-                    <EyeIcon
-                      className="text-light-text dark:text-dark-text h-6 w-6 flex-shrink-0 px-1 hover:text-purple-700 dark:hover:text-yellow-700"
+                    <button
+                      type="button"
+                      aria-label="Show nsec"
+                      className="flex-shrink-0 cursor-pointer px-1 text-xl leading-none"
                       onClick={async () => {
                         // Only decrypt nsec when user explicitly asks to see it.
                         if (!userNSec && signer instanceof NostrNSecSigner) {
@@ -304,7 +311,9 @@ const UserProfilePage = () => {
                         }
                         setViewState("shown");
                       }}
-                    />
+                    >
+                      👁️
+                    </button>
                   )}
                 </div>
               ) : (

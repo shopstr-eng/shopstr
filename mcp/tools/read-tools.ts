@@ -17,6 +17,50 @@ import { NostrEvent } from "@/utils/types/types";
 import { registerTool } from "./register-tool";
 import { ToolContext } from "../audit-log";
 
+const DB_TIMEOUT_MS = 15_000;
+
+function withTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+  label: string
+): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  return Promise.race<T>([
+    promise,
+    new Promise<never>(
+      (_, reject) =>
+        (timeout = setTimeout(
+          () => reject(new Error(`${label} timed out after ${ms}ms`)),
+          ms
+        ))
+    ),
+  ]).finally(() => {
+    if (timeout) clearTimeout(timeout);
+  });
+}
+
+function dbError(error: unknown, startTime: number) {
+  const message = error instanceof Error ? error.message : "DB fetch failed";
+  const isTimeout = message.includes("timed out after");
+
+  return {
+    content: [
+      {
+        type: "text" as const,
+        text: JSON.stringify({
+          error: isTimeout ? "DB fetch timed out" : "DB fetch failed",
+          code: isTimeout ? "TIMEOUT" : "DB_ERROR",
+          _meta: {
+            responseTimeMs: Date.now() - startTime,
+            dataSource: "cached_db",
+          },
+        }),
+      },
+    ],
+    isError: true,
+  };
+}
+
 function getTagValue(tags: string[][], key: string): string | undefined {
   const tag = tags.find((t) => t[0] === key);
   return tag ? tag[1] : undefined;
@@ -285,78 +329,88 @@ export function registerReadTools(server: McpServer, context?: ToolContext) {
       limit,
     }) => {
       const startTime = Date.now();
-      const events = await fetchAllProductsFromDb();
-      let products = events.map(parseProductEvent);
-
-      if (keyword) {
-        const kw = keyword.toLowerCase();
-        products = products.filter(
-          (p) =>
-            p.title.toLowerCase().includes(kw) ||
-            p.summary.toLowerCase().includes(kw)
+      try {
+        const events = await withTimeout(
+          fetchAllProductsFromDb(),
+          DB_TIMEOUT_MS,
+          "fetchAllProductsFromDb"
         );
-      }
+        let products = events.map(parseProductEvent);
 
-      if (category) {
-        const cat = category.toLowerCase();
-        products = products.filter((p) =>
-          p.categories.some((c) => c.toLowerCase() === cat)
+        if (keyword) {
+          const kw = keyword.toLowerCase();
+          products = products.filter(
+            (p) =>
+              p.title.toLowerCase().includes(kw) ||
+              p.summary.toLowerCase().includes(kw)
+          );
+        }
+
+        if (category) {
+          const cat = category.toLowerCase();
+          products = products.filter((p) =>
+            p.categories.some((c) => c.toLowerCase() === cat)
+          );
+        }
+
+        if (location) {
+          const loc = location.toLowerCase();
+          products = products.filter((p) =>
+            p.location.toLowerCase().includes(loc)
+          );
+        }
+
+        if (currency) {
+          const cur = currency.toLowerCase();
+          products = products.filter((p) => p.currency.toLowerCase() === cur);
+        }
+
+        if (minPrice !== undefined) {
+          products = products.filter((p) => p.price >= minPrice);
+        }
+
+        if (maxPrice !== undefined) {
+          products = products.filter((p) => p.price <= maxPrice);
+        }
+
+        if (limit) {
+          products = products.slice(0, limit);
+        }
+
+        const latestTimestamp = products.reduce(
+          (max, p) =>
+            p.createdAt && Number(p.createdAt) > max
+              ? Number(p.createdAt)
+              : max,
+          0
         );
-      }
 
-      if (location) {
-        const loc = location.toLowerCase();
-        products = products.filter((p) =>
-          p.location.toLowerCase().includes(loc)
-        );
-      }
-
-      if (currency) {
-        const cur = currency.toLowerCase();
-        products = products.filter((p) => p.currency.toLowerCase() === cur);
-      }
-
-      if (minPrice !== undefined) {
-        products = products.filter((p) => p.price >= minPrice);
-      }
-
-      if (maxPrice !== undefined) {
-        products = products.filter((p) => p.price <= maxPrice);
-      }
-
-      if (limit) {
-        products = products.slice(0, limit);
-      }
-
-      const latestTimestamp = products.reduce(
-        (max, p) =>
-          p.createdAt && Number(p.createdAt) > max ? Number(p.createdAt) : max,
-        0
-      );
-
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify(
-              {
-                count: products.length,
-                products,
-                _meta: {
-                  responseTimeMs: Date.now() - startTime,
-                  dataSource: "cached_db",
-                  dataFreshness: latestTimestamp
-                    ? new Date(latestTimestamp * 1000).toISOString()
-                    : null,
-                  resultCount: products.length,
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify(
+                {
+                  count: products.length,
+                  products,
+                  _meta: {
+                    responseTimeMs: Date.now() - startTime,
+                    dataSource: "cached_db",
+                    dataFreshness: latestTimestamp
+                      ? new Date(latestTimestamp * 1000).toISOString()
+                      : null,
+                    resultCount: products.length,
+                  },
                 },
-              },
-              null,
-              2
-            ),
-          },
-        ],
-      };
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      } catch (error) {
+        return dbError(error, startTime);
+      }
     }
   );
 
@@ -368,51 +422,59 @@ export function registerReadTools(server: McpServer, context?: ToolContext) {
     },
     async ({ productId }) => {
       const startTime = Date.now();
-      const events = await fetchAllProductsFromDb();
-      const event = events.find((e) => e.id === productId);
+      try {
+        const events = await withTimeout(
+          fetchAllProductsFromDb(),
+          DB_TIMEOUT_MS,
+          "fetchAllProductsFromDb"
+        );
+        const event = events.find((e) => e.id === productId);
 
-      if (!event) {
+        if (!event) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify({
+                  error: "Product not found",
+                  _meta: {
+                    responseTimeMs: Date.now() - startTime,
+                    dataSource: "cached_db",
+                  },
+                }),
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        const product = parseProductEvent(event);
+
         return {
           content: [
             {
               type: "text" as const,
-              text: JSON.stringify({
-                error: "Product not found",
-                _meta: {
-                  responseTimeMs: Date.now() - startTime,
-                  dataSource: "cached_db",
+              text: JSON.stringify(
+                {
+                  ...product,
+                  _meta: {
+                    responseTimeMs: Date.now() - startTime,
+                    dataSource: "cached_db",
+                    dataFreshness: product.createdAt
+                      ? new Date(Number(product.createdAt) * 1000).toISOString()
+                      : null,
+                    resultCount: 1,
+                  },
                 },
-              }),
+                null,
+                2
+              ),
             },
           ],
-          isError: true,
         };
+      } catch (error) {
+        return dbError(error, startTime);
       }
-
-      const product = parseProductEvent(event);
-
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify(
-              {
-                ...product,
-                _meta: {
-                  responseTimeMs: Date.now() - startTime,
-                  dataSource: "cached_db",
-                  dataFreshness: product.createdAt
-                    ? new Date(Number(product.createdAt) * 1000).toISOString()
-                    : null,
-                  resultCount: 1,
-                },
-              },
-              null,
-              2
-            ),
-          },
-        ],
-      };
     }
   );
 
@@ -427,42 +489,52 @@ export function registerReadTools(server: McpServer, context?: ToolContext) {
     },
     async ({ limit }) => {
       const startTime = Date.now();
-      const events = await fetchAllProfilesFromDb();
-      const shopProfiles = events
-        .filter((e) => e.kind === 30019)
-        .map(parseProfileEvent);
+      try {
+        const events = await withTimeout(
+          fetchAllProfilesFromDb(),
+          DB_TIMEOUT_MS,
+          "fetchAllProfilesFromDb"
+        );
+        const shopProfiles = events
+          .filter((e) => e.kind === 30019)
+          .map(parseProfileEvent);
 
-      const results = limit ? shopProfiles.slice(0, limit) : shopProfiles;
+        const results = limit ? shopProfiles.slice(0, limit) : shopProfiles;
 
-      const latestTimestamp = results.reduce(
-        (max, p) =>
-          p.createdAt && Number(p.createdAt) > max ? Number(p.createdAt) : max,
-        0
-      );
+        const latestTimestamp = results.reduce(
+          (max, p) =>
+            p.createdAt && Number(p.createdAt) > max
+              ? Number(p.createdAt)
+              : max,
+          0
+        );
 
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify(
-              {
-                count: results.length,
-                companies: results,
-                _meta: {
-                  responseTimeMs: Date.now() - startTime,
-                  dataSource: "cached_db",
-                  dataFreshness: latestTimestamp
-                    ? new Date(latestTimestamp * 1000).toISOString()
-                    : null,
-                  resultCount: results.length,
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify(
+                {
+                  count: results.length,
+                  companies: results,
+                  _meta: {
+                    responseTimeMs: Date.now() - startTime,
+                    dataSource: "cached_db",
+                    dataFreshness: latestTimestamp
+                      ? new Date(latestTimestamp * 1000).toISOString()
+                      : null,
+                    resultCount: results.length,
+                  },
                 },
-              },
-              null,
-              2
-            ),
-          },
-        ],
-      };
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      } catch (error) {
+        return dbError(error, startTime);
+      }
     }
   );
 
@@ -474,129 +546,144 @@ export function registerReadTools(server: McpServer, context?: ToolContext) {
     },
     async ({ pubkey }) => {
       const startTime = Date.now();
-      const [profileEvents, productEvents, reviewEvents] = await Promise.all([
-        fetchAllProfilesFromDb(),
-        fetchAllProductsFromDb(),
-        fetchCachedEvents(31555),
-      ]);
+      try {
+        const [profileEvents, productEvents, reviewEvents] = await withTimeout(
+          Promise.all([
+            fetchAllProfilesFromDb(),
+            fetchAllProductsFromDb(),
+            fetchCachedEvents(31555),
+          ]),
+          DB_TIMEOUT_MS,
+          "get_company_details"
+        );
 
-      const shopProfile = profileEvents
-        .filter((e) => e.kind === 30019 && e.pubkey === pubkey)
-        .map(parseProfileEvent)[0];
+        const shopProfile = profileEvents
+          .filter((e) => e.kind === 30019 && e.pubkey === pubkey)
+          .map(parseProfileEvent)[0];
 
-      const userProfile = profileEvents
-        .filter((e) => e.kind === 0 && e.pubkey === pubkey)
-        .map(parseProfileEvent)[0];
+        const userProfile = profileEvents
+          .filter((e) => e.kind === 0 && e.pubkey === pubkey)
+          .map(parseProfileEvent)[0];
 
-      const products = productEvents
-        .filter((e) => e.pubkey === pubkey)
-        .map(parseProductEvent);
+        const products = productEvents
+          .filter((e) => e.pubkey === pubkey)
+          .map(parseProductEvent);
 
-      const reviews = reviewEvents
-        .filter((e) => {
-          const dTag = getTagValue(e.tags, "d");
-          return dTag && dTag.includes(pubkey);
-        })
-        .map(parseReviewEvent);
+        const reviews = reviewEvents
+          .filter((e) => {
+            const dTag = getTagValue(e.tags, "d");
+            return dTag && dTag.includes(pubkey);
+          })
+          .map(parseReviewEvent);
 
-      const reviewsWithReplies = await attachRepliesToReviews(reviews);
+        const reviewsWithReplies = await withTimeout(
+          attachRepliesToReviews(reviews),
+          DB_TIMEOUT_MS,
+          "fetchCommentsByReviewIds"
+        );
 
-      if (!shopProfile && !userProfile) {
+        if (!shopProfile && !userProfile) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify({
+                  error: "Company not found",
+                  _meta: {
+                    responseTimeMs: Date.now() - startTime,
+                    dataSource: "cached_db",
+                  },
+                }),
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        let stripeConnectAccount = null;
+        try {
+          stripeConnectAccount = await getStripeConnectAccount(pubkey);
+        } catch {}
+
+        const hasStripe = !!(
+          stripeConnectAccount && stripeConnectAccount.charges_enabled
+        );
+        const acceptedPaymentMethods = determinePaymentMethods(
+          pubkey,
+          hasStripe
+        );
+
+        const productsWithPricing = products.map((p) => ({
+          ...p,
+          pricing: buildPricingBlock(
+            p.price,
+            p.currency,
+            p.shippingType,
+            p.shippingCost,
+            1,
+            acceptedPaymentMethods
+          ),
+        }));
+
+        const allPrices = products.map((p) => p.price).filter((p) => p > 0);
+        const freeShippingProducts = products.filter(
+          (p) => p.shippingType === "Free" || p.shippingType === "Free/Pickup"
+        );
+
+        const allTimestamps = [
+          ...products.map((p) => Number(p.createdAt) || 0),
+          ...reviews.map((r) => Number(r.createdAt) || 0),
+        ];
+        const latestTimestamp = Math.max(...allTimestamps, 0);
+
         return {
           content: [
             {
               type: "text" as const,
-              text: JSON.stringify({
-                error: "Company not found",
-                _meta: {
-                  responseTimeMs: Date.now() - startTime,
-                  dataSource: "cached_db",
+              text: JSON.stringify(
+                {
+                  shopProfile: shopProfile || null,
+                  userProfile: userProfile || null,
+                  products: {
+                    count: productsWithPricing.length,
+                    items: productsWithPricing,
+                  },
+                  reviews: {
+                    count: reviewsWithReplies.length,
+                    items: reviewsWithReplies,
+                  },
+                  paymentInfo: {
+                    acceptedPaymentMethods,
+                    hasStripeConnect: hasStripe,
+                    freeShippingAvailable: freeShippingProducts.length > 0,
+                    freeShippingProductCount: freeShippingProducts.length,
+                    priceRange:
+                      allPrices.length > 0
+                        ? {
+                            min: Math.min(...allPrices),
+                            max: Math.max(...allPrices),
+                            currency: products[0]?.currency || "sats",
+                          }
+                        : null,
+                  },
+                  _meta: {
+                    responseTimeMs: Date.now() - startTime,
+                    dataSource: "cached_db",
+                    dataFreshness: latestTimestamp
+                      ? new Date(latestTimestamp * 1000).toISOString()
+                      : null,
+                    resultCount: products.length + reviews.length,
+                  },
                 },
-              }),
+                null,
+                2
+              ),
             },
           ],
-          isError: true,
         };
+      } catch (error) {
+        return dbError(error, startTime);
       }
-
-      let stripeConnectAccount = null;
-      try {
-        stripeConnectAccount = await getStripeConnectAccount(pubkey);
-      } catch {}
-
-      const hasStripe = !!(
-        stripeConnectAccount && stripeConnectAccount.charges_enabled
-      );
-      const acceptedPaymentMethods = determinePaymentMethods(pubkey, hasStripe);
-
-      const productsWithPricing = products.map((p) => ({
-        ...p,
-        pricing: buildPricingBlock(
-          p.price,
-          p.currency,
-          p.shippingType,
-          p.shippingCost,
-          1,
-          acceptedPaymentMethods
-        ),
-      }));
-
-      const allPrices = products.map((p) => p.price).filter((p) => p > 0);
-      const freeShippingProducts = products.filter(
-        (p) => p.shippingType === "Free" || p.shippingType === "Free/Pickup"
-      );
-
-      const allTimestamps = [
-        ...products.map((p) => Number(p.createdAt) || 0),
-        ...reviews.map((r) => Number(r.createdAt) || 0),
-      ];
-      const latestTimestamp = Math.max(...allTimestamps, 0);
-
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify(
-              {
-                shopProfile: shopProfile || null,
-                userProfile: userProfile || null,
-                products: {
-                  count: productsWithPricing.length,
-                  items: productsWithPricing,
-                },
-                reviews: {
-                  count: reviewsWithReplies.length,
-                  items: reviewsWithReplies,
-                },
-                paymentInfo: {
-                  acceptedPaymentMethods,
-                  hasStripeConnect: hasStripe,
-                  freeShippingAvailable: freeShippingProducts.length > 0,
-                  freeShippingProductCount: freeShippingProducts.length,
-                  priceRange:
-                    allPrices.length > 0
-                      ? {
-                          min: Math.min(...allPrices),
-                          max: Math.max(...allPrices),
-                          currency: products[0]?.currency || "sats",
-                        }
-                      : null,
-                },
-                _meta: {
-                  responseTimeMs: Date.now() - startTime,
-                  dataSource: "cached_db",
-                  dataFreshness: latestTimestamp
-                    ? new Date(latestTimestamp * 1000).toISOString()
-                    : null,
-                  resultCount: products.length + reviews.length,
-                },
-              },
-              null,
-              2
-            ),
-          },
-        ],
-      };
     }
   );
 
@@ -666,10 +753,11 @@ export function registerReadTools(server: McpServer, context?: ToolContext) {
           resolvedPubkey = slugResult.rows[0].pubkey;
         }
 
-        const [profileEvents, productEvents] = await Promise.all([
-          fetchAllProfilesFromDb(),
-          fetchAllProductsFromDb(),
-        ]);
+        const [profileEvents, productEvents] = await withTimeout(
+          Promise.all([fetchAllProfilesFromDb(), fetchAllProductsFromDb()]),
+          DB_TIMEOUT_MS,
+          "get_storefront"
+        );
 
         const shopProfile = profileEvents
           .filter((e) => e.kind === 30019 && e.pubkey === resolvedPubkey)
@@ -834,48 +922,62 @@ export function registerReadTools(server: McpServer, context?: ToolContext) {
         };
       }
 
-      const reviewEvents = await fetchCachedEvents(31555);
-      let reviews = reviewEvents.map(parseReviewEvent);
+      try {
+        const reviewEvents = await withTimeout(
+          fetchCachedEvents(31555),
+          DB_TIMEOUT_MS,
+          "fetchCachedEvents"
+        );
+        let reviews = reviewEvents.map(parseReviewEvent);
 
-      if (productId) {
-        reviews = reviews.filter((r) => r.d && r.d.includes(productId));
-      }
+        if (productId) {
+          reviews = reviews.filter((r) => r.d && r.d.includes(productId));
+        }
 
-      if (sellerPubkey) {
-        reviews = reviews.filter((r) => r.d && r.d.includes(sellerPubkey));
-      }
+        if (sellerPubkey) {
+          reviews = reviews.filter((r) => r.d && r.d.includes(sellerPubkey));
+        }
 
-      const reviewsWithReplies = await attachRepliesToReviews(reviews);
+        const reviewsWithReplies = await withTimeout(
+          attachRepliesToReviews(reviews),
+          DB_TIMEOUT_MS,
+          "fetchCommentsByReviewIds"
+        );
 
-      const latestTimestamp = reviews.reduce(
-        (max, r) =>
-          r.createdAt && Number(r.createdAt) > max ? Number(r.createdAt) : max,
-        0
-      );
+        const latestTimestamp = reviews.reduce(
+          (max, r) =>
+            r.createdAt && Number(r.createdAt) > max
+              ? Number(r.createdAt)
+              : max,
+          0
+        );
 
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify(
-              {
-                count: reviewsWithReplies.length,
-                reviews: reviewsWithReplies,
-                _meta: {
-                  responseTimeMs: Date.now() - startTime,
-                  dataSource: "cached_db",
-                  dataFreshness: latestTimestamp
-                    ? new Date(latestTimestamp * 1000).toISOString()
-                    : null,
-                  resultCount: reviewsWithReplies.length,
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify(
+                {
+                  count: reviewsWithReplies.length,
+                  reviews: reviewsWithReplies,
+                  _meta: {
+                    responseTimeMs: Date.now() - startTime,
+                    dataSource: "cached_db",
+                    dataFreshness: latestTimestamp
+                      ? new Date(latestTimestamp * 1000).toISOString()
+                      : null,
+                    resultCount: reviewsWithReplies.length,
+                  },
                 },
-              },
-              null,
-              2
-            ),
-          },
-        ],
-      };
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      } catch (error) {
+        return dbError(error, startTime);
+      }
     }
   );
 
@@ -889,27 +991,35 @@ export function registerReadTools(server: McpServer, context?: ToolContext) {
     },
     async ({ code, sellerPubkey }) => {
       const startTime = Date.now();
-      const result = await validateDiscountCode(code, sellerPubkey);
+      try {
+        const result = await withTimeout(
+          validateDiscountCode(code, sellerPubkey),
+          DB_TIMEOUT_MS,
+          "validateDiscountCode"
+        );
 
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify(
-              {
-                ...result,
-                _meta: {
-                  responseTimeMs: Date.now() - startTime,
-                  dataSource: "cached_db",
-                  resultCount: 1,
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify(
+                {
+                  ...result,
+                  _meta: {
+                    responseTimeMs: Date.now() - startTime,
+                    dataSource: "cached_db",
+                    resultCount: 1,
+                  },
                 },
-              },
-              null,
-              2
-            ),
-          },
-        ],
-      };
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      } catch (error) {
+        return dbError(error, startTime);
+      }
     }
   );
 }

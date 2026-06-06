@@ -29,6 +29,7 @@ export default function PassphraseChallengeModal({
 }) {
   const [remindToggled, setRemindToggled] = useState(false);
   const [passphraseInput, setPassphraseInput] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const isButtonDisabled = useMemo(() => {
     return passphraseInput.trim().length === 0;
@@ -101,12 +102,25 @@ export default function PassphraseChallengeModal({
             label={<span className="font-semibold text-black">Passphrase</span>}
             labelPlacement="outside"
             placeholder="Enter your passphrase"
-            type="password"
+            type={showPassword ? "text" : "password"}
             onChange={(e) => setPassphraseInput(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") onSubmit();
             }}
             value={passphraseInput}
+            endContent={
+              <button
+                type="button"
+                onClick={() => setShowPassword((prev) => !prev)}
+                className="text-gray-400"
+              >
+                {showPassword ? (
+                  <span className="text-lg leading-none">👁️⃠</span>
+                ) : (
+                  <span className="text-lg leading-none">👁️</span>
+                )}
+              </button>
+            }
             classNames={{
               input: "text-black font-semibold placeholder:text-gray-400",
               label: "text-black font-semibold",

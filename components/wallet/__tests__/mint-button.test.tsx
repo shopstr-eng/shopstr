@@ -24,9 +24,10 @@ const mockCreateMintQuote = jest.fn();
 const mockCheckMintQuote = jest.fn();
 const mockMintProofs = jest.fn();
 (CashuWallet as jest.Mock).mockImplementation(() => ({
-  createMintQuote: mockCreateMintQuote,
-  checkMintQuote: mockCheckMintQuote,
-  mintProofs: mockMintProofs,
+  loadMint: jest.fn().mockResolvedValue(undefined),
+  createMintQuoteBolt11: mockCreateMintQuote,
+  checkMintQuoteBolt11: mockCheckMintQuote,
+  mintProofsBolt11: mockMintProofs,
 }));
 (CashuMint as unknown as jest.Mock).mockImplementation(() => ({}));
 
@@ -263,9 +264,14 @@ describe("MintButton Component", () => {
 
     expect(await screen.findByText("Lightning Invoice")).toBeVisible();
 
-    for (let retry = 0; retry < 31; retry++) {
+    // The polling loop now runs up to 150 rounds (~2.1s each) before timing
+    // out. Each round issues a non-retryable check failure (so withMintRetry
+    // throws immediately) and then sleeps 2100ms; advance enough rounds to
+    // exhaust the loop and surface the timeout failure modal.
+    for (let retry = 0; retry < 155; retry++) {
       await act(async () => {
         jest.advanceTimersByTime(2100);
+        await Promise.resolve();
         await Promise.resolve();
         await Promise.resolve();
       });
@@ -569,9 +575,15 @@ describe("MintButton Component", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
 
-    await waitFor(() => {
-      expect(screen.getByTestId("failure-modal")).toBeVisible();
-    });
+    // A network TypeError is retryable, so withMintRetry burns its bounded
+    // attempts (with backoff) before the component surfaces the failure modal.
+    // Give waitFor enough budget to advance past those retry delays.
+    await waitFor(
+      () => {
+        expect(screen.getByTestId("failure-modal")).toBeVisible();
+      },
+      { timeout: 3000 }
+    );
 
     fireEvent.click(screen.getByTestId("failure-modal-close"));
 

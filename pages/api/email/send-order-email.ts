@@ -42,10 +42,13 @@ export default async function handler(
     buyerName,
     shippingAddress,
     buyerContact,
+    buyerEmailForSeller,
     pickupLocation,
     selectedSize,
     selectedVolume,
     selectedWeight,
+    selectedVariant,
+    variantLabel,
     selectedBulkOption,
     subscriptionFrequency,
     productId,
@@ -69,10 +72,13 @@ export default async function handler(
     buyerName,
     shippingAddress,
     buyerContact,
+    buyerEmail: buyerEmailForSeller || buyerEmail || undefined,
     pickupLocation,
     selectedSize,
     selectedVolume,
     selectedWeight,
+    selectedVariant,
+    variantLabel,
     selectedBulkOption,
     subscriptionFrequency,
     donationAmount:
@@ -89,6 +95,26 @@ export default async function handler(
   try {
     const branding = await loadStorefrontBranding(sellerPubkey);
 
+    // Resolve the seller's notification email first so we can route a buyer's
+    // reply to the order confirmation straight to the seller (Reply-To). Guard
+    // this lookup so a transient failure can't block the buyer confirmation.
+    let sellerEmail: string | null = null;
+    if (sellerPubkey) {
+      try {
+        sellerEmail = await getSellerNotificationEmail(sellerPubkey);
+        if (!sellerEmail) {
+          sellerEmail = await getUserAuthEmail(sellerPubkey);
+        }
+      } catch (sellerLookupError) {
+        console.error(
+          "Failed to resolve seller notification email:",
+          sellerLookupError
+        );
+      }
+    }
+
+    const buyerReplyEmail = buyerEmailForSeller || buyerEmail || undefined;
+
     if (buyerEmail) {
       await saveNotificationEmail(
         buyerEmail,
@@ -98,24 +124,19 @@ export default async function handler(
       );
       results.buyerEmailSent = await sendOrderConfirmationToBuyer(
         buyerEmail,
-        emailParams,
-        branding
+        { ...emailParams, sellerContact: sellerEmail || undefined },
+        branding,
+        sellerEmail || undefined
       );
     }
 
-    if (sellerPubkey) {
-      let sellerEmail = await getSellerNotificationEmail(sellerPubkey);
-      if (!sellerEmail) {
-        sellerEmail = await getUserAuthEmail(sellerPubkey);
-      }
-
-      if (sellerEmail) {
-        results.sellerEmailSent = await sendNewOrderToSeller(
-          sellerEmail,
-          emailParams,
-          branding
-        );
-      }
+    if (sellerEmail) {
+      results.sellerEmailSent = await sendNewOrderToSeller(
+        sellerEmail,
+        emailParams,
+        branding,
+        buyerReplyEmail
+      );
     }
 
     if (buyerEmail && sellerPubkey) {

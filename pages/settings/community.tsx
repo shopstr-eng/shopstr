@@ -159,7 +159,7 @@ const CommunityManagementPage = () => {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ password: passwordInput.trim() }),
+        body: JSON.stringify({ password: passwordInput.trim(), pubkey }),
       });
 
       const data = await response.json();

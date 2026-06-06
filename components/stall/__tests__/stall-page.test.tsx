@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, within } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import type { ComponentProps } from "react";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
@@ -39,17 +39,11 @@ jest.mock(
       return <div data-testid="signin-modal-mock" />;
     }
 );
-jest.mock(
-  "../../home/side-shop-nav",
-  () =>
-    function MockSideShopNav() {
-      return <div data-testid="side-shop-nav-mock" />;
-    }
-);
 jest.mock("@braintree/sanitize-url", () => ({
   sanitizeUrl: (url: string) => url,
 }));
 jest.mock("@heroicons/react/24/outline", () => ({
+  ...jest.requireActual("@heroicons/react/24/outline"),
   Bars3Icon: () => <div data-testid="bars3-icon-mock">Open Menu</div>,
 }));
 
@@ -115,10 +109,7 @@ describe("StallPage", () => {
       expect(
         screen.queryByTestId("display-products-mock")
       ).not.toBeInTheDocument();
-      expect(
-        screen.queryByTestId("side-shop-nav-mock")
-      ).not.toBeInTheDocument();
-      expect(screen.queryByAltText("Shop Banner")).not.toBeInTheDocument();
+      expect(screen.queryByAltText("Stall Banner")).not.toBeInTheDocument();
     });
 
     test('opens sign-in modal when trying to "Add Listing"', () => {
@@ -127,8 +118,8 @@ describe("StallPage", () => {
       expect(mockRouterPush).not.toHaveBeenCalled();
     });
 
-    test('opens sign-in modal when trying to "Edit Shop"', () => {
-      fireEvent.click(screen.getAllByText("Edit Shop")[0]!);
+    test('opens sign-in modal when trying to "Edit Stall"', () => {
+      fireEvent.click(screen.getAllByText("Edit Stall")[0]!);
       expect(mockOnOpen).toHaveBeenCalledTimes(1);
       expect(mockRouterPush).not.toHaveBeenCalled();
     });
@@ -149,90 +140,16 @@ describe("StallPage", () => {
         renderComponent(loggedInUser, mockShopDataContextWithProfile);
       });
 
-      test("fetches and displays shop banner and about info", () => {
-        expect(screen.getByAltText("Shop Banner")).toBeInTheDocument();
-        expect(screen.getByAltText("Shop Banner")).toHaveAttribute(
+      test("displays the shop banner", () => {
+        expect(screen.getByAltText("Stall Banner")).toBeInTheDocument();
+        expect(screen.getByAltText("Stall Banner")).toHaveAttribute(
           "src",
           shopProfile.content.ui.banner
         );
-
-        fireEvent.click(screen.getAllByRole("button", { name: "About" })[0]!);
-        expect(
-          screen.getByRole("heading", { name: /about/i, level: 2 })
-        ).toBeInTheDocument();
-        expect(screen.getByText(shopProfile.content.about)).toBeInTheDocument();
       });
 
       test("renders Listings section by default", () => {
         expect(screen.getByTestId("display-products-mock")).toBeInTheDocument();
-        expect(screen.getByTestId("side-shop-nav-mock")).toBeInTheDocument();
-      });
-
-      test("updates the About section when the shop profile changes but the banner stays the same", () => {
-        const sharedBanner = "http://example.com/banner.jpg";
-        const initialShopContext = {
-          ...mockShopDataContextWithProfile,
-          shopData: new Map([
-            [
-              loggedInUser.pubkey,
-              {
-                ...shopProfile,
-                content: {
-                  ...shopProfile.content,
-                  about: "Initial about text",
-                  ui: {
-                    ...shopProfile.content.ui,
-                    banner: sharedBanner,
-                  },
-                },
-              },
-            ],
-          ]),
-        };
-
-        const { container, rerender } = renderComponent(
-          loggedInUser,
-          initialShopContext
-        );
-        const currentView = within(container);
-
-        fireEvent.click(
-          currentView.getAllByRole("button", { name: "About" })[0]!
-        );
-        expect(currentView.getByText("Initial about text")).toBeInTheDocument();
-
-        const updatedShopContext = {
-          ...initialShopContext,
-          shopData: new Map([
-            [
-              loggedInUser.pubkey,
-              {
-                ...shopProfile,
-                content: {
-                  ...shopProfile.content,
-                  about: "Updated about text",
-                  ui: {
-                    ...shopProfile.content.ui,
-                    banner: sharedBanner,
-                  },
-                },
-              },
-            ],
-          ]),
-        };
-
-        rerender(
-          <SignerContext.Provider value={loggedInUser}>
-            <ShopMapContext.Provider value={updatedShopContext}>
-              <StallPage />
-            </ShopMapContext.Provider>
-          </SignerContext.Provider>
-        );
-
-        expect(currentView.getByText("Updated about text")).toBeInTheDocument();
-        expect(
-          currentView.queryByText("Initial about text")
-        ).not.toBeInTheDocument();
       });
     });
 
@@ -242,15 +159,7 @@ describe("StallPage", () => {
       });
 
       test("does not display shop banner", () => {
-        expect(screen.queryByAltText("Shop Banner")).not.toBeInTheDocument();
-      });
-
-      test('shows "Nothing here" message in About section', () => {
-        fireEvent.click(screen.getAllByRole("button", { name: "About" })[0]!);
-        expect(screen.getByText("Nothing here . . . yet!")).toBeInTheDocument();
-        expect(
-          screen.getByText("Set up your shop in settings!")
-        ).toBeInTheDocument();
+        expect(screen.queryByAltText("Stall Banner")).not.toBeInTheDocument();
       });
 
       test("clears stale shop banner when shop data is removed after render", () => {
@@ -259,7 +168,7 @@ describe("StallPage", () => {
           mockShopDataContextWithProfile
         );
 
-        expect(screen.getByAltText("Shop Banner")).toBeInTheDocument();
+        expect(screen.getByAltText("Stall Banner")).toBeInTheDocument();
 
         rerender(
           <SignerContext.Provider value={loggedInUser}>
@@ -269,7 +178,7 @@ describe("StallPage", () => {
           </SignerContext.Provider>
         );
 
-        expect(screen.queryByAltText("Shop Banner")).not.toBeInTheDocument();
+        expect(screen.queryByAltText("Stall Banner")).not.toBeInTheDocument();
       });
     });
 
@@ -279,13 +188,13 @@ describe("StallPage", () => {
       fireEvent.click(screen.getAllByText("Add Listing")[0]!);
       expect(mockRouterPush).toHaveBeenCalledWith("?addNewListing");
 
-      fireEvent.click(screen.getAllByText("Edit Shop")[0]!);
+      fireEvent.click(screen.getAllByText("Edit Stall")[0]!);
       expect(mockRouterPush).toHaveBeenCalledWith(
         "/settings/stall?tab=storefront"
       );
 
       fireEvent.click(screen.getAllByRole("button", { name: "Orders" })[0]!);
-      expect(mockRouterPush).toHaveBeenCalledWith("/orders");
+      expect(mockRouterPush).toHaveBeenCalledWith("/my-listings/orders");
     });
   });
 
@@ -294,26 +203,16 @@ describe("StallPage", () => {
       renderComponent(loggedInUser, mockShopDataContextWithProfile);
     });
 
-    test("switches between Listings and About sections", () => {
+    test("switches between Listings and Discounts sections", () => {
       expect(screen.getByTestId("display-products-mock")).toBeInTheDocument();
-      expect(
-        screen.queryByText(shopProfile.content.about)
-      ).not.toBeInTheDocument();
 
-      fireEvent.click(screen.getAllByRole("button", { name: "About" })[0]!);
+      fireEvent.click(screen.getAllByRole("button", { name: "Discounts" })[0]!);
       expect(
         screen.queryByTestId("display-products-mock")
       ).not.toBeInTheDocument();
-      expect(
-        screen.getByRole("heading", { name: /about/i, level: 2 })
-      ).toBeInTheDocument();
-      expect(screen.getByText(shopProfile.content.about)).toBeInTheDocument();
 
       fireEvent.click(screen.getAllByRole("button", { name: "Listings" })[0]!);
       expect(screen.getByTestId("display-products-mock")).toBeInTheDocument();
-      expect(
-        screen.queryByText(shopProfile.content.about)
-      ).not.toBeInTheDocument();
     });
 
     test("mobile menu opens and closes on click", () => {
@@ -331,7 +230,7 @@ describe("StallPage", () => {
         screen.getByText("Listings", { selector: ".absolute button" })
       ).toBeInTheDocument();
       expect(
-        screen.getByText("About", { selector: ".absolute button" })
+        screen.getByText("Discounts", { selector: ".absolute button" })
       ).toBeInTheDocument();
 
       fireEvent.click(menuButton!);

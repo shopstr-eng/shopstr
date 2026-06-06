@@ -19,11 +19,14 @@ import {
   DropdownTrigger,
   DropdownMenu,
   DropdownItem,
+  Select,
+  SelectItem,
 } from "@heroui/react";
 import { locationAvatar } from "./dropdowns/location-dropdown";
 import {
   ArrowLongDownIcon,
   EllipsisVerticalIcon,
+  ExclamationTriangleIcon,
 } from "@heroicons/react/24/outline";
 import BeefInitiativeBadge from "./beef-initiative-badge";
 import {
@@ -46,6 +49,7 @@ import ZapsnagButton from "@/components/ZapsnagButton";
 import { RawEventModal, EventIdModal } from "./modals/event-modals";
 import SubscriptionPricingCards from "./subscription-pricing-cards";
 import SellerReviewReply from "./seller-review-reply";
+import useReportEventFlow from "./use-report-event-flow";
 import { getLocalStorageJson } from "@/utils/safe-json";
 import { CartDiscountsMap, isCartDiscountsMap } from "@/utils/cart-discounts";
 import { getAffiliateRefCookie } from "./affiliate-ref-tracker";
@@ -75,6 +79,13 @@ export default function CheckoutCard({
   const productEventContext = useContext(ProductContext);
   const shopMapContext = useContext(ShopMapContext);
   const { isOpen, onOpen, onClose } = useDisclosure();
+  const { openReportFlow, reportFlowUi } = useReportEventFlow({
+    targetLabel: "Listing",
+    reportedPubkey: productData?.pubkey,
+    reportedEventId: productData?.id,
+    onRequireLogin: onOpen,
+  });
+  const isOwnListing = productData?.pubkey === userPubkey;
   const [showFreeShippingNotification, setShowFreeShippingNotification] =
     useState(false);
   const [showRawEventModal, setShowRawEventModal] = useState(false);
@@ -90,6 +101,9 @@ export default function CheckoutCard({
     undefined
   );
   const [hasSizes, setHasSizes] = useState(false);
+  const [selectedVariant, setSelectedVariant] = useState<string | undefined>(
+    undefined
+  );
   const [isAdded, setIsAdded] = useState(false);
 
   const [merchantReview, setMerchantReview] = useState(0);
@@ -149,11 +163,12 @@ export default function CheckoutCard({
 
   const hasVolumes = productData.volumes && productData.volumes.length > 0;
   const hasWeights = productData.weights && productData.weights.length > 0;
+  const hasVariants = !!productData.variants && productData.variants.length > 0;
 
   const activeBulkPrices = (() => {
-    const selectedVariant = selectedVolume || selectedWeight;
-    if (selectedVariant && productData.variantBulkPrices) {
-      const variantTiers = productData.variantBulkPrices.get(selectedVariant);
+    const selectedDimension = selectedVolume || selectedWeight;
+    if (selectedDimension && productData.variantBulkPrices) {
+      const variantTiers = productData.variantBulkPrices.get(selectedDimension);
       if (variantTiers && variantTiers.size > 0) return variantTiers;
     }
     if (productData.bulkPrices && productData.bulkPrices.size > 0) {
@@ -335,6 +350,9 @@ export default function CheckoutCard({
 
     if (selectedSize) {
       productToAdd.selectedSize = selectedSize;
+    }
+    if (selectedVariant) {
+      productToAdd.selectedVariant = selectedVariant;
     }
     if (selectedVolume) {
       productToAdd.selectedVolume = selectedVolume;
@@ -611,6 +629,116 @@ export default function CheckoutCard({
     );
   };
 
+  const handleSelectVariant = (variant: string) => {
+    setSelectedVariant(variant);
+    // Nice-to-have: shift the highlighted image to the one linked to this
+    // variant option (if the seller associated one when listing).
+    const linkedImage = productData.variantImages?.get(variant);
+    if (linkedImage && productData.images.includes(linkedImage)) {
+      setSelectedImage(linkedImage);
+      const linkedIndex = productData.images.indexOf(linkedImage);
+      if (linkedIndex >= 0) {
+        setCarouselStart(linkedIndex);
+      }
+    }
+  };
+
+  const renderVariantGrid = () => {
+    const variantLabel = productData.variantLabel || "Option";
+    const options = productData.variants || [];
+
+    if (productData.variantDisplay === "dropdown") {
+      return (
+        <div className="mb-4">
+          <p className="mb-2 text-sm font-semibold text-black">
+            {`Select ${variantLabel}:`}
+          </p>
+          <Select
+            aria-label={`Select ${variantLabel}`}
+            placeholder={`Choose ${variantLabel.toLowerCase()}`}
+            selectedKeys={
+              selectedVariant ? new Set([selectedVariant]) : new Set([])
+            }
+            onSelectionChange={(keys) => {
+              const key = Array.from(keys as Set<string>)[0];
+              if (key) handleSelectVariant(key);
+            }}
+            classNames={{
+              trigger:
+                "border-2 border-black rounded-md shadow-none bg-white data-[hover=true]:bg-white data-[focus=true]:bg-white",
+              listbox:
+                "bg-white [&_li]:!bg-white [&_li:hover]:!bg-primary-yellow [&_li[data-hover=true]]:!bg-primary-yellow",
+              value: "!text-black",
+            }}
+          >
+            {options.map((variant) => (
+              <SelectItem key={variant}>{variant}</SelectItem>
+            ))}
+          </Select>
+        </div>
+      );
+    }
+
+    return (
+      <div className="mb-4">
+        <p className="mb-2 text-sm font-semibold text-black">
+          {`Select ${variantLabel}:`}
+          {selectedVariant ? (
+            <span className="font-normal text-gray-600">
+              {` ${selectedVariant}`}
+            </span>
+          ) : null}
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {options.map((variant) => {
+            const optionImage = productData.variantImages?.get(variant);
+            const isSelected = selectedVariant === variant;
+            if (optionImage) {
+              return (
+                <button
+                  key={variant}
+                  type="button"
+                  title={variant}
+                  aria-label={variant}
+                  onClick={() => handleSelectVariant(variant)}
+                  className={`flex flex-col items-center gap-1 rounded-md border-2 p-1 transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
+                    isSelected
+                      ? "border-primary-yellow shadow-neo"
+                      : "border-black"
+                  } bg-white`}
+                >
+                  <img
+                    src={optionImage}
+                    alt={variant}
+                    className="h-14 w-14 rounded object-cover"
+                    style={{ aspectRatio: "1 / 1" }}
+                  />
+                  <span className="max-w-[64px] truncate text-xs font-bold text-black">
+                    {variant}
+                  </span>
+                </button>
+              );
+            }
+            return (
+              <button
+                key={variant}
+                type="button"
+                className={`shadow-neo rounded-md border-2 border-black px-3 py-2 text-sm font-bold transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
+                  isSelected
+                    ? "bg-primary-yellow text-black"
+                    : "bg-white text-black"
+                }`}
+                onClick={() => handleSelectVariant(variant)}
+              >
+                {variant}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
   const isSatsCurrency =
     productData.currency.toLowerCase() === "sats" ||
     productData.currency.toLowerCase() === "sat";
@@ -665,6 +793,7 @@ export default function CheckoutCard({
     price: effectivePrice,
     totalCost: effectiveTotal,
     originalPrice: currentPrice,
+    selectedVariant: selectedVariant || undefined,
     discountPercentage: appliedDiscount,
     weightPrice:
       selectedWeight && productData.weightPrices
@@ -694,7 +823,7 @@ export default function CheckoutCard({
               <div className="flex w-full flex-row gap-4">
                 {/* Vertical Thumbnails */}
                 <div className="flex w-1/4 flex-col gap-2">
-                  <div ref={containerRef} className="flex-1 overflow-hidden">
+                  <div ref={containerRef} className="overflow-hidden">
                     <div className="flex flex-col space-y-2">
                       {carouselThumbnails.map(({ image, index }) => (
                         <img
@@ -745,7 +874,7 @@ export default function CheckoutCard({
                     dropDownKeys={
                       productData.pubkey === userPubkey
                         ? ["shop_profile"]
-                        : ["shop", "inquiry", "copy_npub"]
+                        : ["shop", "inquiry", "copy_npub", "report_profile"]
                     }
                   />
                   {merchantQuality !== "" && (
@@ -804,6 +933,18 @@ export default function CheckoutCard({
                         >
                           View Event ID
                         </DropdownItem>
+                        {!isOwnListing ? (
+                          <DropdownItem
+                            key="report-listing"
+                            className="!text-red-600 data-[hover=true]:!bg-red-600 data-[hover=true]:!text-white"
+                            startContent={
+                              <ExclamationTriangleIcon className="h-5 w-5" />
+                            }
+                            onPress={() => openReportFlow()}
+                          >
+                            Report Listing
+                          </DropdownItem>
+                        ) : null}
                       </DropdownMenu>
                     </Dropdown>
                   )}
@@ -889,6 +1030,9 @@ export default function CheckoutCard({
 
                 {/* Size Grid */}
                 {hasSizes && renderSizeGrid()}
+
+                {/* Variant Selector */}
+                {hasVariants && renderVariantGrid()}
 
                 {hasBulkPrices && activeBulkPrices && (
                   <BulkSelector
@@ -1028,7 +1172,8 @@ export default function CheckoutCard({
                             className={`bg-primary-yellow shadow-neo rounded-md border-2 border-black px-6 py-2 font-bold text-black transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
                               (hasSizes && !selectedSize) ||
                               (hasVolumes && !selectedVolume) ||
-                              (hasWeights && !selectedWeight)
+                              (hasWeights && !selectedWeight) ||
+                              (hasVariants && !selectedVariant)
                                 ? "cursor-not-allowed opacity-50"
                                 : ""
                             }`}
@@ -1037,6 +1182,7 @@ export default function CheckoutCard({
                               (hasSizes && !selectedSize) ||
                               (hasVolumes && !selectedVolume) ||
                               (hasWeights && !selectedWeight) ||
+                              (hasVariants && !selectedVariant) ||
                               isExpired
                             }
                             size="lg"
@@ -1050,7 +1196,8 @@ export default function CheckoutCard({
                               isAdded ||
                               (hasSizes && !selectedSize) ||
                               (hasVolumes && !selectedVolume) ||
-                              (hasWeights && !selectedWeight)
+                              (hasWeights && !selectedWeight) ||
+                              (hasVariants && !selectedVariant)
                                 ? "cursor-not-allowed opacity-50"
                                 : ""
                             }`}
@@ -1060,6 +1207,7 @@ export default function CheckoutCard({
                               (hasSizes && !selectedSize) ||
                               (hasVolumes && !selectedVolume) ||
                               (hasWeights && !selectedWeight) ||
+                              (hasVariants && !selectedVariant) ||
                               isExpired
                             }
                             size="lg"
@@ -1124,7 +1272,12 @@ export default function CheckoutCard({
                               dropDownKeys={
                                 reviewerPubkey === userPubkey
                                   ? ["shop_profile"]
-                                  : ["shop", "inquiry", "copy_npub"]
+                                  : [
+                                      "shop",
+                                      "inquiry",
+                                      "copy_npub",
+                                      "report_profile",
+                                    ]
                               }
                             />
                           </div>
@@ -1215,6 +1368,8 @@ export default function CheckoutCard({
               selectedSize={selectedSize}
               selectedVolume={selectedVolume}
               selectedWeight={selectedWeight}
+              selectedVariant={selectedVariant}
+              variantLabel={productData.variantLabel}
               selectedBulkOption={
                 selectedBulkOption ? parseInt(selectedBulkOption) : undefined
               }
@@ -1271,6 +1426,7 @@ export default function CheckoutCard({
           shopData={shopMapContext.shopData}
           cart={cart}
         />
+        {reportFlowUi}
       </div>
     </div>
   );

@@ -25,6 +25,7 @@ jest.mock("nostr-tools", () => ({
   nip19: {
     naddrEncode: jest.fn(),
     npubEncode: jest.fn(),
+    decode: jest.fn(),
   },
 }));
 const mockNip19 = nip19 as jest.Mocked<typeof nip19>;
@@ -36,8 +37,6 @@ jest.mock("@/utils/parsers/product-parser-functions", () => ({
 const mockParseTags = parseTags as jest.Mock;
 
 describe("DynamicHead", () => {
-  const mockOrigin = "https://test.milk.market";
-
   const getMetaContent = (name: string) => {
     const element = document.querySelector(
       `meta[name="${name}"], meta[property="${name}"]`
@@ -102,7 +101,7 @@ describe("DynamicHead", () => {
           profileData={new Map()}
         />
       );
-      await waitFor(() => expect(document.title).toBe("Nostr Goods Shop"));
+      await waitFor(() => expect(document.title).toBe("Nostr Goods Stall"));
     });
 
     test("should render fallback meta tags for a shop page when shop is not found", async () => {
@@ -135,9 +134,13 @@ describe("DynamicHead", () => {
           profileData={new Map()}
         />
       );
-      await waitFor(() => expect(document.title).toBe("Milk Market Stall"));
+      await waitFor(() =>
+        expect(document.title).toBe(
+          "Milk Market - Farm-Fresh Dairy Direct from Local Farmers"
+        )
+      );
       expect(getMetaContent("og:url")).toBe(
-        `${mockOrigin}/marketplace/undefined`
+        "https://milk.market/marketplace/npub"
       );
     });
 
@@ -207,6 +210,41 @@ describe("DynamicHead", () => {
         />
       );
       await waitFor(() => expect(document.title).toBe("Found By ID"));
+    });
+
+    test("should resolve relay-hinted naddr routes from the matching listing identity", async () => {
+      // Downstream mocks nostr-tools, so emulate a relay-hinted naddr by
+      // having nip19.decode return the listing identity that matches the
+      // product event's d tag/pubkey/kind. The component resolves the listing
+      // via eventMatchesListingIdentifier, which decodes naddr identifiers.
+      const relayHintedNaddr = "naddr1relayhinted";
+      mockNip19.naddrEncode.mockReturnValue(relayHintedNaddr);
+      mockNip19.decode.mockReturnValue({
+        type: "naddr",
+        data: {
+          identifier: "some_other_id",
+          pubkey: productPubkey,
+          kind: 30402,
+          relays: [
+            "wss://relay.shopstr.example",
+            "wss://relay-2.shopstr.example",
+          ],
+        },
+      } as ReturnType<typeof nip19.decode>);
+      mockUseRouter.mockReturnValue({
+        pathname: `/listing/${relayHintedNaddr}`,
+        asPath: `/listing/${relayHintedNaddr}`,
+        query: { productId: [relayHintedNaddr] },
+      });
+      mockParseTags.mockReturnValue({ title: "Relay Hint Listing" });
+      render(
+        <DynamicHead
+          productEvents={[productEvent]}
+          shopEvents={new Map()}
+          profileData={new Map()}
+        />
+      );
+      await waitFor(() => expect(document.title).toBe("Relay Hint Listing"));
     });
 
     test("should use fallback values for a parsed product with partial data", async () => {

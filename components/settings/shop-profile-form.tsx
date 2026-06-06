@@ -270,7 +270,10 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
       const response = await fetch("/api/validate-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password: storefrontPasswordInput.trim() }),
+        body: JSON.stringify({
+          password: storefrontPasswordInput.trim(),
+          pubkey: userPubkey,
+        }),
       });
       const data = await response.json();
       if (data.valid) {
@@ -855,7 +858,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
   }, [isSaved, settingsSnapshot]);
 
   const onSubmit = async (data: { [x: string]: string }) => {
-    if (!shopSlug || shopSlug.trim() === "") {
+    if (!isOnboarding && (!shopSlug || shopSlug.trim() === "")) {
       setShopSlugRequired(true);
       return;
     }
@@ -3429,12 +3432,6 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
             className={`w-full text-lg ${BLUEBUTTONCLASSNAMES}`}
             type="submit"
             size="lg"
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                handleSubmit(onSubmit as any)();
-              }
-            }}
             isDisabled={isUploadingShopProfile}
             isLoading={isUploadingShopProfile}
           >

@@ -46,6 +46,7 @@ import {
   isExternalStorefrontHref,
   sanitizeStorefrontNavHref,
 } from "@/utils/storefront-links";
+import { getStorefrontCartQuantity } from "@/utils/storefront-cart";
 import {
   applyCustomDomainHref,
   useIsCustomDomain,
@@ -156,22 +157,12 @@ export default function StorefrontLayout({
 
   useEffect(() => {
     const sync = () => {
-      const cart = localStorage.getItem("cart");
-      if (!cart) {
-        setCartQuantity(0);
-        return;
-      }
-      const items = JSON.parse(cart) as { pubkey?: string }[];
-      setCartQuantity(
-        shopPubkey
-          ? items.filter((p) => p.pubkey === shopPubkey).length
-          : items.length
-      );
+      setCartQuantity(getStorefrontCartQuantity(shopPubkey));
     };
     sync();
     const interval = setInterval(sync, 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [shopPubkey]);
 
   const sellerProducts = useMemo(() => {
     if (!shopPubkey || !productContext.productEvents.length) return [];

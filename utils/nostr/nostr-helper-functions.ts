@@ -14,6 +14,7 @@ import {
   CommunityRelays,
   NostrEvent,
   ProductFormValues,
+  SavedAddress,
 } from "@/utils/types/types";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
 import { Proof } from "@cashu/cashu-ts";
@@ -29,6 +30,18 @@ import {
 } from "@/utils/nostr/request-auth";
 import { newPromiseWithTimeout } from "@/utils/timeout";
 import { getLocalStorageJson } from "@/utils/safe-json";
+
+export const REPORT_TYPES = [
+  "nudity",
+  "malware",
+  "profanity",
+  "illegal",
+  "spam",
+  "impersonation",
+  "other",
+] as const;
+
+export type ReportType = (typeof REPORT_TYPES)[number];
 
 function containsRelay(relays: string[], relay: string): boolean {
   return relays.some((r) => r.includes(relay));
@@ -146,18 +159,12 @@ export async function createNostrProfileEvent(
     kind: 0,
     tags: [],
   };
-  const signedEvent = await finalizeAndSendNostrEvent(
-    signer,
-    nostr,
-    profileContent
-  );
-
-  // Cache profile event to database
-  if (signedEvent) {
-    await cacheEventToDatabase(signedEvent).catch((error) =>
-      console.error("Failed to cache profile event to database:", error)
-    );
-  }
+  // finalizeAndSendNostrEvent already caches the signed event to the database
+  // before returning. With waitForRelayPublish: false the save resolves as soon
+  // as it's signed + cached, so the user isn't blocked on slow relays.
+  return await finalizeAndSendNostrEvent(signer, nostr, profileContent, {
+    waitForRelayPublish: false,
+  });
 }
 
 export async function PostListing(
@@ -327,6 +334,8 @@ export async function constructGiftWrappedEvent(
     selectedSize?: string;
     selectedVolume?: string;
     selectedWeight?: string;
+    selectedVariant?: string;
+    variantLabel?: string;
     selectedBulkOption?: number;
     subscriptionInfo?: {
       enabled: boolean;
@@ -364,6 +373,8 @@ export async function constructGiftWrappedEvent(
     selectedSize,
     selectedVolume,
     selectedWeight,
+    selectedVariant,
+    variantLabel,
     selectedBulkOption,
     subscriptionInfo,
   } = options;
@@ -403,6 +414,9 @@ export async function constructGiftWrappedEvent(
     if (selectedSize) tags.push(["size", selectedSize]);
     if (selectedVolume) tags.push(["volume", selectedVolume]);
     if (selectedWeight) tags.push(["weight", selectedWeight]);
+    if (selectedVariant) tags.push(["variant", selectedVariant]);
+    if (selectedVariant && variantLabel)
+      tags.push(["variant_label", variantLabel]);
     if (selectedBulkOption) tags.push(["bulk", selectedBulkOption.toString()]);
     if (
       donationAmount &&
@@ -528,10 +542,56 @@ export async function constructMessageGiftWrap(
   return signedEvent;
 }
 
+// Best-effort lookup of the relays a recipient READS from (NIP-65 kind 10002),
+// queried over the buyer's own relays/blastr. Bounded so a slow relay can't
+// stall checkout; returns [] on any failure.
+async function fetchRecipientReadRelays(
+  nostr: NostrManager,
+  recipientPubkey: string,
+  baseRelays: string[]
+): Promise<string[]> {
+  try {
+    // Always include default relays (NIP-65 indexers like purplepag.es /
+    // relay.nostr.band) for the lookup so discovery works even if the buyer's
+    // localStorage relays were customized — and is independent of our server.
+    const lookupRelays = Array.from(
+      new Set([...baseRelays, ...getDefaultRelays()])
+    );
+    const events = await newPromiseWithTimeout<NostrEvent[]>(
+      async (resolve, reject) => {
+        try {
+          const res = await nostr.fetch(
+            [{ kinds: [10002], authors: [recipientPubkey] }],
+            {},
+            lookupRelays
+          );
+          resolve(res);
+        } catch (err) {
+          reject(err as Error);
+        }
+      },
+      { timeout: 4000 }
+    );
+    const out: string[] = [];
+    for (const ev of events) {
+      for (const tag of ev.tags) {
+        // Unmarked ("r", url) = read+write; ("r", url, "read") = read-only.
+        if (tag[0] === "r" && tag[1] && (!tag[2] || tag[2] === "read")) {
+          out.push(tag[1]);
+        }
+      }
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
 export async function sendGiftWrappedMessageEvent(
   nostr: NostrManager,
   giftWrappedMessageEvent: NostrEvent,
-  signer?: NostrSigner
+  signer?: NostrSigner,
+  options?: { deliverToRecipientRelays?: boolean }
 ) {
   const { relays, writeRelays } = getLocalStorageData();
   const allWriteRelays = withBlastr([...writeRelays, ...relays]);
@@ -566,6 +626,47 @@ export async function sendGiftWrappedMessageEvent(
       signer
     ).catch(console.error);
   }
+
+  // For order messages the buyer's relays are often not the seller's relays
+  // (e.g. a guest checking out on a custom domain), so the seller's dashboard —
+  // which reads from the seller's own relays — never sees the order. Deliver it
+  // to the recipient's relays via two independent paths. Both are fire-and-
+  // forget so they never add latency to, or change the success of, checkout.
+  if (options?.deliverToRecipientRelays) {
+    const recipient = giftWrappedMessageEvent.tags.find(
+      (t) => t[0] === "p"
+    )?.[1];
+
+    // Fallback path (works even if our server is down): publish straight to the
+    // recipient's relays from the browser, so the dashboard can read it off the
+    // relays via its PWA subscription.
+    if (recipient) {
+      void (async () => {
+        try {
+          const recipientRelays = await fetchRecipientReadRelays(
+            nostr,
+            recipient,
+            allWriteRelays
+          );
+          if (recipientRelays.length > 0) {
+            await nostr.publish(giftWrappedMessageEvent, recipientRelays);
+          }
+        } catch (err) {
+          console.warn("Recipient-relay publish failed (non-fatal):", err);
+        }
+      })();
+    }
+
+    // Primary path: have the server publish to the recipient's relays,
+    // independent of buyer origin/login.
+    void import("@/utils/db/db-client")
+      .then(({ deliverOrderEventsServerSide }) =>
+        deliverOrderEventsServerSide([giftWrappedMessageEvent])
+      )
+      .catch((err) =>
+        console.warn("Server-side order delivery failed (non-fatal):", err)
+      );
+  }
 }
 
 export async function publishReviewEvent(
@@ -598,6 +699,56 @@ export async function publishReviewEvent(
     throw error;
   }
 }
+
+export async function publishReportEvent(
+  nostr: NostrManager,
+  signer: NostrSigner,
+  {
+    content,
+    reportType,
+    reportedPubkey,
+    reportedEventId,
+  }: {
+    content: string;
+    reportType: ReportType;
+    reportedPubkey: string;
+    reportedEventId?: string;
+  }
+) {
+  try {
+    const reportTags = reportedEventId
+      ? [
+          ["e", reportedEventId, reportType],
+          ["p", reportedPubkey],
+        ]
+      : [["p", reportedPubkey, reportType]];
+
+    const reportEvent: EventTemplate = {
+      created_at: Math.floor(Date.now() / 1000),
+      content,
+      kind: 1984,
+      tags: reportTags,
+    };
+
+    const signedEvent = await finalizeAndSendNostrEvent(
+      signer,
+      nostr,
+      reportEvent
+    );
+
+    if (signedEvent) {
+      await cacheEventToDatabase(signedEvent).catch((error) =>
+        console.error("Failed to cache report event to database:", error)
+      );
+    }
+
+    return signedEvent;
+  } catch (error) {
+    console.error(error);
+    throw error;
+  }
+}
+
 export async function publishReviewReply(
   nostr: NostrManager,
   signer: NostrSigner,
@@ -1107,10 +1258,53 @@ export async function retractApproval(
   return await finalizeAndSendNostrEvent(signer, nostr, eventTemplate);
 }
 
+type FinalizeAndSendOptions = {
+  // When false, the relay publish (and any retry tracking) runs in the
+  // background and the call resolves as soon as the event is signed + cached.
+  // Used for latency-sensitive saves (e.g. profile edits) where the user
+  // shouldn't have to wait on slow relays.
+  waitForRelayPublish?: boolean;
+};
+
+async function publishEventWithRetryTracking(
+  nostr: NostrManager,
+  signer: NostrSigner,
+  signedEvent: NostrEvent,
+  relayUrls: string[]
+): Promise<void> {
+  try {
+    await newPromiseWithTimeout(
+      async (resolve, reject) => {
+        try {
+          await nostr.publish(signedEvent, relayUrls);
+          resolve(undefined);
+        } catch (err) {
+          reject(err as Error);
+        }
+      },
+      { timeout: 21000 } // 21 second timeout
+    );
+  } catch (error) {
+    // Timeout or relay publish error - track for retry in the background
+    // so a stalled NIP-46 sign request inside the tracker can never keep
+    // the publish UI spinning.
+    console.warn(
+      "Relay publish timed out or failed, but event is saved to database:",
+      error
+    );
+    void import("@/utils/db/db-client")
+      .then(({ trackFailedRelayPublish }) =>
+        trackFailedRelayPublish(signedEvent.id, signedEvent, relayUrls, signer)
+      )
+      .catch(console.error);
+  }
+}
+
 export async function finalizeAndSendNostrEvent(
   signer: NostrSigner,
   nostr: NostrManager,
-  eventTemplate: EventTemplate
+  eventTemplate: EventTemplate,
+  options: FinalizeAndSendOptions = {}
 ) {
   try {
     const { writeRelays, relays } = getLocalStorageData();
@@ -1121,37 +1315,24 @@ export async function finalizeAndSendNostrEvent(
 
     // After DB confirmation, attempt to publish to relays with timeout
     const allWriteRelays = withBlastr([...writeRelays, ...relays]);
-    try {
-      await newPromiseWithTimeout(
-        async (resolve, reject) => {
-          try {
-            await nostr.publish(signedEvent, allWriteRelays);
-            resolve(undefined);
-          } catch (err) {
-            reject(err as Error);
-          }
-        },
-        { timeout: 21000 } // 21 second timeout
+
+    if (options.waitForRelayPublish === false) {
+      // Optimistic save: don't block the caller on relay publishing.
+      void publishEventWithRetryTracking(
+        nostr,
+        signer,
+        signedEvent,
+        allWriteRelays
       );
-    } catch (error) {
-      // Timeout or relay publish error - track for retry in the background
-      // so a stalled NIP-46 sign request inside the tracker can never keep
-      // the publish UI spinning.
-      console.warn(
-        "Relay publish timed out or failed, but event is saved to database:",
-        error
-      );
-      void import("@/utils/db/db-client")
-        .then(({ trackFailedRelayPublish }) =>
-          trackFailedRelayPublish(
-            signedEvent.id,
-            signedEvent,
-            allWriteRelays,
-            signer
-          )
-        )
-        .catch(console.error);
+      return signedEvent;
     }
+
+    await publishEventWithRetryTracking(
+      nostr,
+      signer,
+      signedEvent,
+      allWriteRelays
+    );
 
     // return the signed event to caller so we know generated IDs
     return signedEvent;
@@ -1390,6 +1571,7 @@ const LOCALSTORAGECONSTANTS = {
   signer: "signer",
   nwcString: "nwcString",
   nwcInfo: "nwcInfo",
+  savedAddresses: "savedAddresses",
 };
 
 export const setLocalStorageDataOnSignIn = ({
@@ -1513,6 +1695,7 @@ export interface LocalStorageInterface {
   nwcString?: string | null;
   nwcInfo?: string | null;
   migrationComplete?: boolean;
+  savedAddresses: SavedAddress[];
 }
 
 function isStoredSignerData(
@@ -1575,6 +1758,7 @@ export const getLocalStorageData = (): LocalStorageInterface => {
   let migrationComplete;
   let nwcString;
   let nwcInfo;
+  let savedAddresses: SavedAddress[] = [];
 
   if (typeof window !== "undefined") {
     encryptedPrivateKey = localStorage.getItem(
@@ -1754,6 +1938,14 @@ export const getLocalStorageData = (): LocalStorageInterface => {
       ? localStorage.getItem(LOCALSTORAGECONSTANTS.nwcInfo)
       : null;
     migrationComplete = localStorage.getItem("migrationComplete") === "true";
+    savedAddresses = getLocalStorageJson<SavedAddress[]>(
+      LOCALSTORAGECONSTANTS.savedAddresses,
+      [],
+      {
+        removeOnError: true,
+        validate: (value): value is SavedAddress[] => Array.isArray(value),
+      }
+    );
   }
   return {
     signInMethod: signInMethod as string,
@@ -1774,6 +1966,7 @@ export const getLocalStorageData = (): LocalStorageInterface => {
     nwcString: nwcString as string | null,
     nwcInfo: nwcInfo as string | null,
     migrationComplete: migrationComplete || false,
+    savedAddresses,
   };
 };
 
@@ -1934,3 +2127,10 @@ export const parseLocalProfileFallback = (
 
   return null;
 };
+
+export {
+  getSavedAddresses,
+  saveAddress,
+  deleteAddress,
+  setDefaultAddress,
+} from "@/utils/nostr/saved-address-helpers";

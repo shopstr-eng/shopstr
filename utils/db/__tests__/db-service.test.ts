@@ -18,7 +18,7 @@ type DbServiceModule = typeof import("../db-service");
 async function withPostgresTestContainer<T>(
   callback: (databaseUrl: string) => Promise<T>
 ): Promise<T> {
-  const { PostgreSqlContainer } = await import("testcontainers");
+  const { PostgreSqlContainer } = await import("@testcontainers/postgresql");
 
   const container = await new PostgreSqlContainer("postgres:15-alpine")
     .withDatabase("shopstr")
@@ -147,7 +147,7 @@ describe("db-service helpers", () => {
 
   maybeItTc("testcontainers: initialize + failed publish flow", async () => {
     // Dynamically import Testcontainers so tests still run if the package isn't installed
-    const { PostgreSqlContainer } = await import("testcontainers");
+    const { PostgreSqlContainer } = await import("@testcontainers/postgresql");
 
     const container = await new PostgreSqlContainer("postgres:15-alpine")
       .withDatabase("shopstr")

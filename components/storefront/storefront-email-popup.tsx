@@ -4,7 +4,6 @@ import {
   StorefrontEmailPopup,
   PopupFlowStep,
 } from "@/utils/types/types";
-import { XMarkIcon } from "@heroicons/react/24/outline";
 import { motion, AnimatePresence } from "framer-motion";
 import { copyToClipboard } from "@/utils/clipboard";
 
@@ -239,10 +238,13 @@ export default function StorefrontEmailPopupComponent({
             <div className="relative z-10">
               <button
                 onClick={handleDismiss}
+                aria-label="Dismiss popup"
                 className="absolute top-3 right-3 z-10 rounded-full p-1 transition-colors hover:bg-black/10"
                 style={{ color: text + "99" }}
               >
-                <XMarkIcon className="h-5 w-5" />
+                <span aria-hidden="true" className="text-lg leading-none">
+                  ✖️
+                </span>
               </button>
 
               <div

@@ -2,11 +2,6 @@ import { useContext, useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import { nip19 } from "nostr-tools";
 import {
-  CheckIcon,
-  ClipboardIcon,
-  DocumentTextIcon,
-} from "@heroicons/react/24/outline";
-import {
   Button,
   Modal,
   ModalContent,
@@ -567,7 +562,9 @@ const ChatMessage = ({
           <div className="text-sm">{content.replace(herdsharePdfUrl, "")}</div>
           <div className="rounded-lg border border-gray-300 bg-gray-50 p-3">
             <div className="mb-2 flex items-center gap-2">
-              <DocumentTextIcon className="h-5 w-5 text-blue-600" />
+              <span aria-hidden="true" className="text-lg leading-none">
+                📄
+              </span>
               <span className="text-sm font-medium text-gray-700">
                 {isEncryptedAgreement
                   ? content.toLowerCase().includes("signed")
@@ -681,14 +678,23 @@ const ChatMessage = ({
                 <div className="flex items-center">
                   <ClaimButton token={cashuPrefix + tokenAfterCashuVersion} />
                   {copiedToClipboard ? (
-                    <CheckIcon className="ml-2 h-5 w-5 text-green-400" />
+                    <span
+                      aria-hidden="true"
+                      className="ml-2 text-lg leading-none"
+                    >
+                      ✔️
+                    </span>
                   ) : (
-                    <ClipboardIcon
+                    <button
+                      type="button"
+                      aria-label="Copy token"
                       onClick={() =>
                         handleCopyToken(cashuPrefix + tokenAfterCashuVersion)
                       }
-                      className="ml-2 h-5 w-5 cursor-pointer transition-all hover:scale-110"
-                    />
+                      className="ml-2 cursor-pointer text-lg leading-none transition-all hover:scale-110"
+                    >
+                      📋
+                    </button>
                   )}
                 </div>
               </>
@@ -752,7 +758,9 @@ const ChatMessage = ({
           <ModalContent className="flex h-full flex-col">
             <ModalHeader className="flex-shrink-0 border-b bg-white">
               <div className="flex items-center gap-2">
-                <DocumentTextIcon className="h-5 w-5" />
+                <span aria-hidden="true" className="text-lg leading-none">
+                  📄
+                </span>
                 Review & Sign Agreement
               </div>
             </ModalHeader>

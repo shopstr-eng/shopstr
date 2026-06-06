@@ -27,6 +27,10 @@ import {
   EventIdModal,
 } from "../../components/utility-components/modals/event-modals";
 import { findProductBySlug, getListingSlug } from "@/utils/url-slugs";
+import {
+  eventMatchesListingIdentifier,
+  getListingRouteIdentifier,
+} from "@/utils/listing-identifiers";
 import StorefrontThemeWrapper from "@/components/storefront/storefront-theme-wrapper";
 import ProductPageRenderer from "@/components/storefront/product-page-renderer";
 import FormattedText from "@/components/storefront/formatted-text";
@@ -51,12 +55,6 @@ type ResolvedListingState = {
   rawEvent: NostrEvent;
   isZapsnag: boolean;
 };
-
-function getListingIdentifier(
-  productId: string | string[] | undefined
-): string {
-  return Array.isArray(productId) ? productId[0] || "" : productId || "";
-}
 
 function resolveListingStateFromEvent(
   event: NostrEvent | null | undefined
@@ -171,7 +169,7 @@ export const getServerSideProps: GetServerSideProps<ListingPageProps> = async (
   context
 ) => {
   const { productId } = context.query;
-  const identifier = getListingIdentifier(productId);
+  const identifier = getListingRouteIdentifier(productId);
 
   if (!identifier) {
     return { props: { ogMeta: LISTING_FALLBACK, initialProductEvent: null } };
@@ -327,9 +325,7 @@ const Listing = ({ initialProductEvent }: ListingPageProps) => {
   useEffect(() => {
     if (router.isReady) {
       const { productId } = router.query;
-      const resolvedProductId = Array.isArray(productId)
-        ? productId[0] || ""
-        : productId || "";
+      const resolvedProductId = getListingRouteIdentifier(productId);
       setProductIdString(resolvedProductId);
       if (!resolvedProductId) {
         router.push("/marketplace");
@@ -376,22 +372,8 @@ const Listing = ({ initialProductEvent }: ListingPageProps) => {
       }
 
       if (!matchingEvent) {
-        matchingEvent = productContext.productEvents.find(
-          (event: NostrEvent) => {
-            const naddrMatch =
-              nip19.naddrEncode({
-                identifier:
-                  event.tags.find((tag: string[]) => tag[0] === "d")?.[1] || "",
-                pubkey: event.pubkey,
-                kind: event.kind,
-              }) === productIdString;
-
-            const dTagMatch =
-              event.tags.find((tag: string[]) => tag[0] === "d")?.[1] ===
-              productIdString;
-            const idMatch = event.id === productIdString;
-            return naddrMatch || dTagMatch || idMatch;
-          }
+        matchingEvent = productContext.productEvents.find((event: NostrEvent) =>
+          eventMatchesListingIdentifier(event, productIdString)
         );
       }
 

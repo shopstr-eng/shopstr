@@ -20,15 +20,8 @@ import {
   SelectItem,
   Input,
   Spinner,
+  Checkbox,
 } from "@heroui/react";
-import {
-  BanknotesIcon,
-  BoltIcon,
-  CheckIcon,
-  ClipboardIcon,
-  CurrencyDollarIcon,
-  WalletIcon,
-} from "@heroicons/react/24/outline";
 import {
   Mint as CashuMint,
   Wallet as CashuWallet,
@@ -59,10 +52,12 @@ import {
   constructGiftWrappedEvent,
   constructMessageSeal,
   constructMessageGiftWrap,
+  getSavedAddresses,
   sendGiftWrappedMessageEvent,
   generateKeys,
   getLocalStorageData,
   publishProofEvent,
+  saveAddress,
 } from "@/utils/nostr/nostr-helper-functions";
 import { LightningAddress } from "@getalby/lightning-tools";
 import QRCode from "qrcode";
@@ -76,6 +71,7 @@ import { BLUEBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import SignInModal from "./sign-in/SignInModal";
 import FailureModal from "@/components/utility-components/failure-modal";
 import CountryDropdown from "./utility-components/dropdowns/country-dropdown";
+import AddressPicker from "./utility-components/address-picker";
 import {
   NostrContext,
   SignerContext,
@@ -84,6 +80,7 @@ import {
   ShippingFormData,
   ContactFormData,
   CombinedFormData,
+  SavedAddress,
   ShopProfile,
 } from "@/utils/types/types";
 import { Controller } from "react-hook-form";
@@ -243,6 +240,12 @@ export default function CartInvoiceCard({
 
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
   const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
+  const [saveDetails, setSaveDetails] = useState(false);
+  const [saveAddressLabel, setSaveAddressLabel] = useState("");
+  const [selectedSavedAddressId, setSelectedSavedAddressId] = useState<
+    string | null
+  >(null);
+  const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
   const [invoice, setInvoice] = useState("");
   const [copiedToClipboard, setCopiedToClipboard] = useState(false);
   // Wall-clock deadline (ms) the Lightning polling loop will give up at; null
@@ -406,6 +409,8 @@ export default function CartInvoiceCard({
     selectedSize?: string;
     selectedVolume?: string;
     selectedWeight?: string;
+    selectedVariant?: string;
+    variantLabel?: string;
     selectedBulkOption?: string;
     donationAmount?: number;
     donationPercentage?: number;
@@ -438,6 +443,8 @@ export default function CartInvoiceCard({
     selectedSize?: string;
     selectedVolume?: string;
     selectedWeight?: string;
+    selectedVariant?: string;
+    variantLabel?: string;
     selectedBulkOption?: string;
     includeBuyerEmail?: boolean;
     subscriptionFrequency?: string;
@@ -454,6 +461,7 @@ export default function CartInvoiceCard({
         keepalive: true,
         body: JSON.stringify({
           buyerEmail: shouldIncludeBuyer ? buyerEmail || undefined : undefined,
+          buyerEmailForSeller: buyerEmail || undefined,
           buyerPubkey: shouldIncludeBuyer ? userPubkey || undefined : undefined,
           sellerPubkey: params.sellerPubkey,
           orderId: params.orderId,
@@ -468,6 +476,8 @@ export default function CartInvoiceCard({
           selectedSize: params.selectedSize,
           selectedVolume: params.selectedVolume,
           selectedWeight: params.selectedWeight,
+          selectedVariant: params.selectedVariant,
+          variantLabel: params.variantLabel,
           selectedBulkOption: params.selectedBulkOption,
           subscriptionFrequency: params.subscriptionFrequency,
           productId: params.productId,
@@ -573,6 +583,8 @@ export default function CartInvoiceCard({
         selectedSize: p.selectedSize || undefined,
         selectedVolume: p.selectedVolume || undefined,
         selectedWeight: p.selectedWeight || undefined,
+        selectedVariant: p.selectedVariant || undefined,
+        variantLabel: p.variantLabel || undefined,
         selectedBulkOption: p.selectedBulkOption
           ? String(p.selectedBulkOption)
           : undefined,
@@ -874,6 +886,7 @@ export default function CartInvoiceCard({
     handleSubmit: handleFormSubmit,
     control: formControl,
     watch,
+    setValue,
   } = useForm();
 
   // Watch form values to validate completion
@@ -1128,6 +1141,18 @@ export default function CartInvoiceCard({
   // the correct unit without re-doing the conversion.
   const [nativeShippingTotal, setNativeShippingTotal] = useState<number>(0);
 
+  // Per-seller discounted shipping, kept in two units so the reported order
+  // totals (DMs / email / dashboard) can include the shipping the buyer is
+  // actually charged. These are REPORTING-ONLY mirrors of the same per-seller
+  // shipping math the charge accumulators use — they never feed fund
+  // distribution (ecash proofs, Stripe intents, etc.).
+  const [shippingCostsInSats, setShippingCostsInSats] = useState<
+    Record<string, number>
+  >({});
+  const [nativeShippingPerSeller, setNativeShippingPerSeller] = useState<
+    Record<string, number>
+  >({});
+
   useEffect(() => {
     if (
       !cartCurrency ||
@@ -1136,6 +1161,7 @@ export default function CartInvoiceCard({
     ) {
       setNativeTotalCost(null);
       setNativeShippingTotal(0);
+      setNativeShippingPerSeller({});
       return;
     }
     let cancelled = false;
@@ -1194,6 +1220,7 @@ export default function CartInvoiceCard({
         totalSmallest += lineToSmallest(lineInCartCurrency);
       }
       let nativeShippingSum = 0;
+      const nativeShipPerSeller: Record<string, number> = {};
       if (
         formType === "shipping" ||
         (formType === "combined" && shippingPickupPreference === "shipping")
@@ -1260,6 +1287,8 @@ export default function CartInvoiceCard({
           }
           totalSmallest += lineToSmallest(shippingInCartCurrency);
           nativeShippingSum += shippingInCartCurrency;
+          nativeShipPerSeller[product.pubkey] =
+            (nativeShipPerSeller[product.pubkey] || 0) + shippingInCartCurrency;
         }
       }
       if (!cancelled) {
@@ -1271,6 +1300,14 @@ export default function CartInvoiceCard({
             ? Math.round(nativeShippingSum)
             : Math.round(nativeShippingSum * 100) / 100
         );
+        const roundedNativeShipPerSeller: Record<string, number> = {};
+        for (const pk of Object.keys(nativeShipPerSeller)) {
+          const v = nativeShipPerSeller[pk] || 0;
+          roundedNativeShipPerSeller[pk] = cartIsZeroDecimal
+            ? Math.round(v)
+            : Math.round(v * 100) / 100;
+        }
+        setNativeShippingPerSeller(roundedNativeShipPerSeller);
       }
     };
     compute();
@@ -1393,6 +1430,30 @@ export default function CartInvoiceCard({
       setRequiredInfo(requiredFields);
     }
   }, [products]);
+
+  useEffect(() => {
+    const loadSavedAddresses = () => {
+      setSavedAddresses(getSavedAddresses());
+    };
+
+    loadSavedAddresses();
+    window.addEventListener("storage", loadSavedAddresses);
+
+    return () => {
+      window.removeEventListener("storage", loadSavedAddresses);
+    };
+  }, []);
+
+  const applySavedAddress = (address: SavedAddress) => {
+    setValue("Name", address.name);
+    setValue("Address", address.address);
+    setValue("Unit", address.unit || "");
+    setValue("City", address.city);
+    setValue("Postal Code", address.zip);
+    setValue("State/Province", address.state);
+    setValue("Country", address.country);
+    setSelectedSavedAddressId(address.id);
+  };
 
   // Check if any products have pickup locations
   const productsWithPickupLocations = useMemo(() => {
@@ -1593,6 +1654,7 @@ export default function CartInvoiceCard({
         watchedValues["Postal Code"]?.trim() &&
         watchedValues["State/Province"]?.trim() &&
         watchedValues.Country?.trim() &&
+        (!saveDetails || saveAddressLabel.trim()) &&
         (!requiredInfo || watchedValues.Required?.trim()) &&
         pickupLocationValid
       );
@@ -1606,6 +1668,7 @@ export default function CartInvoiceCard({
         watchedValues["Postal Code"]?.trim() &&
         watchedValues["State/Province"]?.trim() &&
         watchedValues.Country?.trim() &&
+        (!saveDetails || saveAddressLabel.trim()) &&
         (!requiredInfo || watchedValues.Required?.trim()) &&
         pickupLocationValid
       );
@@ -1618,6 +1681,8 @@ export default function CartInvoiceCard({
     requiredInfo,
     productsWithPickupLocations,
     shippingPickupPreference,
+    saveDetails,
+    saveAddressLabel,
   ]);
 
   const generateNewKeys = async () => {
@@ -1814,6 +1879,8 @@ export default function CartInvoiceCard({
         selectedSize: product.selectedSize,
         selectedVolume: product.selectedVolume,
         selectedWeight: product.selectedWeight,
+        selectedVariant: product.selectedVariant,
+        variantLabel: product.variantLabel,
         selectedBulkOption: product.selectedBulkOption,
         subscriptionInfo,
       };
@@ -1841,6 +1908,8 @@ export default function CartInvoiceCard({
         selectedSize: product.selectedSize,
         selectedVolume: product.selectedVolume,
         selectedWeight: product.selectedWeight,
+        selectedVariant: product.selectedVariant,
+        variantLabel: product.variantLabel,
         selectedBulkOption: product.selectedBulkOption,
       };
     } else if (isDonation) {
@@ -1881,6 +1950,8 @@ export default function CartInvoiceCard({
         selectedSize: product.selectedSize,
         selectedVolume: product.selectedVolume,
         selectedWeight: product.selectedWeight,
+        selectedVariant: product.selectedVariant,
+        variantLabel: product.variantLabel,
         selectedBulkOption: product.selectedBulkOption,
       };
     }
@@ -1905,7 +1976,13 @@ export default function CartInvoiceCard({
       decodedRandomPrivkeyForReceiver.data as Uint8Array,
       pubkeyToReceiveMessage
     );
-    await sendGiftWrappedMessageEvent(nostr!, giftWrappedEvent, signer);
+    // Only seller-bound order messages drive the orders dashboard; deliver
+    // those to the seller's own relays (server + client fallback). Buyer
+    // receipts and donations don't need this and would just add latency.
+    const deliverToRecipientRelays = !!orderId && !isReceipt && !isDonation;
+    await sendGiftWrappedMessageEvent(nostr!, giftWrappedEvent, signer, {
+      deliverToRecipientRelays,
+    });
 
     if (isReceipt || isHerdshare) {
       chatsContext.addNewlyCreatedMessageEvent(
@@ -2026,6 +2103,26 @@ export default function CartInvoiceCard({
         };
       }
 
+      if (
+        saveDetails &&
+        (formType === "shipping" || formType === "combined") &&
+        paymentData.shippingName &&
+        paymentData.shippingAddress
+      ) {
+        saveAddress({
+          id: selectedSavedAddressId || undefined,
+          name: paymentData.shippingName,
+          address: paymentData.shippingAddress,
+          unit: paymentData.shippingUnitNo || "",
+          city: paymentData.shippingCity,
+          state: paymentData.shippingState,
+          zip: paymentData.shippingPostalCode,
+          country: paymentData.shippingCountry,
+          label: saveAddressLabel.trim(),
+          isDefault: false,
+        });
+      }
+
       if (paymentType === "fiat") {
         setPendingPaymentData(paymentData);
         if (isSingleSeller) {
@@ -2062,10 +2159,14 @@ export default function CartInvoiceCard({
       const emailAddressTag =
         paymentData.shippingName && paymentData.shippingAddress
           ? `${paymentData.shippingName}, ${paymentData.shippingAddress}, ${
-              paymentData.shippingCity || ""
-            }, ${paymentData.shippingState || ""}, ${
-              paymentData.shippingPostalCode || ""
-            }, ${paymentData.shippingCountry || ""}`
+              paymentData.shippingUnitNo
+                ? `${paymentData.shippingUnitNo}, `
+                : ""
+            }${paymentData.shippingCity || ""}, ${
+              paymentData.shippingState || ""
+            }, ${paymentData.shippingPostalCode || ""}, ${
+              paymentData.shippingCountry || ""
+            }`
           : undefined;
       const productsBySeller: { [pubkey: string]: typeof products } = {};
       for (const p of products) {
@@ -2083,6 +2184,10 @@ export default function CartInvoiceCard({
               if (p.selectedSize) parts.push(`Size: ${p.selectedSize}`);
               if (p.selectedVolume) parts.push(`Volume: ${p.selectedVolume}`);
               if (p.selectedWeight) parts.push(`Weight: ${p.selectedWeight}`);
+              if (p.selectedVariant)
+                parts.push(
+                  `${p.variantLabel || "Option"}: ${p.selectedVariant}`
+                );
               if (p.selectedBulkOption)
                 parts.push(`Bundle: ${p.selectedBulkOption} units`);
               const qty = quantities[p.id];
@@ -2094,14 +2199,17 @@ export default function CartInvoiceCard({
             .map((p: any) => selectedPickupLocations[p.id])
             .filter(Boolean)
             .join(", ");
-          const sellerAmountSats = totalCostsInSats[sellerPubkey] || 0;
+          const sellerShipSats = shippingCostsInSats[sellerPubkey] || 0;
+          const sellerShipNative = nativeShippingPerSeller[sellerPubkey] || 0;
+          const sellerAmountSats =
+            (totalCostsInSats[sellerPubkey] || 0) + sellerShipSats;
           const sellerAmountNative =
             !isSatsCart && nativeCostsPerProduct
               ? sellerProducts.reduce(
                   (sum: number, p: any) =>
                     sum + (nativeCostsPerProduct[p.id] || 0),
                   0
-                )
+                ) + sellerShipNative
               : null;
           const orderCurrency =
             !isSatsCart && cartCurrency ? cartCurrency : "sats";
@@ -2332,10 +2440,14 @@ export default function CartInvoiceCard({
     let cancelled = false;
     const recompute = async () => {
       if (formType !== "shipping" && formType !== "combined") {
-        if (!cancelled) setTotalCost(subtotalCost);
+        if (!cancelled) {
+          setTotalCost(subtotalCost);
+          setShippingCostsInSats({});
+        }
         return;
       }
       let shippingTotal = 0;
+      const shipPerSeller: Record<string, number> = {};
       const processedSellers = new Set<string>();
       for (const product of products) {
         const sellerPubkey = product.pubkey;
@@ -2360,21 +2472,28 @@ export default function CartInvoiceCard({
             const shippingCostInSats = await convertShippingToSats(
               highestShippingProduct
             );
-            shippingTotal += Math.ceil(
+            const discountedShip = Math.ceil(
               applyShippingDiscount(shippingCostInSats, sellerPubkey)
             );
+            shippingTotal += discountedShip;
+            shipPerSeller[sellerPubkey] = discountedShip;
           }
         } else if (sellerProducts.length === 1) {
           const shippingCostInSats = await convertShippingToSats(
             sellerProducts[0]!
           );
           const quantity = quantities[sellerProducts[0]!.id] || 1;
-          shippingTotal += Math.ceil(
+          const discountedShip = Math.ceil(
             applyShippingDiscount(shippingCostInSats * quantity, sellerPubkey)
           );
+          shippingTotal += discountedShip;
+          shipPerSeller[sellerPubkey] = discountedShip;
         }
       }
-      if (!cancelled) setTotalCost(subtotalCost + shippingTotal);
+      if (!cancelled) {
+        setTotalCost(subtotalCost + shippingTotal);
+        setShippingCostsInSats(shipPerSeller);
+      }
     };
     recompute();
     return () => {
@@ -2529,11 +2648,14 @@ export default function CartInvoiceCard({
               product.selectedSize ||
               product.selectedVolume ||
               product.selectedWeight ||
+              product.selectedVariant ||
               product.selectedBulkOption
                 ? {
                     size: product.selectedSize || undefined,
                     volume: product.selectedVolume || undefined,
                     weight: product.selectedWeight || undefined,
+                    selectedVariant: product.selectedVariant || undefined,
+                    variantLabel: product.variantLabel || undefined,
                     bulk: product.selectedBulkOption || undefined,
                   }
                 : undefined,
@@ -2864,6 +2986,17 @@ export default function CartInvoiceCard({
           ? (cartCurrency as string)
           : "sats";
 
+        // Fold the seller's discounted shipping into the REPORTED amount only
+        // (attributed to the first product so multi-product sellers don't
+        // double-count). The Stripe charge and donation base are unchanged.
+        const reportShipStripe =
+          product === sellerProducts[0]
+            ? useNativeForMsg
+              ? nativeShippingPerSeller[product.pubkey] || 0
+              : shippingCostsInSats[product.pubkey] || 0
+            : 0;
+        const reportedProductAmount = productAmount + reportShipStripe;
+
         const sellerProfileForDonation = profileContext.profileData.get(
           product.pubkey
         );
@@ -2886,7 +3019,7 @@ export default function CartInvoiceCard({
           "stripe",
           paymentIntentId,
           paymentIntentId,
-          productAmount,
+          reportedProductAmount,
           quantities[product.id] || 1,
           undefined,
           addressTag,
@@ -3157,6 +3290,15 @@ export default function CartInvoiceCard({
             const fiatCurrency = useNativeForMsg
               ? (cartCurrency as string)
               : "sats";
+            // Reporting-only: fold the seller's discounted shipping into the
+            // amount tag once (first product), leaving fund handling unchanged.
+            const reportShipFiat =
+              product === sellerProducts[0]
+                ? useNativeForMsg
+                  ? nativeShippingPerSeller[product.pubkey] || 0
+                  : shippingCostsInSats[product.pubkey] || 0
+                : 0;
+            const reportedFiatAmount = fiatAmount + reportShipFiat;
             await sendPaymentAndContactMessage(
               sellerPubkey,
               paymentMessage,
@@ -3169,7 +3311,7 @@ export default function CartInvoiceCard({
               sellerFiatOption,
               sellerFiatHandle,
               sellerFiatHandle,
-              fiatAmount,
+              reportedFiatAmount,
               quantities[product.id] || 1,
               undefined,
               addressTag,
@@ -3329,6 +3471,15 @@ export default function CartInvoiceCard({
           const fiatCurrency = useNativeForMsg
             ? (cartCurrency as string)
             : "sats";
+          // Reporting-only: fold the seller's discounted shipping into the
+          // amount tag once (first product), leaving fund handling unchanged.
+          const reportShipFiat =
+            product === products[0]
+              ? useNativeForMsg
+                ? nativeShippingPerSeller[product.pubkey] || 0
+                : shippingCostsInSats[product.pubkey] || 0
+              : 0;
+          const reportedFiatAmount = fiatAmount + reportShipFiat;
           await sendPaymentAndContactMessage(
             sellerPubkey,
             paymentMessage,
@@ -3341,7 +3492,7 @@ export default function CartInvoiceCard({
             selectedFiatOption,
             (fiatPaymentOptions as any)[selectedFiatOption] || "",
             (fiatPaymentOptions as any)[selectedFiatOption] || "",
-            fiatAmount,
+            reportedFiatAmount,
             quantities[product.id] || 1,
             undefined,
             addressTag,
@@ -3476,10 +3627,10 @@ export default function CartInvoiceCard({
       const emailAddressTag =
         data.shippingName && data.shippingAddress
           ? `${data.shippingName}, ${data.shippingAddress}, ${
-              data.shippingCity || ""
-            }, ${data.shippingState || ""}, ${data.shippingPostalCode || ""}, ${
-              data.shippingCountry || ""
-            }`
+              data.shippingUnitNo ? `${data.shippingUnitNo}, ` : ""
+            }${data.shippingCity || ""}, ${data.shippingState || ""}, ${
+              data.shippingPostalCode || ""
+            }, ${data.shippingCountry || ""}`
           : undefined;
 
       if (isMultiFiat) {
@@ -3875,11 +4026,22 @@ export default function CartInvoiceCard({
         });
       }
 
+      // Track which sellers already had their (sats) shipping folded into a
+      // reported order total, so multi-product sellers don't double-count
+      // shipping across this per-product message loop. Reporting only — the
+      // ecash proof amounts (sellerAmount) below are untouched.
+      const cashuShipReported = new Set<string>();
+
       for (const product of products) {
         const title = product.title;
         const pubkey = product.pubkey;
         const required = product.required;
         const tokenAmount = totalCostsInSats[pubkey];
+        const reportedShipSats = cashuShipReported.has(pubkey)
+          ? 0
+          : shippingCostsInSats[pubkey] || 0;
+        cashuShipReported.add(pubkey);
+        const reportedOrderAmount = (tokenAmount || 0) + reportedShipSats;
         let sellerToken;
         let donationToken;
         let beefDonationToken;
@@ -3965,7 +4127,7 @@ export default function CartInvoiceCard({
           orderInfoTags.push(["address", addressString]);
         }
         if (tokenAmount) {
-          orderInfoTags.push(["amount", tokenAmount.toString()]);
+          orderInfoTags.push(["amount", reportedOrderAmount.toString()]);
         }
         if (donationAmount > 0) {
           orderInfoTags.push([
@@ -4156,6 +4318,14 @@ export default function CartInvoiceCard({
                   productDetails += " weighing " + product.selectedWeight;
                 }
               }
+              if (product.selectedVariant) {
+                productDetails +=
+                  " (" +
+                  (product.variantLabel || "Option") +
+                  ": " +
+                  product.selectedVariant +
+                  ")";
+              }
               if (product.selectedBulkOption) {
                 if (productDetails) {
                   productDetails +=
@@ -4312,6 +4482,14 @@ export default function CartInvoiceCard({
                   productDetails += " weighing " + product.selectedWeight;
                 }
               }
+              if (product.selectedVariant) {
+                productDetails +=
+                  " (" +
+                  (product.variantLabel || "Option") +
+                  ": " +
+                  product.selectedVariant +
+                  ")";
+              }
               if (product.selectedBulkOption) {
                 if (productDetails) {
                   productDetails +=
@@ -4408,6 +4586,14 @@ export default function CartInvoiceCard({
             } else {
               productDetails += " weighing " + product.selectedWeight;
             }
+          }
+          if (product.selectedVariant) {
+            productDetails +=
+              " (" +
+              (product.variantLabel || "Option") +
+              ": " +
+              product.selectedVariant +
+              ")";
           }
           if (product.selectedBulkOption) {
             if (productDetails) {
@@ -4737,6 +4923,14 @@ export default function CartInvoiceCard({
                 productDetails += " weighing " + product.selectedWeight;
               }
             }
+            if (product.selectedVariant) {
+              productDetails +=
+                " (" +
+                (product.variantLabel || "Option") +
+                ": " +
+                product.selectedVariant +
+                ")";
+            }
             if (product.selectedBulkOption) {
               if (productDetails) {
                 productDetails +=
@@ -4889,6 +5083,14 @@ export default function CartInvoiceCard({
               productDetails += " weighing " + product.selectedWeight;
             }
           }
+          if (product.selectedVariant) {
+            productDetails +=
+              " (" +
+              (product.variantLabel || "Option") +
+              ": " +
+              product.selectedVariant +
+              ")";
+          }
           if (product.selectedBulkOption) {
             if (productDetails) {
               productDetails +=
@@ -4968,6 +5170,14 @@ export default function CartInvoiceCard({
             } else {
               productDetails += " weighing " + product.selectedWeight;
             }
+          }
+          if (product.selectedVariant) {
+            productDetails +=
+              " (" +
+              (product.variantLabel || "Option") +
+              ": " +
+              product.selectedVariant +
+              ")";
           }
           if (product.selectedBulkOption) {
             if (productDetails) {
@@ -5537,6 +5747,15 @@ export default function CartInvoiceCard({
       <div className="space-y-4">
         {(formType === "shipping" || formType === "combined") && (
           <>
+            {savedAddresses.length > 0 && (
+              <AddressPicker
+                compact
+                autoSelect={false}
+                allowInlineAdd={false}
+                onSelect={applySavedAddress}
+              />
+            )}
+
             <Controller
               name="Name"
               control={formControl}
@@ -5773,6 +5992,39 @@ export default function CartInvoiceCard({
                 )}
               />
             </div>
+
+            <div className="space-y-3">
+              <Checkbox
+                isSelected={saveDetails}
+                onValueChange={setSaveDetails}
+                classNames={{
+                  label: "text-black",
+                  wrapper:
+                    "before:border-2 before:border-black after:bg-primary-yellow",
+                }}
+              >
+                Save this address for future orders
+              </Checkbox>
+
+              {saveDetails && (
+                <Input
+                  classNames={{
+                    inputWrapper:
+                      "border-2 border-black rounded-md shadow-neo !bg-white hover:!bg-white focus-within:!bg-white data-[hover=true]:!bg-white group-data-[focus=true]:!bg-white",
+                    input: "!text-black placeholder:text-gray-400",
+                    label: "text-gray-600",
+                    innerWrapper: "!bg-white",
+                  }}
+                  fullWidth={true}
+                  label={<span>Address Label</span>}
+                  placeholder="e.g. Home, Office"
+                  labelPlacement="inside"
+                  isRequired={true}
+                  value={saveAddressLabel}
+                  onValueChange={setSaveAddressLabel}
+                />
+              )}
+            </div>
           </>
         )}
 
@@ -5896,6 +6148,12 @@ export default function CartInvoiceCard({
                       {product.selectedWeight && (
                         <p className="text-sm text-gray-600">
                           Weight: {product.selectedWeight}
+                        </p>
+                      )}
+                      {product.selectedVariant && (
+                        <p className="text-sm text-gray-600">
+                          {product.variantLabel || "Option"}:{" "}
+                          {product.selectedVariant}
                         </p>
                       )}
                       {product.selectedBulkOption && (
@@ -6229,17 +6487,24 @@ export default function CartInvoiceCard({
                                 )}`
                               : invoice}
                           </p>
-                          <ClipboardIcon
+                          <button
+                            type="button"
+                            aria-label="Copy invoice"
                             onClick={handleCopyInvoice}
-                            className={`text-dark-text ml-2 h-4 w-4 cursor-pointer ${
+                            className={`ml-2 cursor-pointer text-sm leading-none ${
                               copiedToClipboard ? "hidden" : ""
                             }`}
-                          />
-                          <CheckIcon
-                            className={`text-dark-text ml-2 h-4 w-4 cursor-pointer ${
+                          >
+                            📋
+                          </button>
+                          <span
+                            aria-hidden="true"
+                            className={`ml-2 cursor-pointer text-sm leading-none ${
                               copiedToClipboard ? "" : "hidden"
                             }`}
-                          />
+                          >
+                            ✔️
+                          </span>
                         </div>
                       </>
                     )}
@@ -6323,6 +6588,12 @@ export default function CartInvoiceCard({
                     {product.selectedWeight && (
                       <p className="text-sm text-gray-600">
                         Weight: {product.selectedWeight}
+                      </p>
+                    )}
+                    {product.selectedVariant && (
+                      <p className="text-sm text-gray-600">
+                        {product.variantLabel || "Option"}:{" "}
+                        {product.selectedVariant}
                       </p>
                     )}
                     {product.selectedBulkOption && (
@@ -7019,7 +7290,14 @@ export default function CartInvoiceCard({
                             onFormSubmit(data, "lightning")
                           )();
                         }}
-                        startContent={<BoltIcon className="h-6 w-6" />}
+                        startContent={
+                          <span
+                            aria-hidden="true"
+                            className="text-2xl leading-none"
+                          >
+                            ⚡
+                          </span>
+                        }
                       >
                         Pay with Lightning: {formattedLightningCost}
                         {getDiscountLabel(bitcoinDiscountPct)}
@@ -7040,7 +7318,14 @@ export default function CartInvoiceCard({
                               onFormSubmit(data, "cashu")
                             )();
                           }}
-                          startContent={<BanknotesIcon className="h-6 w-6" />}
+                          startContent={
+                            <span
+                              aria-hidden="true"
+                              className="text-2xl leading-none"
+                            >
+                              🥜
+                            </span>
+                          }
                         >
                           Pay with Cashu: {formattedLightningCost}
                           {getDiscountLabel(bitcoinDiscountPct)}
@@ -7065,7 +7350,14 @@ export default function CartInvoiceCard({
                               onFormSubmit(data, "nwc")
                             )();
                           }}
-                          startContent={<WalletIcon className="h-6 w-6" />}
+                          startContent={
+                            <span
+                              aria-hidden="true"
+                              className="text-2xl leading-none"
+                            >
+                              👛
+                            </span>
+                          }
                         >
                           Pay with {nwcInfo.alias || "NWC"}:{" "}
                           {formattedLightningCost}
@@ -7097,7 +7389,14 @@ export default function CartInvoiceCard({
                           onFormSubmit(data, "stripe")
                         )();
                       }}
-                      startContent={<CurrencyDollarIcon className="h-6 w-6" />}
+                      startContent={
+                        <span
+                          aria-hidden="true"
+                          className="text-2xl leading-none"
+                        >
+                          💳️
+                        </span>
+                      }
                     >
                       Pay with Card: {formattedCardCost}
                       {getDiscountLabel(stripeDiscountPct)}
@@ -7121,7 +7420,12 @@ export default function CartInvoiceCard({
                           )();
                         }}
                         startContent={
-                          <CurrencyDollarIcon className="h-6 w-6" />
+                          <span
+                            aria-hidden="true"
+                            className="text-2xl leading-none"
+                          >
+                            💵
+                          </span>
                         }
                       >
                         Pay with Cash or Payment App:{" "}

@@ -44,6 +44,7 @@ export const FileUploaderButton = ({
   disabled,
   isIconOnly,
   className,
+  containerClassName,
   children,
   imgCallbackOnUpload,
   isPlaceholder,
@@ -52,6 +53,7 @@ export const FileUploaderButton = ({
   disabled?: boolean;
   isIconOnly?: boolean;
   className?: string;
+  containerClassName?: string;
   children?: React.ReactNode;
   imgCallbackOnUpload: (imgUrl: string) => void;
   isPlaceholder?: boolean;
@@ -425,12 +427,12 @@ export const FileUploaderButton = ({
     }, 0);
   };
 
+  const wrapperClassName = containerClassName
+    ? `flex w-fit flex-col gap-4 ${containerClassName}`
+    : `flex flex-col gap-4 ${isPlaceholder || isProductUpload ? "w-full" : ""}`;
+
   return (
-    <div
-      className={`flex flex-col gap-4 ${
-        isPlaceholder || isProductUpload ? "w-full" : ""
-      }`}
-    >
+    <div className={wrapperClassName}>
       {/* Drag and Drop Zone */}
       <div
         ref={dropZoneRef}

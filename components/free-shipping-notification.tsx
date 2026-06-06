@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { XMarkIcon, TruckIcon } from "@heroicons/react/24/outline";
 import { ShopProfile } from "@/utils/types/types";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
 
@@ -91,16 +90,21 @@ export default function FreeShippingNotification({
         >
           <div className="mb-2 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <TruckIcon className="h-5 w-5 text-black" />
+              <span aria-hidden="true" className="text-lg leading-none">
+                🚚
+              </span>
               <span className="text-sm font-bold text-black">
                 Free Shipping Progress
               </span>
             </div>
             <button
               onClick={onClose}
+              aria-label="Close"
               className="rounded-md p-0.5 transition-colors hover:bg-gray-100"
             >
-              <XMarkIcon className="h-4 w-4 text-black" />
+              <span aria-hidden="true" className="text-sm leading-none">
+                ✖️
+              </span>
             </button>
           </div>
           <div className="space-y-3">

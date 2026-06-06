@@ -28,6 +28,7 @@
     ".turbo/",
     "apps/mobile/",
     "packages/",
+    "**/dist/",
     "**/*.js"
   ]
 }

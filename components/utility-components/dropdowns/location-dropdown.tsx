@@ -1,5 +1,11 @@
-import { useMemo } from "react";
-import { Select, SelectItem, SelectSection, Avatar } from "@heroui/react";
+import { useState, useMemo } from "react";
+import {
+  Select,
+  SelectItem,
+  SelectSection,
+  Avatar,
+  Input,
+} from "@heroui/react";
 import locations from "../../../public/locationSelection.json";
 
 export const locationAvatar = (location: string) => {
@@ -30,102 +36,106 @@ const LocationDropdown = ({
 }: {
   [x: string]: any;
 }) => {
+  const [searchValue, setSearchValue] = useState("");
   const resolvedSelectedKeys =
     selectedKeysProp !== undefined ? selectedKeysProp : value ? [value] : [];
   const locationOptions = useMemo(() => {
     const headingClasses =
-      "flex w-full sticky top-1 z-20 py-1.5 px-2 bg-white text-black font-semibold shadow-small rounded-small";
+      "flex w-full py-1.5 px-2 bg-white text-black font-semibold shadow-small rounded-small";
 
-    const countryOptions = (
-      <SelectSection
-        key={"countryOptions"}
-        title="Countries"
-        classNames={{
-          heading: headingClasses,
-        }}
-      >
-        {locations.countries.map((country) => {
-          return (
+    const q = searchValue.trim().toLowerCase();
+
+    const filteredStates = locations.states.filter((state) =>
+      state.state.toLowerCase().includes(q)
+    );
+
+    const filteredCountries = locations.countries.filter((country) =>
+      country.country.toLowerCase().includes(q)
+    );
+
+    const regionalOptionsList = [
+      "Worldwide",
+      "US & Canada",
+      "Europe",
+      "Online",
+    ];
+
+    const filteredRegional = regionalOptionsList.filter((regional) =>
+      regional.toLowerCase().includes(q)
+    );
+
+    const stateOptions =
+      filteredStates.length > 0 ? (
+        <SelectSection
+          key={"stateOptions"}
+          title="U.S. States"
+          classNames={{
+            heading: headingClasses,
+          }}
+        >
+          {filteredStates.map((state) => {
+            return (
+              <SelectItem
+                key={state.state}
+                classNames={{
+                  base: "text-black data-[hover=true]:!bg-primary-yellow",
+                }}
+              >
+                {state.state}
+              </SelectItem>
+            );
+          })}
+        </SelectSection>
+      ) : null;
+
+    const countryOptions =
+      filteredCountries.length > 0 ? (
+        <SelectSection
+          key={"countryOptions"}
+          title="Countries"
+          classNames={{
+            heading: headingClasses,
+          }}
+        >
+          {filteredCountries.map((country) => {
+            return (
+              <SelectItem
+                key={country.country}
+                classNames={{
+                  base: "text-black data-[hover=true]:!bg-primary-yellow",
+                }}
+              >
+                {country.country}
+              </SelectItem>
+            );
+          })}
+        </SelectSection>
+      ) : null;
+
+    const regionalOptions =
+      filteredRegional.length > 0 ? (
+        <SelectSection
+          key={"regionalOptions"}
+          title="Regional"
+          classNames={{
+            heading: headingClasses,
+          }}
+        >
+          {filteredRegional.map((regional) => (
             <SelectItem
-              key={country.country}
+              key={regional}
               classNames={{
                 base: "text-black data-[hover=true]:!bg-primary-yellow",
               }}
             >
-              {country.country}
+              {regional === "US & Canada" ? "US & Canada" : regional}
             </SelectItem>
-          );
-        })}
-      </SelectSection>
-    );
+          ))}
+        </SelectSection>
+      ) : null;
 
-    const stateOptions = (
-      <SelectSection
-        key={"stateOptions"}
-        title="U.S. States"
-        classNames={{
-          heading: headingClasses,
-        }}
-      >
-        {locations.states.map((state) => {
-          return (
-            <SelectItem
-              key={state.state}
-              classNames={{
-                base: "text-black data-[hover=true]:!bg-primary-yellow",
-              }}
-            >
-              {state.state}
-            </SelectItem>
-          );
-        })}
-      </SelectSection>
-    );
-
-    const regionalOptions = (
-      <SelectSection
-        key={"regionalOptions"}
-        title="Regional"
-        classNames={{
-          heading: headingClasses,
-        }}
-      >
-        <SelectItem
-          key={"Worldwide"}
-          classNames={{
-            base: "text-black data-[hover=true]:!bg-primary-yellow",
-          }}
-        >
-          Worldwide
-        </SelectItem>
-        <SelectItem
-          key={"US & Canada"}
-          classNames={{
-            base: "text-black data-[hover=true]:!bg-primary-yellow",
-          }}
-        >
-          US &amp; Canada
-        </SelectItem>
-        <SelectItem
-          key={"Europe"}
-          classNames={{
-            base: "text-black data-[hover=true]:!bg-primary-yellow",
-          }}
-        >
-          Europe
-        </SelectItem>
-        <SelectItem
-          key={"Online"}
-          classNames={{
-            base: "text-black data-[hover=true]:!bg-primary-yellow",
-          }}
-        >
-          Online
-        </SelectItem>
-      </SelectSection>
-    );
-    return [stateOptions, countryOptions, regionalOptions];
-  }, []);
+    return [stateOptions, countryOptions, regionalOptions].filter(Boolean);
+  }, [searchValue]);
 
   return (
     <Select
@@ -142,6 +152,30 @@ const LocationDropdown = ({
         innerWrapper: "bg-white",
         mainWrapper: "bg-white",
         listbox: "bg-white",
+      }}
+      listboxProps={{
+        topContent: (
+          <Input
+            aria-label="Search location"
+            className="mb-1 px-1 py-1"
+            value={searchValue}
+            onValueChange={setSearchValue}
+            placeholder="Search location..."
+            type="text"
+            startContent={
+              <span aria-hidden="true" className="text-sm leading-none">
+                🔍
+              </span>
+            }
+            classNames={{
+              input: "text-black placeholder:text-gray-400",
+              inputWrapper:
+                "border-2 border-black rounded-md bg-white data-[hover=true]:bg-white group-data-[focus=true]:bg-white",
+            }}
+            onKeyDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
+          />
+        ),
       }}
     >
       {locationOptions}

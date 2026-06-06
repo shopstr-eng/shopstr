@@ -28,7 +28,7 @@ const StallFeed = () => {
   const [passwordError, setPasswordError] = useState("");
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [passwordStorageKey, setPasswordStorageKey] = useState<string>("");
-  const { isLoggedIn } = useContext(SignerContext);
+  const { isLoggedIn, pubkey: userPubkey } = useContext(SignerContext);
 
   useEffect(() => {
     const fetchPasswordStorageKey = async () => {
@@ -89,7 +89,10 @@ const StallFeed = () => {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ password: passwordInput.trim() }),
+        body: JSON.stringify({
+          password: passwordInput.trim(),
+          pubkey: userPubkey,
+        }),
       });
 
       const data = await response.json();

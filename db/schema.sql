@@ -288,7 +288,7 @@ CREATE TABLE IF NOT EXISTS email_flows (
     id SERIAL PRIMARY KEY,
     seller_pubkey TEXT NOT NULL,
     name TEXT NOT NULL,
-    flow_type TEXT NOT NULL CHECK (flow_type IN ('welcome_series', 'abandoned_cart', 'post_purchase', 'winback')),
+    flow_type TEXT NOT NULL CHECK (flow_type IN ('welcome_series', 'abandoned_cart', 'post_purchase', 'winback', 'one_time')),
     status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'active', 'paused')),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -733,4 +733,11 @@ CREATE TABLE IF NOT EXISTS pro_settings (
     key TEXT PRIMARY KEY,
     value TEXT,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Authed sellers table: pubkeys that have entered the listing password.
+-- The marketplace only displays products from pubkeys recorded here.
+CREATE TABLE IF NOT EXISTS authed_sellers (
+    pubkey TEXT PRIMARY KEY,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

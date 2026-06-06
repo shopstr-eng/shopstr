@@ -1,11 +1,4 @@
 import { useEffect, useState } from "react";
-import {
-  ArrowDownTrayIcon,
-  ArrowUpTrayIcon,
-  BanknotesIcon,
-  BoltIcon,
-  ShoppingBagIcon,
-} from "@heroicons/react/24/outline";
 import { getLocalStorageData } from "@/utils/nostr/nostr-helper-functions";
 import { Transaction } from "@/utils/types/types";
 
@@ -70,15 +63,40 @@ const Transactions = () => {
                 >
                   <td className="flex items-center px-6 py-4">
                     {transaction.type === 1 ? (
-                      <ArrowDownTrayIcon className="mr-2 h-5 w-5 text-green-400" />
+                      <span
+                        aria-hidden="true"
+                        className="mr-2 text-lg leading-none"
+                      >
+                        📥
+                      </span>
                     ) : transaction.type === 2 ? (
-                      <ArrowUpTrayIcon className="mr-2 h-5 w-5 text-red-400" />
+                      <span
+                        aria-hidden="true"
+                        className="mr-2 text-lg leading-none"
+                      >
+                        📤
+                      </span>
                     ) : transaction.type === 3 ? (
-                      <BanknotesIcon className="mr-2 h-5 w-5 text-green-400" />
+                      <span
+                        aria-hidden="true"
+                        className="mr-2 text-lg leading-none"
+                      >
+                        🥜
+                      </span>
                     ) : transaction.type === 4 ? (
-                      <BoltIcon className="mr-2 h-5 w-5 text-red-400" />
+                      <span
+                        aria-hidden="true"
+                        className="mr-2 text-lg leading-none"
+                      >
+                        ⚡
+                      </span>
                     ) : transaction.type === 5 ? (
-                      <ShoppingBagIcon className="mr-2 h-5 w-5 text-white" />
+                      <span
+                        aria-hidden="true"
+                        className="mr-2 text-lg leading-none"
+                      >
+                        🛍️
+                      </span>
                     ) : null}
                   </td>
                   <td className="px-6 py-4">{transaction.amount} sats</td>

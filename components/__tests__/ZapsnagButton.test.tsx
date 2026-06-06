@@ -51,10 +51,6 @@ jest.mock("@heroui/react", () => ({
   },
 }));
 
-jest.mock("@heroicons/react/24/outline", () => ({
-  BoltIcon: () => <span data-testid="bolt-icon">⚡</span>,
-}));
-
 jest.mock("@getalby/lightning-tools", () => {
   return {
     LightningAddress: jest.fn().mockImplementation(() => ({
@@ -75,6 +71,21 @@ jest.mock("@getalby/sdk", () => ({
 jest.mock("nostr-tools", () => ({
   generateSecretKey: jest.fn().mockReturnValue(new Uint8Array([1, 2, 3])),
   getPublicKey: jest.fn().mockReturnValue("ephemeral-pubkey-hex"),
+}));
+
+// uuid v14 ships ESM-only and is pulled in transitively via the real
+// nostr-manager/nip46 signer import chain; mock it so Jest doesn't try to
+// parse the untransformed ESM module. Not exercised by these tests.
+jest.mock("uuid", () => ({
+  v4: () => "mock-uuid-1234",
+}));
+
+// nostr-tools/nip49 transitively pulls in @scure/base (ESM-only) via the real
+// nsec signer import chain; mock it to avoid the untransformed ESM module.
+// Only used for ncryptsec handling, which these tests don't exercise.
+jest.mock("nostr-tools/nip49", () => ({
+  decrypt: jest.fn(),
+  encrypt: jest.fn(),
 }));
 
 jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
@@ -137,6 +148,8 @@ const renderComponent = (contextOverrides = {}) => {
 describe("ZapsnagButton Component", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockNostrManager.fetch.mockReset();
+    mockSigner.signEvent.mockReset();
     window.alert = jest.fn();
 
     Storage.prototype.getItem = jest.fn(() => null);
@@ -256,12 +269,31 @@ describe("ZapsnagButton Component", () => {
   });
 
   test("handles full purchase flow successfully", async () => {
-    mockNostrManager.fetch.mockResolvedValue([
+    const dateNowSpy = jest.spyOn(Date, "now").mockReturnValue(1700000000000);
+
+    mockNostrManager.fetch.mockResolvedValueOnce([
       {
         created_at: 100,
         content: JSON.stringify({ lud16: "seller@alby.com" }),
       },
     ]);
+
+    const giftWrapEvent = { id: "gift-wrap-event" };
+    const sealEvent = { id: "seal-event" };
+    const finalEvent = { id: "final-event" };
+
+    (nostrHelpers.constructGiftWrappedEvent as jest.Mock).mockResolvedValueOnce(
+      giftWrapEvent
+    );
+    (nostrHelpers.constructMessageSeal as jest.Mock).mockResolvedValueOnce(
+      sealEvent
+    );
+    (nostrHelpers.constructMessageGiftWrap as jest.Mock).mockResolvedValueOnce(
+      finalEvent
+    );
+    (
+      nostrHelpers.sendGiftWrappedMessageEvent as jest.Mock
+    ).mockResolvedValueOnce(undefined);
 
     (zapValidator.validateZapReceipt as jest.Mock).mockResolvedValue(true);
 
@@ -289,16 +321,71 @@ describe("ZapsnagButton Component", () => {
       fireEvent.click(confirmBtn);
     });
 
-    expect(mockNostrManager.fetch).toHaveBeenCalled();
+    expect(mockNostrManager.fetch).toHaveBeenCalledTimes(1);
+    expect(mockNostrManager.fetch).toHaveBeenCalledWith([
+      {
+        kinds: [0],
+        authors: [mockProduct.pubkey],
+      },
+    ]);
+
+    expect(nostrHelpers.constructGiftWrappedEvent).toHaveBeenCalledTimes(1);
+    const giftWrapCall = (nostrHelpers.constructGiftWrappedEvent as jest.Mock)
+      .mock.calls[0];
+    expect(giftWrapCall).toEqual(
+      expect.arrayContaining([
+        "buyer-pubkey",
+        "seller-pubkey",
+        expect.any(String),
+        "zapsnag-order",
+        expect.objectContaining({ isOrder: true, orderId: "1234-order-id" }),
+      ])
+    );
+    expect(JSON.parse(giftWrapCall[2] as string)).toEqual({
+      type: "zapsnag_order",
+      orderId: "1234-order-id",
+      item: mockProduct.id,
+      shipping: {
+        name: "Buyer",
+        address: "Road",
+        unit: "",
+        city: "Town",
+        state: "",
+        zip: "123",
+        country: "US",
+      },
+    });
+
+    expect(nostrHelpers.constructMessageSeal).toHaveBeenCalledWith(
+      mockSigner,
+      giftWrapEvent,
+      "buyer-pubkey",
+      "seller-pubkey"
+    );
+    expect(nostrHelpers.constructMessageGiftWrap).toHaveBeenCalledWith(
+      sealEvent,
+      "ephemeral-pubkey-hex",
+      expect.any(Uint8Array),
+      "seller-pubkey"
+    );
+    expect(
+      Array.from(
+        (nostrHelpers.constructMessageGiftWrap as jest.Mock).mock.calls[0][2]
+      )
+    ).toEqual([1, 2, 3]);
 
     expect(nostrHelpers.constructGiftWrappedEvent).toHaveBeenCalledWith(
       "buyer-pubkey",
       "seller-pubkey",
-      expect.stringContaining("zapsnag_order"),
+      expect.any(String),
       "zapsnag-order",
       expect.objectContaining({ isOrder: true })
     );
-    expect(nostrHelpers.sendGiftWrappedMessageEvent).toHaveBeenCalled();
+    expect(nostrHelpers.sendGiftWrappedMessageEvent).toHaveBeenCalledWith(
+      mockNostrManager,
+      finalEvent,
+      mockSigner
+    );
 
     expect(LightningAddress).toHaveBeenCalledWith("seller@alby.com");
     const mockLnInstance = (LightningAddress as unknown as jest.Mock).mock
@@ -311,6 +398,11 @@ describe("ZapsnagButton Component", () => {
     );
 
     expect(zapValidator.validateZapReceipt).toHaveBeenCalled();
+    expect(zapValidator.validateZapReceipt).toHaveBeenCalledWith(
+      mockNostrManager,
+      mockProduct.id,
+      1700000000
+    );
 
     expect(localStorage.setItem).toHaveBeenCalledWith(
       "milk_market_shipping_info",
@@ -319,6 +411,8 @@ describe("ZapsnagButton Component", () => {
     expect(window.alert).toHaveBeenCalledWith(
       expect.stringContaining("Order Placed & Verified")
     );
+
+    dateNowSpy.mockRestore();
   });
 
   test("handles error if seller has no LUD16", async () => {
@@ -350,7 +444,7 @@ describe("ZapsnagButton Component", () => {
     });
 
     expect(window.alert).toHaveBeenCalledWith(
-      expect.stringContaining("Seller has not set up a Lightning Address")
+      expect.stringContaining("Vendor has not set up a Lightning Address")
     );
   });
 

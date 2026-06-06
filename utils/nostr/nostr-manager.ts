@@ -146,6 +146,7 @@ export class NostrManager {
     const relays = relayUrls
       ? this.relays.filter((r) => relayUrls.includes(r.url))
       : this.relays;
+    await this.keepAlive(relays);
     const requests = relays.flatMap((r) =>
       filters.map((f) => ({ url: r.url, filter: f }))
     );

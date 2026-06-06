@@ -66,14 +66,15 @@ export async function sendEmail(
 export async function sendOrderConfirmationToBuyer(
   buyerEmail: string,
   params: OrderEmailParams,
-  branding?: StorefrontBranding | null
+  branding?: StorefrontBranding | null,
+  replyTo?: string
 ): Promise<boolean> {
   const { subject, html } = orderConfirmationEmail(params, branding);
   return sendEmail(
     buyerEmail,
     subject,
     html,
-    undefined,
+    replyTo,
     undefined,
     branding?.shopName
   );
@@ -82,14 +83,15 @@ export async function sendOrderConfirmationToBuyer(
 export async function sendNewOrderToSeller(
   sellerEmail: string,
   params: OrderEmailParams,
-  branding?: StorefrontBranding | null
+  branding?: StorefrontBranding | null,
+  replyTo?: string
 ): Promise<boolean> {
   const { subject, html } = sellerNewOrderEmail(params, branding);
   return sendEmail(
     sellerEmail,
     subject,
     html,
-    undefined,
+    replyTo,
     undefined,
     branding?.shopName
   );

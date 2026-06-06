@@ -26,11 +26,7 @@ import FailureModal from "../../components/utility-components/failure-modal";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 import { NostrNSecSigner } from "@/utils/nostr/signers/nostr-nsec-signer";
-import {
-  InformationCircleIcon,
-  EyeIcon,
-  EyeSlashIcon,
-} from "@heroicons/react/24/outline";
+import { InformationCircleIcon } from "@heroicons/react/24/outline";
 import RecoveryKeyModal from "./RecoveryKeyModal";
 
 export default function SignInModal({
@@ -692,9 +688,11 @@ export default function SignInModal({
                               className="text-gray-400 hover:text-black"
                             >
                               {showPrivateKey ? (
-                                <EyeSlashIcon className="h-5 w-5" />
+                                <span className="text-lg leading-none">
+                                  👁️⃠
+                                </span>
                               ) : (
-                                <EyeIcon className="h-5 w-5" />
+                                <span className="text-lg leading-none">👁️</span>
                               )}
                             </button>
                           }
@@ -743,9 +741,11 @@ export default function SignInModal({
                               className="text-gray-400 hover:text-black"
                             >
                               {showPassphrase ? (
-                                <EyeSlashIcon className="h-5 w-5" />
+                                <span className="text-lg leading-none">
+                                  👁️⃠
+                                </span>
                               ) : (
-                                <EyeIcon className="h-5 w-5" />
+                                <span className="text-lg leading-none">👁️</span>
                               )}
                             </button>
                           }
@@ -970,9 +970,9 @@ export default function SignInModal({
                             className="text-gray-400 hover:text-black"
                           >
                             {showPrivateKey ? (
-                              <EyeSlashIcon className="h-5 w-5" />
+                              <span className="text-lg leading-none">👁️⃠</span>
                             ) : (
-                              <EyeIcon className="h-5 w-5" />
+                              <span className="text-lg leading-none">👁️</span>
                             )}
                           </button>
                         }
@@ -1021,9 +1021,9 @@ export default function SignInModal({
                             className="text-gray-400 hover:text-black"
                           >
                             {showPassphrase ? (
-                              <EyeSlashIcon className="h-5 w-5" />
+                              <span className="text-lg leading-none">👁️⃠</span>
                             ) : (
-                              <EyeIcon className="h-5 w-5" />
+                              <span className="text-lg leading-none">👁️</span>
                             )}
                           </button>
                         }
@@ -1111,9 +1111,9 @@ export default function SignInModal({
                           className="text-gray-400 hover:text-black"
                         >
                           {showPassword ? (
-                            <EyeSlashIcon className="h-5 w-5" />
+                            <span className="text-lg leading-none">👁️⃠</span>
                           ) : (
-                            <EyeIcon className="h-5 w-5" />
+                            <span className="text-lg leading-none">👁️</span>
                           )}
                         </button>
                       }

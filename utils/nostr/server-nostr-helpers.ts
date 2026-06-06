@@ -5,16 +5,22 @@ import {
   getEventHash,
   nip19,
   nip44,
+  verifyEvent,
 } from "nostr-tools";
 import { useWebSocketImplementation, SimplePool } from "nostr-tools/pool";
 import { NostrEvent } from "@/utils/types/types";
-import { cacheEvent, getDbPool } from "@/utils/db/db-service";
+import {
+  cacheEvent,
+  getDbPool,
+  fetchRelayConfigFromDb,
+} from "@/utils/db/db-service";
 // @ts-ignore: ws provides the WebSocket implementation for Node.js, passed to nostr-tools
 import WebSocket from "ws";
 
 useWebSocketImplementation(WebSocket);
 
 const RELAY_PUBLISH_TIMEOUT_MS = 21000;
+const BLASTR_RELAY = "wss://sendit.nosflare.com";
 
 function generateRandomTimestamp(): number {
   const now = Math.floor(Date.now() / 1000);
@@ -68,8 +74,10 @@ async function trackFailedRelayPublish(
   }
 }
 
-async function publishToRelays(event: any): Promise<number> {
-  const relays = getDefaultRelays();
+async function publishToRelays(
+  event: any,
+  relays: string[] = getDefaultRelays()
+): Promise<number> {
   const pool = new SimplePool();
   try {
     const publishPromise = Promise.allSettled(pool.publish(relays, event));
@@ -100,6 +108,68 @@ async function publishToRelays(event: any): Promise<number> {
   } finally {
     pool.close(relays);
   }
+}
+
+// Resolve the relays a recipient READS from (NIP-65 kind 10002) from our
+// Postgres cache. The orders dashboard subscribes to the seller's own relays,
+// so delivering an order gift-wrap there is what makes it show up.
+async function getRecipientReadRelays(pubkey: string): Promise<string[]> {
+  try {
+    const events = await fetchRelayConfigFromDb(pubkey);
+    const out: string[] = [];
+    for (const ev of events) {
+      for (const tag of ev.tags) {
+        // Unmarked ("r", url) = read+write; ("r", url, "read") = read-only.
+        if (tag[0] === "r" && tag[1] && (!tag[2] || tag[2] === "read")) {
+          out.push(tag[1]);
+        }
+      }
+    }
+    return out;
+  } catch (error) {
+    console.error("Failed to resolve recipient relays:", error);
+    return [];
+  }
+}
+
+// Republish an already-signed gift-wrap (kind 1059) to its recipient's own
+// relays from the server. This is the primary, origin/login-independent
+// delivery path: it fixes custom-domain orders where the buyer is a guest and
+// the client only published to default/buyer relays the seller never reads.
+// The event is self-authenticating (verified below), so no caller auth needed.
+export async function republishGiftWrapToRecipientRelays(
+  event: NostrEvent
+): Promise<{ published: number; relays: string[] }> {
+  if (!event || event.kind !== 1059) {
+    return { published: 0, relays: [] };
+  }
+  if (!verifyEvent(event as any)) {
+    return { published: 0, relays: [] };
+  }
+  const recipient = event.tags.find((t) => t[0] === "p")?.[1];
+  if (!recipient) {
+    return { published: 0, relays: [] };
+  }
+
+  const recipientRelays = await getRecipientReadRelays(recipient);
+  // Always include defaults + blastr so delivery still happens when the seller
+  // has no cached relay list yet.
+  const relays = Array.from(
+    new Set([...recipientRelays, ...getDefaultRelays(), BLASTR_RELAY])
+  );
+
+  // Mirror the event into our cache (idempotent) before broadcasting.
+  try {
+    await cacheEvent(event);
+  } catch (error) {
+    console.error("Failed to cache gift-wrap before relay publish:", error);
+  }
+
+  const published = await publishToRelays(event, relays);
+  if (published === 0) {
+    await trackFailedRelayPublish(event.id, event, relays).catch(console.error);
+  }
+  return { published, relays };
 }
 
 export async function sendServerSideNostrDM(
