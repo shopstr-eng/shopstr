@@ -7,6 +7,26 @@ import { applyRateLimit } from "@/utils/rate-limit";
 // cap to prevent us from being used as an SSRF amplifier.
 const RATE_LIMIT = { limit: 60, windowMs: 60 * 1000 };
 
+// Server-controlled allowlist to prevent attacker-chosen outbound targets.
+// Replace entries with the domains your application is intended to preview.
+const ALLOWED_PREVIEW_HOSTS = new Set<string>([
+  "shopstr.store",
+  "www.shopstr.store",
+  "shopstr.market",
+  "www.shopstr.market",
+]);
+
+const ALLOWED_PREVIEW_HOST_SUFFIXES = [
+  ".shopstr.store",
+  ".shopstr.market",
+];
+
+function isAllowedPreviewHost(hostname: string): boolean {
+  const host = hostname.toLowerCase();
+  if (ALLOWED_PREVIEW_HOSTS.has(host)) return true;
+  return ALLOWED_PREVIEW_HOST_SUFFIXES.some((suffix) => host.endsWith(suffix));
+}
+
 type OGData = {
   title?: string;
   description?: string;
@@ -152,6 +172,10 @@ export default async function handler(
     }
   } catch {
     return res.status(400).json({ error: "Invalid URL" });
+  }
+
+  if (!isAllowedPreviewHost(parsedUrl.hostname)) {
+    return res.status(400).json({ error: "URL host is not allowed" });
   }
 
   const isSafeHost = await isSafePublicHostname(parsedUrl.hostname);
