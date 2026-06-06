@@ -1444,6 +1444,253 @@ describe("fetchProfile", () => {
 
     consoleErrorSpy.mockRestore();
   });
+
+  it("sets nip05Verified from DB verification and relay verification independently", async () => {
+    const verifyNip05Identifier = jest
+      .fn()
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false);
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(),
+      deleteEvent: jest.fn(),
+      verifyNip05Identifier,
+    }));
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase,
+    }));
+
+    const { fetchProfile } = await import("../fetch-service");
+
+    const relayPubkey =
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+    const dbProfileEvent = makeProfileEvent({
+      id: "db-nip05-success",
+      pubkey,
+      created_at: 100,
+      content: JSON.stringify({ nip05: "alice@example.com" }),
+      sig: "sig-db-nip05-success",
+    });
+    const relayProfileEvent = makeProfileEvent({
+      id: "relay-nip05-fail",
+      pubkey: relayPubkey,
+      created_at: 200,
+      content: JSON.stringify({ nip05: "bob@example.com" }),
+      sig: "sig-relay-nip05-fail",
+    });
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(
+        makeDbPayload([dbProfileEvent])
+      ) as typeof global.fetch;
+
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([relayProfileEvent]),
+    } as any;
+    const editProfileContext = jest.fn();
+
+    const { profileMap } = await fetchProfile(
+      nostr,
+      ["wss://relay.example"],
+      [pubkey, relayPubkey],
+      editProfileContext
+    );
+
+    expect(verifyNip05Identifier).toHaveBeenCalledTimes(2);
+    expect(profileMap.get(pubkey)).toMatchObject({
+      pubkey,
+      nip05Verified: true,
+    });
+    expect(profileMap.get(relayPubkey)).toMatchObject({
+      pubkey: relayPubkey,
+      nip05Verified: false,
+    });
+  });
+
+  it("preserves an existing profile that is newer than both the DB and relay versions", async () => {
+    const verifyNip05Identifier = jest.fn().mockResolvedValue(false);
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(),
+      deleteEvent: jest.fn(),
+      verifyNip05Identifier,
+    }));
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase,
+    }));
+
+    const { fetchProfile } = await import("../fetch-service");
+
+    const existingProfile = {
+      pubkey,
+      created_at: 500,
+      content: { display_name: "Existing Newest" },
+      nip05Verified: true,
+    };
+    const olderDbEvent = makeProfileEvent({
+      id: "db-older-than-existing",
+      pubkey,
+      created_at: 100,
+      content: JSON.stringify({ display_name: "Old DB" }),
+      sig: "sig-db-older-than-existing",
+    });
+    const olderRelayEvent = makeProfileEvent({
+      id: "relay-older-than-existing",
+      pubkey,
+      created_at: 200,
+      content: JSON.stringify({ display_name: "Old Relay" }),
+      sig: "sig-relay-older-than-existing",
+    });
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(makeDbPayload([olderDbEvent])) as typeof global.fetch;
+
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([olderRelayEvent]),
+    } as any;
+    const editProfileContext = jest.fn();
+
+    const { profileMap } = await fetchProfile(
+      nostr,
+      ["wss://relay.example"],
+      [pubkey],
+      editProfileContext,
+      new Map([[pubkey, existingProfile]])
+    );
+
+    expect(profileMap.get(pubkey)).toMatchObject({
+      pubkey,
+      created_at: 500,
+      content: { display_name: "Existing Newest" },
+    });
+  });
+
+  it("caches only relay events that have id, sig, pubkey and are kind 0", async () => {
+    const verifyNip05Identifier = jest.fn().mockResolvedValue(false);
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(),
+      deleteEvent: jest.fn(),
+      verifyNip05Identifier,
+    }));
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase,
+    }));
+
+    const { fetchProfile } = await import("../fetch-service");
+
+    const validProfile = makeProfileEvent({
+      id: "relay-valid-kind0-cache",
+      pubkey,
+      created_at: 200,
+      content: JSON.stringify({ display_name: "Valid" }),
+      sig: "sig-valid-kind0-cache",
+    });
+    const missingId = makeProfileEvent({
+      id: "",
+      pubkey: "profile-cache-no-id",
+      created_at: 201,
+      content: JSON.stringify({ display_name: "No ID" }),
+      sig: "sig-profile-cache-no-id",
+    });
+    const missingSig = makeProfileEvent({
+      id: "profile-cache-no-sig",
+      pubkey: "profile-cache-no-sig-pk",
+      created_at: 202,
+      content: JSON.stringify({ display_name: "No Sig" }),
+      sig: "",
+    });
+    const wrongKind = makeBaseEvent({
+      id: "profile-cache-wrong-kind",
+      pubkey: "profile-cache-wrong-kind-pk",
+      created_at: 203,
+      kind: 1,
+      content: "wrong kind",
+      sig: "sig-profile-cache-wrong-kind",
+    });
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(makeDbPayload([])) as typeof global.fetch;
+
+    const nostr = {
+      fetch: jest
+        .fn()
+        .mockResolvedValue([validProfile, missingId, missingSig, wrongKind]),
+    } as any;
+    const editProfileContext = jest.fn();
+
+    await fetchProfile(
+      nostr,
+      ["wss://relay.example"],
+      [pubkey],
+      editProfileContext
+    );
+
+    expect(cacheEventsToDatabase).toHaveBeenCalledTimes(1);
+    expect(cacheEventsToDatabase).toHaveBeenCalledWith([validProfile]);
+  });
+
+  it("catches and logs a DB fetch throw and still queries the relay", async () => {
+    const verifyNip05Identifier = jest.fn().mockResolvedValue(false);
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(),
+      deleteEvent: jest.fn(),
+      verifyNip05Identifier,
+    }));
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase,
+    }));
+
+    const { fetchProfile } = await import("../fetch-service");
+
+    const relayProfileEvent = makeProfileEvent({
+      id: "relay-after-db-throw",
+      pubkey,
+      created_at: 200,
+      content: JSON.stringify({ display_name: "Relay After DB Throw" }),
+      sig: "sig-relay-after-db-throw",
+    });
+
+    const dbError = new Error("DB connection failed");
+    global.fetch = jest.fn().mockRejectedValue(dbError) as typeof global.fetch;
+
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([relayProfileEvent]),
+    } as any;
+    const editProfileContext = jest.fn();
+
+    const { profileMap } = await fetchProfile(
+      nostr,
+      ["wss://relay.example"],
+      [pubkey],
+      editProfileContext
+    );
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      "Failed to fetch profiles from database: ",
+      dbError
+    );
+    expect(nostr.fetch).toHaveBeenCalledTimes(1);
+    expect(profileMap.get(pubkey)).toMatchObject({
+      pubkey,
+      created_at: 200,
+      content: { display_name: "Relay After DB Throw" },
+    });
+
+    consoleErrorSpy.mockRestore();
+  });
 });
 
 describe("fetchAllFollows", () => {
