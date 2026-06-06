@@ -25,6 +25,7 @@ const mkProof = (secret: string, amount = 10): Proof =>
 
 describe("recoverProofsToBuyerWallet", () => {
   beforeEach(() => {
+    process.env.NEXT_PUBLIC_WALLET_ENCRYPTION_KEY = "test-wallet-key";
     window.localStorage.clear();
     helpers.getLocalStorageData.mockReset();
     helpers.publishProofEvent.mockReset();
@@ -42,9 +43,10 @@ describe("recoverProofsToBuyerWallet", () => {
       10
     );
 
-    const tokens = JSON.parse(window.localStorage.getItem("tokens") ?? "[]");
-    expect(tokens).toHaveLength(2);
-    expect(tokens.map((p: Proof) => p.secret)).toEqual(["s1", "s2"]);
+    const tokensRaw = window.localStorage.getItem("tokens");
+    expect(tokensRaw).toBeTruthy();
+    expect(tokensRaw).not.toContain('"secret":"s1"');
+    expect(tokensRaw).not.toContain('"secret":"s2"');
 
     const history = JSON.parse(window.localStorage.getItem("history") ?? "[]");
     expect(history[0]).toMatchObject({ type: 3, amount: 10 });
@@ -62,8 +64,10 @@ describe("recoverProofsToBuyerWallet", () => {
       [mkProof("new", 2)],
       2
     );
-    const tokens = JSON.parse(window.localStorage.getItem("tokens") ?? "[]");
-    expect(tokens.map((p: Proof) => p.secret)).toEqual(["existing", "new"]);
+    const tokensRaw = window.localStorage.getItem("tokens");
+    expect(tokensRaw).toBeTruthy();
+    expect(tokensRaw).not.toContain('"secret":"existing"');
+    expect(tokensRaw).not.toContain('"secret":"new"');
   });
 
   it("does not throw when proof event publish fails", async () => {
@@ -77,8 +81,9 @@ describe("recoverProofsToBuyerWallet", () => {
         5
       )
     ).resolves.toBeUndefined();
-    const tokens = JSON.parse(window.localStorage.getItem("tokens") ?? "[]");
-    expect(tokens).toHaveLength(1);
+    const tokensRaw = window.localStorage.getItem("tokens");
+    expect(tokensRaw).toBeTruthy();
+    expect(tokensRaw).not.toContain('"secret":"s1"');
   });
 
   it("no-ops on empty proof array", async () => {

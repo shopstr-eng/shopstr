@@ -4,6 +4,74 @@ import {
   publishProofEvent,
 } from "@/utils/nostr/nostr-helper-functions";
 
+type EncryptedPayload = {
+  v: 1;
+  alg: "AES-GCM";
+  salt: string;
+  iv: string;
+  data: string;
+};
+
+const encoder = new TextEncoder();
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  bytes.forEach((b) => {
+    binary += String.fromCharCode(b);
+  });
+  return btoa(binary);
+}
+
+async function deriveAesKeyFromPassphrase(
+  passphrase: string,
+  salt: Uint8Array
+): Promise<CryptoKey> {
+  const keyMaterial = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(passphrase),
+    "PBKDF2",
+    false,
+    ["deriveKey"]
+  );
+  return crypto.subtle.deriveKey(
+    {
+      name: "PBKDF2",
+      salt,
+      iterations: 310000,
+      hash: "SHA-256",
+    },
+    keyMaterial,
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["encrypt"]
+  );
+}
+
+async function encryptJsonForStorage(
+  value: unknown,
+  passphrase: string
+): Promise<string> {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const key = await deriveAesKeyFromPassphrase(passphrase, salt);
+  const plaintext = encoder.encode(JSON.stringify(value));
+  const ciphertext = await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv },
+    key,
+    plaintext
+  );
+
+  const payload: EncryptedPayload = {
+    v: 1,
+    alg: "AES-GCM",
+    salt: bytesToBase64(salt),
+    iv: bytesToBase64(iv),
+    data: bytesToBase64(new Uint8Array(ciphertext)),
+  };
+
+  return JSON.stringify(payload);
+}
+
 type Nostr = Parameters<typeof publishProofEvent>[0];
 type Signer = Parameters<typeof publishProofEvent>[1];
 
@@ -30,7 +98,21 @@ export async function recoverProofsToBuyerWallet(
 
   const { tokens, history } = getLocalStorageData();
   const proofArray = [...tokens, ...proofs];
-  window.localStorage.setItem("tokens", JSON.stringify(proofArray));
+  const storagePassphrase =
+    (typeof process !== "undefined" &&
+      process.env &&
+      process.env.NEXT_PUBLIC_WALLET_ENCRYPTION_KEY) ||
+    "";
+  if (!storagePassphrase) {
+    throw new Error(
+      "Wallet encryption key is not configured; refusing to store proofs in clear text."
+    );
+  }
+  const encryptedTokens = await encryptJsonForStorage(
+    proofArray,
+    storagePassphrase
+  );
+  window.localStorage.setItem("tokens", encryptedTokens);
   window.localStorage.setItem(
     "history",
     JSON.stringify([
