@@ -298,9 +298,13 @@ describe("withBlastr", () => {
   it("does not duplicate the blastr relay when it is already present", () => {
     const input = ["wss://relay.damus.io", "wss://sendit.nosflare.com"];
     const result = withBlastr(input);
-    const count = result.filter((r) =>
-      r.includes("sendit.nosflare.com")
-    ).length;
+    const count = result.filter((r) => {
+      try {
+        return new URL(r).hostname === "sendit.nosflare.com";
+      } catch {
+        return false;
+      }
+    }).length;
     expect(count).toBe(1);
   });
 });
