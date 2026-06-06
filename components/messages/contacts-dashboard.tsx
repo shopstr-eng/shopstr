@@ -2,12 +2,6 @@
 
 import { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { Input, Button } from "@heroui/react";
-import {
-  ArrowDownTrayIcon,
-  ArrowPathIcon,
-  EnvelopeIcon,
-  MagnifyingGlassIcon,
-} from "@heroicons/react/24/outline";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import { createNip98AuthorizationHeader } from "@/utils/nostr/nip98-auth";
 import { copyToClipboard } from "@/utils/clipboard";
@@ -200,7 +194,9 @@ export default function ContactsDashboard() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             startContent={
-              <MagnifyingGlassIcon className="h-4 w-4 text-gray-400" />
+              <span aria-hidden="true" className="text-sm leading-none">
+                🔍
+              </span>
             }
             classNames={{
               inputWrapper:
@@ -216,7 +212,11 @@ export default function ContactsDashboard() {
               isDisabled={loading}
               variant="bordered"
               className="rounded-lg border-2 border-black bg-white text-black"
-              startContent={<ArrowPathIcon className="h-4 w-4" />}
+              startContent={
+                <span aria-hidden="true" className="text-sm leading-none">
+                  🔄
+                </span>
+              }
             >
               Refresh
             </Button>
@@ -225,7 +225,11 @@ export default function ContactsDashboard() {
               isDisabled={!filtered.length}
               variant="bordered"
               className="rounded-lg border-2 border-black bg-white text-black"
-              startContent={<EnvelopeIcon className="h-4 w-4" />}
+              startContent={
+                <span aria-hidden="true" className="text-sm leading-none">
+                  ✉️
+                </span>
+              }
             >
               {copiedEmail === "__ALL__" ? "✓ Copied" : "Copy Emails"}
             </Button>
@@ -233,7 +237,11 @@ export default function ContactsDashboard() {
               onPress={handleExport}
               isDisabled={!filtered.length}
               className="col-span-2 rounded-lg bg-black text-white sm:col-span-1"
-              startContent={<ArrowDownTrayIcon className="h-4 w-4" />}
+              startContent={
+                <span aria-hidden="true" className="text-sm leading-none">
+                  📥
+                </span>
+              }
             >
               Export CSV
             </Button>

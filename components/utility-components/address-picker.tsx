@@ -7,8 +7,6 @@ import {
   RadioGroup,
   Radio,
 } from "@heroui/react";
-import { TrashIcon, StarIcon } from "@heroicons/react/24/outline";
-import { StarIcon as StarIconSolid } from "@heroicons/react/24/solid";
 import { SavedAddress } from "@/utils/types/types";
 import {
   deleteAddress,
@@ -360,11 +358,7 @@ export default function AddressPicker({
                     onClick={(e) => handleSetDefault(addr.id, e)}
                     title="Set as default"
                   >
-                    {addr.isDefault ? (
-                      <StarIconSolid className="h-4 w-4 text-black" />
-                    ) : (
-                      <StarIcon className="h-4 w-4 text-black" />
-                    )}
+                    {addr.isDefault ? "⭐" : "☆"}
                   </Button>
                   <Button
                     isIconOnly
@@ -374,7 +368,7 @@ export default function AddressPicker({
                     onClick={(e) => handleDelete(addr.id, e)}
                     title="Delete address"
                   >
-                    <TrashIcon className="h-4 w-4" />
+                    {"🗑️"}
                   </Button>
                 </div>
               </div>
@@ -436,7 +430,9 @@ export default function AddressPicker({
         onClick={() => setIsExpanded((current) => !current)}
       >
         <span className="text-md flex items-center gap-3 font-semibold text-black">
-          <StarIcon className="h-5 w-5 text-black" />
+          <span aria-hidden="true" className="text-lg leading-none">
+            ⭐
+          </span>
           <span>Use a saved address</span>
         </span>
         <span

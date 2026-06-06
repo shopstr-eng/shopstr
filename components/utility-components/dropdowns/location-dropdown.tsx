@@ -6,7 +6,6 @@ import {
   Avatar,
   Input,
 } from "@heroui/react";
-import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import locations from "../../../public/locationSelection.json";
 
 export const locationAvatar = (location: string) => {
@@ -164,10 +163,9 @@ const LocationDropdown = ({
             placeholder="Search location..."
             type="text"
             startContent={
-              <MagnifyingGlassIcon
-                aria-hidden="true"
-                className="h-4 w-4 text-gray-500"
-              />
+              <span aria-hidden="true" className="text-sm leading-none">
+                🔍
+              </span>
             }
             classNames={{
               input: "text-black placeholder:text-gray-400",

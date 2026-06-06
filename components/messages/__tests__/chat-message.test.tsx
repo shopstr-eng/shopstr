@@ -240,20 +240,24 @@ describe("ChatMessage", () => {
       mockGetDecodedToken.mockReturnValue({});
       renderComponent({ messageEvent: { content: token } });
 
-      const clipboardIcon = document.querySelector(".cursor-pointer");
-      expect(clipboardIcon).toBeInTheDocument();
+      const copyButton = screen.getByRole("button", { name: "Copy token" });
+      expect(copyButton).toBeInTheDocument();
 
-      fireEvent.click(clipboardIcon!);
+      await act(async () => {
+        fireEvent.click(copyButton);
+      });
 
       expect(navigator.clipboard.writeText).toHaveBeenCalledWith(token);
-      expect(document.querySelector(".text-green-400")).toBeInTheDocument();
+      expect(screen.getByText("✔️")).toBeInTheDocument();
 
       act(() => {
         jest.advanceTimersByTime(2200);
       });
 
-      expect(document.querySelector(".text-green-400")).not.toBeInTheDocument();
-      expect(document.querySelector(".cursor-pointer")).toBeInTheDocument();
+      expect(screen.queryByText("✔️")).not.toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: "Copy token" })
+      ).toBeInTheDocument();
 
       jest.useRealTimers();
     });

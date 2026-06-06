@@ -9,11 +9,6 @@ import {
   Button,
 } from "@heroui/react";
 import {
-  CreditCardIcon,
-  ArrowTopRightOnSquareIcon,
-  XMarkIcon,
-} from "@heroicons/react/24/outline";
-import {
   BLUEBUTTONCLASSNAMES,
   WHITEBUTTONCLASSNAMES,
 } from "@/utils/STATIC-VARIABLES";
@@ -131,7 +126,9 @@ const StripeConnectModal: React.FC<StripeConnectModalProps> = ({
     >
       <ModalContent>
         <ModalHeader className="flex items-center gap-2 text-black">
-          <CreditCardIcon className="text-primary-blue h-6 w-6" />
+          <span aria-hidden="true" className="text-2xl leading-none">
+            💳
+          </span>
           <span>Set Up Stripe Payments</span>
         </ModalHeader>
         <ModalBody className="text-black">
@@ -174,7 +171,11 @@ const StripeConnectModal: React.FC<StripeConnectModalProps> = ({
           <Button
             className={WHITEBUTTONCLASSNAMES}
             onClick={onClose}
-            startContent={<XMarkIcon className="h-4 w-4" />}
+            startContent={
+              <span aria-hidden="true" className="text-sm leading-none">
+                ✖️
+              </span>
+            }
           >
             Skip for Now
           </Button>
@@ -184,7 +185,9 @@ const StripeConnectModal: React.FC<StripeConnectModalProps> = ({
             isLoading={isLoading}
             startContent={
               !isLoading ? (
-                <ArrowTopRightOnSquareIcon className="h-4 w-4" />
+                <span aria-hidden="true" className="text-sm leading-none">
+                  ↗️
+                </span>
               ) : undefined
             }
           >

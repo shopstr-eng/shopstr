@@ -51,10 +51,6 @@ jest.mock("@heroui/react", () => ({
   },
 }));
 
-jest.mock("@heroicons/react/24/outline", () => ({
-  BoltIcon: () => <span data-testid="bolt-icon">⚡</span>,
-}));
-
 jest.mock("@getalby/lightning-tools", () => {
   return {
     LightningAddress: jest.fn().mockImplementation(() => ({

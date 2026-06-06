@@ -6,7 +6,6 @@ import {
   useStripe,
   useElements,
 } from "@stripe/react-stripe-js";
-import { CreditCardIcon } from "@heroicons/react/24/outline";
 
 function CheckoutForm({
   onPaymentSuccess,
@@ -77,7 +76,9 @@ function CheckoutForm({
           </>
         ) : (
           <>
-            <CreditCardIcon className="h-5 w-5" />
+            <span aria-hidden="true" className="text-lg leading-none">
+              💳
+            </span>
             Pay now
           </>
         )}

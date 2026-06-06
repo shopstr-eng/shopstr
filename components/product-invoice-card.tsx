@@ -22,14 +22,6 @@ import {
   Spinner,
   Checkbox,
 } from "@heroui/react";
-import {
-  BanknotesIcon,
-  BoltIcon,
-  CheckIcon,
-  ClipboardIcon,
-  CurrencyDollarIcon,
-  WalletIcon,
-} from "@heroicons/react/24/outline";
 import { getSatoshiValue } from "@getalby/lightning-tools";
 import {
   Mint as CashuMint,
@@ -5051,17 +5043,24 @@ export default function ProductInvoiceCard({
                                 )}`
                               : invoice}
                           </p>
-                          <ClipboardIcon
+                          <button
+                            type="button"
+                            aria-label="Copy invoice"
                             onClick={handleCopyInvoice}
-                            className={`text-dark-text ml-2 h-4 w-4 cursor-pointer ${
+                            className={`ml-2 cursor-pointer text-sm leading-none ${
                               copiedToClipboard ? "hidden" : ""
                             }`}
-                          />
-                          <CheckIcon
-                            className={`text-dark-text ml-2 h-4 w-4 cursor-pointer ${
+                          >
+                            📋
+                          </button>
+                          <span
+                            aria-hidden="true"
+                            className={`ml-2 cursor-pointer text-sm leading-none ${
                               copiedToClipboard ? "" : "hidden"
                             }`}
-                          />
+                          >
+                            ✔️
+                          </span>
                         </div>
                       </>
                     )}
@@ -5485,7 +5484,14 @@ export default function ProductInvoiceCard({
                             onFormSubmit(data, "lightning")
                           )();
                         }}
-                        startContent={<BoltIcon className="h-6 w-6" />}
+                        startContent={
+                          <span
+                            aria-hidden="true"
+                            className="text-2xl leading-none"
+                          >
+                            ⚡
+                          </span>
+                        }
                       >
                         Pay with Lightning: {formattedLightningCost}
                         {getDiscountLabel(bitcoinDiscountPct)}
@@ -5506,7 +5512,14 @@ export default function ProductInvoiceCard({
                               onFormSubmit(data, "cashu")
                             )();
                           }}
-                          startContent={<BanknotesIcon className="h-6 w-6" />}
+                          startContent={
+                            <span
+                              aria-hidden="true"
+                              className="text-2xl leading-none"
+                            >
+                              💵
+                            </span>
+                          }
                         >
                           Pay with Cashu: {formattedLightningCost}
                           {getDiscountLabel(bitcoinDiscountPct)}
@@ -5543,7 +5556,14 @@ export default function ProductInvoiceCard({
                           onFormSubmit(data, "stripe")
                         )();
                       }}
-                      startContent={<CurrencyDollarIcon className="h-6 w-6" />}
+                      startContent={
+                        <span
+                          aria-hidden="true"
+                          className="text-2xl leading-none"
+                        >
+                          💲
+                        </span>
+                      }
                     >
                       Pay with Card: {formattedCardCost}
                       {getDiscountLabel(stripeDiscountPct)}
@@ -5568,7 +5588,12 @@ export default function ProductInvoiceCard({
                             )();
                           }}
                           startContent={
-                            <CurrencyDollarIcon className="h-6 w-6" />
+                            <span
+                              aria-hidden="true"
+                              className="text-2xl leading-none"
+                            >
+                              💲
+                            </span>
                           }
                         >
                           Pay with Cash or Payment App:{" "}
@@ -5616,7 +5641,14 @@ export default function ProductInvoiceCard({
                               onFormSubmit(data, "nwc")
                             )();
                           }}
-                          startContent={<WalletIcon className="h-6 w-6" />}
+                          startContent={
+                            <span
+                              aria-hidden="true"
+                              className="text-2xl leading-none"
+                            >
+                              👛
+                            </span>
+                          }
                         >
                           Pay with {nwcInfo.alias || "NWC"}:{" "}
                           {formattedLightningCost}

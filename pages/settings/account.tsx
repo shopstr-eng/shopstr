@@ -23,17 +23,11 @@ import {
 import {
   createBlossomServerEvent,
   createNostrRelayEvent,
-  deleteAddress,
   getLocalStorageData,
-  getSavedAddresses,
   publishWalletEvent,
-  saveAddress,
 } from "@/utils/nostr/nostr-helper-functions";
-import { SavedAddress } from "@/utils/types/types";
 import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs";
 import MilkMarketSlider from "@/components/utility-components/mm-slider";
-import SavedAddressesList from "@/components/utility-components/saved-addresses-list";
-import EditAddressForm from "@/components/utility-components/edit-address-form";
 import FailureModal from "@/components/utility-components/failure-modal";
 import {
   NostrContext,
@@ -66,12 +60,6 @@ const AccountSettingsPage = () => {
 
   const [isLoaded, setIsLoaded] = useState(false);
 
-  const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
-  const [editingAddress, setEditingAddress] = useState<SavedAddress | null>(
-    null
-  );
-  const [showEditAddressModal, setShowEditAddressModal] = useState(false);
-
   const [showFailureModal, setShowFailureModal] = useState(false);
   const [failureText, setFailureText] = useState("");
 
@@ -82,32 +70,9 @@ const AccountSettingsPage = () => {
       setReadRelays(getLocalStorageData().readRelays);
       setWriteRelays(getLocalStorageData().writeRelays);
       setBlossomServers(getLocalStorageData().blossomServers);
-      setSavedAddresses(getSavedAddresses());
     }
     setIsLoaded(true);
   }, [signer]);
-
-  const handleEditAddress = (address: SavedAddress) => {
-    setEditingAddress(address);
-    setShowEditAddressModal(true);
-  };
-
-  const handleAddAddress = () => {
-    setEditingAddress(null);
-    setShowEditAddressModal(true);
-  };
-
-  const handleDeleteAddress = (id: string) => {
-    deleteAddress(id);
-    setSavedAddresses(getSavedAddresses());
-  };
-
-  const handleSaveEditedAddress = (address: SavedAddress) => {
-    saveAddress(address);
-    setSavedAddresses(getSavedAddresses());
-    setShowEditAddressModal(false);
-    setEditingAddress(null);
-  };
 
   useEffect(() => {
     if (mints.length != 0) {
@@ -564,35 +529,6 @@ const AccountSettingsPage = () => {
             </div>
           </div>
 
-          {/* Saved Addresses Section */}
-          <div className="mb-8">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-2xl font-bold">Saved Addresses</h2>
-              <Button
-                className={BLACKBUTTONCLASSNAMES}
-                onClick={() => handleAddAddress()}
-              >
-                Add Address
-              </Button>
-            </div>
-
-            {isLoaded && (
-              <SavedAddressesList
-                addresses={savedAddresses}
-                onEdit={handleEditAddress}
-                onDelete={handleDeleteAddress}
-              />
-            )}
-
-            <div className="mt-4 flex items-center gap-2 text-sm text-gray-600">
-              <InformationCircleIcon className="h-5 w-5 flex-shrink-0" />
-              <p>
-                These addresses are stored locally on this device and can be
-                reused during checkout.
-              </p>
-            </div>
-          </div>
-
           {/* Web of Trust Section */}
           <div className="mb-8">
             <h2 className="mb-4 text-2xl font-bold">Web of Trust</h2>
@@ -868,40 +804,6 @@ const AccountSettingsPage = () => {
               </Button>
             </ModalFooter>
           </form>
-        </ModalContent>
-      </Modal>
-
-      {/* Edit Address Modal */}
-      <Modal
-        backdrop="blur"
-        isOpen={showEditAddressModal}
-        onClose={() => {
-          setShowEditAddressModal(false);
-          setEditingAddress(null);
-        }}
-        classNames={{
-          body: "py-6 bg-white",
-          backdrop: "bg-black/50 backdrop-opacity-60",
-          header: "border-b-3 border-black bg-white rounded-t-xl",
-          footer: "border-t-3 border-black bg-white rounded-b-xl",
-          base: "border-3 border-black rounded-xl",
-          closeButton: "hover:bg-gray-100 active:bg-gray-200",
-        }}
-        scrollBehavior={"outside"}
-        size="2xl"
-      >
-        <ModalContent>
-          <ModalHeader className="flex flex-col gap-1 font-bold text-black">
-            {editingAddress ? "Edit Address" : "Add Address"}
-          </ModalHeader>
-          <EditAddressForm
-            address={editingAddress}
-            onSave={handleSaveEditedAddress}
-            onClose={() => {
-              setShowEditAddressModal(false);
-              setEditingAddress(null);
-            }}
-          />
         </ModalContent>
       </Modal>
 

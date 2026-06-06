@@ -11,7 +11,6 @@ import {
   Tabs,
   Tab,
 } from "@heroui/react";
-import { TrashIcon, ClipboardDocumentIcon } from "@heroicons/react/24/outline";
 import { BLUEBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import {
@@ -622,11 +621,12 @@ export default function Affiliates() {
                               />
                               <Button
                                 isIconOnly
+                                aria-label="Copy invite link"
                                 size="sm"
                                 variant="light"
                                 onClick={() => copy(inviteUrl)}
                               >
-                                <ClipboardDocumentIcon className="h-4 w-4" />
+                                {"📋"}
                               </Button>
                             </div>
                             <div className="mt-2 flex flex-wrap gap-2">
@@ -665,11 +665,12 @@ export default function Affiliates() {
                           >
                             <Button
                               isIconOnly
+                              aria-label="Delete affiliate"
                               color="danger"
                               variant="light"
                               size="sm"
                             >
-                              <TrashIcon className="h-5 w-5" />
+                              {"🗑️"}
                             </Button>
                           </ConfirmActionDropdown>
                         </div>
@@ -820,11 +821,12 @@ export default function Affiliates() {
                       >
                         <Button
                           isIconOnly
+                          aria-label="Delete code"
                           color="danger"
                           variant="light"
                           size="sm"
                         >
-                          <TrashIcon className="h-5 w-5" />
+                          {"🗑️"}
                         </Button>
                       </ConfirmActionDropdown>
                     </div>

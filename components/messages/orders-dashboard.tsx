@@ -13,10 +13,6 @@ import {
   Button,
 } from "@heroui/react";
 import {
-  HandThumbUpIcon,
-  HandThumbDownIcon,
-} from "@heroicons/react/24/outline";
-import {
   ChatsContext,
   ProductContext,
   ReviewsContext,
@@ -51,7 +47,6 @@ import { encryptFileWithNip44 } from "@/utils/encryption/file-encryption";
 import PDFAnnotator from "@/components/utility-components/pdf-annotator";
 import FailureModal from "@/components/utility-components/failure-modal";
 import AddressChangeModal from "@/components/utility-components/address-change-modal";
-import { DocumentTextIcon } from "@heroicons/react/24/outline";
 import {
   NostrContext,
   SignerContext,
@@ -2233,7 +2228,12 @@ const OrdersDashboard = ({
                               disabled={isLoadingAgreement}
                               className="inline-flex items-center gap-1 rounded-md border-2 border-black bg-blue-200 px-2 py-1 text-xs font-bold text-black hover:bg-blue-300"
                             >
-                              <DocumentTextIcon className="h-4 w-4" />
+                              <span
+                                aria-hidden="true"
+                                className="text-sm leading-none"
+                              >
+                                📄
+                              </span>
                               {isLoadingAgreement &&
                               herdshareOrder?.orderId === order.orderId
                                 ? "Loading..."
@@ -2245,7 +2245,12 @@ const OrdersDashboard = ({
                               disabled={isLoadingAgreement}
                               className="bg-primary-yellow inline-flex items-center gap-1 rounded-md border-2 border-black px-2 py-1 text-xs font-bold text-black hover:bg-yellow-400"
                             >
-                              <DocumentTextIcon className="h-4 w-4" />
+                              <span
+                                aria-hidden="true"
+                                className="text-sm leading-none"
+                              >
+                                📄
+                              </span>
                               {isLoadingAgreement &&
                               herdshareOrder?.orderId === order.orderId
                                 ? "Loading..."
@@ -2515,24 +2520,32 @@ const OrdersDashboard = ({
               <div className="mb-4 flex items-center justify-center gap-16">
                 <div className="flex items-center gap-3">
                   <span className="text-black">Good Overall</span>
-                  <HandThumbUpIcon
-                    className={`h-12 w-12 cursor-pointer rounded-md border-2 p-2 transition-colors ${
+                  <button
+                    type="button"
+                    aria-label="Rate good overall"
+                    className={`cursor-pointer rounded-md border-2 p-2 text-4xl leading-none transition-colors ${
                       selectedThumb === "up"
-                        ? "border-green-500 text-green-500"
-                        : "border-black text-black hover:border-green-500 hover:text-green-500"
+                        ? "border-green-500"
+                        : "border-black hover:border-green-500"
                     }`}
                     onClick={() => setSelectedThumb("up")}
-                  />
+                  >
+                    👍
+                  </button>
                 </div>
                 <div className="flex items-center gap-3">
-                  <HandThumbDownIcon
-                    className={`h-12 w-12 cursor-pointer rounded-md border-2 p-2 transition-colors ${
+                  <button
+                    type="button"
+                    aria-label="Rate bad overall"
+                    className={`cursor-pointer rounded-md border-2 p-2 text-4xl leading-none transition-colors ${
                       selectedThumb === "down"
-                        ? "border-red-500 text-red-500"
-                        : "border-black text-black hover:border-red-500 hover:text-red-500"
+                        ? "border-red-500"
+                        : "border-black hover:border-red-500"
                     }`}
                     onClick={() => setSelectedThumb("down")}
-                  />
+                  >
+                    👎
+                  </button>
                   <span className="text-black">Bad Overall</span>
                 </div>
               </div>
@@ -2659,7 +2672,9 @@ const OrdersDashboard = ({
           <ModalContent className="flex h-full flex-col">
             <ModalHeader className="flex-shrink-0 border-b bg-white">
               <div className="flex items-center gap-2 text-black">
-                <DocumentTextIcon className="h-5 w-5" />
+                <span aria-hidden="true" className="text-lg leading-none">
+                  📄
+                </span>
                 {isViewMode
                   ? "View Signed Agreement"
                   : "Review & Sign Agreement"}

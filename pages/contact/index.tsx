@@ -3,7 +3,6 @@ import Head from "next/head";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { Image } from "@heroui/react";
-import { ArrowLeftIcon } from "@heroicons/react/24/outline";
 import { safeJsonLdString } from "@/utils/safe-json-ld";
 import {
   BLACKBUTTONCLASSNAMES,
@@ -81,7 +80,9 @@ export default function ContactPage() {
               onClick={() => router.back()}
               className={`${WHITEBUTTONCLASSNAMES} mb-8 flex items-center gap-2`}
             >
-              <ArrowLeftIcon className="h-4 w-4" />
+              <span aria-hidden="true" className="text-sm leading-none">
+                ⬅️
+              </span>
               Back
             </button>
           </div>

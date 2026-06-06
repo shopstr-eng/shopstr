@@ -11,7 +11,6 @@ import {
 import { PRIMARYBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { useRouter } from "next/router";
 import MilkMarketSpinner from "@/components/utility-components/mm-spinner";
-import { EyeIcon, EyeSlashIcon } from "@heroicons/react/24/outline";
 
 export default function PassphraseChallengeModal({
   actionOnSubmit,
@@ -116,9 +115,9 @@ export default function PassphraseChallengeModal({
                 className="text-gray-400"
               >
                 {showPassword ? (
-                  <EyeSlashIcon className="h-5 w-5" />
+                  <span className="text-lg leading-none">👁️⃠</span>
                 ) : (
-                  <EyeIcon className="h-5 w-5" />
+                  <span className="text-lg leading-none">👁️</span>
                 )}
               </button>
             }

@@ -12,6 +12,7 @@ const pathMap: { [key: string]: string } = {
   "api-keys": "API Keys",
   "email-flows": "Email Flows",
   payments: "Payments",
+  addresses: "Saved Addresses",
 };
 
 export const SettingsBreadCrumbs = () => {

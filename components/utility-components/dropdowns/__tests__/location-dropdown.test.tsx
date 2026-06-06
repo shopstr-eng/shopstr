@@ -62,13 +62,13 @@ describe("<LocationDropdown />", () => {
     render(<LocationDropdown value={someCountry} />);
   });
 
-  it("renders a Select with three sections: Regional, Countries, U.S. States", () => {
+  it("renders a Select with three sections: U.S. States, Countries, Regional", () => {
     const sections = screen.getAllByTestId("select-section");
     // expect exactly 3 sections in the order defined in useMemo
     expect(sections).toHaveLength(3);
-    expect(sections[0]).toHaveAttribute("data-title", "Regional");
+    expect(sections[0]).toHaveAttribute("data-title", "U.S. States");
     expect(sections[1]).toHaveAttribute("data-title", "Countries");
-    expect(sections[2]).toHaveAttribute("data-title", "U.S. States");
+    expect(sections[2]).toHaveAttribute("data-title", "Regional");
   });
 
   it("passes the locationAvatar as startContent on the Select", () => {
