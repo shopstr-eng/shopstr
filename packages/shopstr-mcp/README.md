@@ -2,10 +2,10 @@
 
 Standalone read-only MCP server package for Shopstr marketplace data.
 
-This package currently contains the standalone MCP shell plus shared read-only
-infrastructure for relay access, validation, JSON-safe parsing, deduplication,
-structured errors, timeouts, and audit logging. Listing, seller, review, and
-community tools will be added in follow-up PRs.
+This package currently contains the standalone MCP shell, shared read-only
+infrastructure, and the first relay-backed read tools for public Shopstr
+marketplace data. Seller, storefront, reputation, prompt, and resource features
+will be added in follow-up PRs.
 
 ## Current Scope
 
@@ -13,11 +13,44 @@ community tools will be added in follow-up PRs.
 - Reads relay, timeout, cache, and log-level settings from environment
   variables.
 - Starts an MCP server over stdio for local MCP-compatible clients.
-- Registers disabled placeholders so `tools/list`, `resources/list`, and
-  `prompts/list` return valid empty lists until real read tools are added.
+- Registers relay-backed core read tools:
+  `search_products`, `get_product_details`, and `get_reviews`.
+- Registers disabled resource and prompt placeholders so `resources/list` and
+  `prompts/list` return valid empty lists until those features are added.
 - Provides reusable infrastructure modules for upcoming tools:
   `nostr-manager`, `relay-fetch`, `parse-tags`, `dedup`, `validation`,
   `errors`, `timeout`, and `audit-log`.
+
+## Tools
+
+- `search_products`: search public product listings by keyword, category,
+  location, currency, and price range. Price filters require `currency`.
+  Category searches are pushed down to relays with `#t` when possible, then
+  checked again client-side with a broad fallback if no category-tagged results
+  match. Hidden Gamma listings are excluded from search results. Responses are
+  capped at 37 products for MCP token budgeting, even when a higher `limit` is
+  requested.
+- `get_product_details`: fetch one product listing by `productAddress`
+  (`30402:<seller-pubkey>:<product-d-tag>`) or by 64-character `productId`.
+  When given `productId`, the tool first resolves the product coordinate and
+  then fetches the latest replaceable listing for that coordinate so agents do
+  not accidentally use stale event IDs.
+- `get_reviews`: fetch public reviews for a product address, product ID, or
+  seller pubkey. Product reviews use the Shopstr/Gamma `#d` address model and
+  also query the standard `#a` address model. `productId` is resolved to a
+  product address when possible and keeps a legacy `#e` fallback. Seller review
+  lookups first derive the seller's product addresses, query Gamma/standard
+  product review targets, and keep legacy `#p` as a fallback.
+
+Product responses expose Gamma-compatible fields where available, including
+structured image objects, `productType`, `productFormat`, `visibility`
+(`hidden`, `on-sale`, or `pre-order`), `stock`, and structured
+`shippingOptions`. The parser keeps legacy Shopstr fields such as `quantity`,
+embedded `shipping`, and subscription tags as fallback data when present.
+
+Tool responses include relay degradation metadata in `_meta`, including queried
+relays, successful relays, failed relays, coverage, response time, hints, and
+truncation flags when response budgeting applies.
 
 ## Usage
 
@@ -56,4 +89,9 @@ and audit logging.
 ```sh
 npm --prefix packages/shopstr-mcp run build
 npm --prefix packages/shopstr-mcp test
+```
+
+## For Verification
+```sh
+npx @modelcontextprotocol/inspector node shopstr/packages/shopstr-mcp/dist/index.js
 ```

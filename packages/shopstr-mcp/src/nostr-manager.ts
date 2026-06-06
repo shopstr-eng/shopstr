@@ -1,16 +1,9 @@
-import {
-  SimplePool,
-  type Event as NostrToolsEvent,
-  type Filter,
-  verifyEvent,
-} from "nostr-tools";
+import { SimplePool, verifyEvent } from "nostr-tools";
 import type { SubscribeManyParams, SubCloser } from "nostr-tools/abstract-pool";
 
 import type { Logger } from "./logger.js";
 import { TimeoutError } from "./timeout.js";
-
-export type NostrEvent = NostrToolsEvent;
-export type NostrFilter = Filter;
+import type { NostrEvent, NostrFilter } from "./types.js";
 
 export type NostrRelay = {
   url: string;
@@ -109,6 +102,7 @@ export class NostrManager {
     this.gcTimeout = setTimeout(() => {
       void this.gc();
     }, this.params.gcInterval);
+    this.gcTimeout.unref?.();
   }
 
   private async gc(): Promise<void> {
