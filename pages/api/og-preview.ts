@@ -180,7 +180,13 @@ export default async function handler(
     return res.status(400).json({ error: "URL host is not allowed" });
   }
 
-  const normalizedUrl = parsedUrl.toString();
+  const trustedOrigin = `${parsedUrl.protocol}//${parsedUrl.hostname}${
+    parsedUrl.port ? `:${parsedUrl.port}` : ""
+  }`;
+  const normalizedUrl = new URL(
+    `${parsedUrl.pathname}${parsedUrl.search}`,
+    trustedOrigin
+  ).toString();
   const cached = cache.get(normalizedUrl);
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
     res.setHeader("Cache-Control", "public, max-age=1800");
