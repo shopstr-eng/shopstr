@@ -65,14 +65,14 @@ describe("/api/og-preview", () => {
 
     const res = createResponse();
     await handler(
-      createRequest("https://attacker.example/order"),
+      createRequest("https://shopstr.store/order"),
       res as unknown as NextApiResponse
     );
 
     expect(res.statusCode).toBe(200);
     expect(res.jsonBody).toEqual({
       title: "Order receipt",
-      url: "https://attacker.example/order",
+      url: "https://shopstr.store/order",
     });
   });
 
@@ -95,14 +95,14 @@ describe("/api/og-preview", () => {
 
     const res = createResponse();
     await handler(
-      createRequest("https://seller.example/listing"),
+      createRequest("https://shopstr.store/listing"),
       res as unknown as NextApiResponse
     );
 
     expect(res.statusCode).toBe(200);
     expect(res.jsonBody).toEqual({
       title: "Order receipt",
-      url: "https://seller.example/orders/123",
+      url: "https://shopstr.store/orders/123",
     });
   });
 });
