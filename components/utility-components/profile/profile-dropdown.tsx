@@ -60,9 +60,16 @@ const trimProfileContentCache = () => {
   }
 };
 
+// Cache of pubkey -> verified custom domain (or null when none). Avoids
+// re-querying /api/storefront/custom-domain for every dropdown render.
+const customDomainCache = new Map<string, string | null>();
+const inFlightDomainRequests = new Map<string, Promise<string | null>>();
+
 const clearProfileRequestCaches = () => {
   fetchedProfileContentCache.clear();
   inFlightProfileRequests.clear();
+  customDomainCache.clear();
+  inFlightDomainRequests.clear();
 };
 
 const fetchProfileContent = async (pubkey: string) => {
@@ -87,6 +94,25 @@ const fetchProfileContent = async (pubkey: string) => {
   }
 };
 
+const fetchVerifiedCustomDomain = async (
+  pubkey: string
+): Promise<string | null> => {
+  try {
+    const response = await fetch(
+      `/api/storefront/custom-domain?pubkey=${encodeURIComponent(pubkey)}`
+    );
+    if (!response.ok) return null;
+
+    const data = await response.json();
+    if (data && data.verified === true && typeof data.domain === "string") {
+      return data.domain;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+};
+
 export const ProfileWithDropdown = ({
   pubkey,
   baseClassname,
@@ -105,6 +131,7 @@ export const ProfileWithDropdown = ({
   >(null);
   const [isNPubCopied, setIsNPubCopied] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [customDomain, setCustomDomain] = useState<string | null>(null);
   const profileContext = useContext(ProfileMapContext);
   const shopMapContext = useContext(ShopMapContext);
   const npub = pubkey ? nip19.npubEncode(pubkey) : "";
@@ -178,6 +205,44 @@ export const ProfileWithDropdown = ({
     };
   }, [pubkey, profileContext.profileData]);
 
+  // Only the "shop" (Visit Vendor) item routes to a custom domain, so skip the
+  // lookup entirely for dropdowns that don't render it.
+  const hasShopKey = dropDownKeys.includes("shop");
+
+  useEffect(() => {
+    if (!pubkey || !hasShopKey) return;
+    if (typeof fetch !== "function") return;
+
+    if (customDomainCache.has(pubkey)) {
+      setCustomDomain(customDomainCache.get(pubkey) ?? null);
+      return;
+    }
+
+    let isCancelled = false;
+    let request = inFlightDomainRequests.get(pubkey);
+    if (!request) {
+      request = fetchVerifiedCustomDomain(pubkey)
+        .then((domain) => {
+          customDomainCache.set(pubkey, domain);
+          return domain;
+        })
+        .finally(() => {
+          inFlightDomainRequests.delete(pubkey);
+        });
+      inFlightDomainRequests.set(pubkey, request);
+    }
+
+    request
+      .then((domain) => {
+        if (!isCancelled) setCustomDomain(domain);
+      })
+      .catch(() => {});
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [pubkey, hasShopKey]);
+
   const profile = profileContext.profileData.get(pubkey);
   const profileContent = profile?.content ?? fetchedProfileContent;
   const stallSlug =
@@ -194,6 +259,7 @@ export const ProfileWithDropdown = ({
   const isNip05Verified = profile?.nip05Verified || false;
 
   const shopHref = (() => {
+    if (customDomain) return `https://${customDomain}`;
     if (stallSlug) return `/stall/${stallSlug}`;
     const slug = getProfileSlug(pubkey, profileContext.profileData);
     return `/marketplace/${slug}`;
@@ -224,7 +290,15 @@ export const ProfileWithDropdown = ({
       href: shopHref,
       onPress: () => {
         handleDropdownAction(() => {
-          router.push(shopHref);
+          // Custom domains are external URLs: open them in a new tab so Milk
+          // Market stays open. Internal routes use the Next router as usual.
+          if (shopHref.startsWith("http")) {
+            if (typeof window !== "undefined") {
+              window.open(shopHref, "_blank", "noopener,noreferrer");
+            }
+          } else {
+            router.push(shopHref);
+          }
         });
       },
       label: stallSlug ? "Visit Stall" : "Visit Vendor",
