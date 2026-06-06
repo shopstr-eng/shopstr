@@ -16,10 +16,7 @@ const ALLOWED_PREVIEW_HOSTS = new Set<string>([
   "www.shopstr.market",
 ]);
 
-const ALLOWED_PREVIEW_HOST_SUFFIXES = [
-  ".shopstr.store",
-  ".shopstr.market",
-];
+const ALLOWED_PREVIEW_HOST_SUFFIXES = [".shopstr.store", ".shopstr.market"];
 
 function isAllowedPreviewHost(hostname: string): boolean {
   const host = hostname.toLowerCase();
