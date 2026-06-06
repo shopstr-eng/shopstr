@@ -242,7 +242,7 @@ const DynamicHead = ({
   const ogLocale = ssrOgMeta?.locale || "en_US";
   const keywords =
     ssrOgMeta?.keywords ||
-    "milk market, raw dairy, farm-fresh dairy, nostr marketplace, bitcoin payments, lightning network, cashu, peer-to-peer commerce, local farmers, raw milk";
+    "milk market, sell food online, local food marketplace, local artisans, food producers, farm to table, sustainable food, decentralized commerce, nostr marketplace, bitcoin payments, lightning network, cashu, peer-to-peer commerce, shopify alternative, barn2door alternative";
   const geoRegion = ssrOgMeta?.locationRegion || "";
   const geoCity = ssrOgMeta?.locationCity || "";
   const geoPlaceName = [geoCity, geoRegion].filter(Boolean).join(", ");

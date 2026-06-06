@@ -75,9 +75,9 @@ export default function OgHead({
 }
 
 export const DEFAULT_OG: OgMetaProps = {
-  title: "Milk Market - Farm-Fresh Dairy Direct from Local Farmers",
+  title: "Milk Market - Sell Local Food Online, Without the Middlemen",
   description:
-    "Buy farm-fresh, raw milk and dairy products direct from local farmers. Connecting consumers to trusted dairy producers with sovereignty and community in mind.",
+    "The permissionless marketplace for food producers and local artisans. Open a storefront in minutes with 0% mandatory fees, or discover transparent, sustainable products from real people nearby.",
   image: "/milk-market.png",
   url: "/",
 };
