@@ -21,6 +21,8 @@ import {
   grantProTrialIfMissing,
   listExistingStallPubkeys,
   listPaidProManualInvoices,
+  listSettledManualInvoicesMissingCoverage,
+  setProManualInvoiceCoverage,
   syncProStripeMeta,
   getProSetting,
   setProSetting,
@@ -460,4 +462,46 @@ export async function backfillProTrialsOnce(): Promise<{
 
   await setProSetting(TRIAL_BACKFILL_FLAG, now.toISOString());
   return { ran: true, granted };
+}
+
+const COVERAGE_BACKFILL_FLAG = "manual_coverage_backfill_v1";
+
+/**
+ * One-time backfill of coverage_start/end for manual invoices that were settled
+ * before those columns were stamped. For each affected seller we replay the same
+ * stacking reconstruction the billing history uses (`computeManualCoverage`) over
+ * ALL their paid invoices, then persist the window onto the ones still missing
+ * it. Idempotent: only NULL windows are written, and a one-shot flag short-
+ * circuits subsequent runs so the cron can call it every tick cheaply.
+ */
+export async function backfillManualCoverageOnce(): Promise<{
+  ran: boolean;
+  filled: number;
+}> {
+  const done = await getProSetting(COVERAGE_BACKFILL_FLAG);
+  if (done) return { ran: false, filled: 0 };
+
+  const missing = await listSettledManualInvoicesMissingCoverage();
+  const pubkeys = Array.from(new Set(missing.map((inv) => inv.pubkey)));
+
+  let filled = 0;
+  for (const pubkey of pubkeys) {
+    const [row, paid] = await Promise.all([
+      getProMembership(pubkey),
+      listPaidProManualInvoices(pubkey),
+    ]);
+    const trialEnd = toDate(row?.trial_end ?? null);
+    const coverage = computeManualCoverage(paid, trialEnd);
+
+    for (const inv of missing) {
+      if (inv.pubkey !== pubkey) continue;
+      const cov = coverage.get(inv.invoice_id);
+      if (!cov) continue;
+      await setProManualInvoiceCoverage(inv.invoice_id, cov.start, cov.end);
+      filled += 1;
+    }
+  }
+
+  await setProSetting(COVERAGE_BACKFILL_FLAG, new Date().toISOString());
+  return { ran: true, filled };
 }

@@ -89,9 +89,13 @@ function StorefrontThemeWrapperInner({
   const router = useRouter();
   const { isOpen, onOpen, onClose } = useDisclosure();
   const isCustomDomain = useIsCustomDomain();
-  // When a seller lapses past the read-only window (hidden), the public site
-  // stops serving their custom storefront design — we render the plain page.
-  const { isHidden: sellerHidden } = usePublicMembershipStatus(sellerPubkey);
+  // Premium storefront chrome (themed nav, colors/fonts, footer) is a Pro-only
+  // feature. The design is published to Nostr with no server write path to
+  // block, so this is the render-layer enforcement: only Pro-entitled sellers
+  // get the custom chrome. We fail closed — the hook returns a non-Pro view on
+  // any /api/pro/status error, so a lapsed/non-Pro seller's design is never
+  // served during an outage.
+  const { isPro: sellerIsPro } = usePublicMembershipStatus(sellerPubkey);
 
   const [storefront, setStorefront] = useState<StorefrontConfig | null>(null);
   const [colors, setColors] = useState<StorefrontColorScheme>(DEFAULT_COLORS);
@@ -100,6 +104,17 @@ function StorefrontThemeWrapperInner({
 
   useEffect(() => {
     if (!sellerPubkey || !shopMapContext.shopData.has(sellerPubkey)) return;
+    // Premium design is Pro-only — never hydrate the seller's custom storefront
+    // config or colors unless they're entitled. Gating here (not just at the
+    // render early-return) keeps the premium fields out of the body CSS-var
+    // side effect below too, so a non-Pro seller's saved colorScheme can't paint
+    // the page. We fail closed: while entitlement is unresolved (isPro false)
+    // we keep defaults.
+    if (!sellerIsPro) {
+      setStorefront(null);
+      setColors(DEFAULT_COLORS);
+      return;
+    }
     const shopData = shopMapContext.shopData.get(sellerPubkey);
     if (shopData?.content?.storefront) {
       const sf = shopData.content.storefront;
@@ -108,7 +123,7 @@ function StorefrontThemeWrapperInner({
         setColors({ ...DEFAULT_COLORS, ...sf.colorScheme });
       }
     }
-  }, [sellerPubkey, shopMapContext.shopData]);
+  }, [sellerPubkey, shopMapContext.shopData, sellerIsPro]);
 
   useEffect(() => {
     if (sellerPubkey) {
@@ -162,7 +177,7 @@ function StorefrontThemeWrapperInner({
     };
   }, [storefront, colors]);
 
-  const hasCustomStorefront = !!storefront && !sellerHidden;
+  const hasCustomStorefront = !!storefront && sellerIsPro;
   const hasFooter = !!storefront?.footer;
 
   const navBg = storefront?.navColors?.background || colors.secondary;

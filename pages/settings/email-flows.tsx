@@ -95,7 +95,7 @@ function formatDelayHours(hours: number): string {
 }
 
 const EmailFlowsPage = () => {
-        const { pubkey, signer, isLoggedIn } = useContext(SignerContext);
+  const { pubkey, signer, isLoggedIn } = useContext(SignerContext);
   const { membership } = useProMembership();
   const shopMapContext = useContext(ShopMapContext);
   const profileMapContext = useContext(ProfileMapContext);

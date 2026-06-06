@@ -60,6 +60,18 @@ const DEFAULT_COLORS: StorefrontColorScheme = {
   text: "#000000",
 };
 
+// A lapsed (read-only/hidden) or non-Pro seller keeps only identity/routing —
+// never the premium styling (custom colors, fonts, page-builder sections/pages,
+// nav/footer, popups, custom SEO). The design is published to Nostr with no
+// server write path to block, so this strip is the render-layer enforcement of
+// the Pro entitlement.
+function basicStorefront(sf: StorefrontConfig): StorefrontConfig {
+  return {
+    shopSlug: sf.shopSlug,
+    customDomain: sf.customDomain,
+  };
+}
+
 const GOOGLE_FONT_OPTIONS = [
   "Inter",
   "Roboto",
@@ -103,25 +115,72 @@ export default function StorefrontLayout({
   const [cartQuantity, setCartQuantity] = useState(0);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [shopDataReady, setShopDataReady] = useState(false);
+  // The viewed seller's Pro entitlement, scoped to the pubkey it was resolved
+  // for. We key on pubkey so a stale `true` from a previously-viewed Pro seller
+  // can never be applied to a different (non-Pro) seller during a client-side
+  // shop switch. Premium styling is only served when the resolved pubkey
+  // matches the current seller AND isPro is true; we fail closed (false) on any
+  // error so a lapsed seller's design is never served during a status outage.
+  const [proStatus, setProStatus] = useState<{
+    pubkey: string;
+    isPro: boolean;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!shopPubkey) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(
+          `/api/pro/status?pubkey=${encodeURIComponent(shopPubkey)}`
+        );
+        if (cancelled) return;
+        if (res.ok) {
+          const view = await res.json();
+          setProStatus({ pubkey: shopPubkey, isPro: !!view?.isPro });
+        } else {
+          setProStatus({ pubkey: shopPubkey, isPro: false });
+        }
+      } catch {
+        if (!cancelled) setProStatus({ pubkey: shopPubkey, isPro: false });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [shopPubkey]);
+
+  // Entitlement only counts when it was resolved for the seller we're rendering.
+  // While unresolved or stale (different pubkey), this is false → fail closed.
+  const proEntitled =
+    proStatus !== null && proStatus.pubkey === shopPubkey
+      ? proStatus.isPro
+      : null;
 
   useEffect(() => {
     if (shopPubkey && shopMapContext.shopData.has(shopPubkey)) {
       const shopData = shopMapContext.shopData.get(shopPubkey);
       if (shopData) {
         setShop(shopData);
-        if (shopData.content.storefront) {
-          setStorefront(shopData.content.storefront);
-          if (shopData.content.storefront.colorScheme) {
-            setColors({
-              ...DEFAULT_COLORS,
-              ...shopData.content.storefront.colorScheme,
-            });
-          }
+        const sf = shopData.content.storefront;
+        // Wait until entitlement resolves before serving premium styling, and
+        // strip it entirely for non-Pro/lapsed sellers. The basic shop (slug,
+        // products, name) still renders; only the premium design is gated.
+        if (proEntitled === true && sf) {
+          setStorefront(sf);
+          setColors(
+            sf.colorScheme
+              ? { ...DEFAULT_COLORS, ...sf.colorScheme }
+              : DEFAULT_COLORS
+          );
+        } else {
+          setStorefront(sf ? basicStorefront(sf) : {});
+          setColors(DEFAULT_COLORS);
         }
         setShopDataReady(true);
       }
     }
-  }, [shopPubkey, shopMapContext.shopData]);
+  }, [shopPubkey, shopMapContext.shopData, proEntitled]);
 
   useEffect(() => {
     if (!shopDataReady) return;

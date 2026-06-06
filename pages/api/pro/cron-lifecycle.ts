@@ -1,6 +1,9 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { applyRateLimit } from "@/utils/rate-limit";
-import { backfillProTrialsOnce } from "@/utils/pro/membership";
+import {
+  backfillProTrialsOnce,
+  backfillManualCoverageOnce,
+} from "@/utils/pro/membership";
 import { runProLifecycle } from "@/utils/pro/lifecycle";
 import { expirePastDueManualInvoices } from "@/utils/db/pro-membership";
 
@@ -31,12 +34,14 @@ export default async function handler(
 
   try {
     const backfill = await backfillProTrialsOnce();
+    const coverageBackfill = await backfillManualCoverageOnce();
     const expiredInvoices = await expirePastDueManualInvoices();
     const lifecycle = await runProLifecycle();
 
     return res.status(200).json({
       ok: true,
       backfill,
+      coverageBackfill,
       expiredInvoices,
       lifecycle,
     });

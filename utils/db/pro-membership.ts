@@ -547,6 +547,57 @@ export async function expirePastDueManualInvoices(): Promise<number> {
 // One-time settings / flags
 // ---------------------------------------------------------------------------
 
+/**
+ * Settled manual invoices that never had their coverage window stamped (settled
+ * before the coverage_start/end columns existed). Returned oldest-first per
+ * seller so a per-pubkey stacking reconstruction can backfill them.
+ */
+export async function listSettledManualInvoicesMissingCoverage(): Promise<
+  ProManualInvoiceRow[]
+> {
+  let client;
+  try {
+    client = await getDbPool().connect();
+    const result = await client.query(
+      `SELECT * FROM pro_manual_invoices
+        WHERE status = 'paid'
+          AND membership_applied_at IS NOT NULL
+          AND (coverage_start IS NULL OR coverage_end IS NULL)
+        ORDER BY pubkey, paid_at, created_at, id`
+    );
+    return result.rows;
+  } finally {
+    if (client) client.release();
+  }
+}
+
+/**
+ * Persist a reconstructed coverage window onto a manual invoice. Only fills a
+ * still-empty window so a concurrent live settle (which stamps the exact window)
+ * always wins and the backfill never overwrites real data.
+ */
+export async function setProManualInvoiceCoverage(
+  invoiceId: string,
+  coverageStart: Date,
+  coverageEnd: Date
+): Promise<void> {
+  let client;
+  try {
+    client = await getDbPool().connect();
+    await client.query(
+      `UPDATE pro_manual_invoices
+          SET coverage_start = $2,
+              coverage_end = $3,
+              updated_at = now()
+        WHERE invoice_id = $1
+          AND (coverage_start IS NULL OR coverage_end IS NULL)`,
+      [invoiceId, coverageStart, coverageEnd]
+    );
+  } finally {
+    if (client) client.release();
+  }
+}
+
 export async function getProSetting(key: string): Promise<string | null> {
   let client;
   try {

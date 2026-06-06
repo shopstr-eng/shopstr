@@ -19,11 +19,29 @@ interface PublicMembership {
   loading: boolean;
 }
 
-const cache = new Map<string, MembershipView>();
+// Cache entries carry a fetch timestamp and expire after TTL. Without this a
+// seller cached as Pro would keep being treated as Pro for the whole session
+// even after they lapse — re-serving premium chrome the entitlement no longer
+// covers. A short TTL bounds that staleness window while still deduping the
+// many storefront components that read the same seller on one page load.
+const CACHE_TTL_MS = 60_000;
+
+const cache = new Map<string, { view: MembershipView; at: number }>();
 const inflight = new Map<string, Promise<MembershipView>>();
 
+function getFresh(pubkey: string): MembershipView | null {
+  const entry = cache.get(pubkey);
+  if (!entry) return null;
+  if (Date.now() - entry.at > CACHE_TTL_MS) {
+    cache.delete(pubkey);
+    return null;
+  }
+  return entry.view;
+}
+
 async function fetchStatus(pubkey: string): Promise<MembershipView> {
-  if (cache.has(pubkey)) return cache.get(pubkey)!;
+  const fresh = getFresh(pubkey);
+  if (fresh) return fresh;
   const existing = inflight.get(pubkey);
   if (existing) return existing;
 
@@ -34,7 +52,7 @@ async function fetchStatus(pubkey: string): Promise<MembershipView> {
       );
       if (!res.ok) return freeMembershipView(pubkey);
       const data = (await res.json()) as MembershipView;
-      cache.set(pubkey, data);
+      cache.set(pubkey, { view: data, at: Date.now() });
       return data;
     } catch {
       return freeMembershipView(pubkey);
@@ -50,10 +68,10 @@ export function usePublicMembershipStatus(
   pubkey: string | null | undefined
 ): PublicMembership {
   const [view, setView] = useState<MembershipView | null>(
-    pubkey && cache.has(pubkey) ? cache.get(pubkey)! : null
+    pubkey ? getFresh(pubkey) : null
   );
   const [loading, setLoading] = useState<boolean>(
-    !!pubkey && !cache.has(pubkey)
+    !!pubkey && !getFresh(pubkey)
   );
 
   useEffect(() => {
@@ -63,8 +81,9 @@ export function usePublicMembershipStatus(
       setLoading(false);
       return;
     }
-    if (cache.has(pubkey)) {
-      setView(cache.get(pubkey)!);
+    const cached = getFresh(pubkey);
+    if (cached) {
+      setView(cached);
       setLoading(false);
       return;
     }
