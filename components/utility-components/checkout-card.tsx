@@ -823,7 +823,7 @@ export default function CheckoutCard({
               <div className="flex w-full flex-row gap-4">
                 {/* Vertical Thumbnails */}
                 <div className="flex w-1/4 flex-col gap-2">
-                  <div ref={containerRef} className="flex-1 overflow-hidden">
+                  <div ref={containerRef} className="overflow-hidden">
                     <div className="flex flex-col space-y-2">
                       {carouselThumbnails.map(({ image, index }) => (
                         <img

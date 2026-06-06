@@ -5517,7 +5517,7 @@ export default function ProductInvoiceCard({
                               aria-hidden="true"
                               className="text-2xl leading-none"
                             >
-                              💵
+                              🥜
                             </span>
                           }
                         >
@@ -5561,7 +5561,7 @@ export default function ProductInvoiceCard({
                           aria-hidden="true"
                           className="text-2xl leading-none"
                         >
-                          💲
+                          💳️
                         </span>
                       }
                     >
@@ -5592,7 +5592,7 @@ export default function ProductInvoiceCard({
                               aria-hidden="true"
                               className="text-2xl leading-none"
                             >
-                              💲
+                              💵
                             </span>
                           }
                         >

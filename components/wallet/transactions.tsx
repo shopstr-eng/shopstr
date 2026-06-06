@@ -81,7 +81,7 @@ const Transactions = () => {
                         aria-hidden="true"
                         className="mr-2 text-lg leading-none"
                       >
-                        💵
+                        🥜
                       </span>
                     ) : transaction.type === 4 ? (
                       <span
