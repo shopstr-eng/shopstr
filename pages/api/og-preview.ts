@@ -12,10 +12,13 @@ const RATE_LIMIT = { limit: 60, windowMs: 60 * 1000 };
 const ALLOWED_PREVIEW_HOSTS = new Set<string>([
   "shopstr.store",
   "www.shopstr.store",
+  "shopstr.market",
+  "www.shopstr.market",
 ]);
 
 const ALLOWED_PREVIEW_HOST_SUFFIXES = [
   ".shopstr.store",
+  ".shopstr.market",
 ];
 
 function isAllowedPreviewHost(hostname: string): boolean {
