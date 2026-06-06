@@ -101,7 +101,8 @@ const ProUpgradePage = () => {
                     </h2>
                     <p className="font-medium text-black">
                       Advanced storefronts, custom domains, email flows, custom
-                      product pages, Shippo shipping, and the MCP API.
+                      product pages, Shippo shipping (coming soon), and the MCP
+                      API.
                     </p>
                   </div>
 

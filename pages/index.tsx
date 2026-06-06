@@ -367,10 +367,10 @@ export default function StandaloneLanding() {
 
         <div className="relative z-10 mx-auto max-w-4xl text-center">
           <span className="shadow-neo mb-6 inline-block rounded-full border-2 border-black bg-white px-4 py-1.5 text-xs font-bold tracking-wide uppercase">
-            Commerce that flows silky smooth
+            For food producers &amp; local artisans
           </span>
 
-          <h1 className="mb-6 text-4xl leading-tight font-black md:text-6xl">
+          <h1 className="mb-4 text-4xl leading-tight font-black md:text-6xl">
             Sell local food online,{" "}
             <span className="relative inline-block">
               <span className="relative z-10 inline-block rounded-lg border-[3px] border-black bg-black px-4 py-2 text-white">
@@ -379,6 +379,10 @@ export default function StandaloneLanding() {
               <span className="bg-primary-yellow absolute right-[-5px] bottom-[-5px] z-0 h-full w-full rounded-lg border-[3px] border-black"></span>
             </span>
           </h1>
+
+          <p className="mx-auto mb-5 max-w-2xl text-lg font-bold text-zinc-800 md:text-xl">
+            Commerce that flows silky smooth.
+          </p>
 
           <p className="mx-auto mb-4 max-w-2xl text-lg text-zinc-600">
             Milk Market is the permissionless marketplace for food producers and
@@ -764,16 +768,16 @@ export default function StandaloneLanding() {
               <tbody className="text-sm">
                 {[
                   {
-                    feature: "Mandatory platform transaction fees",
+                    feature: "Up-front & platform fees",
                     mm: "0%",
                     shopify: "Up to 2%¹",
-                    barn: "Varies by plan",
+                    barn: "$399+ setup fee²",
                   },
                   {
                     feature: "Monthly subscription",
                     mm: "Free, or $21 Pro",
                     shopify: "From $39/mo",
-                    barn: "Annual contract",
+                    barn: "From $99/mo²",
                   },
                   {
                     feature: "Built for local food & makers",
@@ -850,8 +854,10 @@ export default function StandaloneLanding() {
           <p className="mt-4 text-center text-xs text-zinc-500">
             &sup1; Shopify charges an additional transaction fee when you
             don&apos;t use Shopify Payments; standard card-processing fees apply
-            on all platforms. Competitor details are based on publicly listed
-            pricing and features and may change.
+            on all platforms. &sup2; Barn2Door plans start at $99/mo billed
+            yearly (Entrepreneur) plus a one-time setup fee from $399, rising to
+            $159 and $299/mo on higher tiers. Competitor details are based on
+            publicly listed pricing and features and may change.
           </p>
 
           <div className="mt-8 text-center">
@@ -955,7 +961,7 @@ export default function StandaloneLanding() {
             />
             <FAQItem
               question="How much does it cost to sell?"
-              answer="Starting is free, with unlimited listings and no mandatory transaction fees, ever. Pro is $21/month (or $168/year) and adds custom domains, advanced storefront design, automated email flows, shipping labels, and AI agent (MCP) access. You can set an optional donation rate to support the platform, but that's always your choice."
+              answer="Starting is free, with unlimited listings and no mandatory transaction fees, ever. Pro is $21/month (or $168/year) and adds custom domains, advanced storefront design, automated email flows, shipping labels (coming soon), and AI agent (MCP) access. You can set an optional donation rate to support the platform, but that's always your choice."
             />
             <FAQItem
               question="Do I own my customers and store?"

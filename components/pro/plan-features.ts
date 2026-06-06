@@ -15,6 +15,6 @@ export const PRO_FEATURES: string[] = [
   "Self-serve custom domains",
   "Automated email flows",
   "Custom product pages",
-  "Shippo shipping labels",
+  "Shippo shipping labels (coming soon)",
   "MCP API access for AI agents",
 ];
