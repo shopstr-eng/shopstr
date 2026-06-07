@@ -3,6 +3,16 @@ import test from "node:test";
 
 import { NostrManager } from "../dist/nostr-manager.js";
 
+test("gc timer does not keep the Node.js process alive", async () => {
+  const manager = new NostrManager([], { gcInterval: 60_000 });
+
+  try {
+    assert.equal(manager.gcTimeout.hasRef(), false);
+  } finally {
+    await manager.close();
+  }
+});
+
 test("relay reconnect refreshes the underlying relay handle", async () => {
   const manager = new NostrManager([], { gcInterval: 60_000 });
   const handles = [];

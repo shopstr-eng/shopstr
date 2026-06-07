@@ -7,11 +7,46 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { loadConfig } from "../dist/config.js";
 import { createMcpServer } from "../dist/server.js";
 
-test("exposes valid empty MCP discovery handlers for the setup package", async () => {
+const hex = (char) => char.repeat(64);
+
+function productEvent() {
+  return {
+    id: hex("a"),
+    pubkey: hex("b"),
+    created_at: 100,
+    kind: 30402,
+    tags: [
+      ["d", "shirt"],
+      ["title", "Linen Shirt"],
+      ["summary", "A nice shirt"],
+      ["price", "10", "USD"],
+    ],
+    content: "",
+    sig: "c".repeat(128),
+  };
+}
+
+test("registers and calls PR3 core read tools", async () => {
   const [clientTransport, serverTransport] =
     InMemoryTransport.createLinkedPair();
   const client = new Client({ name: "shopstr-mcp-test", version: "0.0.0" });
-  const server = createMcpServer(loadConfig({}));
+  let closeCount = 0;
+  const server = createMcpServer(
+    loadConfig({ SHOPSTR_MCP_RELAYS: "wss://relay.example.com" }),
+    {
+      nostr: {
+        async fetch() {
+          return [productEvent()];
+        },
+        async close() {
+          closeCount += 1;
+        },
+      },
+      logger: {
+        warn() {},
+      },
+    }
+  );
 
   try {
     await server.connect(serverTransport);
@@ -22,9 +57,26 @@ test("exposes valid empty MCP discovery handlers for the setup package", async (
     assert.ok(capabilities?.resources);
     assert.ok(capabilities?.prompts);
 
-    assert.deepEqual(await client.listTools(), { tools: [] });
+    const tools = await client.listTools();
+    assert.deepEqual(tools.tools.map((tool) => tool.name).sort(), [
+      "get_product_details",
+      "get_reviews",
+      "search_products",
+    ]);
     assert.deepEqual(await client.listResources(), { resources: [] });
     assert.deepEqual(await client.listPrompts(), { prompts: [] });
+
+    const result = await client.callTool({
+      name: "search_products",
+      arguments: { keyword: "shirt" },
+    });
+    const body = JSON.parse(result.content[0].text);
+
+    assert.equal(body.count, 1);
+    assert.equal(body.products[0].title, "Linen Shirt");
+
+    await server.close();
+    assert.equal(closeCount, 1);
   } finally {
     await client.close();
     await server.close();

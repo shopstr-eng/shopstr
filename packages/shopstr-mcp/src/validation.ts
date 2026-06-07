@@ -2,6 +2,13 @@ import { nip19 } from "nostr-tools";
 import { z } from "zod";
 
 const HEX_64_RE = /^[0-9a-f]{64}$/;
+const PRODUCT_ADDRESS_KIND = "30402";
+
+export type ProductAddressParts = {
+  coordinate: string;
+  pubkey: string;
+  dTag: string;
+};
 
 export function isHex64(value: string): boolean {
   return HEX_64_RE.test(value);
@@ -34,6 +41,31 @@ export function canonicalizeSearch(input: string): string {
   return input.trim().replace(/\s+/g, " ");
 }
 
+export function parseProductAddress(
+  input: string
+): ProductAddressParts | undefined {
+  const trimmed = input.trim();
+  const coordinate =
+    trimmed.slice(0, 2).toLowerCase() === "a:" ? trimmed.slice(2) : trimmed;
+  const [kind, pubkeyInput, ...dTagParts] = coordinate.split(":");
+  const pubkey = pubkeyInput?.toLowerCase() ?? "";
+  const dTag = dTagParts.join(":");
+
+  if (kind !== PRODUCT_ADDRESS_KIND || !isHex64(pubkey) || dTag.length === 0) {
+    return;
+  }
+
+  return {
+    coordinate: `${PRODUCT_ADDRESS_KIND}:${pubkey}:${dTag}`,
+    pubkey,
+    dTag,
+  };
+}
+
+export function canonicalizeProductAddress(input: string): string {
+  return parseProductAddress(input)?.coordinate ?? input.trim();
+}
+
 const hex64Schema = z
   .string()
   .transform(canonicalizeHex)
@@ -45,6 +77,15 @@ export const pubkeySchema = z
   .refine(isHex64, "Expected a 64-character hex pubkey or npub");
 
 export const eventIdSchema = hex64Schema;
+
+export const productAddressSchema = z
+  .string()
+  .max(300)
+  .transform(canonicalizeProductAddress)
+  .refine(
+    (value) => parseProductAddress(value) !== undefined,
+    "Expected a product address like 30402:<seller-pubkey>:<product-d-tag>"
+  );
 
 export const searchSchema = z
   .string()
@@ -101,9 +142,15 @@ export const searchProductsSchema = z
     }
   );
 
-export const productIdInputSchema = z.object({
-  productId: eventIdSchema,
-});
+export const productDetailsInputSchema = z
+  .object({
+    productId: eventIdSchema.optional(),
+    productAddress: productAddressSchema.optional(),
+  })
+  .refine(
+    (data) => data.productId !== undefined || data.productAddress !== undefined,
+    { message: "Either productId or productAddress is required" }
+  );
 
 export const pubkeyInputSchema = z.object({
   pubkey: pubkeySchema,
@@ -112,11 +159,15 @@ export const pubkeyInputSchema = z.object({
 export const reviewsInputSchema = z
   .object({
     productId: eventIdSchema.optional(),
+    productAddress: productAddressSchema.optional(),
     sellerPubkey: pubkeySchema.optional(),
   })
   .refine(
-    (data) => data.productId !== undefined || data.sellerPubkey !== undefined,
+    (data) =>
+      data.productId !== undefined ||
+      data.productAddress !== undefined ||
+      data.sellerPubkey !== undefined,
     {
-      message: "Either productId or sellerPubkey is required",
+      message: "Either productId, productAddress, or sellerPubkey is required",
     }
   );
