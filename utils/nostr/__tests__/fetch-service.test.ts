@@ -174,6 +174,13 @@ const makeProfileEvent = (overrides: Record<string, any> = {}) =>
     ...overrides,
   });
 
+const makeShopEvent = (overrides: Record<string, any> = {}) =>
+  makeBaseEvent({
+    kind: 30019,
+    tags: [["d", "shop"]],
+    ...overrides,
+  });
+
 const makeProductEvent = (overrides: Record<string, any> = {}) =>
   makeBaseEvent({
     kind: 30402,
@@ -2435,5 +2442,318 @@ describe("fetchCashuWallet", () => {
     expect(global.fetch).not.toHaveBeenCalled();
     expect(nostr.fetch).not.toHaveBeenCalled();
     expect(editCashuWalletContext).toHaveBeenCalledWith([], [], [], false);
+  });
+});
+
+describe("fetchShopProfile", () => {
+  beforeEach(() => {
+    jest.resetModules();
+    jest.clearAllMocks();
+  });
+
+  it("exits early and emits an empty map when pubkeyShopProfileToFetch is empty", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+    jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
+
+    const { fetchShopProfile } = await import("../fetch-service");
+
+    global.fetch = jest.fn() as typeof global.fetch;
+    const nostr = { fetch: jest.fn() } as any;
+    const editShopContext = jest.fn();
+
+    const { shopProfileMap } = await fetchShopProfile(
+      nostr,
+      ["wss://relay.example"],
+      [],
+      editShopContext
+    );
+
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(nostr.fetch).not.toHaveBeenCalled();
+    expect(shopProfileMap).toEqual(new Map());
+    expect(editShopContext).toHaveBeenCalledWith(new Map(), false);
+  });
+
+  it("hydrates shop profiles from DB before querying relays", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+    jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
+
+    const { fetchShopProfile } = await import("../fetch-service");
+
+    const pubkey = "seller-shop-db";
+    const shopEvent = makeShopEvent({
+      id: "shop-event-db",
+      pubkey,
+      created_at: 100,
+      content: JSON.stringify({ name: "DB Shop" }),
+      sig: "sig-shop-db",
+    });
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(makeDbPayload([shopEvent])) as typeof global.fetch;
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([]) } as any;
+    const editShopContext = jest.fn();
+
+    const { shopProfileMap } = await fetchShopProfile(
+      nostr,
+      ["wss://relay.example"],
+      [pubkey],
+      editShopContext
+    );
+
+    expect(global.fetch).toHaveBeenCalledWith("/api/db/fetch-profiles");
+    expect(shopProfileMap.get(pubkey)).toMatchObject({
+      pubkey,
+      created_at: 100,
+      content: { name: "DB Shop" },
+    });
+    expect(cacheEventsToDatabase).not.toHaveBeenCalled();
+  });
+
+  it("relay results overwrite DB results for the same pubkey", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+    jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
+
+    const { fetchShopProfile } = await import("../fetch-service");
+
+    const pubkey = "seller-shop-merge";
+    const dbShopEvent = makeShopEvent({
+      id: "shop-db-old",
+      pubkey,
+      created_at: 100,
+      content: JSON.stringify({ name: "Old DB Shop" }),
+      sig: "sig-shop-db-old",
+    });
+    const relayShopEvent = makeShopEvent({
+      id: "shop-relay-new",
+      pubkey,
+      created_at: 200,
+      content: JSON.stringify({ name: "New Relay Shop" }),
+      sig: "sig-shop-relay-new",
+    });
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(makeDbPayload([dbShopEvent])) as typeof global.fetch;
+
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([relayShopEvent]),
+    } as any;
+    const editShopContext = jest.fn();
+
+    const { shopProfileMap } = await fetchShopProfile(
+      nostr,
+      ["wss://relay.example"],
+      [pubkey],
+      editShopContext
+    );
+
+    expect(shopProfileMap.get(pubkey)).toMatchObject({
+      pubkey,
+      created_at: 200,
+      content: { name: "New Relay Shop" },
+    });
+    expect(cacheEventsToDatabase).toHaveBeenCalledWith([relayShopEvent]);
+  });
+
+  it("ignores malformed JSON in DB and relay shop profiles without throwing", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+    jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
+
+    const { fetchShopProfile } = await import("../fetch-service");
+
+    const pubkey1 = "seller-shop-bad-db";
+    const pubkey2 = "seller-shop-bad-relay";
+
+    const malformedDbEvent = makeShopEvent({
+      id: "shop-bad-db",
+      pubkey: pubkey1,
+      created_at: 100,
+      content: "not-valid-json{{{",
+      sig: "sig-shop-bad-db",
+    });
+    const malformedRelayEvent = makeShopEvent({
+      id: "shop-bad-relay",
+      pubkey: pubkey2,
+      created_at: 200,
+      content: "also-not-json",
+      sig: "sig-shop-bad-relay",
+    });
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(
+        makeDbPayload([malformedDbEvent])
+      ) as typeof global.fetch;
+
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([malformedRelayEvent]),
+    } as any;
+    const editShopContext = jest.fn();
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    const { shopProfileMap } = await fetchShopProfile(
+      nostr,
+      ["wss://relay.example"],
+      [pubkey1, pubkey2],
+      editShopContext
+    );
+
+    expect(consoleErrorSpy).toHaveBeenCalled();
+    expect(shopProfileMap.get(pubkey1)).toBeFalsy();
+    expect(shopProfileMap.get(pubkey2)).toBeFalsy();
+
+    consoleErrorSpy.mockRestore();
+  });
+
+  it("maps multiple pubkeys independently without cross-contamination", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+    jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
+
+    const { fetchShopProfile } = await import("../fetch-service");
+
+    const pubkeyA = "seller-shop-multi-a";
+    const pubkeyB = "seller-shop-multi-b";
+    const shopEventA = makeShopEvent({
+      id: "shop-multi-a",
+      pubkey: pubkeyA,
+      created_at: 100,
+      content: JSON.stringify({ name: "Shop A" }),
+      sig: "sig-shop-multi-a",
+    });
+    const shopEventB = makeShopEvent({
+      id: "shop-multi-b",
+      pubkey: pubkeyB,
+      created_at: 200,
+      content: JSON.stringify({ name: "Shop B" }),
+      sig: "sig-shop-multi-b",
+    });
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(makeDbPayload([])) as typeof global.fetch;
+
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([shopEventA, shopEventB]),
+    } as any;
+    const editShopContext = jest.fn();
+
+    const { shopProfileMap } = await fetchShopProfile(
+      nostr,
+      ["wss://relay.example"],
+      [pubkeyA, pubkeyB],
+      editShopContext
+    );
+
+    expect(shopProfileMap.get(pubkeyA)).toMatchObject({
+      pubkey: pubkeyA,
+      content: { name: "Shop A" },
+    });
+    expect(shopProfileMap.get(pubkeyB)).toMatchObject({
+      pubkey: pubkeyB,
+      content: { name: "Shop B" },
+    });
+  });
+
+  it("calls editShopContext with DB-only data when relay returns no events", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+    jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
+
+    const { fetchShopProfile } = await import("../fetch-service");
+
+    const pubkey = "seller-shop-db-only";
+    const shopEvent = makeShopEvent({
+      id: "shop-db-only",
+      pubkey,
+      created_at: 100,
+      content: JSON.stringify({ name: "DB-Only Shop" }),
+      sig: "sig-shop-db-only",
+    });
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(makeDbPayload([shopEvent])) as typeof global.fetch;
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([]) } as any;
+    const editShopContext = jest.fn();
+
+    await fetchShopProfile(
+      nostr,
+      ["wss://relay.example"],
+      [pubkey],
+      editShopContext
+    );
+
+    // First call after DB load, second call after relay returns empty
+    expect(editShopContext).toHaveBeenCalledTimes(2);
+    const firstCallArg = editShopContext.mock.calls[0][0] as Map<string, any>;
+    expect(firstCallArg.get(pubkey)).toMatchObject({
+      pubkey,
+      content: { name: "DB-Only Shop" },
+    });
+    expect(cacheEventsToDatabase).not.toHaveBeenCalled();
+  });
+
+  it("caches only relay events with id, sig, pubkey, and kind 30019", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+    jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
+
+    const { fetchShopProfile } = await import("../fetch-service");
+
+    const pubkey = "seller-shop-cache-valid";
+    const validShopEvent = makeShopEvent({
+      id: "shop-valid-cache",
+      pubkey,
+      created_at: 200,
+      content: JSON.stringify({ name: "Valid Shop" }),
+      sig: "sig-shop-valid-cache",
+    });
+    const missingId = makeShopEvent({
+      id: "",
+      pubkey: "shop-cache-no-id",
+      created_at: 201,
+      content: JSON.stringify({ name: "No ID" }),
+      sig: "sig-shop-no-id",
+    });
+    const missingSig = makeShopEvent({
+      id: "shop-cache-no-sig",
+      pubkey: "shop-cache-no-sig-pk",
+      created_at: 202,
+      content: JSON.stringify({ name: "No Sig" }),
+      sig: "",
+    });
+    const wrongKind = makeBaseEvent({
+      id: "shop-cache-wrong-kind",
+      pubkey: "shop-cache-wrong-kind-pk",
+      created_at: 203,
+      kind: 0,
+      content: "wrong kind",
+      sig: "sig-shop-wrong-kind",
+    });
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(makeDbPayload([])) as typeof global.fetch;
+
+    const nostr = {
+      fetch: jest
+        .fn()
+        .mockResolvedValue([validShopEvent, missingId, missingSig, wrongKind]),
+    } as any;
+    const editShopContext = jest.fn();
+
+    await fetchShopProfile(
+      nostr,
+      ["wss://relay.example"],
+      [pubkey],
+      editShopContext
+    );
+
+    expect(cacheEventsToDatabase).toHaveBeenCalledTimes(1);
+    expect(cacheEventsToDatabase).toHaveBeenCalledWith([validShopEvent]);
   });
 });
