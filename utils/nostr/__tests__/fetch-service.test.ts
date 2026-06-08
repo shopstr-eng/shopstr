@@ -2757,3 +2757,510 @@ describe("fetchShopProfile", () => {
     expect(cacheEventsToDatabase).toHaveBeenCalledWith([validShopEvent]);
   });
 });
+
+describe("fetchCart", () => {
+  const userPubkey =
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+  beforeEach(() => {
+    jest.resetModules();
+    jest.clearAllMocks();
+  });
+
+  it("resolves with an empty cartList immediately when no signer is provided", async () => {
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn(),
+    }));
+
+    const { fetchCart } = await import("../fetch-service");
+
+    const nostr = { fetch: jest.fn() } as any;
+    const editCartContext = jest.fn();
+
+    const { cartList } = await fetchCart(
+      nostr,
+      undefined,
+      ["wss://relay.example"],
+      editCartContext,
+      []
+    );
+
+    expect(cartList).toEqual([]);
+    expect(nostr.fetch).not.toHaveBeenCalled();
+    expect(editCartContext).not.toHaveBeenCalled();
+  });
+
+  it("decrypts relay cart events and parses matching products into cartList", async () => {
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn(),
+    }));
+
+    const { fetchCart } = await import("../fetch-service");
+
+    const product = makeProductEvent({
+      id: "prod-cart-1",
+      pubkey: "seller-cart-1",
+      created_at: 100,
+      tags: [
+        ["d", "item-cart-1"],
+        ["title", "Coffee Beans"],
+      ],
+      content: "",
+      sig: "sig-prod-cart-1",
+    });
+
+    const cartContent = JSON.stringify([
+      [null, ["30402", "wss://relay.example", "item-cart-1"]],
+    ]);
+
+    const signer = {
+      getPubKey: jest.fn().mockResolvedValue(userPubkey),
+      decrypt: jest.fn().mockResolvedValue(cartContent),
+    } as any;
+
+    const cartEvent = makeBaseEvent({
+      id: "cart-event-1",
+      pubkey: userPubkey,
+      created_at: 200,
+      kind: 30405,
+      tags: [],
+      content: "encrypted-cart",
+      sig: "sig-cart-event-1",
+    });
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([cartEvent]) } as any;
+    const editCartContext = jest.fn();
+
+    const { cartList } = await fetchCart(
+      nostr,
+      signer,
+      ["wss://relay.example"],
+      editCartContext,
+      [product]
+    );
+
+    expect(nostr.fetch).toHaveBeenCalledWith(
+      [{ kinds: [30405], authors: [userPubkey] }],
+      {},
+      ["wss://relay.example"]
+    );
+    expect(signer.decrypt).toHaveBeenCalledWith(userPubkey, "encrypted-cart");
+    expect(cartList).toHaveLength(1);
+    expect(cartList[0]).toMatchObject({
+      id: "prod-cart-1",
+      selectedQuantity: 1,
+    });
+  });
+
+  it("aggregates selectedQuantity for duplicate products in the cart", async () => {
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn(),
+    }));
+
+    const { fetchCart } = await import("../fetch-service");
+
+    const product = makeProductEvent({
+      id: "prod-dup-1",
+      pubkey: "seller-dup-1",
+      created_at: 100,
+      tags: [["d", "item-dup-1"]],
+      content: "",
+      sig: "sig-prod-dup-1",
+    });
+
+    const cartContent = JSON.stringify([
+      [null, ["30402", "wss://relay.example", "item-dup-1"]],
+      [null, ["30402", "wss://relay.example", "item-dup-1"]],
+      [null, ["30402", "wss://relay.example", "item-dup-1"]],
+    ]);
+
+    const signer = {
+      getPubKey: jest.fn().mockResolvedValue(userPubkey),
+      decrypt: jest.fn().mockResolvedValue(cartContent),
+    } as any;
+
+    const cartEvent = makeBaseEvent({
+      id: "cart-event-dup",
+      pubkey: userPubkey,
+      created_at: 200,
+      kind: 30405,
+      tags: [],
+      content: "encrypted-dup-cart",
+      sig: "sig-cart-event-dup",
+    });
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([cartEvent]) } as any;
+    const editCartContext = jest.fn();
+
+    const { cartList } = await fetchCart(
+      nostr,
+      signer,
+      ["wss://relay.example"],
+      editCartContext,
+      [product]
+    );
+
+    expect(cartList).toHaveLength(1);
+    expect(cartList[0]).toMatchObject({
+      id: "prod-dup-1",
+      selectedQuantity: 3,
+    });
+  });
+
+  it("skips malformed cart payloads and logs an error without throwing", async () => {
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn(),
+    }));
+
+    const { fetchCart } = await import("../fetch-service");
+
+    const signer = {
+      getPubKey: jest.fn().mockResolvedValue(userPubkey),
+      decrypt: jest.fn().mockResolvedValue("not-valid-json{{{"),
+    } as any;
+
+    const cartEvent = makeBaseEvent({
+      id: "cart-event-bad",
+      pubkey: userPubkey,
+      created_at: 200,
+      kind: 30405,
+      tags: [],
+      content: "encrypted-bad-cart",
+      sig: "sig-cart-event-bad",
+    });
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([cartEvent]) } as any;
+    const editCartContext = jest.fn();
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    const { cartList } = await fetchCart(
+      nostr,
+      signer,
+      ["wss://relay.example"],
+      editCartContext,
+      []
+    );
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      "Failed to parse cart: ",
+      expect.any(Error)
+    );
+    expect(cartList).toEqual([]);
+
+    consoleErrorSpy.mockRestore();
+  });
+
+  it("skips address entries whose kind is not 30402", async () => {
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn(),
+    }));
+
+    const { fetchCart } = await import("../fetch-service");
+
+    const product = makeProductEvent({
+      id: "prod-wrong-kind",
+      pubkey: "seller-wrong-kind",
+      created_at: 100,
+      tags: [["d", "item-wrong-kind"]],
+      content: "",
+      sig: "sig-prod-wrong-kind",
+    });
+
+    const cartContent = JSON.stringify([
+      [null, ["30401", "wss://relay.example", "item-wrong-kind"]],
+    ]);
+
+    const signer = {
+      getPubKey: jest.fn().mockResolvedValue(userPubkey),
+      decrypt: jest.fn().mockResolvedValue(cartContent),
+    } as any;
+
+    const cartEvent = makeBaseEvent({
+      id: "cart-event-wrong-kind",
+      pubkey: userPubkey,
+      created_at: 200,
+      kind: 30405,
+      tags: [],
+      content: "encrypted-wrong-kind-cart",
+      sig: "sig-cart-event-wrong-kind",
+    });
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([cartEvent]) } as any;
+    const editCartContext = jest.fn();
+
+    const { cartList } = await fetchCart(
+      nostr,
+      signer,
+      ["wss://relay.example"],
+      editCartContext,
+      [product]
+    );
+
+    expect(cartList).toEqual([]);
+  });
+
+  it("skips address entries whose d-tag does not match any loaded product", async () => {
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn(),
+    }));
+
+    const { fetchCart } = await import("../fetch-service");
+
+    const product = makeProductEvent({
+      id: "prod-no-match",
+      pubkey: "seller-no-match",
+      created_at: 100,
+      tags: [["d", "item-known"]],
+      content: "",
+      sig: "sig-prod-no-match",
+    });
+
+    const cartContent = JSON.stringify([
+      [null, ["30402", "wss://relay.example", "item-unknown"]],
+    ]);
+
+    const signer = {
+      getPubKey: jest.fn().mockResolvedValue(userPubkey),
+      decrypt: jest.fn().mockResolvedValue(cartContent),
+    } as any;
+
+    const cartEvent = makeBaseEvent({
+      id: "cart-event-no-match",
+      pubkey: userPubkey,
+      created_at: 200,
+      kind: 30405,
+      tags: [],
+      content: "encrypted-no-match-cart",
+      sig: "sig-cart-event-no-match",
+    });
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([cartEvent]) } as any;
+    const editCartContext = jest.fn();
+
+    const { cartList } = await fetchCart(
+      nostr,
+      signer,
+      ["wss://relay.example"],
+      editCartContext,
+      [product]
+    );
+
+    expect(cartList).toEqual([]);
+  });
+
+  it("calls editCartContext with the parsed address array and isLoading false", async () => {
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn(),
+    }));
+
+    const { fetchCart } = await import("../fetch-service");
+
+    const product = makeProductEvent({
+      id: "prod-ctx",
+      pubkey: "seller-ctx",
+      created_at: 100,
+      tags: [["d", "item-ctx"]],
+      content: "",
+      sig: "sig-prod-ctx",
+    });
+
+    const addressArray = [[null, ["30402", "wss://relay.example", "item-ctx"]]];
+    const cartContent = JSON.stringify(addressArray);
+
+    const signer = {
+      getPubKey: jest.fn().mockResolvedValue(userPubkey),
+      decrypt: jest.fn().mockResolvedValue(cartContent),
+    } as any;
+
+    const cartEvent = makeBaseEvent({
+      id: "cart-event-ctx",
+      pubkey: userPubkey,
+      created_at: 200,
+      kind: 30405,
+      tags: [],
+      content: "encrypted-ctx-cart",
+      sig: "sig-cart-event-ctx",
+    });
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([cartEvent]) } as any;
+    const editCartContext = jest.fn();
+
+    await fetchCart(nostr, signer, ["wss://relay.example"], editCartContext, [
+      product,
+    ]);
+
+    expect(editCartContext).toHaveBeenCalledTimes(1);
+    expect(editCartContext).toHaveBeenCalledWith(addressArray, false);
+  });
+});
+
+describe("fetchPendingPosts", () => {
+  const makeCommunity = (overrides: Record<string, any> = {}): any => ({
+    id: "community-event-id",
+    kind: 34550,
+    pubkey: "community-pubkey",
+    createdAt: 1,
+    d: "test-community",
+    name: "Test Community",
+    description: "",
+    image: "",
+    moderators: ["moderator-1"],
+    relays: {
+      approvals: [],
+      requests: ["wss://relay.example"],
+      metadata: [],
+      all: ["wss://relay.example"],
+    },
+    ...overrides,
+  });
+
+  beforeEach(() => {
+    jest.resetModules();
+    jest.clearAllMocks();
+  });
+
+  it("resolves with an empty array when no request relays are available", async () => {
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(() => ({ relays: [] })),
+      deleteEvent: jest.fn(),
+      verifyNip05Identifier: jest.fn(),
+    }));
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn(),
+    }));
+
+    const { fetchPendingPosts } = await import("../fetch-service");
+
+    const emptyRelaysCommunity = makeCommunity({
+      relays: { approvals: [], requests: [], metadata: [], all: [] },
+    });
+
+    const nostr = { fetch: jest.fn() } as any;
+
+    const result = await fetchPendingPosts(nostr, emptyRelaysCommunity);
+
+    expect(result).toEqual([]);
+    expect(nostr.fetch).not.toHaveBeenCalled();
+  });
+
+  it("excludes posts that already appear in approved community posts", async () => {
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(() => ({ relays: [] })),
+      deleteEvent: jest.fn(),
+      verifyNip05Identifier: jest.fn(),
+    }));
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn(),
+    }));
+
+    const { fetchPendingPosts } = await import("../fetch-service");
+
+    const communityAddress = "34550:community-pubkey:test-community";
+    const community = makeCommunity();
+
+    const postApproved = makeBaseEvent({
+      id: "post-approved-id",
+      pubkey: "author-1",
+      created_at: 100,
+      kind: 1111,
+      tags: [["a", communityAddress]],
+      content: "approved post",
+      sig: "sig-approved",
+    });
+    const postPending = makeBaseEvent({
+      id: "post-pending-id",
+      pubkey: "author-2",
+      created_at: 200,
+      kind: 1111,
+      tags: [["a", communityAddress]],
+      content: "pending post",
+      sig: "sig-pending",
+    });
+    const approvalEvent = makeBaseEvent({
+      id: "approval-event-id",
+      pubkey: "moderator-1",
+      created_at: 150,
+      kind: 4550,
+      tags: [
+        ["a", communityAddress],
+        ["e", "post-approved-id"],
+      ],
+      content: "",
+      sig: "sig-approval",
+    });
+
+    const nostr = {
+      fetch: jest
+        .fn()
+        .mockResolvedValueOnce([approvalEvent]) // fetchCommunityPosts: approval fetch
+        .mockResolvedValueOnce([postApproved]) // fetchCommunityPosts: post fetch by ids
+        .mockResolvedValueOnce([postApproved, postPending]), // fetchPendingPosts: request fetch
+    } as any;
+
+    const result = await fetchPendingPosts(nostr, community);
+
+    expect(result.map((e) => e.id)).toContain("post-pending-id");
+    expect(result.map((e) => e.id)).not.toContain("post-approved-id");
+  });
+
+  it("returns pending posts sorted newest-first by created_at", async () => {
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(() => ({ relays: [] })),
+      deleteEvent: jest.fn(),
+      verifyNip05Identifier: jest.fn(),
+    }));
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn(),
+    }));
+
+    const { fetchPendingPosts } = await import("../fetch-service");
+
+    const communityAddress = "34550:community-pubkey:test-community";
+    const community = makeCommunity();
+
+    const postOld = makeBaseEvent({
+      id: "post-old",
+      pubkey: "author-1",
+      created_at: 100,
+      kind: 1111,
+      tags: [["a", communityAddress]],
+      content: "",
+      sig: "sig-old",
+    });
+    const postMid = makeBaseEvent({
+      id: "post-mid",
+      pubkey: "author-2",
+      created_at: 200,
+      kind: 1111,
+      tags: [["a", communityAddress]],
+      content: "",
+      sig: "sig-mid",
+    });
+    const postNew = makeBaseEvent({
+      id: "post-new",
+      pubkey: "author-3",
+      created_at: 300,
+      kind: 1111,
+      tags: [["a", communityAddress]],
+      content: "",
+      sig: "sig-new",
+    });
+
+    const nostr = {
+      fetch: jest
+        .fn()
+        .mockResolvedValueOnce([]) // fetchCommunityPosts: no approvals → exits early
+        .mockResolvedValueOnce([postOld, postNew, postMid]), // fetchPendingPosts: request fetch
+    } as any;
+
+    const result = await fetchPendingPosts(nostr, community);
+
+    expect(result.map((e) => e.id)).toEqual([
+      "post-new",
+      "post-mid",
+      "post-old",
+    ]);
+  });
+});
