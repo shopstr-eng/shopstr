@@ -39,7 +39,7 @@ interface NipProfile {
   nip05Verified: boolean;
 }
 
-function getUniqueProofs(proofs: Proof[]): Proof[] {
+export function getUniqueProofs(proofs: Proof[]): Proof[] {
   const seenSecrets = new Set<string>();
   return proofs.filter((proof) => {
     if (!seenSecrets.has(proof.secret)) {
@@ -50,7 +50,7 @@ function getUniqueProofs(proofs: Proof[]): Proof[] {
   });
 }
 
-function isHexString(value: string): boolean {
+export function isHexString(value: string): boolean {
   return /^[0-9a-fA-F]{64}$/.test(value);
 }
 
@@ -75,6 +75,13 @@ export const fetchAllPosts = async (
         }
         return event.id;
       };
+      const isValidProductRelayEvent = (
+        event: NostrEvent | null | undefined
+      ): event is NostrEvent =>
+        !!event?.id &&
+        !!event.sig &&
+        !!event.pubkey &&
+        (event.kind === 30402 || event.kind === 1);
 
       // Cascading DB fetch: load batches one at a time, displaying each as it arrives
       let offset = 0;
@@ -128,9 +135,7 @@ export const fetchAllPosts = async (
       }
 
       // Cache valid product events to database
-      const validProductEvents = fetchedEvents.filter(
-        (e) => e.id && e.sig && e.pubkey && (e.kind === 30402 || e.kind === 1)
-      );
+      const validProductEvents = fetchedEvents.filter(isValidProductRelayEvent);
       if (validProductEvents.length > 0) {
         cacheEventsToDatabase(validProductEvents).catch((error) =>
           console.error("Failed to cache products to database:", error)
@@ -139,7 +144,7 @@ export const fetchAllPosts = async (
 
       // Merge relay events on top of the accumulated DB products
       for (const event of fetchedEvents) {
-        if (!event || !event.id) continue;
+        if (!isValidProductRelayEvent(event)) continue;
         const key = getEventKey(event);
         const existing = dbProductsMap.get(key);
         if (!existing || event.created_at >= existing.created_at) {
@@ -162,6 +167,131 @@ export const fetchAllPosts = async (
   });
 };
 
+export function getReportTargetIdentifiers(event: NostrEvent): {
+  referencedPubkeys: string[];
+  referencedEventIds: string[];
+} {
+  const referencedPubkeys = event.tags
+    .filter((tag: string[]) => tag[0] === "p" && tag[1])
+    .map((tag: string[]) => tag[1]!);
+  const referencedEventIds = event.tags
+    .filter((tag: string[]) => tag[0] === "e" && tag[1])
+    .map((tag: string[]) => tag[1]!);
+
+  return { referencedPubkeys, referencedEventIds };
+}
+
+export const fetchReports = async (
+  nostr: NostrManager,
+  relays: string[],
+  products: NostrEvent[],
+  editReportsContext: (reportEvents: NostrEvent[], isLoading: boolean) => void,
+  additionalProfilePubkeys: string[] = []
+): Promise<{
+  reportEvents: NostrEvent[];
+}> => {
+  return new Promise(async function (resolve, reject) {
+    try {
+      const productIds = new Set(products.map((product) => product.id));
+      const sellerPubkeys = new Set(
+        [
+          ...products.map((product) => product.pubkey),
+          ...additionalProfilePubkeys,
+        ].filter(Boolean)
+      );
+
+      const reportEventsMap = new Map<string, NostrEvent>();
+
+      const isRelevantReportEvent = (event: NostrEvent): boolean => {
+        const { referencedPubkeys, referencedEventIds } =
+          getReportTargetIdentifiers(event);
+
+        return (
+          referencedEventIds.some((eventId) => productIds.has(eventId)) ||
+          referencedPubkeys.some((pubkey) => sellerPubkeys.has(pubkey))
+        );
+      };
+
+      const upsertReportEvent = (event: NostrEvent) => {
+        if (!isRelevantReportEvent(event)) return;
+
+        const existing = reportEventsMap.get(event.id);
+        if (!existing || event.created_at >= existing.created_at) {
+          reportEventsMap.set(event.id, event);
+        }
+      };
+
+      try {
+        const params = new URLSearchParams();
+        Array.from(sellerPubkeys).forEach((pubkey) =>
+          params.append("p", pubkey)
+        );
+        Array.from(productIds).forEach((productId) =>
+          params.append("e", productId)
+        );
+        const response = await fetch(
+          `/api/db/fetch-reports?${params.toString()}`
+        );
+        if (response.ok) {
+          const reportsFromDb: NostrEvent[] = await response.json();
+          reportsFromDb.forEach(upsertReportEvent);
+
+          if (reportEventsMap.size > 0) {
+            editReportsContext(
+              Array.from(reportEventsMap.values()).sort(
+                (a, b) => b.created_at - a.created_at
+              ),
+              false
+            );
+          }
+        }
+      } catch (error) {
+        console.error("Failed to fetch reports from database: ", error);
+      }
+
+      const reportFilters: Filter[] = [];
+      if (sellerPubkeys.size > 0) {
+        reportFilters.push({
+          kinds: [1984],
+          "#p": Array.from(sellerPubkeys),
+        });
+      }
+      if (productIds.size > 0) {
+        reportFilters.push({
+          kinds: [1984],
+          "#e": Array.from(productIds),
+        });
+      }
+
+      if (reportFilters.length === 0) {
+        editReportsContext([], false);
+        resolve({ reportEvents: [] });
+        return;
+      }
+
+      const fetchedEvents = await nostr.fetch(reportFilters, {}, relays);
+      fetchedEvents.forEach(upsertReportEvent);
+
+      const reportEvents = Array.from(reportEventsMap.values()).sort(
+        (a, b) => b.created_at - a.created_at
+      );
+      editReportsContext(reportEvents, false);
+
+      const validReports = fetchedEvents.filter(
+        (event) => event.id && event.sig && event.pubkey && event.kind === 1984
+      );
+      if (validReports.length > 0) {
+        cacheEventsToDatabase(validReports).catch((error) =>
+          console.error("Failed to cache reports to database:", error)
+        );
+      }
+
+      resolve({ reportEvents });
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
 export const fetchCart = async (
   nostr: NostrManager,
   signer: NostrSigner | undefined,
@@ -376,7 +506,7 @@ export const fetchShopProfile = async (
   });
 };
 
-async function verifyProfilesNip05(
+export async function verifyProfilesNip05(
   profileMap: Map<string, NipProfile | null>,
   concurrency = 8
 ): Promise<void> {
@@ -959,17 +1089,21 @@ export const fetchAllFollows = async (
   followList: string[];
 }> => {
   const wot = getLocalStorageData().wot;
-  const defaultAuthor =
-    "d36e8083fa7b36daee646cb8b3f99feaa3d89e5a396508741f003e21ac0b6bec";
+
+  if (!userPubkey) {
+    editFollowsContext([], 0, false);
+    return {
+      followList: [],
+    };
+  }
 
   const fetchFollows = async (userPubkey: string) => {
     let secondDegreeFollowsArrayFromRelay: string[] = [];
     let firstDegreeFollowsLength = 0;
-    let followsArrayFromRelay: string[] = [];
     const followsSet: Set<string> = new Set();
 
     // fetch first-degree follows
-    let fetchedEvents = await nostr.fetch(
+    const fetchedEvents = await nostr.fetch(
       [
         {
           kinds: [3],
@@ -979,19 +1113,41 @@ export const fetchAllFollows = async (
       {},
       relays
     );
+
+    const latestContactListEvent = fetchedEvents.reduce<NostrEvent | null>(
+      (latestEvent, event) => {
+        if (!latestEvent || event.created_at > latestEvent.created_at) {
+          return event;
+        }
+        return latestEvent;
+      },
+      null
+    );
+
+    if (!latestContactListEvent) {
+      return {
+        followsArrayFromRelay: [],
+        firstDegreeFollowsLength: 0,
+      };
+    }
+
     const authors: string[] = [];
-    for (const event of fetchedEvents) {
-      const validTags = event.tags
-        .map((tag) => tag[1])
-        .filter((pubkey) => isHexString(pubkey!) && !followsSet.has(pubkey!));
-      validTags.forEach((pubkey) => followsSet.add(pubkey!));
-      followsArrayFromRelay.push(...(validTags as string[]));
-      firstDegreeFollowsLength = followsArrayFromRelay.length;
-      authors.push(...followsArrayFromRelay);
+    const directFollowsArrayFromRelay = latestContactListEvent.tags
+      .map((tag) => tag[1])
+      .filter((pubkey) => isHexString(pubkey!) && !followsSet.has(pubkey!));
+    directFollowsArrayFromRelay.forEach((pubkey) => followsSet.add(pubkey!));
+    firstDegreeFollowsLength = directFollowsArrayFromRelay.length;
+    authors.push(...(directFollowsArrayFromRelay as string[]));
+
+    if (!authors.length) {
+      return {
+        followsArrayFromRelay: [],
+        firstDegreeFollowsLength,
+      };
     }
 
     // Fetch second-degree follows
-    fetchedEvents = await nostr.fetch(
+    const fetchedSecondDegreeEvents = await nostr.fetch(
       [
         {
           kinds: [3],
@@ -1002,7 +1158,15 @@ export const fetchAllFollows = async (
       relays
     );
 
-    for (const followEvent of fetchedEvents) {
+    const latestSecondDegreeEvents = new Map<string, NostrEvent>();
+    for (const followEvent of fetchedSecondDegreeEvents) {
+      const latestEvent = latestSecondDegreeEvents.get(followEvent.pubkey);
+      if (!latestEvent || followEvent.created_at > latestEvent.created_at) {
+        latestSecondDegreeEvents.set(followEvent.pubkey, followEvent);
+      }
+    }
+
+    for (const followEvent of latestSecondDegreeEvents.values()) {
       const validFollowTags = followEvent.tags
         .map((tag) => tag[1])
         .filter((pubkey) => isHexString(pubkey!) && !followsSet.has(pubkey!));
@@ -1018,8 +1182,12 @@ export const fetchAllFollows = async (
         (pubkey) => (pubkeyCount.get(pubkey) || 0) >= wot
       );
     // Concatenate arrays ensuring uniqueness
-    followsArrayFromRelay = Array.from(
-      new Set(followsArrayFromRelay.concat(secondDegreeFollowsArrayFromRelay))
+    const followsArrayFromRelay = Array.from(
+      new Set(
+        (directFollowsArrayFromRelay as string[]).concat(
+          secondDegreeFollowsArrayFromRelay
+        )
+      )
     );
     return {
       followsArrayFromRelay,
@@ -1027,15 +1195,8 @@ export const fetchAllFollows = async (
     };
   };
 
-  let { followsArrayFromRelay, firstDegreeFollowsLength } = await fetchFollows(
-    userPubkey || defaultAuthor
-  );
-
-  if (!followsArrayFromRelay?.length) {
-    // If followsArrayFromRelay is still empty, add the default value
-    ({ followsArrayFromRelay, firstDegreeFollowsLength } =
-      await fetchFollows(defaultAuthor));
-  }
+  const { followsArrayFromRelay, firstDegreeFollowsLength } =
+    await fetchFollows(userPubkey);
   editFollowsContext(followsArrayFromRelay, firstDegreeFollowsLength, false);
   return {
     followList: followsArrayFromRelay,

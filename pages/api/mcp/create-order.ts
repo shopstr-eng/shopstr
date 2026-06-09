@@ -496,27 +496,37 @@ async function handleCashuPayment(
     }
 
     const tokenMintUrl = decoded.mint;
-    if (tokenMintUrl) {
-      try {
-        const cashuMint = new CashuMint(tokenMintUrl);
-        const wallet = new CashuWallet(cashuMint);
-        await wallet.loadMint();
-        await withMintRetry(() => wallet.receive(cashuToken), {
-          maxAttempts: 4,
-          perAttemptTimeoutMs: 20000,
-          totalTimeoutMs: 90000,
-        });
-      } catch (redeemError) {
-        console.error("Cashu token redemption failed:", redeemError);
-        return res.status(400).json({
-          error:
-            "Failed to redeem Cashu token. It may be invalid or already spent.",
-          details:
-            redeemError instanceof Error
-              ? redeemError.message
-              : "Unknown error",
-        });
-      }
+    const trustedMint = getTrustedMintUrl();
+
+    // The token's embedded mint URL must match the server-controlled trusted mint.
+    // Accepting a buyer-chosen mint would let an attacker point the server at a
+    // fake mint that always reports redemption success, creating fraudulent paid
+    // orders and opening SSRF to arbitrary internal endpoints.
+    if (!tokenMintUrl || tokenMintUrl !== trustedMint) {
+      return res.status(400).json({
+        error:
+          "Cashu token issuer is not a supported mint. Only tokens from trusted mints are accepted.",
+        supportedMints: [trustedMint],
+      });
+    }
+
+    try {
+      const cashuMint = new CashuMint(tokenMintUrl);
+      const wallet = new CashuWallet(cashuMint);
+      await wallet.loadMint();
+      await withMintRetry(() => wallet.receive(cashuToken), {
+        maxAttempts: 4,
+        perAttemptTimeoutMs: 20000,
+        totalTimeoutMs: 90000,
+      });
+    } catch (redeemError) {
+      console.error("Cashu token redemption failed:", redeemError);
+      return res.status(400).json({
+        error:
+          "Failed to redeem Cashu token. It may be invalid or already spent.",
+        details:
+          redeemError instanceof Error ? redeemError.message : "Unknown error",
+      });
     }
 
     const order = await createMcpOrder(

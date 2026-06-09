@@ -204,24 +204,67 @@ Before committing, run all quality checks:
 npm run lint-all
 ```
 
-## Testing
+## Git Hooks & Pre-commit Checks
 
-### 1. Run Tests
+This project uses [Husky](https://typicode.github.io/husky/) to run quality
+checks before each commit.
+
+The pre-commit hook runs staged-file checks for fast feedback, then runs the
+full lint and formatting checks:
+
+- ESLint fixes staged TypeScript files
+- Prettier formats staged TypeScript, CSS, Markdown, JSON, and YAML files
+- Jest runs tests related to staged JavaScript and TypeScript files
+
+If a check fails, fix the issue and commit again. To run the hook manually:
 
 ```bash
-# Run all tests
+npm run pre-commit
+npm run lint
+npm run format:check
+```
+
+Only bypass hooks when absolutely necessary:
+
+```bash
+git commit --no-verify -m "your commit message"
+```
+
+## Testing
+
+Jest CI runs on every PR with coverage thresholds for the high-risk modules
+called out in `TESTING.md`, including Nostr helpers, fetch/cache behavior,
+cache policy, and parser logic.
+
+To find and run tests near what you changed:
+
+```bash
+# Run everything
 npm test
+
+# Run the CI test command locally
+npm run test:ci
+
+# Run tests with coverage thresholds
+npm run test:coverage
 
 # Run tests in watch mode during development
 npm run test:watch
-```
 
-### 2. Writing Tests
+# Run one file to stay focused
+npx jest utils/nostr/__tests__/fetch-service.test.ts --runInBand
+npx jest utils/parsers/__tests__/product-parser-functions.test.ts --runInBand
+
+# See what's not covered
+npm test -- --coverage
+```
 
 - Write tests for new features and bug fixes
 - Place test files next to the components they test or in a `__tests__` directory
 - Use descriptive test names
 - Follow existing test patterns
+- See `TESTING.md` for CI coverage expectations and the high-risk modules that
+  currently define the enforced threshold.
 
 ## Creating a Pull Request
 
@@ -235,7 +278,7 @@ npm run build
 npm run lint-all
 
 # Run tests
-npm test
+npm run test:coverage
 
 # Format code
 npx prettier --write .

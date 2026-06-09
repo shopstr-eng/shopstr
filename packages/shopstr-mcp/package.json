@@ -1,0 +1,51 @@
+{
+  "name": "@shopstr/mcp",
+  "version": "0.1.0",
+  "description": "Read-only MCP server for the Shopstr decentralized marketplace",
+  "type": "module",
+  "bin": {
+    "shopstr-mcp": "./dist/index.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/server.d.ts",
+      "import": "./dist/server.js"
+    },
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "import": "./dist/server.js"
+    }
+  },
+  "main": "./dist/server.js",
+  "types": "./dist/server.d.ts",
+  "files": [
+    "dist",
+    ".env.example",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "test": "npm run build && node --test test/*.node.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "shopstr",
+    "mcp",
+    "nostr",
+    "bitcoin",
+    "marketplace"
+  ],
+  "license": "GPL-3.0-only",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "nostr-tools": "^2.23.3",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.8.0",
+    "typescript": "^6.0.3"
+  }
+}

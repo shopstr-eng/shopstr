@@ -1,0 +1,1 @@
+- [HeroUI version pin](heroui-version-pin.md) — keep @heroui/react on v2.8.10; v3 removes ModalContent/useDisclosure; deploy npm ci installs the lockfile exactly, so stale node_modules hides the break.
