@@ -1148,7 +1148,7 @@ export default function ProductInvoiceCard({
                 await recoverProofsToBuyerWallet(
                   nostr,
                   signer,
-                  mints[0]!,
+                  mintUrl,
                   proofs,
                   newPrice
                 );
@@ -1173,6 +1173,7 @@ export default function ProductInvoiceCard({
                       wallet,
                       proofs,
                       newPrice,
+                      mintUrl,
                       shippingName ? shippingName : undefined,
                       shippingAddress ? shippingAddress : undefined,
                       shippingUnitNo ? shippingUnitNo : undefined,
@@ -1194,7 +1195,7 @@ export default function ProductInvoiceCard({
                 await recoverProofsToBuyerWallet(
                   nostr!,
                   signer!,
-                  mints[0]!,
+                  mintUrl,
                   proofs,
                   newPrice
                 );
@@ -1294,6 +1295,7 @@ export default function ProductInvoiceCard({
     wallet: CashuWallet,
     proofs: Proof[],
     totalPrice: number,
+    tokenMintUrl: string,
     shippingName?: string,
     shippingAddress?: string,
     shippingUnitNo?: string,
@@ -1328,7 +1330,7 @@ export default function ProductInvoiceCard({
       const { keep, send } = swapOutcome;
       sellerProofs = send;
       sellerToken = getEncodedToken({
-        mint: mints[0]!,
+        mint: tokenMintUrl,
         proofs: send,
       });
       remainingProofs = keep;
@@ -1349,7 +1351,7 @@ export default function ProductInvoiceCard({
       }
       const { keep, send } = swapOutcome;
       donationToken = getEncodedToken({
-        mint: mints[0]!,
+        mint: tokenMintUrl,
         proofs: send,
       });
       remainingProofs = keep;
@@ -1479,7 +1481,7 @@ export default function ProductInvoiceCard({
             await new Promise((resolve) => setTimeout(resolve, 500));
 
             const encodedChange = getEncodedToken({
-              mint: mints[0]!,
+              mint: tokenMintUrl,
               proofs: changeProofs,
             });
             const changeMessage = "Overpaid fee change: " + encodedChange;
@@ -1511,7 +1513,7 @@ export default function ProductInvoiceCard({
                 )
               : 0;
           const unusedToken = getEncodedToken({
-            mint: mints[0]!,
+            mint: tokenMintUrl,
             proofs: unusedProofs,
           });
           let productDetails = "";
@@ -1815,7 +1817,7 @@ export default function ProductInvoiceCard({
             false,
             orderId,
             "ecash",
-            mints[0]!,
+            tokenMintUrl,
             sellerToken,
             undefined,
             undefined,
@@ -1886,7 +1888,7 @@ export default function ProductInvoiceCard({
           false,
           orderId,
           "ecash",
-          mints[0]!,
+          tokenMintUrl,
           sellerToken,
           undefined,
           undefined,
@@ -1945,7 +1947,7 @@ export default function ProductInvoiceCard({
         false,
         orderId,
         "ecash",
-        mints[0]!,
+        tokenMintUrl,
         sellerToken,
         undefined,
         undefined,
@@ -2058,6 +2060,7 @@ export default function ProductInvoiceCard({
         wallet,
         send,
         price,
+        mints[0]!,
         data.shippingName ? data.shippingName : undefined,
         data.shippingAddress ? data.shippingAddress : undefined,
         data.shippingUnitNo ? data.shippingUnitNo : undefined,
