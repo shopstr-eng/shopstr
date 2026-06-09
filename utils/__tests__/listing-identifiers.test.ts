@@ -1,6 +1,7 @@
 import { nip19 } from "nostr-tools";
 
 import {
+  decodeListingNaddr,
   eventMatchesListingIdentifier,
   getListingRouteIdentifier,
 } from "../listing-identifiers";
@@ -39,6 +40,21 @@ describe("listing-identifiers", () => {
     expect(eventMatchesListingIdentifier(baseEvent, relayHintedNaddr)).toBe(
       true
     );
+  });
+
+  test("decodes relay-hinted NIP-99 naddr values to listing identity only", () => {
+    const relayHintedNaddr = nip19.naddrEncode({
+      identifier: "listing-d-tag",
+      pubkey: baseEvent.pubkey,
+      kind: 30402,
+      relays: ["wss://relay.shopstr.example"],
+    });
+
+    expect(decodeListingNaddr(relayHintedNaddr)).toEqual({
+      identifier: "listing-d-tag",
+      pubkey: baseEvent.pubkey,
+      kind: 30402,
+    });
   });
 
   test("matches a canonical naddr without relay hints", () => {

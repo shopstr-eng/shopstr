@@ -20,7 +20,7 @@ describe("parseTags", () => {
     id: "test-id",
     pubkey: "test-pubkey",
     created_at: 1672531200,
-    kind: 30023,
+    kind: 30402,
     tags: [],
     content: "Product description",
     sig: "test-sig",
@@ -50,6 +50,65 @@ describe("parseTags", () => {
     expect(result.location).toBe("Online");
   });
 
+  it("should parse a NIP-99 classified listing event", () => {
+    const event = {
+      ...baseEvent,
+      id: "listing-event-id",
+      pubkey: "seller-pubkey",
+      created_at: 1710000000,
+      content: "NIP-99 listing description from event content",
+      tags: [
+        ["d", "seller-listing-1"],
+        ["title", "Handmade Wallet"],
+        ["summary", "Legacy summary should not replace content"],
+        ["published_at", "1710000000"],
+        ["image", "https://example.com/front.jpg"],
+        ["image", "https://example.com/back.jpg"],
+        ["t", "accessories"],
+        ["t", "nostr"],
+        ["location", "Austin, TX"],
+        ["price", "25", "USD"],
+        ["shipping", "Added Cost", "5", "USD"],
+        ["quantity", "3"],
+      ],
+    };
+
+    const result = parseTags(event)!;
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        id: "listing-event-id",
+        pubkey: "seller-pubkey",
+        createdAt: 1710000000,
+        d: "seller-listing-1",
+        title: "Handmade Wallet",
+        summary: "NIP-99 listing description from event content",
+        publishedAt: "1710000000",
+        images: [
+          "https://example.com/front.jpg",
+          "https://example.com/back.jpg",
+        ],
+        categories: ["accessories", "nostr"],
+        location: "Austin, TX",
+        price: 25,
+        currency: "USD",
+        shippingType: "Added Cost",
+        shippingCost: 5,
+        quantity: 3,
+        totalCost: 999,
+        rawEvent: event,
+      })
+    );
+    expect(mockedCalculateTotalCost).toHaveBeenCalledWith(
+      expect.objectContaining({
+        d: "seller-listing-1",
+        price: 25,
+        currency: "USD",
+        shippingCost: 5,
+      })
+    );
+  });
+
   it("should fallback to summary tag when content is empty", () => {
     const event = {
       ...baseEvent,
@@ -65,10 +124,14 @@ describe("parseTags", () => {
     const event = {
       ...baseEvent,
       content: "   ",
-      tags: [["summary", "Whitespace fallback summary"]],
+      tags: [
+        ["d", "listing-with-blank-content"],
+        ["summary", "Whitespace fallback summary"],
+      ],
     };
     const result = parseTags(event)!;
 
+    expect(result.d).toBe("listing-with-blank-content");
     expect(result.summary).toBe("Whitespace fallback summary");
   });
 
