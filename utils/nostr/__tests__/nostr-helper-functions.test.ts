@@ -699,6 +699,46 @@ describe("getLocalStorageData", () => {
     const data = getLocalStorageData();
     expect(data.savedAddresses).toEqual(addresses);
   });
+
+  it("accepts { type: 'nip07' } as a valid stored signer", () => {
+    localStorage.setItem("signer", JSON.stringify({ type: "nip07" }));
+    expect(getLocalStorageData().signer).toEqual({ type: "nip07" });
+  });
+
+  it("accepts { type: 'nip46', bunker: '...' } as a valid stored signer", () => {
+    const storedSigner = {
+      type: "nip46",
+      bunker: "bunker://pubkey?relay=wss://relay.example",
+    };
+    localStorage.setItem("signer", JSON.stringify(storedSigner));
+    expect(getLocalStorageData().signer).toEqual(storedSigner);
+  });
+
+  it("rejects { type: 'nip46' } missing bunker and falls through to migration", () => {
+    localStorage.setItem("signer", JSON.stringify({ type: "nip46" }));
+    localStorage.setItem("signInMethod", "extension");
+    expect(getLocalStorageData().signer).toEqual({ type: "nip07" });
+  });
+
+  it("accepts { type: 'nsec', encryptedPrivKey: '...' } as a valid stored signer", () => {
+    const storedSigner = { type: "nsec", encryptedPrivKey: "enc-key-abc" };
+    localStorage.setItem("signer", JSON.stringify(storedSigner));
+    expect(getLocalStorageData().signer).toEqual(storedSigner);
+  });
+
+  it("rejects { type: 'nsec' } missing encryptedPrivKey and falls through to migration", () => {
+    localStorage.setItem("signer", JSON.stringify({ type: "nsec" }));
+    localStorage.setItem("signInMethod", "extension");
+    expect(getLocalStorageData().signer).toEqual({ type: "nip07" });
+  });
+
+  it("rejects non-object signer values and falls through to migration", () => {
+    localStorage.setItem("signInMethod", "extension");
+    for (const invalid of [null, [], "a-string"]) {
+      localStorage.setItem("signer", JSON.stringify(invalid));
+      expect(getLocalStorageData().signer).toEqual({ type: "nip07" });
+    }
+  });
 });
 
 describe("LogOut", () => {
