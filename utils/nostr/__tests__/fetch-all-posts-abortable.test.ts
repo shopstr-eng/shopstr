@@ -196,4 +196,95 @@ describe("fetchAllPostsAbortable", () => {
     expect(cacheEventsToDatabase).toHaveBeenCalledWith([relayProduct]);
     expect(sub.close).toHaveBeenCalledTimes(1);
   });
+
+  it("merges NIP-99 listings by pubkey and d tag across DB and relay events", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase,
+    }));
+
+    const { fetchAllPostsAbortable } =
+      await import("../fetch-all-posts-abortable");
+
+    let params:
+      | {
+          onevent: (event: any) => void;
+          oneose: () => void;
+        }
+      | undefined;
+    const sub = {
+      close: jest.fn().mockResolvedValue(undefined),
+    };
+    const nostr = {
+      subscribe: jest.fn((_filters, subscribeParams) => {
+        params = subscribeParams;
+        return Promise.resolve(sub);
+      }),
+    } as any;
+
+    const cachedOlderListing = makeProductEvent({
+      id: "cached-old",
+      pubkey: "seller",
+      created_at: 10,
+      tags: [["d", "shared-listing"]],
+      sig: "sig-cached-old",
+    });
+    const cachedSeparateListing = makeProductEvent({
+      id: "cached-separate",
+      pubkey: "seller",
+      created_at: 11,
+      tags: [["d", "separate-listing"]],
+      sig: "sig-cached-separate",
+    });
+    const relayUpdatedListing = makeProductEvent({
+      id: "relay-updated",
+      pubkey: "seller",
+      created_at: 20,
+      tags: [["d", "shared-listing"]],
+      sig: "sig-relay-updated",
+    });
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValueOnce(
+        makeDbPayload([cachedOlderListing, cachedSeparateListing])
+      ) as typeof global.fetch;
+
+    const editProductContext = jest.fn();
+    const promise = fetchAllPostsAbortable(
+      nostr,
+      ["wss://relay.example"],
+      editProductContext
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    params!.onevent(relayUpdatedListing);
+    params!.oneose();
+
+    await expect(promise).resolves.toEqual({
+      productEvents: [relayUpdatedListing, cachedSeparateListing],
+      profileSetFromProducts: new Set(["seller"]),
+    });
+    expect(nostr.subscribe).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kinds: [30402],
+        }),
+      ]),
+      expect.any(Object),
+      ["wss://relay.example"]
+    );
+    expect(editProductContext).toHaveBeenNthCalledWith(
+      1,
+      [cachedOlderListing, cachedSeparateListing],
+      true
+    );
+    expect(editProductContext).toHaveBeenLastCalledWith(
+      [relayUpdatedListing, cachedSeparateListing],
+      false
+    );
+    expect(cacheEventsToDatabase).toHaveBeenCalledWith([relayUpdatedListing]);
+    expect(sub.close).toHaveBeenCalledTimes(1);
+  });
 });
