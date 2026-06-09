@@ -19,6 +19,7 @@ import {
   parseLocalProfileFallback,
   parseBunkerToken,
   publishReportEvent,
+  REPORT_TYPES,
   setLocalStorageDataOnSignIn,
   validateNPubKey,
   validateNSecKey,
@@ -164,16 +165,42 @@ describe("local storage sign-in helpers", () => {
 });
 
 describe("publishReportEvent", () => {
+  const fixedNowMs = 1_710_000_000_000;
+  const fixedNowSeconds = 1_710_000_000;
+
   beforeEach(() => {
     jest.clearAllMocks();
     localStorage.clear();
+    localStorage.setItem("relays", JSON.stringify(["wss://relay.example"]));
+    localStorage.setItem(
+      "writeRelays",
+      JSON.stringify(["wss://write.example"])
+    );
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
       json: async () => ({}),
     });
   });
 
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it("keeps the supported NIP-56 report types in sync", () => {
+    expect(REPORT_TYPES).toEqual([
+      "nudity",
+      "malware",
+      "profanity",
+      "illegal",
+      "spam",
+      "impersonation",
+      "other",
+    ]);
+  });
+
   it("builds a valid profile report event", async () => {
+    jest.spyOn(Date, "now").mockReturnValue(fixedNowMs);
+
     const signer = {
       sign: jest.fn().mockImplementation(async (eventTemplate) => ({
         ...eventTemplate,
@@ -192,22 +219,45 @@ describe("publishReportEvent", () => {
       reportedPubkey: "seller-pubkey",
     });
 
-    expect(signer.sign).toHaveBeenCalledWith(
-      expect.objectContaining({
-        kind: 1984,
-        content: "Spam account",
-        tags: [["p", "seller-pubkey", "spam"]],
-      })
-    );
+    expect(signer.sign).toHaveBeenCalledTimes(1);
+    expect(signer.sign).toHaveBeenCalledWith({
+      created_at: fixedNowSeconds,
+      content: "Spam account",
+      kind: 1984,
+      tags: [["p", "seller-pubkey", "spam"]],
+    });
     expect(signedEvent).toEqual(
       expect.objectContaining({
         id: "signed-profile-report",
         kind: 1984,
+        pubkey: "reporter-pubkey",
+        sig: "signed-sig",
+      })
+    );
+    expect(nostr.publish).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "signed-profile-report",
+        kind: 1984,
+        tags: [["p", "seller-pubkey", "spam"]],
+      }),
+      expect.arrayContaining([
+        "wss://write.example",
+        "wss://relay.example",
+        "wss://sendit.nosflare.com",
+      ])
+    );
+    expect(global.fetch).toHaveBeenCalledWith(
+      "/api/db/cache-event",
+      expect.objectContaining({
+        method: "POST",
+        body: expect.stringContaining("signed-profile-report"),
       })
     );
   });
 
   it("builds a valid listing report event", async () => {
+    jest.spyOn(Date, "now").mockReturnValue(fixedNowMs);
+
     const signer = {
       sign: jest.fn().mockImplementation(async (eventTemplate) => ({
         ...eventTemplate,
@@ -227,15 +277,30 @@ describe("publishReportEvent", () => {
       reportedEventId: "listing-event-id",
     });
 
-    expect(signer.sign).toHaveBeenCalledWith(
+    expect(signer.sign).toHaveBeenCalledTimes(1);
+    expect(signer.sign).toHaveBeenCalledWith({
+      created_at: fixedNowSeconds,
+      content: "Listing looks illegal",
+      kind: 1984,
+      tags: [
+        ["e", "listing-event-id", "illegal"],
+        ["p", "seller-pubkey"],
+      ],
+    });
+    expect(nostr.publish).toHaveBeenCalledWith(
       expect.objectContaining({
+        id: "signed-listing-report",
         kind: 1984,
-        content: "Listing looks illegal",
         tags: [
           ["e", "listing-event-id", "illegal"],
           ["p", "seller-pubkey"],
         ],
-      })
+      }),
+      expect.arrayContaining([
+        "wss://write.example",
+        "wss://relay.example",
+        "wss://sendit.nosflare.com",
+      ])
     );
   });
 });
