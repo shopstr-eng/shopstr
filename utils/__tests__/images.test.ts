@@ -43,6 +43,15 @@ describe("normalizeProductImageUrl", () => {
     );
   });
 
+  it("falls back for protocol-relative remote hosts", () => {
+    expect(normalizeProductImageUrl("//example.com/image.jpg")).toBe(
+      "/no-image-placeholder.png"
+    );
+    expect(normalizeProductImageUrl("//127.0.0.1/image.jpg")).toBe(
+      "/no-image-placeholder.png"
+    );
+  });
+
   it("falls back for private IPv4 remote hosts", () => {
     expect(normalizeProductImageUrl("http://127.0.0.1/image.jpg")).toBe(
       "/no-image-placeholder.png"
@@ -50,6 +59,12 @@ describe("normalizeProductImageUrl", () => {
     expect(normalizeProductImageUrl("http://192.168.1.25/image.jpg")).toBe(
       "/no-image-placeholder.png"
     );
+  });
+
+  it("falls back for IPv4-mapped IPv6 loopback hosts", () => {
+    expect(
+      normalizeProductImageUrl("http://[::ffff:127.0.0.1]/image.jpg")
+    ).toBe("/no-image-placeholder.png");
   });
 });
 
@@ -60,10 +75,7 @@ describe("normalizeProductImageUrls", () => {
         "https://example.com/a.jpg",
         "/images/local-image.jpg",
       ])
-    ).toEqual([
-      "https://example.com/a.jpg",
-      "/images/local-image.jpg",
-    ]);
+    ).toEqual(["https://example.com/a.jpg", "/images/local-image.jpg"]);
   });
 
   it("returns an empty array when no images are provided", () => {

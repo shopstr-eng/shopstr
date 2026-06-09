@@ -3,6 +3,7 @@ import { sanitizeUrl } from "@braintree/sanitize-url";
 const BLOCKED_URL = "about:blank";
 const SAFE_IMAGE_PROTOCOL_RE = /^https?:$/i;
 const EXTERNAL_IMAGE_RE = /^https?:\/\//i;
+const PROTOCOL_RELATIVE_IMAGE_RE = /^\/\//;
 const BLOCKED_LOCAL_IMAGE_PATH_RE = /^\/api\//i;
 const IPV4_RE = /^(?:\d{1,3}\.){3}\d{1,3}$/;
 
@@ -10,7 +11,10 @@ function isPrivateIPv4Literal(hostname: string): boolean {
   if (!IPV4_RE.test(hostname)) return false;
 
   const parts = hostname.split(".").map(Number);
-  if (parts.length !== 4 || parts.some((n) => Number.isNaN(n) || n < 0 || n > 255)) {
+  if (
+    parts.length !== 4 ||
+    parts.some((n) => Number.isNaN(n) || n < 0 || n > 255)
+  ) {
     return true;
   }
 
@@ -31,6 +35,7 @@ function isPrivateIPv6Literal(hostname: string): boolean {
   if (normalized === "::1" || normalized === "::") return true;
   if (normalized.startsWith("fe80:")) return true;
   if (normalized.startsWith("fc") || normalized.startsWith("fd")) return true;
+  if (normalized.startsWith("::ffff:")) return true;
 
   return false;
 }
@@ -55,6 +60,10 @@ export function normalizeProductImageUrl(
 ): string {
   const trimmed = image?.trim();
   if (!trimmed) return fallback;
+
+  if (PROTOCOL_RELATIVE_IMAGE_RE.test(trimmed)) {
+    return fallback;
+  }
 
   if (trimmed.startsWith("/")) {
     if (BLOCKED_LOCAL_IMAGE_PATH_RE.test(trimmed)) {
