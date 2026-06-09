@@ -24,6 +24,24 @@ const makeBaseEvent = (overrides: Record<string, any> = {}) => ({
   ...overrides,
 });
 
+const expectNip50RelayFetches = (
+  fetchMock: jest.Mock,
+  relays = DEFAULT_NIP50_SEARCH_RELAYS
+) => {
+  expect(fetchMock).toHaveBeenCalledTimes(relays.length);
+  relays.forEach((relay, index) => {
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      index + 1,
+      expect.arrayContaining([
+        expect.objectContaining({ kinds: [30402], search: "coffee" }),
+      ]),
+      {},
+      [relay],
+      NIP50_SEARCH_TIMEOUT_MS
+    );
+  });
+};
+
 describe("fetchAllPosts - NIP-99 and relay merge behavior", () => {
   beforeEach(() => {
     jest.resetModules();
@@ -591,16 +609,9 @@ describe("fetch-service NIP-50 search helpers", () => {
       "coffee"
     );
 
-    expect(nostr.fetch).toHaveBeenCalledWith(
-      expect.arrayContaining([
-        expect.objectContaining({ kinds: [30402], search: "coffee" }),
-      ]),
-      {},
-      DEFAULT_NIP50_SEARCH_RELAYS,
-      NIP50_SEARCH_TIMEOUT_MS
-    );
+    expectNip50RelayFetches(nostr.fetch);
     expect(result.productEvents).toEqual([newer]);
-    expect(cacheEventsToDatabase).toHaveBeenCalledWith([older, newer]);
+    expect(cacheEventsToDatabase).toHaveBeenCalledWith([newer]);
   });
 
   it("waits for relevant kind 30402 search results to be cached before returning them", async () => {
@@ -757,12 +768,40 @@ describe("fetch-service NIP-50 search helpers", () => {
       "coffee"
     );
 
-    expect(nostr.fetch).toHaveBeenCalledWith(
-      expect.any(Array),
-      {},
-      DEFAULT_NIP50_SEARCH_RELAYS,
-      NIP50_SEARCH_TIMEOUT_MS
+    expectNip50RelayFetches(nostr.fetch);
+    expect(result.productEvents).toEqual([searchListing]);
+    expect(cacheEventsToDatabase).toHaveBeenCalledWith([searchListing]);
+  });
+
+  it("keeps NIP-50 results from responsive relays when another search relay times out", async () => {
+    const searchListing = {
+      id: "responsive-product",
+      pubkey: "responsive-seller",
+      created_at: 30,
+      kind: 30402,
+      tags: [
+        ["d", "responsive-coffee"],
+        ["title", "Responsive Coffee Beans"],
+        ["price", "12", "USD"],
+      ],
+      content: "responsive coffee",
+      sig: "sig-responsive",
+    };
+    const nostr = {
+      fetch: jest.fn((_, __, relays: string[]) =>
+        relays[0] === DEFAULT_NIP50_SEARCH_RELAYS[1]
+          ? Promise.resolve([searchListing])
+          : Promise.reject(new Error("Timeout"))
+      ),
+    };
+
+    const result = await fetchNip50ProductSearch(
+      nostr as unknown as NostrManager,
+      [],
+      "coffee"
     );
+
+    expectNip50RelayFetches(nostr.fetch);
     expect(result.productEvents).toEqual([searchListing]);
     expect(cacheEventsToDatabase).toHaveBeenCalledWith([searchListing]);
   });
@@ -785,12 +824,7 @@ describe("fetch-service NIP-50 search helpers", () => {
       "coffee"
     );
 
-    expect(nostr.fetch).toHaveBeenCalledWith(
-      expect.any(Array),
-      {},
-      searchRelays,
-      NIP50_SEARCH_TIMEOUT_MS
-    );
+    expectNip50RelayFetches(nostr.fetch, searchRelays);
   });
 
   it("uses default NIP-50 relays when no selected relays are available", async () => {
@@ -817,12 +851,7 @@ describe("fetch-service NIP-50 search helpers", () => {
       "coffee"
     );
 
-    expect(nostr.fetch).toHaveBeenCalledWith(
-      expect.any(Array),
-      {},
-      DEFAULT_NIP50_SEARCH_RELAYS,
-      NIP50_SEARCH_TIMEOUT_MS
-    );
+    expectNip50RelayFetches(nostr.fetch);
     expect(result.productEvents).toEqual([fallbackListing]);
   });
 

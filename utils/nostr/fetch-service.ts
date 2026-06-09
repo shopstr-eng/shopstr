@@ -180,15 +180,24 @@ export async function fetchNip50ProductSearch(
 
   const searchRelays = getNip50SearchRelays(relays);
 
-  const fetchSearchEvents = (targetRelays: string[]) => {
+  const fetchSearchEvents = async (targetRelays: string[]) => {
     if (targetRelays.length === 0) return Promise.resolve([]);
 
-    return nostr
-      .fetch(filters, {}, targetRelays, NIP50_SEARCH_TIMEOUT_MS)
-      .catch((error) => {
-        console.warn("Failed to search products with NIP-50 relays:", error);
-        return [];
-      });
+    const relayResults = await Promise.all(
+      targetRelays.map((relay) =>
+        nostr
+          .fetch(filters, {}, [relay], NIP50_SEARCH_TIMEOUT_MS)
+          .catch((error) => {
+            console.warn(
+              `Failed to search products with NIP-50 relay ${relay}:`,
+              error
+            );
+            return [];
+          })
+      )
+    );
+
+    return relayResults.flat();
   };
 
   const filterSearchProductEvents = (events: NostrEvent[]) =>
@@ -203,7 +212,11 @@ export async function fetchNip50ProductSearch(
     eventMatchesProductSearch(event, searchQuery)
   );
 
-  const cacheableProductEvents = relevantSearchProductEvents.filter(
+  const dedupedSearchProductEvents = dedupeProductEvents(
+    relevantSearchProductEvents
+  );
+
+  const cacheableProductEvents = dedupedSearchProductEvents.filter(
     (event) => event.kind === 30402
   );
 
@@ -216,7 +229,7 @@ export async function fetchNip50ProductSearch(
   }
 
   return {
-    productEvents: dedupeProductEvents(relevantSearchProductEvents),
+    productEvents: dedupedSearchProductEvents,
   };
 }
 

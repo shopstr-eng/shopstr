@@ -129,6 +129,22 @@ const renderDisplayProducts = ({
     </SignerContext.Provider>
   );
 
+const expectNip50RelayFetches = (
+  fetchMock: jest.Mock,
+  expectedFilter: Record<string, unknown>
+) => {
+  expect(fetchMock).toHaveBeenCalledTimes(DEFAULT_NIP50_SEARCH_RELAYS.length);
+  DEFAULT_NIP50_SEARCH_RELAYS.forEach((relay, index) => {
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      index + 1,
+      expect.arrayContaining([expect.objectContaining(expectedFilter)]),
+      {},
+      [relay],
+      NIP50_SEARCH_TIMEOUT_MS
+    );
+  });
+};
+
 describe("DisplayProducts search filtering", () => {
   it("matches literal special characters in search queries", async () => {
     render(
@@ -262,14 +278,10 @@ describe("DisplayProducts search filtering", () => {
     );
 
     await waitFor(() => {
-      expect(nostr.fetch).toHaveBeenCalledWith(
-        expect.arrayContaining([
-          expect.objectContaining({ kinds: [30402], search: "coffee" }),
-        ]),
-        {},
-        DEFAULT_NIP50_SEARCH_RELAYS,
-        NIP50_SEARCH_TIMEOUT_MS
-      );
+      expectNip50RelayFetches(nostr.fetch, {
+        kinds: [30402],
+        search: "coffee",
+      });
       expect(screen.getByText("Relay Coffee Beans")).toBeInTheDocument();
     });
   });
@@ -335,18 +347,11 @@ describe("DisplayProducts search filtering", () => {
     });
 
     await waitFor(() => {
-      expect(nostr.fetch).toHaveBeenCalledWith(
-        expect.arrayContaining([
-          expect.objectContaining({
-            kinds: [30402],
-            search: "coffee",
-            authors: [sellerPubkey],
-          }),
-        ]),
-        {},
-        DEFAULT_NIP50_SEARCH_RELAYS,
-        NIP50_SEARCH_TIMEOUT_MS
-      );
+      expectNip50RelayFetches(nostr.fetch, {
+        kinds: [30402],
+        search: "coffee",
+        authors: [sellerPubkey],
+      });
       expect(screen.getByText("Seller Coffee")).toBeInTheDocument();
     });
   });
