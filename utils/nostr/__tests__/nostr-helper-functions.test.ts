@@ -625,6 +625,80 @@ describe("getLocalStorageData", () => {
     const data = getLocalStorageData();
     expect(data.relays).toEqual(myRelays);
   });
+
+  it("returns the default mint when mints is empty and writes it back to localStorage", () => {
+    localStorage.setItem("mints", JSON.stringify([]));
+    const data = getLocalStorageData();
+    expect(data.mints).toEqual([getDefaultMint()]);
+    expect(localStorage.getItem("mints")).toBe(
+      JSON.stringify([getDefaultMint()])
+    );
+  });
+
+  it("returns stored mints when the array is non-empty", () => {
+    const myMints = ["https://mint.example/cashu"];
+    localStorage.setItem("mints", JSON.stringify(myMints));
+    const data = getLocalStorageData();
+    expect(data.mints).toEqual(myMints);
+  });
+
+  it("returns the default blossom server when blossomServers is empty", () => {
+    localStorage.setItem("blossomServers", JSON.stringify([]));
+    const data = getLocalStorageData();
+    expect(data.blossomServers).toEqual([getDefaultBlossomServer()]);
+  });
+
+  it("initialises tokens to [] in localStorage when the key is absent", () => {
+    getLocalStorageData();
+    expect(localStorage.getItem("tokens")).toBe("[]");
+  });
+
+  it("initialises history to [] in localStorage when the key is absent", () => {
+    getLocalStorageData();
+    expect(localStorage.getItem("history")).toBe("[]");
+  });
+
+  it("parses wot as a number and defaults to 3 when absent", () => {
+    expect(getLocalStorageData().wot).toBe(3);
+    localStorage.setItem("wot", "7");
+    expect(getLocalStorageData().wot).toBe(7);
+  });
+
+  it("returns null for nwcString and nwcInfo when the keys are absent", () => {
+    const data = getLocalStorageData();
+    expect(data.nwcString).toBeNull();
+    expect(data.nwcInfo).toBeNull();
+  });
+
+  it("returns the stored nwcString when present", () => {
+    localStorage.setItem(
+      "nwcString",
+      "nostr+walletconnect://pubkey?relay=wss://relay.example"
+    );
+    const data = getLocalStorageData();
+    expect(data.nwcString).toBe(
+      "nostr+walletconnect://pubkey?relay=wss://relay.example"
+    );
+  });
+
+  it("returns the parsed savedAddresses array", () => {
+    const addresses = [
+      {
+        id: "addr-1",
+        label: "Home",
+        name: "Alice",
+        address: "123 Main St",
+        city: "Springfield",
+        state: "IL",
+        zip: "62701",
+        country: "US",
+        isDefault: true,
+      },
+    ];
+    localStorage.setItem("savedAddresses", JSON.stringify(addresses));
+    const data = getLocalStorageData();
+    expect(data.savedAddresses).toEqual(addresses);
+  });
 });
 
 describe("LogOut", () => {
