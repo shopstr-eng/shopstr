@@ -7,18 +7,22 @@ import {
   constructGiftWrappedEvent,
   createNostrDeleteEvent,
   decryptNpub,
+  generateKeys,
   getDefaultBlossomServer,
   getDefaultMint,
   getDefaultRelays,
   getLocalStorageData,
   getLocalUserProfileKey,
   isProfileContentPopulated,
+  LogOut,
+  nostrExtensionLoaded,
   parseLocalProfileFallback,
   parseBunkerToken,
   publishReportEvent,
   setLocalStorageDataOnSignIn,
   validateNPubKey,
   validateNSecKey,
+  verifyNip05Identifier,
   withBlastr,
 } from "../nostr-helper-functions";
 import { nip19 } from "nostr-tools";
@@ -403,6 +407,21 @@ describe("createNostrDeleteEvent", () => {
   });
 });
 
+describe("generateKeys", () => {
+  it("returns nsec and npub strings with the correct prefixes", async () => {
+    const { nsec, npub } = await generateKeys();
+    expect(nsec).toMatch(/^nsec/);
+    expect(npub).toMatch(/^npub/);
+  });
+
+  it("returns different key pairs on successive calls", async () => {
+    const first = await generateKeys();
+    const second = await generateKeys();
+    expect(first.nsec).not.toBe(second.nsec);
+    expect(first.npub).not.toBe(second.npub);
+  });
+});
+
 describe("parseBunkerToken", () => {
   it("returns null when the token does not start with bunker://", () => {
     expect(parseBunkerToken("https://example.com")).toBeNull();
@@ -435,5 +454,349 @@ describe("parseBunkerToken", () => {
     expect(parseBunkerToken("bunker://[invalid-host")).toBeNull();
     expect(consoleErrorSpy).toHaveBeenCalled();
     consoleErrorSpy.mockRestore();
+  });
+});
+
+describe("verifyNip05Identifier", () => {
+  beforeEach(() => {
+    global.fetch = jest.fn();
+  });
+
+  it("returns false immediately when nip05 is an empty string", async () => {
+    const result = await verifyNip05Identifier("", "some-pubkey");
+    expect(result).toBe(false);
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it("returns false immediately when pubkey is an empty string", async () => {
+    const result = await verifyNip05Identifier("user@example.com", "");
+    expect(result).toBe(false);
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it("returns false when response.ok is false", async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({ ok: false });
+    const result = await verifyNip05Identifier(
+      "user@example.com",
+      "some-pubkey",
+      { baseUrl: "https://app.example" }
+    );
+    expect(result).toBe(false);
+  });
+
+  it("returns true when response body contains verified: true", async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => ({ verified: true }),
+    });
+    const result = await verifyNip05Identifier(
+      "user@example.com",
+      "some-pubkey",
+      { baseUrl: "https://app.example" }
+    );
+    expect(result).toBe(true);
+  });
+
+  it("returns false when response body contains verified: false", async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => ({ verified: false }),
+    });
+    const result = await verifyNip05Identifier(
+      "user@example.com",
+      "some-pubkey",
+      { baseUrl: "https://app.example" }
+    );
+    expect(result).toBe(false);
+  });
+
+  it("returns false when response body is missing the verified field", async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => ({ status: "ok" }),
+    });
+    const result = await verifyNip05Identifier(
+      "user@example.com",
+      "some-pubkey",
+      { baseUrl: "https://app.example" }
+    );
+    expect(result).toBe(false);
+  });
+
+  it("uses the provided baseUrl option to construct the request URL", async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => ({ verified: true }),
+    });
+    await verifyNip05Identifier("user@example.com", "some-pubkey", {
+      baseUrl: "https://custom.example",
+    });
+    const calledUrl = (global.fetch as jest.Mock).mock.calls[0][0] as string;
+    expect(calledUrl).toMatch(/^https:\/\/custom\.example/);
+    expect(calledUrl).toContain("/api/nostr/verify-nip05");
+    expect(calledUrl).toContain("nip05=");
+    expect(calledUrl).toContain("pubkey=");
+  });
+
+  it("returns false in an SSR context when no baseUrl is supplied", async () => {
+    const originalWindow = global.window;
+    (global as any).window = undefined;
+    try {
+      const result = await verifyNip05Identifier(
+        "user@example.com",
+        "some-pubkey"
+      );
+      expect(result).toBe(false);
+    } finally {
+      global.window = originalWindow;
+    }
+  });
+
+  it("returns false when fetch throws", async () => {
+    (global.fetch as jest.Mock).mockRejectedValue(new Error("Network error"));
+    const result = await verifyNip05Identifier(
+      "user@example.com",
+      "some-pubkey",
+      { baseUrl: "https://app.example" }
+    );
+    expect(result).toBe(false);
+  });
+});
+
+describe("nostrExtensionLoaded", () => {
+  afterEach(() => {
+    (window as any).nostr = undefined;
+  });
+
+  it("returns true when window.nostr is set to a truthy object", () => {
+    (window as any).nostr = { getPublicKey: jest.fn() };
+    expect(nostrExtensionLoaded()).toBe(true);
+  });
+
+  it("returns false when window.nostr is undefined", () => {
+    (window as any).nostr = undefined;
+    expect(nostrExtensionLoaded()).toBe(false);
+  });
+});
+
+describe("getLocalStorageData", () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it("returns getDefaultRelays() when localStorage.relays is absent", () => {
+    const data = getLocalStorageData();
+    expect(data.relays).toEqual(getDefaultRelays());
+  });
+
+  it("returns getDefaultRelays() when the stored relays value is an empty array", () => {
+    localStorage.setItem("relays", JSON.stringify([]));
+    const data = getLocalStorageData();
+    expect(data.relays).toEqual(getDefaultRelays());
+  });
+
+  it("filters falsy entries from the stored relays array", () => {
+    localStorage.setItem(
+      "relays",
+      JSON.stringify(["wss://relay.damus.io", "", "wss://nos.lol", ""])
+    );
+    const data = getLocalStorageData();
+    expect(data.relays).toEqual(["wss://relay.damus.io", "wss://nos.lol"]);
+  });
+
+  it("removes legacy keys when signInMethod is present in localStorage", () => {
+    localStorage.setItem("signInMethod", "extension");
+    localStorage.setItem("npub", "npub1abc");
+    localStorage.setItem("signIn", "extension");
+    localStorage.setItem("chats", "[]");
+    localStorage.setItem("cashuWalletRelays", "[]");
+
+    getLocalStorageData();
+
+    expect(localStorage.getItem("npub")).toBeNull();
+    expect(localStorage.getItem("signIn")).toBeNull();
+    expect(localStorage.getItem("chats")).toBeNull();
+    expect(localStorage.getItem("cashuWalletRelays")).toBeNull();
+  });
+
+  it("returns the stored relay array when it is non-empty and valid", () => {
+    const myRelays = ["wss://relay.example", "wss://relay2.example"];
+    localStorage.setItem("relays", JSON.stringify(myRelays));
+    const data = getLocalStorageData();
+    expect(data.relays).toEqual(myRelays);
+  });
+
+  it("returns the default mint when mints is empty and writes it back to localStorage", () => {
+    localStorage.setItem("mints", JSON.stringify([]));
+    const data = getLocalStorageData();
+    expect(data.mints).toEqual([getDefaultMint()]);
+    expect(localStorage.getItem("mints")).toBe(
+      JSON.stringify([getDefaultMint()])
+    );
+  });
+
+  it("returns stored mints when the array is non-empty", () => {
+    const myMints = ["https://mint.example/cashu"];
+    localStorage.setItem("mints", JSON.stringify(myMints));
+    const data = getLocalStorageData();
+    expect(data.mints).toEqual(myMints);
+  });
+
+  it("returns the default blossom server when blossomServers is empty", () => {
+    localStorage.setItem("blossomServers", JSON.stringify([]));
+    const data = getLocalStorageData();
+    expect(data.blossomServers).toEqual([getDefaultBlossomServer()]);
+  });
+
+  it("initialises tokens to [] in localStorage when the key is absent", () => {
+    getLocalStorageData();
+    expect(localStorage.getItem("tokens")).toBe("[]");
+  });
+
+  it("initialises history to [] in localStorage when the key is absent", () => {
+    getLocalStorageData();
+    expect(localStorage.getItem("history")).toBe("[]");
+  });
+
+  it("parses wot as a number and defaults to 3 when absent", () => {
+    expect(getLocalStorageData().wot).toBe(3);
+    localStorage.setItem("wot", "7");
+    expect(getLocalStorageData().wot).toBe(7);
+  });
+
+  it("returns null for nwcString and nwcInfo when the keys are absent", () => {
+    const data = getLocalStorageData();
+    expect(data.nwcString).toBeNull();
+    expect(data.nwcInfo).toBeNull();
+  });
+
+  it("returns the stored nwcString when present", () => {
+    localStorage.setItem(
+      "nwcString",
+      "nostr+walletconnect://pubkey?relay=wss://relay.example"
+    );
+    const data = getLocalStorageData();
+    expect(data.nwcString).toBe(
+      "nostr+walletconnect://pubkey?relay=wss://relay.example"
+    );
+  });
+
+  it("returns the parsed savedAddresses array", () => {
+    const addresses = [
+      {
+        id: "addr-1",
+        label: "Home",
+        name: "Alice",
+        address: "123 Main St",
+        city: "Springfield",
+        state: "IL",
+        zip: "62701",
+        country: "US",
+        isDefault: true,
+      },
+    ];
+    localStorage.setItem("savedAddresses", JSON.stringify(addresses));
+    const data = getLocalStorageData();
+    expect(data.savedAddresses).toEqual(addresses);
+  });
+
+  it("accepts { type: 'nip07' } as a valid stored signer", () => {
+    localStorage.setItem("signer", JSON.stringify({ type: "nip07" }));
+    expect(getLocalStorageData().signer).toEqual({ type: "nip07" });
+  });
+
+  it("accepts { type: 'nip46', bunker: '...' } as a valid stored signer", () => {
+    const storedSigner = {
+      type: "nip46",
+      bunker: "bunker://pubkey?relay=wss://relay.example",
+    };
+    localStorage.setItem("signer", JSON.stringify(storedSigner));
+    expect(getLocalStorageData().signer).toEqual(storedSigner);
+  });
+
+  it("rejects { type: 'nip46' } missing bunker and falls through to migration", () => {
+    localStorage.setItem("signer", JSON.stringify({ type: "nip46" }));
+    localStorage.setItem("signInMethod", "extension");
+    expect(getLocalStorageData().signer).toEqual({ type: "nip07" });
+  });
+
+  it("accepts { type: 'nsec', encryptedPrivKey: '...' } as a valid stored signer", () => {
+    const storedSigner = { type: "nsec", encryptedPrivKey: "enc-key-abc" };
+    localStorage.setItem("signer", JSON.stringify(storedSigner));
+    expect(getLocalStorageData().signer).toEqual(storedSigner);
+  });
+
+  it("rejects { type: 'nsec' } missing encryptedPrivKey and falls through to migration", () => {
+    localStorage.setItem("signer", JSON.stringify({ type: "nsec" }));
+    localStorage.setItem("signInMethod", "extension");
+    expect(getLocalStorageData().signer).toEqual({ type: "nip07" });
+  });
+
+  it("rejects non-object signer values and falls through to migration", () => {
+    localStorage.setItem("signInMethod", "extension");
+    for (const invalid of [null, [], "a-string"]) {
+      localStorage.setItem("signer", JSON.stringify(invalid));
+      expect(getLocalStorageData().signer).toEqual({ type: "nip07" });
+    }
+  });
+});
+
+describe("LogOut", () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it("removes all keys in LOCALSTORAGECONSTANTS from localStorage", () => {
+    const constantKeys = [
+      "signInMethod",
+      "userNPub",
+      "userPubkey",
+      "encryptedPrivateKey",
+      "relays",
+      "readRelays",
+      "writeRelays",
+      "mints",
+      "blossomServers",
+      "tokens",
+      "history",
+      "wot",
+      "clientPubkey",
+      "clientPrivkey",
+      "bunkerRemotePubkey",
+      "bunkerRelays",
+      "bunkerSecret",
+      "signer",
+      "nwcString",
+      "nwcInfo",
+      "savedAddresses",
+    ];
+    constantKeys.forEach((k) => localStorage.setItem(k, "value"));
+
+    LogOut();
+
+    constantKeys.forEach((k) => expect(localStorage.getItem(k)).toBeNull());
+  });
+
+  it("also removes the legacy keys npub, signIn, and chats", () => {
+    localStorage.setItem("npub", "npub1abc");
+    localStorage.setItem("signIn", "extension");
+    localStorage.setItem("chats", "[]");
+
+    LogOut();
+
+    expect(localStorage.getItem("npub")).toBeNull();
+    expect(localStorage.getItem("signIn")).toBeNull();
+    expect(localStorage.getItem("chats")).toBeNull();
+  });
+
+  it("dispatches a storage event on window", () => {
+    const dispatchSpy = jest.spyOn(window, "dispatchEvent");
+
+    LogOut();
+
+    expect(dispatchSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "storage" })
+    );
+    dispatchSpy.mockRestore();
   });
 });
