@@ -2443,6 +2443,198 @@ describe("fetchCashuWallet", () => {
     expect(nostr.fetch).not.toHaveBeenCalled();
     expect(editCashuWalletContext).toHaveBeenCalledWith([], [], [], false);
   });
+
+  it("hydrates NIP-60 wallet state from cache and relays without duplicating proofs", async () => {
+    const userPubkey =
+      "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789";
+    const localProof = {
+      id: "keyset-a",
+      amount: 1,
+      secret: "local-secret",
+      C: "C-local",
+    };
+    const dbProof = {
+      id: "keyset-a",
+      amount: 2,
+      secret: "shared-secret",
+      C: "C-db",
+    };
+    const relayDuplicateProof = {
+      id: "keyset-a",
+      amount: 2,
+      secret: "shared-secret",
+      C: "C-db-duplicate",
+    };
+    const relayProof = {
+      id: "keyset-a",
+      amount: 3,
+      secret: "relay-secret",
+      C: "C-relay",
+    };
+    const dbConfigEvent = {
+      id: "db-config",
+      pubkey: userPubkey,
+      created_at: 10,
+      kind: 17375,
+      tags: [],
+      content: "encrypted-db-config",
+      sig: "sig-db-config",
+    };
+    const dbProofEvent = {
+      id: "db-proof",
+      pubkey: userPubkey,
+      created_at: 11,
+      kind: 7375,
+      tags: [],
+      content: "encrypted-db-proof",
+      sig: "sig-db-proof",
+    };
+    const relayStateEvent = {
+      id: "relay-state",
+      pubkey: userPubkey,
+      created_at: 20,
+      kind: 37375,
+      tags: [
+        ["relay", "wss://cashu.relay"],
+        ["mint", "https://mint.state.example"],
+      ],
+      content: "",
+      sig: "sig-relay-state",
+    };
+    const relayProofEvent = {
+      id: "relay-proof",
+      pubkey: userPubkey,
+      created_at: 21,
+      kind: 7375,
+      tags: [],
+      content: "encrypted-relay-proof",
+      sig: "sig-relay-proof",
+    };
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+    const deleteEvent = jest.fn();
+
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(() => ({ tokens: [localProof] })),
+      deleteEvent,
+      verifyNip05Identifier: jest.fn(),
+    }));
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase,
+    }));
+    jest.doMock("@cashu/cashu-ts", () => {
+      const checkProofsStates = jest.fn(async (proofs) =>
+        proofs.map((proof: { secret: string }) => ({
+          state: "UNSPENT",
+          Y: `Y-${proof.secret}`,
+        }))
+      );
+
+      return {
+        Mint: jest.fn(),
+        Wallet: jest.fn().mockImplementation(() => ({
+          loadMint: jest.fn().mockResolvedValue(undefined),
+          checkProofsStates,
+        })),
+        hashToCurve: jest.fn((bytes: Uint8Array) => ({
+          toHex: () => `Y-${new TextDecoder().decode(bytes)}`,
+        })),
+      };
+    });
+
+    const { fetchCashuWallet } = await import("../fetch-service");
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [dbConfigEvent, dbProofEvent],
+    }) as typeof global.fetch;
+
+    const decryptedPayloads = new Map<string, string>([
+      [
+        "encrypted-db-config",
+        JSON.stringify([["mint", "https://mint.db.example"]]),
+      ],
+      [
+        "encrypted-db-proof",
+        JSON.stringify({
+          mint: "https://mint.db.example",
+          proofs: [dbProof],
+        }),
+      ],
+      [
+        "encrypted-relay-proof",
+        JSON.stringify({
+          mint: "https://mint.db.example",
+          proofs: [relayDuplicateProof, relayProof],
+        }),
+      ],
+    ]);
+    const signer = {
+      getPubKey: jest.fn().mockResolvedValue(userPubkey),
+      decrypt: jest.fn(
+        async (_pubkey: string, content: string) =>
+          decryptedPayloads.get(content) ?? ""
+      ),
+    };
+    const nostr = {
+      fetch: jest
+        .fn()
+        .mockResolvedValueOnce([relayStateEvent])
+        .mockResolvedValueOnce([relayProofEvent]),
+    } as any;
+    const editCashuWalletContext = jest.fn();
+
+    const result = await fetchCashuWallet(
+      nostr,
+      signer as any,
+      ["wss://default.relay"],
+      editCashuWalletContext
+    );
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      `/api/db/fetch-wallet?pubkey=${userPubkey}`
+    );
+    expect(nostr.fetch).toHaveBeenNthCalledWith(
+      1,
+      [{ kinds: [17375, 37375], authors: [userPubkey] }],
+      {},
+      ["wss://default.relay"]
+    );
+    expect(nostr.fetch).toHaveBeenNthCalledWith(
+      2,
+      [{ kinds: [7375, 7376], authors: [userPubkey] }],
+      {},
+      ["wss://cashu.relay"]
+    );
+    expect(result.cashuMints).toEqual(
+      expect.arrayContaining([
+        "https://mint.db.example",
+        "https://mint.state.example",
+      ])
+    );
+    expect(result.cashuProofs.map((proof) => proof.secret)).toEqual([
+      "local-secret",
+      "shared-secret",
+      "relay-secret",
+    ]);
+    expect(result.proofEvents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "db-proof", proofs: [dbProof] }),
+        expect.objectContaining({
+          id: "relay-proof",
+          proofs: [relayDuplicateProof, relayProof],
+        }),
+      ])
+    );
+    expect(editCashuWalletContext).toHaveBeenLastCalledWith(
+      result.proofEvents,
+      result.cashuMints,
+      result.cashuProofs,
+      false
+    );
+    expect(cacheEventsToDatabase).toHaveBeenCalledWith([relayStateEvent]);
+    expect(cacheEventsToDatabase).toHaveBeenCalledWith([relayProofEvent]);
+    expect(deleteEvent).not.toHaveBeenCalled();
+  });
 });
 
 describe("fetchShopProfile", () => {

@@ -4,6 +4,18 @@ import {
   getDefaultRelays,
   getLocalStorageData,
 } from "../nostr-helper-functions";
+import * as NostrHelpers from "../nostr-helper-functions";
+
+type CashuCacheHelpers = typeof NostrHelpers & {
+  getCachedCashuProofs?: () => unknown[];
+  setCachedCashuProofs?: (proofs?: unknown[]) => void;
+};
+
+const cashuHelpers = NostrHelpers as CashuCacheHelpers;
+
+const hasVolatileCashuCache = () =>
+  typeof cashuHelpers.getCachedCashuProofs === "function" &&
+  typeof cashuHelpers.setCachedCashuProofs === "function";
 
 describe("getLocalStorageData", () => {
   beforeEach(() => {
@@ -69,5 +81,37 @@ describe("getLocalStorageData", () => {
       type: "nsec",
       encryptedPrivKey: "ncryptsec1mock",
     });
+  });
+
+  it("keeps the volatile Cashu proof cache isolated from caller mutation when available", () => {
+    if (!hasVolatileCashuCache()) {
+      expect(cashuHelpers.setCachedCashuProofs).toBeUndefined();
+      return;
+    }
+
+    const firstProof = {
+      id: "00d0a1b24d1c1a53",
+      amount: 1,
+      secret: "first-secret",
+      C: "first-c",
+    };
+    const secondProof = {
+      id: "00d0a1b24d1c1a53",
+      amount: 2,
+      secret: "second-secret",
+      C: "second-c",
+    };
+    const originalProofs = [firstProof];
+
+    cashuHelpers.setCachedCashuProofs(originalProofs);
+    originalProofs.push(secondProof);
+
+    expect(cashuHelpers.getCachedCashuProofs()).toEqual([firstProof]);
+
+    const returnedProofs = cashuHelpers.getCachedCashuProofs();
+    returnedProofs.push(secondProof);
+
+    expect(cashuHelpers.getCachedCashuProofs()).toEqual([firstProof]);
+    expect(getLocalStorageData().tokens).toEqual([firstProof]);
   });
 });
