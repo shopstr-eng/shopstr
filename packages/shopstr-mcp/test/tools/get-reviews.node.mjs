@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { handleGetReviews } from "../dist/tools/get-reviews.js";
+import { handleGetReviews } from "../../dist/tools/get-reviews.js";
 
 const hex = (char) => char.repeat(64);
 const productId = hex("9");

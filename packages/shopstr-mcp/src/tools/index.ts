@@ -1,7 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 import { wrapWithAudit } from "../audit-log.js";
-import type { CoreToolContext } from "./context.js";
+import type { CoreToolContext } from "./utils/context.js";
 import {
   getProductDetailsInputSchema,
   handleGetProductDetails,

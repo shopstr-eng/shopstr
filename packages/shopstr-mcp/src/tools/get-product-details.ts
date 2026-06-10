@@ -21,8 +21,8 @@ import {
   createRelayUnavailableResponse,
   createValidationErrorResponse,
   getDataFreshness,
-} from "./common.js";
-import type { CoreToolContext } from "./context.js";
+} from "./utils/common.js";
+import type { CoreToolContext } from "./utils/context.js";
 
 export const getProductDetailsInputSchema = {
   productId: z
