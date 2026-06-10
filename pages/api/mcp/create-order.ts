@@ -2,6 +2,8 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { randomBytes } from "crypto";
 import { Mint as CashuMint, Wallet as CashuWallet } from "@cashu/cashu-ts";
 import { withMintRetry } from "@/utils/cashu/mint-retry-service";
+import { convertCurrencyAmountToSats } from "@/utils/cashu/currency-conversion";
+import { getTrustedMintUrl } from "@/utils/cashu/trusted-mints";
 import { authenticateRequest, initializeApiKeysTable } from "@/utils/mcp/auth";
 import {
   fetchAllProductsFromDb,
@@ -26,7 +28,7 @@ import { applyRateLimit } from "@/utils/rate-limit";
 const RATE_LIMIT = { limit: 60, windowMs: 60 * 1000 };
 const PER_KEY_LIMIT = { limit: 30, windowMs: 60 * 1000 };
 
-const DEFAULT_MINT_URL = "https://mint.minibits.cash/Bitcoin";
+const DEFAULT_MINT_URL = getTrustedMintUrl();
 
 // Server-controlled allowlist of Cashu mints the backend will trust for both
 // Lightning invoice creation and Cashu token redemption.  Buyer-supplied mint
@@ -389,14 +391,7 @@ async function handleLightningPayment(
   }
   const mint = DEFAULT_MINT_URL;
 
-  let amountInSats: number;
-  if (currency.toLowerCase() === "sats" || currency.toLowerCase() === "sat") {
-    amountInSats = Math.round(totalAmount);
-  } else {
-    amountInSats = Math.round(totalAmount);
-  }
-
-  if (amountInSats < 1) amountInSats = 1;
+  const amountInSats = await convertCurrencyAmountToSats(totalAmount, currency);
 
   try {
     const cashuMint = new CashuMint(mint);
@@ -496,12 +491,10 @@ async function handleCashuPayment(
       0
     );
 
-    let requiredAmount: number;
-    if (currency.toLowerCase() === "sats" || currency.toLowerCase() === "sat") {
-      requiredAmount = Math.round(totalAmount);
-    } else {
-      requiredAmount = Math.round(totalAmount);
-    }
+    const requiredAmount = await convertCurrencyAmountToSats(
+      totalAmount,
+      currency
+    );
 
     if (tokenAmount < requiredAmount) {
       return res.status(400).json({
