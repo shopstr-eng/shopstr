@@ -1,4 +1,4 @@
-import type { RelayFetchClient } from "../relay-fetch.js";
+import type { RelayFetchClient } from "../../relay-fetch.js";
 
 export type CoreToolContext = {
   nostr: RelayFetchClient;

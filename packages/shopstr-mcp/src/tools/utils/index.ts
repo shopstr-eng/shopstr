@@ -1,16 +1,16 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
-import { wrapWithAudit } from "../audit-log.js";
+import { wrapWithAudit } from "../../audit-log.js";
 import type { CoreToolContext } from "./context.js";
 import {
   getProductDetailsInputSchema,
   handleGetProductDetails,
-} from "./get-product-details.js";
-import { getReviewsInputSchema, handleGetReviews } from "./get-reviews.js";
+} from "../get-product-details.js";
+import { getReviewsInputSchema, handleGetReviews } from "../get-reviews.js";
 import {
   handleSearchProducts,
   searchProductsInputSchema,
-} from "./search-products.js";
+} from "../search-products.js";
 
 export function registerCoreTools(
   server: McpServer,

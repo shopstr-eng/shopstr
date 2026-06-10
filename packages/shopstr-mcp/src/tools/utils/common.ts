@@ -5,8 +5,8 @@ import {
   createErrorResponse,
   type ToolMeta,
   type ToolTextResponse,
-} from "../errors.js";
-import type { RelayFetchMeta } from "../types.js";
+} from "../../errors.js";
+import type { RelayFetchMeta } from "../../types.js";
 
 export const PRODUCT_KIND = 30402;
 export const REVIEW_KIND = 31555;

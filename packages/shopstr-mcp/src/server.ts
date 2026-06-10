@@ -3,7 +3,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ShopstrMcpConfig } from "./config.js";
 import { createLogger, type Logger } from "./logger.js";
 import { NostrManager } from "./nostr-manager.js";
-import { registerCoreTools } from "./tools/index.js";
+import { registerCoreTools } from "./tools/utils/index.js";
 
 export type McpServerDependencies = {
   logger?: Pick<Logger, "warn">;
