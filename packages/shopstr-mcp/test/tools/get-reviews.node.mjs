@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { handleGetReviews } from "../dist/tools/get-reviews.js";
+import { handleGetReviews } from "../../dist/tools/get-reviews.js";
+import { MemoryCache } from "../../dist/cache.js";
 
 const hex = (char) => char.repeat(64);
 const productId = hex("9");
@@ -44,6 +45,7 @@ function context(fetchImpl) {
     calls,
     relays: ["wss://relay.example.com"],
     timeoutMs: 100,
+    cache: new MemoryCache(0),
     nostr: {
       async fetch(filters) {
         calls.push(filters);

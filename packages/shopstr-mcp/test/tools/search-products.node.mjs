@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { handleSearchProducts } from "../dist/tools/search-products.js";
+import { handleSearchProducts } from "../../dist/tools/search-products.js";
+import { MemoryCache } from "../../dist/cache.js";
 
 const hex = (char) => char.repeat(64);
 
@@ -29,6 +30,7 @@ function context(eventsByRelay) {
   return {
     relays: Object.keys(eventsByRelay),
     timeoutMs: 100,
+    cache: new MemoryCache(0),
     nostr: {
       async fetch(_filters, _params, relayUrls) {
         const relay = relayUrls[0];
@@ -117,6 +119,7 @@ test("search_products pushes category down to relay with #t filter", async () =>
   const ctx = {
     relays: ["wss://relay.example.com"],
     timeoutMs: 100,
+    cache: new MemoryCache(0),
     nostr: {
       async fetch(filters) {
         capturedFilters = filters;
@@ -156,6 +159,7 @@ test("search_products falls back to broad query when #t category returns no matc
   const ctx = {
     relays: ["wss://relay.example.com"],
     timeoutMs: 100,
+    cache: new MemoryCache(0),
     nostr: {
       async fetch(filters) {
         fetchCallCount++;
