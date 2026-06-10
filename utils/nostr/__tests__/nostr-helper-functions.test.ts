@@ -1,3 +1,27 @@
+jest.mock("@/utils/db/db-client", () => ({
+  cacheEventToDatabase: jest.fn().mockResolvedValue(undefined),
+  deleteEventsFromDatabase: jest.fn().mockResolvedValue(undefined),
+  trackFailedRelayPublish: jest.fn().mockResolvedValue(undefined),
+}));
+
+jest.mock("@/utils/nostr/request-auth", () => ({
+  buildDeleteCachedEventsProof: jest.fn().mockReturnValue({}),
+  buildSignedHttpRequestProofTemplate: jest.fn().mockReturnValue({
+    kind: 27235,
+    content: "",
+    tags: [],
+    created_at: 0,
+  }),
+}));
+
+jest.mock("@/utils/timeout", () => ({
+  newPromiseWithTimeout: jest.fn().mockImplementation(async (fn: any) => {
+    return new Promise((resolve, reject) =>
+      fn(resolve, reject, new AbortController().signal)
+    );
+  }),
+}));
+
 jest.mock("nostr-tools", () => {
   const actual = jest.requireActual("nostr-tools");
   return {
@@ -22,7 +46,9 @@ import {
   constructMessageGiftWrap,
   constructMessageSeal,
   createNostrDeleteEvent,
+  createNostrProfileEvent,
   decryptNpub,
+  deleteEvent,
   generateKeys,
   getDefaultBlossomServer,
   getDefaultMint,
@@ -37,6 +63,7 @@ import {
   publishReportEvent,
   REPORT_TYPES,
   saveNWCString,
+  sendGiftWrappedMessageEvent,
   setLocalStorageDataOnSignIn,
   validateNPubKey,
   validateNSecKey,
@@ -45,6 +72,16 @@ import {
 } from "../nostr-helper-functions";
 import { finalizeEvent, nip19, nip44 } from "nostr-tools";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
+import {
+  cacheEventToDatabase,
+  deleteEventsFromDatabase,
+  trackFailedRelayPublish,
+} from "@/utils/db/db-client";
+import {
+  buildDeleteCachedEventsProof,
+  buildSignedHttpRequestProofTemplate,
+} from "@/utils/nostr/request-auth";
+import { newPromiseWithTimeout } from "@/utils/timeout";
 
 describe("constructGiftWrappedEvent", () => {
   const senderPubkey =
@@ -282,10 +319,6 @@ describe("publishReportEvent", () => {
       "writeRelays",
       JSON.stringify(["wss://write.example"])
     );
-    global.fetch = jest.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({}),
-    });
   });
 
   afterEach(() => {
@@ -352,12 +385,8 @@ describe("publishReportEvent", () => {
         "wss://sendit.nosflare.com",
       ])
     );
-    expect(global.fetch).toHaveBeenCalledWith(
-      "/api/db/cache-event",
-      expect.objectContaining({
-        method: "POST",
-        body: expect.stringContaining("signed-profile-report"),
-      })
+    expect(cacheEventToDatabase).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "signed-profile-report" })
     );
   });
 
@@ -1191,5 +1220,266 @@ describe("LogOut", () => {
       expect.objectContaining({ type: "storage" })
     );
     dispatchSpy.mockRestore();
+  });
+});
+
+describe("sendGiftWrappedMessageEvent", () => {
+  const giftWrappedEvent = {
+    id: "wrap-id",
+    kind: 1059,
+    pubkey: "sender-pubkey",
+    created_at: 1,
+    content: "encrypted",
+    sig: "sig",
+    tags: [["p", "recipient-pubkey"]],
+  };
+
+  beforeEach(() => {
+    localStorage.clear();
+    localStorage.setItem("relays", JSON.stringify(["wss://relay.example"]));
+    localStorage.setItem(
+      "writeRelays",
+      JSON.stringify(["wss://write.example"])
+    );
+    (cacheEventToDatabase as jest.Mock).mockClear();
+    (newPromiseWithTimeout as jest.Mock).mockClear();
+    (trackFailedRelayPublish as jest.Mock).mockClear();
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("calls cacheEventToDatabase before any relay publish attempt", async () => {
+    const callOrder: string[] = [];
+    (cacheEventToDatabase as jest.Mock).mockImplementation(async () => {
+      callOrder.push("cache");
+    });
+    const nostr = {
+      publish: jest.fn().mockImplementation(async () => {
+        callOrder.push("publish");
+      }),
+    };
+    (newPromiseWithTimeout as jest.Mock).mockImplementation(async (fn: any) => {
+      return new Promise<void>((resolve, reject) =>
+        fn(resolve, reject, new AbortController().signal)
+      );
+    });
+
+    await sendGiftWrappedMessageEvent(nostr as any, giftWrappedEvent as any);
+
+    expect(cacheEventToDatabase).toHaveBeenCalledWith(giftWrappedEvent);
+    expect(callOrder.indexOf("cache")).toBeLessThan(
+      callOrder.indexOf("publish")
+    );
+  });
+
+  it("calls nostr.publish inside the timeout wrapper", async () => {
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+    (newPromiseWithTimeout as jest.Mock).mockImplementation(async (fn: any) => {
+      return new Promise<void>((resolve, reject) =>
+        fn(resolve, reject, new AbortController().signal)
+      );
+    });
+
+    await sendGiftWrappedMessageEvent(nostr as any, giftWrappedEvent as any);
+
+    expect(newPromiseWithTimeout).toHaveBeenCalled();
+    expect(nostr.publish).toHaveBeenCalledWith(
+      giftWrappedEvent,
+      expect.arrayContaining(["wss://relay.example", "wss://write.example"])
+    );
+  });
+
+  it("calls console.warn and trackFailedRelayPublish with signer when newPromiseWithTimeout rejects", async () => {
+    const consoleWarnSpy = jest
+      .spyOn(console, "warn")
+      .mockImplementation(() => {});
+    const signer = { sign: jest.fn() };
+    const nostr = { publish: jest.fn() };
+    (newPromiseWithTimeout as jest.Mock).mockRejectedValue(
+      new Error("Timeout")
+    );
+
+    await sendGiftWrappedMessageEvent(
+      nostr as any,
+      giftWrappedEvent as any,
+      signer as any
+    );
+
+    expect(consoleWarnSpy).toHaveBeenCalled();
+    expect(trackFailedRelayPublish).toHaveBeenCalledWith(
+      giftWrappedEvent.id,
+      giftWrappedEvent,
+      expect.arrayContaining(["wss://relay.example", "wss://write.example"]),
+      signer
+    );
+    consoleWarnSpy.mockRestore();
+  });
+
+  it("calls trackFailedRelayPublish with undefined signer when signer parameter is omitted", async () => {
+    const consoleWarnSpy = jest
+      .spyOn(console, "warn")
+      .mockImplementation(() => {});
+    const nostr = { publish: jest.fn() };
+    (newPromiseWithTimeout as jest.Mock).mockRejectedValue(
+      new Error("Timeout")
+    );
+
+    await sendGiftWrappedMessageEvent(nostr as any, giftWrappedEvent as any);
+
+    expect(trackFailedRelayPublish).toHaveBeenCalledWith(
+      giftWrappedEvent.id,
+      giftWrappedEvent,
+      expect.any(Array),
+      undefined
+    );
+    consoleWarnSpy.mockRestore();
+  });
+});
+
+describe("deleteEvent", () => {
+  const eventIds = ["event-id-1", "event-id-2"];
+
+  function makeSigner() {
+    return {
+      sign: jest.fn().mockImplementation(async (event: any) => ({
+        ...event,
+        id: "signed-id",
+        pubkey: "signer-pubkey",
+        sig: "sig",
+      })),
+      getPubKey: jest.fn().mockResolvedValue("signer-pubkey"),
+    };
+  }
+
+  function makeNostr() {
+    return { publish: jest.fn().mockResolvedValue(undefined) };
+  }
+
+  beforeEach(() => {
+    localStorage.clear();
+    localStorage.setItem("relays", JSON.stringify(["wss://relay.example"]));
+    localStorage.setItem("writeRelays", JSON.stringify([]));
+    (cacheEventToDatabase as jest.Mock).mockResolvedValue(undefined);
+    (deleteEventsFromDatabase as jest.Mock).mockResolvedValue(undefined);
+    (buildDeleteCachedEventsProof as jest.Mock).mockReturnValue({});
+    (buildSignedHttpRequestProofTemplate as jest.Mock).mockReturnValue({
+      kind: 27235,
+      content: "",
+      tags: [],
+      created_at: 0,
+    });
+    (newPromiseWithTimeout as jest.Mock).mockImplementation(async (fn: any) => {
+      return new Promise((resolve, reject) =>
+        fn(resolve, reject, new AbortController().signal)
+      );
+    });
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("creates a kind-5 deletion event via createNostrDeleteEvent and sends it", async () => {
+    const signer = makeSigner();
+    const nostr = makeNostr();
+
+    await deleteEvent(nostr as any, signer as any, eventIds);
+
+    expect(signer.sign).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 5 })
+    );
+    expect(cacheEventToDatabase).toHaveBeenCalled();
+  });
+
+  it("calls signer.getPubKey to obtain the pubkey for the proof", async () => {
+    const signer = makeSigner();
+    const nostr = makeNostr();
+
+    await deleteEvent(nostr as any, signer as any, eventIds);
+
+    expect(signer.getPubKey).toHaveBeenCalledTimes(1);
+  });
+
+  it("calls deleteEventsFromDatabase with the event IDs and signed proof", async () => {
+    const signer = makeSigner();
+    const nostr = makeNostr();
+
+    await deleteEvent(nostr as any, signer as any, eventIds);
+
+    expect(deleteEventsFromDatabase).toHaveBeenCalledWith(
+      eventIds,
+      expect.objectContaining({ id: "signed-id", sig: "sig" })
+    );
+  });
+
+  it("logs console.error and continues when deleteEventsFromDatabase rejects", async () => {
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    const signer = makeSigner();
+    const nostr = makeNostr();
+    (deleteEventsFromDatabase as jest.Mock).mockRejectedValue(
+      new Error("DB error")
+    );
+
+    await expect(
+      deleteEvent(nostr as any, signer as any, eventIds)
+    ).resolves.toBeUndefined();
+
+    await Promise.resolve();
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      expect.stringContaining("Failed to delete events from database"),
+      expect.any(Error)
+    );
+    consoleErrorSpy.mockRestore();
+  });
+});
+
+describe("createNostrProfileEvent", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    localStorage.setItem("relays", JSON.stringify(["wss://relay.example"]));
+    localStorage.setItem("writeRelays", JSON.stringify([]));
+    (cacheEventToDatabase as jest.Mock).mockResolvedValue(undefined);
+    (newPromiseWithTimeout as jest.Mock).mockImplementation(async (fn: any) => {
+      return new Promise((resolve, reject) =>
+        fn(resolve, reject, new AbortController().signal)
+      );
+    });
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("calls finalizeAndSendNostrEvent with { waitForRelayPublish: false } and returns the signed event", async () => {
+    const signedEvent = {
+      kind: 0,
+      id: "profile-event-id",
+      pubkey: "user-pubkey",
+      sig: "sig",
+      content: '{"name":"Alice"}',
+      created_at: 1,
+      tags: [],
+    };
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+    const signer = { sign: jest.fn().mockResolvedValue(signedEvent) };
+
+    // A never-resolving timeout proves the function does not await relay publish
+    (newPromiseWithTimeout as jest.Mock).mockReturnValue(new Promise(() => {}));
+
+    const result = await createNostrProfileEvent(
+      nostr as any,
+      signer as any,
+      '{"name":"Alice"}'
+    );
+
+    expect(signer.sign).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 0, content: '{"name":"Alice"}' })
+    );
+    expect(result).toEqual(signedEvent);
   });
 });
