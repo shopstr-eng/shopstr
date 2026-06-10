@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { handleSearchProducts } from "../dist/tools/search-products.js";
+import { handleSearchProducts } from "../../dist/tools/search-products.js";
 
 const hex = (char) => char.repeat(64);
 
