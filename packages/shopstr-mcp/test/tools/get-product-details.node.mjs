@@ -137,3 +137,46 @@ test("get_product_details fetches latest version via coordinate when product is 
   assert.equal(body.product.title, "Updated Linen Shirt");
   assert.equal(body.product.price, 50);
 });
+
+test("get_product_details skips pre-flight on second call when cache is enabled", async () => {
+  const productId = hex("1");
+  let preflightCount = 0;
+
+  // Shared enabled cache (60s TTL) across both calls
+  const cache = new MemoryCache(60_000);
+  const fetchImpl = (filters) => {
+    if (filters.some((f) => f.ids?.includes(productId))) {
+      preflightCount++;
+      return [productEvent({ id: productId })];
+    }
+    if (filters.some((f) => f["#d"]?.includes("product"))) {
+      return [productEvent({ id: productId })];
+    }
+    return [];
+  };
+
+  const ctx = {
+    relays: ["wss://relay.example.com"],
+    timeoutMs: 100,
+    cache,
+    nostr: {
+      async fetch(filters) {
+        return fetchImpl(filters);
+      },
+    },
+  };
+
+  // First call: cache miss → pre-flight hits the relay
+  const first = await handleGetProductDetails({ productId }, ctx);
+  assert.equal(first.resultCount, 1);
+  assert.equal(preflightCount, 1, "first call should hit relay for pre-flight");
+
+  // Second call: cache hit → pre-flight is skipped entirely
+  const second = await handleGetProductDetails({ productId }, ctx);
+  assert.equal(second.resultCount, 1);
+  assert.equal(
+    preflightCount,
+    1,
+    "second call should skip pre-flight via cache"
+  );
+});

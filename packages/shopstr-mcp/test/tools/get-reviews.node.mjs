@@ -218,3 +218,60 @@ test("get_reviews requires productId, productAddress, or sellerPubkey", async ()
   assert.equal(response.isError, true);
   assert.equal(body.errorCode, "VALIDATION_ERROR");
 });
+
+test("get_reviews skips seller product resolution on second call when cache is enabled", async () => {
+  let productFetchCount = 0;
+
+  // Shared enabled cache (60s TTL) across both calls
+  const cache = new MemoryCache(60_000);
+  const fetchImpl = (filters) => {
+    // Seller product resolution (kind 30402 by author)
+    if (
+      filters.some(
+        (f) => f.authors?.includes(sellerPubkey) && f.kinds?.includes(30402)
+      )
+    ) {
+      productFetchCount++;
+      return [productEvent()];
+    }
+    // Review fetch
+    return [
+      reviewEvent({
+        id: hex("5"),
+        tags: [
+          ["d", `a:${productAddress}`],
+          ["rating", "4", "quality"],
+        ],
+      }),
+    ];
+  };
+
+  const ctx = {
+    relays: ["wss://relay.example.com"],
+    timeoutMs: 100,
+    cache,
+    nostr: {
+      async fetch(filters) {
+        return fetchImpl(filters);
+      },
+    },
+  };
+
+  // First call: cache miss -> fetches seller's products from relay
+  const first = await handleGetReviews({ sellerPubkey }, ctx);
+  assert.equal(first.resultCount, 1);
+  assert.equal(
+    productFetchCount,
+    1,
+    "first call should fetch seller products from relay"
+  );
+
+  // Second call: cache hit -> skips seller product resolution entirely
+  const second = await handleGetReviews({ sellerPubkey }, ctx);
+  assert.equal(second.resultCount, 1);
+  assert.equal(
+    productFetchCount,
+    1,
+    "second call should skip seller product fetch via cache"
+  );
+});
