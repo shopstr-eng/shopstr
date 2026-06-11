@@ -55,4 +55,15 @@ test("loads config from environment overrides", () => {
   assert.equal(config.defaultToolTimeoutMs, 1500);
   assert.equal(config.relayConnectTimeoutMs, 2500);
   assert.equal(config.resourceCacheTtlMs, 3000);
+  assert.equal(config.profileCacheTtlMs, 3000);
+});
+
+test("loads dedicated cache TTL when provided", () => {
+  const config = loadConfig({
+    SHOPSTR_MCP_RESOURCE_CACHE_TTL_MS: "3000",
+    SHOPSTR_MCP_PROFILE_CACHE_TTL_MS: "4500",
+  });
+
+  assert.equal(config.resourceCacheTtlMs, 3000);
+  assert.equal(config.profileCacheTtlMs, 4500);
 });
