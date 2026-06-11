@@ -2788,6 +2788,684 @@ describe("fetchGiftWrappedChatsAndMessages", () => {
 
     warnSpy.mockRestore();
   });
+
+  it("returns an empty chat map when userPubkey is absent", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+    jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
+
+    const { fetchGiftWrappedChatsAndMessages } =
+      await import("../fetch-service");
+
+    global.fetch = jest.fn() as typeof global.fetch;
+    const nostr = { fetch: jest.fn() };
+    const editChatContext = jest.fn();
+
+    const result = await fetchGiftWrappedChatsAndMessages(
+      nostr as any,
+      undefined,
+      ["wss://relay.example"],
+      editChatContext
+      // no userPubkey
+    );
+
+    expect(result.profileSetFromChats).toEqual(new Set());
+    expect(editChatContext).toHaveBeenCalledWith(new Map(), false);
+    expect(nostr.fetch).not.toHaveBeenCalled();
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it("signer-present path signs the cache request and calls the messages endpoint", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+    jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
+
+    const { fetchGiftWrappedChatsAndMessages } =
+      await import("../fetch-service");
+
+    const userPubkey = "user-pubkey";
+    const signedProof = {
+      kind: 27235,
+      id: "proof-id",
+      sig: "proof-sig",
+      pubkey: userPubkey,
+      content: "",
+      tags: [],
+      created_at: 1000,
+    };
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [],
+    }) as typeof global.fetch;
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([]) };
+    const signer = {
+      sign: jest.fn().mockResolvedValue(signedProof),
+      decrypt: jest.fn(),
+    };
+    const editChatContext = jest.fn();
+
+    await fetchGiftWrappedChatsAndMessages(
+      nostr as any,
+      signer as any,
+      ["wss://relay.example"],
+      editChatContext,
+      userPubkey
+    );
+
+    expect(signer.sign).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 27235 })
+    );
+    expect(global.fetch).toHaveBeenCalledWith(
+      `/api/db/fetch-messages?pubkey=${userPubkey}`,
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          "x-signed-event": JSON.stringify(signedProof),
+        }),
+      })
+    );
+  });
+
+  it("skips an event when the outer decrypt returns a falsy sealEventString", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+    jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
+
+    const { fetchGiftWrappedChatsAndMessages } =
+      await import("../fetch-service");
+
+    const userPubkey = "user-pubkey";
+    const wrapEvent = {
+      id: "wrap-1",
+      kind: 1059,
+      pubkey: "eph",
+      content: "enc-seal",
+      created_at: 1000,
+      sig: "sig",
+      tags: [["p", userPubkey]],
+    };
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [],
+    }) as typeof global.fetch;
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([wrapEvent]) };
+    const signer = {
+      sign: jest.fn().mockResolvedValue({
+        kind: 27235,
+        id: "proof",
+        sig: "s",
+        pubkey: userPubkey,
+        content: "",
+        tags: [],
+        created_at: 0,
+      }),
+      decrypt: jest.fn().mockResolvedValue(""), // falsy → continue
+    };
+    const editChatContext = jest.fn();
+
+    const result = await fetchGiftWrappedChatsAndMessages(
+      nostr as any,
+      signer as any,
+      ["wss://relay.example"],
+      editChatContext,
+      userPubkey
+    );
+
+    expect(result.profileSetFromChats).toEqual(new Set());
+    expect(editChatContext).toHaveBeenCalledWith(new Map(), false);
+  });
+
+  it("skips an event when the inner decrypt returns a falsy messageEventString", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+    jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
+
+    const { fetchGiftWrappedChatsAndMessages } =
+      await import("../fetch-service");
+
+    const userPubkey = "user-pubkey";
+    const senderPubkey = "sender-pubkey";
+    const sealEvent = {
+      kind: 13,
+      pubkey: senderPubkey,
+      content: "enc-msg",
+      created_at: 999,
+      tags: [],
+    };
+    const wrapEvent = {
+      id: "wrap-1",
+      kind: 1059,
+      pubkey: "eph",
+      content: "enc-seal",
+      created_at: 1000,
+      sig: "sig",
+      tags: [["p", userPubkey]],
+    };
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [],
+    }) as typeof global.fetch;
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([wrapEvent]) };
+    const signer = {
+      sign: jest.fn().mockResolvedValue({
+        kind: 27235,
+        id: "proof",
+        sig: "s",
+        pubkey: userPubkey,
+        content: "",
+        tags: [],
+        created_at: 0,
+      }),
+      decrypt: jest
+        .fn()
+        .mockResolvedValueOnce(JSON.stringify(sealEvent)) // outer → ok
+        .mockResolvedValueOnce(""), // inner → falsy → continue
+    };
+    const editChatContext = jest.fn();
+
+    const result = await fetchGiftWrappedChatsAndMessages(
+      nostr as any,
+      signer as any,
+      ["wss://relay.example"],
+      editChatContext,
+      userPubkey
+    );
+
+    expect(result.profileSetFromChats).toEqual(new Set());
+    expect(editChatContext).toHaveBeenCalledWith(new Map(), false);
+  });
+
+  it("decrypts seal and message events and adds the message to the chat map", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+    jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
+
+    const { fetchGiftWrappedChatsAndMessages } =
+      await import("../fetch-service");
+
+    const userPubkey = "user-pubkey";
+    const senderPubkey = "sender-pubkey";
+    const messageEvent = {
+      kind: 14,
+      pubkey: senderPubkey,
+      content: "Hello!",
+      created_at: 1000,
+      tags: [
+        ["p", userPubkey],
+        ["subject", "listing-inquiry"],
+      ],
+    };
+    const sealEvent = {
+      kind: 13,
+      pubkey: senderPubkey,
+      content: "enc-msg",
+      created_at: 999,
+      tags: [],
+    };
+    const wrapEvent = {
+      id: "wrap-1",
+      kind: 1059,
+      pubkey: "eph",
+      content: "enc-seal",
+      created_at: 1000,
+      sig: "sig",
+      tags: [["p", userPubkey]],
+    };
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [],
+    }) as typeof global.fetch;
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([wrapEvent]) };
+    const signer = {
+      sign: jest.fn().mockResolvedValue({
+        kind: 27235,
+        id: "proof",
+        sig: "s",
+        pubkey: userPubkey,
+        content: "",
+        tags: [],
+        created_at: 0,
+      }),
+      decrypt: jest
+        .fn()
+        .mockResolvedValueOnce(JSON.stringify(sealEvent))
+        .mockResolvedValueOnce(JSON.stringify(messageEvent)),
+    };
+    const editChatContext = jest.fn();
+
+    const result = await fetchGiftWrappedChatsAndMessages(
+      nostr as any,
+      signer as any,
+      ["wss://relay.example"],
+      editChatContext,
+      userPubkey
+    );
+
+    expect(result.profileSetFromChats).toContain(senderPubkey);
+    const [chatMap] = editChatContext.mock.calls[0];
+    expect(chatMap.has(senderPubkey)).toBe(true);
+    expect(chatMap.get(senderPubkey)[0].content).toBe("Hello!");
+  });
+
+  it("filters out events whose subject is not in the allowed set", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+    jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
+
+    const { fetchGiftWrappedChatsAndMessages } =
+      await import("../fetch-service");
+
+    const userPubkey = "user-pubkey";
+    const senderPubkey = "sender-pubkey";
+
+    const makeWrap = (id: string, subject: string) => {
+      const msg = {
+        kind: 14,
+        pubkey: senderPubkey,
+        content: "msg",
+        created_at: 1000,
+        tags: [
+          ["p", userPubkey],
+          ["subject", subject],
+        ],
+      };
+      const seal = {
+        kind: 13,
+        pubkey: senderPubkey,
+        content: "enc",
+        created_at: 999,
+        tags: [],
+      };
+      const wrap = {
+        id,
+        kind: 1059,
+        pubkey: "eph",
+        content: "enc-seal",
+        created_at: 1000,
+        sig: "sig",
+        tags: [["p", userPubkey]],
+      };
+      return { wrap, seal, msg };
+    };
+
+    const allowed = makeWrap("wrap-allowed", "listing-inquiry");
+    const blocked = makeWrap("wrap-blocked", "unknown-subject");
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [],
+    }) as typeof global.fetch;
+
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([allowed.wrap, blocked.wrap]),
+    };
+    const signer = {
+      sign: jest.fn().mockResolvedValue({
+        kind: 27235,
+        id: "proof",
+        sig: "s",
+        pubkey: userPubkey,
+        content: "",
+        tags: [],
+        created_at: 0,
+      }),
+      decrypt: jest
+        .fn()
+        .mockResolvedValueOnce(JSON.stringify(allowed.seal))
+        .mockResolvedValueOnce(JSON.stringify(allowed.msg))
+        .mockResolvedValueOnce(JSON.stringify(blocked.seal))
+        .mockResolvedValueOnce(JSON.stringify(blocked.msg)),
+    };
+    const editChatContext = jest.fn();
+
+    const result = await fetchGiftWrappedChatsAndMessages(
+      nostr as any,
+      signer as any,
+      ["wss://relay.example"],
+      editChatContext,
+      userPubkey
+    );
+
+    expect(result.profileSetFromChats).toEqual(new Set([senderPubkey]));
+    const [chatMap] = editChatContext.mock.calls[0];
+    expect(chatMap.get(senderPubkey)).toHaveLength(1);
+  });
+
+  it("keys an incoming message on senderPubkey when sender differs from userPubkey", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+    jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
+
+    const { fetchGiftWrappedChatsAndMessages } =
+      await import("../fetch-service");
+
+    const userPubkey = "user-pubkey";
+    const senderPubkey = "other-person-pubkey";
+    const messageEvent = {
+      kind: 14,
+      pubkey: senderPubkey, // sender ≠ userPubkey → incoming
+      content: "Hi from them",
+      created_at: 1000,
+      tags: [
+        ["p", userPubkey],
+        ["subject", "listing-inquiry"],
+      ],
+    };
+    const sealEvent = {
+      kind: 13,
+      pubkey: senderPubkey,
+      content: "enc-msg",
+      created_at: 999,
+      tags: [],
+    };
+    const wrapEvent = {
+      id: "wrap-1",
+      kind: 1059,
+      pubkey: "eph",
+      content: "enc-seal",
+      created_at: 1000,
+      sig: "sig",
+      tags: [["p", userPubkey]],
+    };
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [],
+    }) as typeof global.fetch;
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([wrapEvent]) };
+    const signer = {
+      sign: jest.fn().mockResolvedValue({
+        kind: 27235,
+        id: "proof",
+        sig: "s",
+        pubkey: userPubkey,
+        content: "",
+        tags: [],
+        created_at: 0,
+      }),
+      decrypt: jest
+        .fn()
+        .mockResolvedValueOnce(JSON.stringify(sealEvent))
+        .mockResolvedValueOnce(JSON.stringify(messageEvent)),
+    };
+    const editChatContext = jest.fn();
+
+    await fetchGiftWrappedChatsAndMessages(
+      nostr as any,
+      signer as any,
+      ["wss://relay.example"],
+      editChatContext,
+      userPubkey
+    );
+
+    const [chatMap] = editChatContext.mock.calls[0];
+    expect(chatMap.has(senderPubkey)).toBe(true);
+    expect(chatMap.has(userPubkey)).toBe(false);
+  });
+
+  it("keys an outgoing message on recipientPubkey when sender equals userPubkey", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+    jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
+
+    const { fetchGiftWrappedChatsAndMessages } =
+      await import("../fetch-service");
+
+    const userPubkey = "user-pubkey";
+    const recipientPubkey = "recipient-pubkey";
+    const messageEvent = {
+      kind: 14,
+      pubkey: userPubkey, // sender = userPubkey → outgoing
+      content: "Hi from me",
+      created_at: 1000,
+      tags: [
+        ["p", recipientPubkey],
+        ["subject", "order-payment"],
+      ],
+    };
+    const sealEvent = {
+      kind: 13,
+      pubkey: userPubkey,
+      content: "enc-msg",
+      created_at: 999,
+      tags: [],
+    };
+    const wrapEvent = {
+      id: "wrap-1",
+      kind: 1059,
+      pubkey: "eph",
+      content: "enc-seal",
+      created_at: 1000,
+      sig: "sig",
+      tags: [["p", userPubkey]],
+    };
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [],
+    }) as typeof global.fetch;
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([wrapEvent]) };
+    const signer = {
+      sign: jest.fn().mockResolvedValue({
+        kind: 27235,
+        id: "proof",
+        sig: "s",
+        pubkey: userPubkey,
+        content: "",
+        tags: [],
+        created_at: 0,
+      }),
+      decrypt: jest
+        .fn()
+        .mockResolvedValueOnce(JSON.stringify(sealEvent))
+        .mockResolvedValueOnce(JSON.stringify(messageEvent)),
+    };
+    const editChatContext = jest.fn();
+
+    await fetchGiftWrappedChatsAndMessages(
+      nostr as any,
+      signer as any,
+      ["wss://relay.example"],
+      editChatContext,
+      userPubkey
+    );
+
+    const [chatMap] = editChatContext.mock.calls[0];
+    expect(chatMap.has(recipientPubkey)).toBe(true);
+    expect(chatMap.has(userPubkey)).toBe(false);
+  });
+
+  it("uses the cached DB read status instead of defaulting to false", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+    jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
+
+    const { fetchGiftWrappedChatsAndMessages } =
+      await import("../fetch-service");
+
+    const userPubkey = "user-pubkey";
+    const senderPubkey = "sender-pubkey";
+    const wrapId = "wrap-1";
+
+    const dbMessage = {
+      id: wrapId,
+      kind: 1059,
+      pubkey: "eph",
+      content: "enc",
+      created_at: 1000,
+      sig: "sig",
+      tags: [],
+      is_read: true, // ← already read in DB
+    };
+    const wrapEvent = {
+      id: wrapId,
+      kind: 1059,
+      pubkey: "eph",
+      content: "enc-seal",
+      created_at: 1000,
+      sig: "sig",
+      tags: [["p", userPubkey]],
+    };
+    const sealEvent = {
+      kind: 13,
+      pubkey: senderPubkey,
+      content: "enc-msg",
+      created_at: 999,
+      tags: [],
+    };
+    const messageEvent = {
+      kind: 14,
+      pubkey: senderPubkey,
+      content: "Hello!",
+      created_at: 1000,
+      tags: [
+        ["p", userPubkey],
+        ["subject", "listing-inquiry"],
+      ],
+    };
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [dbMessage],
+    }) as typeof global.fetch;
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([wrapEvent]) };
+    const signer = {
+      sign: jest.fn().mockResolvedValue({
+        kind: 27235,
+        id: "proof",
+        sig: "s",
+        pubkey: userPubkey,
+        content: "",
+        tags: [],
+        created_at: 0,
+      }),
+      decrypt: jest
+        .fn()
+        .mockResolvedValueOnce(JSON.stringify(sealEvent))
+        .mockResolvedValueOnce(JSON.stringify(messageEvent)),
+    };
+    const editChatContext = jest.fn();
+
+    await fetchGiftWrappedChatsAndMessages(
+      nostr as any,
+      signer as any,
+      ["wss://relay.example"],
+      editChatContext,
+      userPubkey
+    );
+
+    const [chatMap] = editChatContext.mock.calls[0];
+    const messages = chatMap.get(senderPubkey);
+    expect(messages[0].read).toBe(true);
+    expect(messages[0].wrappedEventId).toBe(wrapId);
+  });
+
+  it("caches only 1059 events that have id, sig, and pubkey", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+    jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
+
+    const { fetchGiftWrappedChatsAndMessages } =
+      await import("../fetch-service");
+
+    const userPubkey = "user-pubkey";
+    const validEvent = {
+      id: "wrap-valid",
+      kind: 1059,
+      pubkey: "eph",
+      content: "enc",
+      created_at: 1000,
+      sig: "sig",
+      tags: [["p", userPubkey]],
+    };
+    const invalidEvent = {
+      id: "wrap-invalid",
+      kind: 1059,
+      pubkey: "eph",
+      content: "enc",
+      created_at: 1000,
+      sig: "", // empty sig → invalid
+      tags: [["p", userPubkey]],
+    };
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [],
+    }) as typeof global.fetch;
+
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([validEvent, invalidEvent]),
+    };
+    const signer = {
+      sign: jest.fn().mockResolvedValue({
+        kind: 27235,
+        id: "proof",
+        sig: "s",
+        pubkey: userPubkey,
+        content: "",
+        tags: [],
+        created_at: 0,
+      }),
+      decrypt: jest.fn().mockResolvedValue(""), // all events skipped in loop
+    };
+    const editChatContext = jest.fn();
+
+    await fetchGiftWrappedChatsAndMessages(
+      nostr as any,
+      signer as any,
+      ["wss://relay.example"],
+      editChatContext,
+      userPubkey
+    );
+
+    expect(cacheEventsToDatabase).toHaveBeenCalledWith([validEvent]);
+  });
+
+  it("logs console.error when the DB messages endpoint returns a non-ok response", async () => {
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+    jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
+
+    const { fetchGiftWrappedChatsAndMessages } =
+      await import("../fetch-service");
+
+    const userPubkey = "user-pubkey";
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 401,
+      statusText: "Unauthorized",
+    }) as typeof global.fetch;
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([]) };
+    const signer = {
+      sign: jest.fn().mockResolvedValue({
+        kind: 27235,
+        id: "proof",
+        sig: "s",
+        pubkey: userPubkey,
+        content: "",
+        tags: [],
+        created_at: 0,
+      }),
+      decrypt: jest.fn(),
+    };
+    const editChatContext = jest.fn();
+
+    await fetchGiftWrappedChatsAndMessages(
+      nostr as any,
+      signer as any,
+      ["wss://relay.example"],
+      editChatContext,
+      userPubkey
+    );
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      expect.stringContaining("Failed to fetch messages from database")
+    );
+    consoleErrorSpy.mockRestore();
+  });
 });
 
 describe("fetchCashuWallet", () => {
