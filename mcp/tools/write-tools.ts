@@ -1908,11 +1908,11 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
   reg(
     "update_order_status",
-    "Update the status of an order and optionally notify the buyer via encrypted DM. Sellers can confirm, ship, or complete orders. Buyers can cancel orders.",
+    "Update the status of an order and optionally notify the buyer via encrypted DM. Sellers can confirm, ship, or mark orders delivered. Buyers can cancel orders.",
     {
       orderId: z.string().describe("The order ID to update"),
       status: z
-        .enum(["confirmed", "shipped", "delivered", "completed", "cancelled"])
+        .enum(["confirmed", "shipped", "delivered", "cancelled"])
         .describe("New order status"),
       buyerPubkey: z
         .string()
@@ -2005,7 +2005,6 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
               confirmed: "order-info",
               shipped: "shipping-info",
               delivered: "order-completed",
-              completed: "order-completed",
               cancelled: "order-info",
             };
 
