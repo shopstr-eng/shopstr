@@ -1487,6 +1487,11 @@ describe("createNostrProfileEvent", () => {
 describe("publishWalletEvent", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    (newPromiseWithTimeout as jest.Mock).mockImplementation(async (fn: any) => {
+      return new Promise((resolve, reject) =>
+        fn(resolve, reject, new AbortController().signal)
+      );
+    });
     localStorage.clear();
     localStorage.setItem(
       "mints",
