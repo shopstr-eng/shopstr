@@ -1,12 +1,54 @@
-jest.mock("nostr-tools", () => ({
-  ...jest.requireActual("nostr-tools"),
-  getEventHash: jest.fn(() => "f".repeat(64)),
+jest.mock("@/utils/db/db-client", () => ({
+  cacheEventToDatabase: jest.fn().mockResolvedValue(undefined),
+  deleteEventsFromDatabase: jest.fn().mockResolvedValue(undefined),
+  trackFailedRelayPublish: jest.fn().mockResolvedValue(undefined),
 }));
+
+jest.mock("@/utils/nostr/request-auth", () => ({
+  buildDeleteCachedEventsProof: jest.fn().mockReturnValue({}),
+  buildSignedHttpRequestProofTemplate: jest.fn().mockReturnValue({
+    kind: 27235,
+    content: "",
+    tags: [],
+    created_at: 0,
+  }),
+}));
+
+jest.mock("@/utils/timeout", () => ({
+  newPromiseWithTimeout: jest.fn().mockImplementation(async (fn: any) => {
+    return new Promise((resolve, reject) =>
+      fn(resolve, reject, new AbortController().signal)
+    );
+  }),
+}));
+
+jest.mock("nostr-tools", () => {
+  const actual = jest.requireActual("nostr-tools");
+  return {
+    ...actual,
+    getEventHash: jest.fn(() => "f".repeat(64)),
+    finalizeEvent: jest.fn((event: any, _privkey: any) => ({
+      ...event,
+      id: "f".repeat(64),
+      sig: "fake-sig",
+    })),
+    nip44: {
+      ...actual.nip44,
+      getConversationKey: jest.fn(),
+      encrypt: jest.fn(),
+      decrypt: jest.fn(),
+    },
+  };
+});
 
 import {
   constructGiftWrappedEvent,
+  constructMessageGiftWrap,
+  constructMessageSeal,
   createNostrDeleteEvent,
+  createNostrProfileEvent,
   decryptNpub,
+  deleteEvent,
   generateKeys,
   getDefaultBlossomServer,
   getDefaultMint,
@@ -20,6 +62,8 @@ import {
   parseBunkerToken,
   publishReportEvent,
   REPORT_TYPES,
+  saveNWCString,
+  sendGiftWrappedMessageEvent,
   setLocalStorageDataOnSignIn,
   validateNPubKey,
   validateNSecKey,
@@ -27,8 +71,18 @@ import {
   withBlastr,
 } from "../nostr-helper-functions";
 import * as NostrHelpers from "../nostr-helper-functions";
-import { nip19 } from "nostr-tools";
+import { finalizeEvent, nip19, nip44 } from "nostr-tools";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
+import {
+  cacheEventToDatabase,
+  deleteEventsFromDatabase,
+  trackFailedRelayPublish,
+} from "@/utils/db/db-client";
+import {
+  buildDeleteCachedEventsProof,
+  buildSignedHttpRequestProofTemplate,
+} from "@/utils/nostr/request-auth";
+import { newPromiseWithTimeout } from "@/utils/timeout";
 
 type CashuCacheHelpers = typeof NostrHelpers & {
   getCachedCashuProofs?: () => unknown[];
@@ -229,6 +283,95 @@ describe("Cashu proof cache logout cleanup", () => {
   });
 });
 
+describe("setLocalStorageDataOnSignIn", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    jest.restoreAllMocks();
+  });
+
+  it("always writes relays, readRelays, writeRelays, mints, blossomServers, and wot", () => {
+    setLocalStorageDataOnSignIn({});
+
+    expect(localStorage.getItem("relays")).not.toBeNull();
+    expect(localStorage.getItem("readRelays")).not.toBeNull();
+    expect(localStorage.getItem("writeRelays")).not.toBeNull();
+    expect(localStorage.getItem("mints")).not.toBeNull();
+    expect(localStorage.getItem("blossomServers")).not.toBeNull();
+    expect(localStorage.getItem("wot")).not.toBeNull();
+  });
+
+  it("writes encryptedPrivateKey when provided and skips the key when absent", () => {
+    setLocalStorageDataOnSignIn({ encryptedPrivateKey: "enc-key-abc" });
+    expect(localStorage.getItem("encryptedPrivateKey")).toBe("enc-key-abc");
+
+    localStorage.clear();
+    setLocalStorageDataOnSignIn({});
+    expect(localStorage.getItem("encryptedPrivateKey")).toBeNull();
+  });
+
+  it("writes all four bunker keys when clientPubkey, clientPrivkey, bunkerRemotePubkey, and bunkerRelays are all provided", () => {
+    setLocalStorageDataOnSignIn({
+      clientPubkey: "pub-abc",
+      clientPrivkey: "priv-abc",
+      bunkerRemotePubkey: "remote-pubkey",
+      bunkerRelays: ["wss://relay.example"],
+    });
+
+    expect(localStorage.getItem("clientPubkey")).toBe("pub-abc");
+    expect(localStorage.getItem("clientPrivkey")).toBe("priv-abc");
+    expect(localStorage.getItem("bunkerRemotePubkey")).toBe("remote-pubkey");
+    expect(localStorage.getItem("bunkerRelays")).toBe(
+      JSON.stringify(["wss://relay.example"])
+    );
+  });
+
+  it("does not write bunker keys when any of the four required fields is missing", () => {
+    setLocalStorageDataOnSignIn({
+      clientPubkey: "pub-abc",
+      clientPrivkey: "priv-abc",
+      bunkerRemotePubkey: "remote-pubkey",
+    });
+
+    expect(localStorage.getItem("clientPubkey")).toBeNull();
+    expect(localStorage.getItem("clientPrivkey")).toBeNull();
+  });
+
+  it("writes bunkerSecret alongside the other bunker keys when provided", () => {
+    setLocalStorageDataOnSignIn({
+      clientPubkey: "pub-abc",
+      clientPrivkey: "priv-abc",
+      bunkerRemotePubkey: "remote-pubkey",
+      bunkerRelays: ["wss://relay.example"],
+      bunkerSecret: "my-secret",
+    });
+
+    expect(localStorage.getItem("bunkerSecret")).toBe("my-secret");
+  });
+
+  it("writes signer JSON when a signer is provided", () => {
+    const signer = { type: "nip07" } as any;
+    setLocalStorageDataOnSignIn({ signer });
+    expect(localStorage.getItem("signer")).toBe(JSON.stringify(signer));
+  });
+
+  it("writes migrationComplete=true when migrationComplete is truthy", () => {
+    setLocalStorageDataOnSignIn({ migrationComplete: true });
+    expect(localStorage.getItem("migrationComplete")).toBe("true");
+
+    localStorage.clear();
+    setLocalStorageDataOnSignIn({ migrationComplete: false });
+    expect(localStorage.getItem("migrationComplete")).toBeNull();
+  });
+
+  it("dispatches a storage event on window", () => {
+    const dispatchSpy = jest.spyOn(window, "dispatchEvent");
+    setLocalStorageDataOnSignIn({});
+    expect(dispatchSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "storage" })
+    );
+  });
+});
+
 describe("publishReportEvent", () => {
   const fixedNowMs = 1_710_000_000_000;
   const fixedNowSeconds = 1_710_000_000;
@@ -241,10 +384,6 @@ describe("publishReportEvent", () => {
       "writeRelays",
       JSON.stringify(["wss://write.example"])
     );
-    global.fetch = jest.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({}),
-    });
   });
 
   afterEach(() => {
@@ -311,12 +450,8 @@ describe("publishReportEvent", () => {
         "wss://sendit.nosflare.com",
       ])
     );
-    expect(global.fetch).toHaveBeenCalledWith(
-      "/api/db/cache-event",
-      expect.objectContaining({
-        method: "POST",
-        body: expect.stringContaining("signed-profile-report"),
-      })
+    expect(cacheEventToDatabase).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "signed-profile-report" })
     );
   });
 
@@ -869,6 +1004,228 @@ describe("getLocalStorageData", () => {
       expect(getLocalStorageData().signer).toEqual({ type: "nip07" });
     }
   });
+
+  it("reconstructs { type: 'nip07' } from signInMethod=extension when no stored signer", () => {
+    localStorage.setItem("signInMethod", "extension");
+    expect(getLocalStorageData().signer).toEqual({ type: "nip07" });
+  });
+
+  it("reconstructs { type: 'nip46', bunker, appPrivKey } from signInMethod=bunker keys", () => {
+    localStorage.setItem("signInMethod", "bunker");
+    localStorage.setItem("bunkerRemotePubkey", "remote-pubkey");
+    localStorage.setItem("bunkerSecret", "my-secret");
+    localStorage.setItem(
+      "bunkerRelays",
+      JSON.stringify(["wss://relay.example"])
+    );
+    localStorage.setItem("clientPrivkey", "privkey-abc");
+
+    expect(getLocalStorageData().signer).toEqual({
+      type: "nip46",
+      bunker:
+        "bunker://remote-pubkey?secret=my-secret&relay=wss://relay.example",
+      appPrivKey: "privkey-abc",
+    });
+  });
+
+  it("reconstructs { type: 'nsec', encryptedPrivKey } from signInMethod=nsec when encryptedPrivateKey is a string", () => {
+    localStorage.setItem("signInMethod", "nsec");
+    localStorage.setItem("encryptedPrivateKey", "enc-priv-key-abc");
+
+    expect(getLocalStorageData().signer).toEqual({
+      type: "nsec",
+      encryptedPrivKey: "enc-priv-key-abc",
+    });
+  });
+
+  it("leaves signer undefined when signInMethod=nsec but encryptedPrivateKey is absent", () => {
+    localStorage.setItem("signInMethod", "nsec");
+
+    expect(getLocalStorageData().signer).toBeUndefined();
+  });
+});
+
+describe("constructMessageSeal", () => {
+  const getConvKeyMock = nip44.getConversationKey as jest.Mock;
+  const encryptMock = nip44.encrypt as jest.Mock;
+  const finalizeEventMock = finalizeEvent as jest.Mock;
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("uses nip44.getConversationKey + nip44.encrypt + finalizeEvent when randomPrivkey is provided", async () => {
+    const fakeConvKey = new Uint8Array(32).fill(1);
+    getConvKeyMock.mockReturnValue(fakeConvKey);
+    encryptMock.mockReturnValue("encrypted-content");
+
+    const randomPrivkey = new Uint8Array(32).fill(2);
+    const messageEvent = {
+      kind: 14,
+      content: "hello",
+      tags: [],
+      pubkey: "sender",
+      created_at: 1,
+      id: "msg-id",
+      sig: "sig",
+    };
+    const signer = { encrypt: jest.fn(), sign: jest.fn() };
+
+    const result = await constructMessageSeal(
+      signer as any,
+      messageEvent as any,
+      "sender-pubkey",
+      "recipient-pubkey",
+      randomPrivkey
+    );
+
+    expect(getConvKeyMock).toHaveBeenCalledWith(
+      randomPrivkey,
+      "recipient-pubkey"
+    );
+    expect(encryptMock).toHaveBeenCalledWith(
+      JSON.stringify(messageEvent),
+      fakeConvKey
+    );
+    expect(finalizeEventMock).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 13 }),
+      randomPrivkey
+    );
+    expect(result.kind).toBe(13);
+  });
+
+  it("uses signer.encrypt + signer.sign and returns kind-13 when randomPrivkey is absent", async () => {
+    const signer = {
+      encrypt: jest.fn().mockResolvedValue("signer-encrypted-content"),
+      sign: jest.fn().mockImplementation(async (event: any) => ({
+        ...event,
+        id: "seal-id",
+        sig: "seal-sig",
+      })),
+    };
+    const messageEvent = {
+      kind: 14,
+      content: "hello",
+      tags: [],
+      pubkey: "sender",
+      created_at: 1,
+      id: "msg-id",
+      sig: "sig",
+    };
+
+    const result = await constructMessageSeal(
+      signer as any,
+      messageEvent as any,
+      "sender-pubkey",
+      "recipient-pubkey"
+    );
+
+    expect(signer.encrypt).toHaveBeenCalledWith(
+      "recipient-pubkey",
+      JSON.stringify(messageEvent)
+    );
+    expect(signer.sign).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 13, content: "signer-encrypted-content" })
+    );
+    expect(result.kind).toBe(13);
+  });
+});
+
+describe("constructMessageGiftWrap", () => {
+  const relay = "wss://relay.example";
+  const sealEvent = {
+    kind: 13,
+    id: "seal-id",
+    sig: "seal-sig",
+    content: "seal-content",
+    pubkey: "sender-pubkey",
+    created_at: 1,
+    tags: [],
+  };
+  const randomPrivkey = new Uint8Array(32).fill(4);
+  const fakeConvKey = new Uint8Array(32).fill(3);
+  const getConvKeyMock = nip44.getConversationKey as jest.Mock;
+  const encryptMock = nip44.encrypt as jest.Mock;
+
+  beforeEach(() => {
+    localStorage.clear();
+    localStorage.setItem("relays", JSON.stringify([relay]));
+    getConvKeyMock.mockReturnValue(fakeConvKey);
+    encryptMock.mockReturnValue("wrapped-content");
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("returns a kind-1059 event", async () => {
+    const result = await constructMessageGiftWrap(
+      sealEvent as any,
+      "random-pubkey",
+      randomPrivkey,
+      "recipient-pubkey"
+    );
+    expect(result.kind).toBe(1059);
+  });
+
+  it("includes a p tag for the recipient and the first stored relay", async () => {
+    const result = await constructMessageGiftWrap(
+      sealEvent as any,
+      "random-pubkey",
+      randomPrivkey,
+      "recipient-pubkey"
+    );
+    expect(result.tags).toContainEqual(["p", "recipient-pubkey", relay]);
+  });
+
+  it("encrypts the seal using the random conversation key", async () => {
+    await constructMessageGiftWrap(
+      sealEvent as any,
+      "random-pubkey",
+      randomPrivkey,
+      "recipient-pubkey"
+    );
+    expect(getConvKeyMock).toHaveBeenCalledWith(
+      randomPrivkey,
+      "recipient-pubkey"
+    );
+    expect(encryptMock).toHaveBeenCalledWith(
+      JSON.stringify(sealEvent),
+      fakeConvKey
+    );
+  });
+});
+
+describe("saveNWCString", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    jest.restoreAllMocks();
+  });
+
+  it("writes nwcString to localStorage when given a non-empty string", () => {
+    saveNWCString("nostr+walletconnect://pubkey?relay=wss://relay.example");
+    expect(localStorage.getItem("nwcString")).toBe(
+      "nostr+walletconnect://pubkey?relay=wss://relay.example"
+    );
+  });
+
+  it("removes both nwcString and nwcInfo from localStorage when given an empty string", () => {
+    localStorage.setItem("nwcString", "some-value");
+    localStorage.setItem("nwcInfo", "some-info");
+
+    saveNWCString("");
+
+    expect(localStorage.getItem("nwcString")).toBeNull();
+    expect(localStorage.getItem("nwcInfo")).toBeNull();
+  });
+
+  it("dispatches a storage event on window", () => {
+    const dispatchSpy = jest.spyOn(window, "dispatchEvent");
+    saveNWCString("nostr+walletconnect://pubkey");
+    expect(dispatchSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "storage" })
+    );
+  });
 });
 
 describe("LogOut", () => {
@@ -928,5 +1285,266 @@ describe("LogOut", () => {
       expect.objectContaining({ type: "storage" })
     );
     dispatchSpy.mockRestore();
+  });
+});
+
+describe("sendGiftWrappedMessageEvent", () => {
+  const giftWrappedEvent = {
+    id: "wrap-id",
+    kind: 1059,
+    pubkey: "sender-pubkey",
+    created_at: 1,
+    content: "encrypted",
+    sig: "sig",
+    tags: [["p", "recipient-pubkey"]],
+  };
+
+  beforeEach(() => {
+    localStorage.clear();
+    localStorage.setItem("relays", JSON.stringify(["wss://relay.example"]));
+    localStorage.setItem(
+      "writeRelays",
+      JSON.stringify(["wss://write.example"])
+    );
+    (cacheEventToDatabase as jest.Mock).mockClear();
+    (newPromiseWithTimeout as jest.Mock).mockClear();
+    (trackFailedRelayPublish as jest.Mock).mockClear();
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("calls cacheEventToDatabase before any relay publish attempt", async () => {
+    const callOrder: string[] = [];
+    (cacheEventToDatabase as jest.Mock).mockImplementation(async () => {
+      callOrder.push("cache");
+    });
+    const nostr = {
+      publish: jest.fn().mockImplementation(async () => {
+        callOrder.push("publish");
+      }),
+    };
+    (newPromiseWithTimeout as jest.Mock).mockImplementation(async (fn: any) => {
+      return new Promise<void>((resolve, reject) =>
+        fn(resolve, reject, new AbortController().signal)
+      );
+    });
+
+    await sendGiftWrappedMessageEvent(nostr as any, giftWrappedEvent as any);
+
+    expect(cacheEventToDatabase).toHaveBeenCalledWith(giftWrappedEvent);
+    expect(callOrder.indexOf("cache")).toBeLessThan(
+      callOrder.indexOf("publish")
+    );
+  });
+
+  it("calls nostr.publish inside the timeout wrapper", async () => {
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+    (newPromiseWithTimeout as jest.Mock).mockImplementation(async (fn: any) => {
+      return new Promise<void>((resolve, reject) =>
+        fn(resolve, reject, new AbortController().signal)
+      );
+    });
+
+    await sendGiftWrappedMessageEvent(nostr as any, giftWrappedEvent as any);
+
+    expect(newPromiseWithTimeout).toHaveBeenCalled();
+    expect(nostr.publish).toHaveBeenCalledWith(
+      giftWrappedEvent,
+      expect.arrayContaining(["wss://relay.example", "wss://write.example"])
+    );
+  });
+
+  it("calls console.warn and trackFailedRelayPublish with signer when newPromiseWithTimeout rejects", async () => {
+    const consoleWarnSpy = jest
+      .spyOn(console, "warn")
+      .mockImplementation(() => {});
+    const signer = { sign: jest.fn() };
+    const nostr = { publish: jest.fn() };
+    (newPromiseWithTimeout as jest.Mock).mockRejectedValue(
+      new Error("Timeout")
+    );
+
+    await sendGiftWrappedMessageEvent(
+      nostr as any,
+      giftWrappedEvent as any,
+      signer as any
+    );
+
+    expect(consoleWarnSpy).toHaveBeenCalled();
+    expect(trackFailedRelayPublish).toHaveBeenCalledWith(
+      giftWrappedEvent.id,
+      giftWrappedEvent,
+      expect.arrayContaining(["wss://relay.example", "wss://write.example"]),
+      signer
+    );
+    consoleWarnSpy.mockRestore();
+  });
+
+  it("calls trackFailedRelayPublish with undefined signer when signer parameter is omitted", async () => {
+    const consoleWarnSpy = jest
+      .spyOn(console, "warn")
+      .mockImplementation(() => {});
+    const nostr = { publish: jest.fn() };
+    (newPromiseWithTimeout as jest.Mock).mockRejectedValue(
+      new Error("Timeout")
+    );
+
+    await sendGiftWrappedMessageEvent(nostr as any, giftWrappedEvent as any);
+
+    expect(trackFailedRelayPublish).toHaveBeenCalledWith(
+      giftWrappedEvent.id,
+      giftWrappedEvent,
+      expect.any(Array),
+      undefined
+    );
+    consoleWarnSpy.mockRestore();
+  });
+});
+
+describe("deleteEvent", () => {
+  const eventIds = ["event-id-1", "event-id-2"];
+
+  function makeSigner() {
+    return {
+      sign: jest.fn().mockImplementation(async (event: any) => ({
+        ...event,
+        id: "signed-id",
+        pubkey: "signer-pubkey",
+        sig: "sig",
+      })),
+      getPubKey: jest.fn().mockResolvedValue("signer-pubkey"),
+    };
+  }
+
+  function makeNostr() {
+    return { publish: jest.fn().mockResolvedValue(undefined) };
+  }
+
+  beforeEach(() => {
+    localStorage.clear();
+    localStorage.setItem("relays", JSON.stringify(["wss://relay.example"]));
+    localStorage.setItem("writeRelays", JSON.stringify([]));
+    (cacheEventToDatabase as jest.Mock).mockResolvedValue(undefined);
+    (deleteEventsFromDatabase as jest.Mock).mockResolvedValue(undefined);
+    (buildDeleteCachedEventsProof as jest.Mock).mockReturnValue({});
+    (buildSignedHttpRequestProofTemplate as jest.Mock).mockReturnValue({
+      kind: 27235,
+      content: "",
+      tags: [],
+      created_at: 0,
+    });
+    (newPromiseWithTimeout as jest.Mock).mockImplementation(async (fn: any) => {
+      return new Promise((resolve, reject) =>
+        fn(resolve, reject, new AbortController().signal)
+      );
+    });
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("creates a kind-5 deletion event via createNostrDeleteEvent and sends it", async () => {
+    const signer = makeSigner();
+    const nostr = makeNostr();
+
+    await deleteEvent(nostr as any, signer as any, eventIds);
+
+    expect(signer.sign).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 5 })
+    );
+    expect(cacheEventToDatabase).toHaveBeenCalled();
+  });
+
+  it("calls signer.getPubKey to obtain the pubkey for the proof", async () => {
+    const signer = makeSigner();
+    const nostr = makeNostr();
+
+    await deleteEvent(nostr as any, signer as any, eventIds);
+
+    expect(signer.getPubKey).toHaveBeenCalledTimes(1);
+  });
+
+  it("calls deleteEventsFromDatabase with the event IDs and signed proof", async () => {
+    const signer = makeSigner();
+    const nostr = makeNostr();
+
+    await deleteEvent(nostr as any, signer as any, eventIds);
+
+    expect(deleteEventsFromDatabase).toHaveBeenCalledWith(
+      eventIds,
+      expect.objectContaining({ id: "signed-id", sig: "sig" })
+    );
+  });
+
+  it("logs console.error and continues when deleteEventsFromDatabase rejects", async () => {
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    const signer = makeSigner();
+    const nostr = makeNostr();
+    (deleteEventsFromDatabase as jest.Mock).mockRejectedValue(
+      new Error("DB error")
+    );
+
+    await expect(
+      deleteEvent(nostr as any, signer as any, eventIds)
+    ).resolves.toBeUndefined();
+
+    await Promise.resolve();
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      expect.stringContaining("Failed to delete events from database"),
+      expect.any(Error)
+    );
+    consoleErrorSpy.mockRestore();
+  });
+});
+
+describe("createNostrProfileEvent", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    localStorage.setItem("relays", JSON.stringify(["wss://relay.example"]));
+    localStorage.setItem("writeRelays", JSON.stringify([]));
+    (cacheEventToDatabase as jest.Mock).mockResolvedValue(undefined);
+    (newPromiseWithTimeout as jest.Mock).mockImplementation(async (fn: any) => {
+      return new Promise((resolve, reject) =>
+        fn(resolve, reject, new AbortController().signal)
+      );
+    });
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("calls finalizeAndSendNostrEvent with { waitForRelayPublish: false } and returns the signed event", async () => {
+    const signedEvent = {
+      kind: 0,
+      id: "profile-event-id",
+      pubkey: "user-pubkey",
+      sig: "sig",
+      content: '{"name":"Alice"}',
+      created_at: 1,
+      tags: [],
+    };
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+    const signer = { sign: jest.fn().mockResolvedValue(signedEvent) };
+
+    // A never-resolving timeout proves the function does not await relay publish
+    (newPromiseWithTimeout as jest.Mock).mockReturnValue(new Promise(() => {}));
+
+    const result = await createNostrProfileEvent(
+      nostr as any,
+      signer as any,
+      '{"name":"Alice"}'
+    );
+
+    expect(signer.sign).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 0, content: '{"name":"Alice"}' })
+    );
+    expect(result).toEqual(signedEvent);
   });
 });

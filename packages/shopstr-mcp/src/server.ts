@@ -3,11 +3,13 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ShopstrMcpConfig } from "./config.js";
 import { createLogger, type Logger } from "./logger.js";
 import { NostrManager } from "./nostr-manager.js";
+import { MemoryCache } from "./cache.js";
 import { registerCoreTools } from "./tools/index.js";
 
 export type McpServerDependencies = {
   logger?: Pick<Logger, "warn">;
   nostr?: Pick<NostrManager, "fetch" | "close">;
+  cache?: MemoryCache;
 };
 
 export function createMcpServer(
@@ -21,6 +23,7 @@ export function createMcpServer(
       connectionTimeout: config.relayConnectTimeoutMs,
       logger,
     });
+  const cache = dependencies.cache ?? new MemoryCache(config.profileCacheTtlMs);
   const server = new McpServer({
     name: "shopstr-mcp",
     version: config.version,
@@ -30,6 +33,7 @@ export function createMcpServer(
     nostr,
     relays: config.relays,
     timeoutMs: config.defaultToolTimeoutMs,
+    cache,
   });
   registerPlaceholderCapabilityHandlers(server);
   attachNostrCloseHandler(server, nostr);

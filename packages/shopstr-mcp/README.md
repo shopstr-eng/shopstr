@@ -19,7 +19,7 @@ will be added in follow-up PRs.
   `prompts/list` return valid empty lists until those features are added.
 - Provides reusable infrastructure modules for upcoming tools:
   `nostr-manager`, `relay-fetch`, `parse-tags`, `dedup`, `validation`,
-  `errors`, `timeout`, and `audit-log`.
+  `errors`, `timeout`, `audit-log`, and `cache`.
 
 ## Tools
 
@@ -52,6 +52,11 @@ Tool responses include relay degradation metadata in `_meta`, including queried
 relays, successful relays, failed relays, coverage, response time, hints, and
 truncation flags when response budgeting applies.
 
+Upcoming seller/profile tools receive a process-local in-memory profile cache
+through the shared tool context. The cache stores parsed public profile/shop
+responses by pubkey and event kind, expires entries by TTL, and is intended to
+surface `_meta.cached: true` when a future profile response is served from cache.
+
 ## Usage
 
 ```sh
@@ -73,6 +78,9 @@ or process manager should provide.
   milliseconds.
 - `SHOPSTR_MCP_RESOURCE_CACHE_TTL_MS`: future resource cache TTL in
   milliseconds.
+- `SHOPSTR_MCP_PROFILE_CACHE_TTL_MS`: in-memory parsed profile/shop cache TTL in
+  milliseconds. Defaults to `SHOPSTR_MCP_RESOURCE_CACHE_TTL_MS` when unset or
+  invalid.
 
 Invalid or missing values fall back to safe defaults.
 

@@ -23,6 +23,7 @@ export type ShopstrMcpConfig = {
   defaultToolTimeoutMs: number;
   relayConnectTimeoutMs: number;
   resourceCacheTtlMs: number;
+  profileCacheTtlMs: number;
 };
 
 export function validateRelayUrl(value: string): boolean {
@@ -67,6 +68,11 @@ export function parsePositiveInteger(
 export function loadConfig(
   env: NodeJS.ProcessEnv = process.env
 ): ShopstrMcpConfig {
+  const resourceCacheTtlMs = parsePositiveInteger(
+    env.SHOPSTR_MCP_RESOURCE_CACHE_TTL_MS,
+    DEFAULT_RESOURCE_CACHE_TTL_MS
+  );
+
   return {
     version: env.npm_package_version ?? "0.1.0",
     relays: parseRelayList(env.SHOPSTR_MCP_RELAYS),
@@ -79,9 +85,10 @@ export function loadConfig(
       env.SHOPSTR_MCP_RELAY_CONNECT_TIMEOUT_MS,
       DEFAULT_RELAY_CONNECT_TIMEOUT_MS
     ),
-    resourceCacheTtlMs: parsePositiveInteger(
-      env.SHOPSTR_MCP_RESOURCE_CACHE_TTL_MS,
-      DEFAULT_RESOURCE_CACHE_TTL_MS
+    resourceCacheTtlMs,
+    profileCacheTtlMs: parsePositiveInteger(
+      env.SHOPSTR_MCP_PROFILE_CACHE_TTL_MS,
+      resourceCacheTtlMs
     ),
   };
 }

@@ -21,8 +21,8 @@ import {
   createRelayUnavailableResponse,
   createValidationErrorResponse,
   getDataFreshness,
-} from "./common.js";
-import type { CoreToolContext } from "./context.js";
+} from "./utils/common.js";
+import type { CoreToolContext } from "./utils/context.js";
 
 export const getProductDetailsInputSchema = {
   productId: z
@@ -97,15 +97,34 @@ export async function handleGetProductDetails(
   }
 
   if (!coordinateFilter && productId) {
-    // pre-flight check to resolve the coordinate
-    const resolved = await resolveCoordinateFromId(productId, context);
-    if (resolved.errorResponse) return resolved.errorResponse;
+    // pre-flight check to resolve the coordinate (cached)
+    const PREFLIGHT_CACHE_KIND = 30402;
+    const cacheKey = { pubkey: productId, kind: PREFLIGHT_CACHE_KIND };
+    const cached = context.cache.get<{ pubkey: string; dTag: string }>(
+      cacheKey
+    );
 
-    if (resolved.pubkey && resolved.dTag) {
+    let pubkey: string | undefined;
+    let dTag: string | undefined;
+
+    if (cached) {
+      pubkey = cached.value.pubkey;
+      dTag = cached.value.dTag;
+    } else {
+      const resolved = await resolveCoordinateFromId(productId, context);
+      if (resolved.errorResponse) return resolved.errorResponse;
+      pubkey = resolved.pubkey;
+      dTag = resolved.dTag;
+      if (pubkey && dTag) {
+        context.cache.set(cacheKey, { pubkey, dTag });
+      }
+    }
+
+    if (pubkey && dTag) {
       coordinateFilter = {
         kinds: [PRODUCT_KIND],
-        authors: [resolved.pubkey],
-        "#d": [resolved.dTag],
+        authors: [pubkey],
+        "#d": [dTag],
       };
     } else {
       // Could not resolve coordinate; fall back to exact ID lookup

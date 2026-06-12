@@ -1,3 +1,18 @@
+import { NostrEvent, NostrManager } from "../nostr-manager";
+import {
+  buildNip50ProductSearchFilters,
+  DEFAULT_NIP50_SEARCH_RELAYS,
+  dedupeProductEvents,
+  fetchNip50ProductSearch,
+  NIP50_SEARCH_TIMEOUT_MS,
+} from "../fetch-service";
+
+jest.mock("@/utils/db/db-client", () => ({
+  cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+}));
+
+const { cacheEventsToDatabase } = jest.requireMock("@/utils/db/db-client");
+
 const makeBaseEvent = (overrides: Record<string, any> = {}) => ({
   id: "event-id",
   pubkey: "pubkey",
@@ -8,6 +23,24 @@ const makeBaseEvent = (overrides: Record<string, any> = {}) => ({
   sig: "sig",
   ...overrides,
 });
+
+const expectNip50RelayFetches = (
+  fetchMock: jest.Mock,
+  relays = DEFAULT_NIP50_SEARCH_RELAYS
+) => {
+  expect(fetchMock).toHaveBeenCalledTimes(relays.length);
+  relays.forEach((relay, index) => {
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      index + 1,
+      expect.arrayContaining([
+        expect.objectContaining({ kinds: [30402], search: "coffee" }),
+      ]),
+      {},
+      [relay],
+      NIP50_SEARCH_TIMEOUT_MS
+    );
+  });
+};
 
 describe("fetchAllPosts - NIP-99 and relay merge behavior", () => {
   beforeEach(() => {
@@ -72,7 +105,7 @@ describe("fetchAllPosts - NIP-99 and relay merge behavior", () => {
     expect(profileSetFromProducts).toEqual(new Set(["seller"]));
   });
 
-  it("includes kind 1 zapsnag notes alongside kind 30402 product events and caches both", async () => {
+  it("includes kind 1 zapsnag notes alongside kind 30402 product events and only caches products", async () => {
     const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
 
     jest.doMock("@/utils/db/db-client", () => ({
@@ -118,7 +151,7 @@ describe("fetchAllPosts - NIP-99 and relay merge behavior", () => {
     expect(productEvents).toEqual(
       expect.arrayContaining([product, zapsnagNote])
     );
-    expect(cacheEventsToDatabase).toHaveBeenCalledWith([product, zapsnagNote]);
+    expect(cacheEventsToDatabase).toHaveBeenCalledWith([product]);
     expect(profileSetFromProducts).toEqual(new Set(["seller-p"]));
   });
 
@@ -492,6 +525,366 @@ describe("getUniqueProofs", () => {
     expect(dedupedProofs).toEqual([firstProof, uniqueProof]);
     expect(dedupedProofs).not.toContain(duplicateProof);
     expect(dedupedProofs).toHaveLength(2);
+  });
+});
+
+describe("fetch-service NIP-50 search helpers", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("builds NIP-50 search filters only for marketplace listings", () => {
+    expect(
+      buildNip50ProductSearchFilters("  cold   brew  ", {
+        authors: ["seller-1"],
+        limit: 25,
+      })
+    ).toEqual([
+      {
+        kinds: [30402],
+        search: "cold brew",
+        limit: 25,
+        authors: ["seller-1"],
+      },
+    ]);
+  });
+
+  it("deduplicates replaceable listing events by address and keeps the latest version", () => {
+    const older = {
+      id: "older",
+      pubkey: "seller-1",
+      created_at: 10,
+      kind: 30402,
+      tags: [
+        ["d", "coffee"],
+        ["title", "Coffee Beans"],
+        ["price", "12", "USD"],
+      ],
+      content: "old coffee",
+      sig: "sig-older",
+    };
+    const newer = {
+      ...older,
+      id: "newer",
+      created_at: 20,
+      content: "new coffee",
+      sig: "sig-newer",
+    };
+
+    expect(dedupeProductEvents([older, newer] as NostrEvent[])).toEqual([
+      newer,
+    ]);
+  });
+
+  it("fetches NIP-50 product results, deduplicates them, and caches valid events", async () => {
+    const older = {
+      id: "older",
+      pubkey: "seller-1",
+      created_at: 10,
+      kind: 30402,
+      tags: [
+        ["d", "coffee"],
+        ["title", "Coffee Beans"],
+        ["price", "12", "USD"],
+      ],
+      content: "old coffee",
+      sig: "sig-older",
+    };
+    const newer = {
+      ...older,
+      id: "newer",
+      created_at: 20,
+      content: "new coffee",
+      sig: "sig-newer",
+    };
+    const invalid = {
+      id: "",
+      pubkey: "seller-2",
+      created_at: 30,
+      kind: 30402,
+      tags: [["d", "tea"]],
+      content: "tea",
+      sig: "sig-invalid",
+    };
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([older, newer, invalid]),
+    };
+
+    const result = await fetchNip50ProductSearch(
+      nostr as unknown as NostrManager,
+      ["wss://relay.example"],
+      "coffee"
+    );
+
+    expectNip50RelayFetches(nostr.fetch);
+    expect(result.productEvents).toEqual([newer]);
+    expect(cacheEventsToDatabase).toHaveBeenCalledWith([newer]);
+  });
+
+  it("waits for relevant kind 30402 search results to be cached before returning them", async () => {
+    const product = {
+      id: "coffee-product",
+      pubkey: "seller-1",
+      created_at: 20,
+      kind: 30402,
+      tags: [
+        ["d", "coffee"],
+        ["title", "Coffee Beans"],
+        ["price", "12", "USD"],
+      ],
+      content: "Fresh roasted coffee",
+      sig: "sig-coffee",
+    };
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([product]),
+    };
+    let resolveCache!: () => void;
+    (cacheEventsToDatabase as jest.Mock).mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveCache = resolve;
+        })
+    );
+
+    let didResolve = false;
+    const searchPromise = fetchNip50ProductSearch(
+      nostr as unknown as NostrManager,
+      ["wss://relay.example"],
+      "coffee"
+    ).then((result) => {
+      didResolve = true;
+      return result;
+    });
+
+    for (let index = 0; index < 5 && !resolveCache; index += 1) {
+      await Promise.resolve();
+    }
+
+    expect(didResolve).toBe(false);
+    expect(resolveCache).toBeDefined();
+
+    resolveCache();
+    const result = await searchPromise;
+
+    expect(result.productEvents).toEqual([product]);
+    expect(cacheEventsToDatabase).toHaveBeenCalledWith([product]);
+  });
+
+  it("filters unsupported-relay noise before returning or caching search results", async () => {
+    const relevant = {
+      id: "coffee-product",
+      pubkey: "seller-1",
+      created_at: 20,
+      kind: 30402,
+      tags: [
+        ["d", "coffee"],
+        ["title", "Coffee Beans"],
+        ["price", "12", "USD"],
+      ],
+      content: "Fresh roasted coffee",
+      sig: "sig-coffee",
+    };
+    const unrelated = {
+      id: "tea-product",
+      pubkey: "seller-2",
+      created_at: 30,
+      kind: 30402,
+      tags: [
+        ["d", "tea"],
+        ["title", "Tea Leaves"],
+        ["price", "8", "USD"],
+      ],
+      content: "Green tea",
+      sig: "sig-tea",
+    };
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([unrelated, relevant]),
+    };
+
+    const result = await fetchNip50ProductSearch(
+      nostr as unknown as NostrManager,
+      ["wss://relay.example"],
+      "coffee"
+    );
+
+    expect(result.productEvents).toEqual([relevant]);
+    expect(cacheEventsToDatabase).toHaveBeenCalledWith([relevant]);
+  });
+
+  it("preserves relay relevance order for distinct NIP-50 search results", async () => {
+    const firstRelayResult = {
+      id: "older-but-more-relevant",
+      pubkey: "seller-1",
+      created_at: 10,
+      kind: 30402,
+      tags: [
+        ["d", "coffee-1"],
+        ["title", "Coffee Beans"],
+        ["price", "12", "USD"],
+      ],
+      content: "Top-ranked coffee result",
+      sig: "sig-older",
+    };
+    const secondRelayResult = {
+      id: "newer-but-less-relevant",
+      pubkey: "seller-2",
+      created_at: 100,
+      kind: 30402,
+      tags: [
+        ["d", "coffee-2"],
+        ["title", "Coffee Roaster"],
+        ["price", "20", "USD"],
+      ],
+      content: "Second-ranked coffee result",
+      sig: "sig-newer",
+    };
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([firstRelayResult, secondRelayResult]),
+    };
+
+    const result = await fetchNip50ProductSearch(
+      nostr as unknown as NostrManager,
+      [],
+      "coffee"
+    );
+
+    expect(result.productEvents).toEqual([firstRelayResult, secondRelayResult]);
+  });
+
+  it("routes search to curated NIP-50 relays instead of general user relays", async () => {
+    const searchListing = {
+      id: "fallback-product",
+      pubkey: "fallback-seller",
+      created_at: 30,
+      kind: 30402,
+      tags: [
+        ["d", "fallback-coffee"],
+        ["title", "Fallback Coffee Beans"],
+        ["price", "12", "USD"],
+      ],
+      content: "fallback coffee",
+      sig: "sig-fallback",
+    };
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([searchListing]),
+    };
+
+    const result = await fetchNip50ProductSearch(
+      nostr as unknown as NostrManager,
+      ["wss://relay.damus.io", "wss://nos.lol"],
+      "coffee"
+    );
+
+    expectNip50RelayFetches(nostr.fetch);
+    expect(result.productEvents).toEqual([searchListing]);
+    expect(cacheEventsToDatabase).toHaveBeenCalledWith([searchListing]);
+  });
+
+  it("keeps NIP-50 results from responsive relays when another search relay times out", async () => {
+    const searchListing = {
+      id: "responsive-product",
+      pubkey: "responsive-seller",
+      created_at: 30,
+      kind: 30402,
+      tags: [
+        ["d", "responsive-coffee"],
+        ["title", "Responsive Coffee Beans"],
+        ["price", "12", "USD"],
+      ],
+      content: "responsive coffee",
+      sig: "sig-responsive",
+    };
+    const nostr = {
+      fetch: jest.fn((_, __, relays: string[]) =>
+        relays[0] === DEFAULT_NIP50_SEARCH_RELAYS[1]
+          ? Promise.resolve([searchListing])
+          : Promise.reject(new Error("Timeout"))
+      ),
+    };
+
+    const result = await fetchNip50ProductSearch(
+      nostr as unknown as NostrManager,
+      [],
+      "coffee"
+    );
+
+    expectNip50RelayFetches(nostr.fetch);
+    expect(result.productEvents).toEqual([searchListing]);
+    expect(cacheEventsToDatabase).toHaveBeenCalledWith([searchListing]);
+  });
+
+  it("keeps known selected NIP-50 relays while dropping unsupported selected relays", async () => {
+    const selectedSearchRelay = "wss://relay.nostr.band";
+    const searchRelays = [
+      selectedSearchRelay,
+      ...DEFAULT_NIP50_SEARCH_RELAYS.filter(
+        (relay) => relay !== selectedSearchRelay
+      ),
+    ];
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([]),
+    };
+
+    await fetchNip50ProductSearch(
+      nostr as unknown as NostrManager,
+      ["wss://relay.damus.io", "relay.nostr.band/", "wss://nos.lol"],
+      "coffee"
+    );
+
+    expectNip50RelayFetches(nostr.fetch, searchRelays);
+  });
+
+  it("uses default NIP-50 relays when no selected relays are available", async () => {
+    const fallbackListing = {
+      id: "default-product",
+      pubkey: "fallback-seller",
+      created_at: 40,
+      kind: 30402,
+      tags: [
+        ["d", "default-coffee"],
+        ["title", "Default Coffee Beans"],
+        ["price", "12", "USD"],
+      ],
+      content: "default coffee",
+      sig: "sig-default",
+    };
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([fallbackListing]),
+    };
+
+    const result = await fetchNip50ProductSearch(
+      nostr as unknown as NostrManager,
+      [],
+      "coffee"
+    );
+
+    expectNip50RelayFetches(nostr.fetch);
+    expect(result.productEvents).toEqual([fallbackListing]);
+  });
+
+  it("ignores non-listing events returned by NIP-50 search relays", async () => {
+    const zapsnagNote = {
+      id: "zapsnag-coffee",
+      pubkey: "seller-1",
+      created_at: 20,
+      kind: 1,
+      tags: [["t", "shopstr-zapsnag"]],
+      content:
+        "Coffee beans price: 100 sats #zapsnag https://example.com/coffee.png",
+      sig: "sig-zapsnag",
+    };
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([zapsnagNote]),
+    };
+
+    const result = await fetchNip50ProductSearch(
+      nostr as unknown as NostrManager,
+      ["wss://relay.example"],
+      "coffee"
+    );
+
+    expect(result.productEvents).toEqual([]);
+    expect(cacheEventsToDatabase).not.toHaveBeenCalled();
   });
 });
 
@@ -2215,10 +2608,7 @@ describe("fetchAllPosts", () => {
       new Set(["seller", "zapsnag-seller"])
     );
     expect(editProductContext).toHaveBeenLastCalledWith(productEvents, false);
-    expect(cacheEventsToDatabase).toHaveBeenCalledWith([
-      newerRelayListing,
-      relayNoteListing,
-    ]);
+    expect(cacheEventsToDatabase).toHaveBeenCalledWith([newerRelayListing]);
   });
 
   it("breaks the DB batch loop when response.ok is false and still queries the relay", async () => {
@@ -2397,6 +2787,684 @@ describe("fetchGiftWrappedChatsAndMessages", () => {
     expect(cacheEventsToDatabase).not.toHaveBeenCalled();
 
     warnSpy.mockRestore();
+  });
+
+  it("returns an empty chat map when userPubkey is absent", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+    jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
+
+    const { fetchGiftWrappedChatsAndMessages } =
+      await import("../fetch-service");
+
+    global.fetch = jest.fn() as typeof global.fetch;
+    const nostr = { fetch: jest.fn() };
+    const editChatContext = jest.fn();
+
+    const result = await fetchGiftWrappedChatsAndMessages(
+      nostr as any,
+      undefined,
+      ["wss://relay.example"],
+      editChatContext
+      // no userPubkey
+    );
+
+    expect(result.profileSetFromChats).toEqual(new Set());
+    expect(editChatContext).toHaveBeenCalledWith(new Map(), false);
+    expect(nostr.fetch).not.toHaveBeenCalled();
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it("signer-present path signs the cache request and calls the messages endpoint", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+    jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
+
+    const { fetchGiftWrappedChatsAndMessages } =
+      await import("../fetch-service");
+
+    const userPubkey = "user-pubkey";
+    const signedProof = {
+      kind: 27235,
+      id: "proof-id",
+      sig: "proof-sig",
+      pubkey: userPubkey,
+      content: "",
+      tags: [],
+      created_at: 1000,
+    };
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [],
+    }) as typeof global.fetch;
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([]) };
+    const signer = {
+      sign: jest.fn().mockResolvedValue(signedProof),
+      decrypt: jest.fn(),
+    };
+    const editChatContext = jest.fn();
+
+    await fetchGiftWrappedChatsAndMessages(
+      nostr as any,
+      signer as any,
+      ["wss://relay.example"],
+      editChatContext,
+      userPubkey
+    );
+
+    expect(signer.sign).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 27235 })
+    );
+    expect(global.fetch).toHaveBeenCalledWith(
+      `/api/db/fetch-messages?pubkey=${userPubkey}`,
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          "x-signed-event": JSON.stringify(signedProof),
+        }),
+      })
+    );
+  });
+
+  it("skips an event when the outer decrypt returns a falsy sealEventString", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+    jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
+
+    const { fetchGiftWrappedChatsAndMessages } =
+      await import("../fetch-service");
+
+    const userPubkey = "user-pubkey";
+    const wrapEvent = {
+      id: "wrap-1",
+      kind: 1059,
+      pubkey: "eph",
+      content: "enc-seal",
+      created_at: 1000,
+      sig: "sig",
+      tags: [["p", userPubkey]],
+    };
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [],
+    }) as typeof global.fetch;
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([wrapEvent]) };
+    const signer = {
+      sign: jest.fn().mockResolvedValue({
+        kind: 27235,
+        id: "proof",
+        sig: "s",
+        pubkey: userPubkey,
+        content: "",
+        tags: [],
+        created_at: 0,
+      }),
+      decrypt: jest.fn().mockResolvedValue(""), // falsy → continue
+    };
+    const editChatContext = jest.fn();
+
+    const result = await fetchGiftWrappedChatsAndMessages(
+      nostr as any,
+      signer as any,
+      ["wss://relay.example"],
+      editChatContext,
+      userPubkey
+    );
+
+    expect(result.profileSetFromChats).toEqual(new Set());
+    expect(editChatContext).toHaveBeenCalledWith(new Map(), false);
+  });
+
+  it("skips an event when the inner decrypt returns a falsy messageEventString", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+    jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
+
+    const { fetchGiftWrappedChatsAndMessages } =
+      await import("../fetch-service");
+
+    const userPubkey = "user-pubkey";
+    const senderPubkey = "sender-pubkey";
+    const sealEvent = {
+      kind: 13,
+      pubkey: senderPubkey,
+      content: "enc-msg",
+      created_at: 999,
+      tags: [],
+    };
+    const wrapEvent = {
+      id: "wrap-1",
+      kind: 1059,
+      pubkey: "eph",
+      content: "enc-seal",
+      created_at: 1000,
+      sig: "sig",
+      tags: [["p", userPubkey]],
+    };
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [],
+    }) as typeof global.fetch;
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([wrapEvent]) };
+    const signer = {
+      sign: jest.fn().mockResolvedValue({
+        kind: 27235,
+        id: "proof",
+        sig: "s",
+        pubkey: userPubkey,
+        content: "",
+        tags: [],
+        created_at: 0,
+      }),
+      decrypt: jest
+        .fn()
+        .mockResolvedValueOnce(JSON.stringify(sealEvent)) // outer → ok
+        .mockResolvedValueOnce(""), // inner → falsy → continue
+    };
+    const editChatContext = jest.fn();
+
+    const result = await fetchGiftWrappedChatsAndMessages(
+      nostr as any,
+      signer as any,
+      ["wss://relay.example"],
+      editChatContext,
+      userPubkey
+    );
+
+    expect(result.profileSetFromChats).toEqual(new Set());
+    expect(editChatContext).toHaveBeenCalledWith(new Map(), false);
+  });
+
+  it("decrypts seal and message events and adds the message to the chat map", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+    jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
+
+    const { fetchGiftWrappedChatsAndMessages } =
+      await import("../fetch-service");
+
+    const userPubkey = "user-pubkey";
+    const senderPubkey = "sender-pubkey";
+    const messageEvent = {
+      kind: 14,
+      pubkey: senderPubkey,
+      content: "Hello!",
+      created_at: 1000,
+      tags: [
+        ["p", userPubkey],
+        ["subject", "listing-inquiry"],
+      ],
+    };
+    const sealEvent = {
+      kind: 13,
+      pubkey: senderPubkey,
+      content: "enc-msg",
+      created_at: 999,
+      tags: [],
+    };
+    const wrapEvent = {
+      id: "wrap-1",
+      kind: 1059,
+      pubkey: "eph",
+      content: "enc-seal",
+      created_at: 1000,
+      sig: "sig",
+      tags: [["p", userPubkey]],
+    };
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [],
+    }) as typeof global.fetch;
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([wrapEvent]) };
+    const signer = {
+      sign: jest.fn().mockResolvedValue({
+        kind: 27235,
+        id: "proof",
+        sig: "s",
+        pubkey: userPubkey,
+        content: "",
+        tags: [],
+        created_at: 0,
+      }),
+      decrypt: jest
+        .fn()
+        .mockResolvedValueOnce(JSON.stringify(sealEvent))
+        .mockResolvedValueOnce(JSON.stringify(messageEvent)),
+    };
+    const editChatContext = jest.fn();
+
+    const result = await fetchGiftWrappedChatsAndMessages(
+      nostr as any,
+      signer as any,
+      ["wss://relay.example"],
+      editChatContext,
+      userPubkey
+    );
+
+    expect(result.profileSetFromChats).toContain(senderPubkey);
+    const [chatMap] = editChatContext.mock.calls[0];
+    expect(chatMap.has(senderPubkey)).toBe(true);
+    expect(chatMap.get(senderPubkey)[0].content).toBe("Hello!");
+  });
+
+  it("filters out events whose subject is not in the allowed set", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+    jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
+
+    const { fetchGiftWrappedChatsAndMessages } =
+      await import("../fetch-service");
+
+    const userPubkey = "user-pubkey";
+    const senderPubkey = "sender-pubkey";
+
+    const makeWrap = (id: string, subject: string) => {
+      const msg = {
+        kind: 14,
+        pubkey: senderPubkey,
+        content: "msg",
+        created_at: 1000,
+        tags: [
+          ["p", userPubkey],
+          ["subject", subject],
+        ],
+      };
+      const seal = {
+        kind: 13,
+        pubkey: senderPubkey,
+        content: "enc",
+        created_at: 999,
+        tags: [],
+      };
+      const wrap = {
+        id,
+        kind: 1059,
+        pubkey: "eph",
+        content: "enc-seal",
+        created_at: 1000,
+        sig: "sig",
+        tags: [["p", userPubkey]],
+      };
+      return { wrap, seal, msg };
+    };
+
+    const allowed = makeWrap("wrap-allowed", "listing-inquiry");
+    const blocked = makeWrap("wrap-blocked", "unknown-subject");
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [],
+    }) as typeof global.fetch;
+
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([allowed.wrap, blocked.wrap]),
+    };
+    const signer = {
+      sign: jest.fn().mockResolvedValue({
+        kind: 27235,
+        id: "proof",
+        sig: "s",
+        pubkey: userPubkey,
+        content: "",
+        tags: [],
+        created_at: 0,
+      }),
+      decrypt: jest
+        .fn()
+        .mockResolvedValueOnce(JSON.stringify(allowed.seal))
+        .mockResolvedValueOnce(JSON.stringify(allowed.msg))
+        .mockResolvedValueOnce(JSON.stringify(blocked.seal))
+        .mockResolvedValueOnce(JSON.stringify(blocked.msg)),
+    };
+    const editChatContext = jest.fn();
+
+    const result = await fetchGiftWrappedChatsAndMessages(
+      nostr as any,
+      signer as any,
+      ["wss://relay.example"],
+      editChatContext,
+      userPubkey
+    );
+
+    expect(result.profileSetFromChats).toEqual(new Set([senderPubkey]));
+    const [chatMap] = editChatContext.mock.calls[0];
+    expect(chatMap.get(senderPubkey)).toHaveLength(1);
+  });
+
+  it("keys an incoming message on senderPubkey when sender differs from userPubkey", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+    jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
+
+    const { fetchGiftWrappedChatsAndMessages } =
+      await import("../fetch-service");
+
+    const userPubkey = "user-pubkey";
+    const senderPubkey = "other-person-pubkey";
+    const messageEvent = {
+      kind: 14,
+      pubkey: senderPubkey, // sender ≠ userPubkey → incoming
+      content: "Hi from them",
+      created_at: 1000,
+      tags: [
+        ["p", userPubkey],
+        ["subject", "listing-inquiry"],
+      ],
+    };
+    const sealEvent = {
+      kind: 13,
+      pubkey: senderPubkey,
+      content: "enc-msg",
+      created_at: 999,
+      tags: [],
+    };
+    const wrapEvent = {
+      id: "wrap-1",
+      kind: 1059,
+      pubkey: "eph",
+      content: "enc-seal",
+      created_at: 1000,
+      sig: "sig",
+      tags: [["p", userPubkey]],
+    };
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [],
+    }) as typeof global.fetch;
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([wrapEvent]) };
+    const signer = {
+      sign: jest.fn().mockResolvedValue({
+        kind: 27235,
+        id: "proof",
+        sig: "s",
+        pubkey: userPubkey,
+        content: "",
+        tags: [],
+        created_at: 0,
+      }),
+      decrypt: jest
+        .fn()
+        .mockResolvedValueOnce(JSON.stringify(sealEvent))
+        .mockResolvedValueOnce(JSON.stringify(messageEvent)),
+    };
+    const editChatContext = jest.fn();
+
+    await fetchGiftWrappedChatsAndMessages(
+      nostr as any,
+      signer as any,
+      ["wss://relay.example"],
+      editChatContext,
+      userPubkey
+    );
+
+    const [chatMap] = editChatContext.mock.calls[0];
+    expect(chatMap.has(senderPubkey)).toBe(true);
+    expect(chatMap.has(userPubkey)).toBe(false);
+  });
+
+  it("keys an outgoing message on recipientPubkey when sender equals userPubkey", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+    jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
+
+    const { fetchGiftWrappedChatsAndMessages } =
+      await import("../fetch-service");
+
+    const userPubkey = "user-pubkey";
+    const recipientPubkey = "recipient-pubkey";
+    const messageEvent = {
+      kind: 14,
+      pubkey: userPubkey, // sender = userPubkey → outgoing
+      content: "Hi from me",
+      created_at: 1000,
+      tags: [
+        ["p", recipientPubkey],
+        ["subject", "order-payment"],
+      ],
+    };
+    const sealEvent = {
+      kind: 13,
+      pubkey: userPubkey,
+      content: "enc-msg",
+      created_at: 999,
+      tags: [],
+    };
+    const wrapEvent = {
+      id: "wrap-1",
+      kind: 1059,
+      pubkey: "eph",
+      content: "enc-seal",
+      created_at: 1000,
+      sig: "sig",
+      tags: [["p", userPubkey]],
+    };
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [],
+    }) as typeof global.fetch;
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([wrapEvent]) };
+    const signer = {
+      sign: jest.fn().mockResolvedValue({
+        kind: 27235,
+        id: "proof",
+        sig: "s",
+        pubkey: userPubkey,
+        content: "",
+        tags: [],
+        created_at: 0,
+      }),
+      decrypt: jest
+        .fn()
+        .mockResolvedValueOnce(JSON.stringify(sealEvent))
+        .mockResolvedValueOnce(JSON.stringify(messageEvent)),
+    };
+    const editChatContext = jest.fn();
+
+    await fetchGiftWrappedChatsAndMessages(
+      nostr as any,
+      signer as any,
+      ["wss://relay.example"],
+      editChatContext,
+      userPubkey
+    );
+
+    const [chatMap] = editChatContext.mock.calls[0];
+    expect(chatMap.has(recipientPubkey)).toBe(true);
+    expect(chatMap.has(userPubkey)).toBe(false);
+  });
+
+  it("uses the cached DB read status instead of defaulting to false", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+    jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
+
+    const { fetchGiftWrappedChatsAndMessages } =
+      await import("../fetch-service");
+
+    const userPubkey = "user-pubkey";
+    const senderPubkey = "sender-pubkey";
+    const wrapId = "wrap-1";
+
+    const dbMessage = {
+      id: wrapId,
+      kind: 1059,
+      pubkey: "eph",
+      content: "enc",
+      created_at: 1000,
+      sig: "sig",
+      tags: [],
+      is_read: true, // ← already read in DB
+    };
+    const wrapEvent = {
+      id: wrapId,
+      kind: 1059,
+      pubkey: "eph",
+      content: "enc-seal",
+      created_at: 1000,
+      sig: "sig",
+      tags: [["p", userPubkey]],
+    };
+    const sealEvent = {
+      kind: 13,
+      pubkey: senderPubkey,
+      content: "enc-msg",
+      created_at: 999,
+      tags: [],
+    };
+    const messageEvent = {
+      kind: 14,
+      pubkey: senderPubkey,
+      content: "Hello!",
+      created_at: 1000,
+      tags: [
+        ["p", userPubkey],
+        ["subject", "listing-inquiry"],
+      ],
+    };
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [dbMessage],
+    }) as typeof global.fetch;
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([wrapEvent]) };
+    const signer = {
+      sign: jest.fn().mockResolvedValue({
+        kind: 27235,
+        id: "proof",
+        sig: "s",
+        pubkey: userPubkey,
+        content: "",
+        tags: [],
+        created_at: 0,
+      }),
+      decrypt: jest
+        .fn()
+        .mockResolvedValueOnce(JSON.stringify(sealEvent))
+        .mockResolvedValueOnce(JSON.stringify(messageEvent)),
+    };
+    const editChatContext = jest.fn();
+
+    await fetchGiftWrappedChatsAndMessages(
+      nostr as any,
+      signer as any,
+      ["wss://relay.example"],
+      editChatContext,
+      userPubkey
+    );
+
+    const [chatMap] = editChatContext.mock.calls[0];
+    const messages = chatMap.get(senderPubkey);
+    expect(messages[0].read).toBe(true);
+    expect(messages[0].wrappedEventId).toBe(wrapId);
+  });
+
+  it("caches only 1059 events that have id, sig, and pubkey", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+    jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
+
+    const { fetchGiftWrappedChatsAndMessages } =
+      await import("../fetch-service");
+
+    const userPubkey = "user-pubkey";
+    const validEvent = {
+      id: "wrap-valid",
+      kind: 1059,
+      pubkey: "eph",
+      content: "enc",
+      created_at: 1000,
+      sig: "sig",
+      tags: [["p", userPubkey]],
+    };
+    const invalidEvent = {
+      id: "wrap-invalid",
+      kind: 1059,
+      pubkey: "eph",
+      content: "enc",
+      created_at: 1000,
+      sig: "", // empty sig → invalid
+      tags: [["p", userPubkey]],
+    };
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [],
+    }) as typeof global.fetch;
+
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([validEvent, invalidEvent]),
+    };
+    const signer = {
+      sign: jest.fn().mockResolvedValue({
+        kind: 27235,
+        id: "proof",
+        sig: "s",
+        pubkey: userPubkey,
+        content: "",
+        tags: [],
+        created_at: 0,
+      }),
+      decrypt: jest.fn().mockResolvedValue(""), // all events skipped in loop
+    };
+    const editChatContext = jest.fn();
+
+    await fetchGiftWrappedChatsAndMessages(
+      nostr as any,
+      signer as any,
+      ["wss://relay.example"],
+      editChatContext,
+      userPubkey
+    );
+
+    expect(cacheEventsToDatabase).toHaveBeenCalledWith([validEvent]);
+  });
+
+  it("logs console.error when the DB messages endpoint returns a non-ok response", async () => {
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+    jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
+
+    const { fetchGiftWrappedChatsAndMessages } =
+      await import("../fetch-service");
+
+    const userPubkey = "user-pubkey";
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 401,
+      statusText: "Unauthorized",
+    }) as typeof global.fetch;
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([]) };
+    const signer = {
+      sign: jest.fn().mockResolvedValue({
+        kind: 27235,
+        id: "proof",
+        sig: "s",
+        pubkey: userPubkey,
+        content: "",
+        tags: [],
+        created_at: 0,
+      }),
+      decrypt: jest.fn(),
+    };
+    const editChatContext = jest.fn();
+
+    await fetchGiftWrappedChatsAndMessages(
+      nostr as any,
+      signer as any,
+      ["wss://relay.example"],
+      editChatContext,
+      userPubkey
+    );
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      expect.stringContaining("Failed to fetch messages from database")
+    );
+    consoleErrorSpy.mockRestore();
   });
 });
 

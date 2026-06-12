@@ -19,8 +19,8 @@ import {
   createRelayUnavailableResponse,
   createValidationErrorResponse,
   getDataFreshness,
-} from "./common.js";
-import type { CoreToolContext } from "./context.js";
+} from "./utils/common.js";
+import type { CoreToolContext } from "./utils/context.js";
 
 export const getReviewsInputSchema = {
   productId: z
@@ -244,15 +244,33 @@ export async function handleGetReviews(
   }
 
   if (sellerPubkey) {
-    const resolved = await resolveProductAddressesFromSellerPubkey(
-      sellerPubkey,
-      context
-    );
-    if (resolved.errorResponse) return resolved.errorResponse;
-    for (const address of resolved.addresses) {
+    // Cache the seller's product addresses to avoid repeated relay lookups.
+    // Uses a synthetic kind to name the cache key separately since cache key is built from kind+pubkey.
+    const SELLER_PRODUCTS_CACHE_KIND = 0x7e570000;
+    const cacheKey = { pubkey: sellerPubkey, kind: SELLER_PRODUCTS_CACHE_KIND };
+    const cached = context.cache.get<string[]>(cacheKey);
+
+    let resolvedAddresses: string[];
+
+    if (cached) {
+      resolvedAddresses = cached.value;
+    } else {
+      const resolved = await resolveProductAddressesFromSellerPubkey(
+        sellerPubkey,
+        context
+      );
+      if (resolved.errorResponse) return resolved.errorResponse;
+      resolvedAddresses = resolved.addresses;
+      if (resolvedAddresses.length > 0) {
+        context.cache.set(cacheKey, resolvedAddresses);
+      }
+    }
+
+    for (const address of resolvedAddresses) {
       productAddresses.add(address);
     }
-    if (resolved.addresses.length === 0) {
+
+    if (resolvedAddresses.length === 0) {
       addressResolutionHint =
         addressResolutionHint ??
         "Could not resolve seller products to review addresses; used legacy #p review lookup only.";
