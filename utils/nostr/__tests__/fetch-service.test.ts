@@ -2208,6 +2208,287 @@ describe("fetchAllFollows", () => {
       false
     );
   });
+
+  it("fetches second-degree follows using the direct follow pubkeys as authors", async () => {
+    // wot = 1 so a single endorsement is enough
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(() => ({ wot: 1 })),
+      deleteEvent: jest.fn(),
+      verifyNip05Identifier: jest.fn(),
+    }));
+
+    const { fetchAllFollows } = await import("../fetch-service");
+
+    const directFollow =
+      "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    const secondDegreeFollow =
+      "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
+
+    const nostr = {
+      fetch: jest
+        .fn()
+        .mockResolvedValueOnce([
+          {
+            id: "contact-list",
+            pubkey: userPubkey,
+            created_at: 100,
+            kind: 3,
+            tags: [["p", directFollow]],
+            content: "",
+            sig: "sig",
+          },
+        ])
+        .mockResolvedValueOnce([
+          {
+            id: "second-degree-contact-list",
+            pubkey: directFollow,
+            created_at: 100,
+            kind: 3,
+            tags: [["p", secondDegreeFollow]],
+            content: "",
+            sig: "sig",
+          },
+        ]),
+    } as any;
+    const editFollowsContext = jest.fn();
+
+    const result = await fetchAllFollows(
+      nostr,
+      ["wss://relay.example"],
+      editFollowsContext,
+      userPubkey
+    );
+
+    // Second fetch uses the direct follow pubkeys as authors
+    expect(nostr.fetch).toHaveBeenNthCalledWith(
+      2,
+      [{ kinds: [3], authors: [directFollow] }],
+      {},
+      ["wss://relay.example"]
+    );
+    expect(result.followList).toContain(secondDegreeFollow);
+  });
+
+  it("excludes second-degree follows whose endorsement count is below the WOT threshold", async () => {
+    // wot = 2: a 2nd-degree follow must be endorsed by at least 2 direct follows
+    const { fetchAllFollows } = await import("../fetch-service");
+
+    const directFollowA =
+      "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    const directFollowB =
+      "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
+    const sharedFollow =
+      "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
+    const exclusiveFollow =
+      "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
+
+    const nostr = {
+      fetch: jest
+        .fn()
+        .mockResolvedValueOnce([
+          {
+            id: "contact-list",
+            pubkey: userPubkey,
+            created_at: 100,
+            kind: 3,
+            tags: [
+              ["p", directFollowA],
+              ["p", directFollowB],
+            ],
+            content: "",
+            sig: "sig",
+          },
+        ])
+        .mockResolvedValueOnce([
+          // directFollowA follows both sharedFollow and exclusiveFollow
+          {
+            id: "cl-a",
+            pubkey: directFollowA,
+            created_at: 100,
+            kind: 3,
+            tags: [
+              ["p", sharedFollow],
+              ["p", exclusiveFollow],
+            ],
+            content: "",
+            sig: "sig-a",
+          },
+          // directFollowB only follows sharedFollow
+          {
+            id: "cl-b",
+            pubkey: directFollowB,
+            created_at: 100,
+            kind: 3,
+            tags: [["p", sharedFollow]],
+            content: "",
+            sig: "sig-b",
+          },
+        ]),
+    } as any;
+    const editFollowsContext = jest.fn();
+
+    const result = await fetchAllFollows(
+      nostr,
+      ["wss://relay.example"],
+      editFollowsContext,
+      userPubkey
+    );
+
+    // sharedFollow endorsed by 2 direct follows → meets threshold (wot=2)
+    expect(result.followList).toContain(sharedFollow);
+    // exclusiveFollow endorsed only by directFollowA → below threshold
+    expect(result.followList).not.toContain(exclusiveFollow);
+  });
+
+  it("deduplicates pubkeys that appear in both direct and second-degree lists", async () => {
+    // wot = 1 so C qualifies even with one endorsement; but two direct follows both endorse C
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(() => ({ wot: 1 })),
+      deleteEvent: jest.fn(),
+      verifyNip05Identifier: jest.fn(),
+    }));
+
+    const { fetchAllFollows } = await import("../fetch-service");
+
+    const directFollowA =
+      "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    const directFollowB =
+      "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
+    const sharedSecondDegree =
+      "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
+
+    const nostr = {
+      fetch: jest
+        .fn()
+        .mockResolvedValueOnce([
+          {
+            id: "contact-list",
+            pubkey: userPubkey,
+            created_at: 100,
+            kind: 3,
+            tags: [
+              ["p", directFollowA],
+              ["p", directFollowB],
+            ],
+            content: "",
+            sig: "sig",
+          },
+        ])
+        .mockResolvedValueOnce([
+          {
+            id: "cl-a",
+            pubkey: directFollowA,
+            created_at: 100,
+            kind: 3,
+            tags: [["p", sharedSecondDegree]],
+            content: "",
+            sig: "sig-a",
+          },
+          {
+            id: "cl-b",
+            pubkey: directFollowB,
+            created_at: 100,
+            kind: 3,
+            tags: [["p", sharedSecondDegree]],
+            content: "",
+            sig: "sig-b",
+          },
+        ]),
+    } as any;
+    const editFollowsContext = jest.fn();
+
+    const result = await fetchAllFollows(
+      nostr,
+      ["wss://relay.example"],
+      editFollowsContext,
+      userPubkey
+    );
+
+    // sharedSecondDegree appears in both A's and B's lists but must only appear once
+    const occurrences = result.followList.filter(
+      (pk) => pk === sharedSecondDegree
+    );
+    expect(occurrences).toHaveLength(1);
+    expect(result.followList).toEqual([
+      directFollowA,
+      directFollowB,
+      sharedSecondDegree,
+    ]);
+  });
+
+  it("skips contact list tags whose second element fails isHexString validation", async () => {
+    const { fetchAllFollows } = await import("../fetch-service");
+
+    const validPubkey =
+      "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+
+    const nostr = {
+      fetch: jest
+        .fn()
+        .mockResolvedValueOnce([
+          {
+            id: "contact-list",
+            pubkey: userPubkey,
+            created_at: 100,
+            kind: 3,
+            tags: [
+              ["p", "not-a-valid-hex-pubkey"],
+              ["t", "shopstr"],
+              ["p", validPubkey],
+            ],
+            content: "",
+            sig: "sig",
+          },
+        ])
+        .mockResolvedValueOnce([]),
+    } as any;
+    const editFollowsContext = jest.fn();
+
+    const result = await fetchAllFollows(
+      nostr,
+      ["wss://relay.example"],
+      editFollowsContext,
+      userPubkey
+    );
+
+    expect(result.followList).toEqual([validPubkey]);
+    expect(result.followList).not.toContain("not-a-valid-hex-pubkey");
+    expect(result.followList).not.toContain("shopstr");
+  });
+
+  it("returns empty follows and skips the second-degree fetch when all contact tags fail isHexString", async () => {
+    const { fetchAllFollows } = await import("../fetch-service");
+
+    const nostr = {
+      fetch: jest.fn().mockResolvedValueOnce([
+        {
+          id: "contact-list",
+          pubkey: userPubkey,
+          created_at: 100,
+          kind: 3,
+          tags: [
+            ["t", "shopstr"],
+            ["x", "bad"],
+          ],
+          content: "",
+          sig: "sig",
+        },
+      ]),
+    } as any;
+    const editFollowsContext = jest.fn();
+
+    const result = await fetchAllFollows(
+      nostr,
+      ["wss://relay.example"],
+      editFollowsContext,
+      userPubkey
+    );
+
+    // Only one relay call (no second-degree fetch)
+    expect(nostr.fetch).toHaveBeenCalledTimes(1);
+    expect(result.followList).toEqual([]);
+    expect(editFollowsContext).toHaveBeenCalledWith([], 0, false);
+  });
 });
 
 describe("fetchAllPosts", () => {
@@ -4330,5 +4611,357 @@ describe("fetchPendingPosts", () => {
       "post-mid",
       "post-old",
     ]);
+  });
+});
+
+describe("fetchReviews", () => {
+  const product = {
+    id: "product-1",
+    kind: 30402,
+    pubkey: "seller-a",
+    created_at: 100,
+    tags: [["d", "listing-1"]],
+    content: "",
+    sig: "sig-product",
+  };
+  const productAddress = "a:30402:seller-a:listing-1";
+
+  function makeReviewEvent(overrides: Record<string, unknown> = {}) {
+    return {
+      id: "review-1",
+      kind: 31555,
+      pubkey: "reviewer-1",
+      created_at: 200,
+      tags: [
+        ["d", productAddress],
+        ["rating", "5", "overall"],
+      ],
+      content: "Great product!",
+      sig: "sig-review",
+      ...overrides,
+    };
+  }
+
+  beforeEach(() => {
+    jest.resetModules();
+    jest.clearAllMocks();
+  });
+
+  it("hydrates review maps from the DB and emits context before querying the relay", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+    jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
+
+    const { fetchReviews } = await import("../fetch-service");
+
+    const dbReview = makeReviewEvent({ id: "db-review-1" });
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [dbReview],
+    }) as typeof global.fetch;
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([]) };
+    const editReviewsContext = jest.fn();
+
+    const result = await fetchReviews(
+      nostr as any,
+      ["wss://relay.example"],
+      [product as any],
+      editReviewsContext
+    );
+
+    // Called twice: once from DB block, once final
+    expect(editReviewsContext).toHaveBeenCalledTimes(2);
+    // DB review surfaces in the final result
+    expect(result.productReviewsMap.has("seller-a")).toBe(true);
+  });
+
+  it("ignores DB review rows whose address tag is not in the product address set", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+    jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
+
+    const { fetchReviews } = await import("../fetch-service");
+
+    const irrelevantReview = makeReviewEvent({
+      id: "irrelevant",
+      tags: [
+        ["d", "a:30402:other-seller:other-listing"],
+        ["rating", "5", "overall"],
+      ],
+    });
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [irrelevantReview],
+    }) as typeof global.fetch;
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([]) };
+    const editReviewsContext = jest.fn();
+
+    const result = await fetchReviews(
+      nostr as any,
+      ["wss://relay.example"],
+      [product as any],
+      editReviewsContext
+    );
+
+    expect(result.productReviewsMap.size).toBe(0);
+    expect(result.merchantScoresMap.size).toBe(0);
+  });
+
+  it("merges relay reviews into the maps alongside DB reviews", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+    jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
+
+    const { fetchReviews } = await import("../fetch-service");
+
+    const dbReview = makeReviewEvent({
+      id: "db-review",
+      pubkey: "reviewer-1",
+      created_at: 100,
+    });
+    const relayReview = makeReviewEvent({
+      id: "relay-review",
+      pubkey: "reviewer-2",
+      created_at: 200,
+    });
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [dbReview],
+    }) as typeof global.fetch;
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([relayReview]) };
+    const editReviewsContext = jest.fn();
+
+    const result = await fetchReviews(
+      nostr as any,
+      ["wss://relay.example"],
+      [product as any],
+      editReviewsContext
+    );
+
+    const productReviews = result.productReviewsMap
+      .get("seller-a")
+      ?.get("listing-1");
+    expect(productReviews?.has("reviewer-1")).toBe(true);
+    expect(productReviews?.has("reviewer-2")).toBe(true);
+  });
+
+  it("uses the newer review's score when the same reviewer submits two reviews", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+    jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
+
+    const { fetchReviews } = await import("../fetch-service");
+
+    // DB has older review with low rating
+    const olderDbReview = makeReviewEvent({
+      id: "older-review",
+      pubkey: "reviewer-1",
+      created_at: 100,
+      tags: [
+        ["d", productAddress],
+        ["rating", "1", "overall"],
+      ],
+    });
+    // Relay has newer review with higher rating
+    const newerRelayReview = makeReviewEvent({
+      id: "newer-review",
+      pubkey: "reviewer-1",
+      created_at: 200,
+      tags: [
+        ["d", productAddress],
+        ["rating", "5", "overall"],
+      ],
+    });
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [olderDbReview],
+    }) as typeof global.fetch;
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([newerRelayReview]) };
+    const editReviewsContext = jest.fn();
+
+    const result = await fetchReviews(
+      nostr as any,
+      ["wss://relay.example"],
+      [product as any],
+      editReviewsContext
+    );
+
+    // Score must reflect the newer review (rating 5 → 2.5), not the older (rating 1 → 0.5)
+    expect(result.merchantScoresMap.get("seller-a")).toEqual([2.5]);
+  });
+
+  it("aggregates merchant scores using calculateWeightedScore of the review tags", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+    jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
+
+    const { fetchReviews } = await import("../fetch-service");
+
+    // "rating","4","overall" with no thumb: score = 4 * 0.5 = 2
+    const review = makeReviewEvent({
+      id: "score-review",
+      tags: [
+        ["d", productAddress],
+        ["rating", "4", "overall"],
+      ],
+    });
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [],
+    }) as typeof global.fetch;
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([review]) };
+    const editReviewsContext = jest.fn();
+
+    const result = await fetchReviews(
+      nostr as any,
+      ["wss://relay.example"],
+      [product as any],
+      editReviewsContext
+    );
+
+    expect(result.merchantScoresMap.get("seller-a")).toEqual([2]);
+  });
+
+  it("strips internal created_at entries from review payloads before resolving", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+    jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
+
+    const { fetchReviews } = await import("../fetch-service");
+
+    const review = makeReviewEvent({ id: "cleanup-review" });
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [],
+    }) as typeof global.fetch;
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([review]) };
+    const editReviewsContext = jest.fn();
+
+    const result = await fetchReviews(
+      nostr as any,
+      ["wss://relay.example"],
+      [product as any],
+      editReviewsContext
+    );
+
+    const reviewerTags = result.productReviewsMap
+      .get("seller-a")
+      ?.get("listing-1")
+      ?.get("reviewer-1");
+    expect(reviewerTags).toBeDefined();
+    expect(reviewerTags!.some((item) => item[0] === "created_at")).toBe(false);
+  });
+
+  it("returns empty maps when the products list is empty", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+    jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
+
+    const { fetchReviews } = await import("../fetch-service");
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [],
+    }) as typeof global.fetch;
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([]) };
+    const editReviewsContext = jest.fn();
+
+    const result = await fetchReviews(
+      nostr as any,
+      ["wss://relay.example"],
+      [],
+      editReviewsContext
+    );
+
+    expect(result.merchantScoresMap.size).toBe(0);
+    expect(result.productReviewsMap.size).toBe(0);
+    expect(editReviewsContext).toHaveBeenCalledWith(
+      expect.any(Map),
+      expect.any(Map),
+      false
+    );
+  });
+
+  it("caches only relay events that are valid kind 31555 with id, sig, and pubkey", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+    jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
+
+    const { fetchReviews } = await import("../fetch-service");
+
+    const validReview = makeReviewEvent({
+      id: "valid-id",
+      sig: "valid-sig",
+      pubkey: "reviewer-1",
+    });
+    const noSigReview = makeReviewEvent({
+      id: "no-sig",
+      sig: "",
+      pubkey: "reviewer-2",
+    });
+    const noIdReview = makeReviewEvent({
+      id: "",
+      sig: "sig-noid",
+      pubkey: "reviewer-3",
+    });
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [],
+    }) as typeof global.fetch;
+
+    const nostr = {
+      fetch: jest
+        .fn()
+        .mockResolvedValue([validReview, noSigReview, noIdReview]),
+    };
+    const editReviewsContext = jest.fn();
+
+    await fetchReviews(
+      nostr as any,
+      ["wss://relay.example"],
+      [product as any],
+      editReviewsContext
+    );
+
+    expect(cacheEventsToDatabase).toHaveBeenCalledWith([validReview]);
+  });
+
+  it("logs console.error and still runs the relay fetch when the DB endpoint throws", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+    jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
+
+    const { fetchReviews } = await import("../fetch-service");
+
+    const dbError = new Error("DB connection failed");
+    global.fetch = jest.fn().mockRejectedValue(dbError) as typeof global.fetch;
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([]) };
+    const editReviewsContext = jest.fn();
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    const result = await fetchReviews(
+      nostr as any,
+      ["wss://relay.example"],
+      [product as any],
+      editReviewsContext
+    );
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      "Failed to fetch reviews from database: ",
+      dbError
+    );
+    expect(nostr.fetch).toHaveBeenCalledTimes(1);
+    expect(result.merchantScoresMap).toBeInstanceOf(Map);
+    expect(result.productReviewsMap).toBeInstanceOf(Map);
+
+    consoleErrorSpy.mockRestore();
   });
 });
