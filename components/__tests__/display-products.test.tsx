@@ -320,6 +320,100 @@ describe("DisplayProducts search filtering", () => {
     expect(removeDeletedProductEvent).not.toHaveBeenCalled();
   });
 
+  it("clears transient NIP-50 search results when the search query is cleared", async () => {
+    const relayProduct = {
+      id: "relay-product-1",
+      pubkey: "relay-seller",
+      created_at: 10,
+      kind: 30402,
+      tags: [
+        ["d", "relay-coffee"],
+        ["title", "Relay Coffee Beans"],
+        ["price", "12", "USD"],
+        ["image", "https://example.com/coffee.png"],
+      ],
+      content: "Fresh coffee discovered through relay search",
+      sig: "relay-sig",
+    };
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([relayProduct]),
+    };
+    let setSearch: Dispatch<SetStateAction<string>> | undefined;
+
+    function SearchableDisplayProducts() {
+      const [selectedSearch, updateSelectedSearch] = useState("coffee");
+      setSearch = updateSelectedSearch;
+
+      return (
+        <SignerContext.Provider
+          value={{ pubkey: "viewer-pubkey", isLoggedIn: true }}
+        >
+          <NostrContext.Provider
+            value={{ nostr: nostr as unknown as NostrManager }}
+          >
+            <RelaysContext.Provider
+              value={{
+                relayList: ["wss://relay.example"],
+                readRelayList: [],
+                writeRelayList: [],
+                isLoading: false,
+              }}
+            >
+              <ProfileMapContext.Provider
+                value={{
+                  profileData: new Map(),
+                  isLoading: false,
+                  updateProfileData: jest.fn(),
+                }}
+              >
+                <FollowsContext.Provider
+                  value={{
+                    followList: [],
+                    firstDegreeFollowsLength: 0,
+                    isLoading: false,
+                  }}
+                >
+                  <ProductContext.Provider
+                    value={{
+                      productEvents: [],
+                      isLoading: false,
+                      addNewlyCreatedProductEvent: jest.fn(),
+                      removeDeletedProductEvent: jest.fn(),
+                    }}
+                  >
+                    <DisplayProducts
+                      selectedCategories={new Set()}
+                      selectedLocation=""
+                      selectedSearch={selectedSearch}
+                    />
+                  </ProductContext.Provider>
+                </FollowsContext.Provider>
+              </ProfileMapContext.Provider>
+            </RelaysContext.Provider>
+          </NostrContext.Provider>
+        </SignerContext.Provider>
+      );
+    }
+
+    render(<SearchableDisplayProducts />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Relay Coffee Beans")).toBeInTheDocument();
+    });
+
+    act(() => {
+      setSearch?.("");
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByText("Relay Coffee Beans")).not.toBeInTheDocument();
+      expect(screen.getByText("No products found...")).toBeInTheDocument();
+    });
+    expect(nostr.fetch).toHaveBeenCalledTimes(
+      DEFAULT_NIP50_SEARCH_RELAYS.length
+    );
+  });
+
   it("scopes NIP-50 relay search to the focused seller when viewing a storefront", async () => {
     const sellerPubkey = "a".repeat(64);
     const nostr = {
