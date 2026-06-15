@@ -81,6 +81,12 @@ function upsertEncryptedBuyerP2pkEscrowRecord(
   writeJsonArray(ENCRYPTED_STORAGE_KEY, records);
 }
 
+export function restoreEscrowRecordLocally(
+  record: BuyerP2pkEscrowRecord
+): void {
+  upsertLocalBuyerP2pkEscrowRecord(record);
+}
+
 export async function persistBuyerP2pkEscrowRecord(
   nostr: NostrManager | undefined,
   signer: NostrSigner | undefined,

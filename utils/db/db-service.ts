@@ -1566,6 +1566,13 @@ export async function fetchBlossomConfigFromDb(
   return fetchCachedEvents(10063, { pubkey });
 }
 
+// Fetch buyer P2PK escrow records from database
+export async function fetchEscrowRecordsFromDb(
+  pubkey: string
+): Promise<NostrEvent[]> {
+  return fetchCachedEvents(30406, { pubkey });
+}
+
 // Add discount code
 export async function addDiscountCode(
   code: string,

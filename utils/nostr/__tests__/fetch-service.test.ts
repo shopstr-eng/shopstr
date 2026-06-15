@@ -5473,3 +5473,213 @@ describe("fetchReviews", () => {
     consoleErrorSpy.mockRestore();
   });
 });
+
+describe("fetchEscrowRecords", () => {
+  const userPubkey =
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+  const baseEvent = {
+    id: "ev1",
+    pubkey: userPubkey,
+    kind: 30406,
+    content: "encrypted-record",
+    sig: "sig1",
+    created_at: 1000,
+    tags: [["d", "shopstr:p2pk-escrow:order-1"]],
+  };
+
+  const record = {
+    orderId: "order-1",
+    mint: "https://mint.example",
+    token: "cashuAtoken",
+    amount: 100,
+    sellerPubkey: "b".repeat(64),
+    locktime: 9999999999,
+    refundKeys: ["c".repeat(64)],
+    createdAt: 1000,
+  };
+
+  beforeEach(() => {
+    jest.resetModules();
+    jest.clearAllMocks();
+  });
+
+  it("returns early without touching relays or DB when signer has no pubkey", async () => {
+    jest.doMock("@/utils/cashu/p2pk-escrow-records", () => ({
+      BUYER_P2PK_ESCROW_EVENT_KIND: 30406,
+      restoreEscrowRecordLocally: jest.fn(),
+    }));
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn(),
+    }));
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(() => ({ tokens: [] })),
+      deleteEvent: jest.fn(),
+      verifyNip05Identifier: jest.fn(),
+      publishWalletEvent: jest.fn(),
+    }));
+
+    const { fetchEscrowRecords } = await import("../fetch-service");
+    const nostr = { fetch: jest.fn() };
+    global.fetch = jest.fn() as typeof global.fetch;
+
+    await fetchEscrowRecords(nostr as any, undefined, ["wss://relay.example"]);
+
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(nostr.fetch).not.toHaveBeenCalled();
+  });
+
+  it("restores records from DB then relay, calling restoreEscrowRecordLocally for each", async () => {
+    const restoreEscrowRecordLocally = jest.fn();
+    jest.doMock("@/utils/cashu/p2pk-escrow-records", () => ({
+      BUYER_P2PK_ESCROW_EVENT_KIND: 30406,
+      restoreEscrowRecordLocally,
+    }));
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(() => ({ tokens: [] })),
+      deleteEvent: jest.fn(),
+      verifyNip05Identifier: jest.fn(),
+      publishWalletEvent: jest.fn(),
+    }));
+
+    const { fetchEscrowRecords } = await import("../fetch-service");
+
+    const signer = createMockSigner({
+      getPubKey: jest.fn().mockResolvedValue(userPubkey),
+      decrypt: jest.fn().mockResolvedValue(JSON.stringify(record)),
+    });
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [baseEvent],
+    }) as typeof global.fetch;
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([baseEvent]) };
+
+    await fetchEscrowRecords(nostr as any, signer, ["wss://relay.example"]);
+
+    // Once from DB, once from relay
+    expect(restoreEscrowRecordLocally).toHaveBeenCalledTimes(2);
+    expect(restoreEscrowRecordLocally).toHaveBeenCalledWith(record);
+  });
+
+  it("caches valid relay events to the database", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+    jest.doMock("@/utils/cashu/p2pk-escrow-records", () => ({
+      BUYER_P2PK_ESCROW_EVENT_KIND: 30406,
+      restoreEscrowRecordLocally: jest.fn(),
+    }));
+    jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(() => ({ tokens: [] })),
+      deleteEvent: jest.fn(),
+      verifyNip05Identifier: jest.fn(),
+      publishWalletEvent: jest.fn(),
+    }));
+
+    const { fetchEscrowRecords } = await import("../fetch-service");
+
+    const signer = createMockSigner({
+      getPubKey: jest.fn().mockResolvedValue(userPubkey),
+      decrypt: jest.fn().mockResolvedValue(JSON.stringify(record)),
+    });
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [],
+    }) as typeof global.fetch;
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([baseEvent]) };
+
+    await fetchEscrowRecords(nostr as any, signer, ["wss://relay.example"]);
+
+    expect(cacheEventsToDatabase).toHaveBeenCalledWith([baseEvent]);
+  });
+
+  it("skips a relay event whose content cannot be decrypted without throwing", async () => {
+    const restoreEscrowRecordLocally = jest.fn();
+    jest.doMock("@/utils/cashu/p2pk-escrow-records", () => ({
+      BUYER_P2PK_ESCROW_EVENT_KIND: 30406,
+      restoreEscrowRecordLocally,
+    }));
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(() => ({ tokens: [] })),
+      deleteEvent: jest.fn(),
+      verifyNip05Identifier: jest.fn(),
+      publishWalletEvent: jest.fn(),
+    }));
+
+    const { fetchEscrowRecords } = await import("../fetch-service");
+
+    const signer = createMockSigner({
+      getPubKey: jest.fn().mockResolvedValue(userPubkey),
+      decrypt: jest.fn().mockRejectedValue(new Error("bad key")),
+    });
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [],
+    }) as typeof global.fetch;
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([baseEvent]) };
+
+    await expect(
+      fetchEscrowRecords(nostr as any, signer, ["wss://relay.example"])
+    ).resolves.toBeUndefined();
+
+    expect(restoreEscrowRecordLocally).not.toHaveBeenCalled();
+  });
+
+  it("continues to relay fetch when DB call fails", async () => {
+    const restoreEscrowRecordLocally = jest.fn();
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+
+    jest.doMock("@/utils/cashu/p2pk-escrow-records", () => ({
+      BUYER_P2PK_ESCROW_EVENT_KIND: 30406,
+      restoreEscrowRecordLocally,
+    }));
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(() => ({ tokens: [] })),
+      deleteEvent: jest.fn(),
+      verifyNip05Identifier: jest.fn(),
+      publishWalletEvent: jest.fn(),
+    }));
+
+    const { fetchEscrowRecords } = await import("../fetch-service");
+
+    const signer = createMockSigner({
+      getPubKey: jest.fn().mockResolvedValue(userPubkey),
+      decrypt: jest.fn().mockResolvedValue(JSON.stringify(record)),
+    });
+
+    // DB fetch fails
+    global.fetch = jest
+      .fn()
+      .mockRejectedValue(new Error("network error")) as typeof global.fetch;
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([baseEvent]) };
+
+    await fetchEscrowRecords(nostr as any, signer, ["wss://relay.example"]);
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      "Failed to restore escrow records from database:",
+      expect.any(Error)
+    );
+    // Relay fetch still ran and restored the record
+    expect(nostr.fetch).toHaveBeenCalledTimes(1);
+    expect(restoreEscrowRecordLocally).toHaveBeenCalledWith(record);
+
+    consoleErrorSpy.mockRestore();
+  });
+});

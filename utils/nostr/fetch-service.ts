@@ -34,6 +34,11 @@ import {
   LatestWalletKeypair,
 } from "@/utils/cashu/wallet-config";
 import {
+  BUYER_P2PK_ESCROW_EVENT_KIND,
+  BuyerP2pkEscrowRecord,
+  restoreEscrowRecordLocally,
+} from "@/utils/cashu/p2pk-escrow-records";
+import {
   buildMessagesListProof,
   buildSignedHttpRequestProofTemplate,
   SIGNED_EVENT_HEADER,
@@ -1646,6 +1651,63 @@ export const fetchAllBlossomServers = async (
       reject(error);
     }
   });
+};
+
+export const fetchEscrowRecords = async (
+  nostr: NostrManager,
+  signer: NostrSigner | undefined,
+  relays: string[]
+): Promise<void> => {
+  const userPubkey = await signer?.getPubKey?.();
+  if (!userPubkey) return;
+
+  // DB-first: restore from server-side cache so the orders dashboard has records
+  // even before the Nostr relay fetch completes
+  try {
+    const dbRes = await fetch(`/api/db/fetch-escrow?pubkey=${userPubkey}`);
+    const dbEvents: NostrEvent[] = dbRes.ok ? await dbRes.json() : [];
+    for (const event of dbEvents) {
+      try {
+        const decrypted = await signer!.decrypt(userPubkey, event.content);
+        restoreEscrowRecordLocally(
+          JSON.parse(decrypted) as BuyerP2pkEscrowRecord
+        );
+      } catch {
+        // skip malformed cached events
+      }
+    }
+  } catch (error) {
+    console.error("Failed to restore escrow records from database:", error);
+  }
+
+  // Relay fetch: pick up records missing from the DB cache (e.g. first login on this server)
+  const escrowEvents: NostrEvent[] = await nostr.fetch(
+    [{ kinds: [BUYER_P2PK_ESCROW_EVENT_KIND], authors: [userPubkey] }],
+    {},
+    relays
+  );
+
+  const validEscrowEvents = escrowEvents.filter(
+    (e) => e.id && e.sig && e.pubkey && e.kind === BUYER_P2PK_ESCROW_EVENT_KIND
+  );
+  if (validEscrowEvents.length > 0) {
+    cacheEventsToDatabase(validEscrowEvents).catch((err) =>
+      console.error("Failed to cache escrow events to database:", err)
+    );
+  }
+
+  // upsertLocalBuyerP2pkEscrowRecord (called by restoreEscrowRecordLocally) deduplicates
+  // by orderId — safe to call for the same record from DB and relay without creating duplicates
+  for (const event of escrowEvents) {
+    try {
+      const decrypted = await signer!.decrypt(userPubkey, event.content);
+      restoreEscrowRecordLocally(
+        JSON.parse(decrypted) as BuyerP2pkEscrowRecord
+      );
+    } catch (error) {
+      console.error(`Failed to decrypt escrow record ${event.id}:`, error);
+    }
+  }
 };
 
 export const fetchCashuWallet = async (

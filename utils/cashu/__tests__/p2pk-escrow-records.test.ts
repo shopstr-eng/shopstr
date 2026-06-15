@@ -2,6 +2,7 @@ import {
   BUYER_P2PK_ESCROW_EVENT_KIND,
   getLocalBuyerP2pkEscrowRecords,
   persistBuyerP2pkEscrowRecord,
+  restoreEscrowRecordLocally,
 } from "../p2pk-escrow-records";
 
 jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
@@ -56,6 +57,33 @@ describe("p2pk-escrow-records", () => {
         content: `encrypted:${JSON.stringify(record)}`,
       },
     ]);
+  });
+
+  it("restoreEscrowRecordLocally writes the record to localStorage", () => {
+    restoreEscrowRecordLocally(record);
+    expect(getLocalBuyerP2pkEscrowRecords()).toEqual([record]);
+  });
+
+  it("restoreEscrowRecordLocally deduplicates by orderId — calling twice does not create a duplicate", () => {
+    restoreEscrowRecordLocally(record);
+    restoreEscrowRecordLocally(record);
+    expect(getLocalBuyerP2pkEscrowRecords()).toHaveLength(1);
+  });
+
+  it("restoreEscrowRecordLocally replaces an existing record with the same orderId", () => {
+    restoreEscrowRecordLocally(record);
+    const updated = { ...record, token: "cashuUpdatedToken" };
+    restoreEscrowRecordLocally(updated);
+    const stored = getLocalBuyerP2pkEscrowRecords();
+    expect(stored).toHaveLength(1);
+    expect(stored[0]!.token).toBe("cashuUpdatedToken");
+  });
+
+  it("restoreEscrowRecordLocally is safe when DB and relay return the same event", () => {
+    // Simulates the double-call pattern in fetchEscrowRecords
+    restoreEscrowRecordLocally(record); // from DB
+    restoreEscrowRecordLocally(record); // from relay
+    expect(getLocalBuyerP2pkEscrowRecords()).toEqual([record]);
   });
 
   it("publishes an encrypted relay record when nostr and signer are available", async () => {
