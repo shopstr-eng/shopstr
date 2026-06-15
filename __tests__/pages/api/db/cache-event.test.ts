@@ -1,4 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
+import { IncomingMessage } from "http";
+import { Socket } from "net";
 
 const verifyEventMock = jest.fn();
 const cacheEventMock = jest.fn();
@@ -35,13 +37,21 @@ function createResponse() {
   };
 }
 
-function createRequest(method: string, body: unknown): NextApiRequest {
-  return {
-    method,
-    body,
-    headers: {},
-    socket: { remoteAddress: "127.0.0.1" },
-  } as unknown as NextApiRequest;
+function createRequest(
+  method: string,
+  body: unknown,
+  remoteAddress = "127.0.0.1"
+): NextApiRequest {
+  const socket = new Socket();
+  Object.defineProperty(socket, "remoteAddress", {
+    value: remoteAddress,
+    configurable: true,
+  });
+  const request = new IncomingMessage(socket) as NextApiRequest;
+  request.method = method;
+  request.body = body;
+  request.headers = { "x-forwarded-for": remoteAddress };
+  return request;
 }
 
 describe("/api/db/cache-event", () => {
@@ -126,15 +136,16 @@ describe("/api/db/cache-event", () => {
     cacheEventMock.mockResolvedValue(undefined);
 
     const makeReq = (pubkey: string) => {
-      const r = createRequest("POST", {
-        id: "evt-ok",
-        pubkey,
-        kind: 30019,
-        content: "{}",
-      });
-      (r as any).headers = { "x-forwarded-for": "10.0.0.1" };
-      (r as any).socket = { remoteAddress: "10.0.0.1" };
-      return r;
+      return createRequest(
+        "POST",
+        {
+          id: "evt-ok",
+          pubkey,
+          kind: 30019,
+          content: "{}",
+        },
+        "10.0.0.1"
+      );
     };
 
     // One shopper bursts up to the per-pubkey limit (600/min).
@@ -170,15 +181,16 @@ describe("/api/db/cache-event", () => {
     // Rotate pubkeys per request so we only trip the IP limit (2000/min),
     // not the per-pubkey limit.
     const makeReq = (i: number) => {
-      const r = createRequest("POST", {
-        id: `evt-${i}`,
-        pubkey: `pubkey-${i}`,
-        kind: 30019,
-        content: "{}",
-      });
-      (r as any).headers = { "x-forwarded-for": "10.0.0.9" };
-      (r as any).socket = { remoteAddress: "10.0.0.9" };
-      return r;
+      return createRequest(
+        "POST",
+        {
+          id: `evt-${i}`,
+          pubkey: `pubkey-${i}`,
+          kind: 30019,
+          content: "{}",
+        },
+        "10.0.0.9"
+      );
     };
 
     for (let i = 0; i < 2000; i++) {

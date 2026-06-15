@@ -45,7 +45,7 @@ export class NostrManager {
   private readonly pool: SimplePool;
   private readonly params: NostrManagerParams;
   private readonly relays: Array<NostrRelay> = [];
-  private gcTimeout: any;
+  private gcTimeout: ReturnType<typeof setTimeout> | undefined;
 
   constructor(relays: Array<string> = [], params?: NostrManagerParams) {
     const {
@@ -71,7 +71,7 @@ export class NostrManager {
   }
 
   public static signerFrom(
-    args: { [key: string]: string },
+    args: Record<string, string | undefined>,
     challengeHandler: ChallengeHandler
   ): NostrSigner {
     const signer =
@@ -284,7 +284,7 @@ export class NostrManager {
   }
 
   public close() {
-    clearTimeout(this.gcTimeout);
+    if (this.gcTimeout) clearTimeout(this.gcTimeout);
     for (const relay of this.relays) {
       for (const sub of [...relay.activeSubs]) {
         sub.close();

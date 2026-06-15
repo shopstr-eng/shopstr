@@ -4,6 +4,7 @@ import {
   getDefaultRelays,
   getLocalStorageData,
 } from "../nostr-helper-functions";
+import { Amount } from "@cashu/cashu-ts";
 
 describe("getLocalStorageData", () => {
   beforeEach(() => {
@@ -43,6 +44,45 @@ describe("getLocalStorageData", () => {
     expect(data.tokens).toEqual([]);
     expect(data.history).toEqual([]);
     expect(data.bunkerRelays).toEqual([]);
+  });
+
+  it("validates and normalizes stored wallet tokens and history", () => {
+    localStorage.setItem(
+      "tokens",
+      JSON.stringify([
+        { id: "keyset-1", amount: "100", secret: "secret-1", C: "C-1" },
+        { id: "keyset-2", amount: 50, secret: "secret-2", C: "C-2" },
+        { id: "bad-proof", amount: {}, secret: "secret-3", C: "C-3" },
+      ])
+    );
+    localStorage.setItem(
+      "history",
+      JSON.stringify([
+        { type: 1, amount: 100, date: 1721915400 },
+        { type: "2", amount: 50, date: 1721915500 },
+      ])
+    );
+
+    const data = getLocalStorageData();
+
+    expect(data.tokens).toHaveLength(2);
+    expect(data.tokens[0]!.amount).toBeInstanceOf(Amount);
+    expect(data.tokens.map((proof) => proof.amount.toNumber())).toEqual([
+      100, 50,
+    ]);
+    expect(data.history).toEqual([{ type: 1, amount: 100, date: 1721915400 }]);
+  });
+
+  it("falls back when wallet tokens or history are not arrays", () => {
+    localStorage.setItem("tokens", JSON.stringify({ id: "not-array" }));
+    localStorage.setItem("history", JSON.stringify({ type: 1 }));
+
+    const data = getLocalStorageData();
+
+    expect(data.tokens).toEqual([]);
+    expect(data.history).toEqual([]);
+    expect(localStorage.getItem("tokens")).toBe("[]");
+    expect(localStorage.getItem("history")).toBe("[]");
   });
 
   it("falls back to signInMethod signer when stored signer shape is invalid", () => {

@@ -1,6 +1,11 @@
 import { Wallet as CashuWallet, Proof } from "@cashu/cashu-ts";
 import { withMintRetry } from "./mint-retry-service";
 
+type RecoveryWallet = Pick<
+  CashuWallet,
+  "checkMintQuoteBolt11" | "mintProofsBolt11"
+>;
+
 const STORAGE_KEY = "shopstr.pendingMintQuotes";
 
 export type PendingMintQuoteStatus =
@@ -118,7 +123,7 @@ export interface RecoveryDeps {
    * Build a `loadMint`-ready CashuWallet bound to the given mint URL.
    * Caller is responsible for the v3+ `await wallet.loadMint()` call.
    */
-  buildWallet: (mintUrl: string) => Promise<CashuWallet>;
+  buildWallet: (mintUrl: string) => Promise<RecoveryWallet>;
   /**
    * Persist newly-recovered proofs (typically: append to local tokens,
    * publish a kind-7375 wallet event). Throwing aborts the recovery so the

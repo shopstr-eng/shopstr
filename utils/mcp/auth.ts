@@ -3,6 +3,7 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import type { PoolClient } from "pg";
 import { getDbPool } from "@/utils/db/db-service";
 import { verifyEvent } from "nostr-tools";
+import type { NostrEvent } from "@/utils/types/types";
 
 export type ApiKeyPermission = "read" | "read_write" | "full_access";
 
@@ -26,11 +27,29 @@ export interface AuthenticatedRequest extends NextApiRequest {
 const AUTH_EVENT_KIND = 27235;
 const MAX_EVENT_AGE_SECONDS = 120;
 
+function isNostrEvent(value: unknown): value is NostrEvent {
+  if (typeof value !== "object" || value === null) return false;
+  const event = value as Record<string, unknown>;
+  return (
+    typeof event.id === "string" &&
+    typeof event.pubkey === "string" &&
+    typeof event.created_at === "number" &&
+    typeof event.kind === "number" &&
+    typeof event.content === "string" &&
+    typeof event.sig === "string" &&
+    Array.isArray(event.tags) &&
+    event.tags.every(
+      (tag) =>
+        Array.isArray(tag) && tag.every((item) => typeof item === "string")
+    )
+  );
+}
+
 export function verifyNostrAuth(
-  signedEvent: any,
+  signedEvent: unknown,
   expectedPubkey?: string
 ): { valid: boolean; pubkey: string; error?: string } {
-  if (!signedEvent || typeof signedEvent !== "object") {
+  if (!isNostrEvent(signedEvent)) {
     return { valid: false, pubkey: "", error: "Missing signed auth event" };
   }
 
@@ -179,7 +198,7 @@ export async function createApiKey(
         pubkey,
         permissions,
         encryptedNsec || null,
-      ] as any[]
+      ] as unknown[]
     );
     return { key, record: result.rows[0] };
   } finally {
@@ -203,7 +222,7 @@ export async function updateApiKeyNsec(
     const params = permissions
       ? [encryptedNsec, permissions, id, pubkey]
       : [encryptedNsec, id, pubkey];
-    const result = await client.query(query, params as any[]);
+    const result = await client.query(query, params as unknown[]);
     return (result.rowCount ?? 0) > 0;
   } finally {
     if (client) client.release();
@@ -212,7 +231,7 @@ export async function updateApiKeyNsec(
 
 export async function getAgentSigner(
   apiKey: ApiKeyRecord
-): Promise<{ signer: any; pubkey: string } | null> {
+): Promise<{ signer: unknown; pubkey: string } | null> {
   if (!apiKey.encrypted_nsec) return null;
   try {
     const { decryptNsec, McpNostrSigner } =

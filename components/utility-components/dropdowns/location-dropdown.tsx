@@ -29,7 +29,13 @@ export const locationAvatar = (location: string) => {
   ) : null;
 };
 
-const LocationDropdown = ({ value, ...props }: { [x: string]: any }) => {
+const LocationDropdown = ({
+  value,
+  ...props
+}: {
+  value: string;
+  [x: string]: unknown;
+}) => {
   const [searchValue, setSearchValue] = useState("");
 
   const locationOptions = useMemo(() => {

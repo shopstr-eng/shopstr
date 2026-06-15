@@ -15,9 +15,16 @@ import {
   NostrEvent,
   ProductFormValues,
   SavedAddress,
+  Transaction,
 } from "@/utils/types/types";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
-import { Proof } from "@cashu/cashu-ts";
+import {
+  Amount,
+  normalizeProofAmounts,
+  type AmountLike,
+  type Proof,
+  type ProofLike,
+} from "@cashu/cashu-ts";
 import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
 import {
@@ -30,6 +37,10 @@ import {
 } from "@/utils/nostr/request-auth";
 import { newPromiseWithTimeout } from "@/utils/timeout";
 import { getLocalStorageJson } from "@/utils/safe-json";
+
+type NostrPublisher = Pick<NostrManager, "publish">;
+type NostrEventSigner = Pick<NostrSigner, "getPubKey" | "sign">;
+type NostrSealSigner = Pick<NostrSigner, "encrypt" | "sign">;
 
 export const REPORT_TYPES = [
   "nudity",
@@ -66,8 +77,8 @@ export async function generateKeys(): Promise<{ nsec: string; npub: string }> {
 }
 
 export async function deleteEvent(
-  nostr: NostrManager,
-  signer: NostrSigner,
+  nostr: NostrPublisher,
+  signer: NostrEventSigner,
   event_ids_to_delete: string[],
   deletedKind?: number
 ) {
@@ -149,8 +160,8 @@ export function parseBunkerToken(token: string): BunkerTokenParams | null {
 }
 
 export async function createNostrProfileEvent(
-  nostr: NostrManager,
-  signer: NostrSigner,
+  nostr: NostrPublisher,
+  signer: NostrEventSigner,
   stringifiedContent: string
 ): Promise<NostrEvent> {
   const profileContent: EventTemplate = {
@@ -413,7 +424,7 @@ export async function constructGiftWrappedEvent(
 }
 
 export async function constructMessageSeal(
-  signer: NostrSigner,
+  signer: NostrSealSigner,
   messageEvent: GiftWrappedMessageEvent,
   senderPubkey: string,
   recipientPubkey: string,
@@ -472,9 +483,9 @@ export async function constructMessageGiftWrap(
 }
 
 export async function sendGiftWrappedMessageEvent(
-  nostr: NostrManager,
+  nostr: NostrPublisher,
   giftWrappedMessageEvent: NostrEvent,
-  signer?: NostrSigner
+  signer?: NostrEventSigner
 ) {
   const { relays, writeRelays } = getLocalStorageData();
   const allWriteRelays = withBlastr([...writeRelays, ...relays]);
@@ -543,8 +554,8 @@ export async function publishReviewEvent(
 }
 
 export async function publishReportEvent(
-  nostr: NostrManager,
-  signer: NostrSigner,
+  nostr: NostrPublisher,
+  signer: NostrEventSigner,
   {
     content,
     reportType,
@@ -1060,8 +1071,8 @@ type FinalizeAndSendOptions = {
 };
 
 async function publishEventWithRetryTracking(
-  nostr: NostrManager,
-  signer: NostrSigner,
+  nostr: NostrPublisher,
+  signer: NostrEventSigner,
   signedEvent: NostrEvent,
   relayUrls: string[]
 ): Promise<void> {
@@ -1097,8 +1108,8 @@ async function publishEventWithRetryTracking(
 }
 
 export async function finalizeAndSendNostrEvent(
-  signer: NostrSigner,
-  nostr: NostrManager,
+  signer: NostrEventSigner,
+  nostr: NostrPublisher,
   eventTemplate: EventTemplate,
   options: FinalizeAndSendOptions = {}
 ): Promise<NostrEvent> {
@@ -1372,7 +1383,7 @@ export const setLocalStorageDataOnSignIn = ({
   bunkerRemotePubkey?: string;
   bunkerRelays?: string[];
   bunkerSecret?: string;
-  signer?: NostrSigner;
+  signer?: Record<string, string | undefined>;
   migrationComplete?: boolean;
 }) => {
   if (encryptedPrivateKey) {
@@ -1450,8 +1461,8 @@ export interface LocalStorageInterface {
   writeRelays: string[];
   mints: string[];
   blossomServers: string[];
-  tokens: any[];
-  history: any[];
+  tokens: Proof[];
+  history: Transaction[];
   wot: number;
   encryptedPrivateKey?: string;
   clientPrivkey?: string;
@@ -1503,6 +1514,59 @@ function isStoredSignerData(
   }
 
   return false;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function isAmountLike(value: unknown): value is AmountLike {
+  if (
+    typeof value === "number" ||
+    typeof value === "bigint" ||
+    typeof value === "string" ||
+    value instanceof Amount
+  ) {
+    try {
+      Amount.from(value);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  return false;
+}
+
+function isProofLike(value: unknown): value is ProofLike {
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    isAmountLike(value.amount) &&
+    typeof value.secret === "string" &&
+    typeof value.C === "string"
+  );
+}
+
+function parseStoredProofs(value: unknown): Proof[] {
+  if (!Array.isArray(value)) return [];
+  return normalizeProofAmounts(value.filter(isProofLike));
+}
+
+function isTransaction(value: unknown): value is Transaction {
+  return (
+    isRecord(value) &&
+    typeof value.type === "number" &&
+    Number.isFinite(value.type) &&
+    typeof value.amount === "number" &&
+    Number.isFinite(value.amount) &&
+    typeof value.date === "number" &&
+    Number.isFinite(value.date)
+  );
+}
+
+function parseStoredTransactions(value: unknown): Transaction[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter(isTransaction);
 }
 
 export const getLocalStorageData = (): LocalStorageInterface => {
@@ -1611,10 +1675,13 @@ export const getLocalStorageData = (): LocalStorageInterface => {
       );
     }
 
-    tokens = getLocalStorageJson<unknown[]>(LOCALSTORAGECONSTANTS.tokens, [], {
-      removeOnError: true,
-      validate: isArray,
-    });
+    tokens = parseStoredProofs(
+      getLocalStorageJson<unknown[]>(LOCALSTORAGECONSTANTS.tokens, [], {
+        removeOnError: true,
+        removeOnValidationError: true,
+        validate: isArray,
+      })
+    );
     if (
       tokens.length === 0 &&
       !localStorage.getItem(LOCALSTORAGECONSTANTS.tokens)
@@ -1622,13 +1689,12 @@ export const getLocalStorageData = (): LocalStorageInterface => {
       localStorage.setItem(LOCALSTORAGECONSTANTS.tokens, JSON.stringify([]));
     }
 
-    history = getLocalStorageJson<unknown[]>(
-      LOCALSTORAGECONSTANTS.history,
-      [],
-      {
+    history = parseStoredTransactions(
+      getLocalStorageJson<unknown[]>(LOCALSTORAGECONSTANTS.history, [], {
         removeOnError: true,
+        removeOnValidationError: true,
         validate: isArray,
-      }
+      })
     );
     if (
       history.length === 0 &&
@@ -1801,7 +1867,7 @@ export function getDefaultBlossomServer(): string {
 export async function verifyNip05Identifier(
   nip05: string,
   pubkey: string,
-  options?: { baseUrl?: string }
+  options?: { baseUrl?: string | null }
 ): Promise<boolean> {
   if (!nip05 || !pubkey) return false;
 
@@ -1809,11 +1875,16 @@ export async function verifyNip05Identifier(
     const params = new URLSearchParams({ nip05, pubkey });
     const path = `/api/nostr/verify-nip05?${params.toString()}`;
 
-    const baseUrl =
-      options?.baseUrl ??
-      (typeof window !== "undefined" ? window.location.origin : null);
+    const hasBaseUrlOption =
+      options !== undefined &&
+      Object.prototype.hasOwnProperty.call(options, "baseUrl");
+    const baseUrl = hasBaseUrlOption
+      ? options.baseUrl
+      : typeof window !== "undefined"
+        ? window.location.origin
+        : null;
 
-    if (!baseUrl && typeof window === "undefined") {
+    if (!baseUrl && (hasBaseUrlOption || typeof window === "undefined")) {
       throw new Error("verifyNip05Identifier requires baseUrl in SSR");
     }
 

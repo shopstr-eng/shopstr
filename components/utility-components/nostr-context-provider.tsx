@@ -27,7 +27,7 @@ interface SignerContextInterface {
   isAuthStateResolved?: boolean;
   pubkey?: string;
   npub?: string;
-  newSigner?: (type: string, args: any) => NostrSigner;
+  newSigner?: (type: string, args: Record<string, unknown>) => NostrSigner;
 }
 
 export const SignerContext = createContext({
@@ -54,7 +54,7 @@ export function SignerContextProvider({ children }: { children: ReactNode }) {
   const [authUrl, setAuthUrl] = useState("");
 
   const [challengeResolver, setChallengeResolver] = useState<
-    ((res: any) => void) | undefined
+    ((res: { res: string; remind: boolean }) => void) | undefined
   >(undefined);
 
   const [signer, setSigner] = useState<NostrSigner | undefined>(undefined);
@@ -78,7 +78,7 @@ export function SignerContextProvider({ children }: { children: ReactNode }) {
       setError(error);
       setAbort(() => abort);
       setChallengeResolver(() => {
-        return async (res: any) => {
+        return async (res: { res: string; remind: boolean }) => {
           resolve(res);
         };
       });
@@ -249,20 +249,33 @@ export function SignerContextProvider({ children }: { children: ReactNode }) {
     return undefined;
   }, [isLoggedIn]);
 
-  const newSigner = useCallback((type: string, args: any) => {
-    switch (type.toLowerCase()) {
-      case "nip46": {
-        return new NostrNIP46Signer(args, challengeHandler);
+  const newSigner = useCallback(
+    (type: string, args: Record<string, unknown>) => {
+      switch (type.toLowerCase()) {
+        case "nip46": {
+          return new NostrNIP46Signer(
+            args as { bunker: string; appPrivKey?: Uint8Array },
+            challengeHandler
+          );
+        }
+        case "nsec": {
+          return new NostrNSecSigner(
+            args as {
+              encryptedPrivKey: string;
+              passphrase?: string;
+              pubkey?: string;
+            },
+            challengeHandler
+          );
+        }
+        default:
+        case "nip07": {
+          return new NostrNIP07Signer(args);
+        }
       }
-      case "nsec": {
-        return new NostrNSecSigner(args, challengeHandler);
-      }
-      default:
-      case "nip07": {
-        return new NostrNIP07Signer(args);
-      }
-    }
-  }, []);
+    },
+    []
+  );
 
   return (
     <>

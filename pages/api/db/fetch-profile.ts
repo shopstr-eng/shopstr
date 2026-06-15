@@ -21,7 +21,7 @@ export default async function handler(
     const events = await fetchCachedEvents(0, { pubkey, limit: 1 });
     const event = events[0];
     if (!event) return res.status(200).json({ profile: null });
-    let content: Record<string, any> = {};
+    let content: Record<string, unknown> = {};
     try {
       content = JSON.parse(event.content);
     } catch {

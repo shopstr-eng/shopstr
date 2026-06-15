@@ -1,23 +1,31 @@
-import { Proof } from "@cashu/cashu-ts";
+import {
+  Amount,
+  OutputConfig,
+  Proof,
+  SendConfig,
+  Wallet as CashuWallet,
+} from "@cashu/cashu-ts";
 import { safeSwap } from "../swap-retry-service";
+
+type SwapWalletMock = Pick<CashuWallet, "send" | "checkProofsStates">;
 
 const mkProof = (secret: string, amount = 10): Proof =>
   ({
     id: "00d0a1b24d1c1a53",
-    amount,
+    amount: Amount.from(amount),
     secret,
     C: "C",
-  }) as unknown as Proof;
+  }) satisfies Proof;
 
 describe("safeSwap", () => {
   it("returns swapped on success", async () => {
-    const wallet = {
+    const wallet: SwapWalletMock = {
       send: jest.fn().mockResolvedValue({
         keep: [mkProof("k1", 5)],
         send: [mkProof("s1", 10)],
       }),
       checkProofsStates: jest.fn(),
-    } as any;
+    };
     const out = await safeSwap(wallet, 10, [mkProof("a"), mkProof("b")], {
       swapRetry: {
         maxAttempts: 1,
@@ -32,10 +40,10 @@ describe("safeSwap", () => {
   });
 
   it("returns unswapped on terminal client errors without contacting mint", async () => {
-    const wallet = {
+    const wallet: SwapWalletMock = {
       send: jest.fn().mockRejectedValue(new Error("insufficient funds")),
       checkProofsStates: jest.fn(),
-    } as any;
+    };
     const out = await safeSwap(wallet, 100, [mkProof("a")], {
       swapRetry: {
         maxAttempts: 1,
@@ -48,12 +56,12 @@ describe("safeSwap", () => {
   });
 
   it("returns unswapped when mint confirms inputs all UNSPENT after ambiguous failure", async () => {
-    const wallet = {
+    const wallet: SwapWalletMock = {
       send: jest.fn().mockRejectedValue(new Error("network blip")),
       checkProofsStates: jest
         .fn()
         .mockResolvedValue([{ state: "UNSPENT" }, { state: "UNSPENT" }]),
-    } as any;
+    };
     const out = await safeSwap(wallet, 10, [mkProof("a"), mkProof("b")], {
       swapRetry: {
         maxAttempts: 1,
@@ -71,12 +79,12 @@ describe("safeSwap", () => {
   });
 
   it("returns unknown when inputs are SPENT but outputs were lost", async () => {
-    const wallet = {
+    const wallet: SwapWalletMock = {
       send: jest.fn().mockRejectedValue(new Error("network blip")),
       checkProofsStates: jest
         .fn()
         .mockResolvedValue([{ state: "SPENT" }, { state: "SPENT" }]),
-    } as any;
+    };
     const out = await safeSwap(wallet, 10, [mkProof("a"), mkProof("b")], {
       swapRetry: {
         maxAttempts: 1,
@@ -94,12 +102,12 @@ describe("safeSwap", () => {
   });
 
   it("returns unknown when state check itself fails", async () => {
-    const wallet = {
+    const wallet: SwapWalletMock = {
       send: jest.fn().mockRejectedValue(new Error("network blip")),
       checkProofsStates: jest
         .fn()
         .mockRejectedValue(new Error("network blip 2")),
-    } as any;
+    };
     const out = await safeSwap(wallet, 10, [mkProof("a")], {
       swapRetry: {
         maxAttempts: 1,
@@ -117,12 +125,12 @@ describe("safeSwap", () => {
   });
 
   it("returns unknown when inputs are mixed (some SPENT, some UNSPENT)", async () => {
-    const wallet = {
+    const wallet: SwapWalletMock = {
       send: jest.fn().mockRejectedValue(new Error("network blip")),
       checkProofsStates: jest
         .fn()
         .mockResolvedValue([{ state: "SPENT" }, { state: "UNSPENT" }]),
-    } as any;
+    };
     const out = await safeSwap(wallet, 10, [mkProof("a"), mkProof("b")], {
       swapRetry: {
         maxAttempts: 1,
@@ -139,15 +147,15 @@ describe("safeSwap", () => {
   });
 
   it("forwards sendConfig and outputConfig positionally", async () => {
-    const wallet = {
+    const wallet: SwapWalletMock = {
       send: jest.fn().mockResolvedValue({ keep: [], send: [] }),
       checkProofsStates: jest.fn(),
-    } as any;
-    const sendConfig = { includeFees: true };
-    const outputConfig = { keysetId: "abc" };
+    };
+    const sendConfig: SendConfig = { includeFees: true };
+    const outputConfig: OutputConfig = { send: { type: "random" } };
     await safeSwap(wallet, 10, [mkProof("a")], {
-      sendConfig: sendConfig as any,
-      outputConfig: outputConfig as any,
+      sendConfig,
+      outputConfig,
       swapRetry: {
         maxAttempts: 1,
         perAttemptTimeoutMs: 500,

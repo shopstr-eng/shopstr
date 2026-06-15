@@ -1,23 +1,26 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { ToolCb, ToolContext, wrapWithAudit } from "../audit-log";
+import type { ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
+import {
+  ToolCb,
+  ToolContext,
+  ToolInputSchema,
+  wrapWithAudit,
+} from "../audit-log";
 
-export function registerTool(
+export function registerTool<TSchema extends ToolInputSchema>(
   server: McpServer,
   name: string,
   description: string,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  inputSchema: Record<string, any>,
-  cb: ToolCb,
+  inputSchema: TSchema,
+  cb: ToolCb<TSchema>,
   context?: ToolContext
 ) {
   return server.registerTool(
     name,
     {
       description,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      inputSchema: inputSchema as any,
+      inputSchema,
     },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    wrapWithAudit(name, cb, context) as any
+    wrapWithAudit(name, cb, context) as ToolCallback<TSchema>
   );
 }

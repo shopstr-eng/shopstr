@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import type { ChangeEvent, Key, MouseEventHandler, ReactNode } from "react";
 import ApiKeysPage from "@/pages/settings/api-keys";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import {
@@ -6,6 +7,29 @@ import {
   buildMcpRequestProofTemplate,
   MCP_SIGNED_EVENT_HEADER,
 } from "@/utils/mcp/request-proof";
+import type { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
+
+type ButtonMockProps = {
+  children?: ReactNode;
+  onClick?: MouseEventHandler<HTMLButtonElement>;
+  isDisabled?: boolean;
+  type?: "button" | "submit" | "reset";
+};
+type InputMockProps = {
+  value?: string;
+  onValueChange?: (value: string) => void;
+  label?: string;
+};
+type SelectMockProps = {
+  children?: ReactNode;
+  label?: string;
+  selectedKeys?: Iterable<Key>;
+  onChange?: (event: ChangeEvent<HTMLSelectElement>) => void;
+};
+type SelectItemMockProps = {
+  children?: ReactNode;
+  value?: string;
+};
 
 jest.mock("next/router", () => ({
   useRouter: () => ({
@@ -24,12 +48,12 @@ jest.mock("@heroui/react", () => ({
     onOpen: jest.fn(),
     onClose: jest.fn(),
   }),
-  Button: ({ children, onClick, isDisabled, type }: any) => (
+  Button: ({ children, onClick, isDisabled, type }: ButtonMockProps) => (
     <button disabled={isDisabled} onClick={onClick} type={type || "button"}>
       {children}
     </button>
   ),
-  Input: ({ value, onValueChange, label }: any) => (
+  Input: ({ value, onValueChange, label }: InputMockProps) => (
     <label>
       {label}
       <input
@@ -39,7 +63,7 @@ jest.mock("@heroui/react", () => ({
       />
     </label>
   ),
-  Select: ({ children, label, selectedKeys, onChange }: any) => {
+  Select: ({ children, label, selectedKeys, onChange }: SelectMockProps) => {
     const selectedValue = String(Array.from(selectedKeys || [])[0] || "read");
     return (
       <label>
@@ -50,7 +74,7 @@ jest.mock("@heroui/react", () => ({
       </label>
     );
   },
-  SelectItem: ({ children, value }: any) => (
+  SelectItem: ({ children, value }: SelectItemMockProps) => (
     <option value={value}>{children}</option>
   ),
   Spinner: () => <div>Loading...</div>,
@@ -62,7 +86,7 @@ describe("ApiKeysPage", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    (global as any).fetch = fetchMock;
+    global.fetch = fetchMock;
     Object.assign(navigator, {
       clipboard: {
         writeText: jest.fn(),
@@ -86,7 +110,15 @@ describe("ApiKeysPage", () => {
         value={{
           pubkey: "f".repeat(64),
           isLoggedIn: true,
-          signer: { sign } as any,
+          signer: {
+            connect: jest.fn().mockResolvedValue("f".repeat(64)),
+            getPubKey: jest.fn().mockResolvedValue("f".repeat(64)),
+            sign,
+            encrypt: jest.fn(),
+            decrypt: jest.fn(),
+            close: jest.fn().mockResolvedValue(undefined),
+            toJSON: () => ({ type: "test" }),
+          } satisfies NostrSigner,
         }}
       >
         <ApiKeysPage />

@@ -79,8 +79,8 @@ export default async function handler(
           note: "Add a CNAME record pointing your domain to shopstr.market. Verification may take up to 24 hours after DNS propagation.",
         },
       });
-    } catch (error: any) {
-      if (error?.code === "23505") {
+    } catch (error) {
+      if (error instanceof Error && "code" in error && error.code === "23505") {
         return res
           .status(409)
           .json({ error: "This domain is already registered" });

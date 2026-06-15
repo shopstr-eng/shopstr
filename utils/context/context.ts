@@ -4,13 +4,14 @@ import {
   NostrMessageEvent,
   ProfileData,
   ShopProfile,
+  CashuProofEvent,
   Community,
   CommunityPost,
 } from "../types/types";
 import { Proof } from "@cashu/cashu-ts";
 
 export interface ProfileContextInterface {
-  profileData: Map<string, any>;
+  profileData: Map<string, ProfileData>;
   isLoading: boolean;
   updateProfileData: (profileData: ProfileData) => void;
 }
@@ -90,15 +91,15 @@ export const ReportsContext = createContext({
 export interface CartContextInterface {
   cartAddresses: string[][];
   isLoading: boolean;
-  addProductToCart: (productData: any) => void;
-  removeProductFromCart: (productData: any) => void;
+  addProductToCart: (productData: unknown) => void;
+  removeProductFromCart: (productData: unknown) => void;
 }
 
 export const CartContext = createContext({
   cartAddresses: [],
   isLoading: true,
-  addProductToCart: (_productData: any) => {},
-  removeProductFromCart: (_productData: any) => {},
+  addProductToCart: (_productData: unknown) => {},
+  removeProductFromCart: (_productData: unknown) => {},
 } as CartContextInterface);
 
 export type ChatsMap = Map<string, NostrMessageEvent[]>;
@@ -162,7 +163,7 @@ export const BlossomContext = createContext({
 } as BlossomContextInterface);
 
 export interface CashuWalletContextInterface {
-  proofEvents: any[];
+  proofEvents: CashuProofEvent[];
   cashuMints: string[];
   cashuProofs: Proof[];
   isLoading: boolean;

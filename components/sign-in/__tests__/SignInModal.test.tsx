@@ -6,6 +6,7 @@ import { RelaysContext } from "../../../utils/context/context";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import * as nostrHelpers from "@/utils/nostr/nostr-helper-functions";
 import { NostrNSecSigner } from "@/utils/nostr/signers/nostr-nsec-signer";
+import type { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 
 jest.mock("next/router", () => ({ useRouter: jest.fn() }));
 jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
@@ -42,6 +43,20 @@ const mockParsedBunkerToken = {
   relays: ["wss://relay.damus.io"],
   secret: "secret",
 };
+
+function makeSigner(
+  serialized: Record<string, string>
+): jest.Mocked<NostrSigner> {
+  return {
+    connect: jest.fn().mockResolvedValue(undefined),
+    getPubKey: jest.fn().mockResolvedValue("pk"),
+    sign: jest.fn(),
+    encrypt: jest.fn(),
+    decrypt: jest.fn(),
+    close: jest.fn().mockResolvedValue(undefined),
+    toJSON: jest.fn(() => serialized),
+  };
+}
 
 function renderModal(open = true) {
   const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
@@ -88,7 +103,7 @@ describe("SignInModal", () => {
 
   describe("Extension Sign-in", () => {
     it("succeeds and navigates to user-profile", async () => {
-      const signer = { getPubKey: jest.fn().mockResolvedValue("pk") };
+      const signer = makeSigner({ type: "nip07" });
       mockNewSigner.mockReturnValue(signer);
 
       const { user, push } = renderModal();
@@ -100,7 +115,7 @@ describe("SignInModal", () => {
         expect(mockNewSigner).toHaveBeenCalledWith("nip07", {});
         expect(signer.getPubKey).toHaveBeenCalled();
         expect(helpers.setLocalStorageDataOnSignIn).toHaveBeenCalledWith({
-          signer,
+          signer: signer.toJSON(),
           relays: mockRelays.relayList,
           readRelays: mockRelays.readRelayList,
           writeRelays: mockRelays.writeRelayList,
@@ -140,10 +155,7 @@ describe("SignInModal", () => {
 
     it("succeeds and navigates to user-profile", async () => {
       helpers.parseBunkerToken.mockReturnValue(mockParsedBunkerToken);
-      const signer = {
-        connect: jest.fn().mockResolvedValue(undefined),
-        getPubKey: jest.fn().mockResolvedValue("pk"),
-      };
+      const signer = makeSigner({ type: "nip46" });
       mockNewSigner.mockReturnValue(signer);
 
       const { user, push } = renderModal();
@@ -162,7 +174,7 @@ describe("SignInModal", () => {
         expect(signer.connect).toHaveBeenCalled();
         expect(signer.getPubKey).toHaveBeenCalled();
         expect(helpers.setLocalStorageDataOnSignIn).toHaveBeenCalledWith({
-          signer,
+          signer: signer.toJSON(),
           relays: mockRelays.relayList,
           readRelays: mockRelays.readRelayList,
           writeRelays: mockRelays.writeRelayList,
@@ -207,7 +219,7 @@ describe("SignInModal", () => {
 
     it("succeeds and navigates to user-profile", async () => {
       helpers.validateNSecKey.mockReturnValue(true);
-      const signer = { getPubKey: jest.fn().mockResolvedValue("pk") };
+      const signer = makeSigner({ type: "nsec" });
       mockNewSigner.mockReturnValue(signer);
 
       const { user, push } = renderModal();
@@ -234,7 +246,7 @@ describe("SignInModal", () => {
         });
         expect(signer.getPubKey).toHaveBeenCalled();
         expect(helpers.setLocalStorageDataOnSignIn).toHaveBeenCalledWith({
-          signer,
+          signer: signer.toJSON(),
           relays: mockRelays.relayList,
           readRelays: mockRelays.readRelayList,
           writeRelays: mockRelays.writeRelayList,

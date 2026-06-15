@@ -1,4 +1,6 @@
 import CryptoJS from "crypto-js";
+import type { NextApiRequest } from "next";
+import type { IncomingHttpHeaders } from "http";
 
 const verifyEventMock = jest.fn();
 
@@ -6,7 +8,7 @@ jest.mock("nostr-tools", () => {
   const actual = jest.requireActual("nostr-tools");
   return {
     ...actual,
-    verifyEvent: (event: any) => verifyEventMock(event),
+    verifyEvent: (event: unknown) => verifyEventMock(event),
   };
 });
 
@@ -18,6 +20,16 @@ function buildAuthHeader(event: Record<string, unknown>): string {
   )}`;
 }
 
+function makeRequest(
+  headers: IncomingHttpHeaders,
+  url: string
+): NextApiRequest {
+  return {
+    headers,
+    url,
+  } as NextApiRequest;
+}
+
 describe("verifyNip98Request", () => {
   beforeEach(() => {
     verifyEventMock.mockReset();
@@ -25,12 +37,12 @@ describe("verifyNip98Request", () => {
   });
 
   it("rejects missing authorization headers", async () => {
-    const req = {
-      headers: {
+    const req = makeRequest(
+      {
         host: "localhost:3000",
       },
-      url: "/api/db/update-order-status",
-    } as any;
+      "/api/db/update-order-status"
+    );
 
     await expect(
       verifyNip98Request(req, "POST", { orderId: "o1" })
@@ -43,8 +55,8 @@ describe("verifyNip98Request", () => {
   it("rejects invalid signatures", async () => {
     verifyEventMock.mockReturnValue(false);
 
-    const req = {
-      headers: {
+    const req = makeRequest(
+      {
         host: "localhost:3000",
         authorization: buildAuthHeader({
           pubkey: "f".repeat(64),
@@ -58,8 +70,8 @@ describe("verifyNip98Request", () => {
           sig: "invalid",
         }),
       },
-      url: "/api/db/update-order-status",
-    } as any;
+      "/api/db/update-order-status"
+    );
 
     await expect(
       verifyNip98Request(req, "POST", { orderId: "o1" })
@@ -70,8 +82,8 @@ describe("verifyNip98Request", () => {
   });
 
   it("rejects URL mismatches", async () => {
-    const req = {
-      headers: {
+    const req = makeRequest(
+      {
         host: "localhost:3000",
         authorization: buildAuthHeader({
           pubkey: "f".repeat(64),
@@ -85,8 +97,8 @@ describe("verifyNip98Request", () => {
           sig: "valid",
         }),
       },
-      url: "/api/db/update-order-status",
-    } as any;
+      "/api/db/update-order-status"
+    );
 
     await expect(
       verifyNip98Request(req, "POST", { orderId: "o1" })
@@ -97,8 +109,8 @@ describe("verifyNip98Request", () => {
   });
 
   it("rejects missing payload hashes for signed POST requests", async () => {
-    const req = {
-      headers: {
+    const req = makeRequest(
+      {
         host: "localhost:3000",
         authorization: buildAuthHeader({
           pubkey: "f".repeat(64),
@@ -112,8 +124,8 @@ describe("verifyNip98Request", () => {
           sig: "valid",
         }),
       },
-      url: "/api/db/update-order-status",
-    } as any;
+      "/api/db/update-order-status"
+    );
 
     await expect(
       verifyNip98Request(req, "POST", {
@@ -127,8 +139,8 @@ describe("verifyNip98Request", () => {
   });
 
   it("rejects payload hash mismatches", async () => {
-    const req = {
-      headers: {
+    const req = makeRequest(
+      {
         host: "localhost:3000",
         authorization: buildAuthHeader({
           pubkey: "f".repeat(64),
@@ -143,8 +155,8 @@ describe("verifyNip98Request", () => {
           sig: "valid",
         }),
       },
-      url: "/api/db/update-order-status",
-    } as any;
+      "/api/db/update-order-status"
+    );
 
     await expect(
       verifyNip98Request(req, "POST", {
@@ -164,8 +176,8 @@ describe("verifyNip98Request", () => {
     });
     const payloadHash = CryptoJS.SHA256(body).toString(CryptoJS.enc.Hex);
 
-    const req = {
-      headers: {
+    const req = makeRequest(
+      {
         host: "localhost:3000",
         authorization: buildAuthHeader({
           pubkey: "f".repeat(64),
@@ -180,8 +192,8 @@ describe("verifyNip98Request", () => {
           sig: "valid",
         }),
       },
-      url: "/api/db/update-order-status",
-    } as any;
+      "/api/db/update-order-status"
+    );
 
     await expect(
       verifyNip98Request(req, "POST", JSON.parse(body))

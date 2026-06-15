@@ -35,6 +35,7 @@ import {
   StorefrontPage,
   StorefrontFooter,
   StorefrontNavLink,
+  ShopProfile,
 } from "@/utils/types/types";
 import SectionEditor from "./storefront/section-editor";
 import FooterEditor from "./storefront/footer-editor";
@@ -44,6 +45,49 @@ import { sanitizeStorefrontConfigLinks } from "@/utils/storefront-links";
 
 interface ShopProfileFormProps {
   isOnboarding?: boolean;
+}
+
+type ShopProfileFormValues = {
+  banner: string;
+  picture: string;
+  name: string;
+  about: string;
+};
+
+type ShopContent = ShopProfile["content"];
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isOptionalString(value: unknown): value is string | undefined {
+  return value === undefined || typeof value === "string";
+}
+
+function isOptionalNumber(value: unknown): value is number | undefined {
+  return value === undefined || typeof value === "number";
+}
+
+function isShopUi(value: unknown): value is Partial<ShopContent["ui"]> {
+  if (!isRecord(value)) return false;
+  return (
+    isOptionalString(value.picture) &&
+    isOptionalString(value.banner) &&
+    isOptionalString(value.theme) &&
+    (value.darkMode === undefined || typeof value.darkMode === "boolean")
+  );
+}
+
+function isShopContent(value: unknown): value is Partial<ShopContent> {
+  if (!isRecord(value)) return false;
+  return (
+    isOptionalString(value.name) &&
+    isOptionalString(value.about) &&
+    (value.ui === undefined || isShopUi(value.ui)) &&
+    isOptionalNumber(value.freeShippingThreshold) &&
+    isOptionalString(value.freeShippingCurrency) &&
+    (value.storefront === undefined || isRecord(value.storefront))
+  );
 }
 
 const CURRENCY_OPTIONS = Object.keys(currencySelection);
@@ -231,14 +275,15 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
   const { signer, pubkey: userPubkey } = useContext(SignerContext);
   const shopContext = useContext(ShopMapContext);
 
-  const { handleSubmit, control, reset, watch, setValue } = useForm({
-    defaultValues: {
-      banner: "",
-      picture: "",
-      name: "",
-      about: "",
-    },
-  });
+  const { handleSubmit, control, reset, watch, setValue } =
+    useForm<ShopProfileFormValues>({
+      defaultValues: {
+        banner: "",
+        picture: "",
+        name: "",
+        about: "",
+      },
+    });
 
   const watchBanner = watch("banner");
   const watchPicture = watch("picture");
@@ -249,7 +294,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
   const contextLoadedRef = useRef(false);
 
   const applyShopConfig = useCallback(
-    (config: any) => {
+    (config: Partial<ShopContent>) => {
       if (!config) return;
       reset({
         name: config.name || "",
@@ -298,7 +343,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
       .then((r) => r.json())
       .then((data) => {
         if (contextLoadedRef.current) return; // relay beat us to it
-        if (data?.shopConfig) applyShopConfig(data.shopConfig);
+        if (isShopContent(data?.shopConfig)) applyShopConfig(data.shopConfig);
       })
       .catch((error) => {
         console.error("Failed to fetch storefront lookup data:", error);
@@ -332,12 +377,12 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
     setIsFetchingShop(false);
   }, [shopContext, userPubkey, applyShopConfig]);
 
-  const onSubmit = async (data: { [x: string]: string }) => {
+  const onSubmit = async (data: ShopProfileFormValues) => {
     setIsUploadingShopProfile(true);
     const thresholdValue = freeShippingThreshold
       ? parseFloat(freeShippingThreshold)
       : undefined;
-    const transformedData: any = {
+    const transformedData: ShopContent = {
       name: data.name || "",
       about: data.about || "",
       ui: {
@@ -530,7 +575,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
     const formAbout = watch("about");
     const formPicture = watch("picture");
     const formBanner = watch("banner");
-    const transformedData: any = {
+    const transformedData: ShopContent = {
       name: formName || shop?.content?.name || "",
       about: formAbout || shop?.content?.about || "",
       ui: {
@@ -640,7 +685,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
             </div>
           </div>
 
-          <form onSubmit={handleSubmit(onSubmit as any)}>
+          <form onSubmit={handleSubmit(onSubmit)}>
             <Controller
               name="name"
               control={control}

@@ -3,6 +3,18 @@ import {
   checkRateLimit,
   getRequestIp,
 } from "@/utils/rate-limit";
+import type { NextApiRequest } from "next";
+import type { IncomingHttpHeaders } from "http";
+
+function makeRequest(
+  headers: IncomingHttpHeaders,
+  remoteAddress?: string
+): NextApiRequest {
+  return {
+    headers,
+    socket: { remoteAddress },
+  } as NextApiRequest;
+}
 
 describe("checkRateLimit", () => {
   beforeEach(() => {
@@ -74,75 +86,66 @@ describe("getRequestIp", () => {
   });
 
   it("ignores x-forwarded-for unless proxy headers are trusted", () => {
-    const req = {
-      headers: { "x-forwarded-for": "1.2.3.4, 5.6.7.8" },
-      socket: { remoteAddress: "9.9.9.9" },
-    } as any;
+    const req = makeRequest(
+      { "x-forwarded-for": "1.2.3.4, 5.6.7.8" },
+      "9.9.9.9"
+    );
     expect(getRequestIp(req)).toBe("9.9.9.9");
   });
 
   it("uses the rightmost entry in x-forwarded-for when proxy headers are trusted", () => {
     process.env.TRUST_PROXY_HEADERS = "true";
-    const req = {
-      headers: { "x-forwarded-for": "1.2.3.4, 5.6.7.8" },
-      socket: { remoteAddress: "9.9.9.9" },
-    } as any;
+    const req = makeRequest(
+      { "x-forwarded-for": "1.2.3.4, 5.6.7.8" },
+      "9.9.9.9"
+    );
     expect(getRequestIp(req)).toBe("5.6.7.8");
   });
 
   it("uses the rightmost entry across repeated x-forwarded-for headers", () => {
     process.env.TRUST_PROXY_HEADERS = "true";
-    const req = {
-      headers: { "x-forwarded-for": ["1.2.3.4", "5.6.7.8, 6.7.8.9"] },
-      socket: { remoteAddress: "9.9.9.9" },
-    } as any;
+    const req = makeRequest(
+      { "x-forwarded-for": ["1.2.3.4", "5.6.7.8, 6.7.8.9"] },
+      "9.9.9.9"
+    );
     expect(getRequestIp(req)).toBe("6.7.8.9");
   });
 
   it("trusts x-forwarded-for when the direct peer is a trusted proxy", () => {
     process.env.TRUSTED_PROXY_IPS = "9.9.9.9";
-    const req = {
-      headers: { "x-forwarded-for": "1.2.3.4, 5.6.7.8" },
-      socket: { remoteAddress: "9.9.9.9" },
-    } as any;
+    const req = makeRequest(
+      { "x-forwarded-for": "1.2.3.4, 5.6.7.8" },
+      "9.9.9.9"
+    );
     expect(getRequestIp(req)).toBe("5.6.7.8");
   });
 
   it("ignores x-real-ip and falls back to the socket remote address", () => {
-    const req = {
-      headers: { "x-real-ip": "4.3.2.1" },
-      socket: { remoteAddress: "9.9.9.9" },
-    } as any;
+    const req = makeRequest({ "x-real-ip": "4.3.2.1" }, "9.9.9.9");
     expect(getRequestIp(req)).toBe("9.9.9.9");
   });
 
   it("falls back to the socket remote address", () => {
-    const req = {
-      headers: {},
-      socket: { remoteAddress: "9.9.9.9" },
-    } as any;
+    const req = makeRequest({}, "9.9.9.9");
     expect(getRequestIp(req)).toBe("9.9.9.9");
   });
 
   it("normalizes IPv6-mapped IPv4 socket addresses", () => {
-    const req = {
-      headers: {},
-      socket: { remoteAddress: "::ffff:9.9.9.9" },
-    } as any;
+    const req = makeRequest({}, "::ffff:9.9.9.9");
     expect(getRequestIp(req)).toBe("9.9.9.9");
   });
 
   it("normalizes IPv6-mapped IPv4 forwarded addresses", () => {
     process.env.TRUST_PROXY_HEADERS = "true";
-    const req = {
-      headers: { "x-forwarded-for": "1.2.3.4, ::ffff:5.6.7.8" },
-      socket: { remoteAddress: "9.9.9.9" },
-    } as any;
+    const req = makeRequest(
+      { "x-forwarded-for": "1.2.3.4, ::ffff:5.6.7.8" },
+      "9.9.9.9"
+    );
     expect(getRequestIp(req)).toBe("5.6.7.8");
   });
 
   it("returns 'unknown' when nothing is available", () => {
-    const req = { headers: {}, socket: {} } as any;
+    const req = makeRequest({});
     expect(getRequestIp(req)).toBe("unknown");
   });
 });

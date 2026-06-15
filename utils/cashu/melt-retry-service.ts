@@ -5,6 +5,11 @@ import {
 } from "@cashu/cashu-ts";
 import { withMintRetry, MintRetryOptions } from "./mint-retry-service";
 
+type MeltWallet = Pick<
+  CashuWallet,
+  "meltProofsBolt11" | "checkMeltQuoteBolt11"
+>;
+
 /**
  * Outcome of a `safeMeltProofs` call. The `status` field is the **truth of
  * the world** as the mint reports it, not just the API call result:
@@ -33,7 +38,7 @@ export interface MeltOutcome {
    * `undefined` when status was determined via post-failure
    * `checkMeltQuoteBolt11`.
    */
-  meltResponse?: Awaited<ReturnType<CashuWallet["meltProofsBolt11"]>>;
+  meltResponse?: Awaited<ReturnType<MeltWallet["meltProofsBolt11"]>>;
   /**
    * Diagnostic message describing the outcome path, especially useful when
    * the original `meltProofsBolt11` failed but the quote turned out PAID.
@@ -76,7 +81,7 @@ const DEFAULT_CHECK_OPTS: Required<
  * and consumed the proofs, or vice versa).
  */
 export async function safeMeltProofs(
-  wallet: CashuWallet,
+  wallet: MeltWallet,
   meltQuote: MeltQuoteBolt11Response,
   proofsToSend: Proof[],
   options: { meltRetry?: MintRetryOptions; checkRetry?: MintRetryOptions } = {}

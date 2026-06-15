@@ -34,7 +34,7 @@ describe("NostrNIP46Signer", () => {
   const mockBunkerPubKey = "mock-bunker-pubkey";
   const validBunkerUrl = `bunker://${mockBunkerPubKey}@${mockBunkerPubKey}?relay=wss://relay.one`;
 
-  let onEventCallback: (event: any) => void;
+  let onEventCallback: (event: unknown) => void;
   let mockNostrManagerInstance: {
     subscribe: jest.Mock;
     publish: jest.Mock;

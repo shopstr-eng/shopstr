@@ -1,3 +1,7 @@
+import type { NextApiRequest, NextApiResponse } from "next";
+import { IncomingMessage, ServerResponse } from "http";
+import { Socket } from "net";
+
 const getOrderStatusesMock = jest.fn();
 
 jest.mock("@/utils/db/db-service", () => ({
@@ -14,24 +18,39 @@ const getExpectedMaxOrderIds = () => {
   return Number.isFinite(configured) && configured > 0 ? configured : 200;
 };
 
-function createResponse() {
-  return {
-    statusCode: 200,
-    jsonBody: undefined as unknown,
-    headers: {} as Record<string, string>,
-    status(code: number) {
-      this.statusCode = code;
-      return this;
-    },
-    setHeader(key: string, value: string) {
-      this.headers[key] = value;
-      return this;
-    },
-    json(payload: unknown) {
-      this.jsonBody = payload;
-      return this;
-    },
+type MockResponse = NextApiResponse & {
+  jsonBody: unknown;
+  headers: Record<string, string>;
+};
+
+function createResponse(): MockResponse {
+  const response = new ServerResponse(
+    new IncomingMessage(new Socket())
+  ) as MockResponse;
+  response.statusCode = 200;
+  response.jsonBody = undefined;
+  response.headers = {};
+  response.status = function status(code: number) {
+    this.statusCode = code;
+    return this;
   };
+  response.setHeader = function setHeader(key: string, value: number | string) {
+    this.headers[key] = String(value);
+    return this;
+  };
+  response.json = function json(payload: unknown) {
+    this.jsonBody = payload;
+    return this;
+  };
+  return response;
+}
+
+function createRequest(body: unknown): NextApiRequest {
+  const request = new IncomingMessage(new Socket()) as NextApiRequest;
+  request.method = "POST";
+  request.headers = {};
+  request.body = body;
+  return request;
 }
 
 describe("/api/db/get-order-statuses", () => {
@@ -40,14 +59,10 @@ describe("/api/db/get-order-statuses", () => {
   });
 
   it("rejects non-string orderIds payloads", async () => {
-    const req = {
-      method: "POST",
-      headers: {},
-      body: { orderIds: ["order-1", 123] },
-    } as any;
+    const req = createRequest({ orderIds: ["order-1", 123] });
     const res = createResponse();
 
-    await handler(req, res as any);
+    await handler(req, res);
 
     expect(res.statusCode).toBe(400);
     expect(res.jsonBody).toEqual({
@@ -57,19 +72,15 @@ describe("/api/db/get-order-statuses", () => {
 
   it("rejects requests with too many order IDs", async () => {
     const maxOrderIds = getExpectedMaxOrderIds();
-    const req = {
-      method: "POST",
-      headers: {},
-      body: {
-        orderIds: Array.from(
-          { length: maxOrderIds + 1 },
-          (_, index) => `order-${index}`
-        ),
-      },
-    } as any;
+    const req = createRequest({
+      orderIds: Array.from(
+        { length: maxOrderIds + 1 },
+        (_, index) => `order-${index}`
+      ),
+    });
     const res = createResponse();
 
-    await handler(req, res as any);
+    await handler(req, res);
 
     expect(res.statusCode).toBe(413);
     expect(res.jsonBody).toEqual({
@@ -78,14 +89,10 @@ describe("/api/db/get-order-statuses", () => {
   });
 
   it("returns empty statuses when orderIds is omitted", async () => {
-    const req = {
-      method: "POST",
-      headers: {},
-      body: {},
-    } as any;
+    const req = createRequest({});
     const res = createResponse();
 
-    await handler(req, res as any);
+    await handler(req, res);
 
     expect(getOrderStatusesMock).not.toHaveBeenCalled();
     expect(res.statusCode).toBe(200);
@@ -95,14 +102,12 @@ describe("/api/db/get-order-statuses", () => {
   it("dedupes IDs before querying", async () => {
     getOrderStatusesMock.mockResolvedValue({ "order-1": "shipped" });
 
-    const req = {
-      method: "POST",
-      headers: {},
-      body: { orderIds: ["order-1", "order-1", " order-2 "] },
-    } as any;
+    const req = createRequest({
+      orderIds: ["order-1", "order-1", " order-2 "],
+    });
     const res = createResponse();
 
-    await handler(req, res as any);
+    await handler(req, res);
 
     expect(getOrderStatusesMock).toHaveBeenCalledWith(["order-1", "order-2"]);
     expect(res.statusCode).toBe(200);

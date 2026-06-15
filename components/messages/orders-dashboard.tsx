@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useContext } from "react";
 import { useForm, Controller } from "react-hook-form";
-import { nip19 } from "nostr-tools";
+import { nip19, type Event } from "nostr-tools";
 import {
   Modal,
   ModalContent,
@@ -450,9 +450,9 @@ const OrdersDashboard = ({
             }
             if (productAddress && productContext?.productEvents) {
               const productEvent = productContext.productEvents.find(
-                (event: any) => {
+                (event: Event) => {
                   const eventAddress = `30402:${event.pubkey}:${
-                    event.tags.find((tag: any) => tag[0] === "d")?.[1]
+                    event.tags.find((tag: string[]) => tag[0] === "d")?.[1]
                   }`;
                   return productAddress.includes(eventAddress);
                 }
@@ -838,9 +838,9 @@ const OrdersDashboard = ({
   const handleProductClick = (productAddress: string) => {
     if (!productContext?.productEvents) return;
 
-    const productEvent = productContext.productEvents.find((event: any) => {
+    const productEvent = productContext.productEvents.find((event: Event) => {
       const eventAddress = `30402:${event.pubkey}:${
-        event.tags.find((tag: any) => tag[0] === "d")?.[1]
+        event.tags.find((tag: string[]) => tag[0] === "d")?.[1]
       }`;
       return productAddress.includes(eventAddress);
     });

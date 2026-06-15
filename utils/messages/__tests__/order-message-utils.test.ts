@@ -6,10 +6,27 @@ import {
   registerTaggedOrderGroupingKey,
   resolveExplicitPaymentMethod,
 } from "../order-message-utils";
+import type { NostrMessageEvent } from "@/utils/types/types";
+
+function makeMessageEvent(
+  overrides: Partial<NostrMessageEvent>
+): NostrMessageEvent {
+  return {
+    id: "message-id",
+    pubkey: "pubkey",
+    kind: 14,
+    content: "",
+    created_at: 1,
+    sig: "sig",
+    read: true,
+    tags: [],
+    ...overrides,
+  };
+}
 
 describe("order-message-utils", () => {
   test("buildOrderGroupingKey stays stable across lifecycle subjects", () => {
-    const baseEvent = {
+    const baseEvent = makeMessageEvent({
       id: "msg-1",
       tags: [
         ["subject", "order-info"],
@@ -18,9 +35,9 @@ describe("order-message-utils", () => {
         ["address", "123 Main St"],
         ["pickup", "Storefront"],
       ],
-    } as any;
+    });
 
-    const followUpEvent = {
+    const followUpEvent = makeMessageEvent({
       ...baseEvent,
       id: "msg-2",
       tags: [
@@ -30,7 +47,7 @@ describe("order-message-utils", () => {
         ["address", "123 Main St"],
         ["pickup", "Storefront"],
       ],
-    } as any;
+    });
 
     expect(buildOrderGroupingKey(baseEvent)).toBe(
       buildOrderGroupingKey(followUpEvent)
@@ -38,10 +55,10 @@ describe("order-message-utils", () => {
   });
 
   test("buildOrderGroupingKey returns empty string when fallback metadata is incomplete", () => {
-    const incompleteEvent = {
+    const incompleteEvent = makeMessageEvent({
       id: "msg-incomplete",
       tags: [["subject", "payment-change"]],
-    } as any;
+    });
 
     expect(buildOrderGroupingKey(incompleteEvent)).toBe("");
   });
@@ -58,7 +75,7 @@ describe("order-message-utils", () => {
   });
 
   test("getOrderStatusLookupKeys includes tag, grouping key, and message id", () => {
-    const event = {
+    const event = makeMessageEvent({
       id: "msg-3",
       tags: [
         ["subject", "order-receipt"],
@@ -66,7 +83,7 @@ describe("order-message-utils", () => {
         ["a", "30402:merchant:dtag"],
         ["amount", "2400"],
       ],
-    } as any;
+    });
 
     const lookupKeys = getOrderStatusLookupKeys(event);
     expect(lookupKeys).toEqual(expect.arrayContaining(["order-123", "msg-3"]));
@@ -113,14 +130,14 @@ describe("order-message-utils", () => {
   });
 
   test("getLatestShippingInfo surfaces missing fields", () => {
-    const shippingEvent = {
+    const shippingEvent = makeMessageEvent({
       id: "msg-4",
       tags: [
         ["subject", "shipping-info"],
         ["tracking", ""],
         ["carrier", "UPS"],
       ],
-    } as any;
+    });
 
     const result = getLatestShippingInfo([shippingEvent]);
     expect(result?.carrier).toBe("UPS");
@@ -129,22 +146,22 @@ describe("order-message-utils", () => {
 
   test("getLatestShippingInfo returns null when no shipping-info message exists", () => {
     const messages = [
-      {
+      makeMessageEvent({
         id: "msg-5",
         tags: [["subject", "order-info"]],
-      },
-      {
+      }),
+      makeMessageEvent({
         id: "msg-6",
         tags: [["subject", "payment-confirmation"]],
-      },
-    ] as any[];
+      }),
+    ];
 
     expect(getLatestShippingInfo(messages)).toBeNull();
     expect(getLatestShippingInfo([])).toBeNull();
   });
 
   test("buildOrderGroupingKey uses item tag when a tag is absent", () => {
-    const eventWithItemTag = {
+    const eventWithItemTag = makeMessageEvent({
       id: "msg-7",
       tags: [
         ["subject", "order-info"],
@@ -152,9 +169,9 @@ describe("order-message-utils", () => {
         ["amount", "500"],
         ["address", "456 Oak Ave"],
       ],
-    } as any;
+    });
 
-    const eventWithATag = {
+    const eventWithATag = makeMessageEvent({
       id: "msg-8",
       tags: [
         ["subject", "shipping-info"],
@@ -162,7 +179,7 @@ describe("order-message-utils", () => {
         ["amount", "500"],
         ["address", "456 Oak Ave"],
       ],
-    } as any;
+    });
 
     expect(buildOrderGroupingKey(eventWithItemTag)).toBe(
       buildOrderGroupingKey(eventWithATag)
@@ -171,7 +188,7 @@ describe("order-message-utils", () => {
   });
 
   test("getOrderStatusLookupKeys includes grouping key even when orderTag is present", () => {
-    const event = {
+    const event = makeMessageEvent({
       id: "msg-9",
       tags: [
         ["subject", "order-receipt"],
@@ -180,7 +197,7 @@ describe("order-message-utils", () => {
         ["amount", "1000"],
         ["address", "789 Pine St"],
       ],
-    } as any;
+    });
 
     const lookupKeys = getOrderStatusLookupKeys(event);
     const groupingKey = buildOrderGroupingKey(event);

@@ -24,7 +24,13 @@ import {
 } from "@heroicons/react/24/outline";
 import { useRouter } from "next/router";
 import { nip19, Event } from "nostr-tools";
-import { useContext, useEffect, useState, useRef } from "react";
+import {
+  useContext,
+  useEffect,
+  useState,
+  useRef,
+  type ChangeEvent,
+} from "react";
 import {
   ReviewsContext,
   ShopMapContext,
@@ -579,8 +585,8 @@ function MarketplacePage({
                 placeholder="All"
                 label="Location"
                 value={selectedLocation}
-                onChange={(event: any) => {
-                  setSelectedLocation(event.target.value);
+                onChange={(e: ChangeEvent<HTMLSelectElement>) => {
+                  setSelectedLocation(e.target.value);
                 }}
               />
               {!isFetchingFollows && hasTrustGraph ? (

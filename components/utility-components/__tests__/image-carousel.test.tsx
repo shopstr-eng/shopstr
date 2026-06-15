@@ -2,6 +2,7 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import ImageCarousel from "../image-carousel";
 import { Carousel } from "react-responsive-carousel";
+import type { ImgHTMLAttributes, ReactNode } from "react";
 
 const mockRouter = {
   pathname: "/product-page",
@@ -11,15 +12,24 @@ jest.mock("next/router", () => ({
 }));
 
 jest.mock("react-responsive-carousel", () => ({
-  Carousel: jest.fn(({ children, ...props }) => (
-    <div data-testid="carousel" data-props={JSON.stringify(props)}>
-      {children}
-    </div>
-  )),
+  Carousel: jest.fn(
+    ({
+      children,
+      ...props
+    }: { children?: ReactNode } & Record<string, unknown>) => (
+      <div data-testid="carousel" data-props={JSON.stringify(props)}>
+        {children}
+      </div>
+    )
+  ),
 }));
 
+type MockImageProps = ImgHTMLAttributes<HTMLImageElement> & {
+  _disableSkeleton?: boolean;
+};
+
 jest.mock("@heroui/react", () => ({
-  Image: ({ _disableSkeleton, ...props }: any) => (
+  Image: ({ _disableSkeleton, ...props }: MockImageProps) => (
     <img {...props} data-testid="next-image" />
   ),
 }));

@@ -5,6 +5,7 @@ import {
   waitFor,
   act,
 } from "@testing-library/react";
+import type { SVGProps } from "react";
 import "@testing-library/jest-dom";
 import MintButton from "../mint-button";
 import {
@@ -14,6 +15,9 @@ import {
 import { Mint as CashuMint, Wallet as CashuWallet } from "@cashu/cashu-ts";
 import * as NostrHelper from "@/utils/nostr/nostr-helper-functions";
 import QRCode from "qrcode";
+import type { NostrManager } from "@/utils/nostr/nostr-manager";
+import type { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
+import type { WebLNPaymentResponse } from "@/utils/types/types";
 
 jest.mock("@cashu/cashu-ts", () => ({
   ...jest.requireActual("@cashu/cashu-ts"),
@@ -29,7 +33,9 @@ const mockMintProofs = jest.fn();
   checkMintQuoteBolt11: mockCheckMintQuote,
   mintProofsBolt11: mockMintProofs,
 }));
-(CashuMint as unknown as jest.Mock).mockImplementation(() => ({}));
+(CashuMint as jest.MockedClass<typeof CashuMint>).mockImplementation(
+  () => ({}) as CashuMint
+);
 
 jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
   getLocalStorageData: jest.fn(),
@@ -66,7 +72,7 @@ jest.mock("@/components/utility-components/failure-modal", () => ({
 
 jest.mock("@heroicons/react/24/outline", () => ({
   BanknotesIcon: () => <div data-testid="banknotes-icon" />,
-  ClipboardIcon: (props: any) => (
+  ClipboardIcon: (props: SVGProps<SVGSVGElement>) => (
     <svg data-testid="clipboard-icon" {...props} />
   ),
   CheckIcon: () => <div data-testid="check-icon" />,
@@ -79,33 +85,55 @@ jest.mock("@/utils/nostr/signers/nostr-nip46-signer", () => ({
   })),
 }));
 
-const mockSigner = { name: "mockSigner" };
-const mockNostr = { relays: [] };
+const mockSigner: NostrSigner = {
+  connect: jest.fn().mockResolvedValue("buyer-pubkey"),
+  getPubKey: jest.fn().mockResolvedValue("buyer-pubkey"),
+  sign: jest.fn(),
+  encrypt: jest.fn(),
+  decrypt: jest.fn(),
+  close: jest.fn().mockResolvedValue(undefined),
+  toJSON: () => ({ type: "test" }),
+};
+const mockNostr = Object.create(null) as NostrManager;
 const mockLocalStorage = {
   mints: ["https://legend.lnbits.com/cashu/api/v1/4gr9Xcmz3e3g3pC1YyQ1e3"],
   tokens: [],
   history: [],
 };
 
-const renderComponent = (customSigner = mockSigner) => {
+const renderComponent = (customSigner: NostrSigner = mockSigner) => {
   return render(
     <SignerContext.Provider
-      value={{ signer: customSigner as any, setSigner: jest.fn() } as any}
+      value={{
+        signer: customSigner,
+      }}
     >
-      <NostrContext.Provider
-        value={{ nostr: mockNostr as any, setNostr: jest.fn() } as any}
-      >
+      <NostrContext.Provider value={{ nostr: mockNostr }}>
         <MintButton />
       </NostrContext.Provider>
     </SignerContext.Provider>
   );
 };
 
-const mockWebLN = {
+type TestWebLNProvider = {
+  enable: jest.Mock<Promise<void>, []>;
+  isEnabled: jest.Mock<Promise<boolean>, []>;
+  sendPayment: jest.Mock<Promise<WebLNPaymentResponse | null>, [string]>;
+};
+
+const mockWebLN: TestWebLNProvider = {
   enable: jest.fn(),
   isEnabled: jest.fn(),
   sendPayment: jest.fn(),
 };
+
+function setWebln(provider: TestWebLNProvider | undefined) {
+  Object.defineProperty(window, "webln", {
+    value: provider,
+    configurable: true,
+    writable: true,
+  });
+}
 
 describe("MintButton Component", () => {
   beforeEach(() => {
@@ -117,7 +145,7 @@ describe("MintButton Component", () => {
       value: { writeText: jest.fn().mockResolvedValue(undefined) },
       writable: true,
     });
-    delete (window as any).webln;
+    setWebln(undefined);
     jest.spyOn(console, "error").mockImplementation(() => {});
     jest.spyOn(console, "warn").mockImplementation(() => {});
 
@@ -345,7 +373,7 @@ describe("MintButton Component", () => {
     const mockHash = "hash50";
     const mockProofs = [{ id: "proof1" }];
 
-    (window as any).webln = mockWebLN;
+    setWebln(mockWebLN);
     mockWebLN.enable.mockResolvedValue(undefined);
     mockWebLN.isEnabled.mockResolvedValue(true);
     mockWebLN.sendPayment.mockResolvedValue({ preimage: "mock_preimage" });
@@ -377,7 +405,7 @@ describe("MintButton Component", () => {
     const mockInvoice = "lnbc500...";
     const mockHash = "hash50";
 
-    (window as any).webln = mockWebLN;
+    setWebln(mockWebLN);
     mockWebLN.enable.mockRejectedValue(new Error("WebLN enable failed"));
 
     mockCreateMintQuote.mockResolvedValue({
@@ -403,7 +431,7 @@ describe("MintButton Component", () => {
     const mockInvoice = "lnbc500...";
     const mockHash = "hash50";
 
-    (window as any).webln = mockWebLN;
+    setWebln(mockWebLN);
     mockWebLN.enable.mockResolvedValue(undefined);
     mockWebLN.isEnabled.mockResolvedValue(false);
 
@@ -432,7 +460,7 @@ describe("MintButton Component", () => {
     const mockInvoice = "lnbc500...";
     const mockHash = "hash50";
 
-    (window as any).webln = mockWebLN;
+    setWebln(mockWebLN);
     mockWebLN.enable.mockResolvedValue(undefined);
     mockWebLN.isEnabled.mockResolvedValue(true);
     mockWebLN.sendPayment.mockRejectedValue(new Error("Payment failed"));
@@ -460,7 +488,7 @@ describe("MintButton Component", () => {
     const mockInvoice = "lnbc500...";
     const mockHash = "hash50";
 
-    (window as any).webln = mockWebLN;
+    setWebln(mockWebLN);
     mockWebLN.enable.mockResolvedValue(undefined);
     mockWebLN.isEnabled.mockResolvedValue(true);
     mockWebLN.sendPayment.mockResolvedValue(null);

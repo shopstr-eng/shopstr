@@ -1,3 +1,24 @@
+import type {
+  NostrEvent,
+  NostrManagerParams,
+  NostrRelay,
+  NostrSub,
+} from "../nostr-manager";
+import type { ChallengeHandler } from "../signers/nostr-signer";
+
+type NostrManagerConstructor = typeof import("../nostr-manager").NostrManager;
+type NostrManagerPublic = Pick<
+  InstanceType<NostrManagerConstructor>,
+  "addRelay" | "addRelays" | "close" | "subscribe" | "publish" | "fetch"
+>;
+type TestNostrManager = NostrManagerPublic;
+type TimeoutExecutor<T> = (
+  resolve: (value: T) => void,
+  reject: (reason: Error) => void,
+  abortSignal: AbortSignal
+) => unknown;
+type TimeoutOptions = { timeout?: number };
+
 const verifyEventMock = jest.fn();
 let relayConnectMock: jest.Mock;
 let relayCloseMock: jest.Mock;
@@ -16,11 +37,53 @@ const FakePool = jest.fn().mockImplementation(() => fakePoolInstance);
 const nip07 = { fromJSON: jest.fn() };
 const nsec = { fromJSON: jest.fn() };
 const nip46 = { fromJSON: jest.fn() };
-let timeoutOptionsMock: any[];
+let timeoutOptionsMock: TimeoutOptions[];
 let latestAbortController: AbortController | undefined;
 
 describe("NostrManager", () => {
-  let NostrManager: any;
+  let NostrManager: NostrManagerConstructor;
+
+  const makeManager = (
+    relays: string[],
+    params?: Partial<NostrManagerParams>
+  ): TestNostrManager => new NostrManager(relays, params as NostrManagerParams);
+
+  const isNostrRelay = (value: unknown): value is NostrRelay => {
+    return (
+      typeof value === "object" &&
+      value !== null &&
+      "url" in value &&
+      "activeSubs" in value &&
+      Array.isArray(value.activeSubs)
+    );
+  };
+
+  const getRelays = (manager: TestNostrManager): NostrRelay[] => {
+    const relays: unknown = Reflect.get(manager, "relays");
+    if (!Array.isArray(relays) || !relays.every(isNostrRelay)) {
+      throw new Error("Expected NostrManager private relays for test");
+    }
+    return relays;
+  };
+
+  const getRelay = (manager: TestNostrManager, index = 0): NostrRelay => {
+    const relay = getRelays(manager)[index];
+    if (!relay) {
+      throw new Error(`Expected relay at index ${index}`);
+    }
+    return relay;
+  };
+
+  const makeEvent = (overrides: Partial<NostrEvent> = {}): NostrEvent => ({
+    id: "event-id",
+    pubkey: "pubkey",
+    created_at: 1,
+    kind: 1,
+    tags: [],
+    content: "",
+    sig: "sig",
+    ...overrides,
+  });
 
   beforeEach(async () => {
     jest.resetModules();
@@ -32,7 +95,7 @@ describe("NostrManager", () => {
 
     jest.doMock("nostr-tools", () => ({
       SimplePool: FakePool,
-      verifyEvent: (e: any) => verifyEventMock(e),
+      verifyEvent: (e: unknown) => verifyEventMock(e),
     }));
     jest.doMock("@/utils/nostr/signers/nostr-nip07-signer", () => ({
       NostrNIP07Signer: nip07,
@@ -44,11 +107,14 @@ describe("NostrManager", () => {
       NostrNIP46Signer: nip46,
     }));
     jest.doMock("../../timeout", () => ({
-      newPromiseWithTimeout: (fn: any, options: any) => {
+      newPromiseWithTimeout: <T>(
+        fn: TimeoutExecutor<T>,
+        options: TimeoutOptions
+      ) => {
         timeoutOptionsMock.push(options);
         const abortController = new AbortController();
         latestAbortController = abortController;
-        return new Promise((resolve, reject) =>
+        return new Promise<T>((resolve, reject) =>
           fn(resolve, reject, abortController.signal)
         );
       },
@@ -63,7 +129,7 @@ describe("NostrManager", () => {
   });
 
   describe("signerFrom()", () => {
-    const CH: any = jest.fn();
+    const CH: ChallengeHandler = async () => ({ res: "", remind: false });
 
     it("uses NIP-07 when available", () => {
       nip07.fromJSON.mockReturnValue("S07");
@@ -98,32 +164,34 @@ describe("NostrManager", () => {
 
   describe("relay management", () => {
     it("addRelay/addRelays avoids duplicates", () => {
-      const mgr = new NostrManager([], { keepAliveTime: 10, gcInterval: 10 });
+      const mgr = makeManager([], { keepAliveTime: 10, gcInterval: 10 });
       mgr.addRelay("r1");
       mgr.addRelay("r1");
       mgr.addRelays(["r2", "r1"]);
-      const urls = mgr.relays.map((r: any) => r.url).sort();
+      const urls = getRelays(mgr)
+        .map((relay) => relay.url)
+        .sort();
       expect(urls).toEqual(["r1", "r2"]);
     });
 
     it("close() clears all relays and subs", async () => {
-      const mgr = new NostrManager(["x"]);
-      const sub = { close: jest.fn(), _sub: { close: jest.fn() } };
-      mgr.relays[0].activeSubs.push(sub);
+      const mgr = makeManager(["x"]);
+      const sub: NostrSub = { close: jest.fn(), _sub: { close: jest.fn() } };
+      getRelay(mgr).activeSubs.push(sub);
       mgr.close();
-      expect(mgr.relays.length).toBe(0);
+      expect(getRelays(mgr).length).toBe(0);
       expect(sub.close).toHaveBeenCalled();
     });
   });
 
   describe("subscribe()", () => {
-    let mgr: any;
+    let mgr: TestNostrManager;
     beforeEach(() => {
-      mgr = new NostrManager(["u1"], { readable: true });
+      mgr = makeManager(["u1"], { readable: true });
     });
 
     it("throws if not readable", async () => {
-      mgr = new NostrManager([], { readable: false });
+      mgr = makeManager([], { readable: false });
       await expect(mgr.subscribe([], {})).rejects.toThrow("not readable");
     });
 
@@ -133,18 +201,18 @@ describe("NostrManager", () => {
       await mgr.subscribe([], { onevent: cb }, ["u1"]);
 
       const params = fakePoolInstance.subscribeMap.mock.calls[0][1];
-      params.onevent!({ id: 1 });
-      params.onevent!({ id: 2 });
+      params.onevent!(makeEvent({ id: "1" }));
+      params.onevent!(makeEvent({ id: "2" }));
 
       expect(cb).toHaveBeenCalledTimes(1);
-      expect(cb).toHaveBeenCalledWith({ id: 2 });
+      expect(cb).toHaveBeenCalledWith(makeEvent({ id: "2" }));
     });
 
     it("close() removes from activeSubs", async () => {
       const sub = await mgr.subscribe([], {}, ["u1"]);
-      expect(mgr.relays[0].activeSubs).toContain(sub);
+      expect(getRelay(mgr).activeSubs).toContain(sub);
       await sub.close();
-      expect(mgr.relays[0].activeSubs).not.toContain(sub);
+      expect(getRelay(mgr).activeSubs).not.toContain(sub);
     });
 
     it("awaits reconnect before subscribing on sleeping relays", async () => {
@@ -168,14 +236,14 @@ describe("NostrManager", () => {
   });
 
   describe("publish()", () => {
-    const evt = { id: "X" };
-    let mgr: any;
+    const evt = makeEvent({ id: "X" });
+    let mgr: TestNostrManager;
     beforeEach(() => {
-      mgr = new NostrManager(["p1"], { writable: true });
+      mgr = makeManager(["p1"], { writable: true });
     });
 
     it("throws if not writable", async () => {
-      mgr = new NostrManager([], { writable: false });
+      mgr = makeManager([], { writable: false });
       await expect(mgr.publish(evt)).rejects.toThrow("not writable");
     });
 
@@ -206,7 +274,7 @@ describe("NostrManager", () => {
   });
 
   describe("fetch()", () => {
-    let mgr: any;
+    let mgr: TestNostrManager;
     const waitForSubscribeMap = async () => {
       for (
         let index = 0;
@@ -221,8 +289,8 @@ describe("NostrManager", () => {
     };
 
     beforeEach(() => {
-      mgr = new NostrManager(["u1"], { readable: true });
-      mgr.relays[0].sleeping = false;
+      mgr = makeManager(["u1"], { readable: true });
+      getRelay(mgr).sleeping = false;
       verifyEventMock.mockReturnValue(true);
     });
 
@@ -234,10 +302,12 @@ describe("NostrManager", () => {
       await waitForSubscribeMap();
 
       const params = fakePoolInstance.subscribeMap.mock.calls[0][1];
-      params.onevent({ id: "product-1" });
+      params.onevent(makeEvent({ id: "product-1" }));
       params.oneose();
 
-      await expect(fetchPromise).resolves.toEqual([{ id: "product-1" }]);
+      await expect(fetchPromise).resolves.toEqual([
+        makeEvent({ id: "product-1" }),
+      ]);
       expect(timeoutOptionsMock).toEqual([{ timeout: 1234 }]);
       expect(subClose).toHaveBeenCalledTimes(1);
     });

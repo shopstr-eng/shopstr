@@ -12,6 +12,15 @@ const pool = getDbPool();
 
 const RATE_LIMIT = { limit: 20, windowMs: 60 * 1000 };
 
+function hasPostgresErrorCode(error: unknown, code: string): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    error.code === code
+  );
+}
+
 function sanitizeSlug(input: string): string {
   return input
     .toLowerCase()
@@ -141,8 +150,8 @@ export default async function handler(
     );
 
     return res.status(200).json({ slug: sanitized });
-  } catch (error: any) {
-    if (error?.code === "23505") {
+  } catch (error) {
+    if (hasPostgresErrorCode(error, "23505")) {
       return res.status(409).json({ error: "This shop name is already taken" });
     }
     console.error("Register slug error:", error);

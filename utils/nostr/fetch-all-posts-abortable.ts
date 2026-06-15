@@ -12,6 +12,8 @@ type EditProductContext = (
   isLoading: boolean
 ) => void;
 
+type NostrSubscriber = Pick<NostrManager, "subscribe">;
+
 function isAbortError(error: unknown): boolean {
   return (
     typeof error === "object" &&
@@ -41,7 +43,7 @@ function isValidProductRelayEvent(
 }
 
 async function fetchRelayEvents(
-  nostr: NostrManager,
+  nostr: NostrSubscriber,
   filters: NostrFilter[],
   relays: string[],
   signal?: AbortSignal
@@ -121,7 +123,7 @@ async function fetchRelayEvents(
 }
 
 export const fetchAllPostsAbortable = async (
-  nostr: NostrManager,
+  nostr: NostrSubscriber,
   relays: string[],
   editProductContext: EditProductContext,
   signal?: AbortSignal

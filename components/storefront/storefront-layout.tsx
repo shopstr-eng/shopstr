@@ -105,7 +105,7 @@ export default function StorefrontLayout({
     // Also hydrate the shop state so name/about/picture render before relay loads
     setShop({
       pubkey: shopPubkey,
-      content: cfg as any,
+      content: cfg as ShopProfile["content"],
       created_at: initialCreatedAt || 0,
     });
     // Record the DB event timestamp so we can guard the relay override below
@@ -182,8 +182,8 @@ export default function StorefrontLayout({
   const sellerProducts = useMemo(() => {
     if (!shopPubkey || !productContext.productEvents.length) return [];
     return productContext.productEvents
-      .filter((event: any) => event.pubkey === shopPubkey)
-      .map((event: any) => parseTags(event))
+      .filter((event) => event.pubkey === shopPubkey)
+      .map((event) => parseTags(event))
       .filter((p: ProductData | undefined) => p !== undefined) as ProductData[];
   }, [shopPubkey, productContext.productEvents]);
 

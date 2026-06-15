@@ -54,6 +54,7 @@ import {
   ProfileData,
   NostrMessageEvent,
   ShopProfile,
+  CashuProofEvent,
 } from "../utils/types/types";
 import { Proof } from "@cashu/cashu-ts";
 import TopNav from "@/components/nav-top";
@@ -470,13 +471,14 @@ function Shopstr({ props }: { props: AppProps }) {
   };
 
   const editProfileContext = (
-    profileData: Map<string, any>,
+    profileData: Map<string, ProfileData | null>,
     isLoading: boolean
   ) => {
     setProfileContext((profileContext) => {
       const mergedProfileData = new Map(profileContext.profileData);
 
       profileData.forEach((incomingProfile, pubkey) => {
+        if (!incomingProfile) return;
         const existingProfile = mergedProfileData.get(pubkey);
         if (
           !existingProfile ||
@@ -556,7 +558,7 @@ function Shopstr({ props }: { props: AppProps }) {
   };
 
   const editCashuWalletContext = (
-    proofEvents: any[],
+    proofEvents: CashuProofEvent[],
     cashuMints: string[],
     cashuProofs: Proof[],
     isLoading: boolean
@@ -582,51 +584,25 @@ function Shopstr({ props }: { props: AppProps }) {
     async function fetchData() {
       const runId = ++initializationRunRef.current;
       const isCurrentRun = () => runId === initializationRunRef.current;
-      type EditorFn = (...args: any[]) => void;
 
-      const guard = <TFn extends EditorFn>(fn: TFn) => {
-        return ((...args: Parameters<TFn>) => {
+      const guard = <TArgs extends unknown[]>(fn: (...args: TArgs) => void) => {
+        return ((...args: TArgs) => {
           if (!isCurrentRun()) return;
           fn(...args);
-        }) as TFn;
-      };
-      const createGuardedEditors = <T extends Record<string, EditorFn>>(
-        editors: T
-      ): T => {
-        const guardedEditors = {} as T;
-
-        (Object.keys(editors) as Array<keyof T>).forEach((key) => {
-          guardedEditors[key] = guard(editors[key]);
-        });
-
-        return guardedEditors;
+        }) as (...args: TArgs) => void;
       };
 
-      const {
-        guardedEditProductContext,
-        guardedEditReviewsContext,
-        guardedEditReportsContext,
-        guardedEditShopContext,
-        guardedEditProfileContext,
-        guardedEditChatContext,
-        guardedEditFollowsContext,
-        guardedEditRelaysContext,
-        guardedEditBlossomContext,
-        guardedEditCashuWalletContext,
-        guardedEditCommunityContext,
-      } = createGuardedEditors({
-        guardedEditProductContext: editProductContext,
-        guardedEditReviewsContext: editReviewsContext,
-        guardedEditReportsContext: editReportsContext,
-        guardedEditShopContext: editShopContext,
-        guardedEditProfileContext: editProfileContext,
-        guardedEditChatContext: editChatContext,
-        guardedEditFollowsContext: editFollowsContext,
-        guardedEditRelaysContext: editRelaysContext,
-        guardedEditBlossomContext: editBlossomContext,
-        guardedEditCashuWalletContext: editCashuWalletContext,
-        guardedEditCommunityContext: editCommunityContext,
-      });
+      const guardedEditProductContext = guard(editProductContext);
+      const guardedEditReviewsContext = guard(editReviewsContext);
+      const guardedEditReportsContext = guard(editReportsContext);
+      const guardedEditShopContext = guard(editShopContext);
+      const guardedEditProfileContext = guard(editProfileContext);
+      const guardedEditChatContext = guard(editChatContext);
+      const guardedEditFollowsContext = guard(editFollowsContext);
+      const guardedEditRelaysContext = guard(editRelaysContext);
+      const guardedEditBlossomContext = guard(editBlossomContext);
+      const guardedEditCashuWalletContext = guard(editCashuWalletContext);
+      const guardedEditCommunityContext = guard(editCommunityContext);
 
       const runTask = async <T,>(
         taskName: string,

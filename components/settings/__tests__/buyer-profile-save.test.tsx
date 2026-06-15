@@ -1,4 +1,10 @@
 import React from "react";
+import type {
+  ChangeEventHandler,
+  KeyboardEventHandler,
+  MouseEventHandler,
+  ReactNode,
+} from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import "@testing-library/jest-dom";
@@ -10,6 +16,46 @@ import {
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
 import { createNostrProfileEvent } from "@/utils/nostr/nostr-helper-functions";
+import type { NostrManager } from "@/utils/nostr/nostr-manager";
+import type { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
+
+type ButtonMockProps = {
+  children?: ReactNode;
+  isDisabled?: boolean;
+  isLoading?: boolean;
+  onClick?: MouseEventHandler<HTMLButtonElement>;
+  onKeyDown?: KeyboardEventHandler<HTMLButtonElement>;
+  type?: "button" | "submit" | "reset";
+};
+type InputMockProps = {
+  label?: string;
+  value?: string;
+  onChange?: ChangeEventHandler<HTMLInputElement>;
+  onBlur?: () => void;
+  type?: string;
+};
+type ImageMockProps = {
+  src?: string;
+  alt?: string;
+  className?: string;
+};
+type FileUploaderMockProps = {
+  children?: ReactNode;
+  imgCallbackOnUpload?: (imgUrl: string) => void;
+  isIconOnly?: boolean;
+};
+
+const mockUserPubkey = "buyer_pubkey_123";
+const mockNostr = Object.create(null) as NostrManager;
+const mockSigner: NostrSigner = {
+  connect: jest.fn().mockResolvedValue(mockUserPubkey),
+  getPubKey: jest.fn().mockResolvedValue(mockUserPubkey),
+  sign: jest.fn(),
+  encrypt: jest.fn(),
+  decrypt: jest.fn(),
+  close: jest.fn().mockResolvedValue(undefined),
+  toJSON: () => ({ type: "test" }),
+};
 
 const mockRouterPush = jest.fn();
 jest.mock("next/router", () => ({
@@ -26,7 +72,7 @@ jest.mock(
       onClick,
       onKeyDown,
       type,
-    }: any) => (
+    }: ButtonMockProps) => (
       <button
         type={type || "button"}
         disabled={isDisabled || isLoading}
@@ -36,7 +82,13 @@ jest.mock(
         {children}
       </button>
     ),
-    Input: ({ label, value, onChange, onBlur, type = "text" }: any) => (
+    Input: ({
+      label,
+      value,
+      onChange,
+      onBlur,
+      type = "text",
+    }: InputMockProps) => (
       <label>
         {label}
         <input
@@ -48,7 +100,7 @@ jest.mock(
         />
       </label>
     ),
-    Image: ({ src, alt, className }: any) => (
+    Image: ({ src, alt, className }: ImageMockProps) => (
       <img src={src} alt={alt} className={className} />
     ),
   }),
@@ -62,10 +114,10 @@ const mockCreateNostrProfileEvent = createNostrProfileEvent as jest.Mock;
 
 jest.mock("@/components/utility-components/file-uploader", () => ({
   FileUploaderButton: jest.fn(
-    ({ children, imgCallbackOnUpload, isIconOnly }: any) => (
+    ({ children, imgCallbackOnUpload, isIconOnly }: FileUploaderMockProps) => (
       <button
         data-testid={isIconOnly ? "upload-picture-btn" : "upload-banner-btn"}
-        onClick={() => imgCallbackOnUpload("https://new.image/url")}
+        onClick={() => imgCallbackOnUpload?.("https://new.image/url")}
       >
         {children}
       </button>
@@ -75,7 +127,6 @@ jest.mock("@/components/utility-components/file-uploader", () => ({
 
 jest.mock("@/components/utility-components/shopstr-spinner", () => () => null);
 
-const mockUserPubkey = "buyer_pubkey_123";
 const mockSavedProfileEvent = {
   id: "buyer-profile-event-1",
   pubkey: mockUserPubkey,
@@ -89,9 +140,9 @@ const mockSavedProfileEvent = {
 const renderWithProviders = (component: React.ReactElement) => {
   const mockUpdateProfileData = jest.fn();
   render(
-    <NostrContext.Provider value={{ nostr: {} as any }}>
+    <NostrContext.Provider value={{ nostr: mockNostr }}>
       <SignerContext.Provider
-        value={{ signer: {} as any, pubkey: mockUserPubkey }}
+        value={{ signer: mockSigner, pubkey: mockUserPubkey }}
       >
         <ProfileMapContext.Provider
           value={{
