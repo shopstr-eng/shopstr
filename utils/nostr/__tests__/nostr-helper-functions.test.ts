@@ -49,6 +49,7 @@ import {
   createNostrProfileEvent,
   decryptNpub,
   deleteEvent,
+  finalizeAndSendNostrEvent,
   generateKeys,
   getDefaultBlossomServer,
   getDefaultMint,
@@ -172,6 +173,194 @@ describe("constructGiftWrappedEvent", () => {
         ["item", "30402:seller-pubkey:legacy-d-tag", "1"],
       ])
     );
+  });
+
+  it("returns a kind-14 event with id, pubkey, content, and p/subject tags by default", async () => {
+    const event = await constructGiftWrappedEvent(
+      senderPubkey,
+      recipientPubkey,
+      "Hello world",
+      "listing-inquiry"
+    );
+
+    expect(event).toMatchObject({
+      id: expect.any(String),
+      pubkey: senderPubkey,
+      kind: 14,
+      content: "Hello world",
+    });
+    expect(event.tags).toHaveLength(2);
+    expect(event.tags).toEqual(
+      expect.arrayContaining([
+        ["p", recipientPubkey, relay],
+        ["subject", "listing-inquiry"],
+      ])
+    );
+  });
+
+  it("uses a custom kind when the option is provided", async () => {
+    const event = await constructGiftWrappedEvent(
+      senderPubkey,
+      recipientPubkey,
+      "Hello",
+      "test-subject",
+      { kind: 42 }
+    );
+    expect(event.kind).toBe(42);
+  });
+
+  it("generates a UUID order tag when orderId is absent", async () => {
+    const event = await constructGiftWrappedEvent(
+      senderPubkey,
+      recipientPubkey,
+      "Order placed",
+      "order-payment",
+      { isOrder: true }
+    );
+    const orderTag = event.tags.find((t) => t[0] === "order");
+    expect(orderTag).toBeDefined();
+    expect(orderTag![1]).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+    );
+  });
+
+  it("adds a 3-element payment tag when paymentProof is absent", async () => {
+    const event = await constructGiftWrappedEvent(
+      senderPubkey,
+      recipientPubkey,
+      "Payment",
+      "order-payment",
+      {
+        isOrder: true,
+        orderId: "order-pay3",
+        paymentType: "lightning",
+        paymentReference: "lnbc1234",
+      }
+    );
+    const paymentTag = event.tags.find((t) => t[0] === "payment");
+    expect(paymentTag).toEqual(["payment", "lightning", "lnbc1234"]);
+  });
+
+  it("adds tracking, carrier, and eta tags when each is present", async () => {
+    const event = await constructGiftWrappedEvent(
+      senderPubkey,
+      recipientPubkey,
+      "Shipped",
+      "order-shipping",
+      {
+        isOrder: true,
+        orderId: "order-ship",
+        tracking: "1Z999AA10123456784",
+        carrier: "UPS",
+        eta: 1720000000,
+      }
+    );
+    expect(event.tags).toEqual(
+      expect.arrayContaining([
+        ["tracking", "1Z999AA10123456784"],
+        ["carrier", "UPS"],
+        ["eta", "1720000000"],
+      ])
+    );
+  });
+
+  it("adds contact, address, and pickup tags when each is present", async () => {
+    const event = await constructGiftWrappedEvent(
+      senderPubkey,
+      recipientPubkey,
+      "Order info",
+      "order-info",
+      {
+        isOrder: true,
+        orderId: "order-cap",
+        contact: "alice@example.com",
+        address: "123 Main St, Springfield",
+        pickup: "store-front",
+      }
+    );
+    expect(event.tags).toEqual(
+      expect.arrayContaining([
+        ["contact", "alice@example.com"],
+        ["address", "123 Main St, Springfield"],
+        ["pickup", "store-front"],
+      ])
+    );
+  });
+
+  it("does not add a donation_amount tag when donationAmount is zero or negative", async () => {
+    const eventZero = await constructGiftWrappedEvent(
+      senderPubkey,
+      recipientPubkey,
+      "Order",
+      "order-payment",
+      {
+        isOrder: true,
+        orderId: "order-don-zero",
+        donationAmount: 0,
+        donationPercentage: 5,
+      }
+    );
+    expect(eventZero.tags.some((t) => t[0] === "donation_amount")).toBe(false);
+
+    const eventNeg = await constructGiftWrappedEvent(
+      senderPubkey,
+      recipientPubkey,
+      "Order",
+      "order-payment",
+      {
+        isOrder: true,
+        orderId: "order-don-neg",
+        donationAmount: -1,
+        donationPercentage: 5,
+      }
+    );
+    expect(eventNeg.tags.some((t) => t[0] === "donation_amount")).toBe(false);
+  });
+
+  it("adds an a tag with 30402:<pubkey>:<d> when productData is present in a non-order message", async () => {
+    const productData = {
+      pubkey: "seller-pubkey",
+      d: "listing-1",
+    } as ProductData;
+
+    const event = await constructGiftWrappedEvent(
+      senderPubkey,
+      recipientPubkey,
+      "Interested in this",
+      "listing-inquiry",
+      { productData }
+    );
+
+    expect(event.tags).toEqual(
+      expect.arrayContaining([["a", "30402:seller-pubkey:listing-1", relay]])
+    );
+  });
+
+  it("adds an a tag with productAddress when only productAddress is present in a non-order message", async () => {
+    const event = await constructGiftWrappedEvent(
+      senderPubkey,
+      recipientPubkey,
+      "Question about this item",
+      "listing-inquiry",
+      { productAddress: "30402:seller-pubkey:legacy-d" }
+    );
+
+    expect(event.tags).toEqual(
+      expect.arrayContaining([["a", "30402:seller-pubkey:legacy-d", relay]])
+    );
+  });
+
+  it("adds no extra tags when neither productData nor productAddress is provided in a non-order message", async () => {
+    const event = await constructGiftWrappedEvent(
+      senderPubkey,
+      recipientPubkey,
+      "Just a message",
+      "listing-inquiry"
+    );
+
+    expect(event.tags).toHaveLength(2);
+    expect(event.tags[0]).toEqual(["p", recipientPubkey, relay]);
+    expect(event.tags[1]).toEqual(["subject", "listing-inquiry"]);
   });
 });
 
@@ -1481,5 +1670,241 @@ describe("createNostrProfileEvent", () => {
       expect.objectContaining({ kind: 0, content: '{"name":"Alice"}' })
     );
     expect(result).toEqual(signedEvent);
+  });
+});
+
+describe("finalizeAndSendNostrEvent", () => {
+  const eventTemplate = {
+    kind: 1,
+    content: "test content",
+    tags: [] as string[][],
+    created_at: 1,
+  };
+
+  function makeSignedEvent(overrides: Record<string, unknown> = {}) {
+    return {
+      ...eventTemplate,
+      id: "signed-event-id",
+      pubkey: "user-pubkey",
+      sig: "sig",
+      ...overrides,
+    };
+  }
+
+  beforeEach(() => {
+    localStorage.clear();
+    localStorage.setItem("relays", JSON.stringify(["wss://relay.example"]));
+    localStorage.setItem("writeRelays", JSON.stringify([]));
+    (cacheEventToDatabase as jest.Mock).mockResolvedValue(undefined);
+    (newPromiseWithTimeout as jest.Mock).mockImplementation(async (fn: any) => {
+      return new Promise((resolve, reject) =>
+        fn(resolve, reject, new AbortController().signal)
+      );
+    });
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("signs the event, then awaits cacheEventToDatabase before publishing", async () => {
+    const callOrder: string[] = [];
+    const signedEvent = makeSignedEvent();
+    const signer = {
+      sign: jest.fn().mockImplementation(async () => {
+        callOrder.push("sign");
+        return signedEvent;
+      }),
+    };
+    (cacheEventToDatabase as jest.Mock).mockImplementation(async () => {
+      callOrder.push("cache");
+    });
+    const nostr = {
+      publish: jest.fn().mockImplementation(async () => {
+        callOrder.push("publish");
+      }),
+    };
+
+    await finalizeAndSendNostrEvent(signer as any, nostr as any, eventTemplate);
+
+    expect(signer.sign).toHaveBeenCalledWith(eventTemplate);
+    expect(cacheEventToDatabase).toHaveBeenCalledWith(signedEvent);
+    expect(callOrder).toEqual(["sign", "cache", "publish"]);
+  });
+
+  it("returns the signed event and awaits relay publish in the default path", async () => {
+    const signedEvent = makeSignedEvent();
+    const signer = { sign: jest.fn().mockResolvedValue(signedEvent) };
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    const result = await finalizeAndSendNostrEvent(
+      signer as any,
+      nostr as any,
+      eventTemplate
+    );
+
+    expect(result).toEqual(signedEvent);
+    expect(nostr.publish).toHaveBeenCalledWith(
+      signedEvent,
+      expect.arrayContaining(["wss://relay.example"])
+    );
+  });
+
+  it("returns the signed event immediately and fires publish without awaiting when waitForRelayPublish is false", async () => {
+    const signedEvent = makeSignedEvent();
+    const signer = { sign: jest.fn().mockResolvedValue(signedEvent) };
+    const nostr = { publish: jest.fn() };
+
+    // Never-resolving timeout: if the function awaited it, the test would hang
+    (newPromiseWithTimeout as jest.Mock).mockReturnValue(new Promise(() => {}));
+
+    const result = await finalizeAndSendNostrEvent(
+      signer as any,
+      nostr as any,
+      eventTemplate,
+      { waitForRelayPublish: false }
+    );
+
+    expect(result).toEqual(signedEvent);
+    expect(cacheEventToDatabase).toHaveBeenCalledWith(signedEvent);
+  });
+
+  it("re-throws when signer.sign rejects", async () => {
+    const signError = new Error("Sign failed");
+    const signer = { sign: jest.fn().mockRejectedValue(signError) };
+    const nostr = { publish: jest.fn() };
+
+    await expect(
+      finalizeAndSendNostrEvent(signer as any, nostr as any, eventTemplate)
+    ).rejects.toThrow("Sign failed");
+
+    expect(cacheEventToDatabase).not.toHaveBeenCalled();
+    expect(nostr.publish).not.toHaveBeenCalled();
+  });
+
+  it("re-throws when cacheEventToDatabase rejects", async () => {
+    const cacheError = new Error("Cache write failed");
+    const signedEvent = makeSignedEvent();
+    const signer = { sign: jest.fn().mockResolvedValue(signedEvent) };
+    const nostr = { publish: jest.fn() };
+    (cacheEventToDatabase as jest.Mock).mockRejectedValue(cacheError);
+
+    await expect(
+      finalizeAndSendNostrEvent(signer as any, nostr as any, eventTemplate)
+    ).rejects.toThrow("Cache write failed");
+
+    expect(nostr.publish).not.toHaveBeenCalled();
+  });
+
+  // publishEventWithRetryTracking (private, exercised through finalizeAndSendNostrEvent)
+
+  it("calls nostr.publish via newPromiseWithTimeout and returns cleanly on success", async () => {
+    const signedEvent = makeSignedEvent();
+    const signer = { sign: jest.fn().mockResolvedValue(signedEvent) };
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+    const consoleWarnSpy = jest
+      .spyOn(console, "warn")
+      .mockImplementation(() => {});
+
+    await finalizeAndSendNostrEvent(signer as any, nostr as any, eventTemplate);
+
+    expect(newPromiseWithTimeout).toHaveBeenCalled();
+    expect(nostr.publish).toHaveBeenCalledWith(
+      signedEvent,
+      expect.arrayContaining(["wss://relay.example"])
+    );
+    expect(consoleWarnSpy).not.toHaveBeenCalled();
+    expect(trackFailedRelayPublish).not.toHaveBeenCalled();
+
+    consoleWarnSpy.mockRestore();
+  });
+
+  it("logs console.warn and calls trackFailedRelayPublish when newPromiseWithTimeout rejects", async () => {
+    const signedEvent = makeSignedEvent();
+    const signer = { sign: jest.fn().mockResolvedValue(signedEvent) };
+    const nostr = { publish: jest.fn() };
+    const consoleWarnSpy = jest
+      .spyOn(console, "warn")
+      .mockImplementation(() => {});
+    (newPromiseWithTimeout as jest.Mock).mockRejectedValue(
+      new Error("Timeout")
+    );
+
+    await finalizeAndSendNostrEvent(signer as any, nostr as any, eventTemplate);
+
+    expect(consoleWarnSpy).toHaveBeenCalledWith(
+      expect.stringContaining("timed out or failed"),
+      expect.any(Error)
+    );
+    expect(trackFailedRelayPublish).toHaveBeenCalledWith(
+      signedEvent.id,
+      signedEvent,
+      expect.any(Array),
+      signer
+    );
+
+    consoleWarnSpy.mockRestore();
+  });
+
+  it("swallows trackFailedRelayPublish rejections via .catch(console.error)", async () => {
+    const trackError = new Error("Track failed");
+    (trackFailedRelayPublish as jest.Mock).mockRejectedValue(trackError);
+    const signedEvent = makeSignedEvent();
+    const signer = { sign: jest.fn().mockResolvedValue(signedEvent) };
+    const nostr = { publish: jest.fn() };
+    const consoleWarnSpy = jest
+      .spyOn(console, "warn")
+      .mockImplementation(() => {});
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    (newPromiseWithTimeout as jest.Mock).mockRejectedValue(
+      new Error("Timeout")
+    );
+
+    const result = await finalizeAndSendNostrEvent(
+      signer as any,
+      nostr as any,
+      eventTemplate
+    );
+
+    expect(result).toEqual(signedEvent);
+    expect(consoleErrorSpy).toHaveBeenCalledWith(trackError);
+
+    consoleWarnSpy.mockRestore();
+    consoleErrorSpy.mockRestore();
+  });
+
+  it("logs console.error and resolves when an unexpected error occurs in the retry tracking flow", async () => {
+    const unexpectedError = new Error("Unexpected warn error");
+    const consoleWarnSpy = jest
+      .spyOn(console, "warn")
+      .mockImplementation(() => {
+        throw unexpectedError;
+      });
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    const signedEvent = makeSignedEvent();
+    const signer = { sign: jest.fn().mockResolvedValue(signedEvent) };
+    const nostr = { publish: jest.fn() };
+    (newPromiseWithTimeout as jest.Mock).mockRejectedValue(
+      new Error("Timeout")
+    );
+
+    const result = await finalizeAndSendNostrEvent(
+      signer as any,
+      nostr as any,
+      eventTemplate
+    );
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      "Failed to publish signed Nostr event:",
+      unexpectedError
+    );
+    expect(result).toEqual(signedEvent);
+
+    consoleWarnSpy.mockRestore();
+    consoleErrorSpy.mockRestore();
   });
 });
