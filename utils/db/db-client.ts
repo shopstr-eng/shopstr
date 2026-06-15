@@ -1,4 +1,5 @@
 import { NostrEvent } from "@/utils/types/types";
+import { NostrEventTemplate } from "@/utils/nostr/nostr-manager";
 import {
   buildClearFailedRelayPublishProof,
   buildListFailedRelayPublishesProof,
@@ -9,7 +10,7 @@ import {
 
 type RequestProofSigner = {
   getPubKey: () => string | Promise<string>;
-  sign: (event: any) => NostrEvent | Promise<NostrEvent>;
+  sign: (event: NostrEventTemplate) => NostrEvent | Promise<NostrEvent>;
 };
 
 async function buildSignedRequestHeader(

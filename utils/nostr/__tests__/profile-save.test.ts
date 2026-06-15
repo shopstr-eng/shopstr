@@ -4,6 +4,18 @@ import {
   cacheEventToDatabase,
   trackFailedRelayPublish,
 } from "@/utils/db/db-client";
+import type { NostrManager } from "../nostr-manager";
+import type { NostrSigner } from "../signers/nostr-signer";
+
+type TimeoutExecutor<T> = (
+  resolve: (value: T) => void,
+  reject: (reason?: unknown) => void,
+  abortSignal: AbortSignal
+) => unknown;
+type ProfileSigner = Pick<NostrSigner, "getPubKey" | "sign">;
+type ProfilePublisher = Pick<NostrManager, "publish"> & {
+  publish: jest.MockedFunction<NostrManager["publish"]>;
+};
 
 jest.mock("@/utils/db/db-client", () => ({
   cacheEventToDatabase: jest.fn().mockResolvedValue(undefined),
@@ -12,8 +24,10 @@ jest.mock("@/utils/db/db-client", () => ({
 }));
 
 jest.mock("@/utils/timeout", () => ({
-  newPromiseWithTimeout: (fn: any) =>
-    new Promise((resolve, reject) => fn(resolve, reject)),
+  newPromiseWithTimeout: <T>(fn: TimeoutExecutor<T>) =>
+    new Promise<T>((resolve, reject) =>
+      fn(resolve, reject, new AbortController().signal)
+    ),
 }));
 
 const mockCacheEventToDatabase = cacheEventToDatabase as jest.Mock;
@@ -30,10 +44,10 @@ describe("createNostrProfileEvent", () => {
     sig: "sig",
   };
 
-  const signer = {
+  const signer: ProfileSigner = {
     sign: jest.fn().mockResolvedValue(signedEvent),
     getPubKey: jest.fn().mockResolvedValue("user-pubkey"),
-  } as any;
+  };
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -47,13 +61,13 @@ describe("createNostrProfileEvent", () => {
 
   test("caches the signed profile event once and resolves before relay publish settles", async () => {
     let resolvePublish!: () => void;
-    const nostr = {
+    const nostr: ProfilePublisher = {
       publish: jest.fn().mockReturnValue(
         new Promise<void>((resolve) => {
           resolvePublish = resolve;
         })
       ),
-    } as any;
+    };
 
     const profileSavePromise = createNostrProfileEvent(
       nostr,
@@ -72,9 +86,9 @@ describe("createNostrProfileEvent", () => {
 
   test("tracks failed relay publishes in the background without rejecting the caller", async () => {
     const publishError = new Error("relay failed");
-    const nostr = {
+    const nostr: ProfilePublisher = {
       publish: jest.fn().mockRejectedValue(publishError),
-    } as any;
+    };
 
     await expect(
       createNostrProfileEvent(nostr, signer, signedEvent.content)

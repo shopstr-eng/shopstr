@@ -1,4 +1,5 @@
 import React from "react";
+import type { ChangeEvent, MouseEventHandler, ReactNode } from "react";
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import ZapsnagButton from "../ZapsnagButton";
 import {
@@ -8,6 +9,34 @@ import {
 import * as nostrHelpers from "@/utils/nostr/nostr-helper-functions";
 import * as zapValidator from "@/utils/nostr/zap-validator";
 import { LightningAddress } from "@getalby/lightning-tools";
+import type { NostrManager } from "@/utils/nostr/nostr-manager";
+import type { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
+import type { NostrEvent, WebLNProvider } from "@/utils/types/types";
+
+type ButtonMockProps = {
+  onClick?: MouseEventHandler<HTMLButtonElement>;
+  children?: ReactNode;
+  isDisabled?: boolean;
+  isLoading?: boolean;
+  startContent?: ReactNode;
+  className?: string;
+};
+type ModalMockProps = {
+  isOpen?: boolean;
+  children?: ReactNode;
+};
+type ChildrenMockProps = {
+  children?: ReactNode;
+};
+type InputMockProps = {
+  label?: string;
+  value?: string;
+  onValueChange?: (value: string) => void;
+  placeholder?: string;
+};
+type MockNostrManager = NostrManager & {
+  fetch: jest.MockedFunction<NostrManager["fetch"]>;
+};
 
 jest.mock("@heroui/react", () => ({
   Button: ({
@@ -17,7 +46,7 @@ jest.mock("@heroui/react", () => ({
     isLoading,
     startContent,
     className,
-  }: any) => (
+  }: ButtonMockProps) => (
     <button
       onClick={onClick}
       disabled={isDisabled || isLoading}
@@ -27,17 +56,19 @@ jest.mock("@heroui/react", () => ({
       {startContent} {children}
     </button>
   ),
-  Modal: ({ isOpen, children }: any) =>
+  Modal: ({ isOpen, children }: ModalMockProps) =>
     isOpen ? <div data-testid="modal">{children}</div> : null,
-  ModalContent: ({ children }: any) => <div>{children}</div>,
-  ModalHeader: ({ children }: any) => <h1>{children}</h1>,
-  ModalBody: ({ children }: any) => <div>{children}</div>,
-  Input: ({ label, value, onValueChange, placeholder }: any) => (
+  ModalContent: ({ children }: ChildrenMockProps) => <div>{children}</div>,
+  ModalHeader: ({ children }: ChildrenMockProps) => <h1>{children}</h1>,
+  ModalBody: ({ children }: ChildrenMockProps) => <div>{children}</div>,
+  Input: ({ label, value, onValueChange, placeholder }: InputMockProps) => (
     <input
       aria-label={label}
       placeholder={placeholder}
       value={value}
-      onChange={(e) => onValueChange(e.target.value)}
+      onChange={(event: ChangeEvent<HTMLInputElement>) =>
+        onValueChange?.(event.target.value)
+      }
     />
   ),
   useDisclosure: () => {
@@ -111,8 +142,31 @@ const mockProduct = {
   totalCost: 100,
 };
 
-const mockSigner = { signEvent: jest.fn() };
-const mockNostrManager = { fetch: jest.fn() };
+const makeProfileEvent = (content: string): NostrEvent => ({
+  id: "profile-event",
+  pubkey: mockProduct.pubkey,
+  created_at: 100,
+  kind: 0,
+  tags: [],
+  content,
+  sig: "sig",
+});
+
+const mockSigner: NostrSigner = {
+  connect: jest.fn().mockResolvedValue("buyer-pubkey"),
+  getPubKey: jest.fn().mockResolvedValue("buyer-pubkey"),
+  sign: jest.fn(),
+  encrypt: jest.fn(),
+  decrypt: jest.fn(),
+  close: jest.fn().mockResolvedValue(undefined),
+  toJSON: () => ({ type: "test" }),
+};
+const mockNostrManager = Object.assign(Object.create(null), {
+  fetch: jest.fn<
+    ReturnType<NostrManager["fetch"]>,
+    Parameters<NostrManager["fetch"]>
+  >(),
+}) as MockNostrManager;
 
 const renderComponent = (contextOverrides = {}) => {
   const defaultContext = {
@@ -126,8 +180,8 @@ const renderComponent = (contextOverrides = {}) => {
   };
 
   return render(
-    <NostrContext.Provider value={defaultContext.nostrContext as any}>
-      <SignerContext.Provider value={defaultContext.signerContext as any}>
+    <NostrContext.Provider value={defaultContext.nostrContext}>
+      <SignerContext.Provider value={defaultContext.signerContext}>
         <ZapsnagButton product={mockProduct} />
       </SignerContext.Provider>
     </NostrContext.Provider>
@@ -138,7 +192,7 @@ describe("ZapsnagButton Component", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockNostrManager.fetch.mockReset();
-    mockSigner.signEvent.mockReset();
+    jest.mocked(mockSigner.sign).mockReset();
     window.alert = jest.fn();
 
     Storage.prototype.getItem = jest.fn(() => null);
@@ -149,10 +203,11 @@ describe("ZapsnagButton Component", () => {
       relays: ["wss://relay.test"],
     });
 
-    (window as any).webln = {
+    window.webln = {
       enable: jest.fn().mockResolvedValue(true),
+      isEnabled: jest.fn().mockResolvedValue(true),
       sendPayment: jest.fn(),
-    };
+    } satisfies WebLNProvider;
   });
 
   test("renders the button with correct price", () => {
@@ -261,10 +316,7 @@ describe("ZapsnagButton Component", () => {
     const dateNowSpy = jest.spyOn(Date, "now").mockReturnValue(1700000000000);
 
     mockNostrManager.fetch.mockResolvedValueOnce([
-      {
-        created_at: 100,
-        content: JSON.stringify({ lud16: "seller@alby.com" }),
-      },
+      makeProfileEvent(JSON.stringify({ lud16: "seller@alby.com" })),
     ]);
 
     const giftWrapEvent = { id: "gift-wrap-event" };
@@ -406,7 +458,7 @@ describe("ZapsnagButton Component", () => {
 
   test("handles error if seller has no LUD16", async () => {
     mockNostrManager.fetch.mockResolvedValue([
-      { created_at: 100, content: JSON.stringify({ name: "Just a name" }) },
+      makeProfileEvent(JSON.stringify({ name: "Just a name" })),
     ]);
 
     renderComponent();
@@ -444,10 +496,7 @@ describe("ZapsnagButton Component", () => {
     });
 
     mockNostrManager.fetch.mockResolvedValue([
-      {
-        created_at: 100,
-        content: JSON.stringify({ lud16: "seller@alby.com" }),
-      },
+      makeProfileEvent(JSON.stringify({ lud16: "seller@alby.com" })),
     ]);
 
     renderComponent();

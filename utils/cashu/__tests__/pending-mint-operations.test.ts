@@ -1,6 +1,7 @@
 /**
  * @jest-environment jsdom
  */
+import { Amount, Proof, Wallet as CashuWallet } from "@cashu/cashu-ts";
 import {
   getPendingMintQuotes,
   markMintQuoteClaimed,
@@ -13,6 +14,24 @@ import {
 } from "../pending-mint-operations";
 
 const STORAGE_KEY = "shopstr.pendingMintQuotes";
+
+type RecoveryWalletMock = Pick<
+  CashuWallet,
+  "checkMintQuoteBolt11" | "mintProofsBolt11"
+>;
+
+const logger: Pick<Console, "warn" | "error" | "info"> = {
+  warn: jest.fn(),
+  error: jest.fn(),
+  info: jest.fn(),
+};
+
+const makeProof = (secret: string, amount = 100): Proof => ({
+  id: "k",
+  amount: Amount.from(amount),
+  secret,
+  C: "c",
+});
 
 beforeEach(() => {
   window.localStorage.clear();
@@ -123,11 +142,11 @@ describe("recoverPendingMintQuotes", () => {
       invoice: "i",
       status: "paid_unclaimed",
     });
-    const proofs = [{ id: "k", amount: 100, secret: "s", C: "c" }] as any;
-    const wallet = {
+    const proofs = [makeProof("s")];
+    const wallet: RecoveryWalletMock = {
       checkMintQuoteBolt11: jest.fn().mockResolvedValue({ state: "PAID" }),
       mintProofsBolt11: jest.fn().mockResolvedValue(proofs),
-    } as any;
+    };
     const onProofsClaimed = jest.fn().mockResolvedValue(undefined);
 
     const result = await recoverPendingMintQuotes({
@@ -147,10 +166,10 @@ describe("recoverPendingMintQuotes", () => {
       amount: 100,
       invoice: "i",
     });
-    const wallet = {
+    const wallet: RecoveryWalletMock = {
       checkMintQuoteBolt11: jest.fn().mockResolvedValue({ state: "UNPAID" }),
       mintProofsBolt11: jest.fn(),
-    } as any;
+    };
     const result = await recoverPendingMintQuotes({
       buildWallet: async () => wallet,
       onProofsClaimed: jest.fn(),
@@ -168,16 +187,16 @@ describe("recoverPendingMintQuotes", () => {
       invoice: "i",
       status: "paid_unclaimed",
     });
-    const wallet = {
+    const wallet: RecoveryWalletMock = {
       checkMintQuoteBolt11: jest.fn().mockResolvedValue({ state: "PAID" }),
       mintProofsBolt11: jest
         .fn()
         .mockRejectedValue(new Error("quote already issued")),
-    } as any;
+    };
     const result = await recoverPendingMintQuotes({
       buildWallet: async () => wallet,
       onProofsClaimed: jest.fn(),
-      logger: { warn: jest.fn(), error: jest.fn(), info: jest.fn() } as any,
+      logger,
     });
     expect(result.abandoned).toBe(1);
     const remaining = getPendingMintQuotes();
@@ -196,10 +215,10 @@ describe("recoverPendingMintQuotes", () => {
     updatePendingMintQuote("q1", {
       createdAt: Date.now() - PAID_UNCLAIMED_MAX_AGE_MS - 1000,
     });
-    const wallet = {
+    const wallet: RecoveryWalletMock = {
       checkMintQuoteBolt11: jest.fn(),
       mintProofsBolt11: jest.fn(),
-    } as any;
+    };
     const result = await recoverPendingMintQuotes({
       buildWallet: async () => wallet,
       onProofsClaimed: jest.fn(),
@@ -216,17 +235,17 @@ describe("recoverPendingMintQuotes", () => {
       invoice: "i",
       status: "paid_unclaimed",
     });
-    const proofs = [{ id: "k", amount: 100, secret: "s", C: "c" }] as any;
-    const wallet = {
+    const proofs = [makeProof("s")];
+    const wallet: RecoveryWalletMock = {
       checkMintQuoteBolt11: jest.fn().mockResolvedValue({ state: "PAID" }),
       mintProofsBolt11: jest.fn().mockResolvedValue(proofs),
-    } as any;
+    };
     const result = await recoverPendingMintQuotes({
       buildWallet: async () => wallet,
       onProofsClaimed: jest
         .fn()
         .mockRejectedValue(new Error("nostr publish failed")),
-      logger: { warn: jest.fn(), error: jest.fn(), info: jest.fn() } as any,
+      logger,
     });
     expect(result.recovered).toBe(0);
     expect(result.failed).toBe(1);

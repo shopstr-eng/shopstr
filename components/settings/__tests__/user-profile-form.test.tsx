@@ -12,6 +12,57 @@ import {
 import { createNostrProfileEvent } from "@/utils/nostr/nostr-helper-functions";
 import { FileUploaderButton } from "@/components/utility-components/file-uploader";
 import { AVATARBADGEBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import { NostrManager } from "@/utils/nostr/nostr-manager";
+import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
+
+type MockButtonProps = React.PropsWithChildren<{
+  isDisabled?: boolean;
+  isLoading?: boolean;
+  onClick?: React.MouseEventHandler<HTMLButtonElement>;
+  onKeyDown?: React.KeyboardEventHandler<HTMLButtonElement>;
+  type?: "button" | "submit" | "reset";
+}>;
+
+type MockInputProps = {
+  label?: string;
+  value?: string;
+  onChange?: React.ChangeEventHandler<HTMLInputElement>;
+  onBlur?: React.FocusEventHandler<HTMLInputElement>;
+  type?: string;
+};
+
+type MockImageProps = {
+  src?: string;
+  alt?: string;
+  className?: string;
+};
+
+type MockSelectProps = React.PropsWithChildren<{
+  label?: string;
+  selectedKeys?: string[];
+  onChange?: React.ChangeEventHandler<HTMLSelectElement>;
+  onBlur?: React.FocusEventHandler<HTMLSelectElement>;
+}>;
+
+type MockSelectItemProps = React.OptionHTMLAttributes<HTMLOptionElement> & {
+  value?: string;
+};
+
+type MockFileUploaderProps = React.PropsWithChildren<{
+  imgCallbackOnUpload?: (url: string) => void;
+  isIconOnly?: boolean;
+}>;
+
+const mockNostr = Object.create(NostrManager.prototype) as NostrManager;
+const mockSigner: NostrSigner = {
+  connect: jest.fn(async () => "connected"),
+  getPubKey: jest.fn(async () => "pubkey"),
+  sign: jest.fn(),
+  encrypt: jest.fn(async () => "encrypted"),
+  decrypt: jest.fn(async () => "decrypted"),
+  close: jest.fn(async () => undefined),
+  toJSON: jest.fn(() => ({ type: "test" })),
+};
 
 const mockRouterPush = jest.fn();
 jest.mock("next/router", () => ({
@@ -28,7 +79,7 @@ jest.mock(
       onClick,
       onKeyDown,
       type,
-    }: any) => (
+    }: MockButtonProps) => (
       <button
         type={type || "button"}
         disabled={isDisabled || isLoading}
@@ -38,7 +89,13 @@ jest.mock(
         {children}
       </button>
     ),
-    Input: ({ label, value, onChange, onBlur, type = "text" }: any) => (
+    Input: ({
+      label,
+      value,
+      onChange,
+      onBlur,
+      type = "text",
+    }: MockInputProps) => (
       <label>
         {label}
         <input
@@ -50,10 +107,16 @@ jest.mock(
         />
       </label>
     ),
-    Image: ({ src, alt, className }: any) => (
+    Image: ({ src, alt, className }: MockImageProps) => (
       <img src={src} alt={alt} className={className} />
     ),
-    Select: ({ label, selectedKeys, onChange, onBlur, children }: any) => (
+    Select: ({
+      label,
+      selectedKeys,
+      onChange,
+      onBlur,
+      children,
+    }: MockSelectProps) => (
       <label>
         {label}
         <select
@@ -66,7 +129,7 @@ jest.mock(
         </select>
       </label>
     ),
-    SelectItem: ({ children, value, ...props }: any) => {
+    SelectItem: ({ children, value, ...props }: MockSelectItemProps) => {
       const optionLabel = Array.isArray(children)
         ? children.join("")
         : children;
@@ -82,7 +145,7 @@ jest.mock(
         </option>
       );
     },
-    Tooltip: ({ children }: any) => <>{children}</>,
+    Tooltip: ({ children }: React.PropsWithChildren) => <>{children}</>,
   }),
   { virtual: true }
 );
@@ -105,7 +168,7 @@ jest.mock(
       onClick,
       onKeyDown,
       type,
-    }: any) => (
+    }: MockButtonProps) => (
       <button
         type={type || "button"}
         disabled={isDisabled || isLoading}
@@ -115,7 +178,13 @@ jest.mock(
         {children}
       </button>
     ),
-    Input: ({ label, value, onChange, onBlur, type = "text" }: any) => (
+    Input: ({
+      label,
+      value,
+      onChange,
+      onBlur,
+      type = "text",
+    }: MockInputProps) => (
       <label>
         {label}
         <input
@@ -127,10 +196,16 @@ jest.mock(
         />
       </label>
     ),
-    Image: ({ src, alt, className }: any) => (
+    Image: ({ src, alt, className }: MockImageProps) => (
       <img src={src} alt={alt} className={className} />
     ),
-    Select: ({ label, selectedKeys, onChange, onBlur, children }: any) => (
+    Select: ({
+      label,
+      selectedKeys,
+      onChange,
+      onBlur,
+      children,
+    }: MockSelectProps) => (
       <label>
         {label}
         <select
@@ -143,7 +218,7 @@ jest.mock(
         </select>
       </label>
     ),
-    SelectItem: ({ children, value, ...props }: any) => {
+    SelectItem: ({ children, value, ...props }: MockSelectItemProps) => {
       const optionLabel = Array.isArray(children)
         ? children.join("")
         : children;
@@ -159,17 +234,17 @@ jest.mock(
         </option>
       );
     },
-    Tooltip: ({ children }: any) => <>{children}</>,
+    Tooltip: ({ children }: React.PropsWithChildren) => <>{children}</>,
   }),
   { virtual: true }
 );
 
 jest.mock("@/components/utility-components/file-uploader", () => ({
   FileUploaderButton: jest.fn(
-    ({ children, imgCallbackOnUpload, isIconOnly }: any) => (
+    ({ children, imgCallbackOnUpload, isIconOnly }: MockFileUploaderProps) => (
       <button
         data-testid={isIconOnly ? "upload-picture-btn" : "upload-banner-btn"}
-        onClick={() => imgCallbackOnUpload("https://new.image/url")}
+        onClick={() => imgCallbackOnUpload?.("https://new.image/url")}
       >
         {children}
       </button>
@@ -214,8 +289,8 @@ const renderWithProviders = (
 ) => {
   const mockUpdateProfileData = jest.fn();
   render(
-    <NostrContext.Provider value={{ nostr: {} as any }}>
-      <SignerContext.Provider value={{ signer: {} as any, pubkey }}>
+    <NostrContext.Provider value={{ nostr: mockNostr }}>
+      <SignerContext.Provider value={{ signer: mockSigner, pubkey }}>
         <ProfileMapContext.Provider
           value={{
             profileData,

@@ -1,25 +1,35 @@
 import { render, screen } from "@testing-library/react";
+import type { HTMLAttributes, ImgHTMLAttributes, ReactNode } from "react";
 import LocationDropdown, { locationAvatar } from "../location-dropdown";
 import locations from "../../../../public/locationSelection.json";
 
+type SelectMockProps = HTMLAttributes<HTMLDivElement> & {
+  children?: ReactNode;
+  startContent?: ReactNode;
+};
+type SelectSectionMockProps = HTMLAttributes<HTMLDivElement> & {
+  children?: ReactNode;
+  title?: ReactNode;
+};
+
 jest.mock("@heroui/react", () => ({
-  Select: ({ children, startContent, ...props }: any) => (
+  Select: ({ children, startContent, ...props }: SelectMockProps) => (
     <div data-testid="select" {...props}>
       {startContent}
       {children}
     </div>
   ),
-  SelectSection: ({ children, title, ...props }: any) => (
-    <div data-testid="select-section" data-title={title} {...props}>
+  SelectSection: ({ children, title, ...props }: SelectSectionMockProps) => (
+    <div data-testid="select-section" data-title={String(title)} {...props}>
       {children}
     </div>
   ),
-  SelectItem: ({ children, ...props }: any) => (
+  SelectItem: ({ children, ...props }: HTMLAttributes<HTMLDivElement>) => (
     <div data-testid="select-item" {...props}>
       {children}
     </div>
   ),
-  Avatar: ({ alt, src, className }: any) => (
+  Avatar: ({ alt, src, className }: ImgHTMLAttributes<HTMLImageElement>) => (
     <img data-testid="avatar" alt={alt} src={src} className={className} />
   ),
 }));

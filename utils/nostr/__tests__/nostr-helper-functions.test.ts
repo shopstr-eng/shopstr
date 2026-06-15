@@ -14,12 +14,29 @@ jest.mock("@/utils/nostr/request-auth", () => ({
   }),
 }));
 
+import type { EventTemplate } from "nostr-tools";
+import type { NostrManager } from "@/utils/nostr/nostr-manager";
+import type { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
+import type { NostrEvent, NostrExtensionProvider } from "@/utils/types/types";
+
+type TimeoutExecutor<T> = (
+  resolve: (value: T) => void,
+  reject: (reason: Error) => void,
+  abortSignal: AbortSignal
+) => unknown;
+
+type NostrPublisherMock = Pick<NostrManager, "publish">;
+type NostrEventSignerMock = Pick<NostrSigner, "getPubKey" | "sign">;
+type NostrSealSignerMock = Pick<NostrSigner, "encrypt" | "sign">;
+
 jest.mock("@/utils/timeout", () => ({
-  newPromiseWithTimeout: jest.fn().mockImplementation(async (fn: any) => {
-    return new Promise((resolve, reject) =>
-      fn(resolve, reject, new AbortController().signal)
-    );
-  }),
+  newPromiseWithTimeout: jest
+    .fn()
+    .mockImplementation(async (fn: TimeoutExecutor<unknown>) => {
+      return new Promise<unknown>((resolve, reject) =>
+        fn(resolve, reject, new AbortController().signal)
+      );
+    }),
 }));
 
 jest.mock("nostr-tools", () => {
@@ -27,9 +44,10 @@ jest.mock("nostr-tools", () => {
   return {
     ...actual,
     getEventHash: jest.fn(() => "f".repeat(64)),
-    finalizeEvent: jest.fn((event: any, _privkey: any) => ({
+    finalizeEvent: jest.fn((event: EventTemplate, _privkey: Uint8Array) => ({
       ...event,
       id: "f".repeat(64),
+      pubkey: "finalized-pubkey",
       sig: "fake-sig",
     })),
     nip44: {
@@ -473,9 +491,18 @@ describe("setLocalStorageDataOnSignIn", () => {
   });
 
   it("writes signer JSON when a signer is provided", () => {
-    const signer = { type: "nip07" } as any;
-    setLocalStorageDataOnSignIn({ signer });
-    expect(localStorage.getItem("signer")).toBe(JSON.stringify(signer));
+    const signer: NostrSigner = {
+      connect: jest.fn().mockResolvedValue("pubkey"),
+      getPubKey: jest.fn().mockResolvedValue("pubkey"),
+      sign: jest.fn(),
+      encrypt: jest.fn(),
+      decrypt: jest.fn(),
+      close: jest.fn().mockResolvedValue(undefined),
+      toJSON: () => ({ type: "nip07" }),
+    };
+    const signerJson = signer.toJSON();
+    setLocalStorageDataOnSignIn({ signer: signerJson });
+    expect(localStorage.getItem("signer")).toBe(JSON.stringify(signerJson));
   });
 
   it("writes migrationComplete=true when migrationComplete is truthy", () => {
@@ -529,7 +556,8 @@ describe("publishReportEvent", () => {
   it("builds a valid profile report event", async () => {
     jest.spyOn(Date, "now").mockReturnValue(fixedNowMs);
 
-    const signer = {
+    const signer: NostrEventSignerMock = {
+      getPubKey: jest.fn().mockResolvedValue("reporter-pubkey"),
       sign: jest.fn().mockImplementation(async (eventTemplate) => ({
         ...eventTemplate,
         id: "signed-profile-report",
@@ -537,11 +565,11 @@ describe("publishReportEvent", () => {
         sig: "signed-sig",
       })),
     };
-    const nostr = {
+    const nostr: NostrPublisherMock = {
       publish: jest.fn().mockResolvedValue(undefined),
     };
 
-    const signedEvent = await publishReportEvent(nostr as any, signer as any, {
+    const signedEvent = await publishReportEvent(nostr, signer, {
       content: "Spam account",
       reportType: "spam",
       reportedPubkey: "seller-pubkey",
@@ -582,7 +610,8 @@ describe("publishReportEvent", () => {
   it("builds a valid listing report event", async () => {
     jest.spyOn(Date, "now").mockReturnValue(fixedNowMs);
 
-    const signer = {
+    const signer: NostrEventSignerMock = {
+      getPubKey: jest.fn().mockResolvedValue("reporter-pubkey"),
       sign: jest.fn().mockImplementation(async (eventTemplate) => ({
         ...eventTemplate,
         id: "signed-listing-report",
@@ -590,11 +619,11 @@ describe("publishReportEvent", () => {
         sig: "signed-sig",
       })),
     };
-    const nostr = {
+    const nostr: NostrPublisherMock = {
       publish: jest.fn().mockResolvedValue(undefined),
     };
 
-    await publishReportEvent(nostr as any, signer as any, {
+    await publishReportEvent(nostr, signer, {
       content: "Listing looks illegal",
       reportType: "illegal",
       reportedPubkey: "seller-pubkey",
@@ -928,17 +957,12 @@ describe("verifyNip05Identifier", () => {
   });
 
   it("returns false in an SSR context when no baseUrl is supplied", async () => {
-    const originalWindow = global.window;
-    (global as any).window = undefined;
-    try {
-      const result = await verifyNip05Identifier(
-        "user@example.com",
-        "some-pubkey"
-      );
-      expect(result).toBe(false);
-    } finally {
-      global.window = originalWindow;
-    }
+    const result = await verifyNip05Identifier(
+      "user@example.com",
+      "some-pubkey",
+      { baseUrl: null }
+    );
+    expect(result).toBe(false);
   });
 
   it("returns false when fetch throws", async () => {
@@ -954,16 +978,36 @@ describe("verifyNip05Identifier", () => {
 
 describe("nostrExtensionLoaded", () => {
   afterEach(() => {
-    (window as any).nostr = undefined;
+    Object.defineProperty(window, "nostr", {
+      value: undefined,
+      configurable: true,
+      writable: true,
+    });
   });
 
   it("returns true when window.nostr is set to a truthy object", () => {
-    (window as any).nostr = { getPublicKey: jest.fn() };
+    const extension: NostrExtensionProvider = {
+      getPublicKey: jest.fn().mockResolvedValue("pubkey"),
+      signEvent: jest.fn(),
+      nip44: {
+        encrypt: jest.fn(),
+        decrypt: jest.fn(),
+      },
+    };
+    Object.defineProperty(window, "nostr", {
+      value: extension,
+      configurable: true,
+      writable: true,
+    });
     expect(nostrExtensionLoaded()).toBe(true);
   });
 
   it("returns false when window.nostr is undefined", () => {
-    (window as any).nostr = undefined;
+    Object.defineProperty(window, "nostr", {
+      value: undefined,
+      configurable: true,
+      writable: true,
+    });
     expect(nostrExtensionLoaded()).toBe(false);
   });
 });
@@ -1184,7 +1228,7 @@ describe("constructMessageSeal", () => {
     encryptMock.mockReturnValue("encrypted-content");
 
     const randomPrivkey = new Uint8Array(32).fill(2);
-    const messageEvent = {
+    const messageEvent: NostrEvent = {
       kind: 14,
       content: "hello",
       tags: [],
@@ -1193,11 +1237,11 @@ describe("constructMessageSeal", () => {
       id: "msg-id",
       sig: "sig",
     };
-    const signer = { encrypt: jest.fn(), sign: jest.fn() };
+    const signer: NostrSealSignerMock = { encrypt: jest.fn(), sign: jest.fn() };
 
     const result = await constructMessageSeal(
-      signer as any,
-      messageEvent as any,
+      signer,
+      messageEvent,
       "sender-pubkey",
       "recipient-pubkey",
       randomPrivkey
@@ -1219,15 +1263,16 @@ describe("constructMessageSeal", () => {
   });
 
   it("uses signer.encrypt + signer.sign and returns kind-13 when randomPrivkey is absent", async () => {
-    const signer = {
+    const signer: NostrSealSignerMock = {
       encrypt: jest.fn().mockResolvedValue("signer-encrypted-content"),
-      sign: jest.fn().mockImplementation(async (event: any) => ({
+      sign: jest.fn().mockImplementation(async (event: EventTemplate) => ({
         ...event,
         id: "seal-id",
+        pubkey: "sender-pubkey",
         sig: "seal-sig",
       })),
     };
-    const messageEvent = {
+    const messageEvent: NostrEvent = {
       kind: 14,
       content: "hello",
       tags: [],
@@ -1238,8 +1283,8 @@ describe("constructMessageSeal", () => {
     };
 
     const result = await constructMessageSeal(
-      signer as any,
-      messageEvent as any,
+      signer,
+      messageEvent,
       "sender-pubkey",
       "recipient-pubkey"
     );
@@ -1257,7 +1302,7 @@ describe("constructMessageSeal", () => {
 
 describe("constructMessageGiftWrap", () => {
   const relay = "wss://relay.example";
-  const sealEvent = {
+  const sealEvent: NostrEvent = {
     kind: 13,
     id: "seal-id",
     sig: "seal-sig",
@@ -1284,7 +1329,7 @@ describe("constructMessageGiftWrap", () => {
 
   it("returns a kind-1059 event", async () => {
     const result = await constructMessageGiftWrap(
-      sealEvent as any,
+      sealEvent,
       "random-pubkey",
       randomPrivkey,
       "recipient-pubkey"
@@ -1294,7 +1339,7 @@ describe("constructMessageGiftWrap", () => {
 
   it("includes a p tag for the recipient and the first stored relay", async () => {
     const result = await constructMessageGiftWrap(
-      sealEvent as any,
+      sealEvent,
       "random-pubkey",
       randomPrivkey,
       "recipient-pubkey"
@@ -1304,7 +1349,7 @@ describe("constructMessageGiftWrap", () => {
 
   it("encrypts the seal using the random conversation key", async () => {
     await constructMessageGiftWrap(
-      sealEvent as any,
+      sealEvent,
       "random-pubkey",
       randomPrivkey,
       "recipient-pubkey"
@@ -1413,7 +1458,7 @@ describe("LogOut", () => {
 });
 
 describe("sendGiftWrappedMessageEvent", () => {
-  const giftWrappedEvent = {
+  const giftWrappedEvent: NostrEvent = {
     id: "wrap-id",
     kind: 1059,
     pubkey: "sender-pubkey",
@@ -1444,18 +1489,20 @@ describe("sendGiftWrappedMessageEvent", () => {
     (cacheEventToDatabase as jest.Mock).mockImplementation(async () => {
       callOrder.push("cache");
     });
-    const nostr = {
+    const nostr: NostrPublisherMock = {
       publish: jest.fn().mockImplementation(async () => {
         callOrder.push("publish");
       }),
     };
-    (newPromiseWithTimeout as jest.Mock).mockImplementation(async (fn: any) => {
-      return new Promise<void>((resolve, reject) =>
-        fn(resolve, reject, new AbortController().signal)
-      );
-    });
+    (newPromiseWithTimeout as jest.Mock).mockImplementation(
+      async (fn: TimeoutExecutor<void>) => {
+        return new Promise<void>((resolve, reject) =>
+          fn(resolve, reject, new AbortController().signal)
+        );
+      }
+    );
 
-    await sendGiftWrappedMessageEvent(nostr as any, giftWrappedEvent as any);
+    await sendGiftWrappedMessageEvent(nostr, giftWrappedEvent);
 
     expect(cacheEventToDatabase).toHaveBeenCalledWith(giftWrappedEvent);
     expect(callOrder.indexOf("cache")).toBeLessThan(
@@ -1464,14 +1511,18 @@ describe("sendGiftWrappedMessageEvent", () => {
   });
 
   it("calls nostr.publish inside the timeout wrapper", async () => {
-    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
-    (newPromiseWithTimeout as jest.Mock).mockImplementation(async (fn: any) => {
-      return new Promise<void>((resolve, reject) =>
-        fn(resolve, reject, new AbortController().signal)
-      );
-    });
+    const nostr: NostrPublisherMock = {
+      publish: jest.fn().mockResolvedValue(undefined),
+    };
+    (newPromiseWithTimeout as jest.Mock).mockImplementation(
+      async (fn: TimeoutExecutor<void>) => {
+        return new Promise<void>((resolve, reject) =>
+          fn(resolve, reject, new AbortController().signal)
+        );
+      }
+    );
 
-    await sendGiftWrappedMessageEvent(nostr as any, giftWrappedEvent as any);
+    await sendGiftWrappedMessageEvent(nostr, giftWrappedEvent);
 
     expect(newPromiseWithTimeout).toHaveBeenCalled();
     expect(nostr.publish).toHaveBeenCalledWith(
@@ -1484,17 +1535,16 @@ describe("sendGiftWrappedMessageEvent", () => {
     const consoleWarnSpy = jest
       .spyOn(console, "warn")
       .mockImplementation(() => {});
-    const signer = { sign: jest.fn() };
-    const nostr = { publish: jest.fn() };
+    const signer: NostrEventSignerMock = {
+      getPubKey: jest.fn().mockResolvedValue("signer-pubkey"),
+      sign: jest.fn(),
+    };
+    const nostr: NostrPublisherMock = { publish: jest.fn() };
     (newPromiseWithTimeout as jest.Mock).mockRejectedValue(
       new Error("Timeout")
     );
 
-    await sendGiftWrappedMessageEvent(
-      nostr as any,
-      giftWrappedEvent as any,
-      signer as any
-    );
+    await sendGiftWrappedMessageEvent(nostr, giftWrappedEvent, signer);
 
     expect(consoleWarnSpy).toHaveBeenCalled();
     expect(trackFailedRelayPublish).toHaveBeenCalledWith(
@@ -1510,12 +1560,12 @@ describe("sendGiftWrappedMessageEvent", () => {
     const consoleWarnSpy = jest
       .spyOn(console, "warn")
       .mockImplementation(() => {});
-    const nostr = { publish: jest.fn() };
+    const nostr: NostrPublisherMock = { publish: jest.fn() };
     (newPromiseWithTimeout as jest.Mock).mockRejectedValue(
       new Error("Timeout")
     );
 
-    await sendGiftWrappedMessageEvent(nostr as any, giftWrappedEvent as any);
+    await sendGiftWrappedMessageEvent(nostr, giftWrappedEvent);
 
     expect(trackFailedRelayPublish).toHaveBeenCalledWith(
       giftWrappedEvent.id,
@@ -1530,9 +1580,9 @@ describe("sendGiftWrappedMessageEvent", () => {
 describe("deleteEvent", () => {
   const eventIds = ["event-id-1", "event-id-2"];
 
-  function makeSigner() {
+  function makeSigner(): NostrEventSignerMock {
     return {
-      sign: jest.fn().mockImplementation(async (event: any) => ({
+      sign: jest.fn().mockImplementation(async (event: EventTemplate) => ({
         ...event,
         id: "signed-id",
         pubkey: "signer-pubkey",
@@ -1542,7 +1592,7 @@ describe("deleteEvent", () => {
     };
   }
 
-  function makeNostr() {
+  function makeNostr(): NostrPublisherMock {
     return { publish: jest.fn().mockResolvedValue(undefined) };
   }
 
@@ -1559,11 +1609,13 @@ describe("deleteEvent", () => {
       tags: [],
       created_at: 0,
     });
-    (newPromiseWithTimeout as jest.Mock).mockImplementation(async (fn: any) => {
-      return new Promise((resolve, reject) =>
-        fn(resolve, reject, new AbortController().signal)
-      );
-    });
+    (newPromiseWithTimeout as jest.Mock).mockImplementation(
+      async (fn: TimeoutExecutor<void>) => {
+        return new Promise((resolve, reject) =>
+          fn(resolve, reject, new AbortController().signal)
+        );
+      }
+    );
   });
 
   afterEach(() => {
@@ -1574,7 +1626,7 @@ describe("deleteEvent", () => {
     const signer = makeSigner();
     const nostr = makeNostr();
 
-    await deleteEvent(nostr as any, signer as any, eventIds);
+    await deleteEvent(nostr, signer, eventIds);
 
     expect(signer.sign).toHaveBeenCalledWith(
       expect.objectContaining({ kind: 5 })
@@ -1586,7 +1638,7 @@ describe("deleteEvent", () => {
     const signer = makeSigner();
     const nostr = makeNostr();
 
-    await deleteEvent(nostr as any, signer as any, eventIds);
+    await deleteEvent(nostr, signer, eventIds);
 
     expect(signer.getPubKey).toHaveBeenCalledTimes(1);
   });
@@ -1595,7 +1647,7 @@ describe("deleteEvent", () => {
     const signer = makeSigner();
     const nostr = makeNostr();
 
-    await deleteEvent(nostr as any, signer as any, eventIds);
+    await deleteEvent(nostr, signer, eventIds);
 
     expect(deleteEventsFromDatabase).toHaveBeenCalledWith(
       eventIds,
@@ -1613,9 +1665,7 @@ describe("deleteEvent", () => {
       new Error("DB error")
     );
 
-    await expect(
-      deleteEvent(nostr as any, signer as any, eventIds)
-    ).resolves.toBeUndefined();
+    await expect(deleteEvent(nostr, signer, eventIds)).resolves.toBeUndefined();
 
     await Promise.resolve();
 
@@ -1633,11 +1683,13 @@ describe("createNostrProfileEvent", () => {
     localStorage.setItem("relays", JSON.stringify(["wss://relay.example"]));
     localStorage.setItem("writeRelays", JSON.stringify([]));
     (cacheEventToDatabase as jest.Mock).mockResolvedValue(undefined);
-    (newPromiseWithTimeout as jest.Mock).mockImplementation(async (fn: any) => {
-      return new Promise((resolve, reject) =>
-        fn(resolve, reject, new AbortController().signal)
-      );
-    });
+    (newPromiseWithTimeout as jest.Mock).mockImplementation(
+      async (fn: TimeoutExecutor<unknown>) => {
+        return new Promise((resolve, reject) =>
+          fn(resolve, reject, new AbortController().signal)
+        );
+      }
+    );
   });
 
   afterEach(() => {
@@ -1654,15 +1706,20 @@ describe("createNostrProfileEvent", () => {
       created_at: 1,
       tags: [],
     };
-    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
-    const signer = { sign: jest.fn().mockResolvedValue(signedEvent) };
+    const nostr: NostrPublisherMock = {
+      publish: jest.fn().mockResolvedValue(undefined),
+    };
+    const signer: NostrEventSignerMock = {
+      getPubKey: jest.fn().mockResolvedValue("user-pubkey"),
+      sign: jest.fn().mockResolvedValue(signedEvent),
+    };
 
     // A never-resolving timeout proves the function does not await relay publish
     (newPromiseWithTimeout as jest.Mock).mockReturnValue(new Promise(() => {}));
 
     const result = await createNostrProfileEvent(
-      nostr as any,
-      signer as any,
+      nostr,
+      signer,
       '{"name":"Alice"}'
     );
 
@@ -1674,14 +1731,14 @@ describe("createNostrProfileEvent", () => {
 });
 
 describe("finalizeAndSendNostrEvent", () => {
-  const eventTemplate = {
+  const eventTemplate: EventTemplate = {
     kind: 1,
     content: "test content",
     tags: [] as string[][],
     created_at: 1,
   };
 
-  function makeSignedEvent(overrides: Record<string, unknown> = {}) {
+  function makeSignedEvent(overrides: Partial<NostrEvent> = {}): NostrEvent {
     return {
       ...eventTemplate,
       id: "signed-event-id",
@@ -1696,11 +1753,13 @@ describe("finalizeAndSendNostrEvent", () => {
     localStorage.setItem("relays", JSON.stringify(["wss://relay.example"]));
     localStorage.setItem("writeRelays", JSON.stringify([]));
     (cacheEventToDatabase as jest.Mock).mockResolvedValue(undefined);
-    (newPromiseWithTimeout as jest.Mock).mockImplementation(async (fn: any) => {
-      return new Promise((resolve, reject) =>
-        fn(resolve, reject, new AbortController().signal)
-      );
-    });
+    (newPromiseWithTimeout as jest.Mock).mockImplementation(
+      async (fn: TimeoutExecutor<unknown>) => {
+        return new Promise((resolve, reject) =>
+          fn(resolve, reject, new AbortController().signal)
+        );
+      }
+    );
   });
 
   afterEach(() => {
@@ -1710,7 +1769,8 @@ describe("finalizeAndSendNostrEvent", () => {
   it("signs the event, then awaits cacheEventToDatabase before publishing", async () => {
     const callOrder: string[] = [];
     const signedEvent = makeSignedEvent();
-    const signer = {
+    const signer: NostrEventSignerMock = {
+      getPubKey: jest.fn().mockResolvedValue("user-pubkey"),
       sign: jest.fn().mockImplementation(async () => {
         callOrder.push("sign");
         return signedEvent;
@@ -1719,13 +1779,13 @@ describe("finalizeAndSendNostrEvent", () => {
     (cacheEventToDatabase as jest.Mock).mockImplementation(async () => {
       callOrder.push("cache");
     });
-    const nostr = {
+    const nostr: NostrPublisherMock = {
       publish: jest.fn().mockImplementation(async () => {
         callOrder.push("publish");
       }),
     };
 
-    await finalizeAndSendNostrEvent(signer as any, nostr as any, eventTemplate);
+    await finalizeAndSendNostrEvent(signer, nostr, eventTemplate);
 
     expect(signer.sign).toHaveBeenCalledWith(eventTemplate);
     expect(cacheEventToDatabase).toHaveBeenCalledWith(signedEvent);
@@ -1734,12 +1794,17 @@ describe("finalizeAndSendNostrEvent", () => {
 
   it("returns the signed event and awaits relay publish in the default path", async () => {
     const signedEvent = makeSignedEvent();
-    const signer = { sign: jest.fn().mockResolvedValue(signedEvent) };
-    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+    const signer: NostrEventSignerMock = {
+      getPubKey: jest.fn().mockResolvedValue("user-pubkey"),
+      sign: jest.fn().mockResolvedValue(signedEvent),
+    };
+    const nostr: NostrPublisherMock = {
+      publish: jest.fn().mockResolvedValue(undefined),
+    };
 
     const result = await finalizeAndSendNostrEvent(
-      signer as any,
-      nostr as any,
+      signer,
+      nostr,
       eventTemplate
     );
 
@@ -1752,15 +1817,18 @@ describe("finalizeAndSendNostrEvent", () => {
 
   it("returns the signed event immediately and fires publish without awaiting when waitForRelayPublish is false", async () => {
     const signedEvent = makeSignedEvent();
-    const signer = { sign: jest.fn().mockResolvedValue(signedEvent) };
-    const nostr = { publish: jest.fn() };
+    const signer: NostrEventSignerMock = {
+      getPubKey: jest.fn().mockResolvedValue("user-pubkey"),
+      sign: jest.fn().mockResolvedValue(signedEvent),
+    };
+    const nostr: NostrPublisherMock = { publish: jest.fn() };
 
     // Never-resolving timeout: if the function awaited it, the test would hang
     (newPromiseWithTimeout as jest.Mock).mockReturnValue(new Promise(() => {}));
 
     const result = await finalizeAndSendNostrEvent(
-      signer as any,
-      nostr as any,
+      signer,
+      nostr,
       eventTemplate,
       { waitForRelayPublish: false }
     );
@@ -1772,11 +1840,14 @@ describe("finalizeAndSendNostrEvent", () => {
 
   it("re-throws when signer.sign rejects", async () => {
     const signError = new Error("Sign failed");
-    const signer = { sign: jest.fn().mockRejectedValue(signError) };
-    const nostr = { publish: jest.fn() };
+    const signer: NostrEventSignerMock = {
+      getPubKey: jest.fn().mockResolvedValue("user-pubkey"),
+      sign: jest.fn().mockRejectedValue(signError),
+    };
+    const nostr: NostrPublisherMock = { publish: jest.fn() };
 
     await expect(
-      finalizeAndSendNostrEvent(signer as any, nostr as any, eventTemplate)
+      finalizeAndSendNostrEvent(signer, nostr, eventTemplate)
     ).rejects.toThrow("Sign failed");
 
     expect(cacheEventToDatabase).not.toHaveBeenCalled();
@@ -1786,12 +1857,15 @@ describe("finalizeAndSendNostrEvent", () => {
   it("re-throws when cacheEventToDatabase rejects", async () => {
     const cacheError = new Error("Cache write failed");
     const signedEvent = makeSignedEvent();
-    const signer = { sign: jest.fn().mockResolvedValue(signedEvent) };
-    const nostr = { publish: jest.fn() };
+    const signer: NostrEventSignerMock = {
+      getPubKey: jest.fn().mockResolvedValue("user-pubkey"),
+      sign: jest.fn().mockResolvedValue(signedEvent),
+    };
+    const nostr: NostrPublisherMock = { publish: jest.fn() };
     (cacheEventToDatabase as jest.Mock).mockRejectedValue(cacheError);
 
     await expect(
-      finalizeAndSendNostrEvent(signer as any, nostr as any, eventTemplate)
+      finalizeAndSendNostrEvent(signer, nostr, eventTemplate)
     ).rejects.toThrow("Cache write failed");
 
     expect(nostr.publish).not.toHaveBeenCalled();
@@ -1801,13 +1875,18 @@ describe("finalizeAndSendNostrEvent", () => {
 
   it("calls nostr.publish via newPromiseWithTimeout and returns cleanly on success", async () => {
     const signedEvent = makeSignedEvent();
-    const signer = { sign: jest.fn().mockResolvedValue(signedEvent) };
-    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+    const signer: NostrEventSignerMock = {
+      getPubKey: jest.fn().mockResolvedValue("user-pubkey"),
+      sign: jest.fn().mockResolvedValue(signedEvent),
+    };
+    const nostr: NostrPublisherMock = {
+      publish: jest.fn().mockResolvedValue(undefined),
+    };
     const consoleWarnSpy = jest
       .spyOn(console, "warn")
       .mockImplementation(() => {});
 
-    await finalizeAndSendNostrEvent(signer as any, nostr as any, eventTemplate);
+    await finalizeAndSendNostrEvent(signer, nostr, eventTemplate);
 
     expect(newPromiseWithTimeout).toHaveBeenCalled();
     expect(nostr.publish).toHaveBeenCalledWith(
@@ -1822,8 +1901,11 @@ describe("finalizeAndSendNostrEvent", () => {
 
   it("logs console.warn and calls trackFailedRelayPublish when newPromiseWithTimeout rejects", async () => {
     const signedEvent = makeSignedEvent();
-    const signer = { sign: jest.fn().mockResolvedValue(signedEvent) };
-    const nostr = { publish: jest.fn() };
+    const signer: NostrEventSignerMock = {
+      getPubKey: jest.fn().mockResolvedValue("user-pubkey"),
+      sign: jest.fn().mockResolvedValue(signedEvent),
+    };
+    const nostr: NostrPublisherMock = { publish: jest.fn() };
     const consoleWarnSpy = jest
       .spyOn(console, "warn")
       .mockImplementation(() => {});
@@ -1831,7 +1913,7 @@ describe("finalizeAndSendNostrEvent", () => {
       new Error("Timeout")
     );
 
-    await finalizeAndSendNostrEvent(signer as any, nostr as any, eventTemplate);
+    await finalizeAndSendNostrEvent(signer, nostr, eventTemplate);
 
     expect(consoleWarnSpy).toHaveBeenCalledWith(
       expect.stringContaining("timed out or failed"),
@@ -1851,8 +1933,11 @@ describe("finalizeAndSendNostrEvent", () => {
     const trackError = new Error("Track failed");
     (trackFailedRelayPublish as jest.Mock).mockRejectedValue(trackError);
     const signedEvent = makeSignedEvent();
-    const signer = { sign: jest.fn().mockResolvedValue(signedEvent) };
-    const nostr = { publish: jest.fn() };
+    const signer: NostrEventSignerMock = {
+      getPubKey: jest.fn().mockResolvedValue("user-pubkey"),
+      sign: jest.fn().mockResolvedValue(signedEvent),
+    };
+    const nostr: NostrPublisherMock = { publish: jest.fn() };
     const consoleWarnSpy = jest
       .spyOn(console, "warn")
       .mockImplementation(() => {});
@@ -1864,8 +1949,8 @@ describe("finalizeAndSendNostrEvent", () => {
     );
 
     const result = await finalizeAndSendNostrEvent(
-      signer as any,
-      nostr as any,
+      signer,
+      nostr,
       eventTemplate
     );
 
@@ -1887,15 +1972,18 @@ describe("finalizeAndSendNostrEvent", () => {
       .spyOn(console, "error")
       .mockImplementation(() => {});
     const signedEvent = makeSignedEvent();
-    const signer = { sign: jest.fn().mockResolvedValue(signedEvent) };
-    const nostr = { publish: jest.fn() };
+    const signer: NostrEventSignerMock = {
+      getPubKey: jest.fn().mockResolvedValue("user-pubkey"),
+      sign: jest.fn().mockResolvedValue(signedEvent),
+    };
+    const nostr: NostrPublisherMock = { publish: jest.fn() };
     (newPromiseWithTimeout as jest.Mock).mockRejectedValue(
       new Error("Timeout")
     );
 
     const result = await finalizeAndSendNostrEvent(
-      signer as any,
-      nostr as any,
+      signer,
+      nostr,
       eventTemplate
     );
 

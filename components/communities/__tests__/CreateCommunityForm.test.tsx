@@ -1,14 +1,39 @@
 import React from "react";
+import type {
+  ButtonHTMLAttributes,
+  ImgHTMLAttributes,
+  InputHTMLAttributes,
+  ReactNode,
+  TextareaHTMLAttributes,
+} from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import CreateCommunityForm from "../CreateCommunityForm";
 import { Community } from "@/utils/types/types";
 
+type FieldMockProps = Omit<InputHTMLAttributes<HTMLInputElement>, "label"> & {
+  label?: string;
+  errorMessage?: ReactNode;
+};
+type TextareaMockProps = Omit<
+  TextareaHTMLAttributes<HTMLTextAreaElement>,
+  "label"
+> & {
+  label?: string;
+  errorMessage?: ReactNode;
+};
+
 jest.mock("@heroui/react", () => ({
-  Button: ({ children, ...props }: any) => (
+  Button: ({ children, ...props }: ButtonHTMLAttributes<HTMLButtonElement>) => (
     <button {...props}>{children}</button>
   ),
-  Input: ({ label, value, onChange, errorMessage, ...props }: any) => (
+  Input: ({
+    label,
+    value,
+    onChange,
+    errorMessage,
+    ...props
+  }: FieldMockProps) => (
     <div>
       <label>
         {label}
@@ -22,7 +47,13 @@ jest.mock("@heroui/react", () => ({
       {errorMessage ? <span>{errorMessage}</span> : null}
     </div>
   ),
-  Textarea: ({ label, value, onChange, errorMessage, ...props }: any) => (
+  Textarea: ({
+    label,
+    value,
+    onChange,
+    errorMessage,
+    ...props
+  }: TextareaMockProps) => (
     <div>
       <label>
         {label}
@@ -36,7 +67,7 @@ jest.mock("@heroui/react", () => ({
       {errorMessage ? <span>{errorMessage}</span> : null}
     </div>
   ),
-  Image: ({ alt, src, ...props }: any) => (
+  Image: ({ alt, src, ...props }: ImgHTMLAttributes<HTMLImageElement>) => (
     <img alt={alt} src={src} {...props} />
   ),
 }));

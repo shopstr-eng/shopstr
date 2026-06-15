@@ -20,6 +20,8 @@ import {
   publishWalletEvent,
 } from "@/utils/nostr/nostr-helper-functions";
 import { NostrNIP46Signer } from "@/utils/nostr/signers/nostr-nip46-signer";
+import type { NostrManager } from "@/utils/nostr/nostr-manager";
+import type { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 
 jest.setTimeout(15000);
 
@@ -50,7 +52,7 @@ const mockGetDecodedToken = getDecodedToken as jest.Mock;
 const mockPublishProofEvent = publishProofEvent as jest.Mock;
 const mockPublishWalletEvent = publishWalletEvent as jest.Mock;
 const MockCashuWallet = CashuWallet as jest.Mock;
-const mockSigner = {
+const mockSigner: NostrSigner = {
   connect: jest.fn(),
   getPubKey: jest.fn().mockResolvedValue("mock-pubkey"),
   sign: jest.fn(),
@@ -58,18 +60,24 @@ const mockSigner = {
   decrypt: jest.fn(),
   close: jest.fn(),
   toJSON: jest.fn(),
-} as any;
-const mockNostr = { pool: {} } as any;
+};
+const mockNostr = Object.assign(Object.create(null), {
+  pool: {},
+}) as NostrManager;
 
 const renderWithProviders = (
   ui: React.ReactElement,
-  { signer = mockSigner as any, nostr = mockNostr as any } = {}
+  {
+    signer = mockSigner,
+    nostr = mockNostr,
+  }: {
+    signer?: NostrSigner;
+    nostr?: NostrManager;
+  } = {}
 ) => {
   return render(
-    <NostrContext.Provider value={{ nostr } as any}>
-      <SignerContext.Provider value={{ signer } as any}>
-        {ui}
-      </SignerContext.Provider>
+    <NostrContext.Provider value={{ nostr }}>
+      <SignerContext.Provider value={{ signer }}>{ui}</SignerContext.Provider>
     </NostrContext.Provider>
   );
 };
@@ -299,7 +307,9 @@ describe("ReceiveButton", () => {
       { bunker: "bunker://dummy@dummy" },
       jest.fn()
     );
-    renderWithProviders(<ReceiveButton />, { signer: nip46Signer as any });
+    renderWithProviders(<ReceiveButton />, {
+      signer: nip46Signer,
+    });
     fireEvent.click(screen.getByRole("button", { name: /Receive/i }));
     const modal = await screen.findByRole("dialog");
     const infoMessage =

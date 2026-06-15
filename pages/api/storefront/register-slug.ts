@@ -141,8 +141,8 @@ export default async function handler(
     );
 
     return res.status(200).json({ slug: sanitized });
-  } catch (error: any) {
-    if (error?.code === "23505") {
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "23505") {
       return res.status(409).json({ error: "This shop name is already taken" });
     }
     console.error("Register slug error:", error);

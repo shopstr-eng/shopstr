@@ -4,7 +4,7 @@ jest.mock("nostr-tools", () => {
   const actual = jest.requireActual("nostr-tools");
   return {
     ...actual,
-    verifyEvent: (event: any) => verifyEventMock(event),
+    verifyEvent: (event: unknown) => verifyEventMock(event),
   };
 });
 
@@ -13,6 +13,7 @@ import {
   buildSignedHttpRequestProofTemplate,
   verifySignedHttpRequestProof,
 } from "@/utils/nostr/request-auth";
+import type { NostrEvent } from "@/utils/types/types";
 
 describe("verifySignedHttpRequestProof", () => {
   beforeEach(() => {
@@ -43,7 +44,7 @@ describe("verifySignedHttpRequestProof", () => {
       expiration: 1710000000,
     });
     const template = buildSignedHttpRequestProofTemplate(proof);
-    const signedEvent = {
+    const signedEvent: NostrEvent = {
       id: "proof-1",
       pubkey: proof.pubkey,
       kind: template.kind,
@@ -53,7 +54,7 @@ describe("verifySignedHttpRequestProof", () => {
       sig: "valid",
     };
 
-    expect(verifySignedHttpRequestProof(signedEvent as any, proof)).toEqual({
+    expect(verifySignedHttpRequestProof(signedEvent, proof)).toEqual({
       ok: true,
       status: 200,
     });
@@ -71,7 +72,7 @@ describe("verifySignedHttpRequestProof", () => {
       discountPercentage: 20,
     });
     const template = buildSignedHttpRequestProofTemplate(wrongProof);
-    const signedEvent = {
+    const signedEvent: NostrEvent = {
       id: "proof-2",
       pubkey: proof.pubkey,
       kind: template.kind,
@@ -81,7 +82,7 @@ describe("verifySignedHttpRequestProof", () => {
       sig: "valid",
     };
 
-    expect(verifySignedHttpRequestProof(signedEvent as any, proof)).toEqual({
+    expect(verifySignedHttpRequestProof(signedEvent, proof)).toEqual({
       ok: false,
       status: 401,
       error: "Signed request proof does not match this operation.",
@@ -97,7 +98,7 @@ describe("verifySignedHttpRequestProof", () => {
       discountPercentage: 20,
     });
     const template = buildSignedHttpRequestProofTemplate(proof);
-    const signedEvent = {
+    const signedEvent: NostrEvent = {
       id: "proof-invalid-signature",
       pubkey: proof.pubkey,
       kind: template.kind,
@@ -107,7 +108,7 @@ describe("verifySignedHttpRequestProof", () => {
       sig: "invalid",
     };
 
-    expect(verifySignedHttpRequestProof(signedEvent as any, proof)).toEqual({
+    expect(verifySignedHttpRequestProof(signedEvent, proof)).toEqual({
       ok: false,
       status: 401,
       error: "Invalid signed request proof or pubkey mismatch.",
@@ -121,7 +122,7 @@ describe("verifySignedHttpRequestProof", () => {
       discountPercentage: 20,
     });
     const template = buildSignedHttpRequestProofTemplate(proof);
-    const signedEvent = {
+    const signedEvent: NostrEvent = {
       id: "proof-pubkey-mismatch",
       pubkey: "e".repeat(64),
       kind: template.kind,
@@ -131,7 +132,7 @@ describe("verifySignedHttpRequestProof", () => {
       sig: "valid",
     };
 
-    expect(verifySignedHttpRequestProof(signedEvent as any, proof)).toEqual({
+    expect(verifySignedHttpRequestProof(signedEvent, proof)).toEqual({
       ok: false,
       status: 401,
       error: "Invalid signed request proof or pubkey mismatch.",
@@ -145,7 +146,7 @@ describe("verifySignedHttpRequestProof", () => {
       discountPercentage: 20,
     });
     const template = buildSignedHttpRequestProofTemplate(proof);
-    const signedEvent = {
+    const signedEvent: NostrEvent = {
       id: "proof-3",
       pubkey: proof.pubkey,
       kind: template.kind,
@@ -155,7 +156,7 @@ describe("verifySignedHttpRequestProof", () => {
       sig: "valid",
     };
 
-    expect(verifySignedHttpRequestProof(signedEvent as any, proof)).toEqual({
+    expect(verifySignedHttpRequestProof(signedEvent, proof)).toEqual({
       ok: false,
       status: 401,
       error: "Signed request proof has expired. Please sign the request again.",

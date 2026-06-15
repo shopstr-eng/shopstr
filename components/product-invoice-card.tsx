@@ -77,6 +77,56 @@ import {
 } from "@/utils/types/types";
 import { Controller } from "react-hook-form";
 
+type ProductPaymentData = {
+  additionalInfo?: string;
+  shippingName?: string;
+  shippingAddress?: string;
+  shippingUnitNo?: string;
+  shippingCity?: string;
+  shippingPostalCode?: string;
+  shippingState?: string;
+  shippingCountry?: string;
+  contact?: string;
+  contactType?: string;
+  contactInstructions?: string;
+};
+
+type NwcInfo = {
+  alias?: string;
+};
+
+type GiftWrapOptions = NonNullable<
+  Parameters<typeof constructGiftWrappedEvent>[4]
+>;
+
+function parseNwcInfo(value: string): NwcInfo | null {
+  const parsed = JSON.parse(value) as unknown;
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return null;
+  }
+  const record = parsed as Record<string, unknown>;
+  return {
+    alias: typeof record.alias === "string" ? record.alias : undefined,
+  };
+}
+
+function isCashuProof(value: unknown): value is Proof {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  const amount = record.amount;
+  return (
+    typeof record.id === "string" &&
+    typeof record.secret === "string" &&
+    typeof record.C === "string" &&
+    amount !== null &&
+    typeof amount === "object" &&
+    "toNumber" in amount &&
+    typeof amount.toNumber === "function"
+  );
+}
+
 export default function ProductInvoiceCard({
   productData,
   setIsBeingPaid,
@@ -278,7 +328,7 @@ export default function ProductInvoiceCard({
   };
 
   const [isNwcLoading, setIsNwcLoading] = useState(false);
-  const [nwcInfo, setNwcInfo] = useState<any | null>(null);
+  const [nwcInfo, setNwcInfo] = useState<NwcInfo | null>(null);
 
   // State for failure modal
   const [showFailureModal, setShowFailureModal] = useState(false);
@@ -368,7 +418,7 @@ export default function ProductInvoiceCard({
       const { nwcInfo: infoString } = getLocalStorageData();
       if (infoString) {
         try {
-          const info = JSON.parse(infoString);
+          const info = parseNwcInfo(infoString);
           setNwcInfo(info);
         } catch (e) {
           console.error("Failed to parse NWC info", e);
@@ -459,7 +509,7 @@ export default function ProductInvoiceCard({
       : (decodedRandomPubkeyForSender.data as string);
 
     let messageSubject = "";
-    let messageOptions: any = {};
+    let messageOptions: GiftWrapOptions = {};
     if (isPayment) {
       messageSubject = "order-payment";
       messageOptions = {
@@ -558,8 +608,11 @@ export default function ProductInvoiceCard({
           messageSubject,
           messageOptions
         );
+        if (!signer) {
+          throw new Error("Signer is required to send encrypted messages.");
+        }
         const sealedEvent = await constructMessageSeal(
-          signer || ({} as any),
+          signer,
           giftWrappedMessageEvent,
           decodedRandomPubkeyForSender.data as string,
           pubkeyToReceiveMessage,
@@ -693,7 +746,7 @@ export default function ProductInvoiceCard({
         additionalInfo: data["Required"],
       };
 
-      let paymentData: any = commonData;
+      let paymentData: ProductPaymentData = commonData;
 
       if (formType === "shipping") {
         paymentData = {
@@ -734,11 +787,11 @@ export default function ProductInvoiceCard({
       } else {
         await handleLightningPayment(price, paymentData);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       // Surface a real, accurate failure modal instead of always claiming
       // "cashu payment failed" regardless of payment type or root cause.
       const message =
-        typeof err?.message === "string" && err.message
+        err instanceof Error && err.message
           ? err.message
           : "Something went wrong while preparing your order. Please try again.";
       setFailureText(message);
@@ -769,7 +822,7 @@ export default function ProductInvoiceCard({
     setValue("Country", addr.country);
   };
 
-  const handleNWCError = (error: any) => {
+  const handleNWCError = (error: unknown) => {
     console.error("NWC Payment failed:", error);
     let message = "Payment failed. Please try again.";
     if (error && typeof error === "object" && "code" in error) {
@@ -790,7 +843,10 @@ export default function ProductInvoiceCard({
             "You are sending payments too quickly. Please wait a moment.";
           break;
         default:
-          message = error.message || "An unknown wallet error occurred.";
+          message =
+            "message" in error && typeof error.message === "string"
+              ? error.message
+              : "An unknown wallet error occurred.";
       }
     } else if (error instanceof Error) {
       message = error.message;
@@ -799,7 +855,10 @@ export default function ProductInvoiceCard({
     setShowFailureModal(true);
   };
 
-  const handleNWCPayment = async (convertedPrice: number, data: any) => {
+  const handleNWCPayment = async (
+    convertedPrice: number,
+    data: ProductPaymentData
+  ) => {
     setIsNwcLoading(true);
     let nwc: NostrWebLNProvider | null = null;
 
@@ -861,7 +920,7 @@ export default function ProductInvoiceCard({
         data.shippingCountry ? data.shippingCountry : undefined,
         data.additionalInfo ? data.additionalInfo : undefined
       );
-    } catch (error: any) {
+    } catch (error: unknown) {
       handleNWCError(error);
     } finally {
       nwc?.close();
@@ -869,7 +928,10 @@ export default function ProductInvoiceCard({
     }
   };
 
-  const handleLightningPayment = async (convertedPrice: number, data: any) => {
+  const handleLightningPayment = async (
+    convertedPrice: number,
+    data: ProductPaymentData
+  ) => {
     try {
       if (
         data.shippingName ||
@@ -1869,7 +1931,10 @@ export default function ProductInvoiceCard({
     productData.currency
   );
 
-  const handleCashuPayment = async (price: number, data: any) => {
+  const handleCashuPayment = async (
+    price: number,
+    data: ProductPaymentData
+  ) => {
     try {
       if (!mints || mints.length === 0) {
         throw new Error("No Cashu mint available");
@@ -1912,9 +1977,10 @@ export default function ProductInvoiceCard({
       const wallet = new CashuWallet(mint);
       await wallet.loadMint();
       const mintKeySetIds = await wallet.keyChain.getKeysets();
-      const filteredProofs = tokens.filter((p: Proof) =>
+      const cashuTokens = tokens.filter(isCashuProof);
+      const filteredProofs = cashuTokens.filter((p) =>
         mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
-      ) as Proof[];
+      );
       const swapOutcome = await safeSwap(wallet, price, filteredProofs, {
         sendConfig: { includeFees: true },
       });
@@ -1967,10 +2033,10 @@ export default function ProductInvoiceCard({
         data.additionalInfo ? data.additionalInfo : undefined
       );
       const changeProofs = keep;
-      const remainingProofs = tokens.filter(
-        (p: Proof) =>
+      const remainingProofs = cashuTokens.filter(
+        (p) =>
           !mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
-      ) as Proof[];
+      );
       let proofArray;
       if (changeProofs.length >= 1 && changeProofs) {
         proofArray = [...remainingProofs, ...changeProofs];

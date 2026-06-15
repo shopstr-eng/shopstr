@@ -10,14 +10,14 @@ const ChatButton = ({
   handleClickChat,
 }: {
   pubkeyOfChat: string;
-  chatObject: ChatObject;
+  chatObject?: ChatObject;
   openedChatPubkey: string;
   handleClickChat: (pubkey: string) => void;
 }) => {
   const messages = chatObject?.decryptedChat;
   const lastMessage =
     messages && messages.length > 0 && messages[messages.length - 1];
-  const unreadCount = chatObject?.unreadCount;
+  const unreadCount = chatObject?.unreadCount ?? 0;
 
   const divRef = useRef<HTMLDivElement>(null);
 

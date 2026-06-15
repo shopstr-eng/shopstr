@@ -3,9 +3,15 @@ import { render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import WeightSelector from "../weight-selector";
 
+type SelectMockProps = {
+  selectedKeys: Iterable<React.Key>;
+  onSelectionChange: (keys: Iterable<React.Key>) => void;
+  children?: React.ReactNode;
+};
+
 const mockOnSelectionChange = jest.fn();
 jest.mock("@heroui/react", () => ({
-  Select: (props: any) => {
+  Select: (props: SelectMockProps) => {
     mockOnSelectionChange.mockImplementation((keys) =>
       props.onSelectionChange(keys)
     );

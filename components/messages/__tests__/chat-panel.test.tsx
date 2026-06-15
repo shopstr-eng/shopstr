@@ -1,4 +1,5 @@
 import React from "react";
+import type { SVGProps } from "react";
 import { render, screen, waitFor, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import "@testing-library/jest-dom";
@@ -8,20 +9,48 @@ import {
   SignerContext,
   NostrContext,
 } from "@/components/utility-components/nostr-context-provider";
-import { ReviewsContext } from "@/utils/context/context";
+import {
+  ReviewsContext,
+  ReviewsContextInterface,
+} from "@/utils/context/context";
 import * as nostrHelpers from "@/utils/nostr/nostr-helper-functions";
 import * as nostrTools from "nostr-tools";
 import ChatMessage from "../chat-message";
+import type { ChatObject, NostrMessageEvent } from "@/utils/types/types";
+import type { NostrManager } from "@/utils/nostr/nostr-manager";
+import type { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
+
+type ChatPanelProps = React.ComponentProps<typeof ChatPanel>;
+type ChatMessageMockProps = {
+  messageEvent: NostrMessageEvent;
+  setBuyerPubkey: (pubkey: string) => void;
+  setCanReview: (canReview: boolean) => void;
+  setProductAddress: (productAddress: string) => void;
+};
+
+const makeMessageEvent = (
+  overrides: Partial<NostrMessageEvent> = {}
+): NostrMessageEvent => ({
+  id: "message-id",
+  pubkey: "test-pubkey-1",
+  kind: 14,
+  content: "",
+  created_at: 1,
+  sig: "sig",
+  tags: [],
+  read: true,
+  ...overrides,
+});
 
 jest.mock("@heroicons/react/24/outline", () => ({
   ...jest.requireActual("@heroicons/react/24/outline"),
-  ArrowUturnLeftIcon: (props: any) => (
+  ArrowUturnLeftIcon: (props: SVGProps<SVGSVGElement>) => (
     <svg data-testid="ArrowUturnLeftIcon" {...props} />
   ),
-  HandThumbUpIcon: (props: any) => (
+  HandThumbUpIcon: (props: SVGProps<SVGSVGElement>) => (
     <svg data-testid="HandThumbUpIcon" {...props} />
   ),
-  HandThumbDownIcon: (props: any) => (
+  HandThumbDownIcon: (props: SVGProps<SVGSVGElement>) => (
     <svg data-testid="HandThumbDownIcon" {...props} />
   ),
 }));
@@ -56,25 +85,20 @@ jest.mock("nostr-tools", () => ({
   },
 }));
 
-const defaultProps = {
+const defaultProps: ChatPanelProps = {
   handleGoBack: jest.fn(),
   handleSendMessage: jest.fn().mockResolvedValue(undefined),
   currentChatPubkey: "test-pubkey-1",
-  chatsMap: new Map([
+  chatsMap: new Map<string, ChatObject>([
     [
       "test-pubkey-1",
       {
         decryptedChat: [
-          {
+          makeMessageEvent({
             id: "msg1",
-            pubkey: "test-pubkey-1",
-            kind: 14,
             content: "Hello there",
-            created_at: 1,
             sig: "sig1",
-            tags: [],
-            read: true,
-          },
+          }),
         ],
         unreadCount: 0,
       },
@@ -84,28 +108,44 @@ const defaultProps = {
   isPayment: false,
 };
 
+const mockSigner: NostrSigner = {
+  connect: jest.fn().mockResolvedValue("user-pubkey"),
+  getPubKey: jest.fn().mockResolvedValue("user-pubkey"),
+  sign: jest.fn(),
+  encrypt: jest.fn(),
+  decrypt: jest.fn(),
+  close: jest.fn().mockResolvedValue(undefined),
+  toJSON: () => ({ type: "test" }),
+};
+
 const mockSignerContext = {
-  signer: {},
+  signer: mockSigner,
   pubkey: "user-pubkey",
   npub: "user-npub",
 };
-const mockNostrContext = { nostr: {} };
-const mockReviewsContext = {
-  reviewsData: new Map(),
+const mockNostrContext = {
+  nostr: Object.create(null) as NostrManager,
+};
+const mockReviewsContext: ReviewsContextInterface = {
   merchantReviewsData: new Map(),
+  productReviewsData: new Map(),
+  isLoading: false,
   updateProductReviewsData: jest.fn(),
   updateMerchantReviewsData: jest.fn(),
 };
 
-const renderComponent = async (props = {}, context = {}) => {
+const renderComponent = async (
+  props: Partial<ChatPanelProps> = {},
+  context: Partial<ReviewsContextInterface> = {}
+) => {
   const finalProps = { ...defaultProps, ...props };
   const finalContext = { ...mockReviewsContext, ...context };
 
   await act(async () => {
     render(
-      <NostrContext.Provider value={mockNostrContext as any}>
-        <SignerContext.Provider value={mockSignerContext as any}>
-          <ReviewsContext.Provider value={finalContext as any}>
+      <NostrContext.Provider value={mockNostrContext}>
+        <SignerContext.Provider value={mockSignerContext}>
+          <ReviewsContext.Provider value={finalContext}>
             <ChatPanel {...finalProps} />
           </ReviewsContext.Provider>
         </SignerContext.Provider>
@@ -117,7 +157,7 @@ const renderComponent = async (props = {}, context = {}) => {
 describe("ChatPanel Component", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    MockedChatMessage.mockImplementation((props: any) => (
+    MockedChatMessage.mockImplementation((props: ChatMessageMockProps) => (
       <div data-testid={`chat-message-${props.messageEvent.id}`}>
         {props.messageEvent.content}
       </div>
@@ -180,7 +220,7 @@ describe("ChatPanel Component", () => {
 
   describe("Payment Context - Shipping", () => {
     beforeEach(() => {
-      MockedChatMessage.mockImplementation((props: any) => {
+      MockedChatMessage.mockImplementation((props: ChatMessageMockProps) => {
         React.useEffect(() => {
           props.setBuyerPubkey("mock-buyer-pubkey");
         }, []);
@@ -196,24 +236,20 @@ describe("ChatPanel Component", () => {
       await renderComponent(
         {
           isPayment: true,
-          chatsMap: new Map([
+          chatsMap: new Map<string, ChatObject>([
             [
               "test-pubkey-1",
               {
                 decryptedChat: [
-                  {
+                  makeMessageEvent({
                     id: "shipping-msg-1",
-                    pubkey: "test-pubkey-1",
-                    kind: 14,
                     content: "Shipping update",
-                    created_at: 1,
                     sig: "sig-shipping",
-                    read: true,
                     tags: [
                       ["subject", "shipping-info"],
                       ["carrier", "UPS"],
                     ],
-                  },
+                  }),
                 ],
                 unreadCount: 0,
               },
@@ -241,19 +277,15 @@ describe("ChatPanel Component", () => {
               "test-pubkey-1",
               {
                 decryptedChat: [
-                  {
+                  makeMessageEvent({
                     id: "shipping-msg-2",
-                    pubkey: "test-pubkey-1",
-                    kind: 14,
                     content: "Shipping update",
-                    created_at: 1,
                     sig: "sig-shipping-2",
-                    read: true,
                     tags: [
                       ["subject", "shipping-info"],
                       ["carrier", "FedEx"],
                     ],
-                  },
+                  }),
                 ],
                 unreadCount: 0,
               },
@@ -285,21 +317,17 @@ describe("ChatPanel Component", () => {
       await renderComponent(
         {
           isPayment: true,
-          chatsMap: new Map([
+          chatsMap: new Map<string, ChatObject>([
             [
               "test-pubkey-1",
               {
                 decryptedChat: [
-                  {
+                  makeMessageEvent({
                     id: "order-msg-1",
-                    pubkey: "test-pubkey-1",
-                    kind: 14,
                     content: "Order placed",
-                    created_at: 1,
                     sig: "sig-1",
-                    read: true,
                     tags: [["subject", "order-info"]],
-                  },
+                  }),
                 ],
                 unreadCount: 0,
               },
@@ -424,7 +452,7 @@ describe("ChatPanel Component", () => {
 
   describe("Payment Context - Review", () => {
     beforeEach(() => {
-      MockedChatMessage.mockImplementation((props: any) => {
+      MockedChatMessage.mockImplementation((props: ChatMessageMockProps) => {
         React.useEffect(() => {
           props.setBuyerPubkey("mock-buyer-pubkey");
           props.setProductAddress("30023:kind:merchant-pubkey:dTag");
@@ -532,7 +560,7 @@ describe("ChatPanel Component", () => {
     it("should update an existing merchant in context when a new review is added", async () => {
       const existingMerchantContext = {
         merchantReviewsData: new Map([
-          ["merchant-pubkey", [[50, 50, 50, 50, 50]]],
+          ["merchant-pubkey", [50, 50, 50, 50, 50]],
         ]), // Pre-existing score
         updateMerchantReviewsData: jest.fn(),
       };
@@ -558,7 +586,7 @@ describe("ChatPanel Component", () => {
         const callArgs =
           existingMerchantContext.updateMerchantReviewsData.mock.calls[0];
         expect(callArgs[0]).toBe("merchant-pubkey");
-        expect(callArgs[1].length).toBe(2);
+        expect(callArgs[1].length).toBe(6);
       });
     });
 

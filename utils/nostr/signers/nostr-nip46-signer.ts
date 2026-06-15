@@ -27,6 +27,31 @@ type Listener = {
   reject: (reason: Error) => void;
 };
 
+type Nip46RpcContent = {
+  id: string;
+  result?: string;
+  error?: string;
+};
+
+function parseNip46RpcContent(value: unknown): Nip46RpcContent | null {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  const record = value as Record<string, unknown>;
+  if (typeof record.id !== "string") return null;
+  if (record.result !== undefined && typeof record.result !== "string") {
+    return null;
+  }
+  if (record.error !== undefined && typeof record.error !== "string") {
+    return null;
+  }
+  return {
+    id: record.id,
+    result: record.result,
+    error: record.error,
+  };
+}
+
 export class NostrNIP46Signer implements NostrSigner {
   private readonly bunker: BunkerData;
   private readonly appPrivKey: Uint8Array;
@@ -91,7 +116,7 @@ export class NostrNIP46Signer implements NostrSigner {
     );
   }
 
-  public toJSON(): { [key: string]: any } {
+  public toJSON(): Record<string, string | undefined> {
     return {
       type: "nip46",
       bunker: this.bunker.url,
@@ -100,37 +125,37 @@ export class NostrNIP46Signer implements NostrSigner {
   }
 
   public static fromJSON(
-    json: { [key: string]: any },
+    json: Record<string, string | undefined>,
     challengeHandler: ChallengeHandler
   ): NostrNIP46Signer | undefined {
     if (json.type !== "nip46" || !json.bunker) return undefined;
     return new NostrNIP46Signer(
       {
         bunker: json.bunker,
-        appPrivKey: hexToBytes(json.appPrivKey),
+        appPrivKey: json.appPrivKey ? hexToBytes(json.appPrivKey) : undefined,
       },
       challengeHandler
     );
   }
 
   private async onEvent(event: NostrEvent) {
-    let content: any;
+    let content: Nip46RpcContent | null;
     try {
       const conversationKey = nip44.getConversationKey(
         this.appPrivKey,
         event.pubkey
       );
       const decrypted = nip44.decrypt(event.content, conversationKey);
-      content = JSON.parse(decrypted);
+      content = parseNip46RpcContent(JSON.parse(decrypted) as unknown);
       event.content = decrypted;
     } catch {
       return;
     }
 
+    if (!content) return;
     const id = content.id;
     const error = content.error;
     const result = content.result;
-    if (!id) return;
 
     if (result === "auth_url") {
       const abortController = new AbortController();
@@ -138,7 +163,7 @@ export class NostrNIP46Signer implements NostrSigner {
       this.pendingChallenges.set(id, abortController);
       await this.challengeHandler(
         result,
-        error,
+        error ?? "",
         () => {
           abortController.abort();
           this.pendingChallenges.delete(id);
@@ -169,7 +194,7 @@ export class NostrNIP46Signer implements NostrSigner {
     }
   }
 
-  public async connect() {
+  public async connect(): Promise<string> {
     const args: string[] = [];
     args.push(this.bunker.bunkerPubkey);
     args.push(this.bunker.secret || "");
@@ -221,7 +246,7 @@ export class NostrNIP46Signer implements NostrSigner {
     });
   }
 
-  private async sendRPC(method: string, params: any): Promise<any> {
+  private async sendRPC(method: string, params: string[]): Promise<string> {
     const requestId = this.getNewRequestId();
     const remotePubKey = this.bunker.bunkerPubkey;
 
@@ -253,7 +278,10 @@ export class NostrNIP46Signer implements NostrSigner {
     await this.nostr.publish(signedEvent);
 
     const resp: NostrEvent = await respPromise; // now we wait for the response
-    const content = JSON.parse(resp.content);
+    const content = parseNip46RpcContent(JSON.parse(resp.content) as unknown);
+    if (!content?.result) {
+      throw new Error(`NIP-46 ${method} response did not include a result`);
+    }
     return content.result;
   }
 }

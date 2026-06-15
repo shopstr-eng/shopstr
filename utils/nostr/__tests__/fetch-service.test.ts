@@ -1,4 +1,7 @@
-import { NostrEvent, NostrManager } from "../nostr-manager";
+import { Filter } from "nostr-tools";
+import { NostrEvent } from "../nostr-manager";
+import { Community } from "@/utils/types/types";
+import { Amount, type AmountLike, type Proof } from "@cashu/cashu-ts";
 import {
   buildNip50ProductSearchFilters,
   DEFAULT_NIP50_SEARCH_RELAYS,
@@ -13,7 +16,7 @@ jest.mock("@/utils/db/db-client", () => ({
 
 const { cacheEventsToDatabase } = jest.requireMock("@/utils/db/db-client");
 
-const makeBaseEvent = (overrides: Record<string, any> = {}) => ({
+const makeBaseEvent = (overrides: Partial<NostrEvent> = {}): NostrEvent => ({
   id: "event-id",
   pubkey: "pubkey",
   created_at: 1,
@@ -87,7 +90,9 @@ describe("fetchAllPosts - NIP-99 and relay merge behavior", () => {
       .mockResolvedValueOnce(makeDbPayload([cachedA, cachedB]))
       .mockResolvedValueOnce(makeDbPayload([])) as typeof global.fetch;
 
-    const nostr = { fetch: jest.fn().mockResolvedValue([relayNewForA]) } as any;
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([relayNewForA]),
+    };
     const editProductContext = jest.fn();
 
     const { productEvents, profileSetFromProducts } = await fetchAllPosts(
@@ -139,7 +144,7 @@ describe("fetchAllPosts - NIP-99 and relay merge behavior", () => {
 
     const nostr = {
       fetch: jest.fn().mockResolvedValue([product, zapsnagNote]),
-    } as any;
+    };
     const editProductContext = jest.fn();
 
     const { productEvents, profileSetFromProducts } = await fetchAllPosts(
@@ -186,7 +191,9 @@ describe("fetchAllPosts - NIP-99 and relay merge behavior", () => {
       .mockResolvedValueOnce(makeDbPayload([dbOld]))
       .mockResolvedValueOnce(makeDbPayload([])) as typeof global.fetch;
 
-    const nostr = { fetch: jest.fn().mockResolvedValue([relayNew]) } as any;
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([relayNew]),
+    };
     const editProductContext = jest.fn();
 
     const { productEvents } = await fetchAllPosts(
@@ -201,49 +208,54 @@ describe("fetchAllPosts - NIP-99 and relay merge behavior", () => {
   });
 });
 
-const makeProfileEvent = (overrides: Record<string, any> = {}) =>
+const makeProfileEvent = (overrides: Partial<NostrEvent> = {}): NostrEvent =>
   makeBaseEvent({
     kind: 0,
     ...overrides,
   });
 
-const makeShopEvent = (overrides: Record<string, any> = {}) =>
+const makeShopEvent = (overrides: Partial<NostrEvent> = {}): NostrEvent =>
   makeBaseEvent({
     kind: 30019,
     tags: [["d", "shop"]],
     ...overrides,
   });
 
-const makeProductEvent = (overrides: Record<string, any> = {}) =>
+const makeProductEvent = (overrides: Partial<NostrEvent> = {}): NostrEvent =>
   makeBaseEvent({
     kind: 30402,
     tags: [["d", "listing-1"]],
     ...overrides,
   });
 
-const makeReportEvent = (overrides: Record<string, any> = {}) =>
+const makeReportEvent = (overrides: Partial<NostrEvent> = {}): NostrEvent =>
   makeBaseEvent({
     kind: 1984,
     tags: [["e", "listing-1", "spam"]],
     ...overrides,
   });
 
-const makeReviewEvent = (overrides: Record<string, any> = {}) =>
+const makeReviewEvent = (overrides: Partial<NostrEvent> = {}): NostrEvent =>
   makeBaseEvent({
     kind: 31555,
     tags: [["d", "review-address"]],
     ...overrides,
   });
 
-const makeWalletProof = (overrides: Record<string, any> = {}) => ({
-  id: "proof-id",
-  secret: "proof-secret",
-  amount: 1,
-  C: "C",
-  ...overrides,
-});
+const makeWalletProof = (
+  overrides: Partial<Omit<Proof, "amount">> & { amount?: AmountLike } = {}
+): Proof => {
+  const { amount = 1, ...proofOverrides } = overrides;
+  return {
+    id: "proof-id",
+    secret: "proof-secret",
+    C: "C",
+    ...proofOverrides,
+    amount: Amount.from(amount),
+  };
+};
 
-const makeWalletEvent = (overrides: Record<string, any> = {}) =>
+const makeWalletEvent = (overrides: Partial<NostrEvent> = {}): NostrEvent =>
   makeBaseEvent({
     kind: 7375,
     ...overrides,
@@ -433,7 +445,7 @@ describe("getReportTargetIdentifiers", () => {
           ["e", "listing-2", "impersonation"],
           ["t", "ignored"],
         ],
-      }) as any
+      })
     );
 
     expect(identifiers).toEqual({
@@ -451,7 +463,7 @@ describe("getReportTargetIdentifiers", () => {
           ["t", "ignored"],
           ["subject", "noise"],
         ],
-      }) as any
+      })
     );
 
     expect(identifiers).toEqual({
@@ -505,16 +517,16 @@ describe("getUniqueProofs", () => {
     const firstProof = makeWalletProof({
       id: "proof-1",
       secret: "shared-secret",
-    }) as any;
+    });
     const duplicateProof = makeWalletProof({
       id: "proof-2",
       secret: "shared-secret",
       amount: 99,
-    }) as any;
+    });
     const uniqueProof = makeWalletProof({
       id: "proof-3",
       secret: "unique-secret",
-    }) as any;
+    });
 
     const dedupedProofs = getUniqueProofs([
       firstProof,
@@ -557,7 +569,7 @@ describe("fetch-service NIP-50 search helpers", () => {
     expect(buildNip50ProductSearchFilters("   \n\t  ")).toEqual([]);
 
     const result = await fetchNip50ProductSearch(
-      nostr as unknown as NostrManager,
+      nostr,
       DEFAULT_NIP50_SEARCH_RELAYS,
       "   "
     );
@@ -572,12 +584,7 @@ describe("fetch-service NIP-50 search helpers", () => {
       fetch: jest.fn().mockResolvedValue([]),
     };
 
-    await fetchNip50ProductSearch(
-      nostr as unknown as NostrManager,
-      [],
-      "  cold   brew  ",
-      { limit: 25 }
-    );
+    await fetchNip50ProductSearch(nostr, [], "  cold   brew  ", { limit: 25 });
 
     expect(nostr.fetch).toHaveBeenCalledTimes(
       DEFAULT_NIP50_SEARCH_RELAYS.length
@@ -661,7 +668,7 @@ describe("fetch-service NIP-50 search helpers", () => {
     };
 
     const result = await fetchNip50ProductSearch(
-      nostr as unknown as NostrManager,
+      nostr,
       ["wss://relay.example"],
       "coffee"
     );
@@ -698,7 +705,7 @@ describe("fetch-service NIP-50 search helpers", () => {
 
     let didResolve = false;
     const searchPromise = fetchNip50ProductSearch(
-      nostr as unknown as NostrManager,
+      nostr,
       ["wss://relay.example"],
       "coffee"
     ).then((result) => {
@@ -752,7 +759,7 @@ describe("fetch-service NIP-50 search helpers", () => {
     };
 
     const result = await fetchNip50ProductSearch(
-      nostr as unknown as NostrManager,
+      nostr,
       ["wss://relay.example"],
       "coffee"
     );
@@ -792,11 +799,7 @@ describe("fetch-service NIP-50 search helpers", () => {
       fetch: jest.fn().mockResolvedValue([firstRelayResult, secondRelayResult]),
     };
 
-    const result = await fetchNip50ProductSearch(
-      nostr as unknown as NostrManager,
-      [],
-      "coffee"
-    );
+    const result = await fetchNip50ProductSearch(nostr, [], "coffee");
 
     expect(result.productEvents).toEqual([firstRelayResult, secondRelayResult]);
   });
@@ -820,7 +823,7 @@ describe("fetch-service NIP-50 search helpers", () => {
     };
 
     const result = await fetchNip50ProductSearch(
-      nostr as unknown as NostrManager,
+      nostr,
       ["wss://relay.damus.io", "wss://nos.lol"],
       "coffee"
     );
@@ -852,11 +855,7 @@ describe("fetch-service NIP-50 search helpers", () => {
       ),
     };
 
-    const result = await fetchNip50ProductSearch(
-      nostr as unknown as NostrManager,
-      [],
-      "coffee"
-    );
+    const result = await fetchNip50ProductSearch(nostr, [], "coffee");
 
     expectNip50RelayFetches(nostr.fetch);
     expect(result.productEvents).toEqual([searchListing]);
@@ -871,11 +870,7 @@ describe("fetch-service NIP-50 search helpers", () => {
       fetch: jest.fn().mockRejectedValue(new Error("Timeout")),
     };
 
-    const result = await fetchNip50ProductSearch(
-      nostr as unknown as NostrManager,
-      [],
-      "coffee"
-    );
+    const result = await fetchNip50ProductSearch(nostr, [], "coffee");
 
     expectNip50RelayFetches(nostr.fetch);
     expect(result.productEvents).toEqual([]);
@@ -911,11 +906,7 @@ describe("fetch-service NIP-50 search helpers", () => {
       new Error("cache failed")
     );
 
-    const result = await fetchNip50ProductSearch(
-      nostr as unknown as NostrManager,
-      [],
-      "coffee"
-    );
+    const result = await fetchNip50ProductSearch(nostr, [], "coffee");
 
     expect(result.productEvents).toEqual([searchListing]);
     expect(cacheEventsToDatabase).toHaveBeenCalledWith([searchListing]);
@@ -940,7 +931,7 @@ describe("fetch-service NIP-50 search helpers", () => {
     };
 
     await fetchNip50ProductSearch(
-      nostr as unknown as NostrManager,
+      nostr,
       ["wss://relay.damus.io", "relay.nostr.band/", "wss://nos.lol"],
       "coffee"
     );
@@ -964,7 +955,7 @@ describe("fetch-service NIP-50 search helpers", () => {
     };
 
     await fetchNip50ProductSearch(
-      nostr as unknown as NostrManager,
+      nostr,
       [
         "relay.noswhere.com/",
         "wss://relay.noswhere.com",
@@ -995,11 +986,7 @@ describe("fetch-service NIP-50 search helpers", () => {
       fetch: jest.fn().mockResolvedValue([fallbackListing]),
     };
 
-    const result = await fetchNip50ProductSearch(
-      nostr as unknown as NostrManager,
-      [],
-      "coffee"
-    );
+    const result = await fetchNip50ProductSearch(nostr, [], "coffee");
 
     expectNip50RelayFetches(nostr.fetch);
     expect(result.productEvents).toEqual([fallbackListing]);
@@ -1021,7 +1008,7 @@ describe("fetch-service NIP-50 search helpers", () => {
     };
 
     const result = await fetchNip50ProductSearch(
-      nostr as unknown as NostrManager,
+      nostr,
       ["wss://relay.example"],
       "coffee"
     );
@@ -1059,11 +1046,7 @@ describe("fetch-service NIP-50 search helpers", () => {
       ),
     };
 
-    const result = await fetchNip50ProductSearch(
-      nostr as unknown as NostrManager,
-      [],
-      "coffee"
-    );
+    const result = await fetchNip50ProductSearch(nostr, [], "coffee");
 
     expect(result.productEvents).toEqual([newer]);
     expect(cacheEventsToDatabase).toHaveBeenCalledWith([newer]);
@@ -1153,9 +1136,9 @@ describe("fetch-service report helpers", () => {
     ];
 
     const result = await fetchReports(
-      nostr as any,
+      nostr,
       ["wss://relay.example"],
-      products as any,
+      products,
       editReportsContext,
       ["reviewer-1"]
     );
@@ -1254,13 +1237,13 @@ describe("fetchReports", () => {
         makeDbPayload([reportByETag, reportByPTag, reportIrrelevant])
       ) as typeof global.fetch;
 
-    const nostr = { fetch: jest.fn().mockResolvedValue([]) } as any;
+    const nostr = { fetch: jest.fn().mockResolvedValue([]) };
     const editReportsContext = jest.fn();
 
     const { reportEvents } = await fetchReports(
       nostr,
       ["wss://relay.example"],
-      [productA, productB] as any,
+      [productA, productB],
       editReportsContext
     );
 
@@ -1315,13 +1298,13 @@ describe("fetchReports", () => {
         ])
       ) as typeof global.fetch;
 
-    const nostr = { fetch: jest.fn().mockResolvedValue([]) } as any;
+    const nostr = { fetch: jest.fn().mockResolvedValue([]) };
     const editReportsContext = jest.fn();
 
     const { reportEvents } = await fetchReports(
       nostr,
       ["wss://relay.example"],
-      [product] as any,
+      [product],
       editReportsContext
     );
 
@@ -1356,13 +1339,13 @@ describe("fetchReports", () => {
         makeDbPayload([extraReviewerReport])
       ) as typeof global.fetch;
 
-    const nostr = { fetch: jest.fn().mockResolvedValue([]) } as any;
+    const nostr = { fetch: jest.fn().mockResolvedValue([]) };
     const editReportsContext = jest.fn();
 
     const { reportEvents } = await fetchReports(
       nostr,
       ["wss://relay.example"],
-      [product] as any,
+      [product],
       editReportsContext,
       ["extra-reviewer"]
     );
@@ -1416,13 +1399,15 @@ describe("fetchReports", () => {
       .fn()
       .mockResolvedValue(makeDbPayload([dbReport])) as typeof global.fetch;
 
-    const nostr = { fetch: jest.fn().mockResolvedValue([relayReport]) } as any;
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([relayReport]),
+    };
     const editReportsContext = jest.fn();
 
     await fetchReports(
       nostr,
       ["wss://relay.example"],
-      [product] as any,
+      [product],
       editReportsContext
     );
 
@@ -1467,17 +1452,17 @@ describe("fetchReports", () => {
       .fn()
       .mockResolvedValue(makeDbPayload([])) as typeof global.fetch;
 
-    const nostr = { fetch: jest.fn().mockResolvedValue([]) } as any;
+    const nostr = { fetch: jest.fn().mockResolvedValue([]) };
     const editReportsContext = jest.fn();
 
     await fetchReports(
       nostr,
       ["wss://relay.example"],
-      [productA, productB] as any,
+      [productA, productB],
       editReportsContext
     );
 
-    const filters = nostr.fetch.mock.calls[0][0] as any[];
+    const filters = nostr.fetch.mock.calls[0][0] as Filter[];
     expect(filters).toHaveLength(2);
     const pFilter = filters.find((f) => "#p" in f);
     const eFilter = filters.find((f) => "#e" in f);
@@ -1527,13 +1512,13 @@ describe("fetchReports", () => {
 
     const nostr = {
       fetch: jest.fn().mockResolvedValue([relayVersionNewer]),
-    } as any;
+    };
     const editReportsContext = jest.fn();
 
     const { reportEvents } = await fetchReports(
       nostr,
       ["wss://relay.example"],
-      [product] as any,
+      [product],
       editReportsContext
     );
 
@@ -1554,7 +1539,7 @@ describe("fetchReports", () => {
     global.fetch = jest
       .fn()
       .mockResolvedValue(makeDbPayload([])) as typeof global.fetch;
-    const nostr = { fetch: jest.fn() } as any;
+    const nostr = { fetch: jest.fn() };
     const editReportsContext = jest.fn();
 
     const { reportEvents } = await fetchReports(
@@ -1620,13 +1605,13 @@ describe("fetchReports", () => {
       fetch: jest
         .fn()
         .mockResolvedValue([validReport, missingId, missingSig, wrongKind]),
-    } as any;
+    };
     const editReportsContext = jest.fn();
 
     await fetchReports(
       nostr,
       ["wss://relay.example"],
-      [product] as any,
+      [product],
       editReportsContext
     );
 
@@ -1660,7 +1645,7 @@ describe("fetchReports", () => {
 
     const nostr = {
       fetch: jest.fn().mockResolvedValue([relayReport]),
-    } as any;
+    };
     const editReportsContext = jest.fn();
     const consoleErrorSpy = jest
       .spyOn(console, "error")
@@ -1669,7 +1654,7 @@ describe("fetchReports", () => {
     const { reportEvents } = await fetchReports(
       nostr,
       ["wss://relay.example"],
-      [product] as any,
+      [product],
       editReportsContext
     );
 
@@ -1710,13 +1695,13 @@ describe("fetchReports", () => {
 
     const nostr = {
       fetch: jest.fn().mockResolvedValue([relayReport]),
-    } as any;
+    };
     const editReportsContext = jest.fn();
 
     const { reportEvents } = await fetchReports(
       nostr,
       ["wss://relay.example"],
-      [product] as any,
+      [product],
       editReportsContext
     );
 
@@ -1754,7 +1739,7 @@ describe("fetchReports", () => {
 
     const nostr = {
       fetch: jest.fn().mockResolvedValue([relayReport]),
-    } as any;
+    };
     const editReportsContext = jest.fn();
     const consoleErrorSpy = jest
       .spyOn(console, "error")
@@ -1763,7 +1748,7 @@ describe("fetchReports", () => {
     const { reportEvents } = await fetchReports(
       nostr,
       ["wss://relay.example"],
-      [product] as any,
+      [product],
       editReportsContext
     );
 
@@ -1851,7 +1836,7 @@ describe("fetchProfile", () => {
     const editProfileContext = jest.fn();
     const nostr = {
       fetch: jest.fn().mockResolvedValue([]),
-    } as any;
+    };
 
     const { profileMap } = await fetchProfile(
       nostr,
@@ -1886,7 +1871,7 @@ describe("fetchProfile", () => {
     const { fetchProfile } = await import("../fetch-service");
 
     global.fetch = jest.fn() as typeof global.fetch;
-    const nostr = { fetch: jest.fn() } as any;
+    const nostr = { fetch: jest.fn() };
     const editProfileContext = jest.fn();
 
     const existingProfile = {
@@ -1952,7 +1937,7 @@ describe("fetchProfile", () => {
 
     const nostr = {
       fetch: jest.fn().mockResolvedValue([relayProfileEvent]),
-    } as any;
+    };
     const editProfileContext = jest.fn();
 
     const { profileMap } = await fetchProfile(
@@ -2011,7 +1996,7 @@ describe("fetchProfile", () => {
 
     const nostr = {
       fetch: jest.fn().mockResolvedValue([malformedRelayEvent]),
-    } as any;
+    };
     const editProfileContext = jest.fn();
 
     const { profileMap } = await fetchProfile(
@@ -2071,7 +2056,7 @@ describe("fetchProfile", () => {
 
     const nostr = {
       fetch: jest.fn().mockResolvedValue([relayProfileEvent]),
-    } as any;
+    };
     const editProfileContext = jest.fn();
 
     const { profileMap } = await fetchProfile(
@@ -2134,7 +2119,7 @@ describe("fetchProfile", () => {
 
     const nostr = {
       fetch: jest.fn().mockResolvedValue([olderRelayEvent]),
-    } as any;
+    };
     const editProfileContext = jest.fn();
 
     const { profileMap } = await fetchProfile(
@@ -2205,7 +2190,7 @@ describe("fetchProfile", () => {
       fetch: jest
         .fn()
         .mockResolvedValue([validProfile, missingId, missingSig, wrongKind]),
-    } as any;
+    };
     const editProfileContext = jest.fn();
 
     await fetchProfile(
@@ -2250,7 +2235,7 @@ describe("fetchProfile", () => {
 
     const nostr = {
       fetch: jest.fn().mockResolvedValue([relayProfileEvent]),
-    } as any;
+    };
     const editProfileContext = jest.fn();
 
     const { profileMap } = await fetchProfile(
@@ -2303,7 +2288,7 @@ describe("fetchAllFollows", () => {
     const editFollowsContext = jest.fn();
     const nostr = {
       fetch: jest.fn(),
-    } as any;
+    };
 
     const result = await fetchAllFollows(
       nostr,
@@ -2321,7 +2306,7 @@ describe("fetchAllFollows", () => {
     const editFollowsContext = jest.fn();
     const nostr = {
       fetch: jest.fn().mockResolvedValue([]),
-    } as any;
+    };
 
     const result = await fetchAllFollows(
       nostr,
@@ -2367,7 +2352,7 @@ describe("fetchAllFollows", () => {
           },
         ])
         .mockResolvedValueOnce([]),
-    } as any;
+    };
 
     const result = await fetchAllFollows(
       nostr,
@@ -2431,7 +2416,7 @@ describe("fetchAllFollows", () => {
             sig: "sig",
           },
         ]),
-    } as any;
+    };
     const editFollowsContext = jest.fn();
 
     const result = await fetchAllFollows(
@@ -2506,7 +2491,7 @@ describe("fetchAllFollows", () => {
             sig: "sig-b",
           },
         ]),
-    } as any;
+    };
     const editFollowsContext = jest.fn();
 
     const result = await fetchAllFollows(
@@ -2576,7 +2561,7 @@ describe("fetchAllFollows", () => {
             sig: "sig-b",
           },
         ]),
-    } as any;
+    };
     const editFollowsContext = jest.fn();
 
     const result = await fetchAllFollows(
@@ -2623,7 +2608,7 @@ describe("fetchAllFollows", () => {
           },
         ])
         .mockResolvedValueOnce([]),
-    } as any;
+    };
     const editFollowsContext = jest.fn();
 
     const result = await fetchAllFollows(
@@ -2656,7 +2641,7 @@ describe("fetchAllFollows", () => {
           sig: "sig",
         },
       ]),
-    } as any;
+    };
     const editFollowsContext = jest.fn();
 
     const result = await fetchAllFollows(
@@ -2742,7 +2727,7 @@ describe("fetchAllPosts", () => {
           invalidNoSigListing,
           invalidWrongKindListing,
         ]),
-    } as any;
+    };
     const editProductContext = jest.fn();
     const consoleErrorSpy = jest
       .spyOn(console, "error")
@@ -2793,7 +2778,7 @@ describe("fetchAllPosts", () => {
 
     const nostr = {
       fetch: jest.fn().mockResolvedValue([]),
-    } as any;
+    };
     const editProductContext = jest.fn();
     const consoleErrorSpy = jest
       .spyOn(console, "error")
@@ -2891,7 +2876,7 @@ describe("fetchAllPosts", () => {
 
     const nostr = {
       fetch: jest.fn().mockResolvedValue([relayListing]),
-    } as any;
+    };
     const editProductContext = jest.fn();
 
     const { productEvents, profileSetFromProducts } = await fetchAllPosts(
@@ -2978,7 +2963,7 @@ describe("fetchAllPosts", () => {
 
     const nostr = {
       fetch: jest.fn().mockResolvedValue([relayListing]),
-    } as any;
+    };
     const editProductContext = jest.fn();
 
     await fetchAllPosts(nostr, ["wss://relay.example"], editProductContext);
@@ -3053,7 +3038,7 @@ describe("fetchAllPosts", () => {
           relayNoteListing,
           invalidRelayListing,
         ]),
-    } as any;
+    };
     const editProductContext = jest.fn();
 
     const { productEvents, profileSetFromProducts } = await fetchAllPosts(
@@ -3098,7 +3083,7 @@ describe("fetchAllPosts", () => {
 
     const nostr = {
       fetch: jest.fn().mockResolvedValue([relayListing]),
-    } as any;
+    };
     const editProductContext = jest.fn();
 
     const { productEvents } = await fetchAllPosts(
@@ -3135,7 +3120,7 @@ describe("fetchAllPosts", () => {
 
     const nostr = {
       fetch: jest.fn().mockResolvedValue([relayListing]),
-    } as any;
+    };
     const editProductContext = jest.fn();
     const consoleErrorSpy = jest
       .spyOn(console, "error")
@@ -3182,7 +3167,7 @@ describe("fetchAllPosts", () => {
 
     const nostr = {
       fetch: jest.fn().mockResolvedValue([relayListing]),
-    } as any;
+    };
     const editProductContext = jest.fn();
     const consoleErrorSpy = jest
       .spyOn(console, "error")
@@ -3228,7 +3213,7 @@ describe("fetchGiftWrappedChatsAndMessages", () => {
     const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
     const nostr = {
       fetch: jest.fn().mockResolvedValue([]),
-    } as any;
+    };
     const editChatContext = jest.fn();
 
     const { profileSetFromChats } = await fetchGiftWrappedChatsAndMessages(
@@ -3264,7 +3249,7 @@ describe("fetchGiftWrappedChatsAndMessages", () => {
     const editChatContext = jest.fn();
 
     const result = await fetchGiftWrappedChatsAndMessages(
-      nostr as any,
+      nostr,
       undefined,
       ["wss://relay.example"],
       editChatContext
@@ -3308,8 +3293,8 @@ describe("fetchGiftWrappedChatsAndMessages", () => {
     const editChatContext = jest.fn();
 
     await fetchGiftWrappedChatsAndMessages(
-      nostr as any,
-      signer as any,
+      nostr,
+      signer,
       ["wss://relay.example"],
       editChatContext,
       userPubkey
@@ -3367,8 +3352,8 @@ describe("fetchGiftWrappedChatsAndMessages", () => {
     const editChatContext = jest.fn();
 
     const result = await fetchGiftWrappedChatsAndMessages(
-      nostr as any,
-      signer as any,
+      nostr,
+      signer,
       ["wss://relay.example"],
       editChatContext,
       userPubkey
@@ -3428,8 +3413,8 @@ describe("fetchGiftWrappedChatsAndMessages", () => {
     const editChatContext = jest.fn();
 
     const result = await fetchGiftWrappedChatsAndMessages(
-      nostr as any,
-      signer as any,
+      nostr,
+      signer,
       ["wss://relay.example"],
       editChatContext,
       userPubkey
@@ -3499,8 +3484,8 @@ describe("fetchGiftWrappedChatsAndMessages", () => {
     const editChatContext = jest.fn();
 
     const result = await fetchGiftWrappedChatsAndMessages(
-      nostr as any,
-      signer as any,
+      nostr,
+      signer,
       ["wss://relay.example"],
       editChatContext,
       userPubkey
@@ -3583,8 +3568,8 @@ describe("fetchGiftWrappedChatsAndMessages", () => {
     const editChatContext = jest.fn();
 
     const result = await fetchGiftWrappedChatsAndMessages(
-      nostr as any,
-      signer as any,
+      nostr,
+      signer,
       ["wss://relay.example"],
       editChatContext,
       userPubkey
@@ -3655,8 +3640,8 @@ describe("fetchGiftWrappedChatsAndMessages", () => {
     const editChatContext = jest.fn();
 
     await fetchGiftWrappedChatsAndMessages(
-      nostr as any,
-      signer as any,
+      nostr,
+      signer,
       ["wss://relay.example"],
       editChatContext,
       userPubkey
@@ -3727,8 +3712,8 @@ describe("fetchGiftWrappedChatsAndMessages", () => {
     const editChatContext = jest.fn();
 
     await fetchGiftWrappedChatsAndMessages(
-      nostr as any,
-      signer as any,
+      nostr,
+      signer,
       ["wss://relay.example"],
       editChatContext,
       userPubkey
@@ -3811,8 +3796,8 @@ describe("fetchGiftWrappedChatsAndMessages", () => {
     const editChatContext = jest.fn();
 
     await fetchGiftWrappedChatsAndMessages(
-      nostr as any,
-      signer as any,
+      nostr,
+      signer,
       ["wss://relay.example"],
       editChatContext,
       userPubkey
@@ -3874,8 +3859,8 @@ describe("fetchGiftWrappedChatsAndMessages", () => {
     const editChatContext = jest.fn();
 
     await fetchGiftWrappedChatsAndMessages(
-      nostr as any,
-      signer as any,
+      nostr,
+      signer,
       ["wss://relay.example"],
       editChatContext,
       userPubkey
@@ -3917,8 +3902,8 @@ describe("fetchGiftWrappedChatsAndMessages", () => {
     const editChatContext = jest.fn();
 
     await fetchGiftWrappedChatsAndMessages(
-      nostr as any,
-      signer as any,
+      nostr,
+      signer,
       ["wss://relay.example"],
       editChatContext,
       userPubkey
@@ -3954,7 +3939,8 @@ describe("fetchCashuWallet", () => {
     global.fetch = jest.fn() as typeof global.fetch;
     const nostr = {
       fetch: jest.fn(),
-    } as any;
+      publish: jest.fn(),
+    };
     const editCashuWalletContext = jest.fn();
 
     await expect(
@@ -3989,7 +3975,7 @@ describe("fetchShopProfile", () => {
     const { fetchShopProfile } = await import("../fetch-service");
 
     global.fetch = jest.fn() as typeof global.fetch;
-    const nostr = { fetch: jest.fn() } as any;
+    const nostr = { fetch: jest.fn() };
     const editShopContext = jest.fn();
 
     const { shopProfileMap } = await fetchShopProfile(
@@ -4024,7 +4010,7 @@ describe("fetchShopProfile", () => {
       .fn()
       .mockResolvedValue(makeDbPayload([shopEvent])) as typeof global.fetch;
 
-    const nostr = { fetch: jest.fn().mockResolvedValue([]) } as any;
+    const nostr = { fetch: jest.fn().mockResolvedValue([]) };
     const editShopContext = jest.fn();
 
     const { shopProfileMap } = await fetchShopProfile(
@@ -4071,7 +4057,7 @@ describe("fetchShopProfile", () => {
 
     const nostr = {
       fetch: jest.fn().mockResolvedValue([relayShopEvent]),
-    } as any;
+    };
     const editShopContext = jest.fn();
 
     const { shopProfileMap } = await fetchShopProfile(
@@ -4121,7 +4107,7 @@ describe("fetchShopProfile", () => {
 
     const nostr = {
       fetch: jest.fn().mockResolvedValue([malformedRelayEvent]),
-    } as any;
+    };
     const editShopContext = jest.fn();
     const consoleErrorSpy = jest
       .spyOn(console, "error")
@@ -4170,7 +4156,7 @@ describe("fetchShopProfile", () => {
 
     const nostr = {
       fetch: jest.fn().mockResolvedValue([shopEventA, shopEventB]),
-    } as any;
+    };
     const editShopContext = jest.fn();
 
     const { shopProfileMap } = await fetchShopProfile(
@@ -4209,7 +4195,7 @@ describe("fetchShopProfile", () => {
       .fn()
       .mockResolvedValue(makeDbPayload([shopEvent])) as typeof global.fetch;
 
-    const nostr = { fetch: jest.fn().mockResolvedValue([]) } as any;
+    const nostr = { fetch: jest.fn().mockResolvedValue([]) };
     const editShopContext = jest.fn();
 
     await fetchShopProfile(
@@ -4221,7 +4207,10 @@ describe("fetchShopProfile", () => {
 
     // First call after DB load, second call after relay returns empty
     expect(editShopContext).toHaveBeenCalledTimes(2);
-    const firstCallArg = editShopContext.mock.calls[0][0] as Map<string, any>;
+    const firstCallArg = editShopContext.mock.calls[0][0] as Map<
+      string,
+      unknown
+    >;
     expect(firstCallArg.get(pubkey)).toMatchObject({
       pubkey,
       content: { name: "DB-Only Shop" },
@@ -4274,7 +4263,7 @@ describe("fetchShopProfile", () => {
       fetch: jest
         .fn()
         .mockResolvedValue([validShopEvent, missingId, missingSig, wrongKind]),
-    } as any;
+    };
     const editShopContext = jest.fn();
 
     await fetchShopProfile(
@@ -4305,7 +4294,7 @@ describe("fetchCart", () => {
 
     const { fetchCart } = await import("../fetch-service");
 
-    const nostr = { fetch: jest.fn() } as any;
+    const nostr = { fetch: jest.fn() };
     const editCartContext = jest.fn();
 
     const { cartList } = await fetchCart(
@@ -4347,7 +4336,7 @@ describe("fetchCart", () => {
     const signer = {
       getPubKey: jest.fn().mockResolvedValue(userPubkey),
       decrypt: jest.fn().mockResolvedValue(cartContent),
-    } as any;
+    };
 
     const cartEvent = makeBaseEvent({
       id: "cart-event-1",
@@ -4359,7 +4348,9 @@ describe("fetchCart", () => {
       sig: "sig-cart-event-1",
     });
 
-    const nostr = { fetch: jest.fn().mockResolvedValue([cartEvent]) } as any;
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([cartEvent]),
+    };
     const editCartContext = jest.fn();
 
     const { cartList } = await fetchCart(
@@ -4408,7 +4399,7 @@ describe("fetchCart", () => {
     const signer = {
       getPubKey: jest.fn().mockResolvedValue(userPubkey),
       decrypt: jest.fn().mockResolvedValue(cartContent),
-    } as any;
+    };
 
     const cartEvent = makeBaseEvent({
       id: "cart-event-dup",
@@ -4420,7 +4411,9 @@ describe("fetchCart", () => {
       sig: "sig-cart-event-dup",
     });
 
-    const nostr = { fetch: jest.fn().mockResolvedValue([cartEvent]) } as any;
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([cartEvent]),
+    };
     const editCartContext = jest.fn();
 
     const { cartList } = await fetchCart(
@@ -4448,7 +4441,7 @@ describe("fetchCart", () => {
     const signer = {
       getPubKey: jest.fn().mockResolvedValue(userPubkey),
       decrypt: jest.fn().mockResolvedValue("not-valid-json{{{"),
-    } as any;
+    };
 
     const cartEvent = makeBaseEvent({
       id: "cart-event-bad",
@@ -4460,7 +4453,9 @@ describe("fetchCart", () => {
       sig: "sig-cart-event-bad",
     });
 
-    const nostr = { fetch: jest.fn().mockResolvedValue([cartEvent]) } as any;
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([cartEvent]),
+    };
     const editCartContext = jest.fn();
     const consoleErrorSpy = jest
       .spyOn(console, "error")
@@ -4506,7 +4501,7 @@ describe("fetchCart", () => {
     const signer = {
       getPubKey: jest.fn().mockResolvedValue(userPubkey),
       decrypt: jest.fn().mockResolvedValue(cartContent),
-    } as any;
+    };
 
     const cartEvent = makeBaseEvent({
       id: "cart-event-wrong-kind",
@@ -4518,7 +4513,9 @@ describe("fetchCart", () => {
       sig: "sig-cart-event-wrong-kind",
     });
 
-    const nostr = { fetch: jest.fn().mockResolvedValue([cartEvent]) } as any;
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([cartEvent]),
+    };
     const editCartContext = jest.fn();
 
     const { cartList } = await fetchCart(
@@ -4555,7 +4552,7 @@ describe("fetchCart", () => {
     const signer = {
       getPubKey: jest.fn().mockResolvedValue(userPubkey),
       decrypt: jest.fn().mockResolvedValue(cartContent),
-    } as any;
+    };
 
     const cartEvent = makeBaseEvent({
       id: "cart-event-no-match",
@@ -4567,7 +4564,9 @@ describe("fetchCart", () => {
       sig: "sig-cart-event-no-match",
     });
 
-    const nostr = { fetch: jest.fn().mockResolvedValue([cartEvent]) } as any;
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([cartEvent]),
+    };
     const editCartContext = jest.fn();
 
     const { cartList } = await fetchCart(
@@ -4603,7 +4602,7 @@ describe("fetchCart", () => {
     const signer = {
       getPubKey: jest.fn().mockResolvedValue(userPubkey),
       decrypt: jest.fn().mockResolvedValue(cartContent),
-    } as any;
+    };
 
     const cartEvent = makeBaseEvent({
       id: "cart-event-ctx",
@@ -4615,7 +4614,9 @@ describe("fetchCart", () => {
       sig: "sig-cart-event-ctx",
     });
 
-    const nostr = { fetch: jest.fn().mockResolvedValue([cartEvent]) } as any;
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([cartEvent]),
+    };
     const editCartContext = jest.fn();
 
     await fetchCart(nostr, signer, ["wss://relay.example"], editCartContext, [
@@ -4628,7 +4629,7 @@ describe("fetchCart", () => {
 });
 
 describe("fetchPendingPosts", () => {
-  const makeCommunity = (overrides: Record<string, any> = {}): any => ({
+  const makeCommunity = (overrides: Partial<Community> = {}): Community => ({
     id: "community-event-id",
     kind: 34550,
     pubkey: "community-pubkey",
@@ -4668,7 +4669,7 @@ describe("fetchPendingPosts", () => {
       relays: { approvals: [], requests: [], metadata: [], all: [] },
     });
 
-    const nostr = { fetch: jest.fn() } as any;
+    const nostr = { fetch: jest.fn() };
 
     const result = await fetchPendingPosts(nostr, emptyRelaysCommunity);
 
@@ -4728,7 +4729,7 @@ describe("fetchPendingPosts", () => {
         .mockResolvedValueOnce([approvalEvent]) // fetchCommunityPosts: approval fetch
         .mockResolvedValueOnce([postApproved]) // fetchCommunityPosts: post fetch by ids
         .mockResolvedValueOnce([postApproved, postPending]), // fetchPendingPosts: request fetch
-    } as any;
+    };
 
     const result = await fetchPendingPosts(nostr, community);
 
@@ -4784,7 +4785,7 @@ describe("fetchPendingPosts", () => {
         .fn()
         .mockResolvedValueOnce([]) // fetchCommunityPosts: no approvals → exits early
         .mockResolvedValueOnce([postOld, postNew, postMid]), // fetchPendingPosts: request fetch
-    } as any;
+    };
 
     const result = await fetchPendingPosts(nostr, community);
 
@@ -4846,9 +4847,9 @@ describe("fetchReviews", () => {
     const editReviewsContext = jest.fn();
 
     const result = await fetchReviews(
-      nostr as any,
+      nostr,
       ["wss://relay.example"],
-      [product as any],
+      [product],
       editReviewsContext
     );
 
@@ -4881,9 +4882,9 @@ describe("fetchReviews", () => {
     const editReviewsContext = jest.fn();
 
     const result = await fetchReviews(
-      nostr as any,
+      nostr,
       ["wss://relay.example"],
-      [product as any],
+      [product],
       editReviewsContext
     );
 
@@ -4917,9 +4918,9 @@ describe("fetchReviews", () => {
     const editReviewsContext = jest.fn();
 
     const result = await fetchReviews(
-      nostr as any,
+      nostr,
       ["wss://relay.example"],
-      [product as any],
+      [product],
       editReviewsContext
     );
 
@@ -4966,9 +4967,9 @@ describe("fetchReviews", () => {
     const editReviewsContext = jest.fn();
 
     const result = await fetchReviews(
-      nostr as any,
+      nostr,
       ["wss://relay.example"],
-      [product as any],
+      [product],
       editReviewsContext
     );
 
@@ -5000,9 +5001,9 @@ describe("fetchReviews", () => {
     const editReviewsContext = jest.fn();
 
     const result = await fetchReviews(
-      nostr as any,
+      nostr,
       ["wss://relay.example"],
-      [product as any],
+      [product],
       editReviewsContext
     );
 
@@ -5026,9 +5027,9 @@ describe("fetchReviews", () => {
     const editReviewsContext = jest.fn();
 
     const result = await fetchReviews(
-      nostr as any,
+      nostr,
       ["wss://relay.example"],
-      [product as any],
+      [product],
       editReviewsContext
     );
 
@@ -5055,7 +5056,7 @@ describe("fetchReviews", () => {
     const editReviewsContext = jest.fn();
 
     const result = await fetchReviews(
-      nostr as any,
+      nostr,
       ["wss://relay.example"],
       [],
       editReviewsContext
@@ -5105,9 +5106,9 @@ describe("fetchReviews", () => {
     const editReviewsContext = jest.fn();
 
     await fetchReviews(
-      nostr as any,
+      nostr,
       ["wss://relay.example"],
-      [product as any],
+      [product],
       editReviewsContext
     );
 
@@ -5130,9 +5131,9 @@ describe("fetchReviews", () => {
       .mockImplementation(() => {});
 
     const result = await fetchReviews(
-      nostr as any,
+      nostr,
       ["wss://relay.example"],
-      [product as any],
+      [product],
       editReviewsContext
     );
 

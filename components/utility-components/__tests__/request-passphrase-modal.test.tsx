@@ -1,4 +1,10 @@
 import React from "react";
+import type {
+  ChangeEventHandler,
+  KeyboardEventHandler,
+  MouseEventHandler,
+  ReactNode,
+} from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import PassphraseChallengeModal from "../request-passphrase-modal";
@@ -16,8 +22,17 @@ jest.mock("@/utils/STATIC-VARIABLES", () => ({
 
 jest.mock("@heroui/react", () => {
   const originalModule = jest.requireActual("@heroui/react");
-  const MockInput = React.forwardRef(
-    ({ value, onChange, onKeyDown }: any, ref: any) => (
+  type InputMockProps = {
+    value?: string;
+    onChange?: ChangeEventHandler<HTMLInputElement>;
+    onKeyDown?: KeyboardEventHandler<HTMLInputElement>;
+  };
+  type ButtonMockProps = {
+    children?: ReactNode;
+    onClick?: MouseEventHandler<HTMLButtonElement>;
+  };
+  const MockInput = React.forwardRef<HTMLInputElement, InputMockProps>(
+    ({ value, onChange, onKeyDown }, ref) => (
       <input
         ref={ref}
         type="password"
@@ -51,7 +66,7 @@ jest.mock("@heroui/react", () => {
     ModalFooter: ({ children }: { children: React.ReactNode }) => (
       <footer>{children}</footer>
     ),
-    Button: ({ children, onClick }: any) => (
+    Button: ({ children, onClick }: ButtonMockProps) => (
       <button onClick={onClick}>{children}</button>
     ),
     Input: MockInput,

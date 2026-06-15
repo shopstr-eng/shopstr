@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { Select, SelectItem, SelectSection } from "@heroui/react";
 import locations from "../../../public/locationSelection.json";
 
-const CountryDropdown = ({ _value, ...props }: { [x: string]: any }) => {
+const CountryDropdown = ({ _value, ...props }: { [x: string]: unknown }) => {
   const countryOptions = useMemo(() => {
     const headingClasses =
       "flex w-full py-1.5 px-2 dark:bg-dark-bg bg-light-bg shadow-small rounded-small";

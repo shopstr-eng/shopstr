@@ -6,12 +6,20 @@ import {
   signAndPublishEvent,
 } from "@/utils/mcp/nostr-signing";
 import { ApiKeyRecord, getAgentSigner } from "@/utils/mcp/auth";
-import { EventTemplate } from "nostr-tools";
+import {
+  Amount,
+  normalizeProofAmounts,
+  type AmountLike,
+  type Proof,
+  type ProofLike,
+} from "@cashu/cashu-ts";
+import { EventTemplate, type UnsignedEvent } from "nostr-tools";
 import { cacheEvent, getDbPool } from "@/utils/db/db-service";
 import { v4 as uuidv4 } from "uuid";
 import dns from "dns";
 import { promisify } from "util";
 import { registerTool } from "./register-tool";
+import { ToolCb, ToolInputSchema } from "../audit-log";
 import {
   canActorSendShippingUpdate,
   canActorUpdateMcpOrderStatus,
@@ -26,6 +34,113 @@ import {
 
 const resolveCname = promisify(dns.resolveCname);
 const resolve4 = promisify(dns.resolve4);
+
+type ParsedSealEvent = {
+  pubkey: string;
+  content: string;
+};
+
+type ParsedGiftWrapMessage = {
+  pubkey: string;
+  content: string;
+  created_at: number;
+  tags: string[][];
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function isStringTag(value: unknown): value is string[] {
+  return (
+    Array.isArray(value) && value.every((entry) => typeof entry === "string")
+  );
+}
+
+function isStringTagList(value: unknown): value is string[][] {
+  return Array.isArray(value) && value.every(isStringTag);
+}
+
+function parseJson(value: string): unknown {
+  return JSON.parse(value) as unknown;
+}
+
+function parseSealEvent(value: unknown): ParsedSealEvent | null {
+  if (!isRecord(value)) return null;
+  if (typeof value.pubkey !== "string") return null;
+  if (typeof value.content !== "string") return null;
+  return {
+    pubkey: value.pubkey,
+    content: value.content,
+  };
+}
+
+function parseGiftWrapMessage(value: unknown): ParsedGiftWrapMessage | null {
+  if (!isRecord(value)) return null;
+  if (typeof value.pubkey !== "string") return null;
+  if (typeof value.content !== "string") return null;
+  if (typeof value.created_at !== "number") return null;
+  if (!isStringTagList(value.tags)) return null;
+  return {
+    pubkey: value.pubkey,
+    content: value.content,
+    created_at: value.created_at,
+    tags: value.tags,
+  };
+}
+
+function isAmountLike(value: unknown): value is AmountLike {
+  if (
+    typeof value === "number" ||
+    typeof value === "bigint" ||
+    typeof value === "string" ||
+    value instanceof Amount
+  ) {
+    try {
+      Amount.from(value);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  return false;
+}
+
+function isProofLike(value: unknown): value is ProofLike {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.id === "string" &&
+    isAmountLike(value.amount) &&
+    typeof value.secret === "string" &&
+    typeof value.C === "string"
+  );
+}
+
+function proofAmountToNumber(proof: Pick<ProofLike, "amount">): number {
+  return Amount.from(proof.amount).toNumber();
+}
+
+function sumProofAmounts(proofs: Array<Pick<ProofLike, "amount">>): number {
+  return proofs.reduce((sum, proof) => sum + proofAmountToNumber(proof), 0);
+}
+
+function normalizeStoredProofs(value: unknown): Proof[] {
+  if (!Array.isArray(value)) return [];
+  return normalizeProofAmounts(value.filter(isProofLike));
+}
+
+function parseStoredProofData(value: unknown): {
+  mint: string;
+  proofs: Proof[];
+} | null {
+  if (!isRecord(value)) return null;
+  if (typeof value.mint !== "string") return null;
+  const proofs = normalizeStoredProofs(value.proofs);
+  return {
+    mint: value.mint,
+    proofs,
+  };
+}
 
 function noSignerError() {
   return {
@@ -57,7 +172,7 @@ function permissionError() {
   };
 }
 
-function successResponse(data: any, startTime: number) {
+function successResponse(data: Record<string, unknown>, startTime: number) {
   return {
     content: [
       {
@@ -107,11 +222,11 @@ async function getSigner(apiKey: ApiKeyRecord): Promise<McpNostrSigner | null> {
 export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
   const baseUrl = `http://localhost:${process.env.PORT || 5000}`;
   const context = { apiKeyId: apiKey.id, pubkey: apiKey.pubkey };
-  const reg = (
+  const reg = <TSchema extends ToolInputSchema>(
     name: string,
     description: string,
-    inputSchema: any,
-    cb: (args: any, extra: any) => any
+    inputSchema: TSchema,
+    cb: ToolCb<TSchema>
   ) => registerTool(server, name, description, inputSchema, cb, context);
 
   reg(
@@ -150,7 +265,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
       if (!signer) return noSignerError();
 
       try {
-        const content: Record<string, any> = {};
+        const content: Record<string, unknown> = {};
         if (params.name) content.name = params.name;
         if (params.display_name) content.display_name = params.display_name;
         if (params.about) content.about = params.about;
@@ -449,13 +564,13 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
       try {
         const pubkey = signer.getPubKey();
-        const content: Record<string, any> = {};
+        const content: Record<string, unknown> = {};
         if (params.name) content.name = params.name;
         if (params.about) content.about = params.about;
         if (params.merchants) content.merchants = params.merchants;
         if (params.paymentMethodDiscounts)
           content.paymentMethodDiscounts = params.paymentMethodDiscounts;
-        const ui: Record<string, any> = {};
+        const ui: Record<string, unknown> = {};
         if (params.picture) ui.picture = params.picture;
         if (params.banner) ui.banner = params.banner;
         if (params.theme) ui.theme = params.theme;
@@ -466,7 +581,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         if (params.freeShippingCurrency)
           content.freeShippingCurrency = params.freeShippingCurrency;
 
-        const storefront: Record<string, any> = {};
+        const storefront: Record<string, unknown> = {};
         if (params.storefrontColorScheme)
           storefront.colorScheme = params.storefrontColorScheme;
         if (params.storefrontProductLayout)
@@ -1441,7 +1556,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           id: "",
           sig: "",
         };
-        const innerEventId = getEventHash(innerEventForHash as any);
+        const innerEventId = getEventHash(innerEventForHash as UnsignedEvent);
         const fullInnerEvent = { id: innerEventId, ...innerEvent };
 
         const randomPrivKey = generateSecretKey();
@@ -1529,10 +1644,10 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         const relayManager = new McpRelayManager(withBlastr(defaultRelays));
 
         try {
-          await cacheEvent(recipientWrap as any);
-          await cacheEvent(senderWrap as any);
-          await relayManager.publish(recipientWrap as any);
-          await relayManager.publish(senderWrap as any);
+          await cacheEvent(recipientWrap);
+          await cacheEvent(senderWrap);
+          await relayManager.publish(recipientWrap);
+          await relayManager.publish(senderWrap);
         } finally {
           relayManager.close();
         }
@@ -1624,7 +1739,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         };
 
         const innerEventForHash = { ...innerEvent, id: "", sig: "" };
-        const innerEventId = getEventHash(innerEventForHash as any);
+        const innerEventId = getEventHash(innerEventForHash as UnsignedEvent);
         const fullInnerEvent = { id: innerEventId, ...innerEvent };
 
         const randomPrivKey = generateSecretKey();
@@ -1680,8 +1795,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         const relayManager = new McpRelayManager(withBlastr(defaultRelays));
 
         try {
-          await cacheEvent(sellerWrap as any);
-          await relayManager.publish(sellerWrap as any);
+          await cacheEvent(sellerWrap);
+          await relayManager.publish(sellerWrap);
         } finally {
           relayManager.close();
         }
@@ -1812,7 +1927,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         };
 
         const innerEventForHash = { ...innerEvent, id: "", sig: "" };
-        const innerEventId = getEventHash(innerEventForHash as any);
+        const innerEventId = getEventHash(innerEventForHash as UnsignedEvent);
         const fullInnerEvent = { id: innerEventId, ...innerEvent };
 
         const randomPrivKey = generateSecretKey();
@@ -1863,8 +1978,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         const relayManager = new McpRelayManager(withBlastr(defaultRelays));
 
         try {
-          await cacheEvent(buyerWrap as any);
-          await relayManager.publish(buyerWrap as any);
+          await cacheEvent(buyerWrap);
+          await relayManager.publish(buyerWrap);
         } finally {
           relayManager.close();
         }
@@ -2028,7 +2143,9 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
             };
 
             const innerEventForHash = { ...innerEvent, id: "", sig: "" };
-            const innerEventId = getEventHash(innerEventForHash as any);
+            const innerEventId = getEventHash(
+              innerEventForHash as UnsignedEvent
+            );
             const fullInnerEvent = { id: innerEventId, ...innerEvent };
 
             const randomPrivKey = generateSecretKey();
@@ -2074,8 +2191,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
             const relayManager = new McpRelayManager(withBlastr(defaultRelays));
             try {
-              await cacheEvent(wrapEvent as any);
-              await relayManager.publish(wrapEvent as any);
+              await cacheEvent(wrapEvent);
+              await relayManager.publish(wrapEvent);
               notificationSent = true;
             } finally {
               relayManager.close();
@@ -2147,39 +2264,42 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         const limit = params.limit || 20;
         filtered = filtered.slice(0, limit * 3);
 
-        const decryptedMessages: any[] = [];
+        const decryptedMessages: Array<Record<string, unknown>> = [];
 
         for (const msg of filtered) {
           if (decryptedMessages.length >= limit) break;
 
           try {
             const innerContent = signer.decrypt(msg.pubkey, msg.content);
-            let sealEvent: any;
+            let sealEvent: ParsedSealEvent | null;
             try {
-              sealEvent = JSON.parse(innerContent);
+              sealEvent = parseSealEvent(parseJson(innerContent));
             } catch {
               continue;
             }
 
-            if (!sealEvent || !sealEvent.content) continue;
+            if (!sealEvent) continue;
 
-            let innerMessage: any;
+            let innerMessage: ParsedGiftWrapMessage | null;
             try {
               const sealContent = signer.decrypt(
                 sealEvent.pubkey,
                 sealEvent.content
               );
-              innerMessage = JSON.parse(sealContent);
+              innerMessage = parseGiftWrapMessage(parseJson(sealContent));
             } catch {
               continue;
             }
 
             if (!innerMessage) continue;
 
-            const tags = innerMessage.tags || [];
             const tagsMap = new Map<string, string>();
-            for (const tag of tags) {
-              if (tag.length >= 2) {
+            for (const tag of innerMessage.tags) {
+              if (
+                tag.length >= 2 &&
+                typeof tag[0] === "string" &&
+                typeof tag[1] === "string"
+              ) {
                 tagsMap.set(tag[0], tag[1]);
               }
             }
@@ -2653,9 +2773,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         const { fetchCachedEvents } = await import("@/utils/db/db-service");
         const pubkey = signer.getPubKey();
         const proofEvents = await fetchCachedEvents(7375);
-        const myProofEvents = proofEvents.filter(
-          (e: any) => e.pubkey === pubkey
-        );
+        const myProofEvents = proofEvents.filter((e) => e.pubkey === pubkey);
 
         let totalBalance = 0;
         const mintBalances: Record<string, number> = {};
@@ -2663,13 +2781,11 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         for (const event of myProofEvents) {
           try {
             const decryptedContent = signer.decrypt(pubkey, event.content);
-            const parsed = JSON.parse(decryptedContent);
+            const parsed = parseStoredProofData(parseJson(decryptedContent));
+            if (!parsed) continue;
+
             const mintUrl = parsed.mint;
-            const proofs = parsed.proofs || [];
-            const amount = proofs.reduce(
-              (sum: number, p: any) => sum + (p.amount || 0),
-              0
-            );
+            const amount = sumProofAmounts(parsed.proofs);
 
             if (!params.mintUrl || mintUrl === params.mintUrl) {
               totalBalance += amount;
@@ -2716,10 +2832,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         const decoded = getDecodedToken(params.token, []);
         const mintUrl = decoded.mint;
         const proofs = decoded.proofs;
-        const totalAmount = proofs.reduce(
-          (sum: number, p: any) => sum + (p.amount || 0),
-          0
-        );
+        const totalAmount = sumProofAmounts(proofs);
 
         const pubkey = signer.getPubKey();
 
@@ -2855,16 +2968,14 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         const { fetchCachedEvents } = await import("@/utils/db/db-service");
         const pubkey = signer.getPubKey();
         const proofEvents = await fetchCachedEvents(7375);
-        const myProofEvents = proofEvents.filter(
-          (e: any) => e.pubkey === pubkey
-        );
+        const myProofEvents = proofEvents.filter((e) => e.pubkey === pubkey);
 
-        const availableProofs: any[] = [];
+        const availableProofs: Proof[] = [];
         for (const event of myProofEvents) {
           try {
             const decryptedContent = signer.decrypt(pubkey, event.content);
-            const parsed = JSON.parse(decryptedContent);
-            if (parsed.mint === mintUrl && parsed.proofs) {
+            const parsed = parseStoredProofData(parseJson(decryptedContent));
+            if (parsed?.mint === mintUrl) {
               availableProofs.push(...parsed.proofs);
             }
           } catch {
@@ -2891,10 +3002,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         const totalNeeded =
           meltQuote.amount.toNumber() +
           (meltQuote.fee_reserve?.toNumber() || 0);
-        const totalAvailable = availableProofs.reduce(
-          (sum: number, p: any) => sum + (p.amount || 0),
-          0
-        );
+        const totalAvailable = sumProofAmounts(availableProofs);
 
         if (totalAvailable < totalNeeded) {
           return errorResponse(
@@ -2928,11 +3036,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
             amount: meltQuote.amount,
             fee: meltQuote.fee_reserve || 0,
             mintUrl,
-            change: meltOutcome.changeProofs.reduce(
-              (sum: number, p: any) =>
-                sum + (p.amount?.toNumber?.() ?? p.amount ?? 0),
-              0
-            ),
+            change: sumProofAmounts(meltOutcome.changeProofs),
           },
           startTime
         );

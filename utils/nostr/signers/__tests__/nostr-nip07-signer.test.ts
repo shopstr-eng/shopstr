@@ -1,11 +1,42 @@
 import { NostrNIP07Signer } from "../nostr-nip07-signer";
 import { NostrEventTemplate } from "@/utils/nostr/nostr-manager";
+import type { NostrExtensionProvider } from "@/utils/types/types";
+
+type MockNostrProvider = Omit<NostrExtensionProvider, "nip44"> & {
+  getPublicKey: jest.MockedFunction<NostrExtensionProvider["getPublicKey"]>;
+  signEvent: jest.MockedFunction<NostrExtensionProvider["signEvent"]>;
+  nip44: {
+    encrypt: jest.MockedFunction<
+      NonNullable<NostrExtensionProvider["nip44"]>["encrypt"]
+    >;
+    decrypt: jest.MockedFunction<
+      NonNullable<NostrExtensionProvider["nip44"]>["decrypt"]
+    >;
+  };
+};
+
+function setNostrProvider(
+  provider: NostrExtensionProvider | Partial<NostrExtensionProvider> | undefined
+) {
+  Object.defineProperty(window, "nostr", {
+    value: provider,
+    configurable: true,
+    writable: true,
+  });
+}
+
+function getMockNostr(): MockNostrProvider {
+  if (!window.nostr) {
+    throw new Error("Missing mock Nostr extension");
+  }
+  return window.nostr as MockNostrProvider;
+}
 
 describe("NostrNIP07Signer", () => {
   beforeEach(() => {
     jest.clearAllMocks();
 
-    const mockNostr = {
+    const mockNostr: MockNostrProvider = {
       getPublicKey: jest.fn(),
       signEvent: jest.fn(),
       nip44: {
@@ -14,7 +45,7 @@ describe("NostrNIP07Signer", () => {
       },
     };
 
-    (global as any).window.nostr = mockNostr;
+    setNostrProvider(mockNostr);
   });
 
   describe("constructor and validation", () => {
@@ -23,14 +54,17 @@ describe("NostrNIP07Signer", () => {
     });
 
     it("should throw an error if window.nostr is not available", () => {
-      delete (global as any).window.nostr;
+      setNostrProvider(undefined);
       expect(() => new NostrNIP07Signer({})).toThrow(
         "Nostr extension not found"
       );
     });
 
     it("should throw an error if NIP-44 support is missing", () => {
-      delete (global as any).window.nostr.nip44;
+      setNostrProvider({
+        getPublicKey: jest.fn(),
+        signEvent: jest.fn(),
+      });
       expect(() => new NostrNIP07Signer({})).toThrow(
         "Please use a NIP-44 compatible extension like Alby or nos2x"
       );
@@ -51,15 +85,14 @@ describe("NostrNIP07Signer", () => {
 
   describe("method wrappers", () => {
     it("should call window.nostr.getPublicKey", async () => {
-      (window.nostr.getPublicKey as jest.Mock).mockResolvedValue(
-        "mocked-pubkey"
-      );
+      const nostr = getMockNostr();
+      nostr.getPublicKey.mockResolvedValue("mocked-pubkey");
       const signer = new NostrNIP07Signer({});
 
       const pubkey = await signer.getPubKey();
 
       expect(pubkey).toBe("mocked-pubkey");
-      expect(window.nostr.getPublicKey).toHaveBeenCalledTimes(1);
+      expect(nostr.getPublicKey).toHaveBeenCalledTimes(1);
     });
 
     it("should call window.nostr.signEvent", async () => {
@@ -75,46 +108,39 @@ describe("NostrNIP07Signer", () => {
         sig: "sig",
         pubkey: "pk",
       };
-      (window.nostr.signEvent as jest.Mock).mockResolvedValue(mockSignedEvent);
+      const nostr = getMockNostr();
+      nostr.signEvent.mockResolvedValue(mockSignedEvent);
 
       const signer = new NostrNIP07Signer({});
       const signedEvent = await signer.sign(mockEventTemplate);
 
       expect(signedEvent).toEqual(mockSignedEvent);
-      expect(window.nostr.signEvent).toHaveBeenCalledWith(mockEventTemplate);
-      expect(window.nostr.signEvent).toHaveBeenCalledTimes(1);
+      expect(nostr.signEvent).toHaveBeenCalledWith(mockEventTemplate);
+      expect(nostr.signEvent).toHaveBeenCalledTimes(1);
     });
 
     it("should call window.nostr.nip44.encrypt", async () => {
-      (window.nostr.nip44.encrypt as jest.Mock).mockResolvedValue(
-        "encrypted-text"
-      );
+      const nostr = getMockNostr();
+      nostr.nip44.encrypt.mockResolvedValue("encrypted-text");
       const signer = new NostrNIP07Signer({});
 
       const encrypted = await signer.encrypt("pubkey", "plain-text");
 
       expect(encrypted).toBe("encrypted-text");
-      expect(window.nostr.nip44.encrypt).toHaveBeenCalledWith(
-        "pubkey",
-        "plain-text"
-      );
-      expect(window.nostr.nip44.encrypt).toHaveBeenCalledTimes(1);
+      expect(nostr.nip44.encrypt).toHaveBeenCalledWith("pubkey", "plain-text");
+      expect(nostr.nip44.encrypt).toHaveBeenCalledTimes(1);
     });
 
     it("should call window.nostr.nip44.decrypt", async () => {
-      (window.nostr.nip44.decrypt as jest.Mock).mockResolvedValue(
-        "decrypted-text"
-      );
+      const nostr = getMockNostr();
+      nostr.nip44.decrypt.mockResolvedValue("decrypted-text");
       const signer = new NostrNIP07Signer({});
 
       const decrypted = await signer.decrypt("pubkey", "cipher-text");
 
       expect(decrypted).toBe("decrypted-text");
-      expect(window.nostr.nip44.decrypt).toHaveBeenCalledWith(
-        "pubkey",
-        "cipher-text"
-      );
-      expect(window.nostr.nip44.decrypt).toHaveBeenCalledTimes(1);
+      expect(nostr.nip44.decrypt).toHaveBeenCalledWith("pubkey", "cipher-text");
+      expect(nostr.nip44.decrypt).toHaveBeenCalledTimes(1);
     });
   });
 

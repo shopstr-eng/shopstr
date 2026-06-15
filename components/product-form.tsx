@@ -55,6 +55,32 @@ import {
 import { ProductFormValues } from "../utils/types/types";
 import { useTheme } from "next-themes";
 
+interface ProductFormData {
+  "Product Name": string;
+  Description: string;
+  Price: string;
+  Currency: string;
+  Location: string;
+  "Shipping Option": string;
+  "Shipping Cost": string;
+  "Pickup Locations": string[];
+  Category: string;
+  Quantity: string;
+  Sizes: string;
+  "Size Quantities": Map<string, number>;
+  Volumes: string;
+  "Volume Prices": Map<string, number>;
+  Weights: string;
+  "Weight Prices": Map<string, number>;
+  "Bulk Pricing Enabled": boolean;
+  "Bulk Prices": Map<number, number>;
+  Condition: string;
+  Status: string;
+  Required: string;
+  Restrictions: string;
+  Expiration: string;
+}
+
 interface ProductFormProps {
   handleModalToggle: () => void;
   showModal: boolean;
@@ -91,7 +117,7 @@ export default function ProductForm({
   } = useContext(SignerContext);
   const { nostr } = useContext(NostrContext);
 
-  const { handleSubmit, control, reset, watch } = useForm({
+  const { handleSubmit, control, reset, watch } = useForm<ProductFormData>({
     defaultValues: oldValues
       ? {
           "Product Name": oldValues.title,
@@ -100,7 +126,7 @@ export default function ProductForm({
           Currency: oldValues.currency,
           Location: oldValues.location,
           "Shipping Option": oldValues.shippingType,
-          "Shipping Cost": oldValues.shippingCost,
+          "Shipping Cost": oldValues.shippingCost?.toString() ?? "",
           "Pickup Locations": oldValues.pickupLocations || [""],
           Category: oldValues.categories ? oldValues.categories.join(",") : "",
           Quantity: oldValues.quantity ? String(oldValues.quantity) : "",
@@ -160,9 +186,7 @@ export default function ProductForm({
     }
   }, [showModal, signerPubKey, profileContext]);
 
-  const onSubmit = async (data: {
-    [x: string]: string | Map<string, number> | string[];
-  }) => {
+  const onSubmit = async (data: ProductFormData) => {
     if (images.length === 0) {
       setImageError("At least one image is required.");
       return;
@@ -171,28 +195,28 @@ export default function ProductForm({
     }
 
     setIsPostingOrUpdatingProduct(true);
-    const hashHex = CryptoJS.SHA256(data["Product Name"] as string).toString(
+    const hashHex = CryptoJS.SHA256(data["Product Name"]).toString(
       CryptoJS.enc.Hex
     );
 
     const tags: ProductFormValues = [
       ["d", oldValues?.d || hashHex],
-      ["alt", ("Product listing: " + data["Product Name"]) as string],
+      ["alt", "Product listing: " + data["Product Name"]],
       [
         "client",
         "Shopstr",
         "31990:" + pubkey + ":" + (oldValues?.d || hashHex),
         relayHint,
       ],
-      ["title", data["Product Name"] as string],
-      ["summary", data["Description"] as string],
-      ["price", data["Price"] as string, data["Currency"] as string],
-      ["location", data["Location"] as string],
+      ["title", data["Product Name"]],
+      ["summary", data["Description"]],
+      ["price", data["Price"], data["Currency"]],
+      ["location", data["Location"]],
       [
         "shipping",
-        data["Shipping Option"] as string,
-        data["Shipping Cost"] ? (data["Shipping Cost"] as string) : "0",
-        data["Currency"] as string,
+        data["Shipping Option"],
+        data["Shipping Cost"] ? data["Shipping Cost"] : "0",
+        data["Currency"],
       ],
     ];
 
@@ -200,7 +224,7 @@ export default function ProductForm({
       tags.push(["image", image]);
     });
 
-    (data["Category"] as string).split(",").forEach((category) => {
+    data["Category"].split(",").forEach((category) => {
       tags.push(["t", category]);
     });
     tags.push(["t", "shopstr"]);
@@ -210,41 +234,31 @@ export default function ProductForm({
     }
 
     if (data["Sizes"]) {
-      const sizesArray = Array.isArray(data["Sizes"])
-        ? data["Sizes"]
-        : (data["Sizes"] as string).split(",").filter(Boolean);
+      const sizesArray = data["Sizes"].split(",").filter(Boolean);
       sizesArray.forEach((size) => {
-        const quantity =
-          (data["Size Quantities"] as Map<string, number>).get(size) || 0;
+        const quantity = data["Size Quantities"].get(size) || 0;
         tags.push(["size", size, quantity.toString()]);
       });
     }
 
     if (data["Volumes"]) {
-      const volumesArray = Array.isArray(data["Volumes"])
-        ? data["Volumes"]
-        : (data["Volumes"] as string).split(",").filter(Boolean);
+      const volumesArray = data["Volumes"].split(",").filter(Boolean);
       volumesArray.forEach((volume) => {
-        const price =
-          (data["Volume Prices"] as Map<string, number>).get(volume) || 0;
+        const price = data["Volume Prices"].get(volume) || 0;
         tags.push(["volume", volume, price.toString()]);
       });
     }
 
     if (data["Weights"]) {
-      const weightsArray = Array.isArray(data["Weights"])
-        ? data["Weights"]
-        : (data["Weights"] as string).split(",").filter(Boolean);
+      const weightsArray = data["Weights"].split(",").filter(Boolean);
       weightsArray.forEach((weight) => {
-        const price =
-          (data["Weight Prices"] as Map<string, number>).get(weight) || 0;
+        const price = data["Weight Prices"].get(weight) || 0;
         tags.push(["weight", weight, price.toString()]);
       });
     }
 
     if (data["Bulk Pricing Enabled"] && data["Bulk Prices"]) {
-      const bulkPrices = data["Bulk Prices"] as unknown as Map<number, number>;
-      bulkPrices.forEach((price, units) => {
+      data["Bulk Prices"].forEach((price, units) => {
         if (units > 0 && price > 0) {
           tags.push(["bulk", units.toString(), price.toString()]);
         }
@@ -252,23 +266,23 @@ export default function ProductForm({
     }
 
     if (data["Condition"]) {
-      tags.push(["condition", data["Condition"] as string]);
+      tags.push(["condition", data["Condition"]]);
     }
 
     if (data["Status"]) {
-      tags.push(["status", data["Status"] as string]);
+      tags.push(["status", data["Status"]]);
     }
 
     if (data["Required"]) {
-      tags.push(["required", data["Required"] as string]);
+      tags.push(["required", data["Required"]]);
     }
 
     if (data["Restrictions"]) {
-      tags.push(["restrictions", data["Restrictions"] as string]);
+      tags.push(["restrictions", data["Restrictions"]]);
     }
 
     if (data["Expiration"]) {
-      const dateObj = new Date(data["Expiration"] as string);
+      const dateObj = new Date(data["Expiration"]);
       if (!isNaN(dateObj.getTime())) {
         const unixTime = Math.floor(dateObj.getTime() / 1000);
         tags.push(["valid_until", unixTime.toString()]);
@@ -282,7 +296,7 @@ export default function ProductForm({
       (data["Shipping Option"] === "Pickup" ||
         data["Shipping Option"] === "Free/Pickup")
     ) {
-      (data["Pickup Locations"] as string[])
+      data["Pickup Locations"]
         .filter((location) => location.trim() !== "")
         .forEach((location) => {
           tags.push(["pickup_location", location.trim()]);
@@ -383,7 +397,7 @@ export default function ProductForm({
             if (e.target !== e.currentTarget) {
               e.preventDefault();
             }
-            return handleSubmit(onSubmit as any)(e);
+            return handleSubmit(onSubmit)(e);
           }}
         >
           <ModalBody>
@@ -1739,13 +1753,13 @@ export default function ProductForm({
               onClick={(e) => {
                 if (signer && isLoggedIn) {
                   e.preventDefault();
-                  handleSubmit(onSubmit as any)();
+                  handleSubmit(onSubmit)();
                 }
               }}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   e.preventDefault(); // Prevent default to avoid submitting the form again
-                  handleSubmit(onSubmit as any)(); // Programmatic submit
+                  handleSubmit(onSubmit)(); // Programmatic submit
                 }
               }}
               isDisabled={isPostingOrUpdatingProduct}

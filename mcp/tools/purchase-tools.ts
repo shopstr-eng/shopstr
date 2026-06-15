@@ -67,7 +67,7 @@ export async function createMcpOrder(
         currency,
         shippingAddress ? JSON.stringify(shippingAddress) : null,
         paymentRef,
-      ] as any[]
+      ] as unknown[]
     );
     return result.rows[0];
   } finally {
@@ -102,7 +102,7 @@ export async function listMcpOrders(
     client = await pool.connect();
     const result = await client.query(
       `SELECT * FROM mcp_orders WHERE buyer_pubkey = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
-      [buyerPubkey, limit, offset] as any[]
+      [buyerPubkey, limit, offset] as unknown[]
     );
     return result.rows;
   } finally {
@@ -121,7 +121,7 @@ export async function listMcpOrdersAsSeller(
     client = await pool.connect();
     const result = await client.query(
       `SELECT * FROM mcp_orders WHERE seller_pubkey = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
-      [sellerPubkey, limit, offset] as any[]
+      [sellerPubkey, limit, offset] as unknown[]
     );
     return result.rows;
   } finally {
@@ -196,7 +196,7 @@ export async function updateMcpOrderAddress(
     const result = await client.query(
       `UPDATE mcp_orders SET shipping_address = $1, updated_at = CURRENT_TIMESTAMP
        WHERE order_id = $2 AND buyer_pubkey = $3 RETURNING *`,
-      [JSON.stringify(newAddress), orderId, buyerPubkey] as any[]
+      [JSON.stringify(newAddress), orderId, buyerPubkey] as unknown[]
     );
     if (result.rows.length === 0) return null;
     return result.rows[0];

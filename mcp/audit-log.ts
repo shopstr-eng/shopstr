@@ -1,3 +1,5 @@
+import { z } from "zod/v4";
+
 export interface ToolContext {
   apiKeyId?: number | null;
   pubkey?: string;
@@ -17,15 +19,18 @@ export interface AuditEntry {
 
 type MaybePromise<T> = T | Promise<T>;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type ToolCb = (
-  args: any,
-  extra: any
-) => MaybePromise<{
+export type ToolInputSchema = Record<string, z.ZodType>;
+
+export type ToolResult = {
   content: unknown[];
   isError?: boolean;
   resultCount?: number;
-}>;
+};
+
+export type ToolCb<TSchema extends ToolInputSchema = ToolInputSchema> = (
+  args: z.output<z.ZodObject<TSchema>>,
+  extra: unknown
+) => MaybePromise<ToolResult>;
 
 const REDACTED = "[REDACTED]";
 const MAX_STRING_LENGTH = 200;
@@ -92,13 +97,20 @@ export function logToolCall(entry: AuditEntry): void {
   console.error(JSON.stringify({ level: "audit", ...entry }));
 }
 
-export function wrapWithAudit(
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+export function normalizeToolParams(params: unknown): Record<string, unknown> {
+  return isRecord(params) ? params : {};
+}
+
+export function wrapWithAudit<TSchema extends ToolInputSchema>(
   toolName: string,
-  cb: ToolCb,
+  cb: ToolCb<TSchema>,
   context?: ToolContext
-): ToolCb {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return async (args: any, extra: any) => {
+): ToolCb<TSchema> {
+  return async (args, extra) => {
     const start = Date.now();
     let status: "success" | "error" = "success";
     let errorMessage: string | null = null;
@@ -117,7 +129,7 @@ export function wrapWithAudit(
         tool: toolName,
         ...(context?.apiKeyId !== undefined && { apiKeyId: context.apiKeyId }),
         ...(context?.pubkey !== undefined && { pubkey: context.pubkey }),
-        params: sanitizeParams(args ?? {}),
+        params: sanitizeParams(normalizeToolParams(args)),
         durationMs: Date.now() - start,
         status,
         ...(errorMessage !== null && { error: errorMessage }),

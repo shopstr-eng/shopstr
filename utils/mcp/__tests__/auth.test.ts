@@ -97,9 +97,13 @@ describe("MCP auth helpers", () => {
 
   describe("verifyNostrAuth", () => {
     const baseAuthEvent = {
+      id: "auth-event-id",
       kind: 27235,
       pubkey: "f".repeat(64),
       created_at: FIXED_NOW_SECONDS,
+      tags: [],
+      content: "",
+      sig: "auth-signature",
     };
 
     it("rejects missing signed events", () => {

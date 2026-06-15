@@ -7,7 +7,7 @@ import {
 } from "@/utils/parsers/product-tag-helpers";
 import { NostrEvent } from "@/utils/types/types";
 import { registerTool } from "./register-tool";
-import { ToolContext } from "../audit-log";
+import { ToolContext, ToolInputSchema, ToolCb } from "../audit-log";
 
 const DB_TIMEOUT_MS = 15_000;
 
@@ -309,14 +309,14 @@ function parseProductEvent(event: NostrEvent) {
 }
 
 function parseProfileEvent(event: NostrEvent) {
-  let content: Record<string, any> = {};
+  let content: Record<string, unknown> = {};
   try {
     content = JSON.parse(event.content);
   } catch {
     content = {};
   }
 
-  const base: Record<string, any> = {
+  const base: Record<string, unknown> = {
     pubkey: event.pubkey,
     kind: event.kind,
     name: content.name || "",
@@ -344,8 +344,9 @@ function parseProfileEvent(event: NostrEvent) {
       base.freeShippingCurrency = content.freeShippingCurrency;
     if (content.storefront) {
       base.storefront = content.storefront;
-      if (content.storefront.shopSlug)
-        base.storefrontUrl = `/shop/${content.storefront.shopSlug}`;
+      const storefront = content.storefront as Record<string, unknown>;
+      if (storefront.shopSlug)
+        base.storefrontUrl = `/shop/${storefront.shopSlug}`;
     }
   }
 
@@ -373,11 +374,11 @@ function parseReviewEvent(event: NostrEvent) {
 }
 
 export function registerReadTools(server: McpServer, context?: ToolContext) {
-  const reg = (
+  const reg = <TSchema extends ToolInputSchema>(
     name: string,
     description: string,
-    inputSchema: any,
-    cb: (args: any, extra: any) => any
+    inputSchema: TSchema,
+    cb: ToolCb<TSchema>
   ) => registerTool(server, name, description, inputSchema, cb, context);
 
   reg(
@@ -1001,7 +1002,8 @@ export function registerReadTools(server: McpServer, context?: ToolContext) {
           ),
         }));
 
-        const storefront = (shopProfile as any)?.storefront || {};
+        const storefront =
+          (shopProfile?.storefront as Record<string, unknown>) || {};
 
         let customDomain = null;
         const dbPool = getDbPool();
