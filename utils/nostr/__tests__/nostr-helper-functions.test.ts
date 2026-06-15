@@ -1767,6 +1767,7 @@ describe("finalizeAndSendNostrEvent", () => {
 
     expect(result).toEqual(signedEvent);
     expect(cacheEventToDatabase).toHaveBeenCalledWith(signedEvent);
+    expect(newPromiseWithTimeout).toHaveBeenCalled();
   });
 
   it("re-throws when signer.sign rejects", async () => {
