@@ -1,7 +1,60 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom";
+import type { ChangeEvent, Key, ReactNode } from "react";
 import AddressPicker from "../address-picker";
 import { SavedAddress } from "@/utils/types/types";
+
+type SelectionKeys = "all" | Iterable<Key>;
+type AccordionContextValue = {
+  openKeys: Set<string>;
+  toggle: (key: string) => void;
+};
+type ButtonMockProps = {
+  onClick?: () => void;
+  onPress?: () => void;
+  children?: ReactNode;
+  className?: string;
+  title?: string;
+  size?: string;
+  variant?: string;
+  color?: string;
+};
+type CardMockProps = {
+  children?: ReactNode;
+  className?: string;
+  isPressable?: boolean;
+  onPress?: () => void;
+};
+type InputMockProps = {
+  label?: ReactNode;
+  value?: string;
+  onValueChange?: (value: string) => void;
+  placeholder?: string;
+  isRequired?: boolean;
+};
+type RadioGroupMockProps = {
+  onValueChange?: (value: string) => void;
+  children?: ReactNode;
+};
+type ValueChildrenProps = {
+  value?: string;
+  children?: ReactNode;
+};
+type AccordionMockProps = {
+  children?: ReactNode;
+  selectedKeys?: SelectionKeys;
+  defaultSelectedKeys?: SelectionKeys;
+  onSelectionChange?: (keys: Set<string>) => void;
+};
+type AccordionItemMockProps = {
+  title?: ReactNode;
+  children?: ReactNode;
+  startContent?: ReactNode;
+  accordionItemKey?: string;
+};
+type AccordionInjectedProps = {
+  accordionItemKey?: string;
+};
 
 const mockAddress: SavedAddress = {
   id: "addr-1",
@@ -39,10 +92,12 @@ jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
 
 // Minimal NextUI mocks
 jest.mock("@heroui/react", () => {
-  const React = require("react");
-  const AccordionContext = React.createContext(null);
+  const React = jest.requireActual<typeof import("react")>("react");
+  const AccordionContext = React.createContext<AccordionContextValue | null>(
+    null
+  );
 
-  const normalizeKeys = (keys: any) => {
+  const normalizeKeys = (keys?: SelectionKeys) => {
     if (keys === "all") {
       return new Set(["address-picker"]);
     }
@@ -60,7 +115,7 @@ jest.mock("@heroui/react", () => {
       variant,
       color,
       onPress,
-    }: any) => (
+    }: ButtonMockProps) => (
       <button
         onClick={onClick || onPress}
         className={className}
@@ -72,15 +127,24 @@ jest.mock("@heroui/react", () => {
         {children}
       </button>
     ),
-    Card: ({ children, className, isPressable, onPress }: any) => (
+    Card: ({ children, className, isPressable, onPress }: CardMockProps) => (
       <div className={className} onClick={isPressable ? onPress : undefined}>
         {children}
       </div>
     ),
-    CardBody: ({ children, className }: any) => (
+    CardBody: ({
+      children,
+      className,
+    }: Pick<CardMockProps, "children" | "className">) => (
       <div className={className}>{children}</div>
     ),
-    Input: ({ label, value, onValueChange, placeholder, isRequired }: any) => (
+    Input: ({
+      label,
+      value,
+      onValueChange,
+      placeholder,
+      isRequired,
+    }: InputMockProps) => (
       <input
         aria-label={typeof label === "string" ? label : "input"}
         placeholder={placeholder}
@@ -89,26 +153,30 @@ jest.mock("@heroui/react", () => {
         data-required={isRequired}
       />
     ),
-    RadioGroup: ({ onValueChange, children }: any) => (
+    RadioGroup: ({ onValueChange, children }: RadioGroupMockProps) => (
       <div
         role="radiogroup"
-        onChange={(e: any) => onValueChange?.(e.target.value)}
+        onChange={(e: ChangeEvent<HTMLInputElement>) =>
+          onValueChange?.(e.target.value)
+        }
       >
         {children}
       </div>
     ),
-    Radio: ({ value, children }: any) => (
+    Radio: ({ value, children }: ValueChildrenProps) => (
       <label>
         <input type="radio" value={value} /> {children}
       </label>
     ),
-    Chip: ({ children }: any) => <span>{children}</span>,
+    Chip: ({ children }: Pick<ValueChildrenProps, "children">) => (
+      <span>{children}</span>
+    ),
     Accordion: ({
       children,
       selectedKeys,
       defaultSelectedKeys,
       onSelectionChange,
-    }: any) => {
+    }: AccordionMockProps) => {
       const isControlled = selectedKeys !== undefined;
       const [internalKeys, setInternalKeys] = React.useState(() =>
         normalizeKeys(defaultSelectedKeys)
@@ -135,8 +203,8 @@ jest.mock("@heroui/react", () => {
       return (
         <AccordionContext.Provider value={{ openKeys, toggle }}>
           <div data-selected={JSON.stringify(Array.from(openKeys))}>
-            {React.Children.map(children, (child: any) =>
-              React.isValidElement(child)
+            {React.Children.map(children, (child) =>
+              React.isValidElement<AccordionInjectedProps>(child)
                 ? React.cloneElement(child, {
                     accordionItemKey: String(child.key ?? ""),
                   })
@@ -151,16 +219,14 @@ jest.mock("@heroui/react", () => {
       children,
       startContent,
       accordionItemKey,
-    }: any) => {
+    }: AccordionItemMockProps) => {
       const context = React.useContext(AccordionContext);
-      const isOpen = context?.openKeys.has(accordionItemKey);
+      const itemKey = accordionItemKey ?? "";
+      const isOpen = context?.openKeys.has(itemKey);
 
       return (
         <div>
-          <button
-            type="button"
-            onClick={() => context?.toggle(accordionItemKey)}
-          >
+          <button type="button" onClick={() => context?.toggle(itemKey)}>
             {startContent}
             {title}
           </button>

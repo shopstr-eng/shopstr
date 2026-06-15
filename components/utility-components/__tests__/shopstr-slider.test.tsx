@@ -1,7 +1,11 @@
 import { render, screen, fireEvent, act } from "@testing-library/react";
+import type { MouseEventHandler, ReactNode } from "react";
 import "@testing-library/jest-dom";
 import ShopstrSlider from "../shopstr-slider";
-import { FollowsContext } from "@/utils/context/context";
+import {
+  FollowsContext,
+  FollowsContextInterface,
+} from "@/utils/context/context";
 import { getLocalStorageData } from "@/utils/nostr/nostr-helper-functions";
 
 const mockUseTheme = { theme: "light" };
@@ -18,8 +22,18 @@ jest.mock("@/utils/STATIC-VARIABLES", () => ({
 }));
 
 const mockOnChangeEnd = jest.fn();
+type SliderMockProps = {
+  onChangeEnd: (value: number | number[]) => void;
+  maxValue?: number;
+  color?: string;
+  label?: ReactNode;
+};
+type ButtonMockProps = {
+  children?: ReactNode;
+  onClick?: MouseEventHandler<HTMLButtonElement>;
+};
 jest.mock("@heroui/react", () => ({
-  Slider: (props: any) => {
+  Slider: (props: SliderMockProps) => {
     mockOnChangeEnd.mockImplementation((value) => props.onChangeEnd(value));
     return (
       <div
@@ -31,7 +45,7 @@ jest.mock("@heroui/react", () => ({
       </div>
     );
   },
-  Button: ({ children, onClick }: any) => (
+  Button: ({ children, onClick }: ButtonMockProps) => (
     <button onClick={onClick}>{children}</button>
   ),
 }));
@@ -42,7 +56,7 @@ Object.defineProperty(window, "localStorage", {
   writable: true,
 });
 
-const renderWithContext = (contextValue: any) => {
+const renderWithContext = (contextValue: FollowsContextInterface) => {
   return render(
     <FollowsContext.Provider value={contextValue}>
       <ShopstrSlider />

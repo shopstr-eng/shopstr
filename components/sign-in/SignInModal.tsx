@@ -75,14 +75,14 @@ export default function SignInModal({
       const readRelays = relaysContext.readRelayList;
       const writeRelays = relaysContext.writeRelayList;
       setLocalStorageDataOnSignIn({
-        signer,
+        signer: signer.toJSON(),
         relays: generalRelays,
         readRelays: readRelays,
         writeRelays: writeRelays,
       });
     } else {
       setLocalStorageDataOnSignIn({
-        signer,
+        signer: signer.toJSON(),
       });
     }
   };

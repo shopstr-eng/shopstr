@@ -89,8 +89,8 @@ jest.mock("@heroui/react", () => {
       items,
       children,
     }: {
-      items: any[];
-      children: (item: any) => React.ReactNode;
+      items: unknown[];
+      children: (item: unknown) => React.ReactNode;
     }) => {
       const { isOpen } = React.useContext(DropdownContext);
 
@@ -140,7 +140,10 @@ Object.defineProperty(navigator, "clipboard", {
 
 const renderWithProviders = (
   ui: React.ReactElement,
-  options: { profileData?: Map<string, any>; isLoggedIn?: boolean } = {}
+  options: {
+    profileData?: Map<string, unknown>;
+    isLoggedIn?: boolean;
+  } = {}
 ) => {
   const { profileData = new Map(), isLoggedIn = false } = options;
   return render(

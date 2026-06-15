@@ -364,10 +364,10 @@ export default async function handler(
           }
 
           encryptedNsecValue = encryptNsec(trimmedNsec);
-        } catch (e: any) {
+        } catch (e) {
           return res.status(400).json({
             error: `Invalid nsec: ${
-              e.message || "Could not decode secret key."
+              e instanceof Error ? e.message : "Could not decode secret key."
             }`,
           });
         }

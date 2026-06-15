@@ -4,6 +4,9 @@ import {
   NostrMessageEvent,
   ShopProfile,
   Community,
+  ProfileData,
+  CashuProofEvent,
+  CommunityPost,
 } from "@/utils/types/types";
 import {
   Mint as CashuMint,
@@ -33,12 +36,17 @@ import {
   SIGNED_EVENT_HEADER,
 } from "@/utils/nostr/request-auth";
 
-interface NipProfile {
-  pubkey: string;
-  created_at: number;
-  content: { nip05?: string; [key: string]: any };
+interface NipProfile extends ProfileData {
+  content: { nip05?: string; [key: string]: unknown };
   nip05Verified: boolean;
 }
+
+type NostrFetchClient = Pick<NostrManager, "fetch">;
+type NostrWalletClient = Pick<NostrManager, "fetch" | "publish">;
+type NostrPubkeyProvider = Pick<NostrSigner, "getPubKey">;
+type NostrDecryptSigner = Pick<NostrSigner, "getPubKey" | "decrypt">;
+type NostrGiftWrapSigner = Pick<NostrSigner, "sign" | "decrypt">;
+type NostrWalletSigner = Pick<NostrSigner, "getPubKey" | "decrypt" | "sign">;
 
 type SearchFilter = Filter & { search: string };
 
@@ -52,6 +60,23 @@ export const DEFAULT_NIP50_SEARCH_RELAYS = [
   "wss://antiprimal.net",
   "wss://relay.ditto.pub",
 ];
+
+function isCashuProof(value: unknown): value is Proof {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  const amount = record.amount;
+  return (
+    typeof record.id === "string" &&
+    typeof record.secret === "string" &&
+    typeof record.C === "string" &&
+    amount !== null &&
+    typeof amount === "object" &&
+    "toNumber" in amount &&
+    typeof amount.toNumber === "function"
+  );
+}
 
 function normalizeRelayUrl(relay: string): string {
   const trimmedRelay = relay.trim();
@@ -166,7 +191,7 @@ function eventMatchesProductSearch(
 }
 
 export async function fetchNip50ProductSearch(
-  nostr: NostrManager,
+  nostr: NostrFetchClient,
   relays: string[],
   searchQuery: string,
   options: { authors?: string[]; limit?: number } = {}
@@ -249,7 +274,7 @@ export function isHexString(value: string): boolean {
 }
 
 export const fetchAllPosts = async (
-  nostr: NostrManager,
+  nostr: NostrFetchClient,
   relays: string[],
   editProductContext: (productEvents: NostrEvent[], isLoading: boolean) => void
 ): Promise<{
@@ -375,7 +400,7 @@ export function getReportTargetIdentifiers(event: NostrEvent): {
 }
 
 export const fetchReports = async (
-  nostr: NostrManager,
+  nostr: NostrFetchClient,
   relays: string[],
   products: NostrEvent[],
   editReportsContext: (reportEvents: NostrEvent[], isLoading: boolean) => void,
@@ -486,8 +511,8 @@ export const fetchReports = async (
   });
 };
 export const fetchCart = async (
-  nostr: NostrManager,
-  signer: NostrSigner | undefined,
+  nostr: NostrFetchClient,
+  signer: NostrDecryptSigner | undefined,
   relays: string[],
   editCartContext: (cartAddresses: string[][], isLoading: boolean) => void,
   products: NostrEvent[]
@@ -571,7 +596,7 @@ export const fetchCart = async (
 };
 
 export const fetchShopProfile = async (
-  nostr: NostrManager,
+  nostr: NostrFetchClient,
   relays: string[],
   pubkeyShopProfileToFetch: string[],
   editShopContext: (
@@ -585,9 +610,7 @@ export const fetchShopProfile = async (
     try {
       const shopEvents: NostrEvent[] = [];
 
-      const shopProfile: Map<string, ShopProfile | any> = new Map(
-        pubkeyShopProfileToFetch.map((pubkey) => [pubkey, null])
-      );
+      const shopProfile: Map<string, ShopProfile> = new Map();
 
       if (pubkeyShopProfileToFetch.length === 0) {
         editShopContext(new Map(), false);
@@ -731,16 +754,16 @@ export async function verifyProfilesNip05(
 }
 
 export const fetchProfile = async (
-  nostr: NostrManager,
+  nostr: NostrFetchClient,
   relays: string[],
   pubkeyProfilesToFetch: string[],
   editProfileContext: (
-    profileMap: Map<string, NipProfile | null>,
+    profileMap: Map<string, ProfileData | null>,
     isLoading: boolean
   ) => void,
-  existingProfileMap: Map<string, any> = new Map()
+  existingProfileMap: Map<string, ProfileData | null> = new Map()
 ): Promise<{
-  profileMap: Map<string, NipProfile | null>;
+  profileMap: Map<string, ProfileData | null>;
 }> => {
   return new Promise(async function (resolve, reject) {
     try {
@@ -752,9 +775,7 @@ export const fetchProfile = async (
       }
 
       const mergedProfileMap = new Map(existingProfileMap);
-      const updateProfileIfNewer = (profile: any) => {
-        if (!profile?.pubkey) return;
-
+      const updateProfileIfNewer = (profile: NipProfile) => {
         const existingProfile = mergedProfileMap.get(profile.pubkey);
         if (
           !existingProfile ||
@@ -817,7 +838,7 @@ export const fetchProfile = async (
         authors: Array.from(pubkeyProfilesToFetch),
       };
 
-      const profileMap: Map<string, NipProfile | null> = new Map(
+      const profileMap: Map<string, ProfileData | null> = new Map(
         Array.from(pubkeyProfilesToFetch).map((pubkey) => [
           pubkey,
           mergedProfileMap.get(pubkey) || dbProfileMap.get(pubkey) || null,
@@ -877,8 +898,8 @@ export const fetchProfile = async (
 };
 
 export const fetchGiftWrappedChatsAndMessages = async (
-  nostr: NostrManager,
-  signer: NostrSigner | undefined,
+  nostr: NostrFetchClient,
+  signer: NostrGiftWrapSigner | undefined,
   relays: string[],
   editChatContext: (chatsMap: ChatsMap, isLoading: boolean) => void,
   userPubkey?: string
@@ -1073,7 +1094,7 @@ export const fetchGiftWrappedChatsAndMessages = async (
 };
 
 export const fetchReviews = async (
-  nostr: NostrManager,
+  nostr: NostrFetchClient,
   relays: string[],
   products: NostrEvent[],
   editReviewsContext: (
@@ -1270,7 +1291,7 @@ export const fetchReviews = async (
 };
 
 export const fetchAllFollows = async (
-  nostr: NostrManager,
+  nostr: NostrFetchClient,
   relays: string[],
   editFollowsContext: (
     followList: string[],
@@ -1397,8 +1418,8 @@ export const fetchAllFollows = async (
 };
 
 export const fetchAllRelays = async (
-  nostr: NostrManager,
-  signer: NostrSigner | undefined,
+  nostr: NostrFetchClient,
+  signer: NostrPubkeyProvider | undefined,
   relays: string[],
   editRelaysContext: (
     relayList: string[],
@@ -1547,8 +1568,8 @@ export const fetchAllRelays = async (
 };
 
 export const fetchAllBlossomServers = async (
-  nostr: NostrManager,
-  signer: NostrSigner | undefined,
+  nostr: NostrFetchClient,
+  signer: NostrPubkeyProvider | undefined,
   relays: string[],
   editBlossomContext: (blossomServers: string[], isLoading: boolean) => void
 ): Promise<{
@@ -1643,17 +1664,17 @@ export const fetchAllBlossomServers = async (
 };
 
 export const fetchCashuWallet = async (
-  nostr: NostrManager,
-  signer: NostrSigner | undefined,
+  nostr: NostrWalletClient,
+  signer: NostrWalletSigner | undefined,
   relays: string[],
   editCashuWalletContext: (
-    proofEvents: any[],
+    proofEvents: CashuProofEvent[],
     cashuMints: string[],
     cashuProofs: Proof[],
     isLoading: boolean
   ) => void
 ): Promise<{
-  proofEvents: any[];
+  proofEvents: CashuProofEvent[];
   cashuMints: string[];
   cashuProofs: Proof[];
 }> => {
@@ -1673,11 +1694,11 @@ export const fetchCashuWallet = async (
     try {
       const enc = new TextEncoder();
       let mostRecentWalletEvent: NostrEvent | null = null;
-      const proofEvents: any[] = [];
+      const proofEvents: CashuProofEvent[] = [];
       const cashuRelays: string[] = [];
       const cashuMints: string[] = [];
       const cashuMintSet: Set<string> = new Set();
-      let cashuProofs: Proof[] = [...tokens]; // Start with existing tokens
+      let cashuProofs: Proof[] = tokens.filter(isCashuProof);
       const incomingSpendingHistory: [][] = [];
 
       // Load wallet events from database first
@@ -2098,7 +2119,7 @@ export const fetchCashuWallet = async (
 };
 
 export const fetchAllCommunities = async (
-  nostr: NostrManager,
+  nostr: NostrFetchClient,
   relays: string[],
   editCommunityContext: (
     communities: Map<string, Community>,
@@ -2168,7 +2189,7 @@ export const fetchAllCommunities = async (
 
 // returns CommunityPost[] (posts augmented with approval metadata)
 export const fetchCommunityPosts = async (
-  nostr: NostrManager,
+  nostr: NostrFetchClient,
   community: Community,
   limit: number = 20
 ): Promise<NostrEvent[]> => {
@@ -2268,15 +2289,15 @@ export const fetchCommunityPosts = async (
       // Annotate posts with approval metadata where available
       const annotatedPosts = postEvents.map((post) => {
         const approval = approvalByPostId.get(post.id);
-        const annotated: any = { ...post };
-        if (approval) {
-          annotated.approved = true;
-          annotated.approvalEventId = approval.approvalId;
-          annotated.approvedBy = approval.approver;
-        } else {
-          annotated.approved = false;
-        }
-        return annotated as NostrEvent;
+        const annotated: CommunityPost = {
+          ...post,
+          approved: !!approval,
+          ...(approval && {
+            approvalEventId: approval.approvalId,
+            approvedBy: approval.approver,
+          }),
+        };
+        return annotated;
       });
 
       // Sort posts by creation date, newest first.
@@ -2290,7 +2311,7 @@ export const fetchCommunityPosts = async (
 };
 
 export const fetchPendingPosts = async (
-  nostr: NostrManager,
+  nostr: NostrFetchClient,
   community: Community,
   limit: number = 20
 ): Promise<NostrEvent[]> => {

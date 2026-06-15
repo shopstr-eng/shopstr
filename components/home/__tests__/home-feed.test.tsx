@@ -6,7 +6,6 @@ import { ShopContextInterface, ShopMapContext } from "@/utils/context/context";
 import { ShopProfile } from "@/utils/types/types";
 
 jest.mock("../marketplace", () => {
-  // eslint-disable-next-line react/display-name
   return ({ focusedPubkey }: { focusedPubkey: string }) => (
     <div data-testid="mock-marketplace">Marketplace for: {focusedPubkey}</div>
   );

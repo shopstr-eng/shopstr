@@ -5,7 +5,7 @@ jest.mock("nostr-tools", () => {
   const actual = jest.requireActual("nostr-tools");
   return {
     ...actual,
-    verifyEvent: (event: any) => verifyEventMock(event),
+    verifyEvent: (event: unknown) => verifyEventMock(event),
   };
 });
 
@@ -20,17 +20,21 @@ import {
   buildMcpRequestProofTemplate,
 } from "@/utils/mcp/request-proof";
 import { verifyAndConsumeSignedRequestProof } from "@/utils/mcp/request-proof-server";
+import type { NostrEvent } from "@/utils/types/types";
 
 describe("verifyAndConsumeSignedRequestProof", () => {
   const usedProofIds = new Set<string>();
   const mockRelease = jest.fn();
-  const mockQuery = jest.fn(async (query: string, params?: any[]) => {
+  const mockQuery = jest.fn(async (query: string, params?: unknown[]) => {
     if (query.includes("DELETE FROM mcp_request_proofs")) {
       return { rowCount: 0 };
     }
 
     if (query.includes("INSERT INTO mcp_request_proofs")) {
       const eventId = params?.[0];
+      if (typeof eventId !== "string") {
+        throw new Error("Expected proof event id");
+      }
       if (usedProofIds.has(eventId)) {
         return { rowCount: 0 };
       }
@@ -61,7 +65,7 @@ describe("verifyAndConsumeSignedRequestProof", () => {
       permissions: "read",
       pubkey,
     });
-    const signedEvent = {
+    const signedEvent: NostrEvent = {
       id: "proof-1",
       pubkey,
       kind: buildMcpRequestProofTemplate(proof).kind,
@@ -72,13 +76,13 @@ describe("verifyAndConsumeSignedRequestProof", () => {
     };
 
     const firstAttempt = await verifyAndConsumeSignedRequestProof(
-      signedEvent as any,
+      signedEvent,
       proof
     );
     expect(firstAttempt).toEqual({ ok: true, status: 200 });
 
     const replayAttempt = await verifyAndConsumeSignedRequestProof(
-      signedEvent as any,
+      signedEvent,
       proof
     );
     expect(replayAttempt).toEqual({
@@ -95,7 +99,7 @@ describe("verifyAndConsumeSignedRequestProof", () => {
       permissions: "read",
       pubkey,
     });
-    const signedEvent = {
+    const signedEvent: NostrEvent = {
       id: "proof-2",
       pubkey,
       kind: buildMcpRequestProofTemplate(wrongProof).kind,
@@ -105,16 +109,13 @@ describe("verifyAndConsumeSignedRequestProof", () => {
       sig: "valid",
     };
 
-    const result = await verifyAndConsumeSignedRequestProof(
-      signedEvent as any,
-      {
-        ...wrongProof,
-        fields: {
-          ...wrongProof.fields,
-          name: "Expected Name",
-        },
-      }
-    );
+    const result = await verifyAndConsumeSignedRequestProof(signedEvent, {
+      ...wrongProof,
+      fields: {
+        ...wrongProof.fields,
+        name: "Expected Name",
+      },
+    });
 
     expect(result).toEqual({
       ok: false,
@@ -130,7 +131,7 @@ describe("verifyAndConsumeSignedRequestProof", () => {
       permissions: "read_write",
       pubkey,
     });
-    const staleEvent = {
+    const staleEvent: NostrEvent = {
       id: "proof-3",
       pubkey,
       kind: buildMcpRequestProofTemplate(proof).kind,
@@ -140,10 +141,7 @@ describe("verifyAndConsumeSignedRequestProof", () => {
       sig: "valid",
     };
 
-    const result = await verifyAndConsumeSignedRequestProof(
-      staleEvent as any,
-      proof
-    );
+    const result = await verifyAndConsumeSignedRequestProof(staleEvent, proof);
 
     expect(result).toEqual({
       ok: false,

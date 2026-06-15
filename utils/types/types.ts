@@ -1,4 +1,5 @@
-import { Event } from "nostr-tools";
+import { Event, EventTemplate } from "nostr-tools";
+import { Proof } from "@cashu/cashu-ts";
 
 export type ItemType = "products" | "profiles" | "chats" | "communities";
 
@@ -212,6 +213,7 @@ export interface ShopProfile {
 export interface ProfileData {
   pubkey: string;
   content: {
+    [key: string]: unknown;
     name?: string;
     picture?: string;
     about?: string;
@@ -222,6 +224,14 @@ export interface ProfileData {
     fiat_options?: string[];
     shopstr_donation?: number;
   };
+  created_at: number;
+  nip05Verified?: boolean;
+}
+
+export interface CashuProofEvent {
+  id: string;
+  mint: string;
+  proofs: Proof[];
   created_at: number;
 }
 
@@ -280,16 +290,30 @@ export interface SavedAddress {
   isDefault: boolean;
 }
 
+export interface NostrExtensionProvider {
+  getPublicKey: () => Promise<string>;
+  signEvent: (event: EventTemplate) => Promise<Event>;
+  nip44: {
+    encrypt: (pubkey: string, plainText: string) => Promise<string>;
+    decrypt: (pubkey: string, cipherText: string) => Promise<string>;
+  };
+}
+
+export interface WebLNPaymentResponse {
+  preimage?: string;
+  paymentHash?: string;
+  payment_hash?: string;
+}
+
+export interface WebLNProvider {
+  enable: () => Promise<void>;
+  isEnabled: () => Promise<boolean>;
+  sendPayment: (paymentRequest: string) => Promise<WebLNPaymentResponse>;
+}
+
 declare global {
   interface Window {
-    nostr: {
-      getPublicKey: () => Promise<string>;
-      signEvent: (event: any) => Promise<any>;
-      nip44: {
-        encrypt: (pubkey: string, plainText: string) => Promise<string>;
-        decrypt: (pubkey: string, cipherText: string) => Promise<string>;
-      };
-    };
-    webln: any;
+    nostr?: NostrExtensionProvider;
+    webln?: WebLNProvider;
   }
 }

@@ -85,7 +85,7 @@ export function MintRecoveryBoot(): null {
         });
 
         if (result.recovered > 0 || result.abandoned > 0) {
-          console.info(
+          console.warn(
             `[mint-recovery] processed ${result.total} pending quote(s):`,
             result
           );

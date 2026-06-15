@@ -173,7 +173,7 @@ describe("ChatButton Component", () => {
   test("handles chatObject being null or undefined gracefully", () => {
     const propsUndefinedChat = {
       ...defaultProps,
-      chatObject: undefined as any,
+      chatObject: undefined,
     };
     render(<ChatButton {...propsUndefinedChat} />);
 

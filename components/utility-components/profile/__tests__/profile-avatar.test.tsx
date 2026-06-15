@@ -4,28 +4,51 @@ import { ProfileAvatar } from "../profile-avatar";
 import { ProfileMapContext } from "@/utils/context/context";
 import { nip19 } from "nostr-tools";
 import React from "react";
+import type { RenderOptions } from "@testing-library/react";
+import type { ProfileData } from "@/utils/types/types";
 
 jest.mock("@heroui/react", () => ({
   ...jest.requireActual("@heroui/react"),
-  User: jest.fn(({ avatarProps, name, description, classNames }) => (
-    <div data-testid="mock-user">
-      <img data-testid="mock-avatar" src={avatarProps.src} alt="avatar" />
-      <span
-        data-testid="mock-name"
-        className={`${classNames.name} ${classNames.base}`}
-      >
-        {name}
-      </span>
-      <p data-testid="mock-description" className={classNames.description}>
-        {description}
-      </p>
-    </div>
-  )),
+  User: jest.fn(
+    ({
+      avatarProps,
+      name,
+      description,
+      classNames,
+    }: {
+      avatarProps: { src?: string };
+      name?: React.ReactNode;
+      description?: React.ReactNode;
+      classNames: {
+        name?: string;
+        base?: string;
+        description?: string;
+      };
+    }) => (
+      <div data-testid="mock-user">
+        <img data-testid="mock-avatar" src={avatarProps.src} alt="avatar" />
+        <span
+          data-testid="mock-name"
+          className={`${classNames.name} ${classNames.base}`}
+        >
+          {name}
+        </span>
+        <p data-testid="mock-description" className={classNames.description}>
+          {description}
+        </p>
+      </div>
+    )
+  ),
 }));
 
 const renderWithContext = (
   ui: React.ReactElement,
-  { providerProps, ...renderOptions }: any
+  {
+    providerProps,
+    ...renderOptions
+  }: RenderOptions & {
+    providerProps: React.ContextType<typeof ProfileMapContext>;
+  }
 ) => {
   return render(
     <ProfileMapContext.Provider value={providerProps}>
@@ -40,16 +63,20 @@ describe("ProfileAvatar", () => {
     "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2";
   const npub = nip19.npubEncode(pubkey);
   const mockDescription = "A test user description";
+  const makeProfileContext = (
+    profileData: Map<string, ProfileData> = new Map()
+  ): React.ContextType<typeof ProfileMapContext> => ({
+    profileData,
+    isLoading: false,
+    updateProfileData: jest.fn(),
+  });
 
   afterEach(() => {
     jest.clearAllMocks();
   });
 
   it("should render with fallback data when profile is not in context", () => {
-    const mockContext = {
-      profileData: new Map(),
-      setProfileData: jest.fn(),
-    };
+    const mockContext = makeProfileContext();
 
     renderWithContext(
       <ProfileAvatar pubkey={pubkey} description={mockDescription} />,
@@ -72,19 +99,18 @@ describe("ProfileAvatar", () => {
 
   it("should render with data from context", () => {
     const profile = {
+      pubkey,
+      created_at: 1700000000,
       content: {
         name: "testuser",
         picture: "http://example.com/pic.jpg",
       },
       nip05Verified: false,
     };
-    const profileMap = new Map();
+    const profileMap = new Map<string, ProfileData>();
     profileMap.set(pubkey, profile);
 
-    const mockContext = {
-      profileData: profileMap,
-      setProfileData: jest.fn(),
-    };
+    const mockContext = makeProfileContext(profileMap);
 
     renderWithContext(<ProfileAvatar pubkey={pubkey} />, {
       providerProps: mockContext,
@@ -99,6 +125,8 @@ describe("ProfileAvatar", () => {
 
   it("should prioritize and display the verified NIP-05 identifier", () => {
     const profile = {
+      pubkey,
+      created_at: 1700000000,
       content: {
         name: "testuser",
         nip05: "user@example.com",
@@ -106,13 +134,10 @@ describe("ProfileAvatar", () => {
       },
       nip05Verified: true,
     };
-    const profileMap = new Map();
+    const profileMap = new Map<string, ProfileData>();
     profileMap.set(pubkey, profile);
 
-    const mockContext = {
-      profileData: profileMap,
-      setProfileData: jest.fn(),
-    };
+    const mockContext = makeProfileContext(profileMap);
 
     renderWithContext(<ProfileAvatar pubkey={pubkey} />, {
       providerProps: mockContext,
@@ -132,18 +157,17 @@ describe("ProfileAvatar", () => {
     const truncatedName = "this_is_a_very_long_...";
 
     const profile = {
+      pubkey,
+      created_at: 1700000000,
       content: {
         name: longName,
       },
       nip05Verified: false,
     };
-    const profileMap = new Map();
+    const profileMap = new Map<string, ProfileData>();
     profileMap.set(pubkey, profile);
 
-    const mockContext = {
-      profileData: profileMap,
-      setProfileData: jest.fn(),
-    };
+    const mockContext = makeProfileContext(profileMap);
 
     renderWithContext(<ProfileAvatar pubkey={pubkey} />, {
       providerProps: mockContext,
@@ -160,7 +184,7 @@ describe("ProfileAvatar", () => {
     };
 
     renderWithContext(<ProfileAvatar pubkey={pubkey} {...customClasses} />, {
-      providerProps: { profileData: new Map(), setProfileData: jest.fn() },
+      providerProps: makeProfileContext(),
     });
 
     const nameElement = screen.getByTestId("mock-name");
@@ -173,10 +197,7 @@ describe("ProfileAvatar", () => {
   });
 
   it("should handle an empty pubkey prop gracefully", () => {
-    const mockContext = {
-      profileData: new Map(),
-      setProfileData: jest.fn(),
-    };
+    const mockContext = makeProfileContext();
 
     renderWithContext(<ProfileAvatar pubkey="" />, {
       providerProps: mockContext,

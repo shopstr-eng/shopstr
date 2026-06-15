@@ -8,6 +8,8 @@ import {
 } from "@cashu/cashu-ts";
 import { withMintRetry, MintRetryOptions } from "./mint-retry-service";
 
+type SwapWallet = Pick<CashuWallet, "send" | "checkProofsStates">;
+
 /**
  * Outcome of a `safeSwap` call. The `status` field reflects the **mint's
  * view of the input proofs** after the call resolves, so callers can never
@@ -72,7 +74,7 @@ const DEFAULT_CHECK_OPTS: Required<
  * the user's funds.
  */
 export async function safeSwap(
-  wallet: CashuWallet,
+  wallet: SwapWallet,
   amount: AmountLike,
   inputProofs: Proof[],
   options: {

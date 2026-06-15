@@ -1,16 +1,19 @@
-import { Pool, PoolClient } from "pg";
+import { Pool } from "pg";
 import { NostrEvent } from "../types/types";
 import { findListingBySlug } from "../url-slugs";
 
 let pool: Pool | null = null;
 let tablesInitialized = false;
 let initializingTables = false;
+type QueryableDbClient = {
+  query(queryText: string): Promise<unknown>;
+};
 
 // Queue for serializing cache operations
 let cacheQueue: Promise<void> = Promise.resolve();
 
 export async function ensureFailedRelayPublishesTable(
-  client: PoolClient
+  client: QueryableDbClient
 ): Promise<void> {
   await client.query(`
     CREATE TABLE IF NOT EXISTS failed_relay_publishes (
@@ -92,6 +95,13 @@ export async function trackFailedRelayPublishRecord({
   }
 }
 
+interface FailedRelayPublishRow {
+  event_id: string;
+  event_data: string;
+  relays: string;
+  retry_count: number;
+}
+
 export async function getFailedRelayPublishesForOwner(ownerPubkey: string) {
   const dbPool = getDbPool();
   let client;
@@ -111,9 +121,9 @@ export async function getFailedRelayPublishesForOwner(ownerPubkey: string) {
       [ownerPubkey]
     );
 
-    return result.rows
-      .filter((row: any) => row.event_data)
-      .map((row: any) => {
+    return (result.rows as FailedRelayPublishRow[])
+      .filter((row) => row.event_data)
+      .map((row) => {
         try {
           return {
             eventId: row.event_id,
@@ -537,7 +547,7 @@ export async function cacheEvent(event: NostrEvent): Promise<void> {
       // Delete older events from the same pubkey with the same kind
       const deleteQuery = {
         text: `DELETE FROM ${table} WHERE pubkey = $1 AND kind = $2`,
-        values: [event.pubkey, event.kind] as any[],
+        values: [event.pubkey, event.kind] as unknown[],
       };
       await client.query(deleteQuery);
 
@@ -553,7 +563,7 @@ export async function cacheEvent(event: NostrEvent): Promise<void> {
           JSON.stringify(event.tags),
           event.content,
           event.sig,
-        ] as any[],
+        ] as unknown[],
       };
       await client.query(insertQuery);
 
@@ -573,7 +583,7 @@ export async function cacheEvent(event: NostrEvent): Promise<void> {
             event.pubkey,
             event.kind,
             buildReviewDTagFilter(dTag),
-          ] as any[],
+          ] as unknown[],
         };
         await client.query(deleteQuery);
       }
@@ -590,7 +600,7 @@ export async function cacheEvent(event: NostrEvent): Promise<void> {
           JSON.stringify(event.tags),
           event.content,
           event.sig,
-        ] as any[],
+        ] as unknown[],
       };
       await client.query(insertQuery);
 
@@ -615,7 +625,7 @@ export async function cacheEvent(event: NostrEvent): Promise<void> {
           JSON.stringify(event.tags),
           event.content,
           event.sig,
-        ] as any[],
+        ] as unknown[],
       };
       await client.query(query);
     }
@@ -651,11 +661,12 @@ export async function cacheEvents(events: NostrEvent[]): Promise<void> {
             await cacheEventsTransaction(events);
             resolve();
             return;
-          } catch (error: any) {
-            const isDeadlock = error?.code === "40P01";
+          } catch (error: unknown) {
+            const pgError = error as { code?: string; message?: string };
+            const isDeadlock = pgError.code === "40P01";
             const isConnectionError =
-              error?.message?.includes("Connection terminated") ||
-              error?.message?.includes("Connection timeout");
+              pgError.message?.includes("Connection terminated") ||
+              pgError.message?.includes("Connection timeout");
 
             if ((isDeadlock || isConnectionError) && attempt < maxRetries - 1) {
               attempt++;
@@ -718,7 +729,7 @@ async function cacheEventsTransaction(events: NostrEvent[]): Promise<void> {
         // First, lock and delete old rows
         await client.query(
           `DELETE FROM ${table} WHERE pubkey = $1 AND kind = $2 AND id != $3`,
-          [event.pubkey, event.kind, event.id] as any[]
+          [event.pubkey, event.kind, event.id] as unknown[]
         );
 
         // Then insert/update with ON CONFLICT
@@ -742,7 +753,7 @@ async function cacheEventsTransaction(events: NostrEvent[]): Promise<void> {
             JSON.stringify(event.tags),
             event.content,
             event.sig,
-          ] as any[],
+          ] as unknown[],
         };
         await client.query(upsertQuery);
       }
@@ -772,7 +783,7 @@ async function cacheEventsTransaction(events: NostrEvent[]): Promise<void> {
               event.kind,
               buildReviewDTagFilter(dTag),
               event.id,
-            ] as any[]
+            ] as unknown[]
           );
 
           // Then insert/update with ON CONFLICT
@@ -796,7 +807,7 @@ async function cacheEventsTransaction(events: NostrEvent[]): Promise<void> {
               JSON.stringify(event.tags),
               event.content,
               event.sig,
-            ] as any[],
+            ] as unknown[],
           };
           await client.query(upsertQuery);
         }
@@ -822,7 +833,7 @@ async function cacheEventsTransaction(events: NostrEvent[]): Promise<void> {
             JSON.stringify(event.tags),
             event.content,
             event.sig,
-          ] as any[],
+          ] as unknown[],
         };
         await client.query(query);
       }
@@ -866,7 +877,7 @@ export async function fetchCachedEvents(
   try {
     client = await dbPool.connect();
     let query = `SELECT id, pubkey, created_at, kind, tags, content, sig FROM ${table} WHERE kind = $1`;
-    const params: any[] = [kind];
+    const params: unknown[] = [kind];
     let paramIndex = 2;
 
     if (filters?.pubkey) {
@@ -1159,7 +1170,7 @@ export async function fetchRelevantReportsFromDb(
   try {
     client = await dbPool.connect();
     const clauses: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
     let paramIndex = 1;
 
     if (profilePubkeys.length > 0) {
@@ -1224,7 +1235,7 @@ export async function fetchAllMessagesFromDb(
     client = await dbPool.connect();
     let query = `SELECT id, pubkey, created_at, kind, tags, content, sig, COALESCE(is_read, FALSE) as is_read 
                  FROM message_events WHERE 1=1`;
-    const params: any[] = [];
+    const params: unknown[] = [];
     let paramIndex = 1;
 
     if (pubkey) {
@@ -1280,7 +1291,7 @@ export async function markMessagesAsRead(
            WHERE elem->>0 = 'p' AND elem->>1 = $2
          )
        )`,
-      [messageIds, pubkey] as any[]
+      [messageIds, pubkey] as unknown[]
     );
   } catch (error) {
     console.error("Failed to mark messages as read:", error);
@@ -1337,7 +1348,7 @@ export async function getOrderParticipants(orderId: string): Promise<{
        FROM message_events
        WHERE order_id = $1
        ORDER BY created_at DESC`,
-      [orderId] as any[]
+      [orderId] as unknown[]
     );
 
     let buyerPubkey: string | null = null;
@@ -1575,7 +1586,12 @@ export async function addDiscountCode(
              ON CONFLICT (code, pubkey) DO UPDATE SET
                discount_percentage = EXCLUDED.discount_percentage,
                expiration = EXCLUDED.expiration`,
-      values: [code, pubkey, discountPercentage, expiration ?? null] as any[],
+      values: [
+        code,
+        pubkey,
+        discountPercentage,
+        expiration ?? null,
+      ] as unknown[],
     };
     await client.query(query);
   } catch (error) {

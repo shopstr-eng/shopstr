@@ -11,6 +11,8 @@ import { SignerContext } from "@/components/utility-components/nostr-context-pro
 import { nip19 } from "nostr-tools";
 import { useRouter } from "next/router";
 import { findPubkeyByProfileSlug, isNpub } from "@/utils/url-slugs";
+import type { ParsedUrlQuery } from "querystring";
+import type { ShopProfile } from "@/utils/types/types";
 
 jest.mock("@/utils/url-slugs", () => ({
   getListingSlug: jest.fn(),
@@ -65,7 +67,7 @@ const renderComponent = ({
   isFollowsLoading = false,
 }: {
   focusedPubkey?: string;
-  routerQuery?: any;
+  routerQuery?: ParsedUrlQuery;
   isLoggedIn?: boolean;
   followList?: string[];
   firstDegreeFollowsLength?: number;
@@ -98,13 +100,22 @@ const renderComponent = ({
     onClose: mockOnClose,
   });
 
-  const mockShopData = new Map<string, any>();
+  const mockShopData = new Map<string, ShopProfile>();
   if (focusedPubkey) {
     mockShopData.set(focusedPubkey, {
+      pubkey: focusedPubkey,
       content: {
+        name: "Test shop",
         about: "This is a test shop.",
-        ui: { banner: "test-banner.jpg" },
+        ui: {
+          picture: "",
+          banner: "test-banner.jpg",
+          theme: "",
+          darkMode: false,
+        },
+        merchants: [],
       },
+      created_at: 1700000000,
     });
   }
 

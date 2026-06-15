@@ -27,7 +27,7 @@ export class NostrNSecSigner implements NostrSigner {
   private pubkey?: string;
   private rememberedPassphrase?: string;
   private inputPassphrase?: string;
-  private inputPassphraseClearer?: any;
+  private inputPassphraseClearer?: ReturnType<typeof setTimeout>;
   private isNip49Format: boolean = false;
 
   public static getEncryptedNSEC(
@@ -79,9 +79,7 @@ export class NostrNSecSigner implements NostrSigner {
   }
 
   static fromJSON(
-    json: {
-      [key: string]: any;
-    },
+    json: Record<string, string | undefined>,
     challengeHandler: ChallengeHandler
   ): NostrNSecSigner | undefined {
     if (json.type !== "nsec" || !json.encryptedPrivKey) return undefined;
@@ -95,7 +93,7 @@ export class NostrNSecSigner implements NostrSigner {
     );
   }
 
-  public toJSON(): { [key: string]: any } {
+  public toJSON(): Record<string, string | undefined> {
     return {
       type: "nsec",
       encryptedPrivKey: this.encryptedPrivKey,

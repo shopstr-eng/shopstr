@@ -1,5 +1,6 @@
 import { NostrEvent } from "nostr-tools";
 import { NostrEventTemplate } from "@/utils/nostr/nostr-manager";
+import { NostrExtensionProvider } from "@/utils/types/types";
 import {
   NostrSigner,
   ChallengeHandler,
@@ -10,13 +11,13 @@ export class NostrNIP07Signer implements NostrSigner {
     this.checkExtension();
   }
 
-  public toJSON(): { [key: string]: any } {
+  public toJSON(): Record<string, string | undefined> {
     return {
       type: "nip07",
     };
   }
 
-  private checkExtension(): any {
+  private checkExtension(): void {
     if (!window?.nostr) throw new Error("Nostr extension not found");
     if (!window?.nostr?.nip44) {
       throw new Error(
@@ -25,8 +26,15 @@ export class NostrNIP07Signer implements NostrSigner {
     }
   }
 
+  private get extension(): NostrExtensionProvider {
+    this.checkExtension();
+    const extension = window.nostr;
+    if (!extension) throw new Error("Nostr extension not found");
+    return extension;
+  }
+
   public static fromJSON(
-    json: { [key: string]: any },
+    json: Record<string, string | undefined>,
     _challengeHandler: ChallengeHandler
   ): NostrNIP07Signer | undefined {
     if (json.type !== "nip07") return undefined;
@@ -38,20 +46,20 @@ export class NostrNIP07Signer implements NostrSigner {
   }
 
   public async getPubKey(): Promise<string> {
-    const pubkey = await window.nostr.getPublicKey();
+    const pubkey = await this.extension.getPublicKey();
     return pubkey;
   }
 
   public async sign(event: NostrEventTemplate): Promise<NostrEvent> {
-    return await window.nostr.signEvent(event);
+    return await this.extension.signEvent(event);
   }
 
   public async encrypt(pubkey: string, plainText: string): Promise<string> {
-    return await window.nostr.nip44.encrypt(pubkey, plainText);
+    return await this.extension.nip44.encrypt(pubkey, plainText);
   }
 
   public async decrypt(pubkey: string, cipherText: string): Promise<string> {
-    return await window.nostr.nip44.decrypt(pubkey, cipherText);
+    return await this.extension.nip44.decrypt(pubkey, cipherText);
   }
 
   public async close(): Promise<void> {

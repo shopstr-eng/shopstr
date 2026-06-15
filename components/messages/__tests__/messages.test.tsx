@@ -6,12 +6,35 @@ import {
   act,
 } from "@testing-library/react";
 import "@testing-library/jest-dom";
+import type { ComponentProps } from "react";
 import Messages from "../messages";
-import { ChatsContext } from "../../../utils/context/context";
+import {
+  ChatsContext,
+  ChatsContextInterface,
+  ChatsMap,
+} from "../../../utils/context/context";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import * as nostrHelper from "@/utils/nostr/nostr-helper-functions";
 import * as keypressHandler from "@/utils/keypress-handler";
+import { NostrEvent, NostrMessageEvent } from "@/utils/types/types";
+import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 import { useRouter } from "next/router";
+
+type SignerContextValue = ComponentProps<
+  typeof SignerContext.Provider
+>["value"];
+type MockRouter = {
+  query: { pk?: string };
+  push: jest.Mock;
+};
+type MockChatPanelProps = {
+  handleSendMessage: (message: string) => void;
+  isSendingDMLoading: boolean;
+};
+type MockChatButtonProps = {
+  pubkeyOfChat: string;
+  handleClickChat: (pubkey: string) => void;
+};
 
 jest.mock("../../utility-components/shopstr-spinner", () => {
   return function MockShopstrSpinner() {
@@ -23,7 +46,7 @@ jest.mock("../chat-panel", () => {
   return function MockChatPanel({
     handleSendMessage,
     isSendingDMLoading,
-  }: any) {
+  }: MockChatPanelProps) {
     return (
       <div data-testid="chat-panel">
         <button
@@ -38,7 +61,10 @@ jest.mock("../chat-panel", () => {
 });
 
 jest.mock("../chat-button", () => {
-  return function MockChatButton({ pubkeyOfChat, handleClickChat }: any) {
+  return function MockChatButton({
+    pubkeyOfChat,
+    handleClickChat,
+  }: MockChatButtonProps) {
     return (
       <div
         data-testid={`chat-button-${pubkeyOfChat}`}
@@ -85,51 +111,73 @@ jest.mock("@/utils/keypress-handler");
 const mockNostrHelper = nostrHelper as jest.Mocked<typeof nostrHelper>;
 const mockUseKeyPress = keypressHandler.useKeyPress as jest.Mock;
 
+function createMockSigner(): NostrSigner {
+  return {
+    connect: jest.fn().mockResolvedValue("user_pubkey"),
+    getPubKey: jest.fn().mockResolvedValue("user_pubkey"),
+    sign: jest.fn(),
+    encrypt: jest.fn(),
+    decrypt: jest.fn(),
+    close: jest.fn().mockResolvedValue(undefined),
+    toJSON: () => ({ type: "test" }),
+  };
+}
+
+function makeMessageEvent(
+  overrides: Partial<NostrMessageEvent>
+): NostrMessageEvent {
+  return {
+    id: "message-id",
+    kind: 14,
+    content: "",
+    pubkey: "pubkey",
+    created_at: 1,
+    tags: [["subject", "listing-inquiry"]],
+    sig: "sig",
+    read: true,
+    ...overrides,
+  };
+}
+
 describe("Messages Component", () => {
   const mockUserPubkey = "user_pubkey";
   const mockChatPubkey1 = "chat_pubkey_1";
   const mockChatPubkey2 = "chat_pubkey_2";
-  let mockRouter: any;
+  let mockRouter: MockRouter;
 
-  let mockSignerContextValue: any;
-  let mockChatsContextValue: any;
+  let mockSignerContextValue: SignerContextValue;
+  let mockChatsContextValue: ChatsContextInterface;
 
-  const mockChatsMap = new Map([
+  const mockChatsMap: ChatsMap = new Map<string, NostrMessageEvent[]>([
     [
       mockChatPubkey1,
       [
-        {
+        makeMessageEvent({
           id: "msg1",
-          kind: 14,
           content: "Hello",
           pubkey: mockChatPubkey1,
           created_at: 1000,
-          tags: [["subject", "listing-inquiry"]],
           read: true,
-        },
-        {
+        }),
+        makeMessageEvent({
           id: "msg2",
-          kind: 14,
           content: "New Message",
           pubkey: mockUserPubkey,
           created_at: 1002,
-          tags: [["subject", "listing-inquiry"]],
           read: false,
-        },
+        }),
       ],
     ],
     [
       mockChatPubkey2,
       [
-        {
+        makeMessageEvent({
           id: "msg3",
-          kind: 14,
           content: "Hi there",
           pubkey: mockChatPubkey2,
           created_at: 999,
-          tags: [["subject", "listing-inquiry"]],
           read: true,
-        },
+        }),
       ],
     ],
   ]);
@@ -138,16 +186,19 @@ describe("Messages Component", () => {
     jest.clearAllMocks();
 
     mockSignerContextValue = {
-      signer: { signEvent: jest.fn() },
+      signer: createMockSigner(),
       pubkey: mockUserPubkey,
-      setSigner: jest.fn(),
-      setPubkey: jest.fn(),
+      npub: "npub1test",
+      isLoggedIn: true,
+      isAuthStateResolved: true,
     };
 
     mockChatsContextValue = {
       chatsMap: new Map(),
       isLoading: true,
       addNewlyCreatedMessageEvent: jest.fn(),
+      markAllMessagesAsRead: jest.fn().mockResolvedValue([]),
+      newOrderIds: new Set(),
     };
 
     mockRouter = {
@@ -240,7 +291,7 @@ describe("Messages Component", () => {
     mockRouter.query.pk = "broken_npub";
     mockChatsContextValue.isLoading = false;
     mockChatsContextValue.chatsMap = mockChatsMap;
-    mockNostrHelper.decryptNpub.mockReturnValue(null as any);
+    mockNostrHelper.decryptNpub.mockReturnValue(null);
 
     renderComponent();
 
@@ -256,7 +307,9 @@ describe("Messages Component", () => {
     mockChatsContextValue.isLoading = false;
     mockChatsContextValue.chatsMap = mockChatsMap;
 
-    const mockGiftWrappedEvent = {
+    const mockGiftWrappedEvent: Awaited<
+      ReturnType<typeof nostrHelper.constructGiftWrappedEvent>
+    > = {
       id: "new-gift-event",
       content: "Test message",
       kind: 14,
@@ -264,14 +317,30 @@ describe("Messages Component", () => {
       created_at: 1005,
       tags: [["p", mockChatPubkey1]],
     };
+    const mockSealedEvent: NostrEvent = {
+      id: "sealed-event",
+      sig: "sealed-sig",
+      content: "sealed-content",
+      kind: 13,
+      pubkey: mockUserPubkey,
+      created_at: 1006,
+      tags: [],
+    };
+    const mockGiftWrapEvent: NostrEvent = {
+      id: "gift-wrapped-event",
+      sig: "gift-wrapped-sig",
+      content: "wrapped-content",
+      kind: 1059,
+      pubkey: mockUserPubkey,
+      created_at: 1007,
+      tags: [["p", mockChatPubkey1]],
+    };
     mockNostrHelper.constructGiftWrappedEvent.mockResolvedValue(
-      mockGiftWrappedEvent as any
+      mockGiftWrappedEvent
     );
-    mockNostrHelper.constructMessageSeal.mockResolvedValue(
-      "sealed-event" as any
-    );
+    mockNostrHelper.constructMessageSeal.mockResolvedValue(mockSealedEvent);
     mockNostrHelper.constructMessageGiftWrap.mockResolvedValue(
-      "gift-wrapped-event" as any
+      mockGiftWrapEvent
     );
     mockNostrHelper.sendGiftWrappedMessageEvent.mockResolvedValue(undefined);
 

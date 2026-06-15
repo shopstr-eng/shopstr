@@ -35,6 +35,19 @@ import { FileUploaderButton } from "@/components/utility-components/file-uploade
 import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
 import ProtectedRoute from "@/components/utility-components/protected-route";
 
+interface UserProfileFormData {
+  banner: string;
+  picture: string;
+  display_name: string;
+  name: string;
+  nip05: string;
+  about: string;
+  website: string;
+  lud16: string;
+  payment_preference: string;
+  shopstr_donation: number;
+}
+
 const UserProfilePage = () => {
   const { nostr } = useContext(NostrContext);
   const [isUploadingProfile, setIsUploadingProfile] = useState(false);
@@ -49,20 +62,21 @@ const UserProfilePage = () => {
   const [viewState, setViewState] = useState<"shown" | "hidden">("hidden");
 
   const profileContext = useContext(ProfileMapContext);
-  const { handleSubmit, control, reset, watch, setValue } = useForm({
-    defaultValues: {
-      banner: "",
-      picture: "",
-      display_name: "",
-      name: "",
-      nip05: "", // Nostr address
-      about: "",
-      website: "",
-      lud16: "", // Lightning address
-      payment_preference: "ecash",
-      shopstr_donation: 2.1,
-    },
-  });
+  const { handleSubmit, control, reset, watch, setValue } =
+    useForm<UserProfileFormData>({
+      defaultValues: {
+        banner: "",
+        picture: "",
+        display_name: "",
+        name: "",
+        nip05: "", // Nostr address
+        about: "",
+        website: "",
+        lud16: "", // Lightning address
+        payment_preference: "ecash",
+        shopstr_donation: 2.1,
+      },
+    });
 
   const watchBanner = watch("banner");
   const watchPicture = watch("picture");
@@ -127,7 +141,7 @@ const UserProfilePage = () => {
     }
   }, [userPubkey, profileContext.isLoading, profileContext.profileData, reset]);
 
-  const onSubmit = async (data: { [x: string]: string }) => {
+  const onSubmit = async (data: UserProfileFormData) => {
     if (!userPubkey) {
       console.error("Cannot save profile: pubkey is undefined");
       return;
@@ -317,7 +331,7 @@ const UserProfilePage = () => {
                 <div className="mb-12" />
               )}
 
-              <form onSubmit={handleSubmit(onSubmit as any)}>
+              <form onSubmit={handleSubmit(onSubmit)}>
                 <Controller
                   name="display_name"
                   control={control}
@@ -577,7 +591,7 @@ const UserProfilePage = () => {
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       e.preventDefault(); // Prevent default to avoid submitting the form again
-                      handleSubmit(onSubmit as any)(); // Programmatic submit
+                      handleSubmit(onSubmit)(); // Programmatic submit
                     }
                   }}
                   isDisabled={isUploadingProfile}

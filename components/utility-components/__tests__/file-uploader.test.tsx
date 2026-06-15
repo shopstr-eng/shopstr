@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import type { ButtonHTMLAttributes, HTMLAttributes, SVGProps } from "react";
 import "@testing-library/jest-dom";
 
 import { FileUploaderButton } from "../file-uploader";
@@ -12,12 +13,14 @@ jest.mock(
       onClick,
       type = "button",
       ...props
-    }: any) => (
+    }: ButtonHTMLAttributes<HTMLButtonElement>) => (
       <button type={type} className={className} onClick={onClick} {...props}>
         {children}
       </button>
     ),
-    Progress: (props: any) => <div data-testid="progress" {...props} />,
+    Progress: (props: HTMLAttributes<HTMLDivElement>) => (
+      <div data-testid="progress" {...props} />
+    ),
   }),
   { virtual: true }
 );
@@ -28,12 +31,18 @@ jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
 }));
 
 jest.mock("@heroicons/react/24/outline", () => ({
-  PhotoIcon: (props: any) => <svg data-testid="photo-icon" {...props} />,
-  ArrowUpTrayIcon: (props: any) => (
+  PhotoIcon: (props: SVGProps<SVGSVGElement>) => (
+    <svg data-testid="photo-icon" {...props} />
+  ),
+  ArrowUpTrayIcon: (props: SVGProps<SVGSVGElement>) => (
     <svg data-testid="arrow-up-tray-icon" {...props} />
   ),
-  XCircleIcon: (props: any) => <svg data-testid="x-circle-icon" {...props} />,
-  XMarkIcon: (props: any) => <svg data-testid="x-mark-icon" {...props} />,
+  XCircleIcon: (props: SVGProps<SVGSVGElement>) => (
+    <svg data-testid="x-circle-icon" {...props} />
+  ),
+  XMarkIcon: (props: SVGProps<SVGSVGElement>) => (
+    <svg data-testid="x-mark-icon" {...props} />
+  ),
 }));
 
 describe("FileUploaderButton", () => {

@@ -22,9 +22,14 @@ import { NostrWebLNProvider } from "@getalby/sdk";
 import { formatWithCommas } from "@/components/utility-components/display-monetary-info";
 import ProtectedRoute from "@/components/utility-components/protected-route";
 
+interface NWCWalletInfo {
+  alias?: string;
+  methods: string[];
+}
+
 const NWCSettingsPage = () => {
   const [nwcString, setNwcString] = useState("");
-  const [walletInfo, setWalletInfo] = useState<any>(null);
+  const [walletInfo, setWalletInfo] = useState<NWCWalletInfo | null>(null);
   const [balance, setBalance] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -116,12 +121,13 @@ const NWCSettingsPage = () => {
       if (info.methods && info.methods.includes("get_balance")) {
         await fetchBalance(nwcString);
       }
-    } catch (e: any) {
+    } catch (e) {
       console.error("Failed to validate or connect NWC wallet:", e);
       setError(
         `Failed to connect: ${
-          e.message ||
-          "Please check the connection string and wallet permissions."
+          e instanceof Error
+            ? e.message
+            : "Please check the connection string and wallet permissions."
         }`
       );
       saveNWCString("");

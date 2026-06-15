@@ -1,6 +1,10 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { randomBytes } from "crypto";
-import { Mint as CashuMint, Wallet as CashuWallet } from "@cashu/cashu-ts";
+import {
+  Mint as CashuMint,
+  Wallet as CashuWallet,
+  Amount,
+} from "@cashu/cashu-ts";
 import { withMintRetry } from "@/utils/cashu/mint-retry-service";
 import { authenticateRequest, initializeApiKeysTable } from "@/utils/mcp/auth";
 import {
@@ -16,7 +20,10 @@ import {
   formatOrderForResponse,
   CreateOrderInput,
 } from "@/mcp/tools/purchase-tools";
-import { parseTags } from "@/utils/parsers/product-parser-functions";
+import {
+  parseTags,
+  type ProductData,
+} from "@/utils/parsers/product-parser-functions";
 import { applyRateLimit } from "@/utils/rate-limit";
 
 // MCP create-order is on the payment critical path; the per-IP cap is
@@ -98,8 +105,9 @@ export default async function handler(
     return;
   }
 
-  const originalEnd = res.end.bind(res);
-  (res as any).end = function (...args: any[]) {
+  const originalEnd = res.end.bind(res) as (...args: unknown[]) => unknown;
+  const resOverride = res as { end: (...args: unknown[]) => unknown };
+  resOverride.end = function (...args: unknown[]) {
     const durationMs = Date.now() - requestStart;
     res.setHeader("X-Response-Time", `${durationMs}ms`);
     recordRequest(durationMs, res.statusCode < 500, "create-order");
@@ -182,7 +190,7 @@ async function handleCreateOrder(
       return res.status(500).json({ error: "Failed to parse product data" });
     }
 
-    const selectedSpecs: Record<string, any> = {};
+    const selectedSpecs: Record<string, unknown> = {};
 
     if (selectedSize) {
       if (!product.sizes || !product.sizes.includes(selectedSize)) {
@@ -308,7 +316,7 @@ async function handleCreateOrder(
     const totalAmount = subtotal + shippingCost;
     const orderId = generateOrderId();
 
-    const pricingBlock: Record<string, any> = {
+    const pricingBlock: Record<string, unknown> = {
       unitPrice,
       quantity: effectiveQuantity,
       subtotal: selectedBulkUnits
@@ -370,13 +378,13 @@ async function handleLightningPayment(
   orderId: string,
   apiKeyId: number,
   buyerPubkey: string,
-  product: any,
+  product: ProductData,
   productId: string,
   quantity: number,
   totalAmount: number,
   currency: string,
   shippingAddress: Record<string, string> | null,
-  pricingBlock: any,
+  pricingBlock: Record<string, unknown>,
   mintUrl?: string
 ) {
   // Ignore any caller-supplied mintUrl entirely: the buyer must not be able to
@@ -461,13 +469,13 @@ async function handleCashuPayment(
   orderId: string,
   apiKeyId: number,
   buyerPubkey: string,
-  product: any,
+  product: ProductData,
   productId: string,
   quantity: number,
   totalAmount: number,
   currency: string,
   shippingAddress: Record<string, string> | null,
-  pricingBlock: any,
+  pricingBlock: Record<string, unknown>,
   cashuToken?: string
 ) {
   if (!cashuToken) {
@@ -492,7 +500,7 @@ async function handleCashuPayment(
     }
 
     const tokenAmount = decoded.proofs.reduce(
-      (sum: number, p: any) => sum + (p.amount || 0),
+      (sum: number, p) => sum + Amount.from(p.amount).toNumber(),
       0
     );
 

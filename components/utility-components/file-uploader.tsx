@@ -273,7 +273,7 @@ export const FileUploaderButton = ({
         }
       );
 
-      let responses: any[] = [];
+      let responses: unknown[] = [];
       if (isLoggedIn) {
         // Upload with bounded concurrency and track progress by completed count.
         let uploadedCount = 0;
@@ -299,8 +299,9 @@ export const FileUploaderButton = ({
 
       const imageUrls = responses
         .filter((response) => response && Array.isArray(response))
-        .map((response: string[][]) => {
-          const urlTag = response.find(
+        .map((response) => {
+          const tags = response as string[][];
+          const urlTag = tags.find(
             (tag) => Array.isArray(tag) && tag[0] === "url"
           );
           if (urlTag && urlTag.length > 1) {

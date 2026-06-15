@@ -22,13 +22,13 @@ describe("StorefrontOrderConfirmation", () => {
     removeDeletedProductEvent: jest.fn(),
   };
 
-  const signerContextValue = {
+  const signerContextValue: React.ContextType<typeof SignerContext> = {
     signer: undefined,
     isLoggedIn: false,
     isAuthStateResolved: true,
     pubkey: "",
     npub: "",
-    newSigner: {},
+    newSigner: jest.fn(),
   };
 
   const baseProps = {
@@ -64,7 +64,7 @@ describe("StorefrontOrderConfirmation", () => {
 
     render(
       <React.StrictMode>
-        <SignerContext.Provider value={signerContextValue as any}>
+        <SignerContext.Provider value={signerContextValue}>
           <ProductContext.Provider value={productContextValue}>
             <StorefrontOrderConfirmation {...baseProps} />
           </ProductContext.Provider>
@@ -84,7 +84,7 @@ describe("StorefrontOrderConfirmation", () => {
     sessionStorage.setItem("orderSummary", "{invalid-json");
 
     render(
-      <SignerContext.Provider value={signerContextValue as any}>
+      <SignerContext.Provider value={signerContextValue}>
         <ProductContext.Provider value={productContextValue}>
           <StorefrontOrderConfirmation {...baseProps} />
         </ProductContext.Provider>

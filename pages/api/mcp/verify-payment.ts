@@ -61,8 +61,10 @@ export default async function handler(
     return;
   }
 
-  const originalEnd = res.end.bind(res);
-  (res as any).end = function (...args: any[]) {
+  const originalEnd = res.end.bind(res) as (...args: unknown[]) => unknown;
+  (res as { end: (...args: unknown[]) => unknown }).end = function (
+    ...args: unknown[]
+  ) {
     const durationMs = Date.now() - requestStart;
     res.setHeader("X-Response-Time", `${durationMs}ms`);
     recordRequest(durationMs, res.statusCode < 500, "verify-payment");

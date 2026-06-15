@@ -95,6 +95,56 @@ import {
   sumProductTotalsInSats,
 } from "@/utils/cart-totals";
 
+type CartPaymentData = Partial<
+  ShippingFormData & ContactFormData & CombinedFormData
+> & {
+  additionalInfo?: string;
+  shippingName?: string;
+  shippingAddress?: string;
+  shippingUnitNo?: string;
+  shippingCity?: string;
+  shippingPostalCode?: string;
+  shippingState?: string;
+  shippingCountry?: string;
+  [pickupLocationKey: `pickupLocation_${string}`]: string | undefined;
+};
+
+type NwcInfo = {
+  alias?: string;
+};
+
+type GiftWrapOptions = NonNullable<
+  Parameters<typeof constructGiftWrappedEvent>[4]
+>;
+
+function parseNwcInfo(value: string): NwcInfo | null {
+  const parsed = JSON.parse(value) as unknown;
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return null;
+  }
+  const record = parsed as Record<string, unknown>;
+  return {
+    alias: typeof record.alias === "string" ? record.alias : undefined,
+  };
+}
+
+function isCashuProof(value: unknown): value is Proof {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  const amount = record.amount;
+  return (
+    typeof record.id === "string" &&
+    typeof record.secret === "string" &&
+    typeof record.C === "string" &&
+    amount !== null &&
+    typeof amount === "object" &&
+    "toNumber" in amount &&
+    typeof amount.toNumber === "function"
+  );
+}
+
 export default function CartInvoiceCard({
   products,
   quantities,
@@ -204,8 +254,8 @@ export default function CartInvoiceCard({
   useEffect(() => {
     if (paymentConfirmed && pendingOrderRef.current) {
       try {
-        const cartItems = products.map((p: any) => ({
-          title: p.title || p.productName,
+        const cartItems = products.map((p) => ({
+          title: p.title,
           image: p.images?.[0] || "",
           amount: String(currentProductTotalsInSats[p.id] || 0),
           currency: "sats",
@@ -433,7 +483,7 @@ export default function CartInvoiceCard({
   const [showFailureModal, setShowFailureModal] = useState(false);
 
   // NWC State
-  const [nwcInfo, setNwcInfo] = useState<any | null>(null);
+  const [nwcInfo, setNwcInfo] = useState<NwcInfo | null>(null);
   const [isNwcLoading, setIsNwcLoading] = useState(false);
   const [failureText, setFailureText] = useState("");
 
@@ -529,7 +579,7 @@ export default function CartInvoiceCard({
       const { nwcInfo: infoString } = getLocalStorageData();
       if (infoString) {
         try {
-          const info = JSON.parse(infoString);
+          const info = parseNwcInfo(infoString);
           setNwcInfo(info);
         } catch (e) {
           console.error("Failed to parse NWC info", e);
@@ -735,7 +785,7 @@ export default function CartInvoiceCard({
     }
 
     let messageSubject = "";
-    let messageOptions: any = {};
+    let messageOptions: GiftWrapOptions = {};
     if (isPayment) {
       messageSubject = "order-payment";
       messageOptions = {
@@ -810,8 +860,11 @@ export default function CartInvoiceCard({
       messageSubject,
       messageOptions
     );
+    if (!signer) {
+      throw new Error("Signer is required to send encrypted messages.");
+    }
     const sealedEvent = await constructMessageSeal(
-      signer || ({} as any),
+      signer,
       giftWrappedMessageEvent,
       decodedRandomPubkeyForSender.data as string,
       pubkeyToReceiveMessage,
@@ -839,7 +892,11 @@ export default function CartInvoiceCard({
 
   const validatePaymentData = (
     price: number,
-    data?: ShippingFormData | ContactFormData | CombinedFormData
+    data?:
+      | ShippingFormData
+      | ContactFormData
+      | CombinedFormData
+      | CartPaymentData
   ) => {
     if (price < 1) {
       throw new Error("Payment amount must be greater than 0 sats");
@@ -906,7 +963,7 @@ export default function CartInvoiceCard({
         additionalInfo: data["Required"],
       };
 
-      let paymentData: any = commonData;
+      let paymentData: CartPaymentData = commonData;
 
       if (formType === "shipping") {
         paymentData = {
@@ -943,10 +1000,10 @@ export default function CartInvoiceCard({
           name: paymentData.shippingName,
           address: paymentData.shippingAddress,
           unit: paymentData.shippingUnitNo || "",
-          city: paymentData.shippingCity,
-          state: paymentData.shippingState,
-          zip: paymentData.shippingPostalCode,
-          country: paymentData.shippingCountry,
+          city: paymentData.shippingCity || "",
+          state: paymentData.shippingState || "",
+          zip: paymentData.shippingPostalCode || "",
+          country: paymentData.shippingCountry || "",
           label: saveAddressLabel.trim(),
           isDefault: false,
         });
@@ -961,8 +1018,8 @@ export default function CartInvoiceCard({
             }, ${paymentData.shippingCountry || ""}`
           : undefined;
       const productTitles = products
-        .map((p: any) => {
-          const parts = [p.title || p.productName];
+        .map((p) => {
+          const parts = [p.title];
           if (p.selectedSize) parts.push(`Size: ${p.selectedSize}`);
           if (p.selectedVolume) parts.push(`Volume: ${p.selectedVolume}`);
           if (p.selectedWeight) parts.push(`Weight: ${p.selectedWeight}`);
@@ -974,7 +1031,7 @@ export default function CartInvoiceCard({
         })
         .join("; ");
       const pickupSummary = products
-        .map((p: any) => selectedPickupLocations[p.id])
+        .map((p) => selectedPickupLocations[p.id])
         .filter(Boolean)
         .join(", ");
 
@@ -1070,7 +1127,7 @@ export default function CartInvoiceCard({
     }
   };
 
-  const handleNWCError = (error: any) => {
+  const handleNWCError = (error: unknown) => {
     console.error("NWC Payment failed:", error);
     let message = "Payment failed. Please try again.";
     if (error && typeof error === "object" && "code" in error) {
@@ -1091,7 +1148,10 @@ export default function CartInvoiceCard({
             "You are sending payments too quickly. Please wait a moment.";
           break;
         default:
-          message = error.message || "An unknown wallet error occurred.";
+          message =
+            "message" in error && typeof error.message === "string"
+              ? error.message
+              : "An unknown wallet error occurred.";
       }
     } else if (error instanceof Error) {
       message = error.message;
@@ -1100,7 +1160,10 @@ export default function CartInvoiceCard({
     setShowFailureModal(true);
   };
 
-  const handleNWCPayment = async (convertedPrice: number, data: any) => {
+  const handleNWCPayment = async (
+    convertedPrice: number,
+    data: CartPaymentData
+  ) => {
     setIsNwcLoading(true);
     let nwc: NostrWebLNProvider | null = null;
 
@@ -1129,7 +1192,7 @@ export default function CartInvoiceCard({
 
       await nwc.sendPayment(pr);
       await invoiceHasBeenPaid(wallet, totalCost, hash, data);
-    } catch (error: any) {
+    } catch (error: unknown) {
       handleNWCError(error);
     } finally {
       nwc?.close();
@@ -1137,7 +1200,10 @@ export default function CartInvoiceCard({
     }
   };
 
-  const handleLightningPayment = async (convertedPrice: number, data: any) => {
+  const handleLightningPayment = async (
+    convertedPrice: number,
+    data: CartPaymentData
+  ) => {
     try {
       validatePaymentData(convertedPrice, data);
 
@@ -1205,7 +1271,7 @@ export default function CartInvoiceCard({
     wallet: CashuWallet,
     convertedPrice: number,
     hash: string,
-    data: any
+    data: CartPaymentData
   ) {
     let retryCount = 0;
     const maxRetries = 30; // Maximum 30 retries (about 1 minute)
@@ -1419,7 +1485,7 @@ export default function CartInvoiceCard({
   const sendTokens = async (
     wallet: CashuWallet,
     proofs: Proof[],
-    data: any
+    data: CartPaymentData
   ) => {
     let remainingProofs = proofs;
 
@@ -1506,13 +1572,6 @@ export default function CartInvoiceCard({
           }, ${shippingData.Country}`
         : "";
 
-      // Construct order-info message with address tag
-      const orderInfoMessage = await constructMessageGiftWrap(
-        pubkey as any,
-        "", // Placeholder for seal
-        orderKeys.receiverNsec as any, // Placeholder for keypair
-        pubkey // Recipient pubkey
-      );
       const orderInfoTags: string[][] = [
         ["type", "1"],
         ["subject", "order-info"],
@@ -1531,10 +1590,9 @@ export default function CartInvoiceCard({
           donationPercentage.toString(),
         ]);
       }
-      orderInfoMessage.tags = orderInfoTags;
+      void orderInfoTags;
 
       // Construct payment message with cashu token tag
-      let paymentMessageText;
       let paymentTags;
 
       if (sellerAmount > 0) {
@@ -1558,13 +1616,6 @@ export default function CartInvoiceCard({
         });
         remainingProofs = keep;
 
-        // Construct payment message with cashu token tag
-        paymentMessageText = await constructMessageGiftWrap(
-          pubkey as any,
-          "", // Placeholder for seal
-          orderKeys.receiverNsec as any, // Placeholder for keypair
-          pubkey // Recipient pubkey
-        );
         paymentTags = [
           ["type", "2"],
           ["subject", "order-payment"],
@@ -1581,7 +1632,7 @@ export default function CartInvoiceCard({
             donationPercentage.toString(),
           ]);
         }
-        paymentMessageText.tags = paymentTags;
+        void paymentTags;
       }
 
       // Handle donation if applicable
@@ -2405,7 +2456,7 @@ export default function CartInvoiceCard({
 
   const formattedTotalCost = formatWithCommas(totalCost, "sats");
 
-  const handleCashuPayment = async (price: number, data: any) => {
+  const handleCashuPayment = async (price: number, data: CartPaymentData) => {
     try {
       if (!mints || mints.length === 0) {
         throw new Error("No Cashu mint available");
@@ -2421,9 +2472,10 @@ export default function CartInvoiceCard({
       const wallet = new CashuWallet(mint);
       await wallet.loadMint();
       const mintKeySetIds = await wallet.keyChain.getKeysets();
-      const filteredProofs = tokens.filter((p: Proof) =>
+      const cashuTokens = tokens.filter(isCashuProof);
+      const filteredProofs = cashuTokens.filter((p) =>
         mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
-      ) as Proof[];
+      );
       const swapOutcome = await safeSwap(wallet, price, filteredProofs, {
         sendConfig: { includeFees: true },
       });
@@ -2463,10 +2515,10 @@ export default function CartInvoiceCard({
       ];
       await sendTokens(wallet, send, data);
       const changeProofs = keep;
-      const remainingProofs = tokens.filter(
-        (p: Proof) =>
+      const remainingProofs = cashuTokens.filter(
+        (p) =>
           !mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
-      ) as Proof[];
+      );
       let proofArray;
       if (changeProofs.length >= 1 && changeProofs) {
         proofArray = [...remainingProofs, ...changeProofs];

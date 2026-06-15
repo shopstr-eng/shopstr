@@ -13,6 +13,7 @@ import {
   profileNameToSlug,
 } from "../db-service";
 import type { NostrEvent } from "../../types/types";
+import type { QueryConfig } from "pg";
 
 type DbServiceModule = typeof import("../db-service");
 
@@ -22,7 +23,7 @@ type SharedPostgresContainer = {
   stop(): Promise<unknown>;
 };
 
-type QueryInput = string | { text?: string };
+type QueryInput = string | QueryConfig<unknown[]>;
 
 type MockDbClient = {
   query: jest.Mock;
@@ -593,9 +594,10 @@ describe("db-service helpers", () => {
         queries.push(q);
         return { rows: [], rowCount: 1 };
       }),
+      release: jest.fn(),
     };
 
-    await ensureFailedRelayPublishesTable(client as unknown as any);
+    await ensureFailedRelayPublishesTable(client);
 
     expect(
       queries.some((query) => query.includes("CREATE TABLE IF NOT EXISTS"))
@@ -2726,7 +2728,10 @@ describe("db-service helpers", () => {
           if (typeof q === "string") {
             queries.push({ text: q });
           } else {
-            queries.push({ text: q.text || "", values: (q as any).values });
+            queries.push({
+              text: q.text || "",
+              values: q.values,
+            });
           }
           return { rows: [], rowCount: 1 };
         }),

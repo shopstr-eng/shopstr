@@ -89,7 +89,7 @@ export async function verifyNip98Request(
       return { ok: false, error: "Invalid authorization event kind" };
     }
 
-    if (!verifyEvent(parsed as any)) {
+    if (!verifyEvent(parsed)) {
       return { ok: false, error: "Invalid authorization signature" };
     }
 

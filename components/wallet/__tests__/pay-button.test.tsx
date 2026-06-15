@@ -17,6 +17,10 @@ import {
   publishProofEvent,
 } from "@/utils/nostr/nostr-helper-functions";
 import { NostrNIP46Signer } from "@/utils/nostr/signers/nostr-nip46-signer";
+import { Amount } from "@cashu/cashu-ts";
+import type { CashuWalletContextInterface } from "@/utils/context/context";
+import type { NostrManager } from "@/utils/nostr/nostr-manager";
+import type { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 
 jest.mock("next-themes", () => ({
   useTheme: () => ({ theme: "dark" }),
@@ -44,6 +48,7 @@ const mockCheckMeltQuote = jest
   .mockResolvedValue({ state: "UNPAID", change: [] });
 
 jest.mock("@cashu/cashu-ts", () => ({
+  ...jest.requireActual("@cashu/cashu-ts"),
   Mint: jest.fn().mockImplementation(() => ({})),
   Wallet: jest.fn().mockImplementation(() => ({
     loadMint: jest.fn().mockResolvedValue(undefined),
@@ -74,17 +79,45 @@ Object.defineProperty(window, "localStorage", {
   value: localStorageMock,
 });
 
-const mockSigner = {} as any;
-const mockNostr = {} as any;
-const mockWalletContext = {
+const mockSigner: NostrSigner = {
+  connect: jest.fn().mockResolvedValue("mock-pubkey"),
+  getPubKey: jest.fn().mockResolvedValue("mock-pubkey"),
+  sign: jest.fn(),
+  encrypt: jest.fn(),
+  decrypt: jest.fn(),
+  close: jest.fn().mockResolvedValue(undefined),
+  toJSON: () => ({ type: "test" }),
+};
+const mockNostr = Object.assign(Object.create(null), {}) as NostrManager;
+const mockWalletContext: CashuWalletContextInterface & {
+  setProofEvents: jest.Mock;
+} = {
   proofEvents: [
     {
       id: "event1",
-      proofs: [{ id: "00d0a1b24d1c1a53", amount: 50, secret: "secret1" }],
+      mint: "https://legend.lnbits.com/cashu/api/v1/4_sadf7asdf78",
+      created_at: 1700000000,
+      proofs: [
+        {
+          id: "00d0a1b24d1c1a53",
+          amount: Amount.from(50),
+          secret: "secret1",
+          C: "C1",
+        },
+      ],
     },
     {
       id: "event2",
-      proofs: [{ id: "00d0a1b24d1c1a53", amount: 30, secret: "secret2" }],
+      mint: "https://legend.lnbits.com/cashu/api/v1/4_sadf7asdf78",
+      created_at: 1700000001,
+      proofs: [
+        {
+          id: "00d0a1b24d1c1a53",
+          amount: Amount.from(30),
+          secret: "secret2",
+          C: "C2",
+        },
+      ],
     },
   ],
   cashuMints: [],
@@ -93,15 +126,11 @@ const mockWalletContext = {
   setProofEvents: jest.fn(),
 };
 
-const renderComponent = (customSigner = mockSigner) => {
+const renderComponent = (customSigner: NostrSigner = mockSigner) => {
   return render(
-    <NostrContext.Provider
-      value={{ nostr: mockNostr, setNostr: jest.fn() } as any}
-    >
-      <SignerContext.Provider
-        value={{ signer: customSigner, setSigner: jest.fn() } as any}
-      >
-        <CashuWalletContext.Provider value={mockWalletContext as any}>
+    <NostrContext.Provider value={{ nostr: mockNostr }}>
+      <SignerContext.Provider value={{ signer: customSigner }}>
+        <CashuWalletContext.Provider value={mockWalletContext}>
           <PayButton />
         </CashuWalletContext.Provider>
       </SignerContext.Provider>

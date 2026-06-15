@@ -4,6 +4,7 @@ import "@testing-library/jest-dom";
 import ProductCard from "../product-card";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
+import type { ReactNode } from "react";
 
 const mockRouter = {
   pathname: "/product-page",
@@ -14,11 +15,17 @@ jest.mock("next/router", () => ({
 }));
 
 jest.mock("../profile/profile-dropdown", () => ({
-  ProfileWithDropdown: (props: any) => (
+  ProfileWithDropdown: ({
+    pubkey,
+    dropDownKeys,
+  }: {
+    pubkey: string;
+    dropDownKeys?: string[];
+  }) => (
     <div
       data-testid="profile-dropdown"
-      data-pubkey={props.pubkey}
-      data-keys={JSON.stringify(props.dropDownKeys)}
+      data-pubkey={pubkey}
+      data-keys={JSON.stringify(dropDownKeys)}
     >
       <button data-testid="profile-dropdown-trigger">Seller</button>
     </div>
@@ -27,13 +34,13 @@ jest.mock("../profile/profile-dropdown", () => ({
 jest.mock(
   "../image-carousel",
   () =>
-    function MockImageCarousel(_props: any) {
+    function MockImageCarousel(_props: unknown) {
       return <div data-testid="image-carousel" />;
     }
 );
 jest.mock("../display-monetary-info", () => ({
   __esModule: true,
-  default: (_props: any) => <div data-testid="compact-price-display" />,
+  default: (_props: unknown) => <div data-testid="compact-price-display" />,
 }));
 jest.mock("../dropdowns/location-dropdown", () => ({
   locationAvatar: (location: string) => <div>{`Avatar for ${location}`}</div>,
@@ -41,7 +48,13 @@ jest.mock("../dropdowns/location-dropdown", () => ({
 
 jest.mock("@heroui/react", () => ({
   ...jest.requireActual("@heroui/react"),
-  Chip: ({ children, startContent }: any) => (
+  Chip: ({
+    children,
+    startContent,
+  }: {
+    children?: ReactNode;
+    startContent?: ReactNode;
+  }) => (
     <div>
       {startContent}
       {children}
@@ -83,7 +96,7 @@ const renderWithContext = (
 ) => {
   return render(
     <SignerContext.Provider
-      value={{ pubkey: userPubkey, setPubkey: jest.fn() } as any}
+      value={{ pubkey: userPubkey ?? undefined, isLoggedIn: !!userPubkey }}
     >
       {ui}
     </SignerContext.Provider>

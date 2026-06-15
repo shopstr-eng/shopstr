@@ -1,4 +1,9 @@
-const makeBaseEvent = (overrides: Record<string, any> = {}) => ({
+import type { NostrEvent, NostrManager, NostrSub } from "../nostr-manager";
+import type { SubscribeManyParams } from "nostr-tools/abstract-pool";
+
+type SubscriberMock = Pick<NostrManager, "subscribe">;
+
+const makeBaseEvent = (overrides: Partial<NostrEvent> = {}): NostrEvent => ({
   id: "event-id",
   pubkey: "pubkey",
   created_at: 1,
@@ -11,7 +16,7 @@ const makeBaseEvent = (overrides: Record<string, any> = {}) => ({
 
 export {};
 
-const makeProductEvent = (overrides: Record<string, any> = {}) =>
+const makeProductEvent = (overrides: Partial<NostrEvent> = {}) =>
   makeBaseEvent({
     kind: 30402,
     tags: [["d", "listing-1"]],
@@ -22,6 +27,28 @@ const makeDbPayload = <T>(items: T[]) => ({
   ok: true,
   json: async () => items,
 });
+
+const makeSub = (): NostrSub => ({
+  _sub: { close: jest.fn() },
+  close: jest.fn().mockResolvedValue(undefined),
+});
+
+const emitRelayEvent = (
+  params: SubscribeManyParams | undefined,
+  event: NostrEvent
+) => {
+  if (!params?.onevent) {
+    throw new Error("Expected relay onevent callback to be registered");
+  }
+  params.onevent(event);
+};
+
+const emitRelayEose = (params: SubscribeManyParams | undefined) => {
+  if (!params?.oneose) {
+    throw new Error("Expected relay oneose callback to be registered");
+  }
+  params.oneose();
+};
 
 describe("fetchAllPostsAbortable", () => {
   beforeEach(() => {
@@ -40,9 +67,9 @@ describe("fetchAllPostsAbortable", () => {
       await import("../fetch-all-posts-abortable");
 
     const editProductContext = jest.fn();
-    const nostr = {
+    const nostr: SubscriberMock = {
       subscribe: jest.fn(),
-    } as any;
+    };
 
     global.fetch = jest.fn((_, init) => {
       return new Promise((_, reject) => {
@@ -96,16 +123,14 @@ describe("fetchAllPostsAbortable", () => {
     const { fetchAllPostsAbortable } =
       await import("../fetch-all-posts-abortable");
 
-    let params: { onevent: (event: any) => void } | undefined;
-    const sub = {
-      close: jest.fn().mockResolvedValue(undefined),
-    };
-    const nostr = {
+    let params: SubscribeManyParams | undefined;
+    const sub = makeSub();
+    const nostr: SubscriberMock = {
       subscribe: jest.fn((_filters, subscribeParams) => {
         params = subscribeParams;
         return Promise.resolve(sub);
       }),
-    } as any;
+    };
 
     global.fetch = jest
       .fn()
@@ -121,7 +146,7 @@ describe("fetchAllPostsAbortable", () => {
     );
 
     await new Promise((resolve) => setTimeout(resolve, 0));
-    params!.onevent(makeProductEvent({ id: "relay-product" }));
+    emitRelayEvent(params, makeProductEvent({ id: "relay-product" }));
     abortController.abort();
 
     await expect(promise).resolves.toEqual({
@@ -143,21 +168,14 @@ describe("fetchAllPostsAbortable", () => {
     const { fetchAllPostsAbortable } =
       await import("../fetch-all-posts-abortable");
 
-    let params:
-      | {
-          onevent: (event: any) => void;
-          oneose: () => void;
-        }
-      | undefined;
-    const sub = {
-      close: jest.fn().mockResolvedValue(undefined),
-    };
-    const nostr = {
+    let params: SubscribeManyParams | undefined;
+    const sub = makeSub();
+    const nostr: SubscriberMock = {
       subscribe: jest.fn((_filters, subscribeParams) => {
         params = subscribeParams;
         return Promise.resolve(sub);
       }),
-    } as any;
+    };
 
     global.fetch = jest
       .fn()
@@ -184,9 +202,9 @@ describe("fetchAllPostsAbortable", () => {
     );
 
     await new Promise((resolve) => setTimeout(resolve, 0));
-    params!.onevent(relayProduct);
-    params!.onevent(invalidProduct);
-    params!.oneose();
+    emitRelayEvent(params, relayProduct);
+    emitRelayEvent(params, invalidProduct);
+    emitRelayEose(params);
 
     await expect(promise).resolves.toEqual({
       productEvents: [relayProduct],
@@ -207,21 +225,14 @@ describe("fetchAllPostsAbortable", () => {
     const { fetchAllPostsAbortable } =
       await import("../fetch-all-posts-abortable");
 
-    let params:
-      | {
-          onevent: (event: any) => void;
-          oneose: () => void;
-        }
-      | undefined;
-    const sub = {
-      close: jest.fn().mockResolvedValue(undefined),
-    };
-    const nostr = {
+    let params: SubscribeManyParams | undefined;
+    const sub = makeSub();
+    const nostr: SubscriberMock = {
       subscribe: jest.fn((_filters, subscribeParams) => {
         params = subscribeParams;
         return Promise.resolve(sub);
       }),
-    } as any;
+    };
 
     const cachedOlderListing = makeProductEvent({
       id: "cached-old",
@@ -259,8 +270,8 @@ describe("fetchAllPostsAbortable", () => {
     );
 
     await new Promise((resolve) => setTimeout(resolve, 0));
-    params!.onevent(relayUpdatedListing);
-    params!.oneose();
+    emitRelayEvent(params, relayUpdatedListing);
+    emitRelayEose(params);
 
     await expect(promise).resolves.toEqual({
       productEvents: [relayUpdatedListing, cachedSeparateListing],

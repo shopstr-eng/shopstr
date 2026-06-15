@@ -16,6 +16,9 @@ import {
   NostrContext,
 } from "@/components/utility-components/nostr-context-provider";
 import { createNostrShopEvent } from "@/utils/nostr/nostr-helper-functions";
+import type { ShopProfile } from "@/utils/types/types";
+import type { NostrManager } from "@/utils/nostr/nostr-manager";
+import type { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 
 const mockRouterPush = jest.fn();
 jest.mock("next/router", () => ({
@@ -29,7 +32,15 @@ const mockCreateNostrShopEvent = createNostrShopEvent as jest.Mock;
 
 jest.mock("@/components/utility-components/file-uploader", () => ({
   FileUploaderButton: jest.fn(
-    ({ children, imgCallbackOnUpload, isIconOnly }) => (
+    ({
+      children,
+      imgCallbackOnUpload,
+      isIconOnly,
+    }: {
+      children?: React.ReactNode;
+      imgCallbackOnUpload: (url: string) => void;
+      isIconOnly?: boolean;
+    }) => (
       <button
         data-testid={isIconOnly ? "upload-picture-btn" : "upload-banner-btn"}
         onClick={() => imgCallbackOnUpload("https://new.image/url")}
@@ -43,7 +54,7 @@ jest.mock("@/components/utility-components/file-uploader", () => ({
 jest.mock("@/components/utility-components/shopstr-spinner", () => () => null);
 
 const mockUserPubkey = "test_pubkey";
-const mockShopData = new Map([
+const mockShopData = new Map<string, ShopProfile>([
   [
     mockUserPubkey,
     {
@@ -54,21 +65,35 @@ const mockShopData = new Map([
         ui: {
           picture: "https://existing.image/picture.png",
           banner: "https://existing.image/banner.png",
+          theme: "",
+          darkMode: false,
         },
+        merchants: [],
       },
+      created_at: 1700000000,
     },
   ],
 ]);
+const mockNostrManager = Object.assign(Object.create(null), {}) as NostrManager;
+const mockSigner: NostrSigner = {
+  connect: jest.fn().mockResolvedValue(mockUserPubkey),
+  getPubKey: jest.fn().mockResolvedValue(mockUserPubkey),
+  sign: jest.fn(),
+  encrypt: jest.fn(),
+  decrypt: jest.fn(),
+  close: jest.fn().mockResolvedValue(undefined),
+  toJSON: () => ({ type: "test" }),
+};
 
 const renderWithProviders = (
   component: React.ReactElement,
-  shopData = new Map()
+  shopData: Map<string, ShopProfile> = new Map()
 ) => {
   const mockUpdateShopData = jest.fn();
   render(
-    <NostrContext.Provider value={{ nostr: {} as any }}>
+    <NostrContext.Provider value={{ nostr: mockNostrManager }}>
       <SignerContext.Provider
-        value={{ signer: {} as any, pubkey: mockUserPubkey }}
+        value={{ signer: mockSigner, pubkey: mockUserPubkey }}
       >
         <ShopMapContext.Provider
           value={{
@@ -186,15 +211,16 @@ describe("ShopProfileForm", () => {
   });
 
   test("shows a validation error for inputs that exceed maxLength", async () => {
-    const user = userEvent.setup();
     renderWithProviders(<ShopProfileForm />);
 
     const shopNameInput = await screen.findByLabelText("Shop Name");
-    await user.type(
-      shopNameInput,
-      "This is a very long shop name that is definitely over fifty characters long for sure."
-    );
-    await user.click(screen.getByRole("button", { name: /Save Shop/i }));
+    fireEvent.change(shopNameInput, {
+      target: {
+        value:
+          "This is a very long shop name that is definitely over fifty characters long for sure.",
+      },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Save Shop/i }));
 
     expect(
       await screen.findByText("This input exceed maxLength of 50.")

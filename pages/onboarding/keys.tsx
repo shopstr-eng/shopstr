@@ -38,13 +38,13 @@ const Keys = () => {
       relaysContext.writeRelayList
     ) {
       setLocalStorageDataOnSignIn({
-        signer,
+        signer: signer.toJSON(),
         relays: relaysContext.relayList,
         readRelays: relaysContext.readRelayList,
         writeRelays: relaysContext.writeRelayList,
       });
     } else {
-      setLocalStorageDataOnSignIn({ signer });
+      setLocalStorageDataOnSignIn({ signer: signer.toJSON() });
     }
   };
 

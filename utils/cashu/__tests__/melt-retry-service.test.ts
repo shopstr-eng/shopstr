@@ -1,28 +1,48 @@
 /**
  * @jest-environment node
  */
+import {
+  Amount,
+  MeltQuoteBolt11Response,
+  Proof,
+  Wallet as CashuWallet,
+} from "@cashu/cashu-ts";
 import { safeMeltProofs } from "../melt-retry-service";
 
-const baseQuote = {
+type MeltWalletMock = Pick<
+  CashuWallet,
+  "meltProofsBolt11" | "checkMeltQuoteBolt11"
+>;
+
+const makeProof = (secret: string, amount = 100): Proof => ({
+  id: "k",
+  amount: Amount.from(amount),
+  secret,
+  C: "c",
+});
+
+const baseQuote: MeltQuoteBolt11Response = {
   quote: "q1",
-  amount: 100,
-  fee_reserve: 1,
+  amount: Amount.from(100),
+  fee_reserve: Amount.from(1),
+  unit: "sat",
+  payment_preimage: null,
   state: "UNPAID",
   expiry: 0,
   request: "lnbc...",
-} as any;
+};
 
-const proofs = [{ id: "k", amount: 100, secret: "s", C: "c" }] as any;
+const proofs = [makeProof("s")];
 
 describe("safeMeltProofs", () => {
   it("returns paid when meltProofsBolt11 succeeds first try", async () => {
-    const change = [{ id: "k", amount: 1, secret: "s2", C: "c2" }];
-    const wallet = {
+    const change = [makeProof("s2", 1)];
+    const wallet: MeltWalletMock = {
       meltProofsBolt11: jest
         .fn()
         .mockResolvedValue({ change, quote: baseQuote }),
       checkMeltQuoteBolt11: jest.fn(),
-    } as any;
+    };
 
     const outcome = await safeMeltProofs(wallet, baseQuote, proofs, {
       meltRetry: {
@@ -45,12 +65,12 @@ describe("safeMeltProofs", () => {
   });
 
   it("verifies via checkMeltQuoteBolt11 when melt fails ambiguously, returns paid when mint reports PAID", async () => {
-    const wallet = {
+    const wallet: MeltWalletMock = {
       meltProofsBolt11: jest.fn().mockRejectedValue(new Error("Timeout")),
       checkMeltQuoteBolt11: jest
         .fn()
         .mockResolvedValue({ ...baseQuote, state: "PAID", change: [] }),
-    } as any;
+    };
 
     const outcome = await safeMeltProofs(wallet, baseQuote, proofs, {
       meltRetry: {
@@ -73,12 +93,12 @@ describe("safeMeltProofs", () => {
   });
 
   it("returns unpaid when post-failure check reports UNPAID", async () => {
-    const wallet = {
+    const wallet: MeltWalletMock = {
       meltProofsBolt11: jest.fn().mockRejectedValue(new Error("fetch failed")),
       checkMeltQuoteBolt11: jest
         .fn()
         .mockResolvedValue({ ...baseQuote, state: "UNPAID" }),
-    } as any;
+    };
 
     const outcome = await safeMeltProofs(wallet, baseQuote, proofs, {
       meltRetry: {
@@ -100,12 +120,12 @@ describe("safeMeltProofs", () => {
   });
 
   it("returns pending when post-failure check reports PENDING", async () => {
-    const wallet = {
+    const wallet: MeltWalletMock = {
       meltProofsBolt11: jest.fn().mockRejectedValue(new Error("Timeout")),
       checkMeltQuoteBolt11: jest
         .fn()
         .mockResolvedValue({ ...baseQuote, state: "PENDING" }),
-    } as any;
+    };
 
     const outcome = await safeMeltProofs(wallet, baseQuote, proofs, {
       meltRetry: {
@@ -126,10 +146,10 @@ describe("safeMeltProofs", () => {
   });
 
   it("returns unknown when both melt and check fail", async () => {
-    const wallet = {
+    const wallet: MeltWalletMock = {
       meltProofsBolt11: jest.fn().mockRejectedValue(new Error("Timeout")),
       checkMeltQuoteBolt11: jest.fn().mockRejectedValue(new Error("Timeout")),
-    } as any;
+    };
 
     const outcome = await safeMeltProofs(wallet, baseQuote, proofs, {
       meltRetry: {
@@ -151,12 +171,12 @@ describe("safeMeltProofs", () => {
   });
 
   it("short-circuits to unpaid on terminal error messages without contacting the mint", async () => {
-    const wallet = {
+    const wallet: MeltWalletMock = {
       meltProofsBolt11: jest
         .fn()
         .mockRejectedValue(new Error("insufficient funds")),
       checkMeltQuoteBolt11: jest.fn(),
-    } as any;
+    };
 
     const outcome = await safeMeltProofs(wallet, baseQuote, proofs, {
       meltRetry: {

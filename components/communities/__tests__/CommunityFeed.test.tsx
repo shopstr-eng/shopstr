@@ -14,6 +14,8 @@ import {
 import * as fetchService from "@/utils/nostr/fetch-service";
 import * as nostrHelper from "@/utils/nostr/nostr-helper-functions";
 import { Community, CommunityPost, NostrEvent } from "@/utils/types/types";
+import type { NostrManager } from "@/utils/nostr/nostr-manager";
+import type { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 
 jest.mock("@/utils/nostr/fetch-service");
 jest.mock("@/utils/nostr/nostr-helper-functions");
@@ -114,6 +116,25 @@ const mockPendingReply: NostrEvent = {
   kind: 1,
   sig: "",
 };
+const mockNostrManager = Object.assign(Object.create(null), {}) as NostrManager;
+const mockSigner: NostrSigner = {
+  connect: jest.fn().mockResolvedValue(regularUserPubkey),
+  getPubKey: jest.fn().mockResolvedValue(regularUserPubkey),
+  sign: jest.fn(),
+  encrypt: jest.fn(),
+  decrypt: jest.fn(),
+  close: jest.fn().mockResolvedValue(undefined),
+  toJSON: () => ({ type: "test" }),
+};
+const mockApprovalEvent: NostrEvent = {
+  id: "new_approval_event",
+  pubkey: moderatorPubkey,
+  content: "",
+  tags: [],
+  created_at: 1700000004,
+  kind: 4550,
+  sig: "",
+};
 
 describe("CommunityFeed", () => {
   const renderComponent = (
@@ -129,8 +150,8 @@ describe("CommunityFeed", () => {
     mockedFetchService.fetchPendingPosts.mockResolvedValue(pendingPosts);
 
     return render(
-      <NostrContext.Provider value={{ nostr: { relays: [] } as any }}>
-        <SignerContext.Provider value={{ signer: {} as any, pubkey }}>
+      <NostrContext.Provider value={{ nostr: mockNostrManager }}>
+        <SignerContext.Provider value={{ signer: mockSigner, pubkey }}>
           <CommunityFeed community={mockCommunity} />
         </SignerContext.Provider>
       </NostrContext.Provider>
@@ -313,10 +334,9 @@ describe("CommunityFeed", () => {
     });
 
     it("allows a moderator to approve a pending post and a pending reply", async () => {
-      mockedNostrHelper.approveCommunityPost.mockResolvedValue({
-        id: "new_approval_event",
-        pubkey: moderatorPubkey,
-      } as any);
+      mockedNostrHelper.approveCommunityPost.mockResolvedValue(
+        mockApprovalEvent
+      );
       renderComponent(moderatorPubkey);
 
       // Approve top-level post
@@ -348,7 +368,7 @@ describe("CommunityFeed", () => {
     });
 
     it("allows a moderator to retract their own approval", async () => {
-      mockedNostrHelper.retractApproval.mockResolvedValue(undefined as any);
+      mockedNostrHelper.retractApproval.mockResolvedValue(mockApprovalEvent);
       renderComponent(moderatorPubkey);
 
       const retractButtons = await screen.findAllByRole("button", {

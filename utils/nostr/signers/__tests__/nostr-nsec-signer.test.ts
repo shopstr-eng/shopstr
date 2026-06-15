@@ -1,7 +1,29 @@
 import { NostrNSecSigner } from "../nostr-nsec-signer";
 import * as nostrTools from "nostr-tools";
+import type { EventTemplate } from "nostr-tools";
 import * as nip49 from "nostr-tools/nip49";
 import CryptoJS from "crypto-js";
+
+type PrivatePassphraseKey = "rememberedPassphrase" | "inputPassphrase";
+
+const getPrivatePassphrase = (
+  signer: NostrNSecSigner,
+  key: PrivatePassphraseKey
+): string | undefined => {
+  const value: unknown = Reflect.get(signer, key);
+  if (value !== undefined && typeof value !== "string") {
+    throw new Error(`Expected ${key} to be a string when set`);
+  }
+  return value;
+};
+
+const setPrivatePassphrase = (
+  signer: NostrNSecSigner,
+  key: PrivatePassphraseKey,
+  value: string
+) => {
+  Reflect.set(signer, key, value);
+};
 
 jest.mock("nostr-tools", () => {
   const real = jest.requireActual("nostr-tools");
@@ -19,10 +41,14 @@ jest.mock("nostr-tools", () => {
       decrypt: jest.fn().mockReturnValue("decryptedMessage"),
     },
     getPublicKey: jest.fn().mockReturnValue("mockPubKey"),
-    finalizeEvent: jest.fn().mockImplementation((ev: any, _sk: Uint8Array) => ({
-      ...ev,
-      sig: "sig",
-    })),
+    finalizeEvent: jest
+      .fn()
+      .mockImplementation((ev: EventTemplate, _sk: Uint8Array) => ({
+        ...ev,
+        id: "event-id",
+        pubkey: "mockPubKey",
+        sig: "sig",
+      })),
   };
 });
 
@@ -131,8 +157,8 @@ describe("NostrNSecSigner", () => {
     expect(nip49.decrypt).toHaveBeenCalledWith(nip49Str, "passX");
     expect(priv).toEqual(new Uint8Array([0x0a, 0x0b, 0x0c]));
     // caching behavior
-    expect((s as any).rememberedPassphrase).toBe("passX");
-    expect((s as any).inputPassphrase).toBe("passX");
+    expect(getPrivatePassphrase(s, "rememberedPassphrase")).toBe("passX");
+    expect(getPrivatePassphrase(s, "inputPassphrase")).toBe("passX");
   });
 
   it("getPubKey() with and without cache", async () => {
@@ -186,8 +212,8 @@ describe("NostrNSecSigner", () => {
 
   it("close()", async () => {
     const s = new NostrNSecSigner({ encryptedPrivKey: encrypted }, mockCH);
-    (s as any).rememberedPassphrase = "foo";
+    setPrivatePassphrase(s, "rememberedPassphrase", "foo");
     await s.close();
-    expect((s as any).rememberedPassphrase).toBeUndefined();
+    expect(getPrivatePassphrase(s, "rememberedPassphrase")).toBeUndefined();
   });
 });

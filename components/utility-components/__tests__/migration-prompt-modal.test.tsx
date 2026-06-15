@@ -1,4 +1,10 @@
 import React from "react";
+import type {
+  ChangeEventHandler,
+  KeyboardEventHandler,
+  MouseEventHandler,
+  ReactNode,
+} from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import MigrationPromptModal from "../migration-prompt-modal";
@@ -7,6 +13,20 @@ import { migrateToNip49 } from "@/utils/nostr/encryption-migration";
 jest.mock("@/utils/nostr/encryption-migration", () => ({
   migrateToNip49: jest.fn(),
 }));
+
+type ButtonMockProps = {
+  children?: ReactNode;
+  onClick?: MouseEventHandler<HTMLButtonElement>;
+  isDisabled?: boolean;
+  isLoading?: boolean;
+};
+type InputMockProps = {
+  value?: string;
+  onChange?: ChangeEventHandler<HTMLInputElement>;
+  onKeyDown?: KeyboardEventHandler<HTMLInputElement>;
+  isInvalid?: boolean;
+  errorMessage?: ReactNode;
+};
 
 jest.mock("@heroui/react", () => {
   const originalModule = jest.requireActual("@heroui/react");
@@ -25,12 +45,18 @@ jest.mock("@heroui/react", () => {
     ModalBody: ({ children }: { children: React.ReactNode }) => (
       <main>{children}</main>
     ),
-    Button: ({ children, onClick, isDisabled, isLoading }: any) => (
+    Button: ({ children, onClick, isDisabled, isLoading }: ButtonMockProps) => (
       <button onClick={onClick} disabled={isDisabled || isLoading}>
         {children}
       </button>
     ),
-    Input: ({ value, onChange, onKeyDown, isInvalid, errorMessage }: any) => (
+    Input: ({
+      value,
+      onChange,
+      onKeyDown,
+      isInvalid,
+      errorMessage,
+    }: InputMockProps) => (
       <div>
         <input
           type="password"

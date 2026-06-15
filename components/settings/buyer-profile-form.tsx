@@ -15,6 +15,12 @@ import { createNostrProfileEvent } from "@/utils/nostr/nostr-helper-functions";
 import { FileUploaderButton } from "@/components/utility-components/file-uploader";
 import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
 
+interface BuyerProfileFormData {
+  picture: string;
+  display_name: string;
+  name: string;
+}
+
 interface BuyerProfileFormProps {
   isOnboarding?: boolean;
 }
@@ -29,13 +35,14 @@ const BuyerProfileForm = ({ isOnboarding }: BuyerProfileFormProps) => {
   const { signer, pubkey: userPubkey } = useContext(SignerContext);
 
   const profileContext = useContext(ProfileMapContext);
-  const { handleSubmit, control, reset, watch, setValue } = useForm({
-    defaultValues: {
-      picture: "",
-      display_name: "",
-      name: "",
-    },
-  });
+  const { handleSubmit, control, reset, watch, setValue } =
+    useForm<BuyerProfileFormData>({
+      defaultValues: {
+        picture: "",
+        display_name: "",
+        name: "",
+      },
+    });
 
   const watchPicture = watch("picture");
   const defaultImage = useMemo(() => {
@@ -51,15 +58,15 @@ const BuyerProfileForm = ({ isOnboarding }: BuyerProfileFormProps) => {
       : undefined;
     if (profile) {
       reset({
-        picture: profile.content.picture || "",
-        display_name: profile.content.display_name || "",
-        name: profile.content.name || "",
+        picture: String(profile.content.picture ?? ""),
+        display_name: String(profile.content.display_name ?? ""),
+        name: String(profile.content.name ?? ""),
       });
     }
     setIsFetchingProfile(false);
   }, [profileContext, userPubkey, reset]);
 
-  const onSubmit = async (data: { [x: string]: string }) => {
+  const onSubmit = async (data: BuyerProfileFormData) => {
     if (!userPubkey) {
       console.error("Cannot save profile: pubkey is undefined");
       return;
@@ -136,7 +143,7 @@ const BuyerProfileForm = ({ isOnboarding }: BuyerProfileFormProps) => {
         </div>
       </div>
 
-      <form onSubmit={handleSubmit(onSubmit as any)} className="space-y-4">
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <Controller
           name="display_name"
           control={control}
@@ -203,7 +210,7 @@ const BuyerProfileForm = ({ isOnboarding }: BuyerProfileFormProps) => {
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               e.preventDefault();
-              handleSubmit(onSubmit as any)();
+              handleSubmit(onSubmit)();
             }
           }}
           isDisabled={isUploadingProfile}

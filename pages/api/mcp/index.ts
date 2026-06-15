@@ -435,8 +435,7 @@ function registerPurchaseTools(
           await import("@/utils/db/db-service");
         const profiles = await fetchAllProfilesFromDb();
         const profile = profiles.find(
-          (p: any) =>
-            p.pubkey === sellerPubkey && (p.kind === 0 || p.kind === 30019)
+          (p) => p.pubkey === sellerPubkey && (p.kind === 0 || p.kind === 30019)
         );
 
         if (!profile) {
@@ -457,12 +456,12 @@ function registerPurchaseTools(
           };
         }
 
-        let content: any = {};
+        let content: Record<string, unknown> = {};
         try {
           content = JSON.parse(profile.content);
         } catch {}
 
-        const methods: any[] = [];
+        const methods: Record<string, unknown>[] = [];
 
         methods.push({
           method: "lightning",
@@ -477,7 +476,11 @@ function registerPurchaseTools(
           description: "Pay with Cashu ecash tokens",
         });
 
-        const discounts = content.paymentMethodDiscounts || {};
+        const discounts: Record<string, number> =
+          typeof content.paymentMethodDiscounts === "object" &&
+          content.paymentMethodDiscounts !== null
+            ? (content.paymentMethodDiscounts as Record<string, number>)
+            : {};
         const bitcoinDiscount = discounts.bitcoin
           ? { bitcoin: discounts.bitcoin }
           : null;
@@ -553,7 +556,7 @@ function registerPurchaseTools(
 
         const unreadCount = await getUnreadMessageCount(apiKey.pubkey);
 
-        const result: Record<string, any> = {
+        const result: Record<string, unknown> = {
           unreadMessages: unreadCount,
         };
 
@@ -754,8 +757,10 @@ export default async function handler(
 
   res.setHeader("X-Response-Time-Start", requestStart.toString());
 
-  const originalEnd = res.end.bind(res);
-  (res as any).end = function (...args: any[]) {
+  const originalEnd = res.end.bind(res) as (...args: unknown[]) => unknown;
+  (res as { end: (...args: unknown[]) => unknown }).end = function (
+    ...args: unknown[]
+  ) {
     const durationMs = Date.now() - requestStart;
     res.setHeader("X-Response-Time", `${durationMs}ms`);
     recordRequest(durationMs, res.statusCode < 400, req.body?.method);
@@ -776,7 +781,7 @@ export default async function handler(
       }
       if (apiKey.id !== session.apiKey.id) return rejectSessionMismatch(res);
       session.lastActivityAt = Date.now();
-      await session.transport.handleRequest(req as any, res as any, req.body);
+      await session.transport.handleRequest(req, res, req.body);
       return;
     }
 
@@ -808,7 +813,7 @@ export default async function handler(
       }
 
       await server.connect(transport);
-      await transport.handleRequest(req as any, res as any, req.body);
+      await transport.handleRequest(req, res, req.body);
       return;
     }
 
@@ -835,7 +840,7 @@ export default async function handler(
       }
       if (apiKey.id !== session.apiKey.id) return rejectSessionMismatch(res);
       session.lastActivityAt = Date.now();
-      await session.transport.handleRequest(req as any, res as any);
+      await session.transport.handleRequest(req, res);
       return;
     }
     return res.status(400).json({
@@ -860,7 +865,7 @@ export default async function handler(
         });
       }
       if (apiKey.id !== session.apiKey.id) return rejectSessionMismatch(res);
-      await session.transport.handleRequest(req as any, res as any);
+      await session.transport.handleRequest(req, res);
       sessions.delete(sessionId);
       return;
     }

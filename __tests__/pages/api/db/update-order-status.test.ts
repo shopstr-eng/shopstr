@@ -1,3 +1,7 @@
+import type { NextApiRequest, NextApiResponse } from "next";
+import { IncomingMessage, ServerResponse } from "http";
+import { Socket } from "net";
+
 const verifyNip98RequestMock = jest.fn();
 const getOrderParticipantsMock = jest.fn();
 const updateOrderStatusMock = jest.fn();
@@ -14,19 +18,32 @@ jest.mock("@/utils/db/db-service", () => ({
 
 import handler from "@/pages/api/db/update-order-status";
 
-function createResponse() {
-  return {
-    statusCode: 200,
-    jsonBody: undefined as unknown,
-    status(code: number) {
-      this.statusCode = code;
-      return this;
-    },
-    json(payload: unknown) {
-      this.jsonBody = payload;
-      return this;
-    },
+type MockResponse = NextApiResponse & {
+  jsonBody: unknown;
+};
+
+function createResponse(): MockResponse {
+  const response = new ServerResponse(
+    new IncomingMessage(new Socket())
+  ) as MockResponse;
+  response.statusCode = 200;
+  response.jsonBody = undefined;
+  response.status = function status(code: number) {
+    this.statusCode = code;
+    return this;
   };
+  response.json = function json(payload: unknown) {
+    this.jsonBody = payload;
+    return this;
+  };
+  return response;
+}
+
+function createRequest(body: unknown): NextApiRequest {
+  const request = new IncomingMessage(new Socket()) as NextApiRequest;
+  request.method = "POST";
+  request.body = body;
+  return request;
 }
 
 describe("/api/db/update-order-status", () => {
@@ -46,17 +63,14 @@ describe("/api/db/update-order-status", () => {
       sellerPubkey: "seller-on-target-order",
     });
 
-    const req = {
-      method: "POST",
-      body: {
-        orderId: "order-123",
-        status: "shipped",
-        messageId: "foreign-message-id",
-      },
-    } as any;
+    const req = createRequest({
+      orderId: "order-123",
+      status: "shipped",
+      messageId: "foreign-message-id",
+    });
     const res = createResponse();
 
-    await handler(req, res as any);
+    await handler(req, res);
 
     expect(getOrderParticipantsMock).toHaveBeenCalledWith("order-123");
     expect(updateOrderStatusMock).not.toHaveBeenCalled();

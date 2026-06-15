@@ -7,7 +7,7 @@ export interface NostrSigner {
   encrypt(pubkey: string, plainText: string): Promise<string>;
   decrypt(pubkey: string, cipherText: string): Promise<string>;
   close(): Promise<void>;
-  toJSON(): { [key: string]: any };
+  toJSON(): Record<string, string | undefined>;
 }
 
 export type ChallengeHandler = (

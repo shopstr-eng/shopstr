@@ -8,14 +8,22 @@ import {
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
 import { CashuWalletContext } from "@/utils/context/context";
-import { Wallet as CashuWallet, getEncodedToken } from "@cashu/cashu-ts";
+import {
+  Amount,
+  Wallet as CashuWallet,
+  getEncodedToken,
+} from "@cashu/cashu-ts";
 import {
   getLocalStorageData,
   publishProofEvent,
 } from "@/utils/nostr/nostr-helper-functions";
 import { NostrNIP46Signer } from "@/utils/nostr/signers/nostr-nip46-signer";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
-import { ChallengeHandler } from "@/utils/nostr/signers/nostr-signer";
+import {
+  ChallengeHandler,
+  NostrSigner,
+} from "@/utils/nostr/signers/nostr-signer";
+import type { CashuWalletContextInterface } from "@/utils/context/context";
 
 jest.setTimeout(20000);
 
@@ -54,28 +62,33 @@ const mockPublishProofEvent = publishProofEvent as jest.Mock;
 const mockGetEncodedToken = getEncodedToken as jest.Mock;
 const MockCashuWallet = CashuWallet as jest.Mock;
 
-const mockSigner = {
-  getPublicKey: jest.fn().mockResolvedValue("mock-pubkey"),
+const mockSigner: NostrSigner = {
   getPubKey: jest.fn().mockResolvedValue("mock-pubkey"),
   sign: jest.fn(),
   encrypt: jest.fn(),
   decrypt: jest.fn(),
-  nip04: {
-    encrypt: jest.fn(),
-    decrypt: jest.fn(),
-  },
-  nip44: {
-    encrypt: jest.fn(),
-    decrypt: jest.fn(),
-  },
   connect: jest.fn(),
   close: jest.fn(),
-  toJSON: jest.fn(),
+  toJSON: () => ({ type: "test" }),
 };
 
 const mockNostr = new MockedNostrManager();
-const mockWalletContext = {
-  proofEvents: [{ id: "event1", proofs: [{ id: "keyset_id_1", C: "C1" }] }],
+const mockWalletContext: CashuWalletContextInterface = {
+  proofEvents: [
+    {
+      id: "event1",
+      mint: "https://legend.lnbits.com/cashu/api/v1/4_sadf7asdf78",
+      created_at: 1700000000,
+      proofs: [
+        {
+          id: "keyset_id_1",
+          amount: Amount.from(1000),
+          secret: "secret1",
+          C: "C1",
+        },
+      ],
+    },
+  ],
   cashuMints: [],
   cashuProofs: [],
   isLoading: false,
@@ -84,15 +97,19 @@ const mockWalletContext = {
 const renderWithProviders = (
   ui: React.ReactElement,
   {
-    signer = mockSigner as any,
-    nostr = mockNostr as any,
+    signer = mockSigner,
+    nostr = mockNostr,
     walletContext = mockWalletContext,
+  }: {
+    signer?: NostrSigner;
+    nostr?: NostrManager;
+    walletContext?: CashuWalletContextInterface;
   } = {}
 ) => {
   return render(
-    <NostrContext.Provider value={{ nostr } as any}>
-      <SignerContext.Provider value={{ signer } as any}>
-        <CashuWalletContext.Provider value={walletContext as any}>
+    <NostrContext.Provider value={{ nostr }}>
+      <SignerContext.Provider value={{ signer }}>
+        <CashuWalletContext.Provider value={walletContext}>
           {ui}
         </CashuWalletContext.Provider>
       </SignerContext.Provider>

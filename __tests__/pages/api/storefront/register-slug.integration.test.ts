@@ -87,6 +87,30 @@ describe("/api/storefront/register-slug (integration)", () => {
     );
   });
 
+  it("returns 409 when the database reports a unique slug violation", async () => {
+    queryMock.mockRejectedValueOnce({ code: "23505" });
+    const sk = generateSecretKey();
+    const pk = getPublicKey(sk);
+    const slug = "taken-shop";
+
+    const template = buildSignedHttpRequestProofTemplate(
+      buildStorefrontSlugCreateProof({ pubkey: pk, slug })
+    );
+    const signed = finalizeEvent(template, sk);
+
+    const req = createRequest(
+      "POST",
+      { slug },
+      { [SIGNED_EVENT_HEADER]: JSON.stringify(signed) }
+    );
+    const res = createResponse();
+
+    await handler(req, res as unknown as NextApiResponse);
+
+    expect(res.statusCode).toBe(409);
+    expect(res.jsonBody).toEqual({ error: "This shop name is already taken" });
+  });
+
   it("rejects a POST whose signature is for a different pubkey than the proof claims", async () => {
     const sk = generateSecretKey();
     const attackerPk = getPublicKey(sk);
@@ -122,9 +146,10 @@ describe("/api/storefront/register-slug (integration)", () => {
       buildStorefrontSlugCreateProof({ pubkey: pk, slug: "owner-shop" })
     );
     const signed = finalizeEvent(template, sk);
+    const tamperedSigPrefix = signed.sig.startsWith("00") ? "01" : "00";
     const tampered = {
       ...signed,
-      sig: signed.sig.replace(/^.{2}/, "00"),
+      sig: `${tamperedSigPrefix}${signed.sig.slice(2)}`,
     };
 
     const req = createRequest(

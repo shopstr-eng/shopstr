@@ -103,7 +103,7 @@ export class McpNostrSigner {
   }
 
   sign(event: EventTemplate): NostrEvent {
-    return finalizeEvent(event, this.privKeyBytes) as unknown as NostrEvent;
+    return finalizeEvent(event, this.privKeyBytes);
   }
 
   encrypt(recipientPubkey: string, plainText: string): string {
@@ -145,7 +145,7 @@ export class McpRelayManager {
   }
 
   async publish(event: NostrEvent): Promise<void> {
-    await Promise.allSettled(this.pool.publish(this.relayUrls, event as any));
+    await Promise.allSettled(this.pool.publish(this.relayUrls, event));
   }
 
   close(): void {
