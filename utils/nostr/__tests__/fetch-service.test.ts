@@ -549,6 +549,56 @@ describe("fetch-service NIP-50 search helpers", () => {
     ]);
   });
 
+  it("does not build or fetch NIP-50 search filters for blank queries", async () => {
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([]),
+    };
+
+    expect(buildNip50ProductSearchFilters("   \n\t  ")).toEqual([]);
+
+    const result = await fetchNip50ProductSearch(
+      nostr as unknown as NostrManager,
+      DEFAULT_NIP50_SEARCH_RELAYS,
+      "   "
+    );
+
+    expect(result.productEvents).toEqual([]);
+    expect(nostr.fetch).not.toHaveBeenCalled();
+    expect(cacheEventsToDatabase).not.toHaveBeenCalled();
+  });
+
+  it("normalizes search text before sending it to each NIP-50 relay", async () => {
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([]),
+    };
+
+    await fetchNip50ProductSearch(
+      nostr as unknown as NostrManager,
+      [],
+      "  cold   brew  ",
+      { limit: 25 }
+    );
+
+    expect(nostr.fetch).toHaveBeenCalledTimes(
+      DEFAULT_NIP50_SEARCH_RELAYS.length
+    );
+    DEFAULT_NIP50_SEARCH_RELAYS.forEach((relay, index) => {
+      expect(nostr.fetch).toHaveBeenNthCalledWith(
+        index + 1,
+        expect.arrayContaining([
+          expect.objectContaining({
+            kinds: [30402],
+            search: "cold brew",
+            limit: 25,
+          }),
+        ]),
+        {},
+        [relay],
+        NIP50_SEARCH_TIMEOUT_MS
+      );
+    });
+  });
+
   it("deduplicates replaceable listing events by address and keeps the latest version", () => {
     const older = {
       id: "older",
@@ -813,6 +863,70 @@ describe("fetch-service NIP-50 search helpers", () => {
     expect(cacheEventsToDatabase).toHaveBeenCalledWith([searchListing]);
   });
 
+  it("returns an empty result without caching when every NIP-50 relay fails", async () => {
+    const consoleWarnSpy = jest
+      .spyOn(console, "warn")
+      .mockImplementation(() => {});
+    const nostr = {
+      fetch: jest.fn().mockRejectedValue(new Error("Timeout")),
+    };
+
+    const result = await fetchNip50ProductSearch(
+      nostr as unknown as NostrManager,
+      [],
+      "coffee"
+    );
+
+    expectNip50RelayFetches(nostr.fetch);
+    expect(result.productEvents).toEqual([]);
+    expect(cacheEventsToDatabase).not.toHaveBeenCalled();
+    expect(consoleWarnSpy).toHaveBeenCalledTimes(
+      DEFAULT_NIP50_SEARCH_RELAYS.length
+    );
+
+    consoleWarnSpy.mockRestore();
+  });
+
+  it("returns NIP-50 search results even when caching those results fails", async () => {
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    const searchListing = {
+      id: "cache-failed-product",
+      pubkey: "cache-failed-seller",
+      created_at: 30,
+      kind: 30402,
+      tags: [
+        ["d", "cache-failed-coffee"],
+        ["title", "Cache Failed Coffee Beans"],
+        ["price", "12", "USD"],
+      ],
+      content: "cache failed coffee",
+      sig: "sig-cache-failed",
+    };
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([searchListing]),
+    };
+    (cacheEventsToDatabase as jest.Mock).mockRejectedValueOnce(
+      new Error("cache failed")
+    );
+
+    const result = await fetchNip50ProductSearch(
+      nostr as unknown as NostrManager,
+      [],
+      "coffee"
+    );
+
+    expect(result.productEvents).toEqual([searchListing]);
+    expect(cacheEventsToDatabase).toHaveBeenCalledWith([searchListing]);
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      "Failed to cache NIP-50 product search events:",
+      expect.any(Error)
+    );
+
+    consoleErrorSpy.mockRestore();
+  });
+
   it("keeps known selected NIP-50 relays while dropping unsupported selected relays", async () => {
     const selectedSearchRelay = "wss://relay.nostr.band";
     const searchRelays = [
@@ -828,6 +942,35 @@ describe("fetch-service NIP-50 search helpers", () => {
     await fetchNip50ProductSearch(
       nostr as unknown as NostrManager,
       ["wss://relay.damus.io", "relay.nostr.band/", "wss://nos.lol"],
+      "coffee"
+    );
+
+    expectNip50RelayFetches(nostr.fetch, searchRelays);
+  });
+
+  it("deduplicates normalized selected NIP-50 relays before adding backup relays", async () => {
+    const selectedSearchRelays = [
+      "wss://relay.noswhere.com",
+      "wss://search.nos.today",
+    ];
+    const searchRelays = [
+      ...selectedSearchRelays,
+      ...DEFAULT_NIP50_SEARCH_RELAYS.filter(
+        (relay) => !selectedSearchRelays.includes(relay)
+      ),
+    ];
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([]),
+    };
+
+    await fetchNip50ProductSearch(
+      nostr as unknown as NostrManager,
+      [
+        "relay.noswhere.com/",
+        "wss://relay.noswhere.com",
+        "wss://search.nos.today/",
+        "wss://relay.damus.io",
+      ],
       "coffee"
     );
 
@@ -885,6 +1028,45 @@ describe("fetch-service NIP-50 search helpers", () => {
 
     expect(result.productEvents).toEqual([]);
     expect(cacheEventsToDatabase).not.toHaveBeenCalled();
+  });
+
+  it("deduplicates the same addressable NIP-50 listing returned by multiple relays before caching", async () => {
+    const older = {
+      id: "relay-one-product",
+      pubkey: "seller-1",
+      created_at: 10,
+      kind: 30402,
+      tags: [
+        ["d", "cross-relay-coffee"],
+        ["title", "Cross Relay Coffee"],
+        ["price", "12", "USD"],
+      ],
+      content: "older relay coffee",
+      sig: "sig-relay-one",
+    };
+    const newer = {
+      ...older,
+      id: "relay-two-product",
+      created_at: 20,
+      content: "newer relay coffee",
+      sig: "sig-relay-two",
+    };
+    const nostr = {
+      fetch: jest.fn((_, __, relays: string[]) =>
+        relays[0] === DEFAULT_NIP50_SEARCH_RELAYS[0]
+          ? Promise.resolve([older])
+          : Promise.resolve([newer])
+      ),
+    };
+
+    const result = await fetchNip50ProductSearch(
+      nostr as unknown as NostrManager,
+      [],
+      "coffee"
+    );
+
+    expect(result.productEvents).toEqual([newer]);
+    expect(cacheEventsToDatabase).toHaveBeenCalledWith([newer]);
   });
 });
 
