@@ -4,6 +4,19 @@ import "@testing-library/jest-dom";
 import ProductCard from "../product-card";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
+import { ProfileMapContext } from "@/utils/context/context";
+import {
+  isP2pkEscrowFeatureEnabled,
+  isSellerP2pkEscrowActive,
+} from "@/utils/cashu/p2pk-checkout";
+
+jest.mock("@/utils/cashu/p2pk-checkout", () => ({
+  isP2pkEscrowFeatureEnabled: jest.fn().mockReturnValue(false),
+  isSellerP2pkEscrowActive: jest.fn().mockReturnValue(false),
+}));
+
+const mockIsP2pkEscrowFeatureEnabled = isP2pkEscrowFeatureEnabled as jest.Mock;
+const mockIsSellerP2pkEscrowActive = isSellerP2pkEscrowActive as jest.Mock;
 
 const mockRouter = {
   pathname: "/product-page",
@@ -214,5 +227,51 @@ describe("ProductCard", () => {
       );
       expect(screen.getByText("Sold")).toBeInTheDocument();
     });
+  });
+});
+
+// ── P2PK escrow badge — feature flag gating ───────────────────────────────────
+
+const activeP2pk = {
+  enabled: true,
+  pubkey: "02aabb" + "cc".repeat(29),
+  refundDelayDays: 7,
+};
+
+function renderWithP2pkSeller(flagEnabled: boolean) {
+  mockIsP2pkEscrowFeatureEnabled.mockReturnValue(flagEnabled);
+  mockIsSellerP2pkEscrowActive.mockReturnValue(true);
+
+  const profileData = new Map<string, any>();
+  profileData.set("owner_pubkey", { content: { p2pk: activeP2pk } });
+
+  return render(
+    <ProfileMapContext.Provider
+      value={{ profileData, isLoading: false, updateProfileData: jest.fn() }}
+    >
+      <SignerContext.Provider
+        value={{ pubkey: "buyer_pubkey", setPubkey: jest.fn() } as any}
+      >
+        <ProductCard productData={mockProductData} />
+      </SignerContext.Provider>
+    </ProfileMapContext.Provider>
+  );
+}
+
+describe("ProductCard — P2PK escrow badge feature flag", () => {
+  beforeEach(() => {
+    mockIsP2pkEscrowFeatureEnabled.mockReturnValue(false);
+    mockIsSellerP2pkEscrowActive.mockReturnValue(false);
+  });
+
+  it("hides the escrow badge when NEXT_PUBLIC_P2PK_ESCROW_ENABLED is off", () => {
+    renderWithP2pkSeller(false);
+    expect(screen.queryByText(/P2PK Escrow/i)).not.toBeInTheDocument();
+  });
+
+  it("shows the escrow badge when NEXT_PUBLIC_P2PK_ESCROW_ENABLED is on", () => {
+    renderWithP2pkSeller(true);
+    expect(screen.getByText(/P2PK Escrow/i)).toBeInTheDocument();
+    expect(screen.getByText(/7d reclaim opens/i)).toBeInTheDocument();
   });
 });

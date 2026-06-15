@@ -1,6 +1,5 @@
-/* eslint-disable @next/next/no-img-element */
-
 import { useContext, useEffect, useRef, useState } from "react";
+import { isP2pkEscrowFeatureEnabled } from "@/utils/cashu/p2pk-checkout";
 import { Event, nip19 } from "nostr-tools";
 import parseTags, {
   ProductData,
@@ -176,7 +175,7 @@ export default function CheckoutCard({
   ]);
 
   const p2pkIndicator = () => {
-    if (!p2pk?.enabled) return null;
+    if (!isP2pkEscrowFeatureEnabled() || !p2pk?.enabled) return null;
 
     const days = p2pk.refundDelayDays;
 

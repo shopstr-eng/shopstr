@@ -35,7 +35,10 @@ import {
 import { FileUploaderButton } from "@/components/utility-components/file-uploader";
 import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
 import ProtectedRoute from "@/components/utility-components/protected-route";
-import { normalizeCashuPubkey } from "@/utils/cashu/p2pk-checkout";
+import {
+  normalizeCashuPubkey,
+  isP2pkEscrowFeatureEnabled,
+} from "@/utils/cashu/p2pk-checkout";
 
 function decodeNpubOrHexPubkey(value: string): string {
   const cashuPubkey = normalizeCashuPubkey(value);
@@ -704,97 +707,101 @@ const UserProfilePage = () => {
                   )}
                 />
 
-                <p className="text-light-text dark:text-dark-text mb-2 text-lg font-semibold">
-                  P2PK escrow (for your shop)
-                </p>
-                <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">
-                  When enabled, Cashu payments to you are locked to your redeem
-                  pubkey for a delay period. Buyers can configure their own
-                  reclaim keys separately below.
-                </p>
-                <Controller
-                  name="p2pkEnabled"
-                  control={control}
-                  render={({ field: { onChange, value } }) => (
-                    <div className="pb-4">
-                      <label className="text-light-text dark:text-dark-text flex items-center gap-2 text-lg">
-                        <input
-                          type="checkbox"
-                          checked={!!value}
-                          onChange={(e) => onChange(e.target.checked)}
-                        />
-                        Enable P2PK escrow on my listings
-                      </label>
-                    </div>
-                  )}
-                />
-
-                {watchP2pkEnabled && (
+                {isP2pkEscrowFeatureEnabled() && (
                   <>
+                    <p className="text-light-text dark:text-dark-text mb-2 text-lg font-semibold">
+                      P2PK escrow (for your shop)
+                    </p>
+                    <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">
+                      When enabled, Cashu payments to you are locked to your
+                      redeem pubkey for a delay period. Buyers can configure
+                      their own reclaim keys separately below.
+                    </p>
                     <Controller
-                      name="p2pkPubkey"
+                      name="p2pkEnabled"
                       control={control}
-                      render={({ field: { onChange, onBlur, value } }) => (
-                        <div>
-                          <Input
-                            className="text-light-text dark:text-dark-text"
-                            classNames={{
-                              label:
-                                "text-light-text dark:text-dark-text text-lg",
-                            }}
-                            variant="bordered"
-                            fullWidth
-                            label="P2PK Redeem Pubkey (Cashu wallet key)"
-                            labelPlacement="outside"
-                            placeholder="Will be auto-filled from your Cashu wallet key"
-                            onChange={onChange}
-                            onBlur={onBlur}
-                            value={value}
-                          />
-                          <p className="text-default-400 mt-1 mb-4 text-xs">
-                            Auto-filled from your Cashu wallet when available,
-                            with no Nostr identity fallback. This key is used to
-                            claim locked payments &mdash; it is separate from
-                            your Nostr identity.
-                          </p>
+                      render={({ field: { onChange, value } }) => (
+                        <div className="pb-4">
+                          <label className="text-light-text dark:text-dark-text flex items-center gap-2 text-lg">
+                            <input
+                              type="checkbox"
+                              checked={!!value}
+                              onChange={(e) => onChange(e.target.checked)}
+                            />
+                            Enable P2PK escrow on my listings
+                          </label>
                         </div>
                       )}
                     />
 
-                    <Controller
-                      name="refundDelayDays"
-                      control={control}
-                      rules={{
-                        required: "Required",
-                        min: { value: 1, message: "Minimum 1 day" },
-                        max: { value: 365, message: "Maximum 365 days" },
-                      }}
-                      render={({
-                        field: { onChange, onBlur, value },
-                        fieldState: { error },
-                      }) => (
-                        <Input
-                          type="number"
-                          min={1}
-                          max={365}
-                          className="text-light-text dark:text-dark-text py-6"
-                          classNames={{
-                            label:
-                              "text-light-text dark:text-dark-text text-lg",
-                          }}
-                          variant="bordered"
-                          fullWidth
-                          label="Reclaim opens after (days)"
-                          labelPlacement="outside"
-                          placeholder="e.g. 7 — then buyers gain an additional reclaim path"
-                          isInvalid={!!error}
-                          errorMessage={error?.message}
-                          onChange={onChange}
-                          onBlur={onBlur}
-                          value={value}
+                    {watchP2pkEnabled && (
+                      <>
+                        <Controller
+                          name="p2pkPubkey"
+                          control={control}
+                          render={({ field: { onChange, onBlur, value } }) => (
+                            <div>
+                              <Input
+                                className="text-light-text dark:text-dark-text"
+                                classNames={{
+                                  label:
+                                    "text-light-text dark:text-dark-text text-lg",
+                                }}
+                                variant="bordered"
+                                fullWidth
+                                label="P2PK Redeem Pubkey (Cashu wallet key)"
+                                labelPlacement="outside"
+                                placeholder="Will be auto-filled from your Cashu wallet key"
+                                onChange={onChange}
+                                onBlur={onBlur}
+                                value={value}
+                              />
+                              <p className="text-default-400 mt-1 mb-4 text-xs">
+                                Auto-filled from your Cashu wallet when
+                                available, with no Nostr identity fallback. This
+                                key is used to claim locked payments &mdash; it
+                                is separate from your Nostr identity.
+                              </p>
+                            </div>
+                          )}
                         />
-                      )}
-                    />
+
+                        <Controller
+                          name="refundDelayDays"
+                          control={control}
+                          rules={{
+                            required: "Required",
+                            min: { value: 1, message: "Minimum 1 day" },
+                            max: { value: 365, message: "Maximum 365 days" },
+                          }}
+                          render={({
+                            field: { onChange, onBlur, value },
+                            fieldState: { error },
+                          }) => (
+                            <Input
+                              type="number"
+                              min={1}
+                              max={365}
+                              className="text-light-text dark:text-dark-text py-6"
+                              classNames={{
+                                label:
+                                  "text-light-text dark:text-dark-text text-lg",
+                              }}
+                              variant="bordered"
+                              fullWidth
+                              label="Reclaim opens after (days)"
+                              labelPlacement="outside"
+                              placeholder="e.g. 7 — then buyers gain an additional reclaim path"
+                              isInvalid={!!error}
+                              errorMessage={error?.message}
+                              onChange={onChange}
+                              onBlur={onBlur}
+                              value={value}
+                            />
+                          )}
+                        />
+                      </>
+                    )}
                   </>
                 )}
 
