@@ -1673,10 +1673,6 @@ describe("createNostrProfileEvent", () => {
     expect(result).toEqual(signedEvent);
   });
 });
-describe("publishWalletEvent", () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-
 describe("finalizeAndSendNostrEvent", () => {
   const eventTemplate = {
     kind: 1,
@@ -1705,7 +1701,6 @@ describe("finalizeAndSendNostrEvent", () => {
         fn(resolve, reject, new AbortController().signal)
       );
     });
-    localStorage.clear();
     localStorage.setItem(
       "mints",
       JSON.stringify(["https://local-mint.example"])
