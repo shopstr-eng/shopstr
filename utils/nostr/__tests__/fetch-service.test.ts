@@ -5147,3 +5147,646 @@ describe("fetchReviews", () => {
     consoleErrorSpy.mockRestore();
   });
 });
+
+describe("fetchAllRelays", () => {
+  const userPubkey =
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+  const makeRelayEvent = (overrides: Record<string, any> = {}) =>
+    makeBaseEvent({
+      kind: 10002,
+      pubkey: userPubkey,
+      tags: [],
+      ...overrides,
+    });
+
+  const makeSigner = (pubkey: string | undefined) => ({
+    getPubKey: jest.fn().mockResolvedValue(pubkey),
+  });
+
+  beforeEach(() => {
+    jest.resetModules();
+    jest.clearAllMocks();
+  });
+
+  it("returns empty lists without fetching when signer is undefined", async () => {
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchAllRelays } = await import("../fetch-service");
+
+    global.fetch = jest.fn() as typeof global.fetch;
+    const nostr = { fetch: jest.fn() } as any;
+    const editRelaysContext = jest.fn();
+
+    const result = await fetchAllRelays(
+      nostr,
+      undefined,
+      ["wss://relay.example"],
+      editRelaysContext
+    );
+
+    expect(result).toEqual({
+      relayList: [],
+      readRelayList: [],
+      writeRelayList: [],
+    });
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(nostr.fetch).not.toHaveBeenCalled();
+    expect(editRelaysContext).not.toHaveBeenCalled();
+  });
+
+  it("returns empty lists without fetching when getPubKey returns undefined", async () => {
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchAllRelays } = await import("../fetch-service");
+
+    global.fetch = jest.fn() as typeof global.fetch;
+    const nostr = { fetch: jest.fn() } as any;
+    const editRelaysContext = jest.fn();
+
+    const result = await fetchAllRelays(
+      nostr,
+      makeSigner(undefined) as any,
+      ["wss://relay.example"],
+      editRelaysContext
+    );
+
+    expect(result).toEqual({
+      relayList: [],
+      readRelayList: [],
+      writeRelayList: [],
+    });
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(nostr.fetch).not.toHaveBeenCalled();
+  });
+
+  it("hydrates relay lists from the DB before querying the relay", async () => {
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchAllRelays } = await import("../fetch-service");
+
+    const dbRelayEvent = makeRelayEvent({
+      id: "db-relay-event",
+      sig: "sig-db-relay",
+      tags: [
+        ["r", "wss://db-default.example"],
+        ["r", "wss://db-read.example", "read"],
+        ["r", "wss://db-write.example", "write"],
+      ],
+    });
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(makeDbPayload([dbRelayEvent])) as typeof global.fetch;
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([]) } as any;
+    const editRelaysContext = jest.fn();
+
+    const result = await fetchAllRelays(
+      nostr,
+      makeSigner(userPubkey) as any,
+      ["wss://relay.example"],
+      editRelaysContext
+    );
+
+    expect(result.relayList).toContain("wss://db-default.example");
+    expect(result.readRelayList).toContain("wss://db-read.example");
+    expect(result.writeRelayList).toContain("wss://db-write.example");
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining(`/api/db/fetch-relays?pubkey=${userPubkey}`)
+    );
+    // DB results trigger an early context call
+    expect(editRelaysContext).toHaveBeenCalledWith(
+      expect.arrayContaining(["wss://db-default.example"]),
+      expect.arrayContaining(["wss://db-read.example"]),
+      expect.arrayContaining(["wss://db-write.example"]),
+      false
+    );
+  });
+
+  it("partitions relay tags into default, read, and write buckets", async () => {
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchAllRelays } = await import("../fetch-service");
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(makeDbPayload([])) as typeof global.fetch;
+
+    const relayEvent = makeRelayEvent({
+      id: "relay-partition-event",
+      sig: "sig-relay-partition",
+      tags: [
+        ["r", "wss://default.example"],
+        ["r", "wss://read-only.example", "read"],
+        ["r", "wss://write-only.example", "write"],
+        ["t", "ignored-tag"],
+      ],
+    });
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([relayEvent]) } as any;
+    const editRelaysContext = jest.fn();
+
+    const result = await fetchAllRelays(
+      nostr,
+      makeSigner(userPubkey) as any,
+      ["wss://relay.example"],
+      editRelaysContext
+    );
+
+    expect(result.relayList).toEqual(["wss://default.example"]);
+    expect(result.readRelayList).toEqual(["wss://read-only.example"]);
+    expect(result.writeRelayList).toEqual(["wss://write-only.example"]);
+  });
+
+  it("deduplicates relays that appear in both DB and relay results", async () => {
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchAllRelays } = await import("../fetch-service");
+
+    const dbRelayEvent = makeRelayEvent({
+      id: "db-dedup-event",
+      sig: "sig-db-dedup",
+      tags: [
+        ["r", "wss://shared-default.example"],
+        ["r", "wss://shared-read.example", "read"],
+        ["r", "wss://shared-write.example", "write"],
+      ],
+    });
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(makeDbPayload([dbRelayEvent])) as typeof global.fetch;
+
+    const relayEvent = makeRelayEvent({
+      id: "relay-dedup-event",
+      sig: "sig-relay-dedup",
+      tags: [
+        ["r", "wss://shared-default.example"],
+        ["r", "wss://shared-read.example", "read"],
+        ["r", "wss://shared-write.example", "write"],
+        ["r", "wss://relay-only.example"],
+      ],
+    });
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([relayEvent]) } as any;
+    const editRelaysContext = jest.fn();
+
+    const result = await fetchAllRelays(
+      nostr,
+      makeSigner(userPubkey) as any,
+      ["wss://relay.example"],
+      editRelaysContext
+    );
+
+    expect(
+      result.relayList.filter((r) => r === "wss://shared-default.example")
+    ).toHaveLength(1);
+    expect(
+      result.readRelayList.filter((r) => r === "wss://shared-read.example")
+    ).toHaveLength(1);
+    expect(
+      result.writeRelayList.filter((r) => r === "wss://shared-write.example")
+    ).toHaveLength(1);
+    expect(result.relayList).toContain("wss://relay-only.example");
+  });
+
+  it("caches only relay events that are valid kind 10002 with id, sig, and pubkey", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+    jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
+
+    const { fetchAllRelays } = await import("../fetch-service");
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(makeDbPayload([])) as typeof global.fetch;
+
+    const validEvent = makeRelayEvent({
+      id: "valid-relay-cache",
+      sig: "sig-valid-relay-cache",
+      tags: [["r", "wss://valid.example"]],
+    });
+    const missingId = makeRelayEvent({
+      id: "",
+      sig: "sig-missing-id",
+      tags: [["r", "wss://missing-id.example"]],
+    });
+    const missingSig = makeRelayEvent({
+      id: "missing-sig-relay",
+      sig: "",
+      tags: [["r", "wss://missing-sig.example"]],
+    });
+    const wrongKind = makeBaseEvent({
+      id: "wrong-kind-relay",
+      sig: "sig-wrong-kind",
+      pubkey: userPubkey,
+      kind: 1,
+      tags: [["r", "wss://wrong-kind.example"]],
+    });
+
+    const nostr = {
+      fetch: jest
+        .fn()
+        .mockResolvedValue([validEvent, missingId, missingSig, wrongKind]),
+    } as any;
+    const editRelaysContext = jest.fn();
+
+    await fetchAllRelays(
+      nostr,
+      makeSigner(userPubkey) as any,
+      ["wss://relay.example"],
+      editRelaysContext
+    );
+
+    expect(cacheEventsToDatabase).toHaveBeenCalledTimes(1);
+    expect(cacheEventsToDatabase).toHaveBeenCalledWith([validEvent]);
+  });
+
+  it("calls editRelaysContext with merged relay state after relay fetch completes", async () => {
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchAllRelays } = await import("../fetch-service");
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(makeDbPayload([])) as typeof global.fetch;
+
+    const relayEvent = makeRelayEvent({
+      id: "ctx-relay-event",
+      sig: "sig-ctx-relay",
+      tags: [
+        ["r", "wss://ctx-default.example"],
+        ["r", "wss://ctx-read.example", "read"],
+        ["r", "wss://ctx-write.example", "write"],
+      ],
+    });
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([relayEvent]) } as any;
+    const editRelaysContext = jest.fn();
+
+    await fetchAllRelays(
+      nostr,
+      makeSigner(userPubkey) as any,
+      ["wss://relay.example"],
+      editRelaysContext
+    );
+
+    expect(editRelaysContext).toHaveBeenLastCalledWith(
+      expect.arrayContaining(["wss://ctx-default.example"]),
+      expect.arrayContaining(["wss://ctx-read.example"]),
+      expect.arrayContaining(["wss://ctx-write.example"]),
+      false
+    );
+  });
+
+  it("catches and logs a DB fetch throw and still queries the relay", async () => {
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchAllRelays } = await import("../fetch-service");
+
+    const dbError = new Error("DB connection failed");
+    global.fetch = jest.fn().mockRejectedValue(dbError) as typeof global.fetch;
+
+    const relayEvent = makeRelayEvent({
+      id: "relay-after-db-throw",
+      sig: "sig-relay-after-db-throw",
+      tags: [["r", "wss://relay-after-db-throw.example"]],
+    });
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([relayEvent]) } as any;
+    const editRelaysContext = jest.fn();
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    const result = await fetchAllRelays(
+      nostr,
+      makeSigner(userPubkey) as any,
+      ["wss://relay.example"],
+      editRelaysContext
+    );
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      "Failed to fetch relay config from database: ",
+      dbError
+    );
+    expect(nostr.fetch).toHaveBeenCalledTimes(1);
+    expect(result.relayList).toContain("wss://relay-after-db-throw.example");
+
+    consoleErrorSpy.mockRestore();
+  });
+});
+
+describe("fetchAllBlossomServers", () => {
+  const userPubkey =
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+  const makeBlossomEvent = (overrides: Record<string, any> = {}) =>
+    makeBaseEvent({
+      kind: 10063,
+      pubkey: userPubkey,
+      tags: [],
+      ...overrides,
+    });
+
+  const makeSigner = (pubkey: string | undefined) => ({
+    getPubKey: jest.fn().mockResolvedValue(pubkey),
+  });
+
+  beforeEach(() => {
+    jest.resetModules();
+    jest.clearAllMocks();
+  });
+
+  it("returns empty list without fetching when signer is undefined", async () => {
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchAllBlossomServers } = await import("../fetch-service");
+
+    global.fetch = jest.fn() as typeof global.fetch;
+    const nostr = { fetch: jest.fn() } as any;
+    const editBlossomContext = jest.fn();
+
+    const result = await fetchAllBlossomServers(
+      nostr,
+      undefined,
+      ["wss://relay.example"],
+      editBlossomContext
+    );
+
+    expect(result).toEqual({ blossomServers: [] });
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(nostr.fetch).not.toHaveBeenCalled();
+    expect(editBlossomContext).not.toHaveBeenCalled();
+  });
+
+  it("returns empty list without fetching when getPubKey returns undefined", async () => {
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchAllBlossomServers } = await import("../fetch-service");
+
+    global.fetch = jest.fn() as typeof global.fetch;
+    const nostr = { fetch: jest.fn() } as any;
+    const editBlossomContext = jest.fn();
+
+    const result = await fetchAllBlossomServers(
+      nostr,
+      makeSigner(undefined) as any,
+      ["wss://relay.example"],
+      editBlossomContext
+    );
+
+    expect(result).toEqual({ blossomServers: [] });
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(nostr.fetch).not.toHaveBeenCalled();
+  });
+
+  it("hydrates blossom servers from DB before querying the relay", async () => {
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchAllBlossomServers } = await import("../fetch-service");
+
+    const dbBlossomEvent = makeBlossomEvent({
+      id: "db-blossom-event",
+      sig: "sig-db-blossom",
+      tags: [
+        ["server", "https://db-server-1.example"],
+        ["server", "https://db-server-2.example"],
+        ["t", "ignored"],
+      ],
+    });
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(
+        makeDbPayload([dbBlossomEvent])
+      ) as typeof global.fetch;
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([]) } as any;
+    const editBlossomContext = jest.fn();
+
+    const result = await fetchAllBlossomServers(
+      nostr,
+      makeSigner(userPubkey) as any,
+      ["wss://relay.example"],
+      editBlossomContext
+    );
+
+    expect(result.blossomServers).toContain("https://db-server-1.example");
+    expect(result.blossomServers).toContain("https://db-server-2.example");
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining(`/api/db/fetch-blossom?pubkey=${userPubkey}`)
+    );
+    // DB results trigger an early context call before relay completes
+    expect(editBlossomContext).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        "https://db-server-1.example",
+        "https://db-server-2.example",
+      ]),
+      false
+    );
+  });
+
+  it("adds relay servers that are not already in the DB list without duplicates", async () => {
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchAllBlossomServers } = await import("../fetch-service");
+
+    const dbBlossomEvent = makeBlossomEvent({
+      id: "db-dedup-blossom",
+      sig: "sig-db-dedup-blossom",
+      tags: [["server", "https://shared-server.example"]],
+    });
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(
+        makeDbPayload([dbBlossomEvent])
+      ) as typeof global.fetch;
+
+    const relayBlossomEvent = makeBlossomEvent({
+      id: "relay-dedup-blossom",
+      sig: "sig-relay-dedup-blossom",
+      tags: [
+        ["server", "https://shared-server.example"],
+        ["server", "https://relay-only-server.example"],
+      ],
+    });
+
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([relayBlossomEvent]),
+    } as any;
+    const editBlossomContext = jest.fn();
+
+    const result = await fetchAllBlossomServers(
+      nostr,
+      makeSigner(userPubkey) as any,
+      ["wss://relay.example"],
+      editBlossomContext
+    );
+
+    expect(
+      result.blossomServers.filter((s) => s === "https://shared-server.example")
+    ).toHaveLength(1);
+    expect(result.blossomServers).toContain(
+      "https://relay-only-server.example"
+    );
+  });
+
+  it("caches only relay events that are valid kind 10063 with id, sig, and pubkey", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+    jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
+
+    const { fetchAllBlossomServers } = await import("../fetch-service");
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(makeDbPayload([])) as typeof global.fetch;
+
+    const validEvent = makeBlossomEvent({
+      id: "valid-blossom-cache",
+      sig: "sig-valid-blossom-cache",
+      tags: [["server", "https://valid-cache.example"]],
+    });
+    const missingId = makeBlossomEvent({
+      id: "",
+      sig: "sig-blossom-no-id",
+      tags: [["server", "https://no-id.example"]],
+    });
+    const missingSig = makeBlossomEvent({
+      id: "blossom-no-sig",
+      sig: "",
+      tags: [["server", "https://no-sig.example"]],
+    });
+    const wrongKind = makeBaseEvent({
+      id: "blossom-wrong-kind",
+      sig: "sig-wrong-kind-blossom",
+      pubkey: userPubkey,
+      kind: 1,
+      tags: [["server", "https://wrong-kind.example"]],
+    });
+
+    const nostr = {
+      fetch: jest
+        .fn()
+        .mockResolvedValue([validEvent, missingId, missingSig, wrongKind]),
+    } as any;
+    const editBlossomContext = jest.fn();
+
+    await fetchAllBlossomServers(
+      nostr,
+      makeSigner(userPubkey) as any,
+      ["wss://relay.example"],
+      editBlossomContext
+    );
+
+    expect(cacheEventsToDatabase).toHaveBeenCalledTimes(1);
+    expect(cacheEventsToDatabase).toHaveBeenCalledWith([validEvent]);
+  });
+
+  it("calls editBlossomContext with the final merged server list after relay fetch completes", async () => {
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchAllBlossomServers } = await import("../fetch-service");
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(makeDbPayload([])) as typeof global.fetch;
+
+    const relayBlossomEvent = makeBlossomEvent({
+      id: "ctx-blossom-event",
+      sig: "sig-ctx-blossom",
+      tags: [
+        ["server", "https://ctx-server-1.example"],
+        ["server", "https://ctx-server-2.example"],
+      ],
+    });
+
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([relayBlossomEvent]),
+    } as any;
+    const editBlossomContext = jest.fn();
+
+    await fetchAllBlossomServers(
+      nostr,
+      makeSigner(userPubkey) as any,
+      ["wss://relay.example"],
+      editBlossomContext
+    );
+
+    expect(editBlossomContext).toHaveBeenLastCalledWith(
+      expect.arrayContaining([
+        "https://ctx-server-1.example",
+        "https://ctx-server-2.example",
+      ]),
+      false
+    );
+  });
+
+  it("catches and logs a DB fetch throw and still queries the relay", async () => {
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchAllBlossomServers } = await import("../fetch-service");
+
+    const dbError = new Error("DB connection failed");
+    global.fetch = jest.fn().mockRejectedValue(dbError) as typeof global.fetch;
+
+    const relayBlossomEvent = makeBlossomEvent({
+      id: "relay-after-blossom-db-throw",
+      sig: "sig-relay-after-blossom-db-throw",
+      tags: [["server", "https://relay-after-db-throw.example"]],
+    });
+
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([relayBlossomEvent]),
+    } as any;
+    const editBlossomContext = jest.fn();
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    const result = await fetchAllBlossomServers(
+      nostr,
+      makeSigner(userPubkey) as any,
+      ["wss://relay.example"],
+      editBlossomContext
+    );
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      "Failed to fetch blossom config from database: ",
+      dbError
+    );
+    expect(nostr.fetch).toHaveBeenCalledTimes(1);
+    expect(result.blossomServers).toContain(
+      "https://relay-after-db-throw.example"
+    );
+
+    consoleErrorSpy.mockRestore();
+  });
+});
