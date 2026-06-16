@@ -4300,6 +4300,171 @@ describe("fetchCashuWallet", () => {
       }
     );
   });
+
+  // Case A: relay fetch succeeds, zero wallet events anywhere → generate first identity
+  it("generates and publishes a wallet identity when fetch succeeds but returns no wallet events", async () => {
+    const publishWalletEvent = jest.fn().mockResolvedValue(undefined);
+    const generateCashuWalletKeypair = jest.fn(() => ({
+      cashuPubkey: "02new-pk",
+      cashuPrivkey: "new-sk",
+    }));
+
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(() => ({ tokens: [] })),
+      deleteEvent: jest.fn(),
+      verifyNip05Identifier: jest.fn(),
+      publishWalletEvent,
+    }));
+    jest.doMock("@/utils/cashu/wallet-config", () => ({
+      ...jest.requireActual("@/utils/cashu/wallet-config"),
+      generateCashuWalletKeypair,
+    }));
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+    jest.doMock("@cashu/cashu-ts", () => ({
+      ...jest.requireActual("@cashu/cashu-ts"),
+      Wallet: jest.fn().mockImplementation(() => ({
+        loadMint: jest.fn().mockResolvedValue(undefined),
+        checkProofsStates: jest.fn().mockResolvedValue([]),
+      })),
+      Mint: jest.fn().mockImplementation(() => ({})),
+    }));
+
+    const { fetchCashuWallet } = await import("../fetch-service");
+
+    // DB returns no wallet events
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [],
+    }) as typeof global.fetch;
+
+    // Relay wallet-config fetch returns empty (success), proof fetch also empty
+    const nostr = {
+      fetch: jest.fn().mockResolvedValueOnce([]).mockResolvedValueOnce([]),
+    } as any;
+    const editCashuWalletContext = jest.fn();
+    const signer = createMockSigner({
+      getPubKey: jest.fn().mockResolvedValue(userPubkey),
+      decrypt: jest.fn(),
+    });
+
+    const result = await fetchCashuWallet(
+      nostr,
+      signer,
+      ["wss://relay.example"],
+      editCashuWalletContext
+    );
+
+    expect(generateCashuWalletKeypair).toHaveBeenCalledTimes(1);
+    expect(publishWalletEvent).toHaveBeenCalledTimes(1);
+    expect(publishWalletEvent).toHaveBeenCalledWith(
+      nostr,
+      signer,
+      { cashuPubkey: "02new-pk", cashuPrivkey: "new-sk" },
+      { mints: [] }
+    );
+    expect(result.cashuPubkey).toBe("02new-pk");
+    expect(result.cashuPrivkey).toBe("new-sk");
+    expect(editCashuWalletContext).toHaveBeenLastCalledWith(
+      [],
+      [],
+      [],
+      false,
+      expect.objectContaining({
+        cashuPubkey: "02new-pk",
+        cashuPrivkey: "new-sk",
+      })
+    );
+  });
+
+  // Case C: relay fetch fails → no generation, no publish, walletIdentityUnavailable surfaced
+  it("does not generate or publish when the relay wallet config fetch fails, and surfaces walletIdentityUnavailable", async () => {
+    const publishWalletEvent = jest.fn().mockResolvedValue(undefined);
+    const generateCashuWalletKeypair = jest.fn(() => ({
+      cashuPubkey: "02should-not-be-generated",
+      cashuPrivkey: "should-not-be-generated",
+    }));
+    const consoleWarnSpy = jest
+      .spyOn(console, "warn")
+      .mockImplementation(() => {});
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(() => ({ tokens: [] })),
+      deleteEvent: jest.fn(),
+      verifyNip05Identifier: jest.fn(),
+      publishWalletEvent,
+    }));
+    jest.doMock("@/utils/cashu/wallet-config", () => ({
+      ...jest.requireActual("@/utils/cashu/wallet-config"),
+      generateCashuWalletKeypair,
+    }));
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+    jest.doMock("@cashu/cashu-ts", () => ({
+      ...jest.requireActual("@cashu/cashu-ts"),
+      Wallet: jest.fn().mockImplementation(() => ({
+        loadMint: jest.fn().mockResolvedValue(undefined),
+        checkProofsStates: jest.fn().mockResolvedValue([]),
+      })),
+      Mint: jest.fn().mockImplementation(() => ({})),
+    }));
+
+    const { fetchCashuWallet } = await import("../fetch-service");
+
+    // DB returns no wallet events
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [],
+    }) as typeof global.fetch;
+
+    // Relay wallet-config fetch throws (relay failure); proof fetch succeeds with empty
+    const relayError = new Error("relay unavailable");
+    const nostr = {
+      fetch: jest
+        .fn()
+        .mockRejectedValueOnce(relayError)
+        .mockResolvedValueOnce([]),
+    } as any;
+    const editCashuWalletContext = jest.fn();
+    const signer = createMockSigner({
+      getPubKey: jest.fn().mockResolvedValue(userPubkey),
+      decrypt: jest.fn(),
+    });
+
+    const result = await fetchCashuWallet(
+      nostr,
+      signer,
+      ["wss://relay.example"],
+      editCashuWalletContext
+    );
+
+    expect(generateCashuWalletKeypair).not.toHaveBeenCalled();
+    expect(publishWalletEvent).not.toHaveBeenCalled();
+    expect(result.cashuPubkey).toBeUndefined();
+    expect(result.cashuPrivkey).toBeUndefined();
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      "Failed to fetch wallet config events from relay:",
+      relayError
+    );
+    expect(consoleWarnSpy).toHaveBeenCalledWith(
+      expect.stringContaining("Wallet identity unavailable")
+    );
+    expect(editCashuWalletContext).toHaveBeenLastCalledWith(
+      [],
+      [],
+      [],
+      false,
+      expect.objectContaining({ walletIdentityUnavailable: true })
+    );
+
+    consoleWarnSpy.mockRestore();
+    consoleErrorSpy.mockRestore();
+  });
 });
 
 describe("fetchShopProfile", () => {

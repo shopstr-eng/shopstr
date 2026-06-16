@@ -564,6 +564,7 @@ function Shopstr({ props }: { props: AppProps }) {
     keys?: {
       cashuPubkey?: string;
       cashuPrivkey?: string;
+      walletIdentityUnavailable?: boolean;
     }
   ) => {
     setCashuWalletContext({
@@ -573,6 +574,7 @@ function Shopstr({ props }: { props: AppProps }) {
       isLoading,
       cashuPubkey: keys?.cashuPubkey,
       cashuPrivkey: keys?.cashuPrivkey,
+      walletIdentityUnavailable: keys?.walletIdentityUnavailable,
     });
   };
 

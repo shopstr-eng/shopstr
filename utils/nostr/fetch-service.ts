@@ -1722,6 +1722,7 @@ export const fetchCashuWallet = async (
     keys?: {
       cashuPubkey?: string;
       cashuPrivkey?: string;
+      walletIdentityUnavailable?: boolean;
     }
   ) => void
 ): Promise<{
@@ -1861,11 +1862,17 @@ export const fetchCashuWallet = async (
         authors: [userPubkey],
       };
 
-      const hEvents: NostrEvent[] = await nostr.fetch(
-        [walletConfigFilter],
-        {},
-        relays
-      );
+      let walletRelayFetchSucceeded = false;
+      let hEvents: NostrEvent[] = [];
+      try {
+        hEvents = await nostr.fetch([walletConfigFilter], {}, relays);
+        walletRelayFetchSucceeded = true;
+      } catch (fetchError) {
+        console.error(
+          "Failed to fetch wallet config events from relay:",
+          fetchError
+        );
+      }
 
       // Cache wallet config events to database
       const validWalletConfigEvents = hEvents.filter(
@@ -1947,12 +1954,15 @@ export const fetchCashuWallet = async (
         }
       }
 
-      // Generate a Cashu wallet identity exactly once if none exists yet
+      // Generate a new wallet identity only when the relay fetch definitively
+      // returned (even if empty). A failed relay fetch means we cannot confirm
+      // that no identity exists — generating one would silently replace a real
+      // identity on a broken relay.
       const hasExistingKeypair =
         latestKeypair?.cashuPubkey !== undefined &&
         latestKeypair?.cashuPrivkey !== undefined;
 
-      if (!hasExistingKeypair && signer) {
+      if (!hasExistingKeypair && walletRelayFetchSucceeded && signer) {
         try {
           const { cashuPubkey, cashuPrivkey } = generateCashuWalletKeypair();
           await publishWalletEvent(
@@ -1969,6 +1979,10 @@ export const fetchCashuWallet = async (
         } catch (error) {
           console.error("Failed to generate Cashu wallet identity:", error);
         }
+      } else if (!hasExistingKeypair && !walletRelayFetchSucceeded) {
+        console.warn(
+          "Wallet identity unavailable: relay fetch failed. Skipping identity generation to avoid overwriting an existing identity."
+        );
       }
 
       // Use cashu-specific relays if available, otherwise use default relays
@@ -2180,6 +2194,8 @@ export const fetchCashuWallet = async (
       const walletKeys = {
         cashuPubkey: latestKeypair?.cashuPubkey,
         cashuPrivkey: latestKeypair?.cashuPrivkey,
+        walletIdentityUnavailable:
+          !hasExistingKeypair && !walletRelayFetchSucceeded ? true : undefined,
       };
 
       editCashuWalletContext(
