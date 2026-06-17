@@ -27,16 +27,21 @@ export function creditProofsToLocalWallet(
     ...getCachedCashuProofs(),
     ...proofs,
   ]);
-  window.localStorage.setItem(
-    "history",
-    JSON.stringify([
-      {
-        type: historyType,
-        amount,
-        date: Math.floor(Date.now() / 1000),
-      },
-      ...history,
-    ])
-  );
   setCachedCashuProofs(proofArray);
+
+  try {
+    window.localStorage.setItem(
+      "history",
+      JSON.stringify([
+        {
+          type: historyType,
+          amount,
+          date: Math.floor(Date.now() / 1000),
+        },
+        ...history,
+      ])
+    );
+  } catch (error) {
+    console.warn("Failed to write Cashu wallet history entry:", error);
+  }
 }

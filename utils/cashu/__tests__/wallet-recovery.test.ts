@@ -107,6 +107,27 @@ describe("recoverProofsToBuyerWallet", () => {
     expect(window.localStorage.getItem("tokens")).toBeNull();
   });
 
+  it("credits proofs before best-effort history writes", async () => {
+    jest
+      .spyOn(window.localStorage.__proto__, "setItem")
+      .mockImplementationOnce(() => {
+        throw new Error("quota exceeded");
+      });
+
+    await expect(
+      recoverProofsToBuyerWallet(
+        {} as never,
+        {} as never,
+        "https://mint.example",
+        [mkProof("s1", 5)],
+        5
+      )
+    ).resolves.toBeUndefined();
+
+    expect(helpers.setCachedCashuProofs).toHaveBeenCalledWith([mkProof("s1", 5)]);
+    expect(helpers.publishProofEvent).toHaveBeenCalled();
+  });
+
   it("no-ops on empty proof array", async () => {
     await recoverProofsToBuyerWallet(
       {} as never,
