@@ -6,7 +6,7 @@
     2. Zod validation schema is the actual
        schema used in handlers via safeParse(). These add transforms (e.g.
        canonicalizePubkey), refines (e.g. isHex64), and defaults.
- 
+
   The MCP schema tells the LLM what shape of args to send; the Zod schema
   validates and normalizes the actual input at runtime.
 **/
