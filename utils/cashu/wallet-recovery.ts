@@ -1,8 +1,6 @@
 import { Proof } from "@cashu/cashu-ts";
-import {
-  getLocalStorageData,
-  publishProofEvent,
-} from "@/utils/nostr/nostr-helper-functions";
+import { publishProofEvent } from "@/utils/nostr/nostr-helper-functions";
+import { creditProofsToLocalWallet } from "./local-wallet-cache";
 
 type Nostr = Parameters<typeof publishProofEvent>[0];
 type Signer = Parameters<typeof publishProofEvent>[1];
@@ -28,39 +26,46 @@ export async function recoverProofsToBuyerWallet(
   if (typeof window === "undefined") return;
   if (!proofs || proofs.length === 0) return;
 
-  const { tokens, history } = getLocalStorageData();
-  const proofArray = [...tokens, ...proofs];
-  window.localStorage.setItem("tokens", JSON.stringify(proofArray));
-  window.localStorage.setItem(
-    "history",
-    JSON.stringify([
-      {
-        type: 3,
-        amount,
-        date: Math.floor(Date.now() / 1000),
-      },
-      ...history,
-    ])
-  );
+  creditProofsToLocalWallet(proofs, amount, 3);
 
   // Best-effort wallet event publish; localStorage is the source of truth and
   // sendGiftWrappedMessageEvent / publishProofEvent already cache to DB first
   // so durability does not depend on relay reachability here.
-  try {
-    await publishProofEvent(
-      nostr,
-      signer,
-      mintUrl,
-      proofs,
-      "in",
-      amount.toString()
-    );
-  } catch (err) {
+  void publishProofEvent(
+    nostr,
+    signer,
+    mintUrl,
+    proofs,
+    "in",
+    amount.toString()
+  ).catch((err) => {
     console.warn(
       "[wallet-recovery] proof event publish failed; tokens are safe in localStorage:",
       err
     );
-  }
+  });
+}
+
+export function publishProofEventBestEffort(
+  nostr: Nostr,
+  signer: Signer,
+  mintUrl: string,
+  proofs: Proof[],
+  direction: "in" | "out",
+  amount: string,
+  deletedEventsArray?: string[]
+): void {
+  void publishProofEvent(
+    nostr,
+    signer,
+    mintUrl,
+    proofs,
+    direction,
+    amount,
+    deletedEventsArray
+  ).catch((err) => {
+    console.warn("[wallet-recovery] proof event publish failed:", err);
+  });
 }
 
 /**
