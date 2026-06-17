@@ -1,15 +1,9 @@
 import type { SubscribeManyParams } from "nostr-tools/abstract-pool";
 
+import type { NostrManager } from "./nostr-manager.js";
 import type { NostrEvent, NostrFilter, RelayFetchMeta } from "./types.js";
 
-export type RelayFetchClient = {
-  fetch: (
-    filters: NostrFilter[],
-    params?: SubscribeManyParams,
-    relayUrls?: string[],
-    options?: { timeoutMs?: number }
-  ) => Promise<NostrEvent[]>;
-};
+export type RelayFetchClient = Pick<NostrManager, "fetch">;
 
 export type RelayFetchResult = {
   events: NostrEvent[];
