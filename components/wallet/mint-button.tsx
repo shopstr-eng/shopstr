@@ -21,12 +21,7 @@ import {
   Input,
 } from "@heroui/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
-import {
-  getCachedCashuProofs,
-  getLocalStorageData,
-  publishProofEvent,
-  setCachedCashuProofs,
-} from "@/utils/nostr/nostr-helper-functions";
+import { getLocalStorageData } from "@/utils/nostr/nostr-helper-functions";
 import { Mint as CashuMint, Wallet as CashuWallet } from "@cashu/cashu-ts";
 import QRCode from "qrcode";
 import FailureModal from "@/components/utility-components/failure-modal";
@@ -45,6 +40,8 @@ import {
   recordPendingMintQuote,
   updatePendingMintQuote,
 } from "@/utils/cashu/pending-mint-operations";
+import { creditProofsToLocalWallet } from "@/utils/cashu/local-wallet-cache";
+import { publishProofEventBestEffort } from "@/utils/cashu/wallet-recovery";
 
 const MintButton = () => {
   const [showMintModal, setShowMintModal] = useState(false);
@@ -61,8 +58,7 @@ const MintButton = () => {
   const { signer } = useContext(SignerContext);
   const { nostr } = useContext(NostrContext);
 
-  const { mints, history } = getLocalStorageData();
-  const tokens = getCachedCashuProofs();
+  const { mints } = getLocalStorageData();
 
   const {
     handleSubmit: handleMintSubmit,
@@ -210,19 +206,9 @@ const MintButton = () => {
           { maxAttempts: 5, perAttemptTimeoutMs: 15000, totalTimeoutMs: 60000 }
         );
         if (proofs && proofs.length > 0) {
-          const proofArray = [...tokens, ...proofs];
-          localStorage.setItem(
-            "history",
-            JSON.stringify([
-              {
-                type: 3,
-                amount: numSats,
-                date: Math.floor(Date.now() / 1000),
-              },
-              ...history,
-            ])
-          );
-          await publishProofEvent(
+          creditProofsToLocalWallet(proofs, numSats, 3);
+          markMintQuoteClaimed(hash);
+          publishProofEventBestEffort(
             nostr!,
             signer!,
             mints[0]!,
@@ -230,8 +216,6 @@ const MintButton = () => {
             "in",
             numSats.toString()
           );
-          setCachedCashuProofs(proofArray);
-          markMintQuoteClaimed(hash);
           setPaymentConfirmed(true);
           setQrCodeUrl(null);
           setTimeout(() => {

@@ -1,22 +1,14 @@
 import { useContext, useEffect, useRef } from "react";
+import { Mint as CashuMint, Wallet as CashuWallet } from "@cashu/cashu-ts";
 import {
-  Mint as CashuMint,
-  Wallet as CashuWallet,
-  Proof,
-} from "@cashu/cashu-ts";
-import {
-  PendingMintQuote,
   recoverPendingMintQuotes,
   getPendingMintQuotes,
 } from "@/utils/cashu/pending-mint-operations";
 import {
   getPendingCashuProofPublishes,
-  getCachedCashuProofs,
-  getLocalStorageData,
-  publishProofEvent,
   retryPendingCashuProofPublishes,
-  setCachedCashuProofs,
 } from "@/utils/nostr/nostr-helper-functions";
+import { recoverProofsToBuyerWallet } from "@/utils/cashu/wallet-recovery";
 import {
   NostrContext,
   SignerContext,
@@ -73,31 +65,15 @@ export function MintRecoveryBoot(): null {
             await wallet.loadMint();
             return wallet;
           },
-          onProofsClaimed: async (quote: PendingMintQuote, proofs: Proof[]) => {
+          onProofsClaimed: async (quote, proofs) => {
             if (cancelled) return;
-            const { history } = getLocalStorageData();
-            const tokens = getCachedCashuProofs();
-            const proofArray = [...tokens, ...proofs];
-            window.localStorage.setItem(
-              "history",
-              JSON.stringify([
-                {
-                  type: 3,
-                  amount: quote.amount,
-                  date: Math.floor(Date.now() / 1000),
-                },
-                ...history,
-              ])
-            );
-            await publishProofEvent(
+            await recoverProofsToBuyerWallet(
               nostr,
               signer,
               quote.mintUrl,
               proofs,
-              "in",
-              quote.amount.toString()
+              quote.amount
             );
-            setCachedCashuProofs(proofArray);
           },
         });
 

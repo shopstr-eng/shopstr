@@ -1,10 +1,6 @@
 import { Proof } from "@cashu/cashu-ts";
-import {
-  getCachedCashuProofs,
-  getLocalStorageData,
-  publishProofEvent,
-  setCachedCashuProofs,
-} from "@/utils/nostr/nostr-helper-functions";
+import { publishProofEvent } from "@/utils/nostr/nostr-helper-functions";
+import { creditProofsToLocalWallet } from "./local-wallet-cache";
 
 type Nostr = Parameters<typeof publishProofEvent>[0];
 type Signer = Parameters<typeof publishProofEvent>[1];
@@ -30,30 +26,46 @@ export async function recoverProofsToBuyerWallet(
   if (typeof window === "undefined") return;
   if (!proofs || proofs.length === 0) return;
 
-  const { history } = getLocalStorageData();
-  const tokens = getCachedCashuProofs();
-  const proofArray = [...tokens, ...proofs];
-  window.localStorage.setItem(
-    "history",
-    JSON.stringify([
-      {
-        type: 3,
-        amount,
-        date: Math.floor(Date.now() / 1000),
-      },
-      ...history,
-    ])
-  );
+  creditProofsToLocalWallet(proofs, amount, 3);
 
-  await publishProofEvent(
+  // Best-effort wallet event publish. Local proof cache is credited first, and
+  // publishProofEvent queues encrypted retries on relay failure before
+  // rethrowing, so claim completion does not depend on relay reachability.
+  void publishProofEvent(
     nostr,
     signer,
     mintUrl,
     proofs,
     "in",
     amount.toString()
-  );
-  setCachedCashuProofs(proofArray);
+  ).catch((err) => {
+    console.warn(
+      "[wallet-recovery] proof event publish failed; proofs are safe in local cache:",
+      err
+    );
+  });
+}
+
+export function publishProofEventBestEffort(
+  nostr: Nostr,
+  signer: Signer,
+  mintUrl: string,
+  proofs: Proof[],
+  direction: "in" | "out",
+  amount: string,
+  deletedEventsArray?: string[]
+): void {
+  void publishProofEvent(
+    nostr,
+    signer,
+    mintUrl,
+    proofs,
+    direction,
+    amount,
+    deletedEventsArray
+  ).catch((err) => {
+    console.warn("[wallet-recovery] proof event publish failed:", err);
+  });
 }
 
 /**
