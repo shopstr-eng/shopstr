@@ -79,6 +79,7 @@ export type ProfileResponse = {
   pubkey: string;
   kind: number;
   name: string;
+  displayName: string;
   about: string;
   picture: string;
   banner: string;

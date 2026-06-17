@@ -10,8 +10,11 @@ import type { RelayFetchMeta } from "../../types.js";
 
 export const PRODUCT_KIND = 30402;
 export const REVIEW_KIND = 31555;
+export const PROFILE_KIND = 0;
+export const SHOP_PROFILE_KIND = 30019;
 export const PRODUCT_RESPONSE_BUDGET = 37;
 export const REVIEW_RESPONSE_BUDGET = 50;
+export const SELLER_LIST_RESPONSE_BUDGET = 50;
 export const RELAY_RETRY_AFTER_MS = 2_000;
 
 export function formatValidationError(error: ZodError): string {
@@ -61,6 +64,48 @@ export function buildToolMeta(
     }),
     ...(fields.truncated !== undefined && { _truncated: fields.truncated }),
     _hints: fields.hints ?? [],
+  };
+}
+
+export function emptyRelayMeta(responseTimeMs = 0): RelayFetchMeta {
+  return {
+    relaysQueried: [],
+    relaysSucceeded: [],
+    relaysFailed: [],
+    degraded: false,
+    coverage: 1,
+    responseTimeMs,
+    eventCount: 0,
+  };
+}
+
+export function combineRelayMetas(
+  metas: readonly RelayFetchMeta[],
+  responseTimeMs: number
+): RelayFetchMeta {
+  const relaysQueried = new Set<string>();
+  const relaysSucceeded = new Set<string>();
+  const relaysFailed = new Map<string, { url: string; error: string }>();
+  let eventCount = 0;
+
+  for (const meta of metas) {
+    meta.relaysQueried.forEach((relay) => relaysQueried.add(relay));
+    meta.relaysSucceeded.forEach((relay) => relaysSucceeded.add(relay));
+    for (const failure of meta.relaysFailed) {
+      relaysFailed.set(`${failure.url}:${failure.error}`, failure);
+    }
+    eventCount += meta.eventCount;
+  }
+
+  return {
+    relaysQueried: Array.from(relaysQueried),
+    relaysSucceeded: Array.from(relaysSucceeded),
+    relaysFailed: Array.from(relaysFailed.values()),
+    degraded: Array.from(relaysFailed.values()).length > 0,
+    coverage:
+      relaysQueried.size === 0 ? 1 : relaysSucceeded.size / relaysQueried.size,
+    responseTimeMs,
+    eventCount,
   };
 }
 
