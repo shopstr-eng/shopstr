@@ -103,7 +103,9 @@ describe("recoverProofsToBuyerWallet", () => {
         5
       )
     ).resolves.toBeUndefined();
-    expect(helpers.setCachedCashuProofs).toHaveBeenCalledWith([mkProof("s1", 5)]);
+    expect(helpers.setCachedCashuProofs).toHaveBeenCalledWith([
+      mkProof("s1", 5),
+    ]);
     expect(window.localStorage.getItem("tokens")).toBeNull();
   });
 
@@ -124,7 +126,9 @@ describe("recoverProofsToBuyerWallet", () => {
       )
     ).resolves.toBeUndefined();
 
-    expect(helpers.setCachedCashuProofs).toHaveBeenCalledWith([mkProof("s1", 5)]);
+    expect(helpers.setCachedCashuProofs).toHaveBeenCalledWith([
+      mkProof("s1", 5),
+    ]);
     expect(helpers.publishProofEvent).toHaveBeenCalled();
   });
 
