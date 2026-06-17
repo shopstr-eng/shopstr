@@ -5261,6 +5261,9 @@ describe("fetchAllRelays", () => {
     expect(global.fetch).toHaveBeenCalledWith(
       expect.stringContaining(`/api/db/fetch-relays?pubkey=${userPubkey}`)
     );
+    const dbContextCallOrder = editRelaysContext.mock.invocationCallOrder[0]!;
+    const relayFetchCallOrder = nostr.fetch.mock.invocationCallOrder[0]!;
+    expect(dbContextCallOrder).toBeLessThan(relayFetchCallOrder);
     // DB results trigger an early context call
     expect(editRelaysContext).toHaveBeenCalledWith(
       expect.arrayContaining(["wss://db-default.example"]),
@@ -5597,6 +5600,9 @@ describe("fetchAllBlossomServers", () => {
     expect(global.fetch).toHaveBeenCalledWith(
       expect.stringContaining(`/api/db/fetch-blossom?pubkey=${userPubkey}`)
     );
+    const dbContextCallOrder = editBlossomContext.mock.invocationCallOrder[0]!;
+    const relayFetchCallOrder = nostr.fetch.mock.invocationCallOrder[0]!;
+    expect(dbContextCallOrder).toBeLessThan(relayFetchCallOrder);
     // DB results trigger an early context call before relay completes
     expect(editBlossomContext).toHaveBeenCalledWith(
       expect.arrayContaining([
