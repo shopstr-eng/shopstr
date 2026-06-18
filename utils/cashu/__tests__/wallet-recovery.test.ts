@@ -66,6 +66,22 @@ describe("recoverProofsToBuyerWallet", () => {
     expect(tokens.map((p: Proof) => p.secret)).toEqual(["existing", "new"]);
   });
 
+  it("deduplicates recovered proofs by secret", async () => {
+    helpers.getLocalStorageData.mockReturnValue({
+      tokens: [mkProof("existing", 1)],
+      history: [],
+    });
+    await recoverProofsToBuyerWallet(
+      {} as never,
+      {} as never,
+      "https://mint.example",
+      [mkProof("existing", 1), mkProof("new", 2)],
+      3
+    );
+    const tokens = JSON.parse(window.localStorage.getItem("tokens") ?? "[]");
+    expect(tokens.map((p: Proof) => p.secret)).toEqual(["existing", "new"]);
+  });
+
   it("does not throw when proof event publish fails", async () => {
     helpers.publishProofEvent.mockRejectedValueOnce(new Error("relay down"));
     await expect(

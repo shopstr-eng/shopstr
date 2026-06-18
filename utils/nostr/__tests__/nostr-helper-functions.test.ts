@@ -77,6 +77,7 @@ import {
   verifyNip05Identifier,
   withBlastr,
 } from "../nostr-helper-functions";
+import * as NostrHelpers from "../nostr-helper-functions";
 import { finalizeEvent, nip19, nip44 } from "nostr-tools";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
 import { ProductFormValues } from "@/utils/types/types";
@@ -90,6 +91,17 @@ import {
   buildSignedHttpRequestProofTemplate,
 } from "@/utils/nostr/request-auth";
 import { newPromiseWithTimeout } from "@/utils/timeout";
+
+type CashuCacheHelpers = typeof NostrHelpers & {
+  getCachedCashuProofs?: () => unknown[];
+  setCachedCashuProofs?: (proofs?: unknown[]) => void;
+};
+
+const cashuHelpers = NostrHelpers as CashuCacheHelpers;
+
+const hasVolatileCashuCache = () =>
+  typeof cashuHelpers.getCachedCashuProofs === "function" &&
+  typeof cashuHelpers.setCachedCashuProofs === "function";
 
 describe("constructGiftWrappedEvent", () => {
   const senderPubkey =
@@ -411,6 +423,59 @@ describe("local storage sign-in helpers", () => {
         "bunker://remote-pubkey?secret=shared-secret&relay=wss://one.example&relay=wss://two.example",
       appPrivKey: "client-secret",
     });
+  });
+
+  it("clears stale volatile Cashu proofs during sign-in setup when available", () => {
+    if (!hasVolatileCashuCache()) {
+      expect(cashuHelpers.setCachedCashuProofs).toBeUndefined();
+      return;
+    }
+
+    cashuHelpers.setCachedCashuProofs([
+      {
+        id: "00d0a1b24d1c1a53",
+        amount: 1,
+        secret: "stale-proof",
+        C: "stale-c",
+      },
+    ]);
+
+    setLocalStorageDataOnSignIn({
+      relays: ["wss://relay.example"],
+      mints: ["https://mint.example"],
+      blossomServers: ["https://blossom.example"],
+      wot: 3,
+    });
+
+    expect(cashuHelpers.getCachedCashuProofs()).toEqual([]);
+    expect(getLocalStorageData().tokens).toEqual([]);
+  });
+});
+
+describe("Cashu proof cache logout cleanup", () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it("clears the volatile Cashu proof cache on logout when available", () => {
+    if (!hasVolatileCashuCache()) {
+      expect(cashuHelpers.setCachedCashuProofs).toBeUndefined();
+      return;
+    }
+
+    cashuHelpers.setCachedCashuProofs([
+      {
+        id: "00d0a1b24d1c1a53",
+        amount: 1,
+        secret: "session-proof",
+        C: "session-c",
+      },
+    ]);
+
+    LogOut();
+
+    expect(cashuHelpers.getCachedCashuProofs()).toEqual([]);
+    expect(getLocalStorageData().tokens).toEqual([]);
   });
 });
 
