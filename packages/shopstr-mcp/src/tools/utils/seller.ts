@@ -27,6 +27,7 @@ import {
   PRODUCT_KIND,
   PRODUCT_RESPONSE_BUDGET,
   PROFILE_KIND,
+  REVIEW_PRODUCT_FILTER_LIMIT,
   REVIEW_RESPONSE_BUDGET,
   SHOP_PROFILE_KIND,
   allRelaysFailed,
@@ -64,6 +65,7 @@ export type SellerReviewsResult = {
   reviews: ReviewResponse[];
   returnedReviews: ReviewResponse[];
   truncated: boolean;
+  reviewLookupPartial: boolean;
   meta: RelayFetchMeta;
 };
 
@@ -176,12 +178,16 @@ export async function fetchSellerReviews(
   productEvents: readonly NostrEvent[],
   context: CoreToolContext
 ): Promise<SellerReviewsResult> {
-  const productAddresses = Array.from(
+  const allProductAddresses = Array.from(
     new Set(
       productEvents
         .map(getParameterizedReplaceableCoordinate)
         .filter((value): value is string => value !== undefined)
     )
+  );
+  const productAddresses = allProductAddresses.slice(
+    0,
+    REVIEW_PRODUCT_FILTER_LIMIT
   );
   const relayFilters = buildSellerReviewFilters(productAddresses, sellerPubkey);
   const relayResult = await fetchFromRelays(
@@ -193,15 +199,19 @@ export async function fetchSellerReviews(
 
   const reviews = mergeAndDeduplicateReviews(relayResult.events)
     .filter((event) =>
-      reviewMatchesSeller(event, sellerPubkey, productAddresses)
+      reviewMatchesSeller(event, sellerPubkey, allProductAddresses)
     )
     .map(parseReviewEvent);
   const returnedReviews = reviews.slice(0, REVIEW_RESPONSE_BUDGET);
+
+  const reviewLookupPartial =
+    allProductAddresses.length > REVIEW_PRODUCT_FILTER_LIMIT;
 
   return {
     reviews,
     returnedReviews,
     truncated: returnedReviews.length < reviews.length,
+    reviewLookupPartial,
     meta: relayResult.meta,
   };
 }

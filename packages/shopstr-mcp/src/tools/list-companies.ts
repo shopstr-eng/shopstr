@@ -49,7 +49,10 @@ export async function handleListCompanies(
     [
       {
         kinds: [SHOP_PROFILE_KIND],
-        limit: 500,
+        limit: Math.min(
+          500,
+          Math.min(parsed.data.limit, SELLER_LIST_RESPONSE_BUDGET) * 5
+        ),
         ...(parsed.data.until !== undefined && { until: parsed.data.until }),
       },
     ],

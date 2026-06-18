@@ -15,6 +15,7 @@ export const SHOP_PROFILE_KIND = 30019;
 export const PRODUCT_RESPONSE_BUDGET = 37;
 export const REVIEW_RESPONSE_BUDGET = 50;
 export const SELLER_LIST_RESPONSE_BUDGET = 50;
+export const REVIEW_PRODUCT_FILTER_LIMIT = 20;
 export const RELAY_RETRY_AFTER_MS = 2_000;
 
 export function formatValidationError(error: ZodError): string {

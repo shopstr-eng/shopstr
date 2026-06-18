@@ -62,6 +62,17 @@ export async function handleGetSellerReputation(
 
   const stats = calculateReputationStats(reviews.reviews);
   const recentReviews = reviews.reviews.slice(0, RECENT_REVIEW_BUDGET);
+  const reputationHints: string[] = [];
+  if (reviews.reviews.length === 0) {
+    reputationHints.push(
+      "No public reviews were found for this seller; inspect product freshness and profile details before recommending purchases."
+    );
+  }
+  if (reviews.reviewLookupPartial) {
+    reputationHints.push(
+      "Review lookup was partial: seller has too many products for complete review scanning."
+    );
+  }
   const meta = {
     ...buildToolMeta(relayMeta, {
       resultCount: recentReviews.length,
@@ -71,12 +82,7 @@ export async function handleGetSellerReputation(
         ...recentReviews,
         ...products.returnedProducts,
       ]),
-      hints:
-        reviews.reviews.length === 0
-          ? [
-              "No public reviews were found for this seller; inspect product freshness and profile details before recommending purchases.",
-            ]
-          : [],
+      hints: reputationHints,
     }),
     cached: profiles.cache,
   };

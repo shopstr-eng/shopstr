@@ -61,6 +61,11 @@ export async function handleGetCompanyDetails(
       "Seller has more reviews than returned; use get_reviews with sellerPubkey for review-only inspection."
     );
   }
+  if (reviews.reviewLookupPartial) {
+    hints.push(
+      "Review lookup was partial: seller has too many products for complete review scanning."
+    );
+  }
   const resultCount =
     Number(Boolean(profiles.userProfile)) +
     Number(Boolean(profiles.shopProfile)) +
