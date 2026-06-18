@@ -45,8 +45,10 @@ import {
   constructGiftWrappedEvent,
   constructMessageGiftWrap,
   constructMessageSeal,
+  createBlossomServerEvent,
   createNostrDeleteEvent,
   createNostrProfileEvent,
+  createNostrRelayEvent,
   createNostrShopEvent,
   decryptNpub,
   deleteEvent,
@@ -63,6 +65,7 @@ import {
   parseLocalProfileFallback,
   parseBunkerToken,
   PostListing,
+  publishRelayEvent,
   publishReportEvent,
   publishReviewEvent,
   REPORT_TYPES,
@@ -1964,6 +1967,211 @@ describe("createNostrShopEvent", () => {
       expect.any(Error)
     );
     consoleErrorSpy.mockRestore();
+  });
+});
+
+describe("createNostrRelayEvent", () => {
+  function makeSigner() {
+    return {
+      sign: jest.fn().mockImplementation(async (tpl: any) => ({
+        ...tpl,
+        id: "signed-relay-event",
+        pubkey: "user-pubkey",
+        sig: "sig",
+      })),
+    };
+  }
+
+  beforeEach(() => {
+    localStorage.clear();
+    (cacheEventToDatabase as jest.Mock).mockResolvedValue(undefined);
+    (newPromiseWithTimeout as jest.Mock).mockImplementation(async (fn: any) => {
+      return new Promise((resolve, reject) =>
+        fn(resolve, reject, new AbortController().signal)
+      );
+    });
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('always adds ["r", relay] tags for each relay in the default list', async () => {
+    localStorage.setItem(
+      "relays",
+      JSON.stringify(["wss://relay.example", "wss://relay2.example"])
+    );
+    localStorage.setItem("readRelays", JSON.stringify([]));
+    localStorage.setItem("writeRelays", JSON.stringify([]));
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    const result = await createNostrRelayEvent(nostr as any, signer as any);
+
+    expect(result.kind).toBe(10002);
+    expect(result.tags).toContainEqual(["r", "wss://relay.example"]);
+    expect(result.tags).toContainEqual(["r", "wss://relay2.example"]);
+  });
+
+  it('adds ["r", relay, "read"] tags when readRelays is non-empty', async () => {
+    localStorage.setItem("relays", JSON.stringify(["wss://relay.example"]));
+    localStorage.setItem("readRelays", JSON.stringify(["wss://read.example"]));
+    localStorage.setItem("writeRelays", JSON.stringify([]));
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    const result = await createNostrRelayEvent(nostr as any, signer as any);
+
+    expect(result.tags).toContainEqual(["r", "wss://read.example", "read"]);
+  });
+
+  it('adds ["r", relay, "write"] tags when writeRelays is non-empty', async () => {
+    localStorage.setItem("relays", JSON.stringify(["wss://relay.example"]));
+    localStorage.setItem("readRelays", JSON.stringify([]));
+    localStorage.setItem(
+      "writeRelays",
+      JSON.stringify(["wss://write.example"])
+    );
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    const result = await createNostrRelayEvent(nostr as any, signer as any);
+
+    expect(result.tags).toContainEqual(["r", "wss://write.example", "write"]);
+  });
+
+  it("omits read/write directional tags when both lists are empty", async () => {
+    localStorage.setItem("relays", JSON.stringify(["wss://relay.example"]));
+    localStorage.setItem("readRelays", JSON.stringify([]));
+    localStorage.setItem("writeRelays", JSON.stringify([]));
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    const result = await createNostrRelayEvent(nostr as any, signer as any);
+
+    expect(result.tags.every((t) => t.length === 2)).toBe(true);
+  });
+});
+
+describe("publishRelayEvent", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    localStorage.setItem("relays", JSON.stringify(["wss://relay.example"]));
+    localStorage.setItem("writeRelays", JSON.stringify([]));
+    (cacheEventToDatabase as jest.Mock).mockResolvedValue(undefined);
+    (newPromiseWithTimeout as jest.Mock).mockImplementation(async (fn: any) => {
+      return new Promise((resolve, reject) =>
+        fn(resolve, reject, new AbortController().signal)
+      );
+    });
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("creates a kind-10002 event with r tags and caches it when signedEvent is truthy", async () => {
+    const relays = ["wss://relay1.example", "wss://relay2.example"];
+    const signedEvent = {
+      kind: 10002,
+      id: "relay-event-id",
+      pubkey: "user-pubkey",
+      sig: "sig",
+      content: "",
+      created_at: 1,
+      tags: relays.map((r) => ["r", r]),
+    };
+    const signer = { sign: jest.fn().mockResolvedValue(signedEvent) };
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    await publishRelayEvent(nostr as any, signer as any, relays);
+
+    expect(signer.sign).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 10002,
+        tags: expect.arrayContaining([
+          ["r", "wss://relay1.example"],
+          ["r", "wss://relay2.example"],
+        ]),
+      })
+    );
+    expect(cacheEventToDatabase).toHaveBeenCalledWith(signedEvent);
+  });
+
+  it("logs console.error when caching rejects", async () => {
+    const relays = ["wss://relay.example"];
+    const signedEvent = {
+      kind: 10002,
+      id: "relay-event-id",
+      pubkey: "user-pubkey",
+      sig: "sig",
+      content: "",
+      created_at: 1,
+      tags: [["r", "wss://relay.example"]],
+    };
+    const signer = { sign: jest.fn().mockResolvedValue(signedEvent) };
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    // First call happens inside finalizeAndSendNostrEvent (succeeds); second
+    // is the explicit cache call in publishRelayEvent (rejects).
+    (cacheEventToDatabase as jest.Mock)
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("Cache write failed"));
+
+    await publishRelayEvent(nostr as any, signer as any, relays);
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      "Failed to cache relay list event to database:",
+      expect.any(Error)
+    );
+    consoleErrorSpy.mockRestore();
+  });
+});
+
+describe("createBlossomServerEvent", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    localStorage.setItem("relays", JSON.stringify(["wss://relay.example"]));
+    localStorage.setItem("writeRelays", JSON.stringify([]));
+    (cacheEventToDatabase as jest.Mock).mockResolvedValue(undefined);
+    (newPromiseWithTimeout as jest.Mock).mockImplementation(async (fn: any) => {
+      return new Promise((resolve, reject) =>
+        fn(resolve, reject, new AbortController().signal)
+      );
+    });
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("creates a kind-10063 event with one server tag per configured blossom server", async () => {
+    localStorage.setItem(
+      "blossomServers",
+      JSON.stringify(["https://blossom1.example", "https://blossom2.example"])
+    );
+    const signer = {
+      sign: jest.fn().mockImplementation(async (tpl: any) => ({
+        ...tpl,
+        id: "blossom-event-id",
+        pubkey: "user-pubkey",
+        sig: "sig",
+      })),
+    };
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    const result = await createBlossomServerEvent(nostr as any, signer as any);
+
+    expect(result.kind).toBe(10063);
+    expect(result.tags).toHaveLength(2);
+    expect(result.tags).toEqual(
+      expect.arrayContaining([
+        ["server", "https://blossom1.example"],
+        ["server", "https://blossom2.example"],
+      ])
+    );
   });
 });
 
