@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import CreateCommunityForm from "../CreateCommunityForm";
 import { Community } from "@/utils/types/types";
+import { FileUploaderButton } from "@/components/utility-components/file-uploader";
 
 jest.mock("@heroui/react", () => ({
   Button: ({ children, ...props }: any) => (
@@ -42,24 +43,27 @@ jest.mock("@heroui/react", () => ({
 }));
 
 jest.mock("@/components/utility-components/file-uploader", () => ({
-  FileUploaderButton: ({
-    children,
-    imgCallbackOnUpload,
-    className,
-  }: {
-    children: React.ReactNode;
-    imgCallbackOnUpload: (url: string) => void;
-    className: string;
-  }) => (
-    <button
-      type="button"
-      className={className}
-      onClick={() => imgCallbackOnUpload("https://example.com/new-image.jpg")}
-    >
-      {children}
-    </button>
+  FileUploaderButton: jest.fn(
+    ({
+      children,
+      imgCallbackOnUpload,
+      className,
+    }: {
+      children: React.ReactNode;
+      imgCallbackOnUpload: (url: string) => void;
+      className: string;
+    }) => (
+      <button
+        type="button"
+        className={className}
+        onClick={() => imgCallbackOnUpload("https://example.com/new-image.jpg")}
+      >
+        {children}
+      </button>
+    )
   ),
 }));
+const mockFileUploaderButton = FileUploaderButton as jest.Mock;
 
 jest.mock("uuid", () => ({
   v4: () => "mock-uuid-1234",
@@ -72,6 +76,7 @@ describe("CreateCommunityForm", () => {
   beforeEach(() => {
     onSaveMock.mockClear();
     onCancelMock.mockClear();
+    mockFileUploaderButton.mockClear();
   });
 
   it("renders correctly in create mode with a generated UUID", () => {
@@ -86,6 +91,17 @@ describe("CreateCommunityForm", () => {
     expect(
       screen.getByRole("button", { name: /Create Community/i })
     ).toBeInTheDocument();
+  });
+
+  it("enables URL paste for the community image uploader", () => {
+    render(
+      <CreateCommunityForm existingCommunity={null} onSave={onSaveMock} />
+    );
+
+    expect(mockFileUploaderButton).toHaveBeenCalledWith(
+      expect.objectContaining({ allowUrlInput: true }),
+      undefined
+    );
   });
 
   it("pre-populates the form when editing an existing community", () => {
