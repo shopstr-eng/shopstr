@@ -9,7 +9,7 @@ const order = {
 };
 
 describe("order status auth helpers", () => {
-  it.each(["confirmed", "shipped", "delivered", "completed"])(
+  it.each(["confirmed", "shipped", "delivered"])(
     "allows the seller to set %s",
     (status) => {
       expect(
@@ -18,7 +18,7 @@ describe("order status auth helpers", () => {
     }
   );
 
-  it.each(["confirmed", "shipped", "delivered", "completed"])(
+  it.each(["confirmed", "shipped", "delivered"])(
     "blocks the buyer from setting %s",
     (status) => {
       expect(
@@ -26,6 +26,15 @@ describe("order status auth helpers", () => {
       ).toBe(false);
     }
   );
+
+  it("blocks completed because delivered is the database-backed terminal state", () => {
+    expect(
+      canActorUpdateMcpOrderStatus(order, "completed", order.seller_pubkey)
+    ).toBe(false);
+    expect(
+      canActorUpdateMcpOrderStatus(order, "completed", order.buyer_pubkey)
+    ).toBe(false);
+  });
 
   it("allows the buyer to cancel", () => {
     expect(

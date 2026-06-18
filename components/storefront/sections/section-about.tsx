@@ -1,5 +1,6 @@
 import { StorefrontSection, StorefrontColorScheme } from "@/utils/types/types";
 import { sanitizeUrl } from "@braintree/sanitize-url";
+import { sanitizeStorefrontSectionLink } from "@/utils/storefront-links";
 
 interface SectionAboutProps {
   section: StorefrontSection;
@@ -42,7 +43,7 @@ export default function SectionAbout({ section, colors }: SectionAboutProps) {
           )}
           {section.ctaText && (
             <a
-              href={section.ctaLink || "#products"}
+              href={sanitizeStorefrontSectionLink(section.ctaLink)}
               className="mt-6 inline-block rounded-lg px-6 py-3 font-bold transition-transform hover:-translate-y-0.5"
               style={{
                 backgroundColor: colors.primary,

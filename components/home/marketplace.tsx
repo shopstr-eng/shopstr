@@ -1,4 +1,7 @@
-import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
+import {
+  MagnifyingGlassIcon,
+  InformationCircleIcon,
+} from "@heroicons/react/24/outline";
 import {
   Button,
   Chip,
@@ -6,6 +9,7 @@ import {
   SelectItem,
   SelectSection,
   Input,
+  Tooltip,
   useDisclosure,
   Dropdown,
   DropdownTrigger,
@@ -88,9 +92,10 @@ function MarketplacePage({
   const [selectedCategories, setSelectedCategories] = useState(
     new Set<string>([])
   );
+  const [categorySearch, setCategorySearch] = useState("");
   const [selectedLocation, setSelectedLocation] = useState("");
   const [selectedSearch, setSelectedSearch] = useState("");
-  const debouncedSearch = useDebounce(selectedSearch, 300);
+  const debouncedSearch = useDebounce(selectedSearch, 500);
   const { isOpen, onOpen, onClose } = useDisclosure();
 
   const [wotFilter, setWotFilter] = useState(false);
@@ -124,6 +129,10 @@ function MarketplacePage({
     useContext(SignerContext);
 
   const searchBarRef = useRef<HTMLDivElement>(null);
+  const hasTrustGraph =
+    Boolean(loggedIn) &&
+    !followsContext.isLoading &&
+    followsContext.firstDegreeFollowsLength > 0;
 
   useEffect(() => {
     const slug = normalizeNpub(router.query.npub);
@@ -232,14 +241,17 @@ function MarketplacePage({
       }
     }
     setIsFetchingShop(false);
-  }, [focusedPubkey, shopMapContext, shopBannerURL]);
+  }, [focusedPubkey, shopMapContext]);
 
   useEffect(() => {
-    setIsFetchingFollows(true);
-    if (followsContext.followList.length && !followsContext.isLoading) {
-      setIsFetchingFollows(false);
+    setIsFetchingFollows(followsContext.isLoading);
+  }, [followsContext.isLoading]);
+
+  useEffect(() => {
+    if (!hasTrustGraph && wotFilter) {
+      setWotFilter(false);
     }
-  }, [followsContext]);
+  }, [hasTrustGraph, wotFilter]);
 
   const handleFilteredProductsChange = (products: ProductData[]) => {
     setFilteredProducts(products);
@@ -332,7 +344,12 @@ function MarketplacePage({
                           dropDownKeys={
                             reviewerPubkey === userPubkey
                               ? ["shop_profile"]
-                              : ["shop", "inquiry", "copy_npub"]
+                              : [
+                                  "shop",
+                                  "inquiry",
+                                  "copy_npub",
+                                  "report_profile",
+                                ]
                           }
                         />
                       </div>
@@ -406,9 +423,17 @@ function MarketplacePage({
               <Input
                 className="text-light-text dark:text-dark-text"
                 isClearable
-                placeholder="Title, summary, price, naddr1..., npub1..."
+                placeholder="Search by name, price, or seller"
                 value={selectedSearch}
                 startContent={<MagnifyingGlassIcon height={"1em"} />}
+                endContent={
+                  <Tooltip
+                    content="You can also search by Nostr identifier (naddr1… or npub1…)"
+                    placement="bottom"
+                  >
+                    <InformationCircleIcon className="h-4 w-4 cursor-default text-gray-400" />
+                  </Tooltip>
+                }
                 onChange={(event) => {
                   const value = event.target.value;
                   setSelectedSearch(value);
@@ -486,15 +511,23 @@ function MarketplacePage({
               <Input
                 className="text-light-text dark:text-dark-text mt-2"
                 isClearable
-                placeholder="Title, summary, price, naddr1..., npub1..."
+                placeholder="Search by name, price, or seller"
                 value={selectedSearch}
                 startContent={<MagnifyingGlassIcon height={"1em"} />}
+                endContent={
+                  <Tooltip
+                    content="You can also search by Nostr identifier (naddr1… or npub1…)"
+                    placement="bottom"
+                  >
+                    <InformationCircleIcon className="h-4 w-4 cursor-default text-gray-400" />
+                  </Tooltip>
+                }
                 onChange={(event) => {
                   const value = event.target.value;
                   setSelectedSearch(value);
                 }}
                 onClear={() => setSelectedSearch("")}
-              ></Input>
+              />
             </div>
             <div className="flex w-full flex-row gap-2 pb-3">
               <Select
@@ -512,9 +545,31 @@ function MarketplacePage({
                   }
                 }}
                 selectionMode="multiple"
+                listboxProps={{
+                  topContent: (
+                    <Input
+                      aria-label="Search categories"
+                      className="mb-1 px-1 py-1"
+                      value={categorySearch}
+                      onValueChange={setCategorySearch}
+                      placeholder="Search category..."
+                      type="text"
+                      startContent={
+                        <MagnifyingGlassIcon
+                          aria-hidden="true"
+                          className="text-default-400 h-4 w-4"
+                        />
+                      }
+                      onKeyDown={(e) => e.stopPropagation()}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  ),
+                }}
               >
                 <SelectSection className="text-light-text dark:text-dark-text">
-                  {CATEGORIES.map((category) => (
+                  {CATEGORIES.filter((c) =>
+                    c.toLowerCase().includes(categorySearch.toLowerCase())
+                  ).map((category) => (
                     <SelectItem key={category}>{category}</SelectItem>
                   ))}
                 </SelectSection>
@@ -528,7 +583,7 @@ function MarketplacePage({
                   setSelectedLocation(event.target.value);
                 }}
               />
-              {!isFetchingFollows ? (
+              {!isFetchingFollows && hasTrustGraph ? (
                 <ShopstrSwitch
                   wotFilter={wotFilter}
                   setWotFilter={setWotFilter}

@@ -9,6 +9,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   PhotoIcon,
   ArrowUpTrayIcon,
+  LinkIcon,
   XCircleIcon,
   XMarkIcon,
 } from "@heroicons/react/24/outline";
@@ -16,23 +17,48 @@ import {
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const MAX_STRIP_SIZE = 25 * 1024 * 1024;
 const COMPRESSION_THRESHOLD = 20 * 1024 * 1024;
+const UPLOAD_CONCURRENCY = 4;
+
+async function withConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<R>
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let nextIndex = 0;
+  const workers = Array.from(
+    { length: Math.min(limit, items.length) },
+    async () => {
+      while (nextIndex < items.length) {
+        const i = nextIndex++;
+        results[i] = await fn(items[i]!);
+      }
+    }
+  );
+  await Promise.all(workers);
+  return results;
+}
 
 export const FileUploaderButton = ({
   disabled,
   isIconOnly,
   className,
+  containerClassName,
   children,
   imgCallbackOnUpload,
   isPlaceholder,
   isProductUpload,
+  allowUrlInput,
 }: {
   disabled?: boolean;
   isIconOnly?: boolean;
   className?: string;
+  containerClassName?: string;
   children?: React.ReactNode;
   imgCallbackOnUpload: (imgUrl: string) => void;
   isPlaceholder?: boolean;
   isProductUpload?: boolean;
+  allowUrlInput?: boolean;
 }) => {
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState<number | null>(null);
@@ -42,6 +68,7 @@ export const FileUploaderButton = ({
     { src: string; name: string; size: number }[]
   >([]);
   const [isDragging, setIsDragging] = useState(false);
+  const [urlInput, setUrlInput] = useState("");
 
   const hiddenFileInput = useRef<HTMLInputElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
@@ -206,6 +233,10 @@ export const FileUploaderButton = ({
     try {
       const imageFiles = Array.from(files);
 
+      if (imageFiles.length === 0) {
+        return [];
+      }
+
       if (
         imageFiles.some(
           (imgFile) =>
@@ -225,26 +256,35 @@ export const FileUploaderButton = ({
       }));
       setPreviews(previewsList);
 
-      const processedImageFiles: File[] = [];
-      for (let idx = 0; idx < imageFiles.length; idx++) {
-        const imageFile = imageFiles[idx]!;
-        let processed: File;
-        if (imageFile.size > MAX_STRIP_SIZE) {
-          processed = imageFile;
-        } else {
-          processed = await stripImageMetadata(imageFile);
+      // Preprocess files with bounded concurrency to avoid spiking memory/CPU on large selections.
+      let processedCount = 0;
+      const processedImageFiles = await withConcurrency(
+        imageFiles,
+        UPLOAD_CONCURRENCY,
+        async (imageFile) => {
+          let processed: File;
+          if (imageFile.size > MAX_STRIP_SIZE) {
+            processed = imageFile;
+          } else {
+            processed = await stripImageMetadata(imageFile);
+          }
+          if (processed.size > COMPRESSION_THRESHOLD) {
+            processed = await compressImage(processed);
+          }
+          processedCount += 1;
+          setProgress(Math.round((processedCount / imageFiles.length) * 30));
+          return processed;
         }
-        if (processed.size > COMPRESSION_THRESHOLD) {
-          processed = await compressImage(processed);
-        }
-        processedImageFiles.push(processed);
-        setProgress(Math.round(((idx + 1) / imageFiles.length) * 30));
-      }
+      );
 
       let responses: any[] = [];
       if (isLoggedIn) {
-        responses = await Promise.all(
-          processedImageFiles.map(async (imageFile, idx) => {
+        // Upload with bounded concurrency and track progress by completed count.
+        let uploadedCount = 0;
+        responses = await withConcurrency(
+          processedImageFiles,
+          UPLOAD_CONCURRENCY,
+          async (imageFile) => {
             const tags = await blossomUploadImages(
               imageFile,
               signer!,
@@ -252,11 +292,12 @@ export const FileUploaderButton = ({
                 ? blossomServers
                 : ["https://cdn.nostrcheck.me"]
             );
+            uploadedCount += 1;
             setProgress(
-              30 + Math.round(((idx + 1) / processedImageFiles.length) * 70)
+              30 + Math.round((uploadedCount / processedImageFiles.length) * 70)
             );
             return tags;
-          })
+          }
         );
       }
 
@@ -271,7 +312,9 @@ export const FileUploaderButton = ({
           }
           return null;
         })
-        .filter((url) => url !== null);
+        .filter(
+          (url): url is string => typeof url === "string" && url.length > 0
+        );
 
       setTimeout(() => {
         setProgress(null);
@@ -309,14 +352,20 @@ export const FileUploaderButton = ({
 
   const handleChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    setLoading(true);
-    if (files) {
-      const uploadedImages = await uploadImages(files);
-      uploadedImages
-        .filter((imgUrl): imgUrl is string => imgUrl !== null)
-        .forEach((imgUrl) => imgCallbackOnUpload(imgUrl));
+    if (files && files.length > 0) {
+      setLoading(true);
+      try {
+        const uploadedImages = await uploadImages(files);
+        uploadedImages
+          .filter(
+            (imgUrl): imgUrl is string =>
+              typeof imgUrl === "string" && imgUrl.length > 0
+          )
+          .forEach((imgUrl) => imgCallbackOnUpload(imgUrl));
+      } finally {
+        setLoading(false);
+      }
     }
-    setLoading(false);
     if (hiddenFileInput.current) {
       hiddenFileInput.current.value = "";
     }
@@ -347,24 +396,72 @@ export const FileUploaderButton = ({
     const files = e.dataTransfer.files;
     if (files && files.length > 0) {
       setLoading(true);
-      const uploadedImages = await uploadImages(files);
-      uploadedImages
-        .filter((imgUrl): imgUrl is string => imgUrl !== null)
-        .forEach((imgUrl) => imgCallbackOnUpload(imgUrl));
-      setLoading(false);
+      try {
+        const uploadedImages = await uploadImages(files);
+        uploadedImages
+          .filter(
+            (imgUrl): imgUrl is string =>
+              typeof imgUrl === "string" && imgUrl.length > 0
+          )
+          .forEach((imgUrl) => imgCallbackOnUpload(imgUrl));
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
+  const isHandlingDropZoneClickRef = useRef(false);
+
+  const handleDropZoneClick = () => {
+    // Placeholder mode should behave like the button: click anywhere in the box opens picker.
+    // Guard against duplicate invocations from nested click handlers bubbling to the drop zone.
+    if (!isPlaceholder || isHandlingDropZoneClickRef.current) {
+      return;
+    }
+
+    isHandlingDropZoneClickRef.current = true;
+    handleClick();
+
+    setTimeout(() => {
+      isHandlingDropZoneClickRef.current = false;
+    }, 0);
+  };
+
+  const wrapperClassName = containerClassName
+    ? `flex w-fit flex-col gap-4 ${containerClassName}`
+    : "flex w-full flex-col gap-4";
+  const dropZoneWidthClassName = containerClassName ? "w-fit" : "w-full";
+
+  const handleUrlSubmit = () => {
+    const trimmed = urlInput.trim();
+    if (!trimmed) return;
+
+    try {
+      const parsed = new URL(trimmed);
+      if (parsed.protocol !== "https:") {
+        throw new Error("Image URL must use HTTPS");
+      }
+    } catch {
+      setFailureText("Please enter a valid image URL starting with https://.");
+      setShowFailureModal(true);
+      return;
+    }
+
+    imgCallbackOnUpload(trimmed);
+    setUrlInput("");
+  };
+
   return (
-    <div className="flex w-full flex-col gap-4">
+    <div className={wrapperClassName}>
       {/* Drag and Drop Zone */}
       <div
         ref={dropZoneRef}
+        onClick={handleDropZoneClick}
         onDragEnter={handleDragEnter}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        className={`relative w-full transition-all duration-300 ${
+        className={`relative ${dropZoneWidthClassName} transition-all duration-300 ${
           isPlaceholder
             ? "border-shopstr-purple dark:border-shopstr-yellow flex h-full min-h-[250px] items-center justify-center rounded-xl border-2 border-dashed p-6"
             : !isDragging && "border-2 border-dashed border-transparent"
@@ -399,6 +496,7 @@ export const FileUploaderButton = ({
 
         {!isPlaceholder && (
           <Button
+            type="button"
             isLoading={loading}
             onClick={handleClick}
             isIconOnly={isIconOnly || loading}
@@ -426,23 +524,47 @@ export const FileUploaderButton = ({
           </Button>
         )}
 
-        <Input
+        <input
           type="file"
           accept={ALLOWED_TYPES.join(",")}
           multiple
           ref={hiddenFileInput}
           onChange={handleChange}
           className="hidden"
+          disabled={disabled || loading}
         />
-
-        {isPlaceholder && (
-          <div
-            className="absolute inset-0 cursor-pointer"
-            onClick={handleClick}
-            aria-label="Click to upload images"
-          />
-        )}
       </div>
+
+      {allowUrlInput && (
+        <div className="flex w-full items-center gap-2">
+          <Input
+            type="url"
+            placeholder="Or paste an image URL..."
+            value={urlInput}
+            onChange={(e) => setUrlInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                handleUrlSubmit();
+              }
+            }}
+            variant="bordered"
+            size="sm"
+            className="text-light-text dark:text-dark-text flex-1"
+            startContent={<LinkIcon className="text-default-400 h-4 w-4" />}
+            isDisabled={disabled || loading}
+          />
+          <Button
+            type="button"
+            size="sm"
+            className="bg-shopstr-purple dark:bg-shopstr-yellow shrink-0 text-white dark:text-black"
+            onClick={handleUrlSubmit}
+            isDisabled={!urlInput.trim() || disabled || loading}
+          >
+            Use URL
+          </Button>
+        </div>
+      )}
 
       {/* Progress Bar */}
       <AnimatePresence>

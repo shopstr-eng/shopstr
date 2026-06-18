@@ -1,5 +1,6 @@
 import Head from "next/head";
 import Link from "next/link";
+import { safeJsonLdString } from "@/utils/safe-json-ld";
 import {
   ShieldCheckIcon,
   CodeBracketIcon,
@@ -55,10 +56,9 @@ export default function About() {
           name="description"
           content="Shopstr is a global, permissionless marketplace built on the Nostr protocol. Learn about our mission to enable censorship-resistant Bitcoin commerce worldwide."
         />
-        <link rel="canonical" href="https://shopstr.market/about" />
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
+          dangerouslySetInnerHTML={{ __html: safeJsonLdString(structuredData) }}
         />
       </Head>
 

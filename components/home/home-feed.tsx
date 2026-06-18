@@ -42,7 +42,7 @@ const HomeFeed = ({
       }
     }
     setIsFetchingShop(false);
-  }, [focusedPubkey, shopMapContext, shopBannerURL, router.pathname]);
+  }, [focusedPubkey, shopMapContext, router.pathname]);
 
   return (
     <>

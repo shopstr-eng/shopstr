@@ -1,4 +1,11 @@
-import { useContext, useState, useEffect, useMemo, useRef } from "react";
+import {
+  useCallback,
+  useContext,
+  useState,
+  useEffect,
+  useMemo,
+  useRef,
+} from "react";
 import {
   CashuWalletContext,
   ChatsContext,
@@ -16,6 +23,7 @@ import {
   Select,
   SelectItem,
   Input,
+  Checkbox,
 } from "@heroui/react";
 import {
   BanknotesIcon,
@@ -25,20 +33,37 @@ import {
   WalletIcon,
 } from "@heroicons/react/24/outline";
 import {
-  CashuMint,
-  CashuWallet,
+  Mint as CashuMint,
+  Wallet as CashuWallet,
   getEncodedToken,
   Proof,
-  MintKeyset,
+  Keyset as MintKeyset,
 } from "@cashu/cashu-ts";
+import { safeMeltProofs } from "@/utils/cashu/melt-retry-service";
+import { safeSwap } from "@/utils/cashu/swap-retry-service";
+import { withMintRetry } from "@/utils/cashu/mint-retry-service";
+import {
+  recordPendingMintQuote,
+  markMintQuoteClaimed,
+  updatePendingMintQuote,
+  getPendingMintQuotes,
+  removePendingMintQuote,
+} from "@/utils/cashu/pending-mint-operations";
+import {
+  recoverProofsToBuyerWallet,
+  withDeadline,
+  isTimeoutError,
+} from "@/utils/cashu/wallet-recovery";
 import {
   constructGiftWrappedEvent,
   constructMessageSeal,
   constructMessageGiftWrap,
+  getSavedAddresses,
   sendGiftWrappedMessageEvent,
   generateKeys,
   getLocalStorageData,
   publishProofEvent,
+  saveAddress,
 } from "@/utils/nostr/nostr-helper-functions";
 import { LightningAddress } from "@getalby/lightning-tools";
 import QRCode from "qrcode";
@@ -51,6 +76,7 @@ import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import SignInModal from "./sign-in/SignInModal";
 import FailureModal from "@/components/utility-components/failure-modal";
 import CountryDropdown from "./utility-components/dropdowns/country-dropdown";
+import AddressPicker from "./utility-components/address-picker";
 import {
   NostrContext,
   SignerContext,
@@ -59,15 +85,21 @@ import {
   ShippingFormData,
   ContactFormData,
   CombinedFormData,
+  SavedAddress,
   ShopProfile,
 } from "@/utils/types/types";
 import { Controller } from "react-hook-form";
+import {
+  buildShippingAdjustedProductTotals,
+  ProductTotalsInSats,
+  sumProductTotalsInSats,
+} from "@/utils/cart-totals";
 
 export default function CartInvoiceCard({
   products,
   quantities,
   shippingTypes,
-  totalCostsInSats,
+  productTotalsInSats,
   subtotalCost,
   appliedDiscounts = {},
   discountCodes = {},
@@ -81,7 +113,7 @@ export default function CartInvoiceCard({
   products: ProductData[];
   quantities: { [key: string]: number };
   shippingTypes: { [key: string]: string };
-  totalCostsInSats: { [key: string]: number };
+  productTotalsInSats: ProductTotalsInSats;
   subtotalCost: number;
   appliedDiscounts?: { [key: string]: number };
   discountCodes?: { [key: string]: string };
@@ -111,8 +143,46 @@ export default function CartInvoiceCard({
 
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
   const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
+  const [saveDetails, setSaveDetails] = useState(false);
+  const [saveAddressLabel, setSaveAddressLabel] = useState("");
+  const [selectedSavedAddressId, setSelectedSavedAddressId] = useState<
+    string | null
+  >(null);
+  const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
   const [invoice, setInvoice] = useState("");
   const [copiedToClipboard, setCopiedToClipboard] = useState(false);
+
+  // Tracks the in-flight invoice polling so a "Back" click or unmount can
+  // signal the polling loop to exit cleanly instead of letting it complete
+  // a payment the user has already abandoned.
+  const invoicePollRef = useRef<{
+    cancelled: boolean;
+    activeQuoteId: string | null;
+  }>({ cancelled: false, activeQuoteId: null });
+
+  // Cancels any in-flight invoice polling. If the quote is still awaiting
+  // payment we drop the durable record (no money has moved). If the mint
+  // has already moved to PAID, the durable record stays so MintRecoveryBoot
+  // can claim the proofs back to the buyer's wallet on next boot.
+  const cancelInvoicePolling = useCallback(() => {
+    const state = invoicePollRef.current;
+    state.cancelled = true;
+    const quoteId = state.activeQuoteId;
+    if (!quoteId) return;
+    const existing = getPendingMintQuotes().find((q) => q.quoteId === quoteId);
+    if (existing && existing.status === "awaiting_payment") {
+      removePendingMintQuote(quoteId);
+    }
+  }, []);
+
+  // Defensive: if the user navigates away mid-polling (route change, modal
+  // close), still signal cancellation so the loop doesn't keep working in
+  // the background.
+  useEffect(() => {
+    return () => {
+      cancelInvoicePolling();
+    };
+  }, [cancelInvoicePolling]);
 
   const [orderConfirmed, setOrderConfirmed] = useState(false);
 
@@ -137,7 +207,7 @@ export default function CartInvoiceCard({
         const cartItems = products.map((p: any) => ({
           title: p.title || p.productName,
           image: p.images?.[0] || "",
-          amount: String(totalCostsInSats[p.id] || 0),
+          amount: String(currentProductTotalsInSats[p.id] || 0),
           currency: "sats",
           quantity: quantities[p.id] || 1,
           shipping: shippingTypes[p.id] || "",
@@ -335,8 +405,16 @@ export default function CartInvoiceCard({
         actualUserPubkey
       );
 
-      await sendGiftWrappedMessageEvent(nostr, giftWrappedEventForSeller);
-      await sendGiftWrappedMessageEvent(nostr, giftWrappedEventForBuyer);
+      await sendGiftWrappedMessageEvent(
+        nostr,
+        giftWrappedEventForSeller,
+        signer
+      );
+      await sendGiftWrappedMessageEvent(
+        nostr,
+        giftWrappedEventForBuyer,
+        signer
+      );
 
       // Add to local context for immediate UI feedback
       chatsContext.addNewlyCreatedMessageEvent(
@@ -368,12 +446,15 @@ export default function CartInvoiceCard({
     [productId: string]: string;
   }>({});
 
+  const [currentProductTotalsInSats, setCurrentProductTotalsInSats] =
+    useState<ProductTotalsInSats>(productTotalsInSats);
   const [totalCost, setTotalCost] = useState<number>(subtotalCost);
 
   const {
     handleSubmit: handleFormSubmit,
     control: formControl,
     watch,
+    setValue,
   } = useForm();
 
   // Watch form values to validate completion
@@ -395,6 +476,18 @@ export default function CartInvoiceCard({
   }, [uniqueShippingTypes, hasShippingPickupProducts]);
 
   const [requiredInfo, setRequiredInfo] = useState("");
+  const defaultSavedAddress = useMemo(
+    () =>
+      savedAddresses.find((address) => address.isDefault) ||
+      savedAddresses[0] ||
+      null,
+    [savedAddresses]
+  );
+
+  useEffect(() => {
+    setCurrentProductTotalsInSats(productTotalsInSats);
+    setTotalCost(subtotalCost);
+  }, [productTotalsInSats, subtotalCost]);
 
   useEffect(() => {
     if (products && products.length > 0) {
@@ -405,6 +498,19 @@ export default function CartInvoiceCard({
       setRequiredInfo(requiredFields);
     }
   }, [products]);
+
+  useEffect(() => {
+    const loadSavedAddresses = () => {
+      setSavedAddresses(getSavedAddresses());
+    };
+
+    loadSavedAddresses();
+    window.addEventListener("storage", loadSavedAddresses);
+
+    return () => {
+      window.removeEventListener("storage", loadSavedAddresses);
+    };
+  }, []);
 
   // Check if any products have pickup locations
   const productsWithPickupLocations = useMemo(() => {
@@ -468,6 +574,7 @@ export default function CartInvoiceCard({
         watchedValues["Postal Code"]?.trim() &&
         watchedValues["State/Province"]?.trim() &&
         watchedValues.Country?.trim() &&
+        (!saveDetails || saveAddressLabel.trim()) &&
         (!requiredInfo || watchedValues.Required?.trim()) &&
         pickupLocationValid
       );
@@ -481,6 +588,7 @@ export default function CartInvoiceCard({
         watchedValues["Postal Code"]?.trim() &&
         watchedValues["State/Province"]?.trim() &&
         watchedValues.Country?.trim() &&
+        (!saveDetails || saveAddressLabel.trim()) &&
         (!requiredInfo || watchedValues.Required?.trim()) &&
         pickupLocationValid
       );
@@ -493,6 +601,8 @@ export default function CartInvoiceCard({
     requiredInfo,
     productsWithPickupLocations,
     shippingPickupPreference,
+    saveDetails,
+    saveAddressLabel,
   ]);
 
   const generateNewKeys = async () => {
@@ -713,7 +823,7 @@ export default function CartInvoiceCard({
       decodedRandomPrivkeyForReceiver.data as Uint8Array,
       pubkeyToReceiveMessage
     );
-    await sendGiftWrappedMessageEvent(nostr!, giftWrappedEvent);
+    await sendGiftWrappedMessageEvent(nostr!, giftWrappedEvent, signer);
 
     if (isReceipt) {
       chatsContext.addNewlyCreatedMessageEvent(
@@ -792,7 +902,6 @@ export default function CartInvoiceCard({
       if (price < 1) {
         throw new Error("Total price is less than 1 sat.");
       }
-
       const commonData = {
         additionalInfo: data["Required"],
       };
@@ -821,6 +930,26 @@ export default function CartInvoiceCard({
           shippingState: data["State/Province"],
           shippingCountry: data["Country"],
         };
+      }
+
+      if (
+        saveDetails &&
+        (formType === "shipping" || formType === "combined") &&
+        paymentData.shippingName &&
+        paymentData.shippingAddress
+      ) {
+        saveAddress({
+          id: selectedSavedAddressId || undefined,
+          name: paymentData.shippingName,
+          address: paymentData.shippingAddress,
+          unit: paymentData.shippingUnitNo || "",
+          city: paymentData.shippingCity,
+          state: paymentData.shippingState,
+          zip: paymentData.shippingPostalCode,
+          country: paymentData.shippingCountry,
+          label: saveAddressLabel.trim(),
+          isDefault: false,
+        });
       }
 
       const addressTag =
@@ -873,67 +1002,70 @@ export default function CartInvoiceCard({
     }
   };
 
+  const resetCurrentProductTotals = () => {
+    setCurrentProductTotalsInSats(productTotalsInSats);
+    setTotalCost(subtotalCost);
+  };
+
+  const buildShippingCostsInSats = async () => {
+    const shippingCostsInSats: { [productId: string]: number } = {};
+
+    for (const product of products) {
+      shippingCostsInSats[product.id] = await convertShippingToSats(product);
+    }
+
+    return shippingCostsInSats;
+  };
+
+  const applyCurrentProductTotals = async (
+    shouldAddShipping: (shippingType?: string) => boolean
+  ) => {
+    try {
+      const shippingCostsInSats = await buildShippingCostsInSats();
+      const updatedProductTotalsInSats = buildShippingAdjustedProductTotals({
+        products,
+        baseProductTotalsInSats: productTotalsInSats,
+        quantities,
+        shippingTypes,
+        shippingCostsInSats,
+        sellerFreeShippingStatus,
+        shouldAddShipping,
+      });
+
+      setCurrentProductTotalsInSats(updatedProductTotalsInSats);
+      setTotalCost(sumProductTotalsInSats(updatedProductTotalsInSats));
+
+      return true;
+    } catch (err) {
+      handleShippingConversionError(err);
+      return false;
+    }
+  };
+
   const handleOrderTypeSelection = async (selectedOrderType: string) => {
     setShowOrderTypeSelection(false);
 
     if (selectedOrderType === "shipping") {
       setFormType("shipping");
-      let shippingTotal = 0;
-      const updatedTotalCostsInSats: { [productId: string]: number } = {};
-
-      for (const product of products) {
-        if (sellerFreeShippingStatus[product.pubkey]?.qualifies) {
-          updatedTotalCostsInSats[product.id] =
-            totalCostsInSats[product.id] || 0;
-          continue;
-        }
-        const shippingCostInSats = await convertShippingToSats(product);
-        const quantity = quantities[product.id] || 1;
-        const productShippingCost = Math.ceil(shippingCostInSats * quantity);
-        shippingTotal += productShippingCost;
-        updatedTotalCostsInSats[product.id] =
-          (totalCostsInSats[product.id] || 0) + productShippingCost;
-      }
-
-      setTotalCost(subtotalCost + shippingTotal);
+      if (!(await applyCurrentProductTotals(() => true))) return;
     } else if (selectedOrderType === "contact") {
       setFormType("contact");
       setIsFormValid(true);
-      setTotalCost(subtotalCost);
+      resetCurrentProductTotals();
     } else if (selectedOrderType === "combined") {
       setFormType("combined");
       if (hasMixedShippingWithPickup) {
         setShowFreePickupSelection(true);
+        resetCurrentProductTotals();
       } else {
-        let shippingTotal = 0;
-        const updatedTotalCostsInSats: { [productId: string]: number } = {};
-
-        for (const product of products) {
-          if (sellerFreeShippingStatus[product.pubkey]?.qualifies) {
-            updatedTotalCostsInSats[product.id] =
-              totalCostsInSats[product.id] || 0;
-            continue;
-          }
-          const productShippingType = shippingTypes[product.id];
-          if (
-            productShippingType === "Added Cost" ||
-            productShippingType === "Free"
-          ) {
-            const shippingCostInSats = await convertShippingToSats(product);
-            const quantity = quantities[product.id] || 1;
-            const productShippingCost = Math.ceil(
-              shippingCostInSats * quantity
-            );
-            shippingTotal += productShippingCost;
-            updatedTotalCostsInSats[product.id] =
-              (totalCostsInSats[product.id] || 0) + productShippingCost;
-          } else {
-            updatedTotalCostsInSats[product.id] =
-              totalCostsInSats[product.id] || 0;
-          }
+        if (
+          !(await applyCurrentProductTotals(
+            (shippingType) =>
+              shippingType === "Added Cost" || shippingType === "Free"
+          ))
+        ) {
+          return;
         }
-
-        setTotalCost(subtotalCost + shippingTotal);
       }
     }
   };
@@ -976,8 +1108,18 @@ export default function CartInvoiceCard({
       validatePaymentData(convertedPrice, data);
 
       const wallet = new CashuWallet(new CashuMint(mints[0]!));
-      const { request: pr, quote: hash } =
-        await wallet.createMintQuote(convertedPrice);
+      await wallet.loadMint();
+      const { request: pr, quote: hash } = await withMintRetry(
+        () => wallet.createMintQuoteBolt11(convertedPrice),
+        { maxAttempts: 4, perAttemptTimeoutMs: 15000, totalTimeoutMs: 60000 }
+      );
+      recordPendingMintQuote({
+        quoteId: hash,
+        mintUrl: mints[0]!,
+        amount: convertedPrice,
+        invoice: pr,
+      });
+      invoicePollRef.current = { cancelled: false, activeQuoteId: hash };
 
       const { nwcString } = getLocalStorageData();
       if (!nwcString) throw new Error("NWC connection not found.");
@@ -1001,9 +1143,19 @@ export default function CartInvoiceCard({
 
       setShowInvoiceCard(true);
       const wallet = new CashuWallet(new CashuMint(mints[0]!));
+      await wallet.loadMint();
 
-      const { request: pr, quote: hash } =
-        await wallet.createMintQuote(convertedPrice);
+      const { request: pr, quote: hash } = await withMintRetry(
+        () => wallet.createMintQuoteBolt11(convertedPrice),
+        { maxAttempts: 4, perAttemptTimeoutMs: 15000, totalTimeoutMs: 60000 }
+      );
+      recordPendingMintQuote({
+        quoteId: hash,
+        mintUrl: mints[0]!,
+        amount: convertedPrice,
+        invoice: pr,
+      });
+      invoicePollRef.current = { cancelled: false, activeQuoteId: hash };
 
       setInvoice(pr);
 
@@ -1059,31 +1211,140 @@ export default function CartInvoiceCard({
     const maxRetries = 30; // Maximum 30 retries (about 1 minute)
 
     while (retryCount < maxRetries) {
+      // Honor any cancellation signal from the Back button or component
+      // unmount. If we haven't seen PAID yet, leave the loop and let the
+      // cancel handler drop the durable record.
+      if (invoicePollRef.current.cancelled) {
+        return;
+      }
       try {
-        // First check if the quote has been paid
-        const quoteState = await wallet.checkMintQuote(hash);
+        // First check if the quote has been paid (bounded retry on transient
+        // failures so a single network blip doesn't abandon the polling loop).
+        const quoteState = await withMintRetry(
+          () => wallet.checkMintQuoteBolt11(hash),
+          { maxAttempts: 3, perAttemptTimeoutMs: 10000, totalTimeoutMs: 25000 }
+        );
 
         if (quoteState.state === "PAID") {
-          // Quote is paid, try to mint proofs
+          // Money is on the mint. Mark durable record before claiming so that
+          // a tab close / network drop here triggers boot-time recovery.
+          // Use the upsert form so that a Back-button cancellation racing
+          // with this transition (which would have removed the
+          // awaiting_payment record) cannot leave us without a durable
+          // safety net for the proofs we're about to mint.
+          const existing = getPendingMintQuotes().find(
+            (q) => q.quoteId === hash
+          );
+          recordPendingMintQuote({
+            quoteId: hash,
+            mintUrl: mints[0]!,
+            amount: convertedPrice,
+            invoice: existing?.invoice ?? "",
+            status: "paid_unclaimed",
+          });
           try {
-            const proofs = await wallet.mintProofs(convertedPrice, hash);
-            if (proofs && proofs.length > 0) {
-              await sendTokens(wallet, proofs, data);
-              localStorage.setItem("cart", JSON.stringify([]));
-              setPaymentConfirmed(true);
-              if (setInvoiceIsPaid) {
-                setInvoiceIsPaid(true);
+            const proofs = await withMintRetry(
+              () => wallet.mintProofsBolt11(convertedPrice, hash),
+              {
+                maxAttempts: 5,
+                perAttemptTimeoutMs: 15000,
+                totalTimeoutMs: 60000,
               }
-              setQrCodeUrl(null);
-              break;
+            );
+            if (proofs && proofs.length > 0) {
+              // If the user clicked Back between PAID and the claim
+              // returning, do not forward the order to the seller. Instead
+              // credit the freshly-minted proofs to the buyer's wallet so
+              // their sats are recoverable.
+              if (invoicePollRef.current.cancelled) {
+                // Defensive: if nostr/signer were torn down between cancel
+                // and now, leave the durable record so MintRecoveryBoot
+                // claims to wallet on the next boot rather than dropping
+                // the proofs on the floor.
+                if (!nostr || !signer) {
+                  setShowInvoiceCard(false);
+                  setInvoice("");
+                  setQrCodeUrl(null);
+                  setFailureText(
+                    "Order cancelled. Your sats will be credited to your wallet automatically the next time you open Shopstr."
+                  );
+                  setShowFailureModal(true);
+                  return;
+                }
+                await recoverProofsToBuyerWallet(
+                  nostr,
+                  signer,
+                  mints[0]!,
+                  proofs,
+                  convertedPrice
+                );
+                markMintQuoteClaimed(hash);
+                setShowInvoiceCard(false);
+                setInvoice("");
+                setQrCodeUrl(null);
+                setFailureText(
+                  "Your invoice was paid right as you cancelled. The sats have been credited to your wallet — no order was sent to the seller."
+                );
+                setShowFailureModal(true);
+                return;
+              }
+              // Bound the seller hand-off so a hung relay / signing step
+              // can't strand the buyer indefinitely. On failure or timeout,
+              // the freshly-minted proofs are credited to the buyer's local
+              // wallet so they keep their sats and can retry.
+              try {
+                await withDeadline(
+                  () => sendTokens(wallet, proofs, data),
+                  45000,
+                  "seller payment hand-off"
+                );
+                markMintQuoteClaimed(hash);
+                localStorage.setItem("cart", JSON.stringify([]));
+                setPaymentConfirmed(true);
+                if (setInvoiceIsPaid) {
+                  setInvoiceIsPaid(true);
+                }
+                setQrCodeUrl(null);
+                break;
+              } catch (handoffError) {
+                await recoverProofsToBuyerWallet(
+                  nostr!,
+                  signer!,
+                  mints[0]!,
+                  proofs,
+                  convertedPrice
+                );
+                markMintQuoteClaimed(hash);
+                setShowInvoiceCard(false);
+                setInvoice("");
+                setQrCodeUrl(null);
+                setFailureText(
+                  isTimeoutError(handoffError)
+                    ? "Your payment was received but delivery to the seller timed out. Your sats have been credited to your wallet — please try the order again."
+                    : "Your payment was received but couldn't be delivered to the seller. Your sats have been credited to your wallet — please try the order again."
+                );
+                setShowFailureModal(true);
+                console.warn(
+                  "[cart-invoice-card] seller hand-off failed; proofs recovered to buyer wallet:",
+                  handoffError
+                );
+                break;
+              }
             }
           } catch (mintError) {
-            // If minting fails but quote is paid, it might be already issued
-            if (
-              mintError instanceof Error &&
-              mintError.message.includes("issued")
-            ) {
-              // Quote was already processed, consider it successful
+            const message =
+              mintError instanceof Error
+                ? mintError.message
+                : String(mintError);
+            // If minting fails because mint reports already-issued, the proofs
+            // exist on the mint side but were lost client-side and cannot be
+            // recovered. Mark terminal so boot recovery does not retry forever.
+            if (message.toLowerCase().includes("issued")) {
+              updatePendingMintQuote(hash, {
+                status: "failed_terminal",
+                lastErrorMessage:
+                  "Mint reports quote ISSUED before local claim recorded proofs",
+              });
               localStorage.setItem("cart", JSON.stringify([]));
               setPaymentConfirmed(true);
               setQrCodeUrl(null);
@@ -1101,7 +1362,12 @@ export default function CartInvoiceCard({
           await new Promise((resolve) => setTimeout(resolve, 2100));
           continue;
         } else if (quoteState.state === "ISSUED") {
-          // Quote was already processed successfully
+          // Quote was already processed successfully but we never saw the
+          // proofs locally. Mark terminal so boot recovery doesn't loop on it.
+          updatePendingMintQuote(hash, {
+            status: "failed_terminal",
+            lastErrorMessage: "Quote ISSUED before local claim recorded proofs",
+          });
           localStorage.setItem("cart", JSON.stringify([]));
           setPaymentConfirmed(true);
           setQrCodeUrl(null);
@@ -1174,16 +1440,21 @@ export default function CartInvoiceCard({
       const title = product.title;
       const pubkey = product.pubkey;
       const required = product.required;
-      const tokenAmount = totalCostsInSats[pubkey];
+      const tokenAmount = currentProductTotalsInSats[product.id] || 0;
+      if (tokenAmount < 1) {
+        setFailureText("Failed to calculate cart totals for payment.");
+        setShowFailureModal(true);
+        return;
+      }
       let sellerToken;
       let donationToken;
       const sellerProfile = profileContext.profileData.get(pubkey);
       const donationPercentage =
         sellerProfile?.content?.shopstr_donation || 2.1;
       const donationAmount = Math.ceil(
-        (tokenAmount! * donationPercentage) / 100
+        (tokenAmount * donationPercentage) / 100
       );
-      const sellerAmount = tokenAmount! - donationAmount;
+      const sellerAmount = tokenAmount - donationAmount;
       let sellerProofs: Proof[] = [];
 
       let shippingData = data; // Assume data contains shipping info
@@ -1252,9 +1523,7 @@ export default function CartInvoiceCard({
       if (addressString) {
         orderInfoTags.push(["address", addressString]);
       }
-      if (tokenAmount) {
-        orderInfoTags.push(["amount", tokenAmount.toString()]);
-      }
+      orderInfoTags.push(["amount", tokenAmount.toString()]);
       if (donationAmount > 0) {
         orderInfoTags.push([
           "donation_amount",
@@ -1269,13 +1538,19 @@ export default function CartInvoiceCard({
       let paymentTags;
 
       if (sellerAmount > 0) {
-        const { keep, send } = await wallet.send(
+        const swapOutcome = await safeSwap(
+          wallet,
           sellerAmount,
           remainingProofs,
-          {
-            includeFees: true,
-          }
+          { sendConfig: { includeFees: true } }
         );
+        if (swapOutcome.status !== "swapped") {
+          throw new Error(
+            swapOutcome.errorMessage ??
+              `Seller-payout swap did not complete (${swapOutcome.status})`
+          );
+        }
+        const { keep, send } = swapOutcome;
         sellerProofs = send;
         sellerToken = getEncodedToken({
           mint: mints[0]!,
@@ -1311,13 +1586,19 @@ export default function CartInvoiceCard({
 
       // Handle donation if applicable
       if (donationAmount > 0) {
-        const { keep, send } = await wallet.send(
+        const swapOutcome = await safeSwap(
+          wallet,
           donationAmount,
           remainingProofs,
-          {
-            includeFees: true,
-          }
+          { sendConfig: { includeFees: true } }
         );
+        if (swapOutcome.status !== "swapped") {
+          throw new Error(
+            swapOutcome.errorMessage ??
+              `Donation swap did not complete (${swapOutcome.status})`
+          );
+        }
+        const { keep, send } = swapOutcome;
         donationToken = getEncodedToken({
           mint: mints[0]!,
           proofs: send,
@@ -1339,24 +1620,39 @@ export default function CartInvoiceCard({
         await ln.fetch();
         const invoice = await ln.requestInvoice({ satoshi: newAmount });
         const invoicePaymentRequest = invoice.paymentRequest;
-        const meltQuote = await wallet.createMeltQuote(invoicePaymentRequest);
+        const meltQuote = await wallet.createMeltQuoteBolt11(
+          invoicePaymentRequest
+        );
         if (meltQuote) {
-          const meltQuoteTotal = meltQuote.amount + meltQuote.fee_reserve;
-          const { keep, send } = await wallet.send(
+          const meltQuoteTotal =
+            meltQuote.amount.toNumber() + meltQuote.fee_reserve.toNumber();
+          const swapOutcome = await safeSwap(
+            wallet,
             meltQuoteTotal,
             sellerProofs,
-            {
-              includeFees: true,
-            }
+            { sendConfig: { includeFees: true } }
           );
-          const meltResponse = await wallet.meltProofs(meltQuote, send);
-          if (meltResponse.quote) {
-            const meltAmount = meltResponse.quote.amount;
-            const changeProofs = [...keep, ...meltResponse.change];
+          if (swapOutcome.status !== "swapped") {
+            throw new Error(
+              swapOutcome.errorMessage ??
+                `Pre-melt swap did not complete (${swapOutcome.status})`
+            );
+          }
+          const { keep, send } = swapOutcome;
+          const meltOutcome = await safeMeltProofs(wallet, meltQuote, send);
+          if (meltOutcome.status !== "paid") {
+            throw new Error(
+              meltOutcome.errorMessage ??
+                `Melt did not complete (${meltOutcome.status})`
+            );
+          }
+          if (meltOutcome.meltQuote) {
+            const meltAmount = meltOutcome.meltQuote.amount.toNumber();
+            const changeProofs = [...keep, ...meltOutcome.changeProofs];
             const changeAmount =
               Array.isArray(changeProofs) && changeProofs.length > 0
                 ? changeProofs.reduce(
-                    (acc, current: Proof) => acc + current.amount,
+                    (acc, current: Proof) => acc + current.amount.toNumber(),
                     0
                   )
                 : 0;
@@ -1481,11 +1777,15 @@ export default function CartInvoiceCard({
               }
             }
           } else {
-            const unusedProofs = [...keep, ...send, ...meltResponse.change];
+            const unusedProofs = [
+              ...keep,
+              ...send,
+              ...meltOutcome.changeProofs,
+            ];
             const unusedAmount =
               Array.isArray(unusedProofs) && unusedProofs.length > 0
                 ? unusedProofs.reduce(
-                    (acc, current: Proof) => acc + current.amount,
+                    (acc, current: Proof) => acc + current.amount.toNumber(),
                     0
                   )
                 : 0;
@@ -2080,9 +2380,27 @@ export default function CartInvoiceCard({
       const numSats = await getSatoshiValue(currencyData);
       return Math.round(numSats);
     } catch (err) {
-      console.error("Error converting shipping cost to sats:", err);
-      return 0;
+      // Use console.warn so the Next.js dev overlay doesn't escalate
+      // this. Re-throw so callers can show a real failure modal —
+      // silently returning 0 would let the buyer pay 0-sats shipping
+      // on a non-zero shipping cost.
+      console.warn("Failed to convert shipping cost to sats:", err);
+      throw new Error(
+        `Could not look up the current ${product.currency} → sats exchange rate for shipping. Please try again in a moment.`
+      );
     }
+  };
+
+  // Small helper so every async callsite that calls convertShippingToSats
+  // surfaces the same friendly failure modal instead of crashing as an
+  // unhandled rejection.
+  const handleShippingConversionError = (err: unknown) => {
+    const message =
+      err instanceof Error && err.message
+        ? err.message
+        : "Could not calculate shipping right now. Please try again in a moment.";
+    setFailureText(message);
+    setShowFailureModal(true);
   };
 
   const formattedTotalCost = formatWithCommas(totalCost, "sats");
@@ -2101,13 +2419,21 @@ export default function CartInvoiceCard({
 
       const mint = new CashuMint(mints[0]!);
       const wallet = new CashuWallet(mint);
-      const mintKeySetIds = await wallet.getKeySets();
+      await wallet.loadMint();
+      const mintKeySetIds = await wallet.keyChain.getKeysets();
       const filteredProofs = tokens.filter((p: Proof) =>
         mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
       ) as Proof[];
-      const { keep, send } = await wallet.send(price, filteredProofs, {
-        includeFees: true,
+      const swapOutcome = await safeSwap(wallet, price, filteredProofs, {
+        sendConfig: { includeFees: true },
       });
+      if (swapOutcome.status !== "swapped") {
+        throw new Error(
+          swapOutcome.errorMessage ??
+            `Cart payment swap did not complete (${swapOutcome.status})`
+        );
+      }
+      const { keep, send } = swapOutcome;
       const deletedEventIds = [
         ...new Set([
           ...walletContext.proofEvents
@@ -2180,6 +2506,39 @@ export default function CartInvoiceCard({
     }
   };
 
+  const applySavedAddress = (addr: SavedAddress) => {
+    setSelectedSavedAddressId(addr.id);
+    setSaveAddressLabel(addr.label);
+    setValue("Name", addr.name, {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
+    setValue("Address", addr.address, {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
+    setValue("Unit", addr.unit || "", {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
+    setValue("City", addr.city, {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
+    setValue("State/Province", addr.state, {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
+    setValue("Postal Code", addr.zip, {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
+    setValue("Country", addr.country, {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
+  };
+
   const renderContactForm = () => {
     if (!formType) return null;
 
@@ -2191,6 +2550,12 @@ export default function CartInvoiceCard({
       <div className="space-y-4">
         {(formType === "shipping" || formType === "combined") && (
           <>
+            <AddressPicker
+              autoSelect={false}
+              compact
+              allowInlineAdd={false}
+              onSelect={applySavedAddress}
+            />
             <Controller
               name="Name"
               control={formControl}
@@ -2403,6 +2768,48 @@ export default function CartInvoiceCard({
                 )}
               />
             </div>
+
+            <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <Checkbox
+                isSelected={saveDetails}
+                onValueChange={setSaveDetails}
+                classNames={{
+                  base: "mt-0",
+                  label: "text-sm",
+                }}
+              >
+                Save this address for future use
+              </Checkbox>
+
+              <Button
+                size="sm"
+                variant="flat"
+                onClick={() => {
+                  if (defaultSavedAddress) {
+                    applySavedAddress(defaultSavedAddress);
+                  }
+                }}
+                isDisabled={!defaultSavedAddress}
+              >
+                Use default address
+              </Button>
+            </div>
+
+            {saveDetails && (
+              <Input
+                variant="bordered"
+                fullWidth={true}
+                label={
+                  <span>
+                    Save address as <span className="text-red-500">*</span>
+                  </span>
+                }
+                labelPlacement="inside"
+                placeholder="e.g. Home, Office"
+                value={saveAddressLabel}
+                onChange={(e) => setSaveAddressLabel(e.target.value)}
+              />
+            )}
           </>
         )}
 
@@ -2631,7 +3038,10 @@ export default function CartInvoiceCard({
               </div>
 
               <button
-                onClick={() => onBackToCart?.()}
+                onClick={() => {
+                  cancelInvoicePolling();
+                  onBackToCart?.();
+                }}
                 className="text-shopstr-purple hover:text-shopstr-purple-light dark:text-shopstr-yellow dark:hover:text-shopstr-yellow-light mt-4 underline"
               >
                 ← Back to cart
@@ -2886,7 +3296,10 @@ export default function CartInvoiceCard({
             </div>
 
             <button
-              onClick={() => onBackToCart?.()}
+              onClick={() => {
+                cancelInvoicePolling();
+                onBackToCart?.();
+              }}
               className="text-shopstr-purple hover:text-shopstr-purple-light dark:text-shopstr-yellow dark:hover:text-shopstr-yellow-light mt-4 underline"
             >
               ← Back to cart
@@ -2987,41 +3400,16 @@ export default function CartInvoiceCard({
                   onClick={async () => {
                     setShippingPickupPreference("shipping");
                     setShowFreePickupSelection(false);
-                    // Calculate total with all applicable shipping in sats
-                    let shippingTotal = 0;
-                    const updatedTotalCostsInSats: {
-                      [productId: string]: number;
-                    } = {};
-
-                    for (const product of products) {
-                      if (sellerFreeShippingStatus[product.pubkey]?.qualifies) {
-                        updatedTotalCostsInSats[product.id] =
-                          totalCostsInSats[product.id] || 0;
-                        continue;
-                      }
-                      const productShippingType = shippingTypes[product.id];
-                      if (
-                        productShippingType === "Added Cost" ||
-                        productShippingType === "Free" ||
-                        productShippingType === "Free/Pickup"
-                      ) {
-                        const shippingCostInSats =
-                          await convertShippingToSats(product);
-                        const quantity = quantities[product.id] || 1;
-                        const productShippingCost = Math.ceil(
-                          shippingCostInSats * quantity
-                        );
-                        shippingTotal += productShippingCost;
-                        updatedTotalCostsInSats[product.id] =
-                          (totalCostsInSats[product.id] || 0) +
-                          productShippingCost;
-                      } else {
-                        updatedTotalCostsInSats[product.id] =
-                          totalCostsInSats[product.id] || 0;
-                      }
+                    if (
+                      !(await applyCurrentProductTotals(
+                        (shippingType) =>
+                          shippingType === "Added Cost" ||
+                          shippingType === "Free" ||
+                          shippingType === "Free/Pickup"
+                      ))
+                    ) {
+                      return;
                     }
-
-                    setTotalCost(subtotalCost + shippingTotal);
                   }}
                   className={`w-full rounded-lg border p-4 text-left hover:bg-gray-50 dark:hover:bg-gray-600 ${
                     shippingPickupPreference === "shipping"
@@ -3038,39 +3426,15 @@ export default function CartInvoiceCard({
                   onClick={async () => {
                     setShippingPickupPreference("contact");
                     setShowFreePickupSelection(false);
-                    let shippingTotal = 0;
-                    const updatedTotalCostsInSats: {
-                      [productId: string]: number;
-                    } = {};
-
-                    for (const product of products) {
-                      if (sellerFreeShippingStatus[product.pubkey]?.qualifies) {
-                        updatedTotalCostsInSats[product.id] =
-                          totalCostsInSats[product.id] || 0;
-                        continue;
-                      }
-                      const productShippingType = shippingTypes[product.id];
-                      if (
-                        productShippingType === "Added Cost" ||
-                        productShippingType === "Free"
-                      ) {
-                        const shippingCostInSats =
-                          await convertShippingToSats(product);
-                        const quantity = quantities[product.id] || 1;
-                        const productShippingCost = Math.ceil(
-                          shippingCostInSats * quantity
-                        );
-                        shippingTotal += productShippingCost;
-                        updatedTotalCostsInSats[product.id] =
-                          (totalCostsInSats[product.id] || 0) +
-                          productShippingCost;
-                      } else {
-                        updatedTotalCostsInSats[product.id] =
-                          totalCostsInSats[product.id] || 0;
-                      }
+                    if (
+                      !(await applyCurrentProductTotals(
+                        (shippingType) =>
+                          shippingType === "Added Cost" ||
+                          shippingType === "Free"
+                      ))
+                    ) {
+                      return;
                     }
-
-                    setTotalCost(subtotalCost + shippingTotal);
                   }}
                   className={`w-full rounded-lg border p-4 text-left hover:bg-gray-50 dark:hover:bg-gray-600 ${
                     shippingPickupPreference === "contact"

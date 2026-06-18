@@ -52,7 +52,7 @@ export default function Landing() {
     if (router.pathname === "/" && signerContext.isLoggedIn) {
       router.push("/marketplace");
     }
-  }, [router.pathname, signerContext]);
+  }, [router.pathname, signerContext.isLoggedIn]);
 
   useEffect(() => {
     const parsedProductsArray: ProductData[] = [];

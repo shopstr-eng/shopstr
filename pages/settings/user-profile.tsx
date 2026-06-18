@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useContext, useMemo } from "react";
+import { useEffect, useState, useContext, useMemo } from "react";
 import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs";
 import { ProfileMapContext } from "@/utils/context/context";
 import { useForm, Controller } from "react-hook-form";
@@ -16,13 +16,21 @@ import {
   EyeSlashIcon,
   EyeIcon,
 } from "@heroicons/react/24/outline";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import {
+  AVATARBADGEBUTTONCLASSNAMES,
+  SHOPSTRBUTTONCLASSNAMES,
+} from "@/utils/STATIC-VARIABLES";
 import {
   SignerContext,
   NostrContext,
 } from "@/components/utility-components/nostr-context-provider";
 import { NostrNSecSigner } from "@/utils/nostr/signers/nostr-nsec-signer";
-import { createNostrProfileEvent } from "@/utils/nostr/nostr-helper-functions";
+import {
+  createNostrProfileEvent,
+  getLocalUserProfileKey,
+  parseLocalProfileFallback,
+  isProfileContentPopulated,
+} from "@/utils/nostr/nostr-helper-functions";
 import { FileUploaderButton } from "@/components/utility-components/file-uploader";
 import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
 import ProtectedRoute from "@/components/utility-components/protected-route";
@@ -30,7 +38,6 @@ import ProtectedRoute from "@/components/utility-components/protected-route";
 const UserProfilePage = () => {
   const { nostr } = useContext(NostrContext);
   const [isUploadingProfile, setIsUploadingProfile] = useState(false);
-  const [isFetchingProfile, setIsFetchingProfile] = useState(false);
   const {
     signer,
     pubkey: userPubkey,
@@ -59,47 +66,117 @@ const UserProfilePage = () => {
 
   const watchBanner = watch("banner");
   const watchPicture = watch("picture");
+  const hasCurrentUserProfile =
+    !!userPubkey && profileContext.profileData.has(userPubkey);
+  const isFetchingProfile =
+    !userPubkey || (profileContext.isLoading && !hasCurrentUserProfile);
   const defaultImage = useMemo(() => {
     return "https://robohash.org/" + userPubkey;
   }, [userPubkey]);
 
-  const contextLoadedRef = useRef(false);
-  useEffect(() => {
-    if (!userPubkey) return;
-    if (contextLoadedRef.current) return;
-    setIsFetchingProfile(true);
-    fetch(`/api/db/fetch-profile?pubkey=${encodeURIComponent(userPubkey)}`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (contextLoadedRef.current) return;
-        if (data?.profile?.content) reset(data.profile.content);
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (!contextLoadedRef.current) setIsFetchingProfile(false);
-      });
-  }, [userPubkey, reset]);
+  const profileImageSrc = watchPicture || defaultImage;
 
   useEffect(() => {
-    if (!userPubkey) return;
-    const profile = profileContext.profileData.get(userPubkey);
-    if (!profile) return;
-    contextLoadedRef.current = true;
-    setIsFetchingProfile(true);
-    reset(profile.content);
-    setIsFetchingProfile(false);
-  }, [profileContext, userPubkey, reset]);
+    if (!userPubkey || profileContext.isLoading) return;
+
+    const localFallback = parseLocalProfileFallback(
+      localStorage.getItem(getLocalUserProfileKey(userPubkey))
+    );
+
+    const profileMap = profileContext.profileData;
+    const profile = profileMap.has(userPubkey)
+      ? profileMap.get(userPubkey)
+      : undefined;
+
+    if (profile) {
+      const profileCreatedAt = profile.created_at || 0;
+      const shouldUseLocalFallback =
+        !!localFallback &&
+        localFallback.updatedAt > profileCreatedAt &&
+        isProfileContentPopulated(localFallback.content);
+
+      if (shouldUseLocalFallback) {
+        reset(localFallback.content);
+      } else {
+        reset(profile.content);
+      }
+
+      try {
+        localStorage.setItem(
+          getLocalUserProfileKey(userPubkey),
+          JSON.stringify({
+            content: shouldUseLocalFallback
+              ? localFallback!.content
+              : profile.content,
+            updatedAt: shouldUseLocalFallback
+              ? localFallback!.updatedAt
+              : profileCreatedAt,
+          })
+        );
+      } catch (error) {
+        console.error("Failed to persist profile fallback locally:", error);
+      }
+    } else {
+      try {
+        if (localFallback?.content) {
+          reset(localFallback.content);
+        }
+      } catch (error) {
+        console.error("Failed to read local profile fallback:", error);
+      }
+    }
+  }, [userPubkey, profileContext.isLoading, profileContext.profileData, reset]);
 
   const onSubmit = async (data: { [x: string]: string }) => {
-    if (!userPubkey) throw new Error("pubkey is undefined");
+    if (!userPubkey) {
+      console.error("Cannot save profile: pubkey is undefined");
+      return;
+    }
+
     setIsUploadingProfile(true);
-    await createNostrProfileEvent(nostr!, signer!, JSON.stringify(data));
-    profileContext.updateProfileData({
-      pubkey: userPubkey!,
-      content: data,
-      created_at: 0,
-    });
-    setIsUploadingProfile(false);
+    try {
+      const profileMap = profileContext.profileData;
+      const existingProfile = profileMap.has(userPubkey)
+        ? profileMap.get(userPubkey)?.content
+        : {};
+
+      const updatedData = {
+        ...existingProfile,
+        ...data,
+      };
+
+      try {
+        localStorage.setItem(
+          getLocalUserProfileKey(userPubkey),
+          JSON.stringify({
+            content: updatedData,
+            updatedAt: Math.floor(Date.now() / 1000),
+          })
+        );
+      } catch (error) {
+        console.error("Failed to save local profile fallback:", error);
+      }
+
+      if (!nostr || !signer) {
+        console.error("Cannot save profile: nostr or signer is unavailable");
+        return;
+      }
+
+      const signedProfileEvent = await createNostrProfileEvent(
+        nostr,
+        signer,
+        JSON.stringify(updatedData)
+      );
+      profileContext.updateProfileData({
+        pubkey: userPubkey,
+        content: updatedData,
+        created_at: signedProfileEvent.created_at,
+      });
+    } catch (error) {
+      console.error("Failed to save user profile:", error);
+    } finally {
+      setIsUploadingProfile(false);
+    }
   };
 
   return (
@@ -128,29 +205,22 @@ const UserProfilePage = () => {
                   </FileUploaderButton>
                 </div>
                 <div className="flex items-center justify-center">
-                  <div className="relative z-20 mt-[-3rem] h-24 w-24">
-                    <div className="">
-                      <FileUploaderButton
-                        isIconOnly
-                        className={`absolute right-[-0.5rem] bottom-[-0.5rem] z-20 ${SHOPSTRBUTTONCLASSNAMES}`}
-                        imgCallbackOnUpload={(imgUrl) =>
-                          setValue("picture", imgUrl)
-                        }
-                      />
-                      {watchPicture ? (
-                        <Image
-                          src={watchPicture}
-                          alt="user profile picture"
-                          className="rounded-full"
-                        />
-                      ) : (
-                        <Image
-                          src={defaultImage}
-                          alt="user profile picture"
-                          className="rounded-full"
-                        />
-                      )}
-                    </div>
+                  <div className="relative z-20 mt-[-3rem] h-24 w-24 overflow-visible">
+                    <FileUploaderButton
+                      isIconOnly
+                      className={AVATARBADGEBUTTONCLASSNAMES}
+                      containerClassName="absolute right-[-0.5rem] bottom-[-0.5rem] z-20"
+                      imgCallbackOnUpload={(imgUrl) =>
+                        setValue("picture", imgUrl)
+                      }
+                    />
+                    <Image
+                      key={profileImageSrc}
+                      src={profileImageSrc}
+                      alt="user profile picture"
+                      radius="full"
+                      className="h-24 w-24 rounded-full object-cover"
+                    />
                   </div>
                 </div>
               </div>
@@ -158,7 +228,7 @@ const UserProfilePage = () => {
               <div
                 className="border-light-fg dark:border-dark-fg mx-auto mb-2 flex w-full max-w-2xl cursor-pointer flex-row items-center justify-center rounded-lg border-2 p-2 hover:opacity-60"
                 onClick={() => {
-                  navigator.clipboard.writeText(userNPub!);
+                  if (userNPub) navigator.clipboard.writeText(userNPub);
                   setIsNPubCopied(true);
                   setTimeout(() => {
                     setIsNPubCopied(false);
@@ -169,7 +239,7 @@ const UserProfilePage = () => {
                   className="lg:text-md text-light-text dark:text-dark-text pr-2 text-[0.50rem] font-bold break-all sm:text-xs md:text-sm"
                   suppressHydrationWarning
                 >
-                  {userNPub!}
+                  {userNPub}
                 </span>
                 {isNPubCopied ? (
                   <CheckIcon
@@ -248,6 +318,51 @@ const UserProfilePage = () => {
               )}
 
               <form onSubmit={handleSubmit(onSubmit as any)}>
+                <div className="grid gap-4 pb-4 md:grid-cols-2">
+                  <Controller
+                    name="picture"
+                    control={control}
+                    render={({ field: { onChange, onBlur, value } }) => (
+                      <Input
+                        className="text-light-text dark:text-dark-text"
+                        classNames={{
+                          label: "text-light-text dark:text-dark-text text-lg",
+                        }}
+                        variant="bordered"
+                        fullWidth={true}
+                        type="url"
+                        label="Profile image URL"
+                        labelPlacement="outside"
+                        placeholder="https://..."
+                        onChange={onChange}
+                        onBlur={onBlur}
+                        value={value || ""}
+                      />
+                    )}
+                  />
+                  <Controller
+                    name="banner"
+                    control={control}
+                    render={({ field: { onChange, onBlur, value } }) => (
+                      <Input
+                        className="text-light-text dark:text-dark-text"
+                        classNames={{
+                          label: "text-light-text dark:text-dark-text text-lg",
+                        }}
+                        variant="bordered"
+                        fullWidth={true}
+                        type="url"
+                        label="Profile banner URL"
+                        labelPlacement="outside"
+                        placeholder="https://..."
+                        onChange={onChange}
+                        onBlur={onBlur}
+                        value={value || ""}
+                      />
+                    )}
+                  />
+                </div>
+
                 <Controller
                   name="display_name"
                   control={control}
@@ -496,7 +611,7 @@ const UserProfilePage = () => {
                       labelPlacement="outside"
                       onChange={onChange}
                       onBlur={onBlur}
-                      value={value.toString()}
+                      value={value?.toString() || ""}
                     />
                   )}
                 />

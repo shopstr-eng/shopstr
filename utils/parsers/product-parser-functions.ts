@@ -1,5 +1,6 @@
 import { ShippingOptionsType } from "@/utils/STATIC-VARIABLES";
 import { calculateTotalCost } from "@/components/utility-components/display-monetary-info";
+import { parseShippingTag } from "@/utils/parsers/product-tag-helpers";
 import { NostrEvent } from "@/utils/types/types";
 
 export type ProductData = {
@@ -50,7 +51,7 @@ export const parseTags = (productEvent: NostrEvent) => {
     pubkey: "",
     createdAt: 0,
     title: "",
-    summary: "",
+    summary: productEvent.content || "",
     publishedAt: "",
     images: [],
     categories: [],
@@ -72,7 +73,11 @@ export const parseTags = (productEvent: NostrEvent) => {
         parsedData.title = values[0]!;
         break;
       case "summary":
-        parsedData.summary = values[0]!;
+        // NIP-99 uses event content as primary description.
+        // Keep summary tag as backward-compatible fallback when content is empty or whitespace.
+        if (!parsedData.summary.trim()) {
+          parsedData.summary = values[0]!;
+        }
         break;
       case "published_at":
         parsedData.publishedAt = values[0]!;
@@ -94,13 +99,11 @@ export const parseTags = (productEvent: NostrEvent) => {
         parsedData.currency = currency!;
         break;
       case "shipping":
-        if (values.length === 3) {
-          const [shippingType, cost, _currency] = values;
-          parsedData.shippingType = shippingType as ShippingOptionsType;
-          parsedData.shippingCost = Number(cost);
-          break;
+        const parsedShipping = parseShippingTag(tag);
+        if (parsedShipping) {
+          parsedData.shippingType = parsedShipping.shippingType;
+          parsedData.shippingCost = parsedShipping.shippingCost;
         }
-
         break;
       case "d":
         parsedData.d = values[0];

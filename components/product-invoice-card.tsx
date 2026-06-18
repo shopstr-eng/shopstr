@@ -1,4 +1,4 @@
-import { useContext, useState, useEffect, useRef } from "react";
+import { useCallback, useContext, useState, useEffect, useRef } from "react";
 import {
   CashuWalletContext,
   ChatsContext,
@@ -22,12 +22,27 @@ import {
 } from "@heroicons/react/24/outline";
 import { getSatoshiValue } from "@getalby/lightning-tools";
 import {
-  CashuMint,
-  CashuWallet,
+  Mint as CashuMint,
+  Wallet as CashuWallet,
   getEncodedToken,
-  MintKeyset,
+  Keyset as MintKeyset,
   Proof,
 } from "@cashu/cashu-ts";
+import { safeMeltProofs } from "@/utils/cashu/melt-retry-service";
+import { safeSwap } from "@/utils/cashu/swap-retry-service";
+import { withMintRetry } from "@/utils/cashu/mint-retry-service";
+import {
+  recordPendingMintQuote,
+  markMintQuoteClaimed,
+  updatePendingMintQuote,
+  getPendingMintQuotes,
+  removePendingMintQuote,
+} from "@/utils/cashu/pending-mint-operations";
+import {
+  recoverProofsToBuyerWallet,
+  withDeadline,
+  isTimeoutError,
+} from "@/utils/cashu/wallet-recovery";
 import {
   constructGiftWrappedEvent,
   constructMessageSeal,
@@ -36,6 +51,7 @@ import {
   getLocalStorageData,
   publishProofEvent,
   generateKeys,
+  getSavedAddresses,
 } from "@/utils/nostr/nostr-helper-functions";
 import { LightningAddress } from "@getalby/lightning-tools";
 import QRCode from "qrcode";
@@ -49,11 +65,16 @@ import SignInModal from "./sign-in/SignInModal";
 import currencySelection from "../public/currencySelection.json";
 import FailureModal from "@/components/utility-components/failure-modal";
 import CountryDropdown from "./utility-components/dropdowns/country-dropdown";
+import AddressPicker from "./utility-components/address-picker";
 import {
   NostrContext,
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
-import { ShippingFormData, ContactFormData } from "@/utils/types/types";
+import {
+  ShippingFormData,
+  ContactFormData,
+  SavedAddress,
+} from "@/utils/types/types";
 import { Controller } from "react-hook-form";
 
 export default function ProductInvoiceCard({
@@ -107,6 +128,38 @@ export default function ProductInvoiceCard({
   const [invoice, setInvoice] = useState("");
   const [copiedToClipboard, setCopiedToClipboard] = useState(false);
 
+  // Tracks the in-flight invoice polling so a "Back" click or unmount can
+  // signal the polling loop to exit cleanly instead of letting it complete
+  // a payment the user has already abandoned.
+  const invoicePollRef = useRef<{
+    cancelled: boolean;
+    activeQuoteId: string | null;
+  }>({ cancelled: false, activeQuoteId: null });
+
+  // Cancels any in-flight invoice polling. If the quote is still awaiting
+  // payment we drop the durable record (no money has moved). If the mint
+  // has already moved to PAID, the durable record stays so MintRecoveryBoot
+  // can claim the proofs back to the buyer's wallet on next boot.
+  const cancelInvoicePolling = useCallback(() => {
+    const state = invoicePollRef.current;
+    state.cancelled = true;
+    const quoteId = state.activeQuoteId;
+    if (!quoteId) return;
+    const existing = getPendingMintQuotes().find((q) => q.quoteId === quoteId);
+    if (existing && existing.status === "awaiting_payment") {
+      removePendingMintQuote(quoteId);
+    }
+  }, []);
+
+  // Defensive: if the user navigates away mid-polling (route change, modal
+  // close), still signal cancellation so the loop doesn't keep working in
+  // the background.
+  useEffect(() => {
+    return () => {
+      cancelInvoicePolling();
+    };
+  }, [cancelInvoicePolling]);
+
   const pendingOrderRef = useRef<{
     orderId: string;
     productTitle: string;
@@ -135,6 +188,7 @@ export default function ProductInvoiceCard({
 
   const [formType, setFormType] = useState<"shipping" | "contact" | null>(null);
   const [showOrderTypeSelection, setShowOrderTypeSelection] = useState(true);
+  const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
 
   const sendInquiryDM = async (sellerPubkey: string, productTitle: string) => {
     if (!signer || !nostr || !userPubkey) return;
@@ -198,8 +252,16 @@ export default function ProductInvoiceCard({
         userPubkey
       );
 
-      await sendGiftWrappedMessageEvent(nostr, giftWrappedEventForSeller);
-      await sendGiftWrappedMessageEvent(nostr, giftWrappedEventForBuyer);
+      await sendGiftWrappedMessageEvent(
+        nostr,
+        giftWrappedEventForSeller,
+        signer
+      );
+      await sendGiftWrappedMessageEvent(
+        nostr,
+        giftWrappedEventForBuyer,
+        signer
+      );
 
       // Add to local context for immediate UI feedback
       chatsContext.addNewlyCreatedMessageEvent(
@@ -258,6 +320,7 @@ export default function ProductInvoiceCard({
     handleSubmit: handleFormSubmit,
     control: formControl,
     watch,
+    setValue,
   } = useForm();
 
   // Watch form values to validate completion
@@ -266,10 +329,18 @@ export default function ProductInvoiceCard({
     string | null
   >(null);
 
+  const normalizedShippingType = (productData.shippingType || "")
+    .toLowerCase()
+    .trim();
+  const supportsShipping =
+    normalizedShippingType.includes("free") ||
+    normalizedShippingType.includes("added cost") ||
+    (productData.shippingCost ?? 0) > 0;
+  const supportsPickup = normalizedShippingType.includes("pickup");
+
   // Check if product requires pickup location selection (pickup-type shipping with pickup locations defined)
   const requiresPickupLocation =
-    (productData.shippingType === "Pickup" ||
-      productData.shippingType === "Free/Pickup") &&
+    supportsPickup &&
     productData.pickupLocations &&
     productData.pickupLocations.length > 0;
 
@@ -312,6 +383,16 @@ export default function ProductInvoiceCard({
     window.addEventListener("storage", loadNwcInfo);
     return () => window.removeEventListener("storage", loadNwcInfo);
   }, [productData.pubkey, profileContext.profileData]);
+
+  // Load saved addresses on mount
+  useEffect(() => {
+    const loadSavedAddresses = () => {
+      setSavedAddresses(getSavedAddresses());
+    };
+    loadSavedAddresses();
+    window.addEventListener("storage", loadSavedAddresses);
+    return () => window.removeEventListener("storage", loadSavedAddresses);
+  }, []);
 
   // Validate form completion
   useEffect(() => {
@@ -491,7 +572,7 @@ export default function ProductInvoiceCard({
           pubkeyToReceiveMessage
         );
 
-        await sendGiftWrappedMessageEvent(nostr!, giftWrappedEvent);
+        await sendGiftWrappedMessageEvent(nostr!, giftWrappedEvent, signer);
 
         if (isReceipt) {
           chatsContext.addNewlyCreatedMessageEvent(
@@ -591,7 +672,14 @@ export default function ProductInvoiceCard({
           const numSats = await getSatoshiValue(currencyData);
           price = Math.round(numSats);
         } catch (err) {
-          console.error("ERROR", err);
+          // Use console.warn so the Next.js dev overlay doesn't escalate
+          // this. Re-throw so the outer onFormSubmit catch surfaces a
+          // real failure modal — silently proceeding with the original
+          // fiat number would charge the buyer the wrong amount.
+          console.warn("Failed to convert price to sats:", err);
+          throw new Error(
+            `Could not look up the current ${productData.currency} → sats exchange rate. Please try again in a moment.`
+          );
         }
       } else if (productData.currency.toLowerCase() === "btc") {
         price = price * 100000000;
@@ -646,8 +734,15 @@ export default function ProductInvoiceCard({
       } else {
         await handleLightningPayment(price, paymentData);
       }
-    } catch {
-      setCashuPaymentFailed(true);
+    } catch (err: any) {
+      // Surface a real, accurate failure modal instead of always claiming
+      // "cashu payment failed" regardless of payment type or root cause.
+      const message =
+        typeof err?.message === "string" && err.message
+          ? err.message
+          : "Something went wrong while preparing your order. Please try again.";
+      setFailureText(message);
+      setShowFailureModal(true);
     }
   };
 
@@ -662,6 +757,16 @@ export default function ProductInvoiceCard({
       // For contact orders, only set valid if no pickup location is required
       setIsFormValid(!requiresPickupLocation);
     }
+  };
+
+  const applySavedAddress = (addr: SavedAddress) => {
+    setValue("Name", addr.name);
+    setValue("Address", addr.address);
+    setValue("Unit", addr.unit);
+    setValue("City", addr.city);
+    setValue("State/Province", addr.state);
+    setValue("Postal Code", addr.zip);
+    setValue("Country", addr.country);
   };
 
   const handleNWCError = (error: any) => {
@@ -722,8 +827,18 @@ export default function ProductInvoiceCard({
       }
 
       const wallet = new CashuWallet(new CashuMint(mints[0]!));
-      const { request: pr, quote: hash } =
-        await wallet.createMintQuote(convertedPrice);
+      await wallet.loadMint();
+      const { request: pr, quote: hash } = await withMintRetry(
+        () => wallet.createMintQuoteBolt11(convertedPrice),
+        { maxAttempts: 4, perAttemptTimeoutMs: 15000, totalTimeoutMs: 60000 }
+      );
+      recordPendingMintQuote({
+        quoteId: hash,
+        mintUrl: mints[0]!,
+        amount: convertedPrice,
+        invoice: pr,
+      });
+      invoicePollRef.current = { cancelled: false, activeQuoteId: hash };
 
       const { nwcString } = getLocalStorageData();
       if (!nwcString) throw new Error("NWC connection not found.");
@@ -787,9 +902,19 @@ export default function ProductInvoiceCard({
 
       setShowInvoiceCard(true);
       const wallet = new CashuWallet(new CashuMint(mints[0]!));
+      await wallet.loadMint();
 
-      const { request: pr, quote: hash } =
-        await wallet.createMintQuote(convertedPrice);
+      const { request: pr, quote: hash } = await withMintRetry(
+        () => wallet.createMintQuoteBolt11(convertedPrice),
+        { maxAttempts: 4, perAttemptTimeoutMs: 15000, totalTimeoutMs: 60000 }
+      );
+      recordPendingMintQuote({
+        quoteId: hash,
+        mintUrl: mints[0]!,
+        amount: convertedPrice,
+        invoice: pr,
+      });
+      invoicePollRef.current = { cancelled: false, activeQuoteId: hash };
 
       setInvoice(pr);
 
@@ -859,40 +984,150 @@ export default function ProductInvoiceCard({
     const maxRetries = 42; // Maximum 30 retries (about 1 minute)
 
     while (retryCount < maxRetries) {
+      // Honor any cancellation signal from the Back button or component
+      // unmount. If we haven't seen PAID yet, leave the loop and let the
+      // cancel handler drop the durable record.
+      if (invoicePollRef.current.cancelled) {
+        return;
+      }
       try {
-        // First check if the quote has been paid
-        const quoteState = await wallet.checkMintQuote(hash);
+        // Bounded retry on transient failures so a single network blip
+        // doesn't abandon the polling loop.
+        const quoteState = await withMintRetry(
+          () => wallet.checkMintQuoteBolt11(hash),
+          { maxAttempts: 3, perAttemptTimeoutMs: 10000, totalTimeoutMs: 25000 }
+        );
 
         if (quoteState.state === "PAID") {
-          // Quote is paid, try to mint proofs
+          // Money is on the mint. Mark durable record before claiming so that
+          // a tab close / network drop here triggers boot-time recovery.
+          // Use the upsert form so that a Back-button cancellation racing
+          // with this transition (which would have removed the
+          // awaiting_payment record) cannot leave us without a durable
+          // safety net for the proofs we're about to mint.
+          const existing = getPendingMintQuotes().find(
+            (q) => q.quoteId === hash
+          );
+          recordPendingMintQuote({
+            quoteId: hash,
+            mintUrl: mints[0]!,
+            amount: newPrice,
+            invoice: existing?.invoice ?? "",
+            status: "paid_unclaimed",
+          });
           try {
-            const proofs = await wallet.mintProofs(newPrice, hash);
+            const proofs = await withMintRetry(
+              () => wallet.mintProofsBolt11(newPrice, hash),
+              {
+                maxAttempts: 5,
+                perAttemptTimeoutMs: 15000,
+                totalTimeoutMs: 60000,
+              }
+            );
             if (proofs && proofs.length > 0) {
-              await sendTokens(
-                wallet,
-                proofs,
-                newPrice,
-                shippingName ? shippingName : undefined,
-                shippingAddress ? shippingAddress : undefined,
-                shippingUnitNo ? shippingUnitNo : undefined,
-                shippingCity ? shippingCity : undefined,
-                shippingPostalCode ? shippingPostalCode : undefined,
-                shippingState ? shippingState : undefined,
-                shippingCountry ? shippingCountry : undefined,
-                additionalInfo ? additionalInfo : undefined
-              );
-              setPaymentConfirmed(true);
-              setQrCodeUrl(null);
-              setInvoiceIsPaid(true);
-              break;
+              // If the user clicked Back between PAID and the claim
+              // returning, do not forward the order to the seller. Instead
+              // credit the freshly-minted proofs to the buyer's wallet so
+              // their sats are recoverable.
+              if (invoicePollRef.current.cancelled) {
+                // Defensive: if nostr/signer were torn down between cancel
+                // and now, leave the durable record so MintRecoveryBoot
+                // claims to wallet on the next boot rather than dropping
+                // the proofs on the floor.
+                if (!nostr || !signer) {
+                  setShowInvoiceCard(false);
+                  setInvoice("");
+                  setQrCodeUrl(null);
+                  setFailureText(
+                    "Order cancelled. Your sats will be credited to your wallet automatically the next time you open Shopstr."
+                  );
+                  setShowFailureModal(true);
+                  return;
+                }
+                await recoverProofsToBuyerWallet(
+                  nostr,
+                  signer,
+                  mints[0]!,
+                  proofs,
+                  newPrice
+                );
+                markMintQuoteClaimed(hash);
+                setShowInvoiceCard(false);
+                setInvoice("");
+                setQrCodeUrl(null);
+                setFailureText(
+                  "Your invoice was paid right as you cancelled. The sats have been credited to your wallet — no order was sent to the seller."
+                );
+                setShowFailureModal(true);
+                return;
+              }
+              // Bound the seller hand-off so a hung relay / signing step
+              // can't strand the buyer indefinitely. On failure or timeout,
+              // the freshly-minted proofs are credited to the buyer's local
+              // wallet so they keep their sats and can retry.
+              try {
+                await withDeadline(
+                  () =>
+                    sendTokens(
+                      wallet,
+                      proofs,
+                      newPrice,
+                      shippingName ? shippingName : undefined,
+                      shippingAddress ? shippingAddress : undefined,
+                      shippingUnitNo ? shippingUnitNo : undefined,
+                      shippingCity ? shippingCity : undefined,
+                      shippingPostalCode ? shippingPostalCode : undefined,
+                      shippingState ? shippingState : undefined,
+                      shippingCountry ? shippingCountry : undefined,
+                      additionalInfo ? additionalInfo : undefined
+                    ),
+                  45000,
+                  "seller payment hand-off"
+                );
+                markMintQuoteClaimed(hash);
+                setPaymentConfirmed(true);
+                setQrCodeUrl(null);
+                setInvoiceIsPaid(true);
+                break;
+              } catch (handoffError) {
+                await recoverProofsToBuyerWallet(
+                  nostr!,
+                  signer!,
+                  mints[0]!,
+                  proofs,
+                  newPrice
+                );
+                markMintQuoteClaimed(hash);
+                setShowInvoiceCard(false);
+                setInvoice("");
+                setQrCodeUrl(null);
+                setFailureText(
+                  isTimeoutError(handoffError)
+                    ? "Your payment was received but delivery to the seller timed out. Your sats have been credited to your wallet — please try the order again."
+                    : "Your payment was received but couldn't be delivered to the seller. Your sats have been credited to your wallet — please try the order again."
+                );
+                setShowFailureModal(true);
+                console.warn(
+                  "[product-invoice-card] seller hand-off failed; proofs recovered to buyer wallet:",
+                  handoffError
+                );
+                break;
+              }
             }
           } catch (mintError) {
-            // If minting fails but quote is paid, it might be already issued
-            if (
-              mintError instanceof Error &&
-              mintError.message.includes("issued")
-            ) {
-              // Quote was already processed, consider it successful
+            const message =
+              mintError instanceof Error
+                ? mintError.message
+                : String(mintError);
+            // If minting fails because mint reports already-issued, the proofs
+            // exist on the mint side but were lost client-side and cannot be
+            // recovered. Mark terminal so boot recovery does not retry forever.
+            if (message.toLowerCase().includes("issued")) {
+              updatePendingMintQuote(hash, {
+                status: "failed_terminal",
+                lastErrorMessage:
+                  "Mint reports quote ISSUED before local claim recorded proofs",
+              });
               setPaymentConfirmed(true);
               setQrCodeUrl(null);
               setFailureText(
@@ -904,7 +1139,12 @@ export default function ProductInvoiceCard({
             throw mintError;
           }
         } else if (quoteState.state === "ISSUED") {
-          // Quote was already processed successfully
+          // Quote was already processed successfully but we never saw the
+          // proofs locally. Mark terminal so boot recovery doesn't loop on it.
+          updatePendingMintQuote(hash, {
+            status: "failed_terminal",
+            lastErrorMessage: "Quote ISSUED before local claim recorded proofs",
+          });
           setPaymentConfirmed(true);
           setQrCodeUrl(null);
           setFailureText(
@@ -972,9 +1212,19 @@ export default function ProductInvoiceCard({
     let sellerProofs: Proof[] = [];
 
     if (sellerAmount > 0) {
-      const { keep, send } = await wallet.send(sellerAmount, remainingProofs, {
-        includeFees: true,
-      });
+      const swapOutcome = await safeSwap(
+        wallet,
+        sellerAmount,
+        remainingProofs,
+        { sendConfig: { includeFees: true } }
+      );
+      if (swapOutcome.status !== "swapped") {
+        throw new Error(
+          swapOutcome.errorMessage ??
+            `Seller-payout swap did not complete (${swapOutcome.status})`
+        );
+      }
+      const { keep, send } = swapOutcome;
       sellerProofs = send;
       sellerToken = getEncodedToken({
         mint: mints[0]!,
@@ -984,13 +1234,19 @@ export default function ProductInvoiceCard({
     }
 
     if (donationAmount > 0) {
-      const { keep, send } = await wallet.send(
+      const swapOutcome = await safeSwap(
+        wallet,
         donationAmount,
         remainingProofs,
-        {
-          includeFees: true,
-        }
+        { sendConfig: { includeFees: true } }
       );
+      if (swapOutcome.status !== "swapped") {
+        throw new Error(
+          swapOutcome.errorMessage ??
+            `Donation swap did not complete (${swapOutcome.status})`
+        );
+      }
+      const { keep, send } = swapOutcome;
       donationToken = getEncodedToken({
         mint: mints[0]!,
         proofs: send,
@@ -1022,20 +1278,39 @@ export default function ProductInvoiceCard({
       await ln.fetch();
       const invoice = await ln.requestInvoice({ satoshi: newAmount });
       const invoicePaymentRequest = invoice.paymentRequest;
-      const meltQuote = await wallet.createMeltQuote(invoicePaymentRequest);
+      const meltQuote = await wallet.createMeltQuoteBolt11(
+        invoicePaymentRequest
+      );
       if (meltQuote) {
-        const meltQuoteTotal = meltQuote.amount + meltQuote.fee_reserve;
-        const { keep, send } = await wallet.send(meltQuoteTotal, sellerProofs, {
-          includeFees: true,
-        });
-        const meltResponse = await wallet.meltProofs(meltQuote, send);
-        if (meltResponse.quote) {
-          const meltAmount = meltResponse.quote.amount;
-          const changeProofs = [...keep, ...meltResponse.change];
+        const meltQuoteTotal =
+          meltQuote.amount.toNumber() + meltQuote.fee_reserve.toNumber();
+        const swapOutcome = await safeSwap(
+          wallet,
+          meltQuoteTotal,
+          sellerProofs,
+          { sendConfig: { includeFees: true } }
+        );
+        if (swapOutcome.status !== "swapped") {
+          throw new Error(
+            swapOutcome.errorMessage ??
+              `Pre-melt swap did not complete (${swapOutcome.status})`
+          );
+        }
+        const { keep, send } = swapOutcome;
+        const meltOutcome = await safeMeltProofs(wallet, meltQuote, send);
+        if (meltOutcome.status !== "paid") {
+          throw new Error(
+            meltOutcome.errorMessage ??
+              `Melt did not complete (${meltOutcome.status})`
+          );
+        }
+        if (meltOutcome.meltQuote) {
+          const meltAmount = meltOutcome.meltQuote.amount.toNumber();
+          const changeProofs = [...keep, ...meltOutcome.changeProofs];
           const changeAmount =
             Array.isArray(changeProofs) && changeProofs.length > 0
               ? changeProofs.reduce(
-                  (acc, current: Proof) => acc + current.amount,
+                  (acc, current: Proof) => acc + current.amount.toNumber(),
                   0
                 )
               : 0;
@@ -1126,11 +1401,11 @@ export default function ProductInvoiceCard({
             }
           }
         } else {
-          const unusedProofs = [...keep, ...send, ...meltResponse.change];
+          const unusedProofs = [...keep, ...send, ...meltOutcome.changeProofs];
           const unusedAmount =
             Array.isArray(unusedProofs) && unusedProofs.length > 0
               ? unusedProofs.reduce(
-                  (acc, current: Proof) => acc + current.amount,
+                  (acc, current: Proof) => acc + current.amount.toNumber(),
                   0
                 )
               : 0;
@@ -1635,13 +1910,21 @@ export default function ProductInvoiceCard({
 
       const mint = new CashuMint(mints[0]!);
       const wallet = new CashuWallet(mint);
-      const mintKeySetIds = await wallet.getKeySets();
+      await wallet.loadMint();
+      const mintKeySetIds = await wallet.keyChain.getKeysets();
       const filteredProofs = tokens.filter((p: Proof) =>
         mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
       ) as Proof[];
-      const { keep, send } = await wallet.send(price, filteredProofs, {
-        includeFees: true,
+      const swapOutcome = await safeSwap(wallet, price, filteredProofs, {
+        sendConfig: { includeFees: true },
       });
+      if (swapOutcome.status !== "swapped") {
+        throw new Error(
+          swapOutcome.errorMessage ??
+            `Product payment swap did not complete (${swapOutcome.status})`
+        );
+      }
+      const { keep, send } = swapOutcome;
       const deletedEventIds = [
         ...new Set([
           ...walletContext.proofEvents
@@ -1760,13 +2043,45 @@ export default function ProductInvoiceCard({
           </div>
         );
       }
-      return null;
+      return (
+        <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm dark:border-gray-700 dark:bg-gray-800">
+          <h3 className="mb-2 text-base font-semibold">Pickup Details</h3>
+          <p className="text-gray-600 dark:text-gray-300">
+            This listing supports pickup, but no pickup locations were provided.
+            You can continue and coordinate pickup details with the seller after
+            payment.
+          </p>
+        </div>
+      );
     }
 
     return (
       <div className="space-y-4">
         {formType === "shipping" && (
           <>
+            <div className="mb-6">
+              <h3 className="mb-3 text-lg font-semibold">Saved Addresses</h3>
+              {savedAddresses.length > 0 ? (
+                <AddressPicker
+                  onSelect={applySavedAddress}
+                  forceExpanded={true}
+                  autoSelect={false}
+                  compact={true}
+                  allowInlineAdd={false}
+                  selectable={true}
+                />
+              ) : (
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  No saved addresses yet. You can continue with the form below
+                  for this order, or add one from Preferences to reuse later.
+                </p>
+              )}
+            </div>
+
+            <div className="my-4 border-t pt-4">
+              <h3 className="mb-3 text-lg font-semibold">Shipping Address</h3>
+            </div>
+
             <Controller
               name="Name"
               control={formControl}
@@ -2145,7 +2460,10 @@ export default function ProductInvoiceCard({
               </div>
 
               <button
-                onClick={() => setIsBeingPaid(false)}
+                onClick={() => {
+                  cancelInvoicePolling();
+                  setIsBeingPaid(false);
+                }}
                 className="text-shopstr-purple hover:text-shopstr-purple-light dark:text-shopstr-yellow dark:hover:text-shopstr-yellow-light mt-4 underline"
               >
                 ← Back to product
@@ -2343,7 +2661,10 @@ export default function ProductInvoiceCard({
             </div>
 
             <button
-              onClick={() => setIsBeingPaid(false)}
+              onClick={() => {
+                cancelInvoicePolling();
+                setIsBeingPaid(false);
+              }}
               className="text-shopstr-purple hover:text-shopstr-purple-light dark:text-shopstr-yellow dark:hover:text-shopstr-yellow-light mt-4 underline"
             >
               ← Back to product
@@ -2361,13 +2682,17 @@ export default function ProductInvoiceCard({
             <>
               <h2 className="mb-6 text-2xl font-bold">Select Order Type</h2>
               <div className="space-y-4">
-                {productData.shippingType === "Free/Pickup" ? (
+                {supportsShipping && supportsPickup ? (
                   <>
                     <button
                       onClick={() => handleOrderTypeSelection("shipping")}
                       className="w-full rounded-lg border border-gray-300 bg-white p-4 text-left hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:hover:bg-gray-600"
                     >
-                      <div className="font-medium">Free shipping</div>
+                      <div className="font-medium">
+                        {normalizedShippingType.includes("free")
+                          ? "Free shipping"
+                          : "Shipping"}
+                      </div>
                       <div className="text-sm text-gray-500 dark:text-gray-400">
                         Get it shipped to your address
                       </div>
@@ -2382,8 +2707,7 @@ export default function ProductInvoiceCard({
                       </div>
                     </button>
                   </>
-                ) : productData.shippingType === "Free" ||
-                  productData.shippingType === "Added Cost" ? (
+                ) : supportsShipping ? (
                   <button
                     onClick={() => handleOrderTypeSelection("shipping")}
                     className="w-full rounded-lg border border-gray-300 bg-white p-4 text-left hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:hover:bg-gray-600"

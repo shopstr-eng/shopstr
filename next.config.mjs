@@ -1,6 +1,10 @@
 /** @type {import('next').NextConfig} */
 
 import withPWAInit from "@ducanh2912/next-pwa";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const withPWA = withPWAInit({
   dest: "public",
@@ -50,7 +54,14 @@ const withPWA = withPWAInit({
 const nextConfig = {
   bundlePagesRouterDependencies: true,
   output: "standalone",
+  // Pin the file tracer to this project root so Next.js bundles only what's
+  // needed into .next/standalone (silences multi-lockfile warnings and keeps
+  // the deployment image lean).
+  outputFileTracingRoot: path.join(__dirname, "."),
   reactStrictMode: true,
+  allowedDevOrigins: process.env.REPLIT_DEV_DOMAIN
+    ? [process.env.REPLIT_DEV_DOMAIN]
+    : [],
   poweredByHeader: false,
   turbopack: {},
   async rewrites() {

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import Head from "next/head";
 import Link from "next/link";
+import { safeJsonLdString } from "@/utils/safe-json-ld";
 import { ArrowLeftIcon, ChevronDownIcon } from "@heroicons/react/24/outline";
 
 const faqSections = [
@@ -175,10 +176,9 @@ export default function Faq() {
           name="description"
           content="Answers to common questions about Shopstr — the permissionless Bitcoin marketplace on Nostr. Learn about payments, Lightning Network, selling, privacy, and more."
         />
-        <link rel="canonical" href="https://shopstr.market/faq" />
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
+          dangerouslySetInnerHTML={{ __html: safeJsonLdString(structuredData) }}
         />
       </Head>
 

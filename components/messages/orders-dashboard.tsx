@@ -32,6 +32,13 @@ import parseTags, {
   ProductData,
 } from "@/utils/parsers/product-parser-functions";
 import {
+  buildOrderGroupingKey,
+  getOrderConsolidationKey,
+  getOrderStatusLookupKeys,
+  registerTaggedOrderGroupingKey,
+  resolveExplicitPaymentMethod,
+} from "@/utils/messages/order-message-utils";
+import {
   constructGiftWrappedEvent,
   constructMessageSeal,
   constructMessageGiftWrap,
@@ -72,6 +79,9 @@ ChartJS.register(
 
 interface OrderData {
   orderId: string;
+  orderTag?: string;
+  orderGroupKey: string;
+  statusLookupKeys: string[];
   buyerPubkey: string;
   productAddress: string;
   amount: number;
@@ -105,7 +115,13 @@ interface OrderData {
   returnRequestType?: string;
 }
 
-const OrdersDashboard = () => {
+const OrdersDashboard = ({
+  sellerOnly = false,
+  buyerOnly = false,
+}: {
+  sellerOnly?: boolean;
+  buyerOnly?: boolean;
+}) => {
   const chatsContext = useContext(ChatsContext);
   const productContext = useContext(ProductContext);
   const [orders, setOrders] = useState<OrderData[]>([]);
@@ -253,7 +269,11 @@ const OrdersDashboard = () => {
           const sats = await getSatoshiValue({ amount: 1, currency });
           return { currency: currency.toLowerCase(), rate: sats };
         } catch (err) {
-          console.error(`Failed to fetch rate for ${currency}:`, err);
+          // The third-party rate API 404s for some less-common currencies.
+          // Use console.warn (not console.error) so the Next.js dev
+          // overlay doesn't treat this benign, already-handled fallback
+          // as a Runtime Error popup.
+          console.warn(`Failed to fetch rate for ${currency}:`, err);
           return { currency: currency.toLowerCase(), rate: 0 };
         }
       });
@@ -280,12 +300,14 @@ const OrdersDashboard = () => {
     async function loadCachedStatuses() {
       if (!chatsContext || chatsContext.isLoading) return;
 
-      const orderIds: string[] = [];
+      const orderIdSet = new Set<string>();
       for (const entry of chatsContext.chatsMap) {
         const chat = entry[1] as NostrMessageEvent[];
         for (const messageEvent of chat) {
           const tagsMap = new Map(
-            messageEvent.tags.map((tag: string[]) => [tag[0], tag[1]])
+            messageEvent.tags
+              .filter((tag): tag is [string, string] => tag.length >= 2)
+              .map(([key, value]) => [key, value])
           );
           const subject = tagsMap.get("subject") || "";
           if (
@@ -294,20 +316,20 @@ const OrdersDashboard = () => {
             subject === "shipping-info" ||
             subject === "order-completed"
           ) {
-            const orderId = tagsMap.get("order") || messageEvent.id;
-            if (orderId && !orderIds.includes(orderId)) {
-              orderIds.push(orderId);
+            const orderStatusKeys = getOrderStatusLookupKeys(messageEvent);
+            for (const statusKey of orderStatusKeys) {
+              orderIdSet.add(statusKey);
             }
           }
         }
       }
 
-      if (orderIds.length > 0) {
+      if (orderIdSet.size > 0) {
         try {
           const response = await fetch("/api/db/get-order-statuses", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ orderIds }),
+            body: JSON.stringify({ orderIds: Array.from(orderIdSet) }),
           });
           if (response.ok) {
             const data = await response.json();
@@ -351,7 +373,10 @@ const OrdersDashboard = () => {
             subject === "order-completed" ||
             subject === "zapsnag-order"
           ) {
-            const orderId = tagsMap.get("order") || messageEvent.id;
+            const orderTag = tagsMap.get("order") || "";
+            const orderGroupKey = buildOrderGroupingKey(messageEvent);
+            const statusLookupKeys = getOrderStatusLookupKeys(messageEvent);
+            const orderId = orderTag || messageEvent.id;
             const itemTag = messageEvent.tags.find((tag) => tag[0] === "item");
             const productAddress =
               tagsMap.get("a") || (itemTag ? itemTag[1] : "") || "";
@@ -441,33 +466,13 @@ const OrdersDashboard = () => {
             }
             const finalAmount = amount > 0 ? amount : productPrice * quantity;
 
-            let paymentMethod = "Not specified";
-            if (paymentType) {
-              switch (paymentType.toLowerCase()) {
-                case "ecash":
-                  paymentMethod = "Cashu";
-                  break;
-                case "lightning":
-                  paymentMethod = "Lightning";
-                  break;
-                default:
-                  paymentMethod =
-                    paymentType.charAt(0).toUpperCase() + paymentType.slice(1);
-              }
-            } else if (messageEvent.content) {
-              const content = messageEvent.content.toLowerCase();
-              if (content.includes("lightning") || content.includes("lnurl")) {
-                paymentMethod = "Lightning";
-              } else if (
-                content.includes("cashu") ||
-                content.includes("ecash")
-              ) {
-                paymentMethod = "Cashu";
-              }
-            }
+            const paymentMethod = resolveExplicitPaymentMethod(paymentType);
 
             ordersList.push({
               orderId,
+              orderTag: orderTag || undefined,
+              orderGroupKey,
+              statusLookupKeys,
               buyerPubkey,
               productAddress,
               amount: finalAmount,
@@ -501,12 +506,28 @@ const OrdersDashboard = () => {
       }
 
       const consolidatedOrdersMap = new Map<string, OrderData>();
+      const taggedOrderGroupKeys = new Map<string, string | null>();
+
+      const getCachedStatusForOrder = (order: OrderData) => {
+        for (const lookupKey of order.statusLookupKeys) {
+          const cachedStatus = cachedStatuses[lookupKey];
+          if (cachedStatus) {
+            return cachedStatus;
+          }
+        }
+
+        return undefined;
+      };
 
       for (const order of ordersList) {
-        const existing = consolidatedOrdersMap.get(order.orderId);
+        const consolidationKey = getOrderConsolidationKey(
+          order,
+          taggedOrderGroupKeys
+        );
+        const existing = consolidatedOrdersMap.get(consolidationKey);
 
         if (!existing) {
-          const cachedStatus = cachedStatuses[order.orderId];
+          const cachedStatus = getCachedStatusForOrder(order);
           const statusPriorityInit: Record<string, number> = {
             canceled: 5,
             completed: 4,
@@ -518,13 +539,19 @@ const OrdersDashboard = () => {
             ? statusPriorityInit[cachedStatus] || 0
             : 0;
           const orderPriority = statusPriorityInit[order.status] || 0;
-          consolidatedOrdersMap.set(order.orderId, {
+          consolidatedOrdersMap.set(consolidationKey, {
             ...order,
+            orderId: order.orderTag || order.orderId,
             status:
               cachedPriority > orderPriority && cachedStatus
                 ? cachedStatus
                 : order.status,
           });
+          registerTaggedOrderGroupingKey(
+            order,
+            taggedOrderGroupKeys,
+            consolidationKey
+          );
         } else {
           const statusPriority: Record<string, number> = {
             canceled: 5,
@@ -535,7 +562,7 @@ const OrdersDashboard = () => {
           };
           const existingPriority = statusPriority[existing.status] || 0;
           const newPriority = statusPriority[order.status] || 0;
-          const cachedStatus = cachedStatuses[order.orderId];
+          const cachedStatus = getCachedStatusForOrder(order);
           const cachedPriority = cachedStatus
             ? statusPriority[cachedStatus] || 0
             : 0;
@@ -549,8 +576,15 @@ const OrdersDashboard = () => {
             finalStatus = cachedStatus;
           }
 
-          consolidatedOrdersMap.set(order.orderId, {
+          const mergedStatusLookupKeys = Array.from(
+            new Set([...existing.statusLookupKeys, ...order.statusLookupKeys])
+          );
+
+          consolidatedOrdersMap.set(consolidationKey, {
             ...existing,
+            orderTag: existing.orderTag || order.orderTag,
+            orderId: existing.orderTag || order.orderTag || existing.orderId,
+            statusLookupKeys: mergedStatusLookupKeys,
             status: finalStatus,
             address: order.address || existing.address,
             pickupLocation: order.pickupLocation || existing.pickupLocation,
@@ -592,6 +626,11 @@ const OrdersDashboard = () => {
               order.subscriptionFrequency || existing.subscriptionFrequency,
             subscriptionId: order.subscriptionId || existing.subscriptionId,
           });
+          registerTaggedOrderGroupingKey(
+            order,
+            taggedOrderGroupKeys,
+            consolidationKey
+          );
         }
       }
 
@@ -630,8 +669,14 @@ const OrdersDashboard = () => {
         }
       }
 
-      setOrders(consolidatedOrders);
-      setTotalOrders(consolidatedOrders.length);
+      const finalOrders = sellerOnly
+        ? consolidatedOrders.filter((o) => o.isSale)
+        : buyerOnly
+          ? consolidatedOrders.filter((o) => !o.isSale)
+          : consolidatedOrders;
+
+      setOrders(finalOrders);
+      setTotalOrders(finalOrders.length);
       setIsLoading(false);
 
       const statusPriorityForPersist: Record<string, number> = {
@@ -644,7 +689,9 @@ const OrdersDashboard = () => {
       for (const order of consolidatedOrders) {
         if (order.status && order.orderId) {
           const currentPriority = statusPriorityForPersist[order.status] || 0;
-          const cachedStatusValue = cachedStatuses[order.orderId];
+          const cachedStatusValue = order.statusLookupKeys
+            .map((lookupKey) => cachedStatuses[lookupKey])
+            .find((status): status is string => Boolean(status));
           const cachedPriority = cachedStatusValue
             ? statusPriorityForPersist[cachedStatusValue] || 0
             : 0;
@@ -900,7 +947,7 @@ const OrdersDashboard = () => {
         selectedOrder.buyerPubkey
       );
 
-      await sendGiftWrappedMessageEvent(nostr, giftWrappedEvent);
+      await sendGiftWrappedMessageEvent(nostr, giftWrappedEvent, signer);
 
       // Update local state to shipped status (removes Send Shipping Update button)
       setOrders((prevOrders) =>
@@ -1191,7 +1238,7 @@ const OrdersDashboard = () => {
         sellerPubkey
       );
 
-      await sendGiftWrappedMessageEvent(nostr, giftWrappedEvent);
+      await sendGiftWrappedMessageEvent(nostr, giftWrappedEvent, signer);
 
       setOrders((prevOrders) =>
         prevOrders.map((order) =>
@@ -1277,7 +1324,7 @@ const OrdersDashboard = () => {
         sellerPubkey
       );
 
-      await sendGiftWrappedMessageEvent(nostr, giftWrappedEvent);
+      await sendGiftWrappedMessageEvent(nostr, giftWrappedEvent, signer);
 
       setOrders((prevOrders) =>
         prevOrders.map((order) =>
@@ -1308,7 +1355,11 @@ const OrdersDashboard = () => {
       <div className="mx-auto w-full max-w-full min-w-0">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
           <h1 className="text-light-text dark:text-dark-text text-3xl font-bold">
-            Orders Dashboard
+            {sellerOnly
+              ? "Seller Orders Dashboard"
+              : buyerOnly
+                ? "My Purchases"
+                : "Orders Dashboard"}
           </h1>
           <div className="flex items-center gap-3">
             <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
@@ -1339,10 +1390,12 @@ const OrdersDashboard = () => {
           </div>
         </div>
 
-        <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-3">
+        <div
+          className={`mb-8 grid grid-cols-1 gap-6 ${sellerOnly ? "md:grid-cols-4" : "md:grid-cols-3"}`}
+        >
           <div className="rounded-lg bg-white p-6 shadow-md dark:bg-gray-800">
             <h3 className="mb-2 text-sm font-medium text-gray-600 dark:text-gray-400">
-              Total Orders
+              {sellerOnly ? "Total Sales" : "Total Orders"}
             </h3>
             <p className="text-light-text dark:text-dark-text text-3xl font-bold">
               {totalOrders}
@@ -1351,7 +1404,7 @@ const OrdersDashboard = () => {
 
           <div className="rounded-lg bg-white p-6 shadow-md dark:bg-gray-800">
             <h3 className="mb-2 text-sm font-medium text-gray-600 dark:text-gray-400">
-              Total GMV
+              {sellerOnly ? "Total Revenue" : "Total GMV"}
             </h3>
             <p className="text-light-text dark:text-dark-text text-3xl font-bold">
               {displayCurrency === "sats"
@@ -1376,6 +1429,27 @@ const OrdersDashboard = () => {
                   })}`}
             </p>
           </div>
+
+          {sellerOnly && (
+            <div className="rounded-lg bg-white p-6 shadow-md dark:bg-gray-800">
+              <h3 className="mb-2 text-sm font-medium text-gray-600 dark:text-gray-400">
+                Top Product
+              </h3>
+              <p className="text-light-text dark:text-dark-text truncate text-xl font-bold">
+                {(() => {
+                  const counts: Record<string, number> = {};
+                  orders.forEach((o) => {
+                    const title = o.productTitle || "Unknown";
+                    counts[title] = (counts[title] || 0) + 1;
+                  });
+                  const top = Object.entries(counts).sort(
+                    (a, b) => b[1] - a[1]
+                  )[0];
+                  return top ? `${top[0]} (×${top[1]})` : "—";
+                })()}
+              </p>
+            </div>
+          )}
         </div>
 
         {orders.length > 0 && (
@@ -1394,11 +1468,13 @@ const OrdersDashboard = () => {
                   <th className="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-600 uppercase dark:text-gray-400">
                     Order ID
                   </th>
+                  {!sellerOnly && (
+                    <th className="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-600 uppercase dark:text-gray-400">
+                      Type
+                    </th>
+                  )}
                   <th className="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-600 uppercase dark:text-gray-400">
-                    Type
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-600 uppercase dark:text-gray-400">
-                    Buyer/Seller
+                    {sellerOnly ? "Customer" : "Buyer/Seller"}
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-600 uppercase dark:text-gray-400">
                     Amount
@@ -1484,17 +1560,19 @@ const OrdersDashboard = () => {
                             ) : null}
                           </div>
                         </td>
-                        <td className="px-4 py-4 text-sm whitespace-nowrap">
-                          <span
-                            className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
-                              order.isSale
-                                ? "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200"
-                                : "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200"
-                            }`}
-                          >
-                            {order.isSale ? "Sale" : "Purchase"}
-                          </span>
-                        </td>
+                        {!sellerOnly && (
+                          <td className="px-4 py-4 text-sm whitespace-nowrap">
+                            <span
+                              className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
+                                order.isSale
+                                  ? "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200"
+                                  : "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200"
+                              }`}
+                            >
+                              {order.isSale ? "Sale" : "Purchase"}
+                            </span>
+                          </td>
+                        )}
                         <td className="px-4 py-4 text-sm">
                           {(() => {
                             const displayPubkey = order.isSale
@@ -1545,7 +1623,7 @@ const OrdersDashboard = () => {
                             >
                               {order.status}
                             </span>
-                            {order.status === "pending" && (
+                            {order.isSale && order.status === "pending" && (
                               <button
                                 onClick={() => handleOpenShippingModal(order)}
                                 className="text-shopstr-purple-light hover:text-shopstr-purple dark:text-shopstr-yellow-light dark:hover:text-shopstr-yellow cursor-pointer text-left text-xs underline"

@@ -5,11 +5,18 @@ import {
   fetchAllProfilesFromDb,
   fetchCachedEvents,
 } from "@/utils/db/db-service";
+import { applyRateLimit } from "@/utils/rate-limit";
+
+// Status hits the DB; per-IP cap prevents an unauthenticated client from
+// pinning a connection-pool slot on this endpoint.
+const RATE_LIMIT = { limit: 600, windowMs: 60 * 1000 };
 
 export default async function handler(
-  _req: NextApiRequest,
+  req: NextApiRequest,
   res: NextApiResponse
 ) {
+  if (!applyRateLimit(req, res, "mcp-status", RATE_LIMIT)) return;
+
   const startTime = Date.now();
 
   try {
