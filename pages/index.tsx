@@ -10,13 +10,14 @@ import {
 } from "@heroicons/react/24/outline";
 import { useRouter } from "next/router";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
-import { useContext, useEffect, useState } from "react";
+import { useContext, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { ProductContext } from "@/utils/context/context";
 import ProductCard from "@/components/utility-components/product-card";
 import parseTags, {
   ProductData,
 } from "@/utils/parsers/product-parser-functions";
+import { resolveMarketplaceStats } from "@/utils/marketplace-stats";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import Link from "next/link";
 import { nip19 } from "nostr-tools";
@@ -34,19 +35,45 @@ export default function Landing() {
   const productEventsLength = productEventContext.productEvents.length;
 
   const signerContext = useContext(SignerContext);
+  const marketplaceStats = useMemo(
+    () =>
+      resolveMarketplaceStats(
+        { listingCount, sellerCount },
+        productEventContext.productEvents
+      ),
+    [listingCount, sellerCount, productEventContext.productEvents]
+  );
 
   useEffect(() => {
-    fetch("/api/db/marketplace-stats", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((data) => {
+    let isCurrent = true;
+
+    async function fetchMarketplaceStats() {
+      try {
+        const response = await fetch("/api/db/marketplace-stats", {
+          cache: "no-store",
+        });
+        if (!response.ok) {
+          throw new Error(`Stats request failed with ${response.status}`);
+        }
+
+        const data = await response.json();
+        if (!isCurrent) return;
+
         if (typeof data.listingCount === "number")
           setListingCount(data.listingCount);
         if (typeof data.sellerCount === "number")
           setSellerCount(data.sellerCount);
-      })
-      .catch((error) => {
+      } catch (error) {
+        if (!isCurrent) return;
         console.error("Failed to fetch marketplace stats:", error);
-      });
+      }
+    }
+
+    void fetchMarketplaceStats();
+
+    return () => {
+      isCurrent = false;
+    };
   }, [productEventsLength]);
   useEffect(() => {
     if (router.pathname === "/" && signerContext.isLoggedIn) {
@@ -354,7 +381,9 @@ export default function Landing() {
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
             <div className="bg-light-fg dark:bg-dark-fg rounded-xl p-6 text-center shadow-md">
               <p className="text-shopstr-purple dark:text-shopstr-yellow text-3xl font-bold">
-                {listingCount === null ? "…" : listingCount.toLocaleString()}
+                {marketplaceStats.listingCount === null
+                  ? "…"
+                  : marketplaceStats.listingCount.toLocaleString()}
               </p>
               <p className="text-light-text dark:text-dark-text mt-2 text-sm">
                 Active listings on Shopstr right now
@@ -362,7 +391,9 @@ export default function Landing() {
             </div>
             <div className="bg-light-fg dark:bg-dark-fg rounded-xl p-6 text-center shadow-md">
               <p className="text-shopstr-purple dark:text-shopstr-yellow text-3xl font-bold">
-                {sellerCount === null ? "…" : sellerCount.toLocaleString()}
+                {marketplaceStats.sellerCount === null
+                  ? "…"
+                  : marketplaceStats.sellerCount.toLocaleString()}
               </p>
               <p className="text-light-text dark:text-dark-text mt-2 text-sm">
                 Sellers with active shops on Shopstr
