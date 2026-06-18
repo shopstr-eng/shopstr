@@ -233,6 +233,47 @@ test("get_company_details merges profiles, products, reviews, and cache metadata
   });
 });
 
+test("get_company_details hints when review lookup is partial", async () => {
+  const products = Array.from({ length: 21 }, (_, index) =>
+    productEvent({
+      id: (index + 1).toString(16).padStart(64, "0"),
+      created_at: 130 + index,
+      tags: [
+        ["d", `item-${index}`],
+        ["title", `Product ${index}`],
+        ["summary", "Product beyond review scan cap"],
+        ["price", "25", "USD"],
+      ],
+    })
+  );
+  const response = await handleGetCompanyDetails(
+    { pubkey: sellerPubkey },
+    context((filters) => {
+      if (
+        filters.some((filter) =>
+          filter.kinds?.some((kind) => kind === 0 || kind === 30019)
+        )
+      ) {
+        return [profileEvent(), shopEvent()];
+      }
+      if (filters.some((filter) => filter.kinds?.includes(30402))) {
+        return products;
+      }
+      if (filters.some((filter) => filter.kinds?.includes(31555))) {
+        return [];
+      }
+      return [];
+    })
+  );
+  const body = JSON.parse(response.content[0].text);
+
+  assert.equal(response.isError, undefined);
+  assert.equal(body.products.totalMatches, 21);
+  assert.ok(
+    body._meta._hints.some((hint) => hint.includes("Review lookup was partial"))
+  );
+});
+
 test("get_company_details accepts npub input via pubkeySchema", async () => {
   const npub = nip19.npubEncode(sellerPubkey);
   const response = await handleGetCompanyDetails(
