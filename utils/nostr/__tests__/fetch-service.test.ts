@@ -1973,8 +1973,8 @@ describe("fetchProfile", () => {
   it("handles malformed profile JSON from DB and relay without throwing", async () => {
     const verifyNip05Identifier = jest.fn().mockResolvedValue(false);
     const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
-    const consoleErrorSpy = jest
-      .spyOn(console, "error")
+    const consoleWarnSpy = jest
+      .spyOn(console, "warn")
       .mockImplementation(() => {});
 
     jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
@@ -2021,10 +2021,15 @@ describe("fetchProfile", () => {
       editProfileContext
     );
 
-    expect(consoleErrorSpy).toHaveBeenCalled();
+    expect(consoleWarnSpy).toHaveBeenCalledWith(
+      `Skipping invalid profile JSON from DB: ${pubkey}`
+    );
+    expect(consoleWarnSpy).toHaveBeenCalledWith(
+      `Skipping invalid profile JSON for pubkey: ${pubkey}`
+    );
     expect(profileMap.get(pubkey)).toBeFalsy();
 
-    consoleErrorSpy.mockRestore();
+    consoleWarnSpy.mockRestore();
   });
 
   it("sets nip05Verified from DB verification and relay verification independently", async () => {
