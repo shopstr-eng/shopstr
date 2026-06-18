@@ -38,6 +38,7 @@ export const STORAGE_KEYS = {
   // Storefront & Cart (These were mostly unmanaged string literals)
   CART: "cart",
   CART_DISCOUNTS: "cartDiscounts",
+  SAVED_ADDRESSES: "savedAddresses",
   SF_SELLER_PUBKEY: "sf_seller_pubkey",
   SF_SHOP_SLUG: "sf_shop_slug",
   SHIPPING_INFO: "shopstr_shipping_info",
@@ -98,9 +99,22 @@ class StorageManager {
     const raw = localStorage.getItem(key);
     return parseJsonWithFallback(raw, fallback, {
       ...options,
-      onError: (err) => {
-        options?.onError?.(err);
-        console.warn(`Storage parse error for key "${key}":`, err);
+      onError: (context) => {
+        const contextWithKey = { ...context, key };
+        options?.onError?.(contextWithKey);
+
+        if (context.reason === "parse_error" && options?.removeOnError) {
+          localStorage.removeItem(key);
+        }
+
+        if (
+          context.reason === "validation_mismatch" &&
+          options?.removeOnValidationError
+        ) {
+          localStorage.removeItem(key);
+        }
+
+        console.warn(`Storage parse error for key "${key}":`, context);
       },
     });
   }
@@ -159,9 +173,22 @@ class StorageManager {
     const raw = sessionStorage.getItem(key);
     return parseJsonWithFallback(raw, fallback, {
       ...options,
-      onError: (err) => {
-        options?.onError?.(err);
-        console.warn(`SessionStorage parse error for key "${key}":`, err);
+      onError: (context) => {
+        const contextWithKey = { ...context, key };
+        options?.onError?.(contextWithKey);
+
+        if (context.reason === "parse_error" && options?.removeOnError) {
+          sessionStorage.removeItem(key);
+        }
+
+        if (
+          context.reason === "validation_mismatch" &&
+          options?.removeOnValidationError
+        ) {
+          sessionStorage.removeItem(key);
+        }
+
+        console.warn(`SessionStorage parse error for key "${key}":`, context);
       },
     });
   }

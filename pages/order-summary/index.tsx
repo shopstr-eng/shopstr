@@ -82,7 +82,8 @@ export default function OrderSummary() {
   useEffect(() => {
     if (hasConsumedOrderRef.current) return;
     const data = storage.getSessionJson<OrderSummaryData | null>(
-      STORAGE_KEYS.ORDER_SUMMARY
+      STORAGE_KEYS.ORDER_SUMMARY,
+      null
     );
     if (data) {
       hasConsumedOrderRef.current = true;

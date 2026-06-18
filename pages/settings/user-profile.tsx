@@ -16,7 +16,10 @@ import {
   EyeSlashIcon,
   EyeIcon,
 } from "@heroicons/react/24/outline";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import {
+  AVATARBADGEBUTTONCLASSNAMES,
+  SHOPSTRBUTTONCLASSNAMES,
+} from "@/utils/STATIC-VARIABLES";
 import {
   SignerContext,
   NostrContext,
@@ -35,7 +38,6 @@ import ProtectedRoute from "@/components/utility-components/protected-route";
 const UserProfilePage = () => {
   const { nostr } = useContext(NostrContext);
   const [isUploadingProfile, setIsUploadingProfile] = useState(false);
-  const [isFetchingProfile, setIsFetchingProfile] = useState(false);
   const {
     signer,
     pubkey: userPubkey,
@@ -64,17 +66,22 @@ const UserProfilePage = () => {
 
   const watchBanner = watch("banner");
   const watchPicture = watch("picture");
+  const hasCurrentUserProfile =
+    !!userPubkey && profileContext.profileData.has(userPubkey);
+  const isFetchingProfile =
+    !userPubkey || (profileContext.isLoading && !hasCurrentUserProfile);
   const defaultImage = useMemo(() => {
     return "https://robohash.org/" + userPubkey;
   }, [userPubkey]);
+
   const profileImageSrc = watchPicture || defaultImage;
 
   useEffect(() => {
-    if (!userPubkey) return;
-    setIsFetchingProfile(true);
+    if (!userPubkey || profileContext.isLoading) return;
 
     const localFallback = storage.getJson<any>(
-      getLocalUserProfileKey(userPubkey)
+      getLocalUserProfileKey(userPubkey),
+      null
     );
 
     const profileMap = profileContext.profileData;
@@ -116,8 +123,7 @@ const UserProfilePage = () => {
         console.error("Failed to read local profile fallback:", error);
       }
     }
-    setIsFetchingProfile(false);
-  }, [profileContext, userPubkey, reset]);
+  }, [userPubkey, profileContext.isLoading, profileContext.profileData, reset]);
 
   const onSubmit = async (data: { [x: string]: string }) => {
     if (!userPubkey) {
@@ -151,11 +157,15 @@ const UserProfilePage = () => {
         return;
       }
 
-      await createNostrProfileEvent(nostr, signer, JSON.stringify(updatedData));
+      const signedProfileEvent = await createNostrProfileEvent(
+        nostr,
+        signer,
+        JSON.stringify(updatedData)
+      );
       profileContext.updateProfileData({
         pubkey: userPubkey,
         content: updatedData,
-        created_at: Math.floor(Date.now() / 1000),
+        created_at: signedProfileEvent.created_at,
       });
     } catch (error) {
       console.error("Failed to save user profile:", error);
@@ -190,23 +200,22 @@ const UserProfilePage = () => {
                   </FileUploaderButton>
                 </div>
                 <div className="flex items-center justify-center">
-                  <div className="relative z-20 mt-[-3rem] h-24 w-24">
-                    <div className="">
-                      <FileUploaderButton
-                        isIconOnly
-                        className={`absolute right-[-0.5rem] bottom-[-0.5rem] z-20 ${SHOPSTRBUTTONCLASSNAMES}`}
-                        imgCallbackOnUpload={(imgUrl) =>
-                          setValue("picture", imgUrl)
-                        }
-                      />
-                      <Image
-                        key={profileImageSrc}
-                        src={profileImageSrc}
-                        alt="user profile picture"
-                        radius="full"
-                        className="h-24 w-24 object-cover"
-                      />
-                    </div>
+                  <div className="relative z-20 mt-[-3rem] h-24 w-24 overflow-visible">
+                    <FileUploaderButton
+                      isIconOnly
+                      className={AVATARBADGEBUTTONCLASSNAMES}
+                      containerClassName="absolute right-[-0.5rem] bottom-[-0.5rem] z-20"
+                      imgCallbackOnUpload={(imgUrl) =>
+                        setValue("picture", imgUrl)
+                      }
+                    />
+                    <Image
+                      key={profileImageSrc}
+                      src={profileImageSrc}
+                      alt="user profile picture"
+                      radius="full"
+                      className="h-24 w-24 rounded-full object-cover"
+                    />
                   </div>
                 </div>
               </div>
@@ -304,6 +313,51 @@ const UserProfilePage = () => {
               )}
 
               <form onSubmit={handleSubmit(onSubmit as any)}>
+                <div className="grid gap-4 pb-4 md:grid-cols-2">
+                  <Controller
+                    name="picture"
+                    control={control}
+                    render={({ field: { onChange, onBlur, value } }) => (
+                      <Input
+                        className="text-light-text dark:text-dark-text"
+                        classNames={{
+                          label: "text-light-text dark:text-dark-text text-lg",
+                        }}
+                        variant="bordered"
+                        fullWidth={true}
+                        type="url"
+                        label="Profile image URL"
+                        labelPlacement="outside"
+                        placeholder="https://..."
+                        onChange={onChange}
+                        onBlur={onBlur}
+                        value={value || ""}
+                      />
+                    )}
+                  />
+                  <Controller
+                    name="banner"
+                    control={control}
+                    render={({ field: { onChange, onBlur, value } }) => (
+                      <Input
+                        className="text-light-text dark:text-dark-text"
+                        classNames={{
+                          label: "text-light-text dark:text-dark-text text-lg",
+                        }}
+                        variant="bordered"
+                        fullWidth={true}
+                        type="url"
+                        label="Profile banner URL"
+                        labelPlacement="outside"
+                        placeholder="https://..."
+                        onChange={onChange}
+                        onBlur={onBlur}
+                        value={value || ""}
+                      />
+                    )}
+                  />
+                </div>
+
                 <Controller
                   name="display_name"
                   control={control}

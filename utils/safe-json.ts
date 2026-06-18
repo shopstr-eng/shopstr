@@ -46,3 +46,34 @@ export function parseJsonWithFallback<T>(
     return fallback;
   }
 }
+
+export function getLocalStorageJson<T>(
+  key: string,
+  fallback: T,
+  options?: StorageParseOptions<T>
+): T {
+  if (typeof window === "undefined") {
+    options?.onError?.({ reason: "ssr", key });
+    return fallback;
+  }
+
+  const raw = localStorage.getItem(key);
+  return parseJsonWithFallback(raw, fallback, {
+    ...options,
+    onError: (context) => {
+      const contextWithKey = { ...context, key };
+      options?.onError?.(contextWithKey);
+
+      if (context.reason === "parse_error" && options?.removeOnError) {
+        localStorage.removeItem(key);
+      }
+
+      if (
+        context.reason === "validation_mismatch" &&
+        options?.removeOnValidationError
+      ) {
+        localStorage.removeItem(key);
+      }
+    },
+  });
+}

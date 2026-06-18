@@ -23,6 +23,7 @@ import {
   Select,
   SelectItem,
   Input,
+  Checkbox,
 } from "@heroui/react";
 import {
   BanknotesIcon,
@@ -57,10 +58,12 @@ import {
   constructGiftWrappedEvent,
   constructMessageSeal,
   constructMessageGiftWrap,
+  getSavedAddresses,
   sendGiftWrappedMessageEvent,
   generateKeys,
   getStoredMints,
   publishProofEvent,
+  saveAddress,
 } from "@/utils/nostr/nostr-helper-functions";
 import { storage, STORAGE_KEYS } from "@/utils/storage";
 import { LightningAddress } from "@getalby/lightning-tools";
@@ -74,6 +77,7 @@ import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import SignInModal from "./sign-in/SignInModal";
 import FailureModal from "@/components/utility-components/failure-modal";
 import CountryDropdown from "./utility-components/dropdowns/country-dropdown";
+import AddressPicker from "./utility-components/address-picker";
 import {
   NostrContext,
   SignerContext,
@@ -82,15 +86,21 @@ import {
   ShippingFormData,
   ContactFormData,
   CombinedFormData,
+  SavedAddress,
   ShopProfile,
 } from "@/utils/types/types";
 import { Controller } from "react-hook-form";
+import {
+  buildShippingAdjustedProductTotals,
+  ProductTotalsInSats,
+  sumProductTotalsInSats,
+} from "@/utils/cart-totals";
 
 export default function CartInvoiceCard({
   products,
   quantities,
   shippingTypes,
-  totalCostsInSats,
+  productTotalsInSats,
   subtotalCost,
   appliedDiscounts = {},
   discountCodes = {},
@@ -104,7 +114,7 @@ export default function CartInvoiceCard({
   products: ProductData[];
   quantities: { [key: string]: number };
   shippingTypes: { [key: string]: string };
-  totalCostsInSats: { [key: string]: number };
+  productTotalsInSats: ProductTotalsInSats;
   subtotalCost: number;
   appliedDiscounts?: { [key: string]: number };
   discountCodes?: { [key: string]: string };
@@ -117,6 +127,7 @@ export default function CartInvoiceCard({
 }) {
   const mints = getStoredMints();
   const tokens = storage.getJson<any[]>(STORAGE_KEYS.TOKENS, []);
+  const history = storage.getJson<any[]>(STORAGE_KEYS.HISTORY, []);
   const {
     isLoggedIn,
     pubkey: userPubkey,
@@ -135,6 +146,12 @@ export default function CartInvoiceCard({
 
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
   const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
+  const [saveDetails, setSaveDetails] = useState(false);
+  const [saveAddressLabel, setSaveAddressLabel] = useState("");
+  const [selectedSavedAddressId, setSelectedSavedAddressId] = useState<
+    string | null
+  >(null);
+  const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
   const [invoice, setInvoice] = useState("");
   const [copiedToClipboard, setCopiedToClipboard] = useState(false);
 
@@ -193,7 +210,7 @@ export default function CartInvoiceCard({
         const cartItems = products.map((p: any) => ({
           title: p.title || p.productName,
           image: p.images?.[0] || "",
-          amount: String(totalCostsInSats[p.id] || 0),
+          amount: String(currentProductTotalsInSats[p.id] || 0),
           currency: "sats",
           quantity: quantities[p.id] || 1,
           shipping: shippingTypes[p.id] || "",
@@ -429,12 +446,15 @@ export default function CartInvoiceCard({
     [productId: string]: string;
   }>({});
 
+  const [currentProductTotalsInSats, setCurrentProductTotalsInSats] =
+    useState<ProductTotalsInSats>(productTotalsInSats);
   const [totalCost, setTotalCost] = useState<number>(subtotalCost);
 
   const {
     handleSubmit: handleFormSubmit,
     control: formControl,
     watch,
+    setValue,
   } = useForm();
 
   // Watch form values to validate completion
@@ -456,6 +476,18 @@ export default function CartInvoiceCard({
   }, [uniqueShippingTypes, hasShippingPickupProducts]);
 
   const [requiredInfo, setRequiredInfo] = useState("");
+  const defaultSavedAddress = useMemo(
+    () =>
+      savedAddresses.find((address) => address.isDefault) ||
+      savedAddresses[0] ||
+      null,
+    [savedAddresses]
+  );
+
+  useEffect(() => {
+    setCurrentProductTotalsInSats(productTotalsInSats);
+    setTotalCost(subtotalCost);
+  }, [productTotalsInSats, subtotalCost]);
 
   useEffect(() => {
     if (products && products.length > 0) {
@@ -466,6 +498,19 @@ export default function CartInvoiceCard({
       setRequiredInfo(requiredFields);
     }
   }, [products]);
+
+  useEffect(() => {
+    const loadSavedAddresses = () => {
+      setSavedAddresses(getSavedAddresses());
+    };
+
+    loadSavedAddresses();
+    window.addEventListener("storage", loadSavedAddresses);
+
+    return () => {
+      window.removeEventListener("storage", loadSavedAddresses);
+    };
+  }, []);
 
   // Check if any products have pickup locations
   const productsWithPickupLocations = useMemo(() => {
@@ -529,6 +574,7 @@ export default function CartInvoiceCard({
         watchedValues["Postal Code"]?.trim() &&
         watchedValues["State/Province"]?.trim() &&
         watchedValues.Country?.trim() &&
+        (!saveDetails || saveAddressLabel.trim()) &&
         (!requiredInfo || watchedValues.Required?.trim()) &&
         pickupLocationValid
       );
@@ -542,6 +588,7 @@ export default function CartInvoiceCard({
         watchedValues["Postal Code"]?.trim() &&
         watchedValues["State/Province"]?.trim() &&
         watchedValues.Country?.trim() &&
+        (!saveDetails || saveAddressLabel.trim()) &&
         (!requiredInfo || watchedValues.Required?.trim()) &&
         pickupLocationValid
       );
@@ -554,6 +601,8 @@ export default function CartInvoiceCard({
     requiredInfo,
     productsWithPickupLocations,
     shippingPickupPreference,
+    saveDetails,
+    saveAddressLabel,
   ]);
 
   const generateNewKeys = async () => {
@@ -853,7 +902,6 @@ export default function CartInvoiceCard({
       if (price < 1) {
         throw new Error("Total price is less than 1 sat.");
       }
-
       const commonData = {
         additionalInfo: data["Required"],
       };
@@ -882,6 +930,26 @@ export default function CartInvoiceCard({
           shippingState: data["State/Province"],
           shippingCountry: data["Country"],
         };
+      }
+
+      if (
+        saveDetails &&
+        (formType === "shipping" || formType === "combined") &&
+        paymentData.shippingName &&
+        paymentData.shippingAddress
+      ) {
+        saveAddress({
+          id: selectedSavedAddressId || undefined,
+          name: paymentData.shippingName,
+          address: paymentData.shippingAddress,
+          unit: paymentData.shippingUnitNo || "",
+          city: paymentData.shippingCity,
+          state: paymentData.shippingState,
+          zip: paymentData.shippingPostalCode,
+          country: paymentData.shippingCountry,
+          label: saveAddressLabel.trim(),
+          isDefault: false,
+        });
       }
 
       const addressTag =
@@ -934,77 +1002,70 @@ export default function CartInvoiceCard({
     }
   };
 
+  const resetCurrentProductTotals = () => {
+    setCurrentProductTotalsInSats(productTotalsInSats);
+    setTotalCost(subtotalCost);
+  };
+
+  const buildShippingCostsInSats = async () => {
+    const shippingCostsInSats: { [productId: string]: number } = {};
+
+    for (const product of products) {
+      shippingCostsInSats[product.id] = await convertShippingToSats(product);
+    }
+
+    return shippingCostsInSats;
+  };
+
+  const applyCurrentProductTotals = async (
+    shouldAddShipping: (shippingType?: string) => boolean
+  ) => {
+    try {
+      const shippingCostsInSats = await buildShippingCostsInSats();
+      const updatedProductTotalsInSats = buildShippingAdjustedProductTotals({
+        products,
+        baseProductTotalsInSats: productTotalsInSats,
+        quantities,
+        shippingTypes,
+        shippingCostsInSats,
+        sellerFreeShippingStatus,
+        shouldAddShipping,
+      });
+
+      setCurrentProductTotalsInSats(updatedProductTotalsInSats);
+      setTotalCost(sumProductTotalsInSats(updatedProductTotalsInSats));
+
+      return true;
+    } catch (err) {
+      handleShippingConversionError(err);
+      return false;
+    }
+  };
+
   const handleOrderTypeSelection = async (selectedOrderType: string) => {
     setShowOrderTypeSelection(false);
 
     if (selectedOrderType === "shipping") {
       setFormType("shipping");
-      let shippingTotal = 0;
-      const updatedTotalCostsInSats: { [productId: string]: number } = {};
-
-      try {
-        for (const product of products) {
-          if (sellerFreeShippingStatus[product.pubkey]?.qualifies) {
-            updatedTotalCostsInSats[product.id] =
-              totalCostsInSats[product.id] || 0;
-            continue;
-          }
-          const shippingCostInSats = await convertShippingToSats(product);
-          const quantity = quantities[product.id] || 1;
-          const productShippingCost = Math.ceil(shippingCostInSats * quantity);
-          shippingTotal += productShippingCost;
-          updatedTotalCostsInSats[product.id] =
-            (totalCostsInSats[product.id] || 0) + productShippingCost;
-        }
-      } catch (err) {
-        handleShippingConversionError(err);
-        return;
-      }
-
-      setTotalCost(subtotalCost + shippingTotal);
+      if (!(await applyCurrentProductTotals(() => true))) return;
     } else if (selectedOrderType === "contact") {
       setFormType("contact");
       setIsFormValid(true);
-      setTotalCost(subtotalCost);
+      resetCurrentProductTotals();
     } else if (selectedOrderType === "combined") {
       setFormType("combined");
       if (hasMixedShippingWithPickup) {
         setShowFreePickupSelection(true);
+        resetCurrentProductTotals();
       } else {
-        let shippingTotal = 0;
-        const updatedTotalCostsInSats: { [productId: string]: number } = {};
-
-        try {
-          for (const product of products) {
-            if (sellerFreeShippingStatus[product.pubkey]?.qualifies) {
-              updatedTotalCostsInSats[product.id] =
-                totalCostsInSats[product.id] || 0;
-              continue;
-            }
-            const productShippingType = shippingTypes[product.id];
-            if (
-              productShippingType === "Added Cost" ||
-              productShippingType === "Free"
-            ) {
-              const shippingCostInSats = await convertShippingToSats(product);
-              const quantity = quantities[product.id] || 1;
-              const productShippingCost = Math.ceil(
-                shippingCostInSats * quantity
-              );
-              shippingTotal += productShippingCost;
-              updatedTotalCostsInSats[product.id] =
-                (totalCostsInSats[product.id] || 0) + productShippingCost;
-            } else {
-              updatedTotalCostsInSats[product.id] =
-                totalCostsInSats[product.id] || 0;
-            }
-          }
-        } catch (err) {
-          handleShippingConversionError(err);
+        if (
+          !(await applyCurrentProductTotals(
+            (shippingType) =>
+              shippingType === "Added Cost" || shippingType === "Free"
+          ))
+        ) {
           return;
         }
-
-        setTotalCost(subtotalCost + shippingTotal);
       }
     }
   };
@@ -1379,16 +1440,21 @@ export default function CartInvoiceCard({
       const title = product.title;
       const pubkey = product.pubkey;
       const required = product.required;
-      const tokenAmount = totalCostsInSats[pubkey];
+      const tokenAmount = currentProductTotalsInSats[product.id] || 0;
+      if (tokenAmount < 1) {
+        setFailureText("Failed to calculate cart totals for payment.");
+        setShowFailureModal(true);
+        return;
+      }
       let sellerToken;
       let donationToken;
       const sellerProfile = profileContext.profileData.get(pubkey);
       const donationPercentage =
         sellerProfile?.content?.shopstr_donation || 2.1;
       const donationAmount = Math.ceil(
-        (tokenAmount! * donationPercentage) / 100
+        (tokenAmount * donationPercentage) / 100
       );
-      const sellerAmount = tokenAmount! - donationAmount;
+      const sellerAmount = tokenAmount - donationAmount;
       let sellerProofs: Proof[] = [];
 
       let shippingData = data; // Assume data contains shipping info
@@ -1457,9 +1523,7 @@ export default function CartInvoiceCard({
       if (addressString) {
         orderInfoTags.push(["address", addressString]);
       }
-      if (tokenAmount) {
-        orderInfoTags.push(["amount", tokenAmount.toString()]);
-      }
+      orderInfoTags.push(["amount", tokenAmount.toString()]);
       if (donationAmount > 0) {
         orderInfoTags.push([
           "donation_amount",
@@ -2439,6 +2503,39 @@ export default function CartInvoiceCard({
     }
   };
 
+  const applySavedAddress = (addr: SavedAddress) => {
+    setSelectedSavedAddressId(addr.id);
+    setSaveAddressLabel(addr.label);
+    setValue("Name", addr.name, {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
+    setValue("Address", addr.address, {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
+    setValue("Unit", addr.unit || "", {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
+    setValue("City", addr.city, {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
+    setValue("State/Province", addr.state, {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
+    setValue("Postal Code", addr.zip, {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
+    setValue("Country", addr.country, {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
+  };
+
   const renderContactForm = () => {
     if (!formType) return null;
 
@@ -2450,6 +2547,12 @@ export default function CartInvoiceCard({
       <div className="space-y-4">
         {(formType === "shipping" || formType === "combined") && (
           <>
+            <AddressPicker
+              autoSelect={false}
+              compact
+              allowInlineAdd={false}
+              onSelect={applySavedAddress}
+            />
             <Controller
               name="Name"
               control={formControl}
@@ -2662,6 +2765,48 @@ export default function CartInvoiceCard({
                 )}
               />
             </div>
+
+            <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <Checkbox
+                isSelected={saveDetails}
+                onValueChange={setSaveDetails}
+                classNames={{
+                  base: "mt-0",
+                  label: "text-sm",
+                }}
+              >
+                Save this address for future use
+              </Checkbox>
+
+              <Button
+                size="sm"
+                variant="flat"
+                onClick={() => {
+                  if (defaultSavedAddress) {
+                    applySavedAddress(defaultSavedAddress);
+                  }
+                }}
+                isDisabled={!defaultSavedAddress}
+              >
+                Use default address
+              </Button>
+            </div>
+
+            {saveDetails && (
+              <Input
+                variant="bordered"
+                fullWidth={true}
+                label={
+                  <span>
+                    Save address as <span className="text-red-500">*</span>
+                  </span>
+                }
+                labelPlacement="inside"
+                placeholder="e.g. Home, Office"
+                value={saveAddressLabel}
+                onChange={(e) => setSaveAddressLabel(e.target.value)}
+              />
+            )}
           </>
         )}
 
@@ -3252,48 +3397,16 @@ export default function CartInvoiceCard({
                   onClick={async () => {
                     setShippingPickupPreference("shipping");
                     setShowFreePickupSelection(false);
-                    // Calculate total with all applicable shipping in sats
-                    let shippingTotal = 0;
-                    const updatedTotalCostsInSats: {
-                      [productId: string]: number;
-                    } = {};
-
-                    try {
-                      for (const product of products) {
-                        if (
-                          sellerFreeShippingStatus[product.pubkey]?.qualifies
-                        ) {
-                          updatedTotalCostsInSats[product.id] =
-                            totalCostsInSats[product.id] || 0;
-                          continue;
-                        }
-                        const productShippingType = shippingTypes[product.id];
-                        if (
-                          productShippingType === "Added Cost" ||
-                          productShippingType === "Free" ||
-                          productShippingType === "Free/Pickup"
-                        ) {
-                          const shippingCostInSats =
-                            await convertShippingToSats(product);
-                          const quantity = quantities[product.id] || 1;
-                          const productShippingCost = Math.ceil(
-                            shippingCostInSats * quantity
-                          );
-                          shippingTotal += productShippingCost;
-                          updatedTotalCostsInSats[product.id] =
-                            (totalCostsInSats[product.id] || 0) +
-                            productShippingCost;
-                        } else {
-                          updatedTotalCostsInSats[product.id] =
-                            totalCostsInSats[product.id] || 0;
-                        }
-                      }
-                    } catch (err) {
-                      handleShippingConversionError(err);
+                    if (
+                      !(await applyCurrentProductTotals(
+                        (shippingType) =>
+                          shippingType === "Added Cost" ||
+                          shippingType === "Free" ||
+                          shippingType === "Free/Pickup"
+                      ))
+                    ) {
                       return;
                     }
-
-                    setTotalCost(subtotalCost + shippingTotal);
                   }}
                   className={`w-full rounded-lg border p-4 text-left hover:bg-gray-50 dark:hover:bg-gray-600 ${
                     shippingPickupPreference === "shipping"
@@ -3310,46 +3423,15 @@ export default function CartInvoiceCard({
                   onClick={async () => {
                     setShippingPickupPreference("contact");
                     setShowFreePickupSelection(false);
-                    let shippingTotal = 0;
-                    const updatedTotalCostsInSats: {
-                      [productId: string]: number;
-                    } = {};
-
-                    try {
-                      for (const product of products) {
-                        if (
-                          sellerFreeShippingStatus[product.pubkey]?.qualifies
-                        ) {
-                          updatedTotalCostsInSats[product.id] =
-                            totalCostsInSats[product.id] || 0;
-                          continue;
-                        }
-                        const productShippingType = shippingTypes[product.id];
-                        if (
-                          productShippingType === "Added Cost" ||
-                          productShippingType === "Free"
-                        ) {
-                          const shippingCostInSats =
-                            await convertShippingToSats(product);
-                          const quantity = quantities[product.id] || 1;
-                          const productShippingCost = Math.ceil(
-                            shippingCostInSats * quantity
-                          );
-                          shippingTotal += productShippingCost;
-                          updatedTotalCostsInSats[product.id] =
-                            (totalCostsInSats[product.id] || 0) +
-                            productShippingCost;
-                        } else {
-                          updatedTotalCostsInSats[product.id] =
-                            totalCostsInSats[product.id] || 0;
-                        }
-                      }
-                    } catch (err) {
-                      handleShippingConversionError(err);
+                    if (
+                      !(await applyCurrentProductTotals(
+                        (shippingType) =>
+                          shippingType === "Added Cost" ||
+                          shippingType === "Free"
+                      ))
+                    ) {
                       return;
                     }
-
-                    setTotalCost(subtotalCost + shippingTotal);
                   }}
                   className={`w-full rounded-lg border p-4 text-left hover:bg-gray-50 dark:hover:bg-gray-600 ${
                     shippingPickupPreference === "contact"

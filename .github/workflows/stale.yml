@@ -1,0 +1,60 @@
+name: Close inactive issues and PRs
+
+on:
+  schedule:
+    - cron: "0 0 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  stale:
+    name: Mark and close inactive issues and PRs
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Update inactive issues and pull requests
+        uses: actions/stale@eb5cf3af3ac0a1aa4c9c45633dd1ae542a27a899 # v10
+        with:
+          days-before-stale: 21
+          days-before-close: 7
+
+          stale-issue-label: stale
+          stale-pr-label: stale
+          exempt-issue-labels: "bug,documentation,enhancement,good first issue,help wanted,hold,priority"
+          exempt-pr-labels: "hold,merge-ready,priority"
+          exempt-draft-pr: true
+          exempt-all-milestones: true
+
+          stale-issue-message: |
+            This issue has been automatically marked as stale because it has not had recent activity for 3 weeks.
+            It will be closed if no further activity occurs within 7 days.
+            If this issue is still relevant, please leave a comment to keep it open.
+            Thank you for your contributions!
+
+          close-issue-message: |
+            This issue has been automatically closed because it remained inactive for 1 week after being marked as stale.
+            If you believe this issue is still relevant, please reopen it or create a new issue with updated information.
+            Thank you for your understanding!
+
+          stale-pr-message: |
+            This pull request has been automatically marked as stale because it has not had recent activity for 3 weeks.
+            It will be closed if no further activity occurs within 7 days.
+            If this PR is still relevant, please leave a comment or push new commits to keep it open.
+            Thank you for your contribution!
+
+          close-pr-message: |
+            This pull request has been automatically closed because it remained inactive for 1 week after being marked as stale.
+            If you would like to continue working on this, please reopen it or create a new PR.
+            Thank you for your contribution!
+
+          close-issue-reason: not_planned
+          operations-per-run: 100
+          remove-stale-when-updated: true
+          enable-statistics: true

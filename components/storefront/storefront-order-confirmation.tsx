@@ -1,4 +1,4 @@
-import { useEffect, useState, useContext, useMemo } from "react";
+import { useEffect, useState, useContext, useMemo, useRef } from "react";
 import { useRouter } from "next/router";
 import {
   CheckCircleIcon,
@@ -68,14 +68,18 @@ export default function StorefrontOrderConfirmation({
   const { isLoggedIn } = useContext(SignerContext);
   const productContext = useContext(ProductContext);
   const [orderData, setOrderData] = useState<OrderSummaryData | null>(null);
+  const hasConsumedOrderRef = useRef(false);
 
   useEffect(() => {
+    if (hasConsumedOrderRef.current) return;
     const stored = storage.getSessionJson<OrderSummaryData | null>(
       STORAGE_KEYS.ORDER_SUMMARY,
       null
     );
     if (stored) {
+      hasConsumedOrderRef.current = true;
       setOrderData(stored);
+      storage.removeSessionItem(STORAGE_KEYS.ORDER_SUMMARY);
     } else {
       router.push(`/shop/${shopSlug}`);
     }

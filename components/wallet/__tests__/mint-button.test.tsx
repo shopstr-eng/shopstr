@@ -15,7 +15,11 @@ import { Mint as CashuMint, Wallet as CashuWallet } from "@cashu/cashu-ts";
 import * as NostrHelper from "@/utils/nostr/nostr-helper-functions";
 import QRCode from "qrcode";
 
-jest.mock("@cashu/cashu-ts");
+jest.mock("@cashu/cashu-ts", () => ({
+  ...jest.requireActual("@cashu/cashu-ts"),
+  Wallet: jest.fn(),
+  Mint: jest.fn().mockImplementation(() => ({})),
+}));
 const mockCreateMintQuote = jest.fn();
 const mockCheckMintQuote = jest.fn();
 const mockMintProofs = jest.fn();
@@ -29,9 +33,11 @@ const mockMintProofs = jest.fn();
 
 jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
   getLocalStorageData: jest.fn(),
+  getStoredMints: jest.fn(),
   publishProofEvent: jest.fn(),
 }));
 const mockGetLocalStorageData = NostrHelper.getLocalStorageData as jest.Mock;
+const mockGetStoredMints = NostrHelper.getStoredMints as jest.Mock;
 const mockPublishProofEvent = NostrHelper.publishProofEvent as jest.Mock;
 
 jest.mock("qrcode", () => ({
@@ -107,6 +113,7 @@ describe("MintButton Component", () => {
   beforeEach(() => {
     jest.useFakeTimers();
     mockGetLocalStorageData.mockReturnValue(mockLocalStorage);
+    mockGetStoredMints.mockReturnValue(mockLocalStorage.mints);
     mockToDataURL.mockResolvedValue("data:image/png;base64,mock-qr-code");
     mockPublishProofEvent.mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", {

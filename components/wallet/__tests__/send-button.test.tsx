@@ -10,6 +10,7 @@ import {
 import { CashuWalletContext } from "@/utils/context/context";
 import { Wallet as CashuWallet, getEncodedToken } from "@cashu/cashu-ts";
 import {
+  getStoredMints,
   getLocalStorageData,
   publishProofEvent,
 } from "@/utils/nostr/nostr-helper-functions";
@@ -19,7 +20,12 @@ import { ChallengeHandler } from "@/utils/nostr/signers/nostr-signer";
 
 jest.setTimeout(20000);
 
-jest.mock("@cashu/cashu-ts");
+jest.mock("@cashu/cashu-ts", () => ({
+  ...jest.requireActual("@cashu/cashu-ts"),
+  Wallet: jest.fn(),
+  getEncodedToken: jest.fn(),
+  Mint: jest.fn().mockImplementation(() => ({})),
+}));
 jest.mock("@/utils/nostr/nostr-helper-functions");
 jest.mock("@/utils/nostr/signers/nostr-nip46-signer");
 jest.mock("@/utils/nostr/nostr-manager");
@@ -45,6 +51,7 @@ jest.mock("@heroicons/react/24/outline", () => ({
 }));
 
 const mockGetLocalStorageData = getLocalStorageData as jest.Mock;
+const mockGetStoredMints = getStoredMints as jest.Mock;
 const mockPublishProofEvent = publishProofEvent as jest.Mock;
 const mockGetEncodedToken = getEncodedToken as jest.Mock;
 const MockCashuWallet = CashuWallet as jest.Mock;
@@ -128,6 +135,9 @@ describe("SendButton", () => {
       tokens: [{ id: "keyset_id_1", amount: 1000, C: "C1" }],
       history: [],
     });
+    mockGetStoredMints.mockReturnValue([
+      "https://legend.lnbits.com/cashu/api/v1/4_sadf7asdf78",
+    ]);
     Object.defineProperty(navigator, "clipboard", {
       value: { writeText: jest.fn().mockResolvedValue(undefined) },
       writable: true,

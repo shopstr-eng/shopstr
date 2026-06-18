@@ -50,7 +50,10 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
   const { signer, isLoggedIn, pubkey: userPubkey } = useContext(SignerContext);
 
   useEffect(() => {
-    const savedInfo = storage.getJson(STORAGE_KEYS.SHIPPING_INFO, null);
+    const savedInfo = storage.getJson<Partial<typeof shippingInfo> | null>(
+      STORAGE_KEYS.SHIPPING_INFO,
+      null
+    );
     if (savedInfo) {
       setShippingInfo((prev) => ({ ...prev, ...savedInfo }));
     }

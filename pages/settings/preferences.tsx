@@ -16,6 +16,7 @@ import {
   Radio,
   RadioGroup,
 } from "@heroui/react";
+import { SavedAddress } from "@/utils/types/types";
 import { Relay } from "nostr-tools";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
@@ -27,6 +28,9 @@ import {
   getStoredRelays,
   getStoredWriteRelays,
   publishWalletEvent,
+  saveAddress,
+  deleteAddress,
+  getSavedAddresses,
 } from "@/utils/nostr/nostr-helper-functions";
 import { storage, STORAGE_KEYS } from "@/utils/storage";
 import { useTheme } from "next-themes";
@@ -38,6 +42,8 @@ import {
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
 import ProtectedRoute from "@/components/utility-components/protected-route";
+import EditAddressForm from "@/components/utility-components/edit-address-form";
+import SavedAddressesList from "@/components/utility-components/saved-addresses-list";
 
 const PreferencesPage = () => {
   const { nostr } = useContext(NostrContext);
@@ -64,6 +70,13 @@ const PreferencesPage = () => {
   const [showFailureModal, setShowFailureModal] = useState(false);
   const [failureText, setFailureText] = useState("");
 
+  // Address edit modal state
+  const [showEditAddressModal, setShowEditAddressModal] = useState(false);
+  const [editingAddress, setEditingAddress] = useState<SavedAddress | null>(
+    null
+  );
+  const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
+
   useEffect(() => {
     if (typeof window !== "undefined") {
       setMints(getStoredMints());
@@ -71,9 +84,48 @@ const PreferencesPage = () => {
       setReadRelays(getStoredReadRelays());
       setWriteRelays(getStoredWriteRelays());
       setBlossomServers(getStoredBlossomServers());
+      loadSavedAddresses();
     }
     setIsLoaded(true);
   }, [signer]);
+
+  const loadSavedAddresses = () => {
+    const addresses = getSavedAddresses();
+    setSavedAddresses(addresses);
+  };
+
+  const handleEditAddress = (address: SavedAddress) => {
+    setEditingAddress(address);
+    setShowEditAddressModal(true);
+  };
+
+  const handleDeleteAddress = (id: string) => {
+    deleteAddress(id);
+    loadSavedAddresses();
+  };
+
+  const handleSaveEditedAddress = (updatedAddress: SavedAddress) => {
+    saveAddress({
+      id: updatedAddress.id,
+      label: updatedAddress.label,
+      name: updatedAddress.name,
+      address: updatedAddress.address,
+      unit: updatedAddress.unit,
+      city: updatedAddress.city,
+      state: updatedAddress.state,
+      zip: updatedAddress.zip,
+      country: updatedAddress.country,
+      isDefault: updatedAddress.isDefault,
+    });
+    loadSavedAddresses();
+    setShowEditAddressModal(false);
+    setEditingAddress(null);
+  };
+
+  useEffect(() => {
+    window.addEventListener("storage", loadSavedAddresses);
+    return () => window.removeEventListener("storage", loadSavedAddresses);
+  }, []);
 
   useEffect(() => {
     if (mints.length !== 0) {
@@ -944,6 +996,62 @@ const PreferencesPage = () => {
                   </Button>
                 </ModalFooter>
               </form>
+            </ModalContent>
+          </Modal>
+
+          <span className="text-light-text dark:text-dark-text my-4 flex text-2xl font-bold">
+            Saved Addresses
+          </span>
+
+          {isLoaded && (
+            <div className="bg-light-bg dark:bg-dark-bg mb-6 rounded-md border border-gray-200 p-4 dark:border-zinc-800">
+              <SavedAddressesList
+                addresses={savedAddresses}
+                onEdit={handleEditAddress}
+                onDelete={handleDeleteAddress}
+              />
+              <Button
+                className={`${SHOPSTRBUTTONCLASSNAMES} mt-4`}
+                onClick={() => {
+                  setEditingAddress(null);
+                  setShowEditAddressModal(true);
+                }}
+              >
+                Add New Address
+              </Button>
+            </div>
+          )}
+
+          {/* Edit/Add Address Modal */}
+          <Modal
+            backdrop="blur"
+            isOpen={showEditAddressModal}
+            onClose={() => {
+              setShowEditAddressModal(false);
+              setEditingAddress(null);
+            }}
+            classNames={{
+              body: "py-6",
+              backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+              header: "border-b-[1px] border-[#292f46]",
+              footer: "border-t-[1px] border-[#292f46]",
+              closeButton: "hover:bg-black/5 active:bg-white/10",
+            }}
+            scrollBehavior={"outside"}
+            size="2xl"
+          >
+            <ModalContent>
+              <ModalHeader className="text-light-text dark:text-dark-text flex flex-col gap-1">
+                {editingAddress ? "Edit Address" : "Add New Address"}
+              </ModalHeader>
+              <EditAddressForm
+                address={editingAddress}
+                onSave={handleSaveEditedAddress}
+                onClose={() => {
+                  setShowEditAddressModal(false);
+                  setEditingAddress(null);
+                }}
+              />
             </ModalContent>
           </Modal>
 

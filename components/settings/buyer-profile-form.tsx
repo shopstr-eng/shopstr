@@ -3,7 +3,10 @@ import { useRouter } from "next/router";
 import { useForm, Controller } from "react-hook-form";
 import { Button, Input, Image } from "@heroui/react";
 import { ProfileMapContext } from "@/utils/context/context";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import {
+  AVATARBADGEBUTTONCLASSNAMES,
+  SHOPSTRBUTTONCLASSNAMES,
+} from "@/utils/STATIC-VARIABLES";
 import {
   SignerContext,
   NostrContext,
@@ -57,33 +60,49 @@ const BuyerProfileForm = ({ isOnboarding }: BuyerProfileFormProps) => {
   }, [profileContext, userPubkey, reset]);
 
   const onSubmit = async (data: { [x: string]: string }) => {
-    if (!userPubkey) throw new Error("pubkey is undefined");
+    if (!userPubkey) {
+      console.error("Cannot save profile: pubkey is undefined");
+      return;
+    }
     setIsUploadingProfile(true);
+    try {
+      const profileMap = profileContext.profileData;
+      const existingProfile = profileMap.has(userPubkey)
+        ? profileMap.get(userPubkey)?.content
+        : {};
 
-    const profileMap = profileContext.profileData;
-    const existingProfile = profileMap.has(userPubkey)
-      ? profileMap.get(userPubkey)?.content
-      : {};
+      const updatedData = {
+        ...existingProfile,
+        picture: data.picture || "",
+        display_name: data.display_name || "",
+        name: data.name || "",
+      };
 
-    const updatedData = {
-      ...existingProfile,
-      picture: data.picture || "",
-      display_name: data.display_name || "",
-      name: data.name || "",
-    };
+      if (!nostr || !signer) {
+        console.error("Cannot save profile: nostr or signer is unavailable");
+        return;
+      }
 
-    await createNostrProfileEvent(nostr!, signer!, JSON.stringify(updatedData));
-    profileContext.updateProfileData({
-      pubkey: userPubkey!,
-      content: updatedData,
-      created_at: 0,
-    });
-    setIsUploadingProfile(false);
-    setIsSaved(true);
-    setTimeout(() => setIsSaved(false), 3000);
+      const signedProfileEvent = await createNostrProfileEvent(
+        nostr,
+        signer,
+        JSON.stringify(updatedData)
+      );
+      profileContext.updateProfileData({
+        pubkey: userPubkey,
+        content: updatedData,
+        created_at: signedProfileEvent.created_at,
+      });
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 3000);
 
-    if (isOnboarding) {
-      router.push("/onboarding/wallet?type=buyer");
+      if (isOnboarding) {
+        router.push("/onboarding/wallet?type=buyer");
+      }
+    } catch (error) {
+      console.error("Failed to save user profile:", error);
+    } finally {
+      setIsUploadingProfile(false);
     }
   };
 
@@ -94,23 +113,24 @@ const BuyerProfileForm = ({ isOnboarding }: BuyerProfileFormProps) => {
   return (
     <>
       <div className="mb-16 flex items-center justify-center">
-        <div className="relative h-24 w-24">
+        <div className="relative h-24 w-24 overflow-visible">
           <FileUploaderButton
             isIconOnly
-            className={`absolute right-[-0.5rem] bottom-[-0.5rem] z-20 ${SHOPSTRBUTTONCLASSNAMES}`}
+            className={AVATARBADGEBUTTONCLASSNAMES}
+            containerClassName="absolute right-[-0.5rem] bottom-[-0.5rem] z-20"
             imgCallbackOnUpload={(imgUrl) => setValue("picture", imgUrl)}
           />
           {watchPicture ? (
             <Image
               src={watchPicture}
               alt="User Profile Picture"
-              className="rounded-full"
+              className="h-24 w-24 rounded-full object-cover"
             />
           ) : (
             <Image
               src={defaultImage}
               alt="User Profile Picture"
-              className="rounded-full"
+              className="h-24 w-24 rounded-full object-cover"
             />
           )}
         </div>

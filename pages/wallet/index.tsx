@@ -23,10 +23,7 @@ const Wallet = () => {
   const [mintKeySetIds, setMintKeySetIds] = useState<MintKeyset[]>([]);
   const router = useRouter();
 
-  const mints = useMemo(
-    () => getStoredMints(),
-    []
-  );
+  const mints = useMemo(() => getStoredMints(), []);
   const tokens = useMemo(
     () => storage.getJson<any[]>(STORAGE_KEYS.TOKENS, []),
     []

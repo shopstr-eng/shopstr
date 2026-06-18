@@ -13,6 +13,7 @@ import {
 import { ChatsMap } from "@/utils/context/context";
 import {
   deleteEvent,
+  getLocalStorageData,
   verifyNip05Identifier,
 } from "@/utils/nostr/nostr-helper-functions";
 import { storage, STORAGE_KEYS } from "@/utils/storage";
@@ -20,6 +21,7 @@ import {
   ProductData,
   parseTags,
 } from "@/utils/parsers/product-parser-functions";
+import { productSatisfiesSearchFilter } from "@/utils/parsers/product-filter-helpers";
 import { parseCommunityEvent } from "../parsers/community-parser-functions";
 import { calculateWeightedScore } from "@/utils/parsers/review-parser-functions";
 import { hashToCurve } from "@cashu/cashu-ts";
@@ -39,7 +41,200 @@ interface NipProfile {
   nip05Verified: boolean;
 }
 
-function getUniqueProofs(proofs: Proof[]): Proof[] {
+type SearchFilter = Filter & { search: string };
+
+const PRODUCT_SEARCH_LIMIT = 100;
+export const NIP50_SEARCH_TIMEOUT_MS = 10_000;
+export const DEFAULT_NIP50_SEARCH_RELAYS = [
+  "wss://relay.nostr.band",
+  "wss://nostr.wine",
+  "wss://relay.noswhere.com",
+  "wss://search.nos.today",
+  "wss://antiprimal.net",
+  "wss://relay.ditto.pub",
+];
+
+function normalizeRelayUrl(relay: string): string {
+  const trimmedRelay = relay.trim();
+  if (!trimmedRelay) return "";
+
+  const relayWithProtocol = /^wss?:\/\//i.test(trimmedRelay)
+    ? trimmedRelay
+    : `wss://${trimmedRelay}`;
+
+  return relayWithProtocol.replace(/\/+$/, "");
+}
+
+function getUniqueRelayUrls(relays: string[]): string[] {
+  const relayMap = new Map<string, string>();
+
+  for (const relay of relays) {
+    const normalizedRelay = normalizeRelayUrl(relay);
+    if (!normalizedRelay) continue;
+    relayMap.set(normalizedRelay.toLowerCase(), normalizedRelay);
+  }
+
+  return Array.from(relayMap.values());
+}
+
+function getNip50SearchRelays(relays: string[]): string[] {
+  const knownSearchRelaySet = new Set(
+    DEFAULT_NIP50_SEARCH_RELAYS.map((relay) => relay.toLowerCase())
+  );
+  const selectedSearchRelays = getUniqueRelayUrls(relays).filter((relay) =>
+    knownSearchRelaySet.has(relay.toLowerCase())
+  );
+  const selectedSearchRelaySet = new Set(
+    selectedSearchRelays.map((relay) => relay.toLowerCase())
+  );
+  const backupSearchRelays = DEFAULT_NIP50_SEARCH_RELAYS.filter(
+    (relay) => !selectedSearchRelaySet.has(relay.toLowerCase())
+  );
+
+  return [...selectedSearchRelays, ...backupSearchRelays];
+}
+
+export function getProductEventKey(event: NostrEvent): string {
+  if (event.kind === 30402) {
+    const dTag = event.tags?.find((tag: string[]) => tag[0] === "d")?.[1];
+    if (dTag) return `${event.kind}:${event.pubkey}:${dTag}`;
+  }
+
+  return `${event.kind}:${event.id}`;
+}
+
+export function dedupeProductEvents(events: NostrEvent[]): NostrEvent[] {
+  const eventMap = new Map<string, NostrEvent>();
+  const orderedKeys: string[] = [];
+
+  for (const event of events) {
+    if (!event?.id) continue;
+
+    const key = getProductEventKey(event);
+    const existing = eventMap.get(key);
+
+    if (!existing) {
+      orderedKeys.push(key);
+      eventMap.set(key, event);
+      continue;
+    }
+
+    if ((event.created_at ?? 0) >= (existing.created_at ?? 0)) {
+      eventMap.set(key, event);
+    }
+  }
+
+  return orderedKeys
+    .map((key) => eventMap.get(key))
+    .filter((event): event is NostrEvent => !!event);
+}
+
+export function buildNip50ProductSearchFilters(
+  searchQuery: string,
+  options: { authors?: string[]; limit?: number } = {}
+): SearchFilter[] {
+  const search = searchQuery.trim().replace(/\s+/g, " ");
+  if (!search) return [];
+
+  const limit = options.limit ?? PRODUCT_SEARCH_LIMIT;
+  const baseFilter = {
+    search,
+    limit,
+    ...(options.authors?.length ? { authors: options.authors } : {}),
+  };
+
+  return [
+    {
+      ...baseFilter,
+      kinds: [30402],
+    },
+  ];
+}
+
+function eventMatchesProductSearch(
+  event: NostrEvent,
+  searchQuery: string
+): boolean {
+  if (event.kind === 30402) {
+    const parsedProduct = parseTags(event);
+    return (
+      !!parsedProduct &&
+      productSatisfiesSearchFilter(parsedProduct, searchQuery)
+    );
+  }
+
+  return false;
+}
+
+export async function fetchNip50ProductSearch(
+  nostr: NostrManager,
+  relays: string[],
+  searchQuery: string,
+  options: { authors?: string[]; limit?: number } = {}
+): Promise<{
+  productEvents: NostrEvent[];
+}> {
+  const filters = buildNip50ProductSearchFilters(searchQuery, options);
+  if (!filters.length) {
+    return { productEvents: [] };
+  }
+
+  const searchRelays = getNip50SearchRelays(relays);
+
+  const fetchSearchEvents = async (targetRelays: string[]) => {
+    if (targetRelays.length === 0) return Promise.resolve([]);
+
+    const relayResults = await Promise.all(
+      targetRelays.map((relay) =>
+        nostr
+          .fetch(filters, {}, [relay], NIP50_SEARCH_TIMEOUT_MS)
+          .catch((error) => {
+            console.warn(
+              `Failed to search products with NIP-50 relay ${relay}:`,
+              error
+            );
+            return [];
+          })
+      )
+    );
+
+    return relayResults.flat();
+  };
+
+  const filterSearchProductEvents = (events: NostrEvent[]) =>
+    events.filter(
+      (event) => event.id && event.sig && event.pubkey && event.kind === 30402
+    );
+
+  let searchProductEvents = filterSearchProductEvents(
+    await fetchSearchEvents(searchRelays)
+  );
+  let relevantSearchProductEvents = searchProductEvents.filter((event) =>
+    eventMatchesProductSearch(event, searchQuery)
+  );
+
+  const dedupedSearchProductEvents = dedupeProductEvents(
+    relevantSearchProductEvents
+  );
+
+  const cacheableProductEvents = dedupedSearchProductEvents.filter(
+    (event) => event.kind === 30402
+  );
+
+  if (cacheableProductEvents.length > 0) {
+    try {
+      await cacheEventsToDatabase(cacheableProductEvents);
+    } catch (error) {
+      console.error("Failed to cache NIP-50 product search events:", error);
+    }
+  }
+
+  return {
+    productEvents: dedupedSearchProductEvents,
+  };
+}
+
+export function getUniqueProofs(proofs: Proof[]): Proof[] {
   const seenSecrets = new Set<string>();
   return proofs.filter((proof) => {
     if (!seenSecrets.has(proof.secret)) {
@@ -50,8 +245,25 @@ function getUniqueProofs(proofs: Proof[]): Proof[] {
   });
 }
 
-function isHexString(value: string): boolean {
+export function isHexString(value: string): boolean {
   return /^[0-9a-fA-F]{64}$/.test(value);
+}
+
+function parseJsonSafely<T>(input: unknown): T | null {
+  if (typeof input !== "string") {
+    return null;
+  }
+
+  const trimmed = input.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(trimmed) as T;
+  } catch {
+    return null;
+  }
 }
 
 export const fetchAllPosts = async (
@@ -69,12 +281,15 @@ export const fetchAllPosts = async (
       const dbProductsMap = new Map<string, NostrEvent>();
 
       const getEventKey = (event: NostrEvent): string => {
-        if (event.kind === 30402) {
-          const dTag = event.tags?.find((tag: string[]) => tag[0] === "d")?.[1];
-          if (dTag) return `${event.pubkey}:${dTag}`;
-        }
-        return event.id;
+        return getProductEventKey(event);
       };
+      const isValidProductRelayEvent = (
+        event: NostrEvent | null | undefined
+      ): event is NostrEvent =>
+        !!event?.id &&
+        !!event.sig &&
+        !!event.pubkey &&
+        (event.kind === 30402 || event.kind === 1);
 
       // Cascading DB fetch: load batches one at a time, displaying each as it arrives
       let offset = 0;
@@ -129,7 +344,8 @@ export const fetchAllPosts = async (
 
       // Cache valid product events to database
       const validProductEvents = fetchedEvents.filter(
-        (e) => e.id && e.sig && e.pubkey && (e.kind === 30402 || e.kind === 1)
+        (event): event is NostrEvent =>
+          isValidProductRelayEvent(event) && event.kind === 30402
       );
       if (validProductEvents.length > 0) {
         cacheEventsToDatabase(validProductEvents).catch((error) =>
@@ -139,7 +355,7 @@ export const fetchAllPosts = async (
 
       // Merge relay events on top of the accumulated DB products
       for (const event of fetchedEvents) {
-        if (!event || !event.id) continue;
+        if (!isValidProductRelayEvent(event)) continue;
         const key = getEventKey(event);
         const existing = dbProductsMap.get(key);
         if (!existing || event.created_at >= existing.created_at) {
@@ -162,6 +378,131 @@ export const fetchAllPosts = async (
   });
 };
 
+export function getReportTargetIdentifiers(event: NostrEvent): {
+  referencedPubkeys: string[];
+  referencedEventIds: string[];
+} {
+  const referencedPubkeys = event.tags
+    .filter((tag: string[]) => tag[0] === "p" && tag[1])
+    .map((tag: string[]) => tag[1]!);
+  const referencedEventIds = event.tags
+    .filter((tag: string[]) => tag[0] === "e" && tag[1])
+    .map((tag: string[]) => tag[1]!);
+
+  return { referencedPubkeys, referencedEventIds };
+}
+
+export const fetchReports = async (
+  nostr: NostrManager,
+  relays: string[],
+  products: NostrEvent[],
+  editReportsContext: (reportEvents: NostrEvent[], isLoading: boolean) => void,
+  additionalProfilePubkeys: string[] = []
+): Promise<{
+  reportEvents: NostrEvent[];
+}> => {
+  return new Promise(async function (resolve, reject) {
+    try {
+      const productIds = new Set(products.map((product) => product.id));
+      const sellerPubkeys = new Set(
+        [
+          ...products.map((product) => product.pubkey),
+          ...additionalProfilePubkeys,
+        ].filter(Boolean)
+      );
+
+      const reportEventsMap = new Map<string, NostrEvent>();
+
+      const isRelevantReportEvent = (event: NostrEvent): boolean => {
+        const { referencedPubkeys, referencedEventIds } =
+          getReportTargetIdentifiers(event);
+
+        return (
+          referencedEventIds.some((eventId) => productIds.has(eventId)) ||
+          referencedPubkeys.some((pubkey) => sellerPubkeys.has(pubkey))
+        );
+      };
+
+      const upsertReportEvent = (event: NostrEvent) => {
+        if (!isRelevantReportEvent(event)) return;
+
+        const existing = reportEventsMap.get(event.id);
+        if (!existing || event.created_at >= existing.created_at) {
+          reportEventsMap.set(event.id, event);
+        }
+      };
+
+      try {
+        const params = new URLSearchParams();
+        Array.from(sellerPubkeys).forEach((pubkey) =>
+          params.append("p", pubkey)
+        );
+        Array.from(productIds).forEach((productId) =>
+          params.append("e", productId)
+        );
+        const response = await fetch(
+          `/api/db/fetch-reports?${params.toString()}`
+        );
+        if (response.ok) {
+          const reportsFromDb: NostrEvent[] = await response.json();
+          reportsFromDb.forEach(upsertReportEvent);
+
+          if (reportEventsMap.size > 0) {
+            editReportsContext(
+              Array.from(reportEventsMap.values()).sort(
+                (a, b) => b.created_at - a.created_at
+              ),
+              false
+            );
+          }
+        }
+      } catch (error) {
+        console.error("Failed to fetch reports from database: ", error);
+      }
+
+      const reportFilters: Filter[] = [];
+      if (sellerPubkeys.size > 0) {
+        reportFilters.push({
+          kinds: [1984],
+          "#p": Array.from(sellerPubkeys),
+        });
+      }
+      if (productIds.size > 0) {
+        reportFilters.push({
+          kinds: [1984],
+          "#e": Array.from(productIds),
+        });
+      }
+
+      if (reportFilters.length === 0) {
+        editReportsContext([], false);
+        resolve({ reportEvents: [] });
+        return;
+      }
+
+      const fetchedEvents = await nostr.fetch(reportFilters, {}, relays);
+      fetchedEvents.forEach(upsertReportEvent);
+
+      const reportEvents = Array.from(reportEventsMap.values()).sort(
+        (a, b) => b.created_at - a.created_at
+      );
+      editReportsContext(reportEvents, false);
+
+      const validReports = fetchedEvents.filter(
+        (event) => event.id && event.sig && event.pubkey && event.kind === 1984
+      );
+      if (validReports.length > 0) {
+        cacheEventsToDatabase(validReports).catch((error) =>
+          console.error("Failed to cache reports to database:", error)
+        );
+      }
+
+      resolve({ reportEvents });
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
 export const fetchCart = async (
   nostr: NostrManager,
   signer: NostrSigner | undefined,
@@ -376,7 +717,7 @@ export const fetchShopProfile = async (
   });
 };
 
-async function verifyProfilesNip05(
+export async function verifyProfilesNip05(
   profileMap: Map<string, NipProfile | null>,
   concurrency = 8
 ): Promise<void> {
@@ -461,22 +802,20 @@ export const fetchProfile = async (
           }
 
           for (const [pubkey, event] of latestDbEvents.entries()) {
-            try {
-              const content = JSON.parse(event.content);
-              const profile: NipProfile = {
-                pubkey: event.pubkey,
-                created_at: event.created_at,
-                content,
-                nip05Verified: false,
-              };
-              dbProfileMap.set(pubkey, profile);
-              updateProfileIfNewer(profile);
-            } catch (error) {
-              console.error(
-                `Failed to parse profile from DB: ${pubkey}`,
-                error
-              );
+            const content = parseJsonSafely<Record<string, any>>(event.content);
+            if (!content) {
+              console.warn(`Skipping invalid profile JSON from DB: ${pubkey}`);
+              continue;
             }
+
+            const profile: NipProfile = {
+              pubkey: event.pubkey,
+              created_at: event.created_at,
+              content,
+              nip05Verified: false,
+            };
+            dbProfileMap.set(pubkey, profile);
+            updateProfileIfNewer(profile);
           }
 
           if (dbProfileMap.size > 0) {
@@ -512,23 +851,23 @@ export const fetchProfile = async (
           !existing ||
           event.created_at > existing.created_at
         ) {
-          try {
-            const content = JSON.parse(event.content);
-            const profile: NipProfile = {
-              pubkey: event.pubkey,
-              created_at: event.created_at,
-              content,
-              nip05Verified: false,
-            };
-            profileMap.set(event.pubkey, profile);
-            updatedProfiles.set(event.pubkey, profile);
-            updateProfileIfNewer(profile);
-          } catch (error) {
-            console.error(
-              `Failed parse profile for pubkey: ${event.pubkey}, ${event.content}`,
-              error
+          const content = parseJsonSafely<Record<string, any>>(event.content);
+          if (!content) {
+            console.warn(
+              `Skipping invalid profile JSON for pubkey: ${event.pubkey}`
             );
+            continue;
           }
+
+          const profile: NipProfile = {
+            pubkey: event.pubkey,
+            created_at: event.created_at,
+            content,
+            nip05Verified: false,
+          };
+          profileMap.set(event.pubkey, profile);
+          updatedProfiles.set(event.pubkey, profile);
+          updateProfileIfNewer(profile);
         }
       }
 
@@ -958,18 +1297,22 @@ export const fetchAllFollows = async (
 ): Promise<{
   followList: string[];
 }> => {
-  const wot = storage.getJson<number>(STORAGE_KEYS.WOT, 3);
-  const defaultAuthor =
-    "d36e8083fa7b36daee646cb8b3f99feaa3d89e5a396508741f003e21ac0b6bec";
+  const wot = getLocalStorageData().wot;
+
+  if (!userPubkey) {
+    editFollowsContext([], 0, false);
+    return {
+      followList: [],
+    };
+  }
 
   const fetchFollows = async (userPubkey: string) => {
     let secondDegreeFollowsArrayFromRelay: string[] = [];
     let firstDegreeFollowsLength = 0;
-    let followsArrayFromRelay: string[] = [];
     const followsSet: Set<string> = new Set();
 
     // fetch first-degree follows
-    let fetchedEvents = await nostr.fetch(
+    const fetchedEvents = await nostr.fetch(
       [
         {
           kinds: [3],
@@ -979,19 +1322,41 @@ export const fetchAllFollows = async (
       {},
       relays
     );
+
+    const latestContactListEvent = fetchedEvents.reduce<NostrEvent | null>(
+      (latestEvent, event) => {
+        if (!latestEvent || event.created_at > latestEvent.created_at) {
+          return event;
+        }
+        return latestEvent;
+      },
+      null
+    );
+
+    if (!latestContactListEvent) {
+      return {
+        followsArrayFromRelay: [],
+        firstDegreeFollowsLength: 0,
+      };
+    }
+
     const authors: string[] = [];
-    for (const event of fetchedEvents) {
-      const validTags = event.tags
-        .map((tag) => tag[1])
-        .filter((pubkey) => isHexString(pubkey!) && !followsSet.has(pubkey!));
-      validTags.forEach((pubkey) => followsSet.add(pubkey!));
-      followsArrayFromRelay.push(...(validTags as string[]));
-      firstDegreeFollowsLength = followsArrayFromRelay.length;
-      authors.push(...followsArrayFromRelay);
+    const directFollowsArrayFromRelay = latestContactListEvent.tags
+      .map((tag) => tag[1])
+      .filter((pubkey) => isHexString(pubkey!) && !followsSet.has(pubkey!));
+    directFollowsArrayFromRelay.forEach((pubkey) => followsSet.add(pubkey!));
+    firstDegreeFollowsLength = directFollowsArrayFromRelay.length;
+    authors.push(...(directFollowsArrayFromRelay as string[]));
+
+    if (!authors.length) {
+      return {
+        followsArrayFromRelay: [],
+        firstDegreeFollowsLength,
+      };
     }
 
     // Fetch second-degree follows
-    fetchedEvents = await nostr.fetch(
+    const fetchedSecondDegreeEvents = await nostr.fetch(
       [
         {
           kinds: [3],
@@ -1002,7 +1367,15 @@ export const fetchAllFollows = async (
       relays
     );
 
-    for (const followEvent of fetchedEvents) {
+    const latestSecondDegreeEvents = new Map<string, NostrEvent>();
+    for (const followEvent of fetchedSecondDegreeEvents) {
+      const latestEvent = latestSecondDegreeEvents.get(followEvent.pubkey);
+      if (!latestEvent || followEvent.created_at > latestEvent.created_at) {
+        latestSecondDegreeEvents.set(followEvent.pubkey, followEvent);
+      }
+    }
+
+    for (const followEvent of latestSecondDegreeEvents.values()) {
       const validFollowTags = followEvent.tags
         .map((tag) => tag[1])
         .filter((pubkey) => isHexString(pubkey!) && !followsSet.has(pubkey!));
@@ -1018,8 +1391,12 @@ export const fetchAllFollows = async (
         (pubkey) => (pubkeyCount.get(pubkey) || 0) >= wot
       );
     // Concatenate arrays ensuring uniqueness
-    followsArrayFromRelay = Array.from(
-      new Set(followsArrayFromRelay.concat(secondDegreeFollowsArrayFromRelay))
+    const followsArrayFromRelay = Array.from(
+      new Set(
+        (directFollowsArrayFromRelay as string[]).concat(
+          secondDegreeFollowsArrayFromRelay
+        )
+      )
     );
     return {
       followsArrayFromRelay,
@@ -1027,15 +1404,8 @@ export const fetchAllFollows = async (
     };
   };
 
-  let { followsArrayFromRelay, firstDegreeFollowsLength } = await fetchFollows(
-    userPubkey || defaultAuthor
-  );
-
-  if (!followsArrayFromRelay?.length) {
-    // If followsArrayFromRelay is still empty, add the default value
-    ({ followsArrayFromRelay, firstDegreeFollowsLength } =
-      await fetchFollows(defaultAuthor));
-  }
+  const { followsArrayFromRelay, firstDegreeFollowsLength } =
+    await fetchFollows(userPubkey);
   editFollowsContext(followsArrayFromRelay, firstDegreeFollowsLength, false);
   return {
     followList: followsArrayFromRelay,

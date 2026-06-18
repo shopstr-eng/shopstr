@@ -45,8 +45,9 @@ import WeightSelector from "./weight-selector";
 import BulkSelector from "./bulk-selector";
 import ZapsnagButton from "@/components/ZapsnagButton";
 import { RawEventModal, EventIdModal } from "./modals/event-modals";
-import { storage } from "@/utils/storage";
-import { CartDiscountsMap } from "@/utils/cart-discounts";
+import { storage, STORAGE_KEYS } from "@/utils/storage";
+import useReportEventFlow from "./use-report-event-flow";
+import { CartDiscountsMap, isCartDiscountsMap } from "@/utils/cart-discounts";
 
 const SUMMARY_CHARACTER_LIMIT = 100;
 
@@ -78,6 +79,13 @@ export default function CheckoutCard({
 
   const router = useRouter();
 
+  const { openReportFlow, reportFlowUi } = useReportEventFlow({
+    targetLabel: "listing",
+    reportedPubkey: productData.pubkey,
+    reportedEventId: productData.id,
+    onRequireLogin: onOpen,
+  });
+
   const [isExpanded, setIsExpanded] = useState(false);
   const [isBeingPaid, setIsBeingPaid] = useState(false);
   const [visibleImages, setVisibleImages] = useState<string[]>([]);
@@ -99,6 +107,9 @@ export default function CheckoutCard({
   const [showFailureModal, setShowFailureModal] = useState(false);
   const [failureText, setFailureText] = useState("");
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successText, setSuccessText] = useState(
+    "Listing URL copied to clipboard!"
+  );
 
   const [cart, setCart] = useState<ProductData[]>([]);
   const [selectedVolume, setSelectedVolume] = useState<string>("");
@@ -178,7 +189,7 @@ export default function CheckoutCard({
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const cartList = storage.getJson<ProductData[]>("cart", []);
+    const cartList = storage.getJson<ProductData[]>(STORAGE_KEYS.CART, []);
     if (cartList && cartList.length > 0) {
       setCart(cartList);
     }
@@ -330,7 +341,7 @@ export default function CheckoutCard({
 
       updatedCart = [...cart, productToAdd];
       setCart(updatedCart);
-      storage.setJson("cart", updatedCart);
+      storage.setJson(STORAGE_KEYS.CART, updatedCart);
 
       const sellerShop = shopMapContext.shopData.get(productData.pubkey);
       if (
@@ -344,13 +355,17 @@ export default function CheckoutCard({
       // Store discount code if applied
       if (appliedDiscount > 0 && discountCode) {
         const discounts = storage.getJson<CartDiscountsMap>(
-          "cartDiscounts",
-          {}
+          STORAGE_KEYS.CART_DISCOUNTS,
+          {},
+          {
+            removeOnError: true,
+            validate: isCartDiscountsMap,
+          }
         );
         discounts[productData.pubkey] = {
           code: discountCode,
         };
-        storage.setJson("cartDiscounts", discounts);
+        storage.setJson(STORAGE_KEYS.CART_DISCOUNTS, discounts);
       }
     } else {
       onOpen();
@@ -375,6 +390,7 @@ export default function CheckoutCard({
       navigator.clipboard.writeText(
         `${window.location.origin}/listing/${listingPath}`
       );
+      setSuccessText("Listing URL copied to clipboard!");
       setShowSuccessModal(true);
     }
   };
@@ -571,7 +587,7 @@ export default function CheckoutCard({
                         dropDownKeys={
                           productData.pubkey === userPubkey
                             ? ["shop_profile"]
-                            : ["shop", "inquiry", "copy_npub"]
+                            : ["shop", "inquiry", "copy_npub", "report_profile"]
                         }
                       />
                       {merchantQuality !== "" && (
@@ -629,18 +645,32 @@ export default function CheckoutCard({
                           </Button>
                         </DropdownTrigger>
                         <DropdownMenu aria-label="Event Actions">
-                          <DropdownItem
-                            key="view-raw"
-                            onPress={() => setShowRawEventModal(true)}
-                          >
-                            View Raw Event
-                          </DropdownItem>
-                          <DropdownItem
-                            key="view-id"
-                            onPress={() => setShowEventIdModal(true)}
-                          >
-                            View Event ID
-                          </DropdownItem>
+                          {[
+                            <DropdownItem
+                              key="view-raw"
+                              onPress={() => setShowRawEventModal(true)}
+                            >
+                              View Raw Event
+                            </DropdownItem>,
+                            <DropdownItem
+                              key="view-id"
+                              onPress={() => setShowEventIdModal(true)}
+                            >
+                              View Event ID
+                            </DropdownItem>,
+                            ...(productData.pubkey !== userPubkey
+                              ? [
+                                  <DropdownItem
+                                    key="report-listing"
+                                    color="danger"
+                                    className="text-danger"
+                                    onPress={openReportFlow}
+                                  >
+                                    Report Listing
+                                  </DropdownItem>,
+                                ]
+                              : []),
+                          ]}
                         </DropdownMenu>
                       </Dropdown>
                     )}
@@ -894,7 +924,12 @@ export default function CheckoutCard({
                                 dropDownKeys={
                                   reviewerPubkey === userPubkey
                                     ? ["shop_profile"]
-                                    : ["shop", "inquiry", "copy_npub"]
+                                    : [
+                                        "shop",
+                                        "inquiry",
+                                        "copy_npub",
+                                        "report_profile",
+                                      ]
                                 }
                               />
                             </div>
@@ -1007,10 +1042,11 @@ export default function CheckoutCard({
           onClose={() => setShowFailureModal(false)}
         />
         <SuccessModal
-          bodyText="Listing URL copied to clipboard!"
+          bodyText={successText}
           isOpen={showSuccessModal}
           onClose={() => setShowSuccessModal(false)}
         />
+        {reportFlowUi}
         <RawEventModal
           isOpen={showRawEventModal}
           onClose={() => setShowRawEventModal(false)}

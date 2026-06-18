@@ -14,6 +14,7 @@ import {
   CommunityRelays,
   NostrEvent,
   ProductFormValues,
+  SavedAddress,
 } from "@/utils/types/types";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
 import { Proof } from "@cashu/cashu-ts";
@@ -29,6 +30,18 @@ import {
 } from "@/utils/nostr/request-auth";
 import { newPromiseWithTimeout } from "@/utils/timeout";
 import { storage, STORAGE_KEYS } from "@/utils/storage";
+
+export const REPORT_TYPES = [
+  "nudity",
+  "malware",
+  "profanity",
+  "illegal",
+  "spam",
+  "impersonation",
+  "other",
+] as const;
+
+export type ReportType = (typeof REPORT_TYPES)[number];
 
 function containsRelay(relays: string[], relay: string): boolean {
   return relays.some((r) => r.includes(relay));
@@ -139,25 +152,16 @@ export async function createNostrProfileEvent(
   nostr: NostrManager,
   signer: NostrSigner,
   stringifiedContent: string
-) {
+): Promise<NostrEvent> {
   const profileContent: EventTemplate = {
     created_at: Math.floor(Date.now() / 1000),
     content: stringifiedContent,
     kind: 0,
     tags: [],
   };
-  const signedEvent = await finalizeAndSendNostrEvent(
-    signer,
-    nostr,
-    profileContent
-  );
-
-  // Cache profile event to database
-  if (signedEvent) {
-    await cacheEventToDatabase(signedEvent).catch((error) =>
-      console.error("Failed to cache profile event to database:", error)
-    );
-  }
+  return await finalizeAndSendNostrEvent(signer, nostr, profileContent, {
+    waitForRelayPublish: false,
+  });
 }
 
 export async function PostListing(
@@ -533,6 +537,55 @@ export async function publishReviewEvent(
         console.error("Failed to cache review event to database:", error)
       );
     }
+  } catch (error) {
+    console.error(error);
+    throw error;
+  }
+}
+
+export async function publishReportEvent(
+  nostr: NostrManager,
+  signer: NostrSigner,
+  {
+    content,
+    reportType,
+    reportedPubkey,
+    reportedEventId,
+  }: {
+    content: string;
+    reportType: ReportType;
+    reportedPubkey: string;
+    reportedEventId?: string;
+  }
+) {
+  try {
+    const reportTags = reportedEventId
+      ? [
+          ["e", reportedEventId, reportType],
+          ["p", reportedPubkey],
+        ]
+      : [["p", reportedPubkey, reportType]];
+
+    const reportEvent: EventTemplate = {
+      created_at: Math.floor(Date.now() / 1000),
+      content,
+      kind: 1984,
+      tags: reportTags,
+    };
+
+    const signedEvent = await finalizeAndSendNostrEvent(
+      signer,
+      nostr,
+      reportEvent
+    );
+
+    if (signedEvent) {
+      await cacheEventToDatabase(signedEvent).catch((error) =>
+        console.error("Failed to cache report event to database:", error)
+      );
+    }
+
+    return signedEvent;
   } catch (error) {
     console.error(error);
     throw error;
@@ -1004,35 +1057,30 @@ export async function retractApproval(
   return await finalizeAndSendNostrEvent(signer, nostr, eventTemplate);
 }
 
-export async function finalizeAndSendNostrEvent(
-  signer: NostrSigner,
+type FinalizeAndSendOptions = {
+  waitForRelayPublish?: boolean;
+};
+
+async function publishEventWithRetryTracking(
   nostr: NostrManager,
-  eventTemplate: EventTemplate
-) {
+  signer: NostrSigner,
+  signedEvent: NostrEvent,
+  relayUrls: string[]
+): Promise<void> {
   try {
-    const writeRelays = getStoredWriteRelays();
-    const relays = getStoredRelays();
-    const signedEvent = await signer.sign(eventTemplate);
-
-    // Cache to database first and wait for confirmation
-    await cacheEventToDatabase(signedEvent);
-
-    // After DB confirmation, attempt to publish to relays with timeout
-    const allWriteRelays = withBlastr([...writeRelays, ...relays]);
     try {
       await newPromiseWithTimeout(
         async (resolve, reject) => {
           try {
-            await nostr.publish(signedEvent, allWriteRelays);
+            await nostr.publish(signedEvent, relayUrls);
             resolve(undefined);
           } catch (err) {
             reject(err as Error);
           }
         },
-        { timeout: 21000 } // 21 second timeout
+        { timeout: 21000 }
       );
     } catch (error) {
-      // Timeout or relay publish error - track for retry
       console.warn(
         "Relay publish timed out or failed, but event is saved to database:",
         error
@@ -1041,15 +1089,49 @@ export async function finalizeAndSendNostrEvent(
       await trackFailedRelayPublish(
         signedEvent.id,
         signedEvent,
-        allWriteRelays,
+        relayUrls,
         signer
       ).catch(console.error);
     }
+  } catch (error) {
+    console.error("Failed to publish signed Nostr event:", error);
+  }
+}
 
-    // return the signed event to caller so we know generated IDs
+export async function finalizeAndSendNostrEvent(
+  signer: NostrSigner,
+  nostr: NostrManager,
+  eventTemplate: EventTemplate,
+  options: FinalizeAndSendOptions = {}
+): Promise<NostrEvent> {
+  try {
+    const writeRelays = getStoredWriteRelays();
+    const relays = getStoredRelays();
+    const signedEvent = await signer.sign(eventTemplate);
+
+    // Cache to database first and wait for confirmation
+    await cacheEventToDatabase(signedEvent);
+
+    const allWriteRelays = withBlastr([...writeRelays, ...relays]);
+
+    if (options.waitForRelayPublish === false) {
+      void publishEventWithRetryTracking(
+        nostr,
+        signer,
+        signedEvent,
+        allWriteRelays
+      );
+      return signedEvent;
+    }
+
+    await publishEventWithRetryTracking(
+      nostr,
+      signer,
+      signedEvent,
+      allWriteRelays
+    );
     return signedEvent;
   } catch (error) {
-    // Log the actual error and re-throw it so the calling function knows something went wrong
     throw error;
   }
 }
@@ -1241,8 +1323,6 @@ export function validateNSecKey(privateKey: string) {
   return privateKey.match(validPrivKey) !== null;
 }
 
-// Note: LOCALSTORAGECONSTANTS removed in favor of STORAGE_KEYS from @/utils/storage
-
 export const setLocalStorageDataOnSignIn = ({
   encryptedPrivateKey,
   relays,
@@ -1354,6 +1434,7 @@ export interface LocalStorageInterface {
   nwcString?: string | null;
   nwcInfo?: string | null;
   migrationComplete?: boolean;
+  savedAddresses: SavedAddress[];
 }
 
 export function isStoredSignerData(
@@ -1393,67 +1474,191 @@ export function isStoredSignerData(
   return false;
 }
 
+const isStringArray = (value: unknown): value is string[] =>
+  Array.isArray(value) && value.every((entry) => typeof entry === "string");
+
+const isUnknownArray = (value: unknown): value is unknown[] =>
+  Array.isArray(value);
+
+const isSavedAddressArray = (value: unknown): value is SavedAddress[] =>
+  Array.isArray(value);
+
+const isStoredSignerDataOrUndefined = (
+  value: unknown
+): value is LocalStorageInterface["signer"] | undefined =>
+  value === undefined || isStoredSignerData(value);
+
+function getStoredStringArray(
+  key: string,
+  fallback: string[] = [],
+  persistFallback = false
+): string[] {
+  const values = storage
+    .getJson<string[]>(key, [], {
+      removeOnError: true,
+      removeOnValidationError: true,
+      validate: isStringArray,
+    })
+    .filter(Boolean);
+
+  if (values.length > 0) {
+    return values;
+  }
+
+  if (persistFallback && fallback.length > 0) {
+    storage.setJson(key, fallback);
+  }
+
+  return fallback;
+}
+
 export function getStoredRelays(): string[] {
-  const relays = storage
-    .getJson<string[]>(STORAGE_KEYS.RELAYS, [])
-    .filter((relay) => !!relay);
-  return relays.length > 0 ? relays : getDefaultRelays();
+  return getStoredStringArray(STORAGE_KEYS.RELAYS, getDefaultRelays());
 }
 
 export function getStoredReadRelays(): string[] {
-  return storage
-    .getJson<string[]>(STORAGE_KEYS.READ_RELAYS, [])
-    .filter((relay) => !!relay);
+  return getStoredStringArray(STORAGE_KEYS.READ_RELAYS);
 }
 
 export function getStoredWriteRelays(): string[] {
-  return storage
-    .getJson<string[]>(STORAGE_KEYS.WRITE_RELAYS, [])
-    .filter((relay) => !!relay);
+  return getStoredStringArray(STORAGE_KEYS.WRITE_RELAYS);
 }
 
 export function getStoredMints(): string[] {
-  const mints = storage
-    .getJson<string[]>(STORAGE_KEYS.MINTS, [])
-    .filter((mint) => !!mint);
-  return mints.length > 0 ? mints : [getDefaultMint()];
+  return getStoredStringArray(STORAGE_KEYS.MINTS, [getDefaultMint()]);
 }
 
 export function getStoredBlossomServers(): string[] {
-  const blossomServers = storage
-    .getJson<string[]>(STORAGE_KEYS.BLOSSOM_SERVERS, [])
-    .filter((server) => !!server);
-  return blossomServers.length > 0
-    ? blossomServers
-    : [getDefaultBlossomServer()];
+  return getStoredStringArray(STORAGE_KEYS.BLOSSOM_SERVERS, [
+    getDefaultBlossomServer(),
+  ]);
 }
 
 export const getLocalStorageData = (): LocalStorageInterface => {
+  const signInMethod = storage.getItem(STORAGE_KEYS.SIGN_IN_METHOD) || "";
+  const encryptedPrivateKey =
+    storage.getItem(STORAGE_KEYS.ENCRYPTED_PRIVATE_KEY) || undefined;
+
+  if (signInMethod) {
+    storage.removeItem("npub");
+    storage.removeItem("signIn");
+    storage.removeItem("chats");
+    storage.removeItem("cashuWalletRelays");
+  }
+
+  const relays = getStoredStringArray(
+    STORAGE_KEYS.RELAYS,
+    getDefaultRelays(),
+    true
+  );
+  const readRelays = getStoredReadRelays();
+  const writeRelays = getStoredWriteRelays();
+  const mints = getStoredStringArray(
+    STORAGE_KEYS.MINTS,
+    [getDefaultMint()],
+    true
+  );
+  const blossomServers = getStoredStringArray(
+    STORAGE_KEYS.BLOSSOM_SERVERS,
+    [getDefaultBlossomServer()],
+    true
+  );
+
+  const tokens = storage.getJson<any[]>(STORAGE_KEYS.TOKENS, [], {
+    removeOnError: true,
+    removeOnValidationError: true,
+    validate: isUnknownArray,
+  });
+  if (!storage.getItem(STORAGE_KEYS.TOKENS)) {
+    storage.setJson(STORAGE_KEYS.TOKENS, []);
+  }
+
+  const history = storage.getJson<any[]>(STORAGE_KEYS.HISTORY, [], {
+    removeOnError: true,
+    removeOnValidationError: true,
+    validate: isUnknownArray,
+  });
+  if (!storage.getItem(STORAGE_KEYS.HISTORY)) {
+    storage.setJson(STORAGE_KEYS.HISTORY, []);
+  }
+
+  const parsedWot = Number(storage.getItem(STORAGE_KEYS.WOT) || 3);
+  const wot = Number.isFinite(parsedWot) ? parsedWot : 3;
+  const clientPrivkey =
+    storage.getItem(STORAGE_KEYS.CLIENT_PRIVKEY) || undefined;
+  const bunkerRemotePubkey =
+    storage.getItem(STORAGE_KEYS.BUNKER_REMOTE_PUBKEY) || undefined;
+  const bunkerRelays = getStoredStringArray(STORAGE_KEYS.BUNKER_RELAYS);
+  const bunkerSecret = storage.getItem(STORAGE_KEYS.BUNKER_SECRET) || undefined;
+
+  let signer = storage.getJson<LocalStorageInterface["signer"] | undefined>(
+    STORAGE_KEYS.SIGNER,
+    undefined,
+    {
+      removeOnError: true,
+      removeOnValidationError: true,
+      validate: isStoredSignerDataOrUndefined,
+    }
+  );
+
+  if (!signer) {
+    switch (signInMethod) {
+      case "extension":
+        signer = { type: "nip07" };
+        break;
+      case "bunker":
+        if (bunkerRemotePubkey && bunkerSecret) {
+          let bunker = `bunker://${bunkerRemotePubkey}?secret=${bunkerSecret}`;
+          for (const relay of bunkerRelays) {
+            bunker += `&relay=${relay}`;
+          }
+          signer = {
+            type: "nip46",
+            bunker,
+            appPrivKey: clientPrivkey,
+          };
+        }
+        break;
+      case "nsec":
+        if (encryptedPrivateKey) {
+          signer = {
+            type: "nsec",
+            encryptedPrivKey: encryptedPrivateKey,
+          };
+        }
+        break;
+    }
+  }
+
   return {
-    signInMethod: storage.getItem(STORAGE_KEYS.SIGN_IN_METHOD) || "",
-    encryptedPrivateKey:
-      storage.getItem(STORAGE_KEYS.ENCRYPTED_PRIVATE_KEY) || undefined,
-    relays: getStoredRelays(),
-    readRelays: getStoredReadRelays(),
-    writeRelays: getStoredWriteRelays(),
-    mints: getStoredMints(),
-    blossomServers: getStoredBlossomServers(),
-    tokens: storage.getJson<any[]>(STORAGE_KEYS.TOKENS, []),
-    history: storage.getJson<any[]>(STORAGE_KEYS.HISTORY, []),
-    wot: Number(storage.getItem(STORAGE_KEYS.WOT) || 3),
-    clientPrivkey: storage.getItem(STORAGE_KEYS.CLIENT_PRIVKEY) || undefined,
-    bunkerRemotePubkey:
-      storage.getItem(STORAGE_KEYS.BUNKER_REMOTE_PUBKEY) || undefined,
-    bunkerRelays: storage.getJson<string[]>(STORAGE_KEYS.BUNKER_RELAYS, []),
-    bunkerSecret: storage.getItem(STORAGE_KEYS.BUNKER_SECRET) || undefined,
-    signer: storage.getJson<LocalStorageInterface["signer"] | undefined>(
-      STORAGE_KEYS.SIGNER,
-      undefined,
-      { validate: isStoredSignerData }
-    ),
+    signInMethod,
+    encryptedPrivateKey,
+    relays,
+    readRelays,
+    writeRelays,
+    mints,
+    blossomServers,
+    tokens,
+    history,
+    wot,
+    clientPrivkey,
+    bunkerRemotePubkey,
+    bunkerRelays,
+    bunkerSecret,
+    signer,
     nwcString: storage.getItem(STORAGE_KEYS.NWC_STRING),
     nwcInfo: storage.getItem(STORAGE_KEYS.NWC_INFO),
-    migrationComplete: storage.getItem(STORAGE_KEYS.MIGRATION_COMPLETE) === "true",
+    migrationComplete:
+      storage.getItem(STORAGE_KEYS.MIGRATION_COMPLETE) === "true",
+    savedAddresses: storage.getJson<SavedAddress[]>(
+      STORAGE_KEYS.SAVED_ADDRESSES,
+      [],
+      {
+        removeOnError: true,
+        removeOnValidationError: true,
+        validate: isSavedAddressArray,
+      }
+    ),
   };
 };
 
@@ -1461,10 +1666,13 @@ export const LogOut = () => {
   storage.removeItem("npub");
   storage.removeItem("signIn");
   storage.removeItem("chats");
+  storage.removeItem("cashuWalletRelays");
   storage.clearKeys([
     STORAGE_KEYS.SIGNER,
     STORAGE_KEYS.SIGN_IN_METHOD,
     STORAGE_KEYS.ENCRYPTED_PRIVATE_KEY,
+    STORAGE_KEYS.USER_NPUB,
+    STORAGE_KEYS.USER_PUBKEY,
     STORAGE_KEYS.CLIENT_PUBKEY,
     STORAGE_KEYS.CLIENT_PRIVKEY,
     STORAGE_KEYS.RELAYS,
@@ -1480,13 +1688,20 @@ export const LogOut = () => {
     STORAGE_KEYS.BUNKER_REMOTE_PUBKEY,
     STORAGE_KEYS.BUNKER_RELAYS,
     STORAGE_KEYS.BUNKER_SECRET,
+    STORAGE_KEYS.SAVED_ADDRESSES,
   ]);
   window.dispatchEvent(new Event("storage"));
 };
 
-export const decryptNpub = (npub: string) => {
-  const { data } = nip19.decode(npub);
-  return data;
+export const decryptNpub = (npub: string): string | null => {
+  try {
+    const decoded = nip19.decode(npub);
+    return decoded.type === "npub" && typeof decoded.data === "string"
+      ? decoded.data
+      : null;
+  } catch {
+    return null;
+  }
 };
 
 export function nostrExtensionLoaded() {
@@ -1623,3 +1838,10 @@ export const parseLocalProfileFallback = (
 
   return null;
 };
+
+export {
+  getSavedAddresses,
+  saveAddress,
+  deleteAddress,
+  setDefaultAddress,
+} from "@/utils/nostr/saved-address-helpers";
