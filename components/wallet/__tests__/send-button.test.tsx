@@ -10,6 +10,7 @@ import {
 import { CashuWalletContext } from "@/utils/context/context";
 import { Wallet as CashuWallet, getEncodedToken } from "@cashu/cashu-ts";
 import {
+  getStoredMints,
   getLocalStorageData,
   publishProofEvent,
 } from "@/utils/nostr/nostr-helper-functions";
@@ -50,6 +51,7 @@ jest.mock("@heroicons/react/24/outline", () => ({
 }));
 
 const mockGetLocalStorageData = getLocalStorageData as jest.Mock;
+const mockGetStoredMints = getStoredMints as jest.Mock;
 const mockPublishProofEvent = publishProofEvent as jest.Mock;
 const mockGetEncodedToken = getEncodedToken as jest.Mock;
 const MockCashuWallet = CashuWallet as jest.Mock;
@@ -118,12 +120,24 @@ describe("SendButton", () => {
     }));
 
     setItemSpy = jest.spyOn(Storage.prototype, "setItem");
+    localStorage.setItem(
+      "mints",
+      JSON.stringify(["https://legend.lnbits.com/cashu/api/v1/4_sadf7asdf78"])
+    );
+    localStorage.setItem(
+      "tokens",
+      JSON.stringify([{ id: "keyset_id_1", amount: 1000, C: "C1" }])
+    );
+
     mockPublishProofEvent.mockResolvedValue(undefined);
     mockGetLocalStorageData.mockReturnValue({
       mints: ["https://legend.lnbits.com/cashu/api/v1/4_sadf7asdf78"],
       tokens: [{ id: "keyset_id_1", amount: 1000, C: "C1" }],
       history: [],
     });
+    mockGetStoredMints.mockReturnValue([
+      "https://legend.lnbits.com/cashu/api/v1/4_sadf7asdf78",
+    ]);
     Object.defineProperty(navigator, "clipboard", {
       value: { writeText: jest.fn().mockResolvedValue(undefined) },
       writable: true,
@@ -277,6 +291,14 @@ describe("SendButton", () => {
   });
 
   test("handles tokens with different keyset IDs", async () => {
+    localStorage.setItem(
+      "tokens",
+      JSON.stringify([
+        { id: "keyset_id_1", amount: 500, C: "C1" },
+        { id: "keyset_id_2", amount: 300, C: "C2" },
+        { id: "keyset_id_3", amount: 200, C: "C3" },
+      ])
+    );
     mockGetLocalStorageData.mockReturnValue({
       mints: ["https://legend.lnbits.com/cashu/api/v1/4_sadf7asdf78"],
       tokens: [

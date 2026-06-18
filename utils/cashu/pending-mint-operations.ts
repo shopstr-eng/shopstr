@@ -1,7 +1,6 @@
 import { Wallet as CashuWallet, Proof } from "@cashu/cashu-ts";
 import { withMintRetry } from "./mint-retry-service";
-
-const STORAGE_KEY = "shopstr.pendingMintQuotes";
+import { storage, STORAGE_KEYS } from "@/utils/storage";
 
 export type PendingMintQuoteStatus =
   | "awaiting_payment"
@@ -28,20 +27,14 @@ export interface PendingMintQuote {
 export const PAID_UNCLAIMED_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
 function readAll(): PendingMintQuote[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+  return storage.getJson<PendingMintQuote[]>(
+    STORAGE_KEYS.PENDING_MINT_QUOTES,
+    []
+  );
 }
 
 function writeAll(quotes: PendingMintQuote[]): void {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(quotes));
+  storage.setJson(STORAGE_KEYS.PENDING_MINT_QUOTES, quotes);
 }
 
 export interface RecordPendingMintQuoteInput {

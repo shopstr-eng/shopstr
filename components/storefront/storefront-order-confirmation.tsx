@@ -13,6 +13,7 @@ import parseTags, {
 } from "@/utils/parsers/product-parser-functions";
 import { nip19 } from "nostr-tools";
 import ProductCard from "@/components/utility-components/product-card";
+import { storage, STORAGE_KEYS } from "@/utils/storage";
 
 interface OrderSummaryData {
   productTitle: string;
@@ -71,15 +72,14 @@ export default function StorefrontOrderConfirmation({
 
   useEffect(() => {
     if (hasConsumedOrderRef.current) return;
-    const stored = sessionStorage.getItem("orderSummary");
+    const stored = storage.getSessionJson<OrderSummaryData | null>(
+      STORAGE_KEYS.ORDER_SUMMARY,
+      null
+    );
     if (stored) {
       hasConsumedOrderRef.current = true;
-      try {
-        setOrderData(JSON.parse(stored));
-        sessionStorage.removeItem("orderSummary");
-      } catch {
-        router.push(`/shop/${shopSlug}`);
-      }
+      setOrderData(stored);
+      storage.removeSessionItem(STORAGE_KEYS.ORDER_SUMMARY);
     } else {
       router.push(`/shop/${shopSlug}`);
     }

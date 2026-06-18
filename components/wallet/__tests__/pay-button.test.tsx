@@ -13,6 +13,7 @@ import {
   NostrContext,
 } from "@/components/utility-components/nostr-context-provider";
 import {
+  getStoredMints,
   getLocalStorageData,
   publishProofEvent,
 } from "@/utils/nostr/nostr-helper-functions";
@@ -23,6 +24,7 @@ jest.mock("next-themes", () => ({
 }));
 
 jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
+  getStoredMints: jest.fn(),
   getLocalStorageData: jest.fn(),
   publishProofEvent: jest.fn(),
 }));
@@ -127,6 +129,9 @@ describe("PayButton Component", () => {
       tokens: JSON.parse(localStorageMock.getItem("tokens") || "[]"),
       history: JSON.parse(localStorageMock.getItem("history") || "[]"),
     }));
+    (getStoredMints as jest.Mock).mockReturnValue([
+      "https://legend.lnbits.com/cashu/api/v1/4gr9XkQ8ez543F4L6f5UqA",
+    ]);
   });
 
   test("renders the pay button initially", () => {

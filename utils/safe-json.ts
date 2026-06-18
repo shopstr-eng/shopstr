@@ -12,7 +12,7 @@ interface JsonErrorContext {
   error?: unknown;
 }
 
-interface StorageParseOptions<T> {
+export interface StorageParseOptions<T> {
   removeOnError?: boolean;
   removeOnValidationError?: boolean;
   onError?: (context: JsonErrorContext) => void;
@@ -52,37 +52,28 @@ export function getLocalStorageJson<T>(
   fallback: T,
   options?: StorageParseOptions<T>
 ): T {
-  const reportError = (context: JsonErrorContext) => {
-    options?.onError?.({ ...context, key });
-  };
-
-  if (options?.validate && !options.validate(fallback)) {
-    reportError({ reason: "fallback_validation_mismatch" });
-  }
-
   if (typeof window === "undefined") {
-    reportError({ reason: "ssr" });
+    options?.onError?.({ reason: "ssr", key });
     return fallback;
   }
 
   const raw = localStorage.getItem(key);
-  if (raw === null) return fallback;
+  return parseJsonWithFallback(raw, fallback, {
+    ...options,
+    onError: (context) => {
+      const contextWithKey = { ...context, key };
+      options?.onError?.(contextWithKey);
 
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    if (options?.validate && !options.validate(parsed)) {
-      if (options.removeOnValidationError) {
+      if (context.reason === "parse_error" && options?.removeOnError) {
         localStorage.removeItem(key);
       }
-      reportError({ reason: "validation_mismatch" });
-      return fallback;
-    }
-    return parsed as T;
-  } catch (error) {
-    if (options?.removeOnError) {
-      localStorage.removeItem(key);
-    }
-    reportError({ reason: "parse_error", error });
-    return fallback;
-  }
+
+      if (
+        context.reason === "validation_mismatch" &&
+        options?.removeOnValidationError
+      ) {
+        localStorage.removeItem(key);
+      }
+    },
+  });
 }

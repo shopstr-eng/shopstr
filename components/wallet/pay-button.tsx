@@ -18,9 +18,10 @@ import {
   Spinner,
 } from "@heroui/react";
 import {
-  getLocalStorageData,
+  getStoredMints,
   publishProofEvent,
 } from "@/utils/nostr/nostr-helper-functions";
+import { storage, STORAGE_KEYS } from "@/utils/storage";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
   Mint as CashuMint,
@@ -50,7 +51,9 @@ const PayButton = () => {
   const { signer } = useContext(SignerContext);
   const { nostr } = useContext(NostrContext);
 
-  const { mints, tokens, history } = getLocalStorageData();
+  const mints = getStoredMints();
+  const tokens = storage.getJson<any[]>(STORAGE_KEYS.TOKENS, []);
+  const history = storage.getJson<any[]>(STORAGE_KEYS.HISTORY, []);
 
   const { theme } = useTheme();
 
@@ -169,7 +172,7 @@ const PayButton = () => {
             ) || !send.some((s) => s.secret === p.secret)
         ) as Proof[];
         const quarantineProofArray = [...remainingProofsAfterMelt, ...keep];
-        localStorage.setItem("tokens", JSON.stringify(quarantineProofArray));
+        storage.setJson(STORAGE_KEYS.TOKENS, quarantineProofArray);
         throw new Error(meltOutcome.errorMessage ?? "Melt outcome ambiguous");
       }
       const changeProofs = [...keep, ...meltOutcome.changeProofs];
@@ -190,23 +193,20 @@ const PayButton = () => {
       } else {
         proofArray = [...remainingProofs];
       }
-      localStorage.setItem("tokens", JSON.stringify(proofArray));
+      storage.setJson(STORAGE_KEYS.TOKENS, proofArray);
       const filteredTokenAmount = filteredProofs.reduce(
         (acc, token: Proof) => acc + token.amount.toNumber(),
         0
       );
       const transactionAmount = filteredTokenAmount - changeAmount;
-      localStorage.setItem(
-        "history",
-        JSON.stringify([
-          {
-            type: 4,
-            amount: transactionAmount,
-            date: Math.floor(Date.now() / 1000),
-          },
-          ...history,
-        ])
-      );
+      storage.setJson(STORAGE_KEYS.HISTORY, [
+        {
+          type: 4,
+          amount: transactionAmount,
+          date: Math.floor(Date.now() / 1000),
+        },
+        ...history,
+      ]);
       await publishProofEvent(
         nostr!,
         signer!,

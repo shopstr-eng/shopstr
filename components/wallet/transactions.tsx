@@ -6,7 +6,7 @@ import {
   BoltIcon,
   ShoppingBagIcon,
 } from "@heroicons/react/24/outline";
-import { getLocalStorageData } from "@/utils/nostr/nostr-helper-functions";
+import { storage, STORAGE_KEYS } from "@/utils/storage";
 import { Transaction } from "@/utils/types/types";
 
 // add found proofs as nutsack deposit with different icon
@@ -17,10 +17,8 @@ const Transactions = () => {
   useEffect(() => {
     // Function to fetch and update transactions
     const fetchAndUpdateTransactions = () => {
-      const localData = getLocalStorageData();
-      if (localData && localData.history) {
-        setHistory(localData.history);
-      }
+      const history = storage.getJson<Transaction[]>(STORAGE_KEYS.HISTORY, []);
+      setHistory(history);
     };
     // Initial fetch
     fetchAndUpdateTransactions();

@@ -28,11 +28,11 @@ import { NostrNSecSigner } from "@/utils/nostr/signers/nostr-nsec-signer";
 import {
   createNostrProfileEvent,
   getLocalUserProfileKey,
-  parseLocalProfileFallback,
   isProfileContentPopulated,
 } from "@/utils/nostr/nostr-helper-functions";
 import { FileUploaderButton } from "@/components/utility-components/file-uploader";
 import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
+import { storage } from "@/utils/storage";
 import ProtectedRoute from "@/components/utility-components/protected-route";
 
 const UserProfilePage = () => {
@@ -79,8 +79,9 @@ const UserProfilePage = () => {
   useEffect(() => {
     if (!userPubkey || profileContext.isLoading) return;
 
-    const localFallback = parseLocalProfileFallback(
-      localStorage.getItem(getLocalUserProfileKey(userPubkey))
+    const localFallback = storage.getJson<any>(
+      getLocalUserProfileKey(userPubkey),
+      null
     );
 
     const profileMap = profileContext.profileData;
@@ -102,17 +103,14 @@ const UserProfilePage = () => {
       }
 
       try {
-        localStorage.setItem(
-          getLocalUserProfileKey(userPubkey),
-          JSON.stringify({
-            content: shouldUseLocalFallback
-              ? localFallback!.content
-              : profile.content,
-            updatedAt: shouldUseLocalFallback
-              ? localFallback!.updatedAt
-              : profileCreatedAt,
-          })
-        );
+        storage.setJson(getLocalUserProfileKey(userPubkey), {
+          content: shouldUseLocalFallback
+            ? localFallback!.content
+            : profile.content,
+          updatedAt: shouldUseLocalFallback
+            ? localFallback!.updatedAt
+            : profileCreatedAt,
+        });
       } catch (error) {
         console.error("Failed to persist profile fallback locally:", error);
       }
@@ -146,13 +144,10 @@ const UserProfilePage = () => {
       };
 
       try {
-        localStorage.setItem(
-          getLocalUserProfileKey(userPubkey),
-          JSON.stringify({
-            content: updatedData,
-            updatedAt: Math.floor(Date.now() / 1000),
-          })
-        );
+        storage.setJson(getLocalUserProfileKey(userPubkey), {
+          content: updatedData,
+          updatedAt: Math.floor(Date.now() / 1000),
+        });
       } catch (error) {
         console.error("Failed to save local profile fallback:", error);
       }

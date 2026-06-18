@@ -12,10 +12,11 @@ import {
 } from "@cashu/cashu-ts";
 import { ChatsMap } from "@/utils/context/context";
 import {
-  getLocalStorageData,
   deleteEvent,
+  getLocalStorageData,
   verifyNip05Identifier,
 } from "@/utils/nostr/nostr-helper-functions";
+import { storage, STORAGE_KEYS } from "@/utils/storage";
 import {
   ProductData,
   parseTags,
@@ -1673,7 +1674,7 @@ export const fetchCashuWallet = async (
   cashuProofs: Proof[];
 }> => {
   return new Promise(async function (resolve, reject) {
-    const { tokens } = getLocalStorageData();
+    const tokens = storage.getJson<any[]>(STORAGE_KEYS.TOKENS, []);
     const userPubkey = await signer?.getPubKey?.();
     if (!userPubkey) {
       editCashuWalletContext([], [], [], false);
@@ -2194,7 +2195,7 @@ export const fetchCommunityPosts = async (
     }
     try {
       const communityAddress = `${community.kind}:${community.pubkey}:${community.d}`;
-      const { relays: userRelays } = getLocalStorageData();
+      const userRelays = storage.getJson<string[]>(STORAGE_KEYS.RELAYS, []);
       // Create a combined, unique list of relays for fetching
       const combinedRelays = Array.from(
         new Set([...community.relays.all, ...userRelays])
@@ -2311,7 +2312,7 @@ export const fetchPendingPosts = async (
 ): Promise<NostrEvent[]> => {
   return new Promise(async (resolve, reject) => {
     try {
-      const { relays: userRelays } = getLocalStorageData();
+      const userRelays = storage.getJson<string[]>(STORAGE_KEYS.RELAYS, []);
       const communityAddress = `${community.kind}:${community.pubkey}:${community.d}`;
       const approvedPostEvents = await fetchCommunityPosts(
         nostr,

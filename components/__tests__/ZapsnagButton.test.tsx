@@ -79,6 +79,7 @@ jest.mock("nostr-tools", () => ({
 
 jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
   getLocalStorageData: jest.fn(),
+  getStoredRelays: jest.fn(() => ["wss://relay.damus.io"]),
   constructGiftWrappedEvent: jest.fn(),
   constructMessageSeal: jest.fn(),
   constructMessageGiftWrap: jest.fn(),

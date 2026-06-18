@@ -41,6 +41,7 @@ jest.mock(
 
 jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
   blossomUploadImages: jest.fn(),
+  getStoredBlossomServers: jest.fn(() => []),
   getLocalStorageData: jest.fn(() => ({})),
 }));
 
