@@ -28,29 +28,35 @@ export default function ConfirmActionModal({
   children,
 }: ConfirmActionModalProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [isConfirming, setIsConfirming] = useState(false);
 
-  const closeModal = useCallback(() => setIsOpen(false), []);
+  const closeModal = useCallback(() => {
+    setIsOpen(false);
+    setIsConfirming(false);
+  }, []);
   const openModal = useCallback(() => setIsOpen(true), []);
 
-  const handleTriggerClick = useCallback<React.MouseEventHandler<HTMLElement>>(
-    (event) => {
-      children.props.onClick?.(event);
-      if (
-        event.defaultPrevented ||
-        children.props.disabled ||
-        children.props.isDisabled
-      ) {
-        return;
-      }
-      openModal();
-    },
-    [children, openModal]
-  );
+  const handleTriggerClick: React.MouseEventHandler<HTMLElement> = (event) => {
+    children.props.onClick?.(event);
+    if (
+      event.defaultPrevented ||
+      children.props.disabled ||
+      children.props.isDisabled
+    ) {
+      return;
+    }
+    openModal();
+  };
 
-  const handleConfirm = useCallback(() => {
-    void onConfirm();
-    closeModal();
-  }, [closeModal, onConfirm]);
+  const handleConfirm = useCallback(async () => {
+    if (isConfirming) return;
+    setIsConfirming(true);
+    try {
+      await onConfirm();
+    } finally {
+      closeModal();
+    }
+  }, [closeModal, isConfirming, onConfirm]);
 
   return (
     <>
@@ -77,10 +83,21 @@ export default function ConfirmActionModal({
             <p>{helpText}</p>
           </ModalBody>
           <ModalFooter>
-            <Button type="button" variant="light" onPress={closeModal}>
+            <Button
+              type="button"
+              variant="light"
+              isDisabled={isConfirming}
+              onPress={closeModal}
+            >
               Cancel
             </Button>
-            <Button type="button" color="danger" onPress={handleConfirm}>
+            <Button
+              type="button"
+              color="danger"
+              isDisabled={isConfirming}
+              isLoading={isConfirming}
+              onPress={handleConfirm}
+            >
               {buttonLabel}
             </Button>
           </ModalFooter>

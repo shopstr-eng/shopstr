@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import ConfirmActionModal from "../confirm-action-modal";
 
@@ -29,14 +29,23 @@ jest.mock("@heroui/react", () => ({
     onClick,
     color,
     type,
+    isDisabled,
+    isLoading,
   }: {
     children: React.ReactNode;
     onPress?: () => void;
     onClick?: () => void;
     color?: string;
     type?: "button" | "submit" | "reset";
+    isDisabled?: boolean;
+    isLoading?: boolean;
   }) => (
-    <button data-color={color} type={type} onClick={onPress ?? onClick}>
+    <button
+      data-color={color}
+      type={type}
+      disabled={isDisabled || isLoading}
+      onClick={onPress ?? onClick}
+    >
       {children}
     </button>
   ),
@@ -136,5 +145,111 @@ describe("ConfirmActionModal", () => {
     expect(
       screen.getByRole("button", { name: props.buttonLabel })
     ).toHaveAttribute("type", "button");
+  });
+
+  it("does not open when the trigger prevents default", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <ConfirmActionModal {...props}>
+        <button onClick={(e) => e.preventDefault()}>Delete</button>
+      </ConfirmActionModal>
+    );
+
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("does not open when the trigger is disabled via isDisabled", async () => {
+    const user = userEvent.setup();
+
+    const TriggerStub = ({
+      onClick,
+      children,
+    }: {
+      isDisabled?: boolean;
+      onClick?: React.MouseEventHandler<HTMLButtonElement>;
+      children: React.ReactNode;
+    }) => <button onClick={onClick}>{children}</button>;
+
+    render(
+      <ConfirmActionModal {...props}>
+        <TriggerStub isDisabled>Delete</TriggerStub>
+      </ConfirmActionModal>
+    );
+
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("does not open when the trigger is disabled via the disabled prop", async () => {
+    const user = userEvent.setup();
+
+    const TriggerStub = ({
+      onClick,
+      children,
+    }: {
+      disabled?: boolean;
+      onClick?: React.MouseEventHandler<HTMLButtonElement>;
+      children: React.ReactNode;
+    }) => <button onClick={onClick}>{children}</button>;
+
+    render(
+      <ConfirmActionModal {...props}>
+        <TriggerStub disabled>Delete</TriggerStub>
+      </ConfirmActionModal>
+    );
+
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("awaits an async onConfirm before closing", async () => {
+    const user = userEvent.setup();
+    const asyncOnConfirm = jest.fn().mockResolvedValue(undefined);
+
+    render(<ConfirmActionModal {...props} onConfirm={asyncOnConfirm} />);
+
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+    await user.click(screen.getByRole("button", { name: props.buttonLabel }));
+
+    expect(asyncOnConfirm).toHaveBeenCalledTimes(1);
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+    );
+  });
+
+  it("disables the confirm button and guards against double-fire while onConfirm is pending", async () => {
+    const user = userEvent.setup();
+    let resolveConfirm: () => void = () => {};
+    const asyncOnConfirm = jest.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveConfirm = resolve;
+        })
+    );
+
+    render(<ConfirmActionModal {...props} onConfirm={asyncOnConfirm} />);
+
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+    await user.click(screen.getByRole("button", { name: props.buttonLabel }));
+
+    expect(asyncOnConfirm).toHaveBeenCalledTimes(1);
+
+    const confirmButton = screen.getByRole("button", {
+      name: props.buttonLabel,
+    });
+    expect(confirmButton).toBeDisabled();
+
+    fireEvent.click(confirmButton);
+    expect(asyncOnConfirm).toHaveBeenCalledTimes(1);
+
+    resolveConfirm();
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+    );
   });
 });
