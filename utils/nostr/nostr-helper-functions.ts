@@ -14,6 +14,7 @@ import {
   CommunityRelays,
   NostrEvent,
   ProductFormValues,
+  SavedAddress,
 } from "@/utils/types/types";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
 import { Proof } from "@cashu/cashu-ts";
@@ -29,6 +30,18 @@ import {
 } from "@/utils/nostr/request-auth";
 import { newPromiseWithTimeout } from "@/utils/timeout";
 import { getLocalStorageJson } from "@/utils/safe-json";
+
+export const REPORT_TYPES = [
+  "nudity",
+  "malware",
+  "profanity",
+  "illegal",
+  "spam",
+  "impersonation",
+  "other",
+] as const;
+
+export type ReportType = (typeof REPORT_TYPES)[number];
 
 function containsRelay(relays: string[], relay: string): boolean {
   return relays.some((r) => r.includes(relay));
@@ -139,25 +152,16 @@ export async function createNostrProfileEvent(
   nostr: NostrManager,
   signer: NostrSigner,
   stringifiedContent: string
-) {
+): Promise<NostrEvent> {
   const profileContent: EventTemplate = {
     created_at: Math.floor(Date.now() / 1000),
     content: stringifiedContent,
     kind: 0,
     tags: [],
   };
-  const signedEvent = await finalizeAndSendNostrEvent(
-    signer,
-    nostr,
-    profileContent
-  );
-
-  // Cache profile event to database
-  if (signedEvent) {
-    await cacheEventToDatabase(signedEvent).catch((error) =>
-      console.error("Failed to cache profile event to database:", error)
-    );
-  }
+  return await finalizeAndSendNostrEvent(signer, nostr, profileContent, {
+    waitForRelayPublish: false,
+  });
 }
 
 export async function PostListing(
@@ -532,6 +536,55 @@ export async function publishReviewEvent(
         console.error("Failed to cache review event to database:", error)
       );
     }
+  } catch (error) {
+    console.error(error);
+    throw error;
+  }
+}
+
+export async function publishReportEvent(
+  nostr: NostrManager,
+  signer: NostrSigner,
+  {
+    content,
+    reportType,
+    reportedPubkey,
+    reportedEventId,
+  }: {
+    content: string;
+    reportType: ReportType;
+    reportedPubkey: string;
+    reportedEventId?: string;
+  }
+) {
+  try {
+    const reportTags = reportedEventId
+      ? [
+          ["e", reportedEventId, reportType],
+          ["p", reportedPubkey],
+        ]
+      : [["p", reportedPubkey, reportType]];
+
+    const reportEvent: EventTemplate = {
+      created_at: Math.floor(Date.now() / 1000),
+      content,
+      kind: 1984,
+      tags: reportTags,
+    };
+
+    const signedEvent = await finalizeAndSendNostrEvent(
+      signer,
+      nostr,
+      reportEvent
+    );
+
+    if (signedEvent) {
+      await cacheEventToDatabase(signedEvent).catch((error) =>
+        console.error("Failed to cache report event to database:", error)
+      );
+    }
+
+    return signedEvent;
   } catch (error) {
     console.error(error);
     throw error;
@@ -1002,34 +1055,30 @@ export async function retractApproval(
   return await finalizeAndSendNostrEvent(signer, nostr, eventTemplate);
 }
 
-export async function finalizeAndSendNostrEvent(
-  signer: NostrSigner,
+type FinalizeAndSendOptions = {
+  waitForRelayPublish?: boolean;
+};
+
+async function publishEventWithRetryTracking(
   nostr: NostrManager,
-  eventTemplate: EventTemplate
-) {
+  signer: NostrSigner,
+  signedEvent: NostrEvent,
+  relayUrls: string[]
+): Promise<void> {
   try {
-    const { writeRelays, relays } = getLocalStorageData();
-    const signedEvent = await signer.sign(eventTemplate);
-
-    // Cache to database first and wait for confirmation
-    await cacheEventToDatabase(signedEvent);
-
-    // After DB confirmation, attempt to publish to relays with timeout
-    const allWriteRelays = withBlastr([...writeRelays, ...relays]);
     try {
       await newPromiseWithTimeout(
         async (resolve, reject) => {
           try {
-            await nostr.publish(signedEvent, allWriteRelays);
+            await nostr.publish(signedEvent, relayUrls);
             resolve(undefined);
           } catch (err) {
             reject(err as Error);
           }
         },
-        { timeout: 21000 } // 21 second timeout
+        { timeout: 21000 }
       );
     } catch (error) {
-      // Timeout or relay publish error - track for retry
       console.warn(
         "Relay publish timed out or failed, but event is saved to database:",
         error
@@ -1038,15 +1087,48 @@ export async function finalizeAndSendNostrEvent(
       await trackFailedRelayPublish(
         signedEvent.id,
         signedEvent,
-        allWriteRelays,
+        relayUrls,
         signer
       ).catch(console.error);
     }
+  } catch (error) {
+    console.error("Failed to publish signed Nostr event:", error);
+  }
+}
 
-    // return the signed event to caller so we know generated IDs
+export async function finalizeAndSendNostrEvent(
+  signer: NostrSigner,
+  nostr: NostrManager,
+  eventTemplate: EventTemplate,
+  options: FinalizeAndSendOptions = {}
+): Promise<NostrEvent> {
+  try {
+    const { writeRelays, relays } = getLocalStorageData();
+    const signedEvent = await signer.sign(eventTemplate);
+
+    // Cache to database first and wait for confirmation
+    await cacheEventToDatabase(signedEvent);
+
+    const allWriteRelays = withBlastr([...writeRelays, ...relays]);
+
+    if (options.waitForRelayPublish === false) {
+      void publishEventWithRetryTracking(
+        nostr,
+        signer,
+        signedEvent,
+        allWriteRelays
+      );
+      return signedEvent;
+    }
+
+    await publishEventWithRetryTracking(
+      nostr,
+      signer,
+      signedEvent,
+      allWriteRelays
+    );
     return signedEvent;
   } catch (error) {
-    // Log the actual error and re-throw it so the calling function knows something went wrong
     throw error;
   }
 }
@@ -1259,6 +1341,7 @@ const LOCALSTORAGECONSTANTS = {
   signer: "signer",
   nwcString: "nwcString",
   nwcInfo: "nwcInfo",
+  savedAddresses: "savedAddresses",
 };
 
 export const setLocalStorageDataOnSignIn = ({
@@ -1382,6 +1465,7 @@ export interface LocalStorageInterface {
   nwcString?: string | null;
   nwcInfo?: string | null;
   migrationComplete?: boolean;
+  savedAddresses: SavedAddress[];
 }
 
 function isStoredSignerData(
@@ -1444,6 +1528,7 @@ export const getLocalStorageData = (): LocalStorageInterface => {
   let migrationComplete;
   let nwcString;
   let nwcInfo;
+  let savedAddresses: SavedAddress[] = [];
 
   if (typeof window !== "undefined") {
     encryptedPrivateKey = localStorage.getItem(
@@ -1623,6 +1708,14 @@ export const getLocalStorageData = (): LocalStorageInterface => {
       ? localStorage.getItem(LOCALSTORAGECONSTANTS.nwcInfo)
       : null;
     migrationComplete = localStorage.getItem("migrationComplete") === "true";
+    savedAddresses = getLocalStorageJson<SavedAddress[]>(
+      LOCALSTORAGECONSTANTS.savedAddresses,
+      [],
+      {
+        removeOnError: true,
+        validate: (value): value is SavedAddress[] => Array.isArray(value),
+      }
+    );
   }
   return {
     signInMethod: signInMethod as string,
@@ -1643,6 +1736,7 @@ export const getLocalStorageData = (): LocalStorageInterface => {
     nwcString: nwcString as string | null,
     nwcInfo: nwcInfo as string | null,
     migrationComplete: migrationComplete || false,
+    savedAddresses,
   };
 };
 
@@ -1658,9 +1752,15 @@ export const LogOut = () => {
   window.dispatchEvent(new Event("storage"));
 };
 
-export const decryptNpub = (npub: string) => {
-  const { data } = nip19.decode(npub);
-  return data;
+export const decryptNpub = (npub: string): string | null => {
+  try {
+    const decoded = nip19.decode(npub);
+    return decoded.type === "npub" && typeof decoded.data === "string"
+      ? decoded.data
+      : null;
+  } catch {
+    return null;
+  }
 };
 
 export function nostrExtensionLoaded() {
@@ -1937,3 +2037,10 @@ export const parseLocalProfileFallback = (
 
   return null;
 };
+
+export {
+  getSavedAddresses,
+  saveAddress,
+  deleteAddress,
+  setDefaultAddress,
+} from "@/utils/nostr/saved-address-helpers";

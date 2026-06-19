@@ -146,6 +146,7 @@ export class NostrManager {
     const relays = relayUrls
       ? this.relays.filter((r) => relayUrls.includes(r.url))
       : this.relays;
+    await this.keepAlive(relays);
     const requests = relays.flatMap((r) =>
       filters.map((f) => ({ url: r.url, filter: f }))
     );
@@ -170,50 +171,61 @@ export class NostrManager {
   public async fetch(
     filters: NostrFilter[],
     params?: SubscribeManyParams,
-    relayUrls?: string[]
+    relayUrls?: string[],
+    timeout?: number
   ): Promise<NostrEvent[]> {
-    return await newPromiseWithTimeout(async (resolve, _reject) => {
-      if (!params) {
-        params = {};
-      }
-
-      if (!params.onevent) {
-        params.onevent = () => {};
-      }
-
-      if (!params.oneose) {
-        params.oneose = () => {};
-      }
-
-      const onEvent = params.onevent;
-      const onEose = params.oneose;
-      const fetchedEvents: Array<NostrEvent> = [];
-      let sub: NostrSub | undefined;
-      let didCloseSub = false;
-      let didResolve = false;
-
-      const closeSubIfNeeded = async () => {
-        if (!sub || didCloseSub) return;
-        didCloseSub = true;
-        await sub.close();
-      };
-
-      params.onevent = (event: NostrEvent) => {
-        fetchedEvents.push(event);
-        return onEvent!(event);
-      };
-
-      params.oneose = () => {
-        closeSubIfNeeded().catch(console.error);
-        if (!didResolve) {
-          didResolve = true;
-          resolve(fetchedEvents);
+    return await newPromiseWithTimeout(
+      async (resolve, _reject, abortSignal) => {
+        if (!params) {
+          params = {};
         }
-        return onEose!();
-      };
 
-      sub = await this.subscribe(filters, params, relayUrls);
-    });
+        if (!params.onevent) {
+          params.onevent = () => {};
+        }
+
+        if (!params.oneose) {
+          params.oneose = () => {};
+        }
+
+        const onEvent = params.onevent;
+        const onEose = params.oneose;
+        const fetchedEvents: Array<NostrEvent> = [];
+        let sub: NostrSub | undefined;
+        let didCloseSub = false;
+        let didResolve = false;
+
+        const closeSubIfNeeded = async () => {
+          if (!sub || didCloseSub) return;
+          didCloseSub = true;
+          await sub.close();
+        };
+
+        abortSignal.addEventListener("abort", () => {
+          closeSubIfNeeded().catch(console.error);
+        });
+
+        params.onevent = (event: NostrEvent) => {
+          fetchedEvents.push(event);
+          return onEvent!(event);
+        };
+
+        params.oneose = () => {
+          closeSubIfNeeded().catch(console.error);
+          if (!didResolve) {
+            didResolve = true;
+            resolve(fetchedEvents);
+          }
+          return onEose!();
+        };
+
+        sub = await this.subscribe(filters, params, relayUrls);
+        if (abortSignal.aborted) {
+          await closeSubIfNeeded();
+        }
+      },
+      { timeout }
+    );
   }
 
   public async publish(event: NostrEvent, relayUrls?: string[]): Promise<void> {

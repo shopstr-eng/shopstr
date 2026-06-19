@@ -9,6 +9,7 @@ describe("cache event policy", () => {
     expect(isCacheableKind(0)).toBe(true);
     expect(isCacheableKind(1059)).toBe(true);
     expect(isCacheableKind(30402)).toBe(true);
+    expect(isCacheableKind(1984)).toBe(true);
     expect(isCacheableKind(7375)).toBe(true);
     expect(isCacheableKind(7376)).toBe(true);
   });

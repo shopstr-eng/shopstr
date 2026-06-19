@@ -9,11 +9,14 @@ const customJestConfig = {
   setupFilesAfterEnv: ["<rootDir>/jest.setup.js"],
   testEnvironment: "jest-environment-jsdom",
   collectCoverageFrom: [
-    "utils/nostr/nostr-helper-functions.ts",
-    "utils/nostr/fetch-service.ts",
-    "utils/db/cache-event-policy.ts",
-    "utils/parsers/product-parser-functions.ts",
-    "utils/parsers/product-tag-helpers.ts",
+    "utils/**/*.{ts,tsx}",
+    "components/**/*.{ts,tsx}",
+    "pages/**/*.{ts,tsx}",
+    "!**/*.d.ts",
+    "!**/node_modules/**",
+    "!pages/_app.tsx",
+    "!pages/_document.tsx",
+    "!public/**",
   ],
   coverageThreshold: {
     global: {
