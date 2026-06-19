@@ -1843,7 +1843,6 @@ type OrderNotificationParams = {
   message: string;
   subject: string;
   status: string;
-  amountSats?: number;
   productAddress?: string;
   tracking?: string;
   carrier?: string;
@@ -1858,7 +1857,6 @@ async function sendOrderNotificationMessage({
   message,
   subject,
   status,
-  amountSats,
   productAddress,
   tracking,
   carrier,
@@ -1876,7 +1874,6 @@ async function sendOrderNotificationMessage({
       isOrder: true,
       type: 4,
       orderId,
-      orderAmount: amountSats,
       status,
       productAddress,
       tracking,
@@ -1901,40 +1898,7 @@ async function sendOrderNotificationMessage({
   await sendGiftWrappedMessageEvent(nostr, giftWrappedEvent, signer);
 }
 
-export async function sendPaymentConfirmationMessage({
-  nostr,
-  signer,
-  buyerPubkey,
-  orderId,
-  amountSats,
-  productTitle,
-  productAddress,
-}: {
-  nostr: NostrManager;
-  signer: NostrSigner;
-  buyerPubkey: string;
-  orderId: string;
-  amountSats: number;
-  productTitle?: string;
-  productAddress?: string;
-}): Promise<void> {
-  const title = productTitle ? ` for ${productTitle}` : "";
-  const message = `Payment confirmed${title}. ${amountSats} sats were sent for order ${orderId}.`;
-
-  await sendOrderNotificationMessage({
-    nostr,
-    signer,
-    recipientPubkey: buyerPubkey,
-    orderId,
-    message,
-    subject: "payment-confirmation",
-    status: "confirmed",
-    amountSats,
-    productAddress,
-  });
-}
-
-export async function sendShippingConfirmationMessage({
+export async function sendShippingInfoMessage({
   nostr,
   signer,
   buyerPubkey,
@@ -1956,7 +1920,9 @@ export async function sendShippingConfirmationMessage({
   const trackingText =
     carrier && tracking ? ` ${carrier} tracking number: ${tracking}.` : "";
   const etaText = eta
-    ? ` Estimated delivery: ${new Date(eta * 1000).toLocaleDateString()}.`
+    ? ` Estimated delivery: ${new Date(eta * 1000).toLocaleDateString(
+        "en-US"
+      )}.`
     : "";
   const message = `Your order ${orderId} has shipped.${trackingText}${etaText}`;
 
@@ -1966,7 +1932,7 @@ export async function sendShippingConfirmationMessage({
     recipientPubkey: buyerPubkey,
     orderId,
     message,
-    subject: "shipping-confirmation",
+    subject: "shipping-info",
     status: "shipped",
     productAddress,
     tracking,

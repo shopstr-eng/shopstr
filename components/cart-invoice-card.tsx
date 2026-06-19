@@ -63,7 +63,6 @@ import {
   generateKeys,
   getLocalStorageData,
   publishProofEvent,
-  sendPaymentConfirmationMessage,
   saveAddress,
 } from "@/utils/nostr/nostr-helper-functions";
 import { LightningAddress } from "@getalby/lightning-tools";
@@ -201,26 +200,6 @@ export default function CartInvoiceCard({
     selectedWeight?: string;
     selectedBulkOption?: string;
   } | null>(null);
-
-  const sendBuyerPaymentConfirmation = async (amountSats: number) => {
-    if (!nostr || !signer) return;
-
-    try {
-      const buyerPubkey = await signer.getPubKey?.();
-      if (!buyerPubkey) return;
-
-      await sendPaymentConfirmationMessage({
-        nostr,
-        signer,
-        buyerPubkey,
-        orderId: pendingOrderRef.current?.orderId || "cart",
-        amountSats,
-        productTitle: pendingOrderRef.current?.productTitle || "your cart",
-      });
-    } catch (error) {
-      console.warn("Failed to send payment confirmation DM:", error);
-    }
-  };
 
   useEffect(() => {
     if (paymentConfirmed && pendingOrderRef.current) {
@@ -1321,7 +1300,6 @@ export default function CartInvoiceCard({
                 );
                 markMintQuoteClaimed(hash);
                 localStorage.setItem("cart", JSON.stringify([]));
-                void sendBuyerPaymentConfirmation(convertedPrice);
                 setPaymentConfirmed(true);
                 if (setInvoiceIsPaid) {
                   setInvoiceIsPaid(true);
@@ -2514,7 +2492,6 @@ export default function CartInvoiceCard({
       );
       localStorage.setItem("cart", JSON.stringify([]));
       setOrderConfirmed(true);
-      void sendBuyerPaymentConfirmation(price);
       setPaymentConfirmed(true);
       if (setCashuPaymentSent) {
         setCashuPaymentSent(true);

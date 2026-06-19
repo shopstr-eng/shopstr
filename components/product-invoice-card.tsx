@@ -51,7 +51,6 @@ import {
   getLocalStorageData,
   publishProofEvent,
   generateKeys,
-  sendPaymentConfirmationMessage,
   getSavedAddresses,
 } from "@/utils/nostr/nostr-helper-functions";
 import { LightningAddress } from "@getalby/lightning-tools";
@@ -175,30 +174,6 @@ export default function ProductInvoiceCard({
     selectedWeight?: string;
     selectedBulkOption?: number;
   } | null>(null);
-
-  const sendBuyerPaymentConfirmation = async (amountSats: number) => {
-    if (!nostr || !signer) return;
-
-    try {
-      const buyerPubkey = await signer.getPubKey?.();
-      if (!buyerPubkey) return;
-      const productAddress = productData.d
-        ? `30402:${productData.pubkey}:${productData.d}`
-        : undefined;
-
-      await sendPaymentConfirmationMessage({
-        nostr,
-        signer,
-        buyerPubkey,
-        orderId: pendingOrderRef.current?.orderId || productData.d || "order",
-        amountSats,
-        productTitle: productData.title,
-        productAddress,
-      });
-    } catch (error) {
-      console.warn("Failed to send payment confirmation DM:", error);
-    }
-  };
 
   const walletContext = useContext(CashuWalletContext);
 
@@ -1110,7 +1085,6 @@ export default function ProductInvoiceCard({
                   "seller payment hand-off"
                 );
                 markMintQuoteClaimed(hash);
-                void sendBuyerPaymentConfirmation(newPrice);
                 setPaymentConfirmed(true);
                 setQrCodeUrl(null);
                 setInvoiceIsPaid(true);
@@ -2021,7 +1995,6 @@ export default function ProductInvoiceCard({
         deletedEventIds
       );
       setCashuPaymentSent(true);
-      void sendBuyerPaymentConfirmation(price);
       setPaymentConfirmed(true);
     } catch {
       setCashuPaymentFailed(true);
