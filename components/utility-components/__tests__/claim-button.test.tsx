@@ -10,7 +10,11 @@ import {
   ChatsContext,
   CashuWalletContext,
 } from "@/utils/context/context";
-import { getDecodedToken, Wallet as CashuWallet } from "@cashu/cashu-ts";
+import {
+  getDecodedToken,
+  getTokenMetadata,
+  Wallet as CashuWallet,
+} from "@cashu/cashu-ts";
 import {
   getLocalStorageData,
   publishProofEvent,
@@ -42,6 +46,7 @@ jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
 jest.mock("@cashu/cashu-ts", () => ({
   ...jest.requireActual("@cashu/cashu-ts"),
   getDecodedToken: jest.fn(),
+  getTokenMetadata: jest.fn(),
   getEncodedToken: jest.fn().mockReturnValue("cashuAtoken"),
   Mint: jest.fn().mockImplementation(() => ({})),
   Wallet: jest.fn().mockImplementation(() => ({
@@ -153,6 +158,7 @@ jest.mock("@heroicons/react/24/outline", () => ({
 
 const mockGetLocalStorageData = getLocalStorageData as jest.Mock;
 const mockGetDecodedToken = getDecodedToken as jest.Mock;
+const mockGetTokenMetadata = getTokenMetadata as jest.Mock;
 const mockPublishProofEvent = publishProofEvent as jest.Mock;
 const mockPublishWalletEvent = publishWalletEvent as jest.Mock;
 const mockGenerateKeys = generateKeys as jest.Mock;
@@ -204,6 +210,22 @@ const mockSigner = {
 } as any;
 
 const mockNostr = { pool: {} } as any;
+
+function makeMockWallet(overrides: Record<string, unknown> = {}) {
+  return {
+    loadMint: jest.fn().mockResolvedValue(undefined),
+    decodeToken: jest.fn(() => mockGetDecodedToken()),
+    checkProofsStates: jest
+      .fn()
+      .mockResolvedValue([{ state: "UNSPENT", Y: "Y1" }]),
+    receive: jest.fn().mockResolvedValue([mockFreshProof]),
+    createMeltQuoteBolt11: jest.fn().mockResolvedValue({
+      amount: { toNumber: () => 95 },
+      fee_reserve: { toNumber: () => 3 },
+    }),
+    ...overrides,
+  };
+}
 
 // ── Render helper ─────────────────────────────────────────────────────────────
 
@@ -297,27 +319,65 @@ beforeEach(() => {
     npub: "npub1test",
   });
   // Default: plain token, no P2PK
+  mockGetTokenMetadata.mockReturnValue({
+    mint: "https://testmint.com",
+    unit: "sat",
+  });
   mockGetDecodedToken.mockReturnValue({
     mint: "https://testmint.com",
     proofs: [mockProof],
   });
   mockParseP2PKProofSet.mockReturnValue({ p2pk: null });
-  MockCashuWallet.mockImplementation(() => ({
-    loadMint: jest.fn().mockResolvedValue(undefined),
-    checkProofsStates: jest
-      .fn()
-      .mockResolvedValue([{ state: "UNSPENT", Y: "Y1" }]),
-    receive: jest.fn().mockResolvedValue([mockFreshProof]),
-    createMeltQuoteBolt11: jest.fn().mockResolvedValue({
-      amount: { toNumber: () => 95 },
-      fee_reserve: { toNumber: () => 3 },
-    }),
-  }));
+  MockCashuWallet.mockImplementation(() => makeMockWallet());
 });
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe("ClaimButton — non-P2PK token (regression)", () => {
+  test("loads the mint and decodes with wallet.decodeToken instead of getDecodedToken", async () => {
+    const loadMint = jest.fn().mockResolvedValue(undefined);
+    const decodeToken = jest.fn().mockReturnValue({
+      mint: "https://testmint.com",
+      proofs: [mockProof],
+    });
+    MockCashuWallet.mockImplementation(() =>
+      makeMockWallet({ loadMint, decodeToken })
+    );
+
+    renderClaimButton("cashuAtoken");
+
+    expect(await screen.findByText(/Claim: 100/i)).toBeInTheDocument();
+    expect(mockGetTokenMetadata).toHaveBeenCalledWith("cashuAtoken");
+    expect(loadMint).toHaveBeenCalled();
+    expect(decodeToken).toHaveBeenCalledWith("cashuAtoken");
+    expect(loadMint.mock.invocationCallOrder[0]!).toBeLessThan(
+      decodeToken.mock.invocationCallOrder[0]!
+    );
+    expect(mockGetDecodedToken).not.toHaveBeenCalled();
+  });
+
+  test("loads the mint before checking whether claim proofs are spent", async () => {
+    const loadMint = jest.fn().mockResolvedValue(undefined);
+    const checkProofsStates = jest
+      .fn()
+      .mockResolvedValue([{ state: "SPENT", Y: "Y1" }]);
+    MockCashuWallet.mockImplementation(() =>
+      makeMockWallet({ loadMint, checkProofsStates })
+    );
+
+    renderClaimButton();
+    fireEvent.click(await screen.findByRole("button", { name: /Claim/i }));
+
+    await waitFor(() => expect(checkProofsStates).toHaveBeenCalled());
+    expect(loadMint).toHaveBeenCalled();
+    expect(loadMint.mock.invocationCallOrder[0]!).toBeLessThan(
+      checkProofsStates.mock.invocationCallOrder[0]!
+    );
+    expect(
+      await screen.findByRole("button", { name: /Claimed:/i })
+    ).toBeInTheDocument();
+  });
+
   test("renders claim button with amount", async () => {
     renderClaimButton();
     expect(await screen.findByText(/Claim: 100/i)).toBeInTheDocument();
@@ -445,14 +505,11 @@ describe("ClaimButton — P2PK receive path", () => {
       proofs: [mockP2PKProof],
     });
     mockParseP2PKProofSet.mockReturnValue({ p2pk: mockParsedP2PK });
-    MockCashuWallet.mockImplementation(() => ({
-      loadMint: jest.fn().mockResolvedValue(undefined),
-      checkProofsStates: jest
-        .fn()
-        .mockResolvedValue([{ state: "UNSPENT", Y: "Y1" }]),
-      receive: jest.fn().mockResolvedValue([mockFreshProof]),
-      createMeltQuoteBolt11: jest.fn(),
-    }));
+    MockCashuWallet.mockImplementation(() =>
+      makeMockWallet({
+        createMeltQuoteBolt11: jest.fn(),
+      })
+    );
   });
 
   test("calls wallet.loadMint() before wallet.receive()", async () => {
@@ -541,12 +598,13 @@ describe("ClaimButton — P2PK receive path", () => {
   });
 
   test("shows error when wallet.receive() throws", async () => {
-    MockCashuWallet.mockImplementation(() => ({
-      loadMint: jest.fn().mockResolvedValue(undefined),
-      checkProofsStates: jest.fn().mockResolvedValue([]),
-      receive: jest.fn().mockRejectedValue(new Error("Mint rejected proof")),
-      createMeltQuoteBolt11: jest.fn(),
-    }));
+    MockCashuWallet.mockImplementation(() =>
+      makeMockWallet({
+        checkProofsStates: jest.fn().mockResolvedValue([]),
+        receive: jest.fn().mockRejectedValue(new Error("Mint rejected proof")),
+        createMeltQuoteBolt11: jest.fn(),
+      })
+    );
 
     renderClaimButton();
 
@@ -591,17 +649,7 @@ describe("ClaimButton — P2PK redeem path", () => {
       proofs: [mockP2PKProof],
     });
     mockParseP2PKProofSet.mockReturnValue({ p2pk: mockParsedP2PK });
-    MockCashuWallet.mockImplementation(() => ({
-      loadMint: jest.fn().mockResolvedValue(undefined),
-      checkProofsStates: jest
-        .fn()
-        .mockResolvedValue([{ state: "UNSPENT", Y: "Y1" }]),
-      receive: jest.fn().mockResolvedValue([mockFreshProof]),
-      createMeltQuoteBolt11: jest.fn().mockResolvedValue({
-        amount: { toNumber: () => 95 },
-        fee_reserve: { toNumber: () => 3 },
-      }),
-    }));
+    MockCashuWallet.mockImplementation(() => makeMockWallet());
     mockSafeSwap.mockResolvedValue({
       status: "swapped",
       keep: [],
@@ -703,25 +751,25 @@ describe("ClaimButton — P2PK refund path", () => {
       mint: "https://testmint.com",
       proofs: [mockP2PKProof],
     });
-    MockCashuWallet.mockImplementation(() => ({
-      loadMint: jest.fn().mockResolvedValue(undefined),
-      checkProofsStates: jest
-        .fn()
-        .mockResolvedValue([{ state: "UNSPENT", Y: "Y1" }]),
-      receive: jest.fn().mockResolvedValue([mockFreshProof]),
-      createMeltQuoteBolt11: jest.fn(),
-    }));
+    MockCashuWallet.mockImplementation(() =>
+      makeMockWallet({
+        createMeltQuoteBolt11: jest.fn(),
+      })
+    );
   });
 
   // Helper: render with an expired P2PK proof that authorizes this wallet,
   // then wait for the sentinel to confirm p2pk state has committed.
-  async function renderExpiredRefundScenario(authorized = true) {
+  async function renderExpiredRefundScenario(
+    authorized = true,
+    options: ProviderOptions = {}
+  ) {
     mockParseP2PKProofSet.mockReturnValue({
       p2pk: authorized
         ? mockParsedP2PKExpired
         : mockParsedP2PKExpiredUnauthorized,
     });
-    renderClaimButton();
+    renderClaimButton("cashuAtoken", options);
     await screen.findByTestId("p2pk-detected");
   }
 
@@ -746,6 +794,16 @@ describe("ClaimButton — P2PK refund path", () => {
     expect(
       screen.queryByRole("button", { name: /^Refund:/i })
     ).not.toBeInTheDocument();
+  });
+
+  test("shows wallet-not-ready modal instead of refunding when cashuPrivkey is absent", async () => {
+    await renderExpiredRefundScenario(true, { cashuPrivkey: false });
+
+    fireEvent.click(screen.getByRole("button", { name: /^Refund:/i }));
+
+    expect(await screen.findByText(/Wallet not ready/i)).toBeInTheDocument();
+    const walletInstance = MockCashuWallet.mock.results[0]!.value;
+    expect(walletInstance.receive).not.toHaveBeenCalled();
   });
 
   test("calls wallet.loadMint() then wallet.receive() with privkey on refund click", async () => {
@@ -830,14 +888,15 @@ describe("ClaimButton — P2PK refund path", () => {
   });
 
   test("shows error when mint rejects refund (wallet.receive throws)", async () => {
-    MockCashuWallet.mockImplementation(() => ({
-      loadMint: jest.fn().mockResolvedValue(undefined),
-      checkProofsStates: jest.fn().mockResolvedValue([]),
-      receive: jest
-        .fn()
-        .mockRejectedValue(new Error("Locktime not yet expired")),
-      createMeltQuoteBolt11: jest.fn(),
-    }));
+    MockCashuWallet.mockImplementation(() =>
+      makeMockWallet({
+        checkProofsStates: jest.fn().mockResolvedValue([]),
+        receive: jest
+          .fn()
+          .mockRejectedValue(new Error("Locktime not yet expired")),
+        createMeltQuoteBolt11: jest.fn(),
+      })
+    );
 
     await renderExpiredRefundScenario();
     fireEvent.click(screen.getByRole("button", { name: /^Refund:/i }));

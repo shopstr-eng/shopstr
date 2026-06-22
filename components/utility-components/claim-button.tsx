@@ -36,7 +36,7 @@ import {
   Mint as CashuMint,
   Wallet as CashuWallet,
   Proof,
-  getDecodedToken,
+  getTokenMetadata,
   getEncodedToken,
 } from "@cashu/cashu-ts";
 import { safeMeltProofs } from "@/utils/cashu/melt-retry-service";
@@ -104,15 +104,18 @@ export default function ClaimButton({ token }: { token: string }) {
   const { theme } = useTheme();
 
   useEffect(() => {
-    if (proofs.length > 0) {
-      const parsedP2pk = parseP2PKProofSet(proofs);
-      if (parsedP2pk.invalidReason) {
-        setP2PK(null);
-        setIsInvalidToken(true);
-        return;
-      }
-      setP2PK(parsedP2pk.p2pk);
+    if (proofs.length === 0) {
+      setP2PK(null);
+      return;
     }
+
+    const parsedP2pk = parseP2PKProofSet(proofs);
+    if (parsedP2pk.invalidReason) {
+      setP2PK(null);
+      setIsInvalidToken(true);
+      return;
+    }
+    setP2PK(parsedP2pk.p2pk);
   }, [proofs]);
 
   const [randomNpubForSender, setRandomNpubForSender] = useState<string>("");
@@ -137,29 +140,48 @@ export default function ClaimButton({ token }: { token: string }) {
   }, []);
 
   useEffect(() => {
-    try {
-      setIsInvalidToken(false);
-      const decodedToken = getDecodedToken(token, []);
-      const mint = decodedToken.mint;
-      setTokenMint(mint);
-      const proofs = decodedToken.proofs;
-      setProofs(proofs);
-      const newWallet = new CashuWallet(new CashuMint(mint));
-      setWallet(newWallet);
-      const totalAmount =
-        Array.isArray(proofs) && proofs.length > 0
-          ? proofs.reduce(
-              (acc, current: Proof) => acc + current.amount.toNumber(),
-              0
-            )
-          : 0;
+    let isActive = true;
 
-      setTokenAmount(totalAmount);
-      setFormattedTokenAmount(formatWithCommas(totalAmount, "sats"));
-    } catch (error) {
-      console.error("Error decoding token:", error);
-      setIsInvalidToken(true);
-    }
+    const decodeToken = async () => {
+      try {
+        setIsInvalidToken(false);
+        setProofs([]);
+        setWallet(undefined);
+        const tokenMetadata = getTokenMetadata(token);
+        const newWallet = new CashuWallet(new CashuMint(tokenMetadata.mint), {
+          unit: tokenMetadata.unit,
+        });
+        await newWallet.loadMint();
+        const decodedToken = newWallet.decodeToken(token);
+        if (!isActive) return;
+
+        const mint = decodedToken.mint;
+        setTokenMint(mint);
+        const proofs = decodedToken.proofs;
+        setProofs(proofs);
+        setWallet(newWallet);
+        const totalAmount =
+          Array.isArray(proofs) && proofs.length > 0
+            ? proofs.reduce(
+                (acc, current: Proof) => acc + current.amount.toNumber(),
+                0
+              )
+            : 0;
+
+        setTokenAmount(totalAmount);
+        setFormattedTokenAmount(formatWithCommas(totalAmount, "sats"));
+      } catch (error) {
+        if (!isActive) return;
+        console.error("Error decoding token:", error);
+        setIsInvalidToken(true);
+      }
+    };
+
+    decodeToken();
+
+    return () => {
+      isActive = false;
+    };
   }, [token]);
 
   const checkProofsSpent = async () => {
@@ -234,10 +256,15 @@ export default function ClaimButton({ token }: { token: string }) {
       // Both the seller claim path and the buyer refund path use this branch;
       // the mint is the authority on which signing path is valid.
       if (p2pk) {
+        if (!cashuPrivkey) {
+          setIsP2pkKeyMissing(true);
+          setIsRedeeming(false);
+          return;
+        }
         await assertP2pkMintSupported();
         await wallet!.loadMint();
         const freshProofs = await wallet!.receive(proofs, {
-          privkey: cashuPrivkey!,
+          privkey: cashuPrivkey,
         });
         await publishProofEvent(
           nostr!,
@@ -458,6 +485,14 @@ export default function ClaimButton({ token }: { token: string }) {
     }
   };
 
+  const handleRefundClick = async () => {
+    if (p2pk && !cashuPrivkey) {
+      setIsP2pkKeyMissing(true);
+      return;
+    }
+    await receive(false, true);
+  };
+
   const buttonClassName = useMemo(() => {
     const disabledStyle =
       "min-w-fit from-gray-300 to-gray-400 cursor-not-allowed";
@@ -507,7 +542,7 @@ export default function ClaimButton({ token }: { token: string }) {
               ? "mt-2 min-w-fit cursor-not-allowed bg-gray-400 text-gray-600 opacity-60"
               : SHOPSTRBUTTONCLASSNAMES + " mt-2 min-w-fit"
           }
-          onClick={() => receive(false, true)}
+          onClick={handleRefundClick}
           isDisabled={isRefunded || isRedeeming}
         >
           {isRedeeming ? (

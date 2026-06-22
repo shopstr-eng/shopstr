@@ -14,7 +14,11 @@ import {
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
 import { CashuWalletContext } from "@/utils/context/context";
-import { getDecodedToken, Wallet as CashuWallet } from "@cashu/cashu-ts";
+import {
+  getDecodedToken,
+  getTokenMetadata,
+  Wallet as CashuWallet,
+} from "@cashu/cashu-ts";
 import {
   getLocalStorageData,
   publishProofEvent,
@@ -36,6 +40,7 @@ jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
 jest.mock("@cashu/cashu-ts", () => ({
   ...jest.requireActual("@cashu/cashu-ts"),
   getDecodedToken: jest.fn(),
+  getTokenMetadata: jest.fn(),
   Mint: jest.fn().mockImplementation(() => ({})),
   Wallet: jest.fn().mockImplementation(() => ({
     loadMint: jest.fn().mockResolvedValue(undefined),
@@ -139,6 +144,7 @@ jest.mock("@heroicons/react/24/outline", () => ({
 
 const mockGetLocalStorageData = getLocalStorageData as jest.Mock;
 const mockGetDecodedToken = getDecodedToken as jest.Mock;
+const mockGetTokenMetadata = getTokenMetadata as jest.Mock;
 const mockPublishProofEvent = publishProofEvent as jest.Mock;
 const mockPublishWalletEvent = publishWalletEvent as jest.Mock;
 const MockCashuWallet = CashuWallet as jest.Mock;
@@ -154,6 +160,15 @@ const mockSigner = {
   toJSON: jest.fn(),
 } as any;
 const mockNostr = { pool: {} } as any;
+
+function makeMockWallet(overrides: Record<string, unknown> = {}) {
+  return {
+    loadMint: jest.fn().mockResolvedValue(undefined),
+    decodeToken: jest.fn(() => mockGetDecodedToken()),
+    checkProofsStates: jest.fn(),
+    ...overrides,
+  };
+}
 
 const renderWithProviders = (
   ui: React.ReactElement,
@@ -197,6 +212,10 @@ describe("ReceiveButton", () => {
     mockPublishWalletEvent.mockResolvedValue(undefined);
     mockParseP2PKProofSet.mockReturnValue({ p2pk: null });
     mockCheckMintP2pkSupport.mockResolvedValue({ supported: true });
+    mockGetTokenMetadata.mockReturnValue({
+      mint: "https://testmint.com",
+      unit: "sat",
+    });
   });
 
   test("renders the receive button and opens/closes the modal", async () => {
@@ -241,6 +260,51 @@ describe("ReceiveButton", () => {
     expect(await within(modal).findByText(errorMessage)).toBeVisible();
   });
 
+  test("loads the mint and decodes with wallet.decodeToken instead of getDecodedToken", async () => {
+    const user = userEvent.setup();
+    const mockProofs = [
+      {
+        id: "test",
+        amount: { toNumber: () => 10 },
+        secret: "secret",
+        C: "C1",
+      },
+    ];
+    const loadMint = jest.fn().mockResolvedValue(undefined);
+    const decodeToken = jest.fn().mockReturnValue({
+      mint: "https://testmint.com",
+      proofs: mockProofs,
+    });
+    MockCashuWallet.mockImplementation(() =>
+      makeMockWallet({
+        loadMint,
+        decodeToken,
+        checkProofsStates: jest
+          .fn()
+          .mockResolvedValue([{ state: "UNSPENT", Y: "Y1" }]),
+      })
+    );
+
+    renderWithProviders(<ReceiveButton />);
+    fireEvent.click(screen.getByRole("button", { name: /Receive/i }));
+    const receiveModal = await screen.findByRole("dialog");
+    await user.type(
+      within(receiveModal).getByLabelText(/Cashu token string/i),
+      VALID_TOKEN
+    );
+    fireEvent.click(
+      within(receiveModal).getByRole("button", { name: /Receive/i })
+    );
+
+    await waitFor(() => expect(decodeToken).toHaveBeenCalledWith(VALID_TOKEN));
+    expect(mockGetTokenMetadata).toHaveBeenCalledWith(VALID_TOKEN);
+    expect(loadMint).toHaveBeenCalled();
+    expect(loadMint.mock.invocationCallOrder[0]!).toBeLessThan(
+      decodeToken.mock.invocationCallOrder[0]!
+    );
+    expect(mockGetDecodedToken).not.toHaveBeenCalled();
+  });
+
   test("successfully receives a valid token and closes the success modal", async () => {
     const user = userEvent.setup();
     const mockProofs = [
@@ -255,12 +319,13 @@ describe("ReceiveButton", () => {
       mint: "https://testmint.com",
       proofs: mockProofs,
     });
-    MockCashuWallet.mockImplementation(() => ({
-      loadMint: jest.fn().mockResolvedValue(undefined),
-      checkProofsStates: jest
-        .fn()
-        .mockResolvedValue([{ state: "UNSPENT", Y: "Y1" }]),
-    }));
+    MockCashuWallet.mockImplementation(() =>
+      makeMockWallet({
+        checkProofsStates: jest
+          .fn()
+          .mockResolvedValue([{ state: "UNSPENT", Y: "Y1" }]),
+      })
+    );
 
     renderWithProviders(<ReceiveButton />);
     fireEvent.click(screen.getByRole("button", { name: /Receive/i }));
@@ -316,11 +381,12 @@ describe("ReceiveButton", () => {
       mint: "https://testmint.com",
       proofs: [lockedProof],
     });
-    MockCashuWallet.mockImplementation(() => ({
-      loadMint: jest.fn().mockResolvedValue(undefined),
-      checkProofsStates,
-      receive,
-    }));
+    MockCashuWallet.mockImplementation(() =>
+      makeMockWallet({
+        checkProofsStates,
+        receive,
+      })
+    );
 
     renderWithProviders(<ReceiveButton />);
     fireEvent.click(screen.getByRole("button", { name: /Receive/i }));
@@ -371,12 +437,13 @@ describe("ReceiveButton", () => {
         },
       ],
     });
-    MockCashuWallet.mockImplementation(() => ({
-      loadMint: jest.fn().mockResolvedValue(undefined),
-      checkProofsStates: jest
-        .fn()
-        .mockResolvedValue([{ state: "SPENT", Y: "Y1" }]),
-    }));
+    MockCashuWallet.mockImplementation(() =>
+      makeMockWallet({
+        checkProofsStates: jest
+          .fn()
+          .mockResolvedValue([{ state: "SPENT", Y: "Y1" }]),
+      })
+    );
 
     renderWithProviders(<ReceiveButton />);
     fireEvent.click(screen.getByRole("button", { name: /Receive/i }));
@@ -417,12 +484,13 @@ describe("ReceiveButton", () => {
       mint: "https://testmint.com",
       proofs: [mockProof],
     });
-    MockCashuWallet.mockImplementation(() => ({
-      loadMint: jest.fn().mockResolvedValue(undefined),
-      checkProofsStates: jest
-        .fn()
-        .mockResolvedValue([{ state: "UNSPENT", Y: "Y1" }]),
-    }));
+    MockCashuWallet.mockImplementation(() =>
+      makeMockWallet({
+        checkProofsStates: jest
+          .fn()
+          .mockResolvedValue([{ state: "UNSPENT", Y: "Y1" }]),
+      })
+    );
 
     renderWithProviders(<ReceiveButton />);
     fireEvent.click(screen.getByRole("button", { name: /Receive/i }));

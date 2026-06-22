@@ -24,7 +24,7 @@ import {
 import {
   Mint as CashuMint,
   Wallet as CashuWallet,
-  getDecodedToken,
+  getTokenMetadata,
   Proof,
 } from "@cashu/cashu-ts";
 import {
@@ -127,11 +127,14 @@ const ReceiveButton = () => {
     setIsSpent(false);
     setIsInvalidToken(false);
     try {
-      const token = getDecodedToken(tokenString, []);
+      const tokenMetadata = getTokenMetadata(tokenString);
+      const wallet = new CashuWallet(new CashuMint(tokenMetadata.mint), {
+        unit: tokenMetadata.unit,
+      });
+      await wallet.loadMint();
+      const token = wallet.decodeToken(tokenString);
       const tokenMint = token.mint;
       const tokenProofs = token.proofs;
-      const wallet = new CashuWallet(new CashuMint(tokenMint));
-      await wallet.loadMint();
       const transactionAmount = tokenProofs.reduce(
         (acc, token: Proof) => acc + token.amount.toNumber(),
         0

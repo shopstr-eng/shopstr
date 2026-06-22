@@ -6,12 +6,12 @@ import ClaimButton from "../utility-components/claim-button";
 import LinkPreview from "./link-preview";
 import { NostrMessageEvent } from "../../utils/types/types";
 import { timeSinceMessageDisplayText } from "../../utils/messages/utils";
-import { getDecodedToken } from "@cashu/cashu-ts";
+import { getTokenMetadata } from "@cashu/cashu-ts";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 
 function isDecodableToken(token: string): boolean {
   try {
-    getDecodedToken(token, []);
+    getTokenMetadata(token);
     return true;
   } catch {
     return false;
