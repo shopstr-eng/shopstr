@@ -3982,9 +3982,11 @@ describe("fetchCashuWallet", () => {
 
   it("DB-first hydration: extracts kind-17375 mints, tracks kind-37375 mostRecentWalletEvent, adds kind-7375 proof events, and accumulates kind-7376 spending history", async () => {
     const loadMint = jest.fn().mockResolvedValue(undefined);
-    const checkProofsStates = jest
-      .fn()
-      .mockResolvedValue([{ state: "UNSPENT", Y: "Y-s1" }]);
+    const checkProofsStates = jest.fn().mockResolvedValue([
+      { state: "UNSPENT", Y: "Y-s1" },
+      { state: "UNSPENT", Y: "Y-s-destroyed-db" },
+      { state: "UNSPENT", Y: "Y-s-created-db" },
+    ]);
 
     jest.doMock("@cashu/cashu-ts", () => ({
       Mint: jest.fn(),
@@ -4008,13 +4010,34 @@ describe("fetchCashuWallet", () => {
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     const mintUrl = "https://mint-db.example";
     const proof = { id: "p1", secret: "s1", C: "C1", amount: 1 };
+    const destroyedProof = {
+      id: "p-destroyed-db",
+      secret: "s-destroyed-db",
+      C: "C-destroyed-db",
+      amount: 4,
+    };
+    const createdProof = {
+      id: "p-created-db",
+      secret: "s-created-db",
+      C: "C-created-db",
+      amount: 3,
+    };
 
     const decryptMap: Record<string, string> = {
       "enc-17375": JSON.stringify([["mint", mintUrl]]),
       "enc-7375": JSON.stringify({ mint: mintUrl, proofs: [proof] }),
+      "enc-destroyed-7375": JSON.stringify({
+        mint: mintUrl,
+        proofs: [destroyedProof],
+      }),
+      "enc-created-7375": JSON.stringify({
+        mint: mintUrl,
+        proofs: [createdProof],
+      }),
       "enc-7376": JSON.stringify([
-        ["direction", "in"],
-        ["e", "other-proof-id", "", "created"],
+        ["direction", "out"],
+        ["e", "db-destroyed-7375", "", "destroyed"],
+        ["e", "db-created-7375", "", "created"],
       ]),
     };
     const signer = {
@@ -4051,6 +4074,20 @@ describe("fetchCashuWallet", () => {
           created_at: 100,
         }),
         makeBaseEvent({
+          id: "db-destroyed-7375",
+          kind: 7375,
+          pubkey: userPubkey,
+          content: "enc-destroyed-7375",
+          created_at: 101,
+        }),
+        makeBaseEvent({
+          id: "db-created-7375",
+          kind: 7375,
+          pubkey: userPubkey,
+          content: "enc-created-7375",
+          created_at: 102,
+        }),
+        makeBaseEvent({
           id: "db-7376",
           kind: 7376,
           pubkey: userPubkey,
@@ -4078,6 +4115,12 @@ describe("fetchCashuWallet", () => {
     );
     expect(result.cashuProofs).toEqual(
       expect.arrayContaining([expect.objectContaining({ secret: "s1" })])
+    );
+    expect(result.cashuProofs).not.toContainEqual(
+      expect.objectContaining({ secret: "s-destroyed-db" })
+    );
+    expect(result.cashuProofs).toContainEqual(
+      expect.objectContaining({ secret: "s-created-db" })
     );
   });
 
@@ -4397,12 +4440,11 @@ describe("fetchCashuWallet", () => {
     expect(loadMint).toHaveBeenCalledTimes(1);
   });
 
-  it("deduplicates proofs by secret when two proof events contain the same secret", async () => {
+  it("deduplicates proofs by secret when two relay proof events contain the same secret", async () => {
     const loadMint = jest.fn().mockResolvedValue(undefined);
-    const checkProofsStates = jest.fn().mockResolvedValue([
-      { state: "UNSPENT", Y: "Y-shared-secret" },
-      { state: "UNSPENT", Y: "Y-shared-secret" },
-    ]);
+    const checkProofsStates = jest
+      .fn()
+      .mockResolvedValue([{ state: "UNSPENT", Y: "Y-shared-secret" }]);
 
     jest.doMock("@cashu/cashu-ts", () => ({
       Mint: jest.fn(),
@@ -4412,11 +4454,7 @@ describe("fetchCashuWallet", () => {
       })),
     }));
     jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
-      getLocalStorageData: jest.fn(() => ({
-        tokens: [
-          { id: "tok1", secret: "shared-secret", C: "C-tok1", amount: 1 },
-        ],
-      })),
+      getLocalStorageData: jest.fn(() => ({ tokens: [] })),
       deleteEvent: jest.fn().mockResolvedValue(undefined),
       verifyNip05Identifier: jest.fn(),
     }));
@@ -4429,10 +4467,16 @@ describe("fetchCashuWallet", () => {
     const userPubkey =
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     const mintUrl = "https://dedup-mint.example";
-    const duplicateProof = {
-      id: "dup1",
+    const duplicateProofA = {
+      id: "dup-a",
       secret: "shared-secret",
-      C: "C-dup1",
+      C: "C-dup-a",
+      amount: 1,
+    };
+    const duplicateProofB = {
+      id: "dup-b",
+      secret: "shared-secret",
+      C: "C-dup-b",
       amount: 1,
     };
 
@@ -4441,7 +4485,10 @@ describe("fetchCashuWallet", () => {
       decrypt: jest
         .fn()
         .mockResolvedValueOnce(
-          JSON.stringify({ mint: mintUrl, proofs: [duplicateProof] })
+          JSON.stringify({ mint: mintUrl, proofs: [duplicateProofA] })
+        )
+        .mockResolvedValueOnce(
+          JSON.stringify({ mint: mintUrl, proofs: [duplicateProofB] })
         )
         .mockResolvedValue(null),
     };
@@ -4456,11 +4503,19 @@ describe("fetchCashuWallet", () => {
         .mockResolvedValueOnce([])
         .mockResolvedValueOnce([
           makeBaseEvent({
-            id: "relay-dedup-7375",
+            id: "relay-dedup-7375-a",
             kind: 7375,
             pubkey: userPubkey,
-            content: "enc-dedup",
-            sig: "sig-dedup",
+            content: "enc-dedup-a",
+            sig: "sig-dedup-a",
+            created_at: 100,
+          }),
+          makeBaseEvent({
+            id: "relay-dedup-7375-b",
+            kind: 7375,
+            pubkey: userPubkey,
+            content: "enc-dedup-b",
+            sig: "sig-dedup-b",
             created_at: 100,
           }),
         ]),
