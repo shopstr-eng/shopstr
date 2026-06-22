@@ -167,13 +167,20 @@ const PreferencesPage = () => {
 
   const replaceMint = async (newMint: string) => {
     try {
-      // Perform a fetch request to the specified mint URL
-      const response = await fetch(newMint + "/keys");
+      const response = await fetch("/api/cashu/validate-mint", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ mintUrl: newMint }),
+      });
       if (response.ok) {
-        const updatedMints = !mints.includes(newMint)
-          ? [newMint, ...mints]
-          : [newMint, ...mints.filter((mint) => mint !== newMint)];
-        if (!mints.includes(newMint)) {
+        const result = (await response.json()) as { mintUrl?: string };
+        const validatedMint = result.mintUrl ?? newMint;
+        const updatedMints = !mints.includes(validatedMint)
+          ? [validatedMint, ...mints]
+          : [validatedMint, ...mints.filter((mint) => mint !== validatedMint)];
+        if (!mints.includes(validatedMint)) {
           setMints(updatedMints);
         } else {
           setMints(updatedMints);
@@ -181,15 +188,18 @@ const PreferencesPage = () => {
         await publishUpdatedWalletMints(updatedMints);
         handleToggleMintModal();
       } else {
+        const result = (await response.json().catch(() => null)) as {
+          error?: string;
+        } | null;
         setFailureText(
-          `Failed to add mint! Could not fetch keys from ${newMint}/keys.`
+          result?.error
+            ? `Failed to add mint! ${result.error}`
+            : `Failed to add mint! Could not validate ${newMint}.`
         );
         setShowFailureModal(true);
       }
     } catch {
-      setFailureText(
-        `Failed to add mint! Could not fetch keys from ${newMint}/keys.`
-      );
+      setFailureText(`Failed to add mint! Could not validate ${newMint}.`);
       setShowFailureModal(true);
     }
   };

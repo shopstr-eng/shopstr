@@ -122,10 +122,7 @@ const UserProfilePage = () => {
   const watchP2pkEnabled = watch("p2pkEnabled");
   const watchP2pkPubkey = watch("p2pkPubkey");
 
-  const hasCurrentUserProfile =
-    !!userPubkey && profileContext.profileData.has(userPubkey);
-  const isFetchingProfile =
-    !userPubkey || (profileContext.isLoading && !hasCurrentUserProfile);
+  const isFetchingProfile = !userPubkey;
   const defaultImage = useMemo(() => {
     return "https://robohash.org/" + userPubkey;
   }, [userPubkey]);
@@ -133,7 +130,7 @@ const UserProfilePage = () => {
   const profileImageSrc = watchPicture || defaultImage;
 
   useEffect(() => {
-    if (!userPubkey || profileContext.isLoading) return;
+    if (!userPubkey) return;
 
     const localFallback = parseLocalProfileFallback(
       localStorage.getItem(getLocalUserProfileKey(userPubkey))

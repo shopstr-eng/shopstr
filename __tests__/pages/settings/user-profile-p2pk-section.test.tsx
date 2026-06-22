@@ -102,9 +102,17 @@ const mockIsP2pkEscrowFeatureEnabled = isP2pkEscrowFeatureEnabled as jest.Mock;
 
 // ── Render helper ─────────────────────────────────────────────────────────────
 
-function renderUserProfilePage() {
+function renderUserProfilePage({
+  profileIsLoading = false,
+  includeProfile = true,
+}: {
+  profileIsLoading?: boolean;
+  includeProfile?: boolean;
+} = {}) {
   const profileData = new Map<string, any>();
-  profileData.set("test_pubkey", { content: {}, created_at: 0 });
+  if (includeProfile) {
+    profileData.set("test_pubkey", { content: {}, created_at: 0 });
+  }
 
   return render(
     <NostrContext.Provider value={{ nostr: {} } as any}>
@@ -132,7 +140,7 @@ function renderUserProfilePage() {
           <ProfileMapContext.Provider
             value={{
               profileData,
-              isLoading: false,
+              isLoading: profileIsLoading,
               updateProfileData: jest.fn(),
             }}
           >
@@ -164,6 +172,19 @@ describe("UserProfile page — P2PK seller toggle feature flag", () => {
   it("shows the seller escrow section when NEXT_PUBLIC_P2PK_ESCROW_ENABLED is on", () => {
     mockIsP2pkEscrowFeatureEnabled.mockReturnValue(true);
     renderUserProfilePage();
+    expect(
+      screen.getByText(/P2PK escrow \(for your shop\)/i)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByLabelText(/Enable P2PK escrow on my listings/i)
+    ).toBeInTheDocument();
+  });
+
+  it("shows profile controls while relay profile loading is still pending", () => {
+    mockIsP2pkEscrowFeatureEnabled.mockReturnValue(true);
+    renderUserProfilePage({ profileIsLoading: true, includeProfile: false });
+
+    expect(screen.queryByTestId("spinner")).not.toBeInTheDocument();
     expect(
       screen.getByText(/P2PK escrow \(for your shop\)/i)
     ).toBeInTheDocument();

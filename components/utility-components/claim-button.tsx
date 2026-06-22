@@ -51,6 +51,7 @@ import {
   parseP2PKProofSet,
   pubkeysEqual,
 } from "@/utils/cashu/p2pk-checkout";
+import { sumProofAmounts } from "@/utils/cashu/proof-amount";
 import { ParsedP2PK } from "@/utils/types/types";
 
 export default function ClaimButton({ token }: { token: string }) {
@@ -162,10 +163,7 @@ export default function ClaimButton({ token }: { token: string }) {
         setWallet(newWallet);
         const totalAmount =
           Array.isArray(proofs) && proofs.length > 0
-            ? proofs.reduce(
-                (acc, current: Proof) => acc + current.amount.toNumber(),
-                0
-              )
+            ? sumProofAmounts(proofs)
             : 0;
 
         setTokenAmount(totalAmount);
@@ -421,10 +419,7 @@ export default function ClaimButton({ token }: { token: string }) {
           const changeProofs = [...keep, ...meltOutcome.changeProofs];
           const changeAmount =
             Array.isArray(changeProofs) && changeProofs.length > 0
-              ? changeProofs.reduce(
-                  (acc, current: Proof) => acc + current.amount.toNumber(),
-                  0
-                )
+              ? sumProofAmounts(changeProofs)
               : 0;
           if (changeAmount >= 1 && changeProofs && changeProofs.length > 0) {
             const decodedRandomPubkeyForSender =

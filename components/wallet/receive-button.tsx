@@ -27,6 +27,7 @@ import {
   getTokenMetadata,
   Proof,
 } from "@cashu/cashu-ts";
+import { sumProofAmounts } from "@/utils/cashu/proof-amount";
 import {
   NostrContext,
   SignerContext,
@@ -135,10 +136,7 @@ const ReceiveButton = () => {
       const token = wallet.decodeToken(tokenString);
       const tokenMint = token.mint;
       const tokenProofs = token.proofs;
-      const transactionAmount = tokenProofs.reduce(
-        (acc, token: Proof) => acc + token.amount.toNumber(),
-        0
-      );
+      const transactionAmount = sumProofAmounts(tokenProofs);
       const parsedP2pk = parseP2PKProofSet(tokenProofs);
       if (parsedP2pk.invalidReason) {
         setIsInvalidToken(true);

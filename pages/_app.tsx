@@ -47,6 +47,7 @@ import {
   fetchAllCommunities,
   fetchGiftWrappedChatsAndMessages,
   fetchReports,
+  getUniqueProofs,
 } from "@/utils/nostr/fetch-service";
 import { fetchAllPostsAbortable } from "@/utils/nostr/fetch-all-posts-abortable";
 import {
@@ -921,14 +922,17 @@ function Shopstr({ props }: { props: AppProps }) {
         }
 
         if (walletResult?.cashuMints?.length && walletResult.cashuProofs) {
+          const { tokens: currentTokens } = getLocalStorageData();
+          const mergedProofs = getUniqueProofs([
+            ...(currentTokens as Proof[]),
+            ...walletResult.cashuProofs,
+          ]);
+
           localStorage.setItem(
             "mints",
             JSON.stringify(walletResult.cashuMints)
           );
-          localStorage.setItem(
-            "tokens",
-            JSON.stringify(walletResult.cashuProofs)
-          );
+          localStorage.setItem("tokens", JSON.stringify(mergedProofs));
         }
 
         await runTask("retrying relay publishes", async () => {
