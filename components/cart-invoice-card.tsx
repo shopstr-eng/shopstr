@@ -41,6 +41,13 @@ import {
 } from "@cashu/cashu-ts";
 import { safeMeltProofs } from "@/utils/cashu/melt-retry-service";
 import { safeSwap } from "@/utils/cashu/swap-retry-service";
+import { sumProofAmounts } from "@/utils/cashu/proof-amount";
+import {
+  buildP2pkOutputConfig,
+  checkMintP2pkSupport,
+  getP2pkCheckoutPolicyError,
+  isSellerP2pkEscrowActive,
+} from "@/utils/cashu/p2pk-checkout";
 import { withMintRetry } from "@/utils/cashu/mint-retry-service";
 import {
   recordPendingMintQuote,
@@ -54,6 +61,7 @@ import {
   withDeadline,
   isTimeoutError,
 } from "@/utils/cashu/wallet-recovery";
+import { persistBuyerP2pkEscrowRecord } from "@/utils/cashu/p2pk-escrow-records";
 import {
   constructGiftWrappedEvent,
   constructMessageSeal,
@@ -124,7 +132,7 @@ export default function CartInvoiceCard({
   setCashuPaymentSent?: (cashuPaymentSent: boolean) => void;
   setCashuPaymentFailed?: (cashuPaymentFailed: boolean) => void;
 }) {
-  const { mints, tokens, history } = getLocalStorageData();
+  const { mints, tokens } = getLocalStorageData();
   const {
     isLoggedIn,
     pubkey: userPubkey,
@@ -263,6 +271,7 @@ export default function CartInvoiceCard({
   }, [paymentConfirmed]);
 
   const walletContext = useContext(CashuWalletContext);
+  const { cashuPubkey } = walletContext;
 
   const { isOpen, onOpen, onClose } = useDisclosure();
 
@@ -428,6 +437,16 @@ export default function CartInvoiceCard({
     } catch (error) {
       console.error("Failed to send inquiry DM:", error);
     }
+  };
+
+  const renderP2pkCartBadge = (sellerPubkey: string) => {
+    const p2pk = profileContext.profileData.get(sellerPubkey)?.content.p2pk;
+    if (!isSellerP2pkEscrowActive(p2pk)) return null;
+    return (
+      <div className="mt-2 inline-flex items-center gap-1 rounded-full border border-yellow-500/30 bg-yellow-500/10 px-2 py-1 text-[11px] font-medium text-yellow-700 dark:text-yellow-300">
+        🔒 P2PK Escrow · {p2pk!.refundDelayDays}d reclaim opens
+      </div>
+    );
   };
 
   const [showFailureModal, setShowFailureModal] = useState(false);
@@ -1442,15 +1461,44 @@ export default function CartInvoiceCard({
       const required = product.required;
       const tokenAmount = currentProductTotalsInSats[product.id] || 0;
       if (tokenAmount < 1) {
-        setFailureText("Failed to calculate cart totals for payment.");
-        setShowFailureModal(true);
-        return;
+        throw new Error("Failed to calculate cart totals for payment.");
       }
       let sellerToken;
       let donationToken;
       const sellerProfile = profileContext.profileData.get(pubkey);
+      const buyerProfile = userPubkey
+        ? profileContext.profileData.get(userPubkey)
+        : undefined;
+      const sellerP2pk = sellerProfile?.content?.p2pk;
+      const policyError = getP2pkCheckoutPolicyError(sellerP2pk, tokenAmount);
+      if (policyError) {
+        throw new Error(policyError);
+      }
+      if (isSellerP2pkEscrowActive(sellerP2pk)) {
+        const selectedMint = mints[0];
+        if (!selectedMint) {
+          throw new Error("A Cashu mint is required for escrow checkout.");
+        }
+        const mintSupport = await checkMintP2pkSupport(selectedMint);
+        if (!mintSupport.supported) {
+          throw new Error(
+            mintSupport.reason ??
+              "This mint does not advertise P2PK escrow support."
+          );
+        }
+      }
+      const p2pkOutputConfig = buildP2pkOutputConfig(
+        sellerP2pk,
+        buyerProfile?.content,
+        cashuPubkey
+      );
+      if (isSellerP2pkEscrowActive(sellerP2pk) && !p2pkOutputConfig) {
+        throw new Error(
+          "A Cashu wallet identity is required to pay for an escrow listing. Please wait for your wallet to finish loading and try again."
+        );
+      }
       const donationPercentage =
-        sellerProfile?.content?.shopstr_donation || 2.1;
+        sellerProfile?.content?.shopstr_donation ?? 2.1;
       const donationAmount = Math.ceil(
         (tokenAmount * donationPercentage) / 100
       );
@@ -1489,9 +1537,7 @@ export default function CartInvoiceCard({
       // Generate keys once per order to ensure consistent sender pubkey
       const orderKeys = await generateNewKeys();
       if (!orderKeys) {
-        setFailureText("Failed to generate new keys for messages!");
-        setShowFailureModal(true);
-        return;
+        throw new Error("Failed to generate new keys for messages!");
       }
       const paymentPreference =
         sellerProfile?.content?.payment_preference || "ecash";
@@ -1542,7 +1588,10 @@ export default function CartInvoiceCard({
           wallet,
           sellerAmount,
           remainingProofs,
-          { sendConfig: { includeFees: true } }
+          {
+            sendConfig: { includeFees: true },
+            outputConfig: p2pkOutputConfig,
+          }
         );
         if (swapOutcome.status !== "swapped") {
           throw new Error(
@@ -1606,8 +1655,22 @@ export default function CartInvoiceCard({
         remainingProofs = keep;
       }
 
+      if (p2pkOutputConfig && sellerToken) {
+        await persistBuyerP2pkEscrowRecord(nostr, signer, {
+          orderId,
+          mint: mints[0]!,
+          token: sellerToken,
+          amount: sellerAmount,
+          sellerPubkey: p2pkOutputConfig.send.options.pubkey,
+          locktime: p2pkOutputConfig.send.options.locktime,
+          refundKeys: p2pkOutputConfig.send.options.refundKeys,
+          createdAt: Math.floor(Date.now() / 1000),
+        });
+      }
+
       // Step 1: Send payment message (if applicable)
       if (
+        !isSellerP2pkEscrowActive(sellerProfile?.content?.p2pk) &&
         paymentPreference === "lightning" &&
         lnurl &&
         lnurl !== "" &&
@@ -1651,10 +1714,7 @@ export default function CartInvoiceCard({
             const changeProofs = [...keep, ...meltOutcome.changeProofs];
             const changeAmount =
               Array.isArray(changeProofs) && changeProofs.length > 0
-                ? changeProofs.reduce(
-                    (acc, current: Proof) => acc + current.amount.toNumber(),
-                    0
-                  )
+                ? sumProofAmounts(changeProofs)
                 : 0;
             let productDetails = "";
             if (product.selectedSize) {
@@ -1784,10 +1844,7 @@ export default function CartInvoiceCard({
             ];
             const unusedAmount =
               Array.isArray(unusedProofs) && unusedProofs.length > 0
-                ? unusedProofs.reduce(
-                    (acc, current: Proof) => acc + current.amount.toNumber(),
-                    0
-                  )
+                ? sumProofAmounts(unusedProofs)
                 : 0;
             const unusedToken = getEncodedToken({
               mint: mints[0]!,
@@ -2345,6 +2402,8 @@ export default function CartInvoiceCard({
         );
       }
     }
+
+    return remainingProofs;
   };
 
   const handleCopyInvoice = () => {
@@ -2421,19 +2480,11 @@ export default function CartInvoiceCard({
       const wallet = new CashuWallet(mint);
       await wallet.loadMint();
       const mintKeySetIds = await wallet.keyChain.getKeysets();
-      const filteredProofs = tokens.filter((p: Proof) =>
+      const { tokens: currentTokens, history: currentHistory } =
+        getLocalStorageData();
+      const filteredProofs = (currentTokens as Proof[]).filter((p: Proof) =>
         mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
-      ) as Proof[];
-      const swapOutcome = await safeSwap(wallet, price, filteredProofs, {
-        sendConfig: { includeFees: true },
-      });
-      if (swapOutcome.status !== "swapped") {
-        throw new Error(
-          swapOutcome.errorMessage ??
-            `Cart payment swap did not complete (${swapOutcome.status})`
-        );
-      }
-      const { keep, send } = swapOutcome;
+      );
       const deletedEventIds = [
         ...new Set([
           ...walletContext.proofEvents
@@ -2445,28 +2496,13 @@ export default function CartInvoiceCard({
               )
             )
             .map((event) => event.id),
-          ...walletContext.proofEvents
-            .filter((event) =>
-              event.proofs.some((proof: Proof) =>
-                keep.some((keepProof) => keepProof.secret === proof.secret)
-              )
-            )
-            .map((event) => event.id),
-          ...walletContext.proofEvents
-            .filter((event) =>
-              event.proofs.some((proof: Proof) =>
-                send.some((sendProof) => sendProof.secret === proof.secret)
-              )
-            )
-            .map((event) => event.id),
         ]),
       ];
-      await sendTokens(wallet, send, data);
-      const changeProofs = keep;
-      const remainingProofs = tokens.filter(
+      const changeProofs = await sendTokens(wallet, filteredProofs, data);
+      const remainingProofs = (currentTokens as Proof[]).filter(
         (p: Proof) =>
           !mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
-      ) as Proof[];
+      );
       let proofArray;
       if (changeProofs.length >= 1 && changeProofs) {
         proofArray = [...remainingProofs, ...changeProofs];
@@ -2478,7 +2514,7 @@ export default function CartInvoiceCard({
         "history",
         JSON.stringify([
           { type: 5, amount: price, date: Math.floor(Date.now() / 1000) },
-          ...history,
+          ...currentHistory,
         ])
       );
       await publishProofEvent(
@@ -2935,6 +2971,7 @@ export default function CartInvoiceCard({
                       <p className="text-sm text-gray-600 dark:text-gray-400">
                         Quantity: {quantities[product.id] || 1}
                       </p>
+                      {renderP2pkCartBadge(product.pubkey)}
                     </div>
                   </div>
                 ))}
@@ -3166,6 +3203,7 @@ export default function CartInvoiceCard({
                     <p className="text-sm text-gray-600 dark:text-gray-400">
                       Quantity: {quantities[product.id] || 1}
                     </p>
+                    {renderP2pkCartBadge(product.pubkey)}
                   </div>
                 </div>
               ))}

@@ -39,6 +39,7 @@ import {
 import ProtectedRoute from "@/components/utility-components/protected-route";
 import EditAddressForm from "@/components/utility-components/edit-address-form";
 import SavedAddressesList from "@/components/utility-components/saved-addresses-list";
+import { CashuWalletContext } from "@/utils/context/context";
 
 const PreferencesPage = () => {
   const { nostr } = useContext(NostrContext);
@@ -61,6 +62,7 @@ const PreferencesPage = () => {
 
   const [isLoaded, setIsLoaded] = useState(false);
   const { signer } = useContext(SignerContext);
+  const { cashuPubkey, cashuPrivkey } = useContext(CashuWalletContext);
 
   const [showFailureModal, setShowFailureModal] = useState(false);
   const [failureText, setFailureText] = useState("");
@@ -152,35 +154,60 @@ const PreferencesPage = () => {
     setShowMintModal(!showMintModal);
   };
 
+  const publishUpdatedWalletMints = async (updatedMints: string[]) => {
+    if (cashuPrivkey) {
+      await publishWalletEvent(
+        nostr!,
+        signer!,
+        { cashuPubkey, cashuPrivkey },
+        { mints: updatedMints }
+      );
+    }
+  };
+
   const replaceMint = async (newMint: string) => {
     try {
-      // Perform a fetch request to the specified mint URL
-      const response = await fetch(newMint + "/keys");
+      const response = await fetch("/api/cashu/validate-mint", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ mintUrl: newMint }),
+      });
       if (response.ok) {
-        if (!mints.includes(newMint)) {
-          setMints([newMint, ...mints]);
+        const result = (await response.json()) as { mintUrl?: string };
+        const validatedMint = result.mintUrl ?? newMint;
+        const updatedMints = !mints.includes(validatedMint)
+          ? [validatedMint, ...mints]
+          : [validatedMint, ...mints.filter((mint) => mint !== validatedMint)];
+        if (!mints.includes(validatedMint)) {
+          setMints(updatedMints);
         } else {
-          setMints([newMint, ...mints.filter((mint) => mint !== newMint)]);
+          setMints(updatedMints);
         }
-        await publishWalletEvent(nostr!, signer!);
+        await publishUpdatedWalletMints(updatedMints);
         handleToggleMintModal();
       } else {
+        const result = (await response.json().catch(() => null)) as {
+          error?: string;
+        } | null;
         setFailureText(
-          `Failed to add mint! Could not fetch keys from ${newMint}/keys.`
+          result?.error
+            ? `Failed to add mint! ${result.error}`
+            : `Failed to add mint! Could not validate ${newMint}.`
         );
         setShowFailureModal(true);
       }
     } catch {
-      setFailureText(
-        `Failed to add mint! Could not fetch keys from ${newMint}/keys.`
-      );
+      setFailureText(`Failed to add mint! Could not validate ${newMint}.`);
       setShowFailureModal(true);
     }
   };
 
   const deleteMint = async (mintToDelete: string) => {
-    setMints(mints.filter((mint) => mint !== mintToDelete));
-    await publishWalletEvent(nostr!, signer!);
+    const updatedMints = mints.filter((mint) => mint !== mintToDelete);
+    setMints(updatedMints);
+    await publishUpdatedWalletMints(updatedMints);
   };
 
   useEffect(() => {

@@ -65,6 +65,7 @@ import {
   parseLocalProfileFallback,
   parseBunkerToken,
   PostListing,
+  publishWalletEvent,
   publishRelayEvent,
   publishReportEvent,
   publishReviewEvent,
@@ -1803,6 +1804,75 @@ describe("createNostrProfileEvent", () => {
       expect.objectContaining({ kind: 0, content: '{"name":"Alice"}' })
     );
     expect(result).toEqual(signedEvent);
+  });
+});
+
+describe("publishWalletEvent", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    localStorage.setItem("relays", JSON.stringify(["wss://relay.example"]));
+    localStorage.setItem("writeRelays", JSON.stringify([]));
+    (cacheEventToDatabase as jest.Mock).mockResolvedValue(undefined);
+    (newPromiseWithTimeout as jest.Mock).mockImplementation(async (fn: any) => {
+      return new Promise((resolve, reject) =>
+        fn(resolve, reject, new AbortController().signal)
+      );
+    });
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("publishes an encrypted NIP-60 wallet event with explicit mints", async () => {
+    const userPubkey =
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const cashuPrivkey =
+      "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    const mint = "https://mint.example";
+    const walletContent = JSON.stringify([
+      ["privkey", cashuPrivkey],
+      ["mint", mint],
+    ]);
+    const signer = {
+      getPubKey: jest.fn().mockResolvedValue(userPubkey),
+      encrypt: jest
+        .fn()
+        .mockImplementation(async (_pubkey: string, content: string) => {
+          return `encrypted:${content}`;
+        }),
+      sign: jest.fn().mockImplementation(async (event: any) => ({
+        ...event,
+        id: "wallet-event-id",
+        pubkey: userPubkey,
+        sig: "sig",
+      })),
+    };
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    await publishWalletEvent(
+      nostr as any,
+      signer as any,
+      { cashuPubkey: userPubkey, cashuPrivkey },
+      { mints: [mint] }
+    );
+
+    expect(signer.encrypt).toHaveBeenCalledWith(userPubkey, walletContent);
+    expect(signer.sign).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 17375,
+        tags: [],
+        content: `encrypted:${walletContent}`,
+      })
+    );
+    expect(nostr.publish).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "wallet-event-id",
+        kind: 17375,
+        content: `encrypted:${walletContent}`,
+      }),
+      expect.arrayContaining(["wss://relay.example"])
+    );
   });
 });
 
