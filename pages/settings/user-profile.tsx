@@ -781,7 +781,10 @@ const UserProfilePage = () => {
                         <Controller
                           name="p2pkPubkey"
                           control={control}
-                          render={({ field: { onChange, onBlur, value } }) => (
+                          render={({
+                            field: { onChange, onBlur, value },
+                            fieldState: { error },
+                          }) => (
                             <div>
                               <Input
                                 className="text-light-text dark:text-dark-text"
@@ -794,6 +797,8 @@ const UserProfilePage = () => {
                                 label="P2PK Redeem Pubkey (Cashu wallet key)"
                                 labelPlacement="outside"
                                 placeholder="Will be auto-filled from your Cashu wallet key"
+                                isInvalid={!!error}
+                                errorMessage={error?.message}
                                 onChange={onChange}
                                 onBlur={onBlur}
                                 value={value}

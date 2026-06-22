@@ -1,8 +1,9 @@
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import UserProfilePage from "@/pages/settings/user-profile";
 import { CashuWalletContext, ProfileMapContext } from "@/utils/context/context";
+import { createNostrProfileEvent } from "@/utils/nostr/nostr-helper-functions";
 import {
   SignerContext,
   NostrContext,
@@ -40,14 +41,32 @@ jest.mock(
           onChange,
           onBlur,
         }),
-      Input: ({ label, value, onChange, onBlur, type = "text" }: any) =>
-        React.createElement("input", {
-          "aria-label": label,
-          type,
-          value: value ?? "",
-          onChange,
-          onBlur,
-        }),
+      Input: ({
+        label,
+        value,
+        onChange,
+        onBlur,
+        type = "text",
+        isInvalid,
+        errorMessage,
+        placeholder,
+      }: any) =>
+        React.createElement(
+          "div",
+          null,
+          React.createElement("input", {
+            "aria-invalid": isInvalid ? "true" : undefined,
+            "aria-label": label,
+            placeholder,
+            type,
+            value: value ?? "",
+            onChange,
+            onBlur,
+          }),
+          isInvalid && errorMessage
+            ? React.createElement("span", null, errorMessage)
+            : null
+        ),
       Image: ({ src, alt }: any) => React.createElement("img", { src, alt }),
       Select: ({ label, children }: any) =>
         React.createElement("select", { "aria-label": label }, children),
@@ -99,6 +118,7 @@ jest.mock("@/components/settings/settings-bread-crumbs", () => ({
 // ── Typed mock handle ─────────────────────────────────────────────────────────
 
 const mockIsP2pkEscrowFeatureEnabled = isP2pkEscrowFeatureEnabled as jest.Mock;
+const mockCreateNostrProfileEvent = createNostrProfileEvent as jest.Mock;
 
 // ── Render helper ─────────────────────────────────────────────────────────────
 
@@ -156,6 +176,7 @@ function renderUserProfilePage({
 
 describe("UserProfile page — P2PK seller toggle feature flag", () => {
   beforeEach(() => {
+    jest.clearAllMocks();
     mockIsP2pkEscrowFeatureEnabled.mockReturnValue(false);
   });
 
@@ -198,5 +219,26 @@ describe("UserProfile page — P2PK seller toggle feature flag", () => {
     expect(
       screen.getByText(/Escrow reclaim keys \(when you buy\)/i)
     ).toBeInTheDocument();
+  });
+
+  it("shows a visible error when seller P2PK is enabled without a Cashu wallet key", async () => {
+    mockIsP2pkEscrowFeatureEnabled.mockReturnValue(true);
+    renderUserProfilePage();
+
+    fireEvent.click(
+      screen.getByLabelText(/Enable P2PK escrow on my listings/i)
+    );
+    fireEvent.change(screen.getByLabelText(/Reclaim opens after/i), {
+      target: { value: "7" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Save Profile/i }));
+
+    expect(
+      await screen.findByText(/Cashu wallet key not yet available/i)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByLabelText(/P2PK Redeem Pubkey \(Cashu wallet key\)/i)
+    ).toHaveAttribute("aria-invalid", "true");
+    expect(mockCreateNostrProfileEvent).not.toHaveBeenCalled();
   });
 });
