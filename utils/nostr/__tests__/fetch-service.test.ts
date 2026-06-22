@@ -23,20 +23,6 @@ const makeBaseEvent = (overrides: Record<string, any> = {}) => ({
   sig: "sig",
   ...overrides,
 });
-import type { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
-
-function createMockSigner(overrides: Partial<NostrSigner> = {}): NostrSigner {
-  return {
-    connect: jest.fn().mockResolvedValue(""),
-    getPubKey: jest.fn().mockResolvedValue(""),
-    sign: jest.fn(),
-    encrypt: jest.fn(),
-    decrypt: jest.fn(),
-    close: jest.fn().mockResolvedValue(undefined),
-    toJSON: jest.fn().mockReturnValue({}),
-    ...overrides,
-  };
-}
 
 const expectNip50RelayFetches = (
   fetchMock: jest.Mock,
@@ -3950,10 +3936,210 @@ describe("fetchGiftWrappedChatsAndMessages", () => {
   });
 });
 
-describe("fetchCashuWallet", () => {
+describe("fetchEscrowRecords", () => {
+  beforeEach(() => {
+    jest.resetModules();
+    jest.clearAllMocks();
+  });
+
+  async function importFetchEscrowRecords(
+    restoreEncryptedEscrowRecordLocally = jest.fn()
+  ) {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase,
+    }));
+    jest.doMock("@/utils/cashu/p2pk-escrow-records", () => {
+      const actual = jest.requireActual("@/utils/cashu/p2pk-escrow-records");
+      return {
+        ...actual,
+        restoreEncryptedEscrowRecordLocally,
+      };
+    });
+
+    const { fetchEscrowRecords } = await import("../fetch-service");
+    return {
+      fetchEscrowRecords,
+      cacheEventsToDatabase,
+      restoreEncryptedEscrowRecordLocally,
+    };
+  }
+
   const userPubkey =
     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+  const buyerEscrowRecord = {
+    orderId: "order-db",
+    mint: "https://mint.example",
+    token: "cashuAdb",
+    amount: 21,
+    sellerPubkey: "seller-pubkey",
+    locktime: 123456,
+    refundKeys: ["refund-key"],
+    createdAt: 100,
+  };
+  const relayEscrowRecord = {
+    ...buyerEscrowRecord,
+    orderId: "order-relay",
+    token: "cashuArelay",
+    createdAt: 200,
+  };
 
+  it("returns without DB, relay, or local writes when signer pubkey is unavailable", async () => {
+    const { fetchEscrowRecords, restoreEncryptedEscrowRecordLocally } =
+      await importFetchEscrowRecords();
+    const nostr = { fetch: jest.fn() } as any;
+    const signer = { getPubKey: jest.fn().mockResolvedValue(undefined) };
+    global.fetch = jest.fn() as typeof global.fetch;
+
+    await fetchEscrowRecords(nostr, signer as any, ["wss://relay.example"]);
+
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(nostr.fetch).not.toHaveBeenCalled();
+    expect(restoreEncryptedEscrowRecordLocally).not.toHaveBeenCalled();
+  });
+
+  it("restores encrypted buyer escrow records from DB and relay without plaintext local writes", async () => {
+    const { fetchEscrowRecords, restoreEncryptedEscrowRecordLocally } =
+      await importFetchEscrowRecords();
+    const dbEvent = makeBaseEvent({
+      id: "db-escrow",
+      kind: 30406,
+      pubkey: userPubkey,
+      content: "enc-db",
+      created_at: 100,
+      sig: "sig-db",
+    });
+    const relayEvent = makeBaseEvent({
+      id: "relay-escrow",
+      kind: 30406,
+      pubkey: userPubkey,
+      content: "enc-relay",
+      created_at: 200,
+      sig: "sig-relay",
+    });
+    const signer = {
+      getPubKey: jest.fn().mockResolvedValue(userPubkey),
+      decrypt: jest.fn(async (_pubkey: string, content: string) =>
+        content === "enc-db"
+          ? JSON.stringify(buyerEscrowRecord)
+          : JSON.stringify(relayEscrowRecord)
+      ),
+    };
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(makeDbPayload([dbEvent])) as typeof global.fetch;
+    const nostr = { fetch: jest.fn().mockResolvedValue([relayEvent]) } as any;
+
+    await fetchEscrowRecords(nostr, signer as any, ["wss://relay.example"]);
+
+    expect(restoreEncryptedEscrowRecordLocally).toHaveBeenCalledWith({
+      orderId: buyerEscrowRecord.orderId,
+      createdAt: buyerEscrowRecord.createdAt,
+      content: "enc-db",
+    });
+    expect(restoreEncryptedEscrowRecordLocally).toHaveBeenCalledWith({
+      orderId: relayEscrowRecord.orderId,
+      createdAt: relayEscrowRecord.createdAt,
+      content: "enc-relay",
+    });
+    expect(restoreEncryptedEscrowRecordLocally).not.toHaveBeenCalledWith(
+      expect.objectContaining({ token: expect.any(String) })
+    );
+  });
+
+  it("caches valid relay escrow events after restoring DB records", async () => {
+    const {
+      fetchEscrowRecords,
+      cacheEventsToDatabase,
+      restoreEncryptedEscrowRecordLocally,
+    } = await importFetchEscrowRecords();
+    const relayEvent = makeBaseEvent({
+      id: "relay-cacheable",
+      kind: 30406,
+      pubkey: userPubkey,
+      content: "enc-relay",
+      created_at: 200,
+      sig: "sig-relay",
+    });
+    const signer = {
+      getPubKey: jest.fn().mockResolvedValue(userPubkey),
+      decrypt: jest.fn().mockResolvedValue(JSON.stringify(relayEscrowRecord)),
+    };
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(makeDbPayload([])) as typeof global.fetch;
+    const nostr = { fetch: jest.fn().mockResolvedValue([relayEvent]) } as any;
+
+    await fetchEscrowRecords(nostr, signer as any, ["wss://relay.example"]);
+
+    expect(restoreEncryptedEscrowRecordLocally).toHaveBeenCalledTimes(1);
+    expect(cacheEventsToDatabase).toHaveBeenCalledWith([relayEvent]);
+  });
+
+  it("skips malformed escrow payloads instead of restoring unusable records", async () => {
+    const { fetchEscrowRecords, restoreEncryptedEscrowRecordLocally } =
+      await importFetchEscrowRecords();
+    const relayEvent = makeBaseEvent({
+      id: "relay-malformed",
+      kind: 30406,
+      pubkey: userPubkey,
+      content: "enc-malformed",
+      created_at: 200,
+      sig: "sig-relay",
+    });
+    const signer = {
+      getPubKey: jest.fn().mockResolvedValue(userPubkey),
+      decrypt: jest.fn().mockResolvedValue(JSON.stringify({ orderId: "" })),
+    };
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(makeDbPayload([])) as typeof global.fetch;
+    const nostr = { fetch: jest.fn().mockResolvedValue([relayEvent]) } as any;
+
+    await fetchEscrowRecords(nostr, signer as any, ["wss://relay.example"]);
+
+    expect(restoreEncryptedEscrowRecordLocally).not.toHaveBeenCalled();
+  });
+
+  it("continues to relay recovery when the DB escrow fetch fails", async () => {
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    const { fetchEscrowRecords, restoreEncryptedEscrowRecordLocally } =
+      await importFetchEscrowRecords();
+    const relayEvent = makeBaseEvent({
+      id: "relay-after-db-failure",
+      kind: 30406,
+      pubkey: userPubkey,
+      content: "enc-relay",
+      created_at: 200,
+      sig: "sig-relay",
+    });
+    const signer = {
+      getPubKey: jest.fn().mockResolvedValue(userPubkey),
+      decrypt: jest.fn().mockResolvedValue(JSON.stringify(relayEscrowRecord)),
+    };
+
+    global.fetch = jest
+      .fn()
+      .mockRejectedValue(new Error("db unavailable")) as typeof global.fetch;
+    const nostr = { fetch: jest.fn().mockResolvedValue([relayEvent]) } as any;
+
+    await fetchEscrowRecords(nostr, signer as any, ["wss://relay.example"]);
+
+    expect(restoreEncryptedEscrowRecordLocally).toHaveBeenCalledWith({
+      orderId: relayEscrowRecord.orderId,
+      createdAt: relayEscrowRecord.createdAt,
+      content: "enc-relay",
+    });
+    consoleErrorSpy.mockRestore();
+  });
+});
+
+describe("fetchCashuWallet", () => {
   beforeEach(() => {
     jest.resetModules();
     jest.clearAllMocks();
@@ -3979,302 +4165,71 @@ describe("fetchCashuWallet", () => {
     } as any;
     const editCashuWalletContext = jest.fn();
 
-    const result = await fetchCashuWallet(
-      nostr,
-      undefined,
-      ["wss://relay.example"],
-      editCashuWalletContext
-    );
-
-    expect(result).toEqual({
+    await expect(
+      fetchCashuWallet(
+        nostr,
+        undefined,
+        ["wss://relay.example"],
+        editCashuWalletContext
+      )
+    ).resolves.toEqual({
       proofEvents: [],
       cashuMints: [],
       cashuProofs: [],
     });
-    expect(result.cashuPubkey).toBeUndefined();
-    expect(result.cashuPrivkey).toBeUndefined();
 
     expect(global.fetch).not.toHaveBeenCalled();
     expect(nostr.fetch).not.toHaveBeenCalled();
     expect(editCashuWalletContext).toHaveBeenCalledWith([], [], [], false);
   });
 
-  it("returns v1 keypair and merged mints through DB and relay wallet config loading", async () => {
-    const { deriveCashuPubkey } = jest.requireActual(
-      "@/utils/cashu/wallet-config"
-    ) as typeof import("@/utils/cashu/wallet-config");
-    const oldPrivkey = "2".repeat(64);
-    const newPrivkey = "3".repeat(64);
-    const newPubkey = deriveCashuPubkey(newPrivkey)!;
-    const v1RelayConfig = {
-      version: 1 as const,
-      cashuPubkey: "ignored-temp-object-pubkey",
-      cashuPrivkey: newPrivkey,
-      mints: ["https://relay-mint.example"],
-    };
-    const v1OlderDbConfig = {
-      version: 1 as const,
-      cashuPubkey: "ignored-old-temp-object-pubkey",
-      cashuPrivkey: oldPrivkey,
-      mints: ["https://old-mint.example"],
-    };
-    const legacyDbConfig = [["mint", "https://legacy-mint.example"]];
-
-    const decrypt = jest.fn(async (_pubkey: string, content: string) => {
-      switch (content) {
-        case "encrypted-v1-relay":
-          return JSON.stringify(v1RelayConfig);
-        case "encrypted-v1-old-db":
-          return JSON.stringify(v1OlderDbConfig);
-        case "encrypted-legacy-db":
-          return JSON.stringify(legacyDbConfig);
-        default:
-          throw new Error(`unexpected encrypted content: ${content}`);
-      }
-    });
-
+  it("recovers a persisted Cashu wallet identity from encrypted wallet config events", async () => {
+    const cashuPrivkey = "11".repeat(32);
+    const mintUrl = "https://identity-mint.example";
+    const publishWalletEvent = jest.fn().mockResolvedValue(undefined);
+    jest.doMock("@cashu/cashu-ts", () => ({
+      Mint: jest.fn(),
+      Wallet: jest.fn(() => ({
+        loadMint: jest.fn().mockResolvedValue(undefined),
+        checkProofsStates: jest.fn().mockResolvedValue([]),
+      })),
+      hashToCurve: jest.fn((bytes: Uint8Array) => ({
+        toHex: () => `Y-${Buffer.from(bytes).toString("utf8")}`,
+      })),
+    }));
     jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
       getLocalStorageData: jest.fn(() => ({ tokens: [] })),
-      deleteEvent: jest.fn(),
+      deleteEvent: jest.fn().mockResolvedValue(undefined),
       verifyNip05Identifier: jest.fn(),
+      publishWalletEvent,
     }));
     jest.doMock("@/utils/db/db-client", () => ({
       cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
     }));
-    jest.doMock("@cashu/cashu-ts", () => ({
-      ...jest.requireActual("@cashu/cashu-ts"),
-      Wallet: jest.fn().mockImplementation(() => ({
-        loadMint: jest.fn().mockResolvedValue(undefined),
-        checkProofsStates: jest.fn().mockResolvedValue([]),
-      })),
-      Mint: jest.fn().mockImplementation(() => ({})),
-    }));
 
     const { fetchCashuWallet } = await import("../fetch-service");
-
-    global.fetch = jest.fn().mockResolvedValue({
-      ok: true,
-      json: async () => [
-        {
-          id: "db-old-v1",
-          kind: 17375,
-          created_at: 100,
-          content: "encrypted-v1-old-db",
-          pubkey: userPubkey,
-          sig: "sig-old-v1",
-        },
-        {
-          id: "db-legacy",
-          kind: 17375,
-          created_at: 50,
-          content: "encrypted-legacy-db",
-          pubkey: userPubkey,
-          sig: "sig-legacy",
-        },
-      ],
-    }) as typeof global.fetch;
-
-    const nostr = {
-      fetch: jest
-        .fn()
-        .mockResolvedValueOnce([
-          {
-            id: "relay-v1",
-            kind: 17375,
-            created_at: 200,
-            content: "encrypted-v1-relay",
-            pubkey: userPubkey,
-            sig: "sig-relay-v1",
-          },
+    const userPubkey =
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const signer = {
+      getPubKey: jest.fn().mockResolvedValue(userPubkey),
+      decrypt: jest.fn().mockResolvedValue(
+        JSON.stringify([
+          ["mint", mintUrl],
+          ["privkey", cashuPrivkey],
         ])
-        .mockResolvedValueOnce([]),
-    } as any;
-    const editCashuWalletContext = jest.fn();
-
-    const result = await fetchCashuWallet(
-      nostr,
-      createMockSigner({
-        getPubKey: jest.fn().mockResolvedValue(userPubkey),
-        decrypt,
-      }),
-      ["wss://relay.example"],
-      editCashuWalletContext
-    );
-
-    expect(global.fetch).toHaveBeenCalledWith(
-      `/api/db/fetch-wallet?pubkey=${userPubkey}`
-    );
-    expect(nostr.fetch).toHaveBeenNthCalledWith(
-      1,
-      [{ kinds: [17375, 37375], authors: [userPubkey] }],
-      {},
-      ["wss://relay.example"]
-    );
-    expect(decrypt).toHaveBeenCalledTimes(3);
-    expect(result.cashuMints).toEqual([
-      "https://old-mint.example",
-      "https://legacy-mint.example",
-      "https://relay-mint.example",
-    ]);
-    expect(result.cashuPubkey).toBe(newPubkey);
-    expect(result.cashuPrivkey).toBe(newPrivkey);
-    expect(result.cashuProofs).toEqual([]);
-    expect(editCashuWalletContext).toHaveBeenCalledWith(
-      [],
-      result.cashuMints,
-      [],
-      false,
-      {
-        cashuPubkey: newPubkey,
-        cashuPrivkey: newPrivkey,
-      }
-    );
-  });
-
-  it("generates and publishes a v1 wallet identity for a legacy-only wallet config", async () => {
-    const legacyDbConfig = [["mint", "https://legacy-mint.example"]];
-
-    const decrypt = jest.fn(async () => JSON.stringify(legacyDbConfig));
-    const publishWalletEvent = jest.fn().mockResolvedValue(undefined);
-    const generateCashuWalletKeypair = jest.fn(() => ({
-      cashuPubkey: "02generated-pk",
-      cashuPrivkey: "generated-sk",
-    }));
-
-    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
-      getLocalStorageData: jest.fn(() => ({ tokens: [] })),
-      deleteEvent: jest.fn(),
-      verifyNip05Identifier: jest.fn(),
-      publishWalletEvent,
-    }));
-    jest.doMock("@/utils/cashu/wallet-config", () => ({
-      ...jest.requireActual("@/utils/cashu/wallet-config"),
-      generateCashuWalletKeypair,
-    }));
-    jest.doMock("@/utils/db/db-client", () => ({
-      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
-    }));
-    jest.doMock("@cashu/cashu-ts", () => ({
-      ...jest.requireActual("@cashu/cashu-ts"),
-      Wallet: jest.fn().mockImplementation(() => ({
-        loadMint: jest.fn().mockResolvedValue(undefined),
-        checkProofsStates: jest.fn().mockResolvedValue([]),
-      })),
-      Mint: jest.fn().mockImplementation(() => ({})),
-    }));
-
-    const { fetchCashuWallet } = await import("../fetch-service");
-
-    global.fetch = jest.fn().mockResolvedValue({
-      ok: true,
-      json: async () => [
-        {
-          id: "db-legacy",
-          kind: 17375,
-          created_at: 50,
-          content: "encrypted-legacy-db",
-          pubkey: userPubkey,
-          sig: "sig-legacy",
-        },
-      ],
-    }) as typeof global.fetch;
-
-    const nostr = {
-      fetch: jest.fn().mockResolvedValueOnce([]).mockResolvedValueOnce([]),
-    } as any;
-    const editCashuWalletContext = jest.fn();
-    const signer = createMockSigner({
-      getPubKey: jest.fn().mockResolvedValue(userPubkey),
-      decrypt,
-    });
-
-    const result = await fetchCashuWallet(
-      nostr,
-      signer,
-      ["wss://relay.example"],
-      editCashuWalletContext
-    );
-
-    expect(generateCashuWalletKeypair).toHaveBeenCalledTimes(1);
-    expect(publishWalletEvent).toHaveBeenCalledTimes(1);
-    expect(publishWalletEvent).toHaveBeenCalledWith(
-      nostr,
-      signer,
-      { cashuPubkey: "02generated-pk", cashuPrivkey: "generated-sk" },
-      { mints: ["https://legacy-mint.example"] }
-    );
-    expect(result.cashuPubkey).toBe("02generated-pk");
-    expect(result.cashuPrivkey).toBe("generated-sk");
-    expect(editCashuWalletContext).toHaveBeenLastCalledWith(
-      [],
-      ["https://legacy-mint.example"],
-      [],
-      false,
-      {
-        cashuPubkey: "02generated-pk",
-        cashuPrivkey: "generated-sk",
-      }
-    );
-  });
-
-  it("does not generate or publish when a v1 wallet identity already exists", async () => {
-    const { deriveCashuPubkey } = jest.requireActual(
-      "@/utils/cashu/wallet-config"
-    ) as typeof import("@/utils/cashu/wallet-config");
-    const existingPrivkey = "4".repeat(64);
-    const existingPubkey = deriveCashuPubkey(existingPrivkey)!;
-    const v1Config = {
-      version: 1 as const,
-      cashuPubkey: "ignored-existing-temp-object-pubkey",
-      cashuPrivkey: existingPrivkey,
-      mints: ["https://existing-mint.example"],
+      ),
     };
-
-    const decrypt = jest.fn(async () => JSON.stringify(v1Config));
-    const publishWalletEvent = jest.fn().mockResolvedValue(undefined);
-    const generateCashuWalletKeypair = jest.fn(() => ({
-      cashuPubkey: "02should-not-be-used",
-      cashuPrivkey: "should-not-be-used",
-    }));
-
-    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
-      getLocalStorageData: jest.fn(() => ({ tokens: [] })),
-      deleteEvent: jest.fn(),
-      verifyNip05Identifier: jest.fn(),
-      publishWalletEvent,
-    }));
-    jest.doMock("@/utils/cashu/wallet-config", () => ({
-      ...jest.requireActual("@/utils/cashu/wallet-config"),
-      generateCashuWalletKeypair,
-    }));
-    jest.doMock("@/utils/db/db-client", () => ({
-      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
-    }));
-    jest.doMock("@cashu/cashu-ts", () => ({
-      ...jest.requireActual("@cashu/cashu-ts"),
-      Wallet: jest.fn().mockImplementation(() => ({
-        loadMint: jest.fn().mockResolvedValue(undefined),
-        checkProofsStates: jest.fn().mockResolvedValue([]),
-      })),
-      Mint: jest.fn().mockImplementation(() => ({})),
-    }));
-
-    const { fetchCashuWallet } = await import("../fetch-service");
-
-    global.fetch = jest.fn().mockResolvedValue({
-      ok: true,
-      json: async () => [
-        {
-          id: "db-v1",
+    global.fetch = jest.fn().mockResolvedValue(
+      makeDbPayload([
+        makeBaseEvent({
+          id: "db-wallet-config",
           kind: 17375,
-          created_at: 100,
-          content: "encrypted-v1-db",
           pubkey: userPubkey,
-          sig: "sig-v1",
-        },
-      ],
-    }) as typeof global.fetch;
-
+          content: "enc-wallet-config",
+          created_at: 100,
+        }),
+      ])
+    ) as typeof global.fetch;
     const nostr = {
       fetch: jest.fn().mockResolvedValueOnce([]).mockResolvedValueOnce([]),
     } as any;
@@ -4282,183 +4237,168 @@ describe("fetchCashuWallet", () => {
 
     const result = await fetchCashuWallet(
       nostr,
-      createMockSigner({
-        getPubKey: jest.fn().mockResolvedValue(userPubkey),
-        decrypt,
-      }),
+      signer as any,
       ["wss://relay.example"],
       editCashuWalletContext
     );
 
-    expect(generateCashuWalletKeypair).not.toHaveBeenCalled();
     expect(publishWalletEvent).not.toHaveBeenCalled();
-    expect(result.cashuPubkey).toBe(existingPubkey);
-    expect(result.cashuPrivkey).toBe(existingPrivkey);
+    expect(result.cashuMints).toEqual([mintUrl]);
+    expect(result.cashuPrivkey).toBe(cashuPrivkey);
+    expect(result.cashuPubkey).toMatch(/^[0-9a-f]{64}$/);
     expect(editCashuWalletContext).toHaveBeenLastCalledWith(
       [],
-      ["https://existing-mint.example"],
-      [],
-      false,
-      {
-        cashuPubkey: existingPubkey,
-        cashuPrivkey: existingPrivkey,
-      }
-    );
-  });
-
-  // Case A: relay fetch succeeds, zero wallet events anywhere → generate first identity
-  it("generates and publishes a wallet identity when fetch succeeds but returns no wallet events", async () => {
-    const publishWalletEvent = jest.fn().mockResolvedValue(undefined);
-    const generateCashuWalletKeypair = jest.fn(() => ({
-      cashuPubkey: "02new-pk",
-      cashuPrivkey: "new-sk",
-    }));
-
-    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
-      getLocalStorageData: jest.fn(() => ({ tokens: [] })),
-      deleteEvent: jest.fn(),
-      verifyNip05Identifier: jest.fn(),
-      publishWalletEvent,
-    }));
-    jest.doMock("@/utils/cashu/wallet-config", () => ({
-      ...jest.requireActual("@/utils/cashu/wallet-config"),
-      generateCashuWalletKeypair,
-    }));
-    jest.doMock("@/utils/db/db-client", () => ({
-      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
-    }));
-    jest.doMock("@cashu/cashu-ts", () => ({
-      ...jest.requireActual("@cashu/cashu-ts"),
-      Wallet: jest.fn().mockImplementation(() => ({
-        loadMint: jest.fn().mockResolvedValue(undefined),
-        checkProofsStates: jest.fn().mockResolvedValue([]),
-      })),
-      Mint: jest.fn().mockImplementation(() => ({})),
-    }));
-
-    const { fetchCashuWallet } = await import("../fetch-service");
-
-    // DB returns no wallet events
-    global.fetch = jest.fn().mockResolvedValue({
-      ok: true,
-      json: async () => [],
-    }) as typeof global.fetch;
-
-    // Relay wallet-config fetch returns empty (success), proof fetch also empty
-    const nostr = {
-      fetch: jest.fn().mockResolvedValueOnce([]).mockResolvedValueOnce([]),
-    } as any;
-    const editCashuWalletContext = jest.fn();
-    const signer = createMockSigner({
-      getPubKey: jest.fn().mockResolvedValue(userPubkey),
-      decrypt: jest.fn(),
-    });
-
-    const result = await fetchCashuWallet(
-      nostr,
-      signer,
-      ["wss://relay.example"],
-      editCashuWalletContext
-    );
-
-    expect(generateCashuWalletKeypair).toHaveBeenCalledTimes(1);
-    expect(publishWalletEvent).toHaveBeenCalledTimes(1);
-    expect(publishWalletEvent).toHaveBeenCalledWith(
-      nostr,
-      signer,
-      { cashuPubkey: "02new-pk", cashuPrivkey: "new-sk" },
-      { mints: [] }
-    );
-    expect(result.cashuPubkey).toBe("02new-pk");
-    expect(result.cashuPrivkey).toBe("new-sk");
-    expect(editCashuWalletContext).toHaveBeenLastCalledWith(
-      [],
-      [],
+      [mintUrl],
       [],
       false,
       expect.objectContaining({
-        cashuPubkey: "02new-pk",
-        cashuPrivkey: "new-sk",
+        cashuPrivkey,
+        cashuPubkey: expect.stringMatching(/^[0-9a-f]{64}$/),
       })
     );
   });
 
-  // Case C: relay fetch fails → no generation, no publish, walletIdentityUnavailable surfaced
-  it("does not generate or publish when the relay wallet config fetch fails, and surfaces walletIdentityUnavailable", async () => {
+  it("generates and publishes a Cashu wallet identity only after relay config fetch succeeds", async () => {
+    const generatedKeys = {
+      cashuPubkey:
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      cashuPrivkey:
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    };
     const publishWalletEvent = jest.fn().mockResolvedValue(undefined);
-    const generateCashuWalletKeypair = jest.fn(() => ({
-      cashuPubkey: "02should-not-be-generated",
-      cashuPrivkey: "should-not-be-generated",
-    }));
-    const consoleWarnSpy = jest
-      .spyOn(console, "warn")
-      .mockImplementation(() => {});
-    const consoleErrorSpy = jest
-      .spyOn(console, "error")
-      .mockImplementation(() => {});
-
-    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
-      getLocalStorageData: jest.fn(() => ({ tokens: [] })),
-      deleteEvent: jest.fn(),
-      verifyNip05Identifier: jest.fn(),
-      publishWalletEvent,
-    }));
-    jest.doMock("@/utils/cashu/wallet-config", () => ({
-      ...jest.requireActual("@/utils/cashu/wallet-config"),
-      generateCashuWalletKeypair,
-    }));
-    jest.doMock("@/utils/db/db-client", () => ({
-      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
-    }));
     jest.doMock("@cashu/cashu-ts", () => ({
-      ...jest.requireActual("@cashu/cashu-ts"),
-      Wallet: jest.fn().mockImplementation(() => ({
+      Mint: jest.fn(),
+      Wallet: jest.fn(() => ({
         loadMint: jest.fn().mockResolvedValue(undefined),
         checkProofsStates: jest.fn().mockResolvedValue([]),
       })),
-      Mint: jest.fn().mockImplementation(() => ({})),
+      hashToCurve: jest.fn((bytes: Uint8Array) => ({
+        toHex: () => `Y-${Buffer.from(bytes).toString("utf8")}`,
+      })),
+    }));
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(() => ({ tokens: [] })),
+      deleteEvent: jest.fn().mockResolvedValue(undefined),
+      verifyNip05Identifier: jest.fn(),
+      publishWalletEvent,
+    }));
+    jest.doMock("@/utils/cashu/wallet-config", () => {
+      const actual = jest.requireActual("@/utils/cashu/wallet-config");
+      return {
+        ...actual,
+        generateCashuWalletKeypair: jest.fn(() => generatedKeys),
+      };
+    });
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
     }));
 
     const { fetchCashuWallet } = await import("../fetch-service");
-
-    // DB returns no wallet events
-    global.fetch = jest.fn().mockResolvedValue({
-      ok: true,
-      json: async () => [],
-    }) as typeof global.fetch;
-
-    // Relay wallet-config fetch throws (relay failure); proof fetch succeeds with empty
-    const relayError = new Error("relay unavailable");
+    const userPubkey =
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const signer = {
+      getPubKey: jest.fn().mockResolvedValue(userPubkey),
+      decrypt: jest.fn().mockResolvedValue(null),
+    };
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(makeDbPayload([])) as typeof global.fetch;
     const nostr = {
-      fetch: jest
-        .fn()
-        .mockRejectedValueOnce(relayError)
-        .mockResolvedValueOnce([]),
+      fetch: jest.fn().mockResolvedValueOnce([]).mockResolvedValueOnce([]),
     } as any;
     const editCashuWalletContext = jest.fn();
-    const signer = createMockSigner({
-      getPubKey: jest.fn().mockResolvedValue(userPubkey),
-      decrypt: jest.fn(),
-    });
 
     const result = await fetchCashuWallet(
       nostr,
-      signer,
+      signer as any,
       ["wss://relay.example"],
       editCashuWalletContext
     );
 
-    expect(generateCashuWalletKeypair).not.toHaveBeenCalled();
+    expect(publishWalletEvent).toHaveBeenCalledWith(
+      nostr,
+      signer,
+      generatedKeys,
+      { mints: [] }
+    );
+    expect(result).toMatchObject(generatedKeys);
+    expect(editCashuWalletContext).toHaveBeenLastCalledWith(
+      [],
+      [],
+      [],
+      false,
+      expect.objectContaining(generatedKeys)
+    );
+  });
+
+  it("does not generate a wallet identity when relay config fetch fails", async () => {
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    const consoleWarnSpy = jest
+      .spyOn(console, "warn")
+      .mockImplementation(() => {});
+    const publishWalletEvent = jest.fn().mockResolvedValue(undefined);
+    jest.doMock("@cashu/cashu-ts", () => ({
+      Mint: jest.fn(),
+      Wallet: jest.fn(() => ({
+        loadMint: jest.fn().mockResolvedValue(undefined),
+        checkProofsStates: jest.fn().mockResolvedValue([]),
+      })),
+      hashToCurve: jest.fn((bytes: Uint8Array) => ({
+        toHex: () => `Y-${Buffer.from(bytes).toString("utf8")}`,
+      })),
+    }));
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(() => ({ tokens: [] })),
+      deleteEvent: jest.fn().mockResolvedValue(undefined),
+      verifyNip05Identifier: jest.fn(),
+      publishWalletEvent,
+    }));
+    jest.doMock("@/utils/cashu/wallet-config", () => {
+      const actual = jest.requireActual("@/utils/cashu/wallet-config");
+      return {
+        ...actual,
+        generateCashuWalletKeypair: jest.fn(() => ({
+          cashuPubkey:
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          cashuPrivkey:
+            "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        })),
+      };
+    });
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchCashuWallet } = await import("../fetch-service");
+    const userPubkey =
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const signer = {
+      getPubKey: jest.fn().mockResolvedValue(userPubkey),
+      decrypt: jest.fn().mockResolvedValue(null),
+    };
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(makeDbPayload([])) as typeof global.fetch;
+    const nostr = {
+      fetch: jest
+        .fn()
+        .mockRejectedValueOnce(new Error("relay down"))
+        .mockResolvedValueOnce([]),
+    } as any;
+    const editCashuWalletContext = jest.fn();
+
+    const result = await fetchCashuWallet(
+      nostr,
+      signer as any,
+      ["wss://relay.example"],
+      editCashuWalletContext
+    );
+
     expect(publishWalletEvent).not.toHaveBeenCalled();
     expect(result.cashuPubkey).toBeUndefined();
     expect(result.cashuPrivkey).toBeUndefined();
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      "Failed to fetch wallet config events from relay:",
-      relayError
-    );
-    expect(consoleWarnSpy).toHaveBeenCalledWith(
-      expect.stringContaining("Wallet identity unavailable")
-    );
     expect(editCashuWalletContext).toHaveBeenLastCalledWith(
       [],
       [],
@@ -4466,9 +4406,979 @@ describe("fetchCashuWallet", () => {
       false,
       expect.objectContaining({ walletIdentityUnavailable: true })
     );
-
-    consoleWarnSpy.mockRestore();
     consoleErrorSpy.mockRestore();
+    consoleWarnSpy.mockRestore();
+  });
+
+  it("DB-first hydration: extracts kind-17375 mints, tracks kind-37375 mostRecentWalletEvent, adds kind-7375 proof events, and accumulates kind-7376 spending history", async () => {
+    const loadMint = jest.fn().mockResolvedValue(undefined);
+    const checkProofsStates = jest.fn().mockResolvedValue([
+      { state: "UNSPENT", Y: "Y-s1" },
+      { state: "UNSPENT", Y: "Y-s-destroyed-db" },
+      { state: "UNSPENT", Y: "Y-s-created-db" },
+    ]);
+
+    jest.doMock("@cashu/cashu-ts", () => ({
+      Mint: jest.fn(),
+      Wallet: jest.fn(() => ({ loadMint, checkProofsStates })),
+      hashToCurve: jest.fn((bytes: Uint8Array) => ({
+        toHex: () => `Y-${Buffer.from(bytes).toString("utf8")}`,
+      })),
+    }));
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(() => ({ tokens: [] })),
+      deleteEvent: jest.fn().mockResolvedValue(undefined),
+      verifyNip05Identifier: jest.fn(),
+    }));
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchCashuWallet } = await import("../fetch-service");
+
+    const userPubkey =
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const mintUrl = "https://mint-db.example";
+    const proof = { id: "p1", secret: "s1", C: "C1", amount: 1 };
+    const destroyedProof = {
+      id: "p-destroyed-db",
+      secret: "s-destroyed-db",
+      C: "C-destroyed-db",
+      amount: 4,
+    };
+    const createdProof = {
+      id: "p-created-db",
+      secret: "s-created-db",
+      C: "C-created-db",
+      amount: 3,
+    };
+
+    const decryptMap: Record<string, string> = {
+      "enc-17375": JSON.stringify([["mint", mintUrl]]),
+      "enc-7375": JSON.stringify({ mint: mintUrl, proofs: [proof] }),
+      "enc-destroyed-7375": JSON.stringify({
+        mint: mintUrl,
+        proofs: [destroyedProof],
+      }),
+      "enc-created-7375": JSON.stringify({
+        mint: mintUrl,
+        proofs: [createdProof],
+      }),
+      "enc-7376": JSON.stringify([
+        ["direction", "out"],
+        ["e", "db-destroyed-7375", "", "destroyed"],
+        ["e", "db-created-7375", "", "created"],
+      ]),
+    };
+    const signer = {
+      getPubKey: jest.fn().mockResolvedValue(userPubkey),
+      decrypt: jest
+        .fn()
+        .mockImplementation(
+          async (_pk: string, content: string) => decryptMap[content] ?? null
+        ),
+    };
+
+    global.fetch = jest.fn().mockResolvedValue(
+      makeDbPayload([
+        makeBaseEvent({
+          id: "db-17375",
+          kind: 17375,
+          pubkey: userPubkey,
+          content: "enc-17375",
+          created_at: 100,
+        }),
+        makeBaseEvent({
+          id: "db-37375",
+          kind: 37375,
+          pubkey: userPubkey,
+          tags: [],
+          content: "",
+          created_at: 200,
+        }),
+        makeBaseEvent({
+          id: "db-7375",
+          kind: 7375,
+          pubkey: userPubkey,
+          content: "enc-7375",
+          created_at: 100,
+        }),
+        makeBaseEvent({
+          id: "db-destroyed-7375",
+          kind: 7375,
+          pubkey: userPubkey,
+          content: "enc-destroyed-7375",
+          created_at: 101,
+        }),
+        makeBaseEvent({
+          id: "db-created-7375",
+          kind: 7375,
+          pubkey: userPubkey,
+          content: "enc-created-7375",
+          created_at: 102,
+        }),
+        makeBaseEvent({
+          id: "db-7376",
+          kind: 7376,
+          pubkey: userPubkey,
+          content: "enc-7376",
+          created_at: 100,
+        }),
+      ])
+    ) as typeof global.fetch;
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([]) } as any;
+    const editCashuWalletContext = jest.fn();
+
+    const result = await fetchCashuWallet(
+      nostr,
+      signer as any,
+      ["wss://relay.example"],
+      editCashuWalletContext
+    );
+
+    expect(result.cashuMints).toContain(mintUrl);
+    expect(result.proofEvents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "db-7375", mint: mintUrl }),
+      ])
+    );
+    expect(result.cashuProofs).toEqual(
+      expect.arrayContaining([expect.objectContaining({ secret: "s1" })])
+    );
+    expect(result.cashuProofs).not.toContainEqual(
+      expect.objectContaining({ secret: "s-destroyed-db" })
+    );
+    expect(result.cashuProofs).toContainEqual(
+      expect.objectContaining({ secret: "s-created-db" })
+    );
+  });
+
+  it("extracts relay and mint tags from mostRecentWalletEvent after the DB loop and uses the cashu relay for the proof fetch", async () => {
+    jest.doMock("@cashu/cashu-ts", () => ({
+      Mint: jest.fn(),
+      Wallet: jest.fn(() => ({
+        loadMint: jest.fn().mockResolvedValue(undefined),
+        checkProofsStates: jest.fn().mockResolvedValue([]),
+      })),
+      hashToCurve: jest.fn((bytes: Uint8Array) => ({
+        toHex: () => `Y-${Buffer.from(bytes).toString("utf8")}`,
+      })),
+    }));
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(() => ({ tokens: [] })),
+      deleteEvent: jest.fn().mockResolvedValue(undefined),
+      verifyNip05Identifier: jest.fn(),
+    }));
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchCashuWallet } = await import("../fetch-service");
+
+    const userPubkey =
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const cashuRelay = "wss://cashu-relay.example";
+    const walletMint = "https://wallet-mint.example";
+
+    const signer = {
+      getPubKey: jest.fn().mockResolvedValue(userPubkey),
+      decrypt: jest.fn().mockResolvedValue(null),
+    };
+
+    // DB returns a 37375 event with relay and mint tags
+    global.fetch = jest.fn().mockResolvedValue(
+      makeDbPayload([
+        makeBaseEvent({
+          id: "db-37375-with-tags",
+          kind: 37375,
+          pubkey: userPubkey,
+          tags: [
+            ["relay", cashuRelay],
+            ["mint", walletMint],
+          ],
+          content: "",
+          created_at: 200,
+        }),
+      ])
+    ) as typeof global.fetch;
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([]) } as any;
+    const editCashuWalletContext = jest.fn();
+
+    await fetchCashuWallet(
+      nostr,
+      signer as any,
+      ["wss://relay.example"],
+      editCashuWalletContext
+    );
+
+    // Second nostr.fetch call (for proof events) must use the cashu relay
+    expect(nostr.fetch).toHaveBeenCalledTimes(2);
+    expect(nostr.fetch).toHaveBeenNthCalledWith(2, expect.anything(), {}, [
+      cashuRelay,
+    ]);
+  });
+
+  it("processes relay wallet config events: kind-17375 mints and kind-37375 wallet state", async () => {
+    const loadMint = jest.fn().mockResolvedValue(undefined);
+    const checkProofsStates = jest.fn().mockResolvedValue([]);
+
+    jest.doMock("@cashu/cashu-ts", () => ({
+      Mint: jest.fn(),
+      Wallet: jest.fn(() => ({ loadMint, checkProofsStates })),
+      hashToCurve: jest.fn((bytes: Uint8Array) => ({
+        toHex: () => `Y-${Buffer.from(bytes).toString("utf8")}`,
+      })),
+    }));
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(() => ({ tokens: [] })),
+      deleteEvent: jest.fn().mockResolvedValue(undefined),
+      verifyNip05Identifier: jest.fn(),
+    }));
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchCashuWallet } = await import("../fetch-service");
+
+    const userPubkey =
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const relayMint = "https://relay-mint.example";
+
+    const signer = {
+      getPubKey: jest.fn().mockResolvedValue(userPubkey),
+      decrypt: jest
+        .fn()
+        // relay 17375 decrypt
+        .mockResolvedValueOnce(JSON.stringify([["mint", relayMint]]))
+        // relay 37375 and proof fetches: no content to decrypt
+        .mockResolvedValue(null),
+    };
+
+    // DB empty
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(makeDbPayload([])) as typeof global.fetch;
+
+    const relay17375 = makeBaseEvent({
+      id: "relay-17375",
+      kind: 17375,
+      pubkey: userPubkey,
+      content: "enc-relay-17375",
+      sig: "sig-relay-17375",
+      created_at: 100,
+    });
+    const relay37375 = makeBaseEvent({
+      id: "relay-37375",
+      kind: 37375,
+      pubkey: userPubkey,
+      tags: [["relay", "wss://cashu-from-relay.example"]],
+      content: "",
+      sig: "sig-relay-37375",
+      created_at: 200,
+    });
+
+    const nostr = {
+      fetch: jest
+        .fn()
+        // First call: config events (17375 / 37375)
+        .mockResolvedValueOnce([relay17375, relay37375])
+        // Second call: proof events
+        .mockResolvedValueOnce([]),
+    } as any;
+    const editCashuWalletContext = jest.fn();
+
+    const result = await fetchCashuWallet(
+      nostr,
+      signer as any,
+      ["wss://relay.example"],
+      editCashuWalletContext
+    );
+
+    expect(result.cashuMints).toContain(relayMint);
+    // Second nostr.fetch should use the cashu relay from the 37375 relay tag
+    expect(nostr.fetch).toHaveBeenNthCalledWith(2, expect.anything(), {}, [
+      "wss://cashu-from-relay.example",
+    ]);
+  });
+
+  it("processes relay proof events (7375) and spending history events (7376)", async () => {
+    const loadMint = jest.fn().mockResolvedValue(undefined);
+    const checkProofsStates = jest
+      .fn()
+      .mockResolvedValue([{ state: "UNSPENT", Y: "Y-s-relay" }]);
+
+    jest.doMock("@cashu/cashu-ts", () => ({
+      Mint: jest.fn(),
+      Wallet: jest.fn(() => ({ loadMint, checkProofsStates })),
+      hashToCurve: jest.fn((bytes: Uint8Array) => ({
+        toHex: () => `Y-${Buffer.from(bytes).toString("utf8")}`,
+      })),
+    }));
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(() => ({ tokens: [] })),
+      deleteEvent: jest.fn().mockResolvedValue(undefined),
+      verifyNip05Identifier: jest.fn(),
+    }));
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchCashuWallet } = await import("../fetch-service");
+
+    const userPubkey =
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const mintUrl = "https://relay-proof-mint.example";
+    const relayProof = { id: "rp1", secret: "s-relay", C: "C-rp1", amount: 2 };
+
+    const signer = {
+      getPubKey: jest.fn().mockResolvedValue(userPubkey),
+      decrypt: jest
+        .fn()
+        // 7375 relay proof decrypt
+        .mockResolvedValueOnce(
+          JSON.stringify({ mint: mintUrl, proofs: [relayProof] })
+        )
+        // 7376 relay spending history decrypt
+        .mockResolvedValueOnce(
+          JSON.stringify([
+            ["direction", "in"],
+            ["e", "some-created-id", "", "created"],
+          ])
+        ),
+    };
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(makeDbPayload([])) as typeof global.fetch;
+
+    const relay7375 = makeBaseEvent({
+      id: "relay-7375",
+      kind: 7375,
+      pubkey: userPubkey,
+      content: "enc-relay-7375",
+      sig: "sig-relay-7375",
+      created_at: 100,
+    });
+    const relay7376 = makeBaseEvent({
+      id: "relay-7376",
+      kind: 7376,
+      pubkey: userPubkey,
+      content: "enc-relay-7376",
+      sig: "sig-relay-7376",
+      created_at: 100,
+    });
+
+    const nostr = {
+      fetch: jest
+        .fn()
+        // First call: config events — none
+        .mockResolvedValueOnce([])
+        // Second call: proof events
+        .mockResolvedValueOnce([relay7375, relay7376]),
+    } as any;
+    const editCashuWalletContext = jest.fn();
+
+    const result = await fetchCashuWallet(
+      nostr,
+      signer as any,
+      ["wss://relay.example"],
+      editCashuWalletContext
+    );
+
+    expect(result.proofEvents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "relay-7375", mint: mintUrl }),
+      ])
+    );
+    expect(result.cashuProofs).toEqual(
+      expect.arrayContaining([expect.objectContaining({ secret: "s-relay" })])
+    );
+  });
+
+  it("calls CashuWallet.loadMint for each discovered mint", async () => {
+    const loadMint = jest.fn().mockResolvedValue(undefined);
+    const checkProofsStates = jest
+      .fn()
+      .mockResolvedValue([{ state: "UNSPENT", Y: "Y-s-load" }]);
+    const MockMint = jest.fn();
+    const MockWallet = jest.fn(() => ({ loadMint, checkProofsStates }));
+
+    jest.doMock("@cashu/cashu-ts", () => ({
+      Mint: MockMint,
+      Wallet: MockWallet,
+      hashToCurve: jest.fn((bytes: Uint8Array) => ({
+        toHex: () => `Y-${Buffer.from(bytes).toString("utf8")}`,
+      })),
+    }));
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(() => ({ tokens: [] })),
+      deleteEvent: jest.fn().mockResolvedValue(undefined),
+      verifyNip05Identifier: jest.fn(),
+    }));
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchCashuWallet } = await import("../fetch-service");
+
+    const userPubkey =
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const mintUrl = "https://loadmint.example";
+    const proof = { id: "pl1", secret: "s-load", C: "C-pl1", amount: 1 };
+
+    const signer = {
+      getPubKey: jest.fn().mockResolvedValue(userPubkey),
+      decrypt: jest
+        .fn()
+        .mockResolvedValueOnce(
+          JSON.stringify({ mint: mintUrl, proofs: [proof] })
+        )
+        .mockResolvedValue(null),
+    };
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(makeDbPayload([])) as typeof global.fetch;
+
+    const nostr = {
+      fetch: jest
+        .fn()
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([
+          makeBaseEvent({
+            id: "proof-event-loadmint",
+            kind: 7375,
+            pubkey: userPubkey,
+            content: "enc-proof-loadmint",
+            sig: "sig-proof-loadmint",
+            created_at: 100,
+          }),
+        ]),
+    } as any;
+
+    await fetchCashuWallet(
+      nostr,
+      signer as any,
+      ["wss://relay.example"],
+      jest.fn()
+    );
+
+    expect(MockMint).toHaveBeenCalledWith(mintUrl);
+    expect(MockWallet).toHaveBeenCalledTimes(1);
+    expect(loadMint).toHaveBeenCalledTimes(1);
+  });
+
+  it("deduplicates proofs by secret when two relay proof events contain the same secret", async () => {
+    const loadMint = jest.fn().mockResolvedValue(undefined);
+    const checkProofsStates = jest
+      .fn()
+      .mockResolvedValue([{ state: "UNSPENT", Y: "Y-shared-secret" }]);
+
+    jest.doMock("@cashu/cashu-ts", () => ({
+      Mint: jest.fn(),
+      Wallet: jest.fn(() => ({ loadMint, checkProofsStates })),
+      hashToCurve: jest.fn((bytes: Uint8Array) => ({
+        toHex: () => `Y-${Buffer.from(bytes).toString("utf8")}`,
+      })),
+    }));
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(() => ({ tokens: [] })),
+      deleteEvent: jest.fn().mockResolvedValue(undefined),
+      verifyNip05Identifier: jest.fn(),
+    }));
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchCashuWallet } = await import("../fetch-service");
+
+    const userPubkey =
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const mintUrl = "https://dedup-mint.example";
+    const duplicateProofA = {
+      id: "dup-a",
+      secret: "shared-secret",
+      C: "C-dup-a",
+      amount: 1,
+    };
+    const duplicateProofB = {
+      id: "dup-b",
+      secret: "shared-secret",
+      C: "C-dup-b",
+      amount: 1,
+    };
+
+    const signer = {
+      getPubKey: jest.fn().mockResolvedValue(userPubkey),
+      decrypt: jest
+        .fn()
+        .mockResolvedValueOnce(
+          JSON.stringify({ mint: mintUrl, proofs: [duplicateProofA] })
+        )
+        .mockResolvedValueOnce(
+          JSON.stringify({ mint: mintUrl, proofs: [duplicateProofB] })
+        )
+        .mockResolvedValue(null),
+    };
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(makeDbPayload([])) as typeof global.fetch;
+
+    const nostr = {
+      fetch: jest
+        .fn()
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([
+          makeBaseEvent({
+            id: "relay-dedup-7375-a",
+            kind: 7375,
+            pubkey: userPubkey,
+            content: "enc-dedup-a",
+            sig: "sig-dedup-a",
+            created_at: 100,
+          }),
+          makeBaseEvent({
+            id: "relay-dedup-7375-b",
+            kind: 7375,
+            pubkey: userPubkey,
+            content: "enc-dedup-b",
+            sig: "sig-dedup-b",
+            created_at: 100,
+          }),
+        ]),
+    } as any;
+
+    const result = await fetchCashuWallet(
+      nostr,
+      signer as any,
+      ["wss://relay.example"],
+      jest.fn()
+    );
+
+    const secretCount = result.cashuProofs.filter(
+      (p: { secret: string }) => p.secret === "shared-secret"
+    ).length;
+    expect(secretCount).toBe(1);
+  });
+
+  it("prunes spent proofs using checkProofsStates", async () => {
+    const loadMint = jest.fn().mockResolvedValue(undefined);
+    const checkProofsStates = jest
+      .fn()
+      .mockResolvedValue([{ state: "SPENT", Y: "Y-s-spent" }]);
+
+    jest.doMock("@cashu/cashu-ts", () => ({
+      Mint: jest.fn(),
+      Wallet: jest.fn(() => ({ loadMint, checkProofsStates })),
+      hashToCurve: jest.fn((bytes: Uint8Array) => ({
+        toHex: () => `Y-${Buffer.from(bytes).toString("utf8")}`,
+      })),
+    }));
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(() => ({ tokens: [] })),
+      deleteEvent: jest.fn().mockResolvedValue(undefined),
+      verifyNip05Identifier: jest.fn(),
+    }));
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchCashuWallet } = await import("../fetch-service");
+
+    const userPubkey =
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const mintUrl = "https://spent-mint.example";
+    const spentProof = { id: "sp1", secret: "s-spent", C: "C-sp1", amount: 5 };
+
+    const signer = {
+      getPubKey: jest.fn().mockResolvedValue(userPubkey),
+      decrypt: jest
+        .fn()
+        .mockResolvedValueOnce(
+          JSON.stringify({ mint: mintUrl, proofs: [spentProof] })
+        )
+        .mockResolvedValue(null),
+    };
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(makeDbPayload([])) as typeof global.fetch;
+
+    const nostr = {
+      fetch: jest
+        .fn()
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([
+          makeBaseEvent({
+            id: "spent-proof-event",
+            kind: 7375,
+            pubkey: userPubkey,
+            content: "enc-spent",
+            sig: "sig-spent",
+            created_at: 100,
+          }),
+        ]),
+    } as any;
+
+    const result = await fetchCashuWallet(
+      nostr,
+      signer as any,
+      ["wss://relay.example"],
+      jest.fn()
+    );
+
+    expect(result.cashuProofs).not.toContainEqual(
+      expect.objectContaining({ secret: "s-spent" })
+    );
+  });
+
+  it("spending-history reconciliation removes out-direction destroyed proofs and adds back unspent created proofs", async () => {
+    const loadMint = jest.fn().mockResolvedValue(undefined);
+    const checkProofsStates = jest.fn().mockResolvedValue([
+      { state: "UNSPENT", Y: "Y-s-out" },
+      { state: "UNSPENT", Y: "Y-s-change" },
+    ]);
+
+    jest.doMock("@cashu/cashu-ts", () => ({
+      Mint: jest.fn(),
+      Wallet: jest.fn(() => ({ loadMint, checkProofsStates })),
+      hashToCurve: jest.fn((bytes: Uint8Array) => ({
+        toHex: () => `Y-${Buffer.from(bytes).toString("utf8")}`,
+      })),
+    }));
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(() => ({ tokens: [] })),
+      deleteEvent: jest.fn().mockResolvedValue(undefined),
+      verifyNip05Identifier: jest.fn(),
+    }));
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchCashuWallet } = await import("../fetch-service");
+
+    const userPubkey =
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const mintUrl = "https://history-mint.example";
+    const outProof = { id: "p-out", secret: "s-out", C: "C-out", amount: 10 };
+    const changeProof = {
+      id: "p-change",
+      secret: "s-change",
+      C: "C-change",
+      amount: 3,
+    };
+
+    const signer = {
+      getPubKey: jest.fn().mockResolvedValue(userPubkey),
+      decrypt: jest
+        .fn()
+        // out-proof-event decrypt
+        .mockResolvedValueOnce(
+          JSON.stringify({ mint: mintUrl, proofs: [outProof] })
+        )
+        // change-proof-event decrypt
+        .mockResolvedValueOnce(
+          JSON.stringify({ mint: mintUrl, proofs: [changeProof] })
+        )
+        // spending-history event decrypt
+        .mockResolvedValueOnce(
+          JSON.stringify([
+            ["direction", "out"],
+            ["e", "out-proof-event-id", "", "destroyed"],
+            ["e", "change-proof-event-id", "", "created"],
+          ])
+        ),
+    };
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(makeDbPayload([])) as typeof global.fetch;
+
+    const nostr = {
+      fetch: jest
+        .fn()
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([
+          makeBaseEvent({
+            id: "out-proof-event-id",
+            kind: 7375,
+            pubkey: userPubkey,
+            content: "enc-out",
+            sig: "sig-out",
+            created_at: 100,
+          }),
+          makeBaseEvent({
+            id: "change-proof-event-id",
+            kind: 7375,
+            pubkey: userPubkey,
+            content: "enc-change",
+            sig: "sig-change",
+            created_at: 100,
+          }),
+          makeBaseEvent({
+            id: "history-event-id",
+            kind: 7376,
+            pubkey: userPubkey,
+            content: "enc-history",
+            sig: "sig-history",
+            created_at: 100,
+          }),
+        ]),
+    } as any;
+
+    const result = await fetchCashuWallet(
+      nostr,
+      signer as any,
+      ["wss://relay.example"],
+      jest.fn()
+    );
+
+    expect(result.cashuProofs).not.toContainEqual(
+      expect.objectContaining({ secret: "s-out" })
+    );
+    expect(result.cashuProofs).toContainEqual(
+      expect.objectContaining({ secret: "s-change" })
+    );
+  });
+
+  it("calls deleteEvent with IDs of fully-spent proof events", async () => {
+    const loadMint = jest.fn().mockResolvedValue(undefined);
+    const checkProofsStates = jest
+      .fn()
+      .mockResolvedValue([{ state: "SPENT", Y: "Y-s-delete" }]);
+
+    const deleteEvent = jest.fn().mockResolvedValue(undefined);
+
+    jest.doMock("@cashu/cashu-ts", () => ({
+      Mint: jest.fn(),
+      Wallet: jest.fn(() => ({ loadMint, checkProofsStates })),
+      hashToCurve: jest.fn((bytes: Uint8Array) => ({
+        toHex: () => `Y-${Buffer.from(bytes).toString("utf8")}`,
+      })),
+    }));
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(() => ({ tokens: [] })),
+      deleteEvent,
+      verifyNip05Identifier: jest.fn(),
+    }));
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchCashuWallet } = await import("../fetch-service");
+
+    const userPubkey =
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const mintUrl = "https://delete-mint.example";
+    const deletedProof = {
+      id: "pd1",
+      secret: "s-delete",
+      C: "C-pd1",
+      amount: 1,
+    };
+
+    const signer = {
+      getPubKey: jest.fn().mockResolvedValue(userPubkey),
+      decrypt: jest
+        .fn()
+        .mockResolvedValueOnce(
+          JSON.stringify({ mint: mintUrl, proofs: [deletedProof] })
+        )
+        .mockResolvedValue(null),
+    };
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(makeDbPayload([])) as typeof global.fetch;
+
+    const nostr = {
+      fetch: jest
+        .fn()
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([
+          makeBaseEvent({
+            id: "spent-delete-event-id",
+            kind: 7375,
+            pubkey: userPubkey,
+            content: "enc-delete",
+            sig: "sig-delete",
+            created_at: 100,
+          }),
+        ]),
+    } as any;
+
+    await fetchCashuWallet(
+      nostr,
+      signer as any,
+      ["wss://relay.example"],
+      jest.fn()
+    );
+
+    expect(deleteEvent).toHaveBeenCalledWith(
+      nostr,
+      signer,
+      expect.arrayContaining(["spent-delete-event-id"])
+    );
+  });
+
+  it("does not break when signer.decrypt throws or returns malformed JSON", async () => {
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(() => ({ tokens: [] })),
+      deleteEvent: jest.fn().mockResolvedValue(undefined),
+      verifyNip05Identifier: jest.fn(),
+    }));
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchCashuWallet } = await import("../fetch-service");
+
+    const userPubkey =
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+    const signer = {
+      getPubKey: jest.fn().mockResolvedValue(userPubkey),
+      decrypt: jest
+        .fn()
+        // DB 17375: decrypt throws
+        .mockRejectedValueOnce(new Error("decrypt error"))
+        // DB 7375: returns malformed JSON
+        .mockResolvedValueOnce("not-valid-json{{{"),
+    };
+
+    global.fetch = jest.fn().mockResolvedValue(
+      makeDbPayload([
+        makeBaseEvent({
+          id: "err-17375",
+          kind: 17375,
+          pubkey: userPubkey,
+          content: "enc-err-17375",
+          created_at: 100,
+        }),
+        makeBaseEvent({
+          id: "err-7375",
+          kind: 7375,
+          pubkey: userPubkey,
+          content: "enc-err-7375",
+          created_at: 100,
+        }),
+      ])
+    ) as typeof global.fetch;
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([]) } as any;
+
+    await expect(
+      fetchCashuWallet(nostr, signer as any, ["wss://relay.example"], jest.fn())
+    ).resolves.toMatchObject({
+      proofEvents: [],
+      cashuMints: [],
+      cashuProofs: [],
+    });
+
+    expect(consoleErrorSpy).toHaveBeenCalled();
+
+    consoleErrorSpy.mockRestore();
+  });
+
+  it("final context payload matches the reconciled wallet state", async () => {
+    const loadMint = jest.fn().mockResolvedValue(undefined);
+    const checkProofsStates = jest
+      .fn()
+      .mockResolvedValue([{ state: "UNSPENT", Y: "Y-s-final" }]);
+
+    jest.doMock("@cashu/cashu-ts", () => ({
+      Mint: jest.fn(),
+      Wallet: jest.fn(() => ({ loadMint, checkProofsStates })),
+      hashToCurve: jest.fn((bytes: Uint8Array) => ({
+        toHex: () => `Y-${Buffer.from(bytes).toString("utf8")}`,
+      })),
+    }));
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(() => ({ tokens: [] })),
+      deleteEvent: jest.fn().mockResolvedValue(undefined),
+      verifyNip05Identifier: jest.fn(),
+    }));
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchCashuWallet } = await import("../fetch-service");
+
+    const userPubkey =
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const mintUrl = "https://final-mint.example";
+    const finalProof = {
+      id: "pf1",
+      secret: "s-final",
+      C: "C-pf1",
+      amount: 21,
+    };
+
+    const signer = {
+      getPubKey: jest.fn().mockResolvedValue(userPubkey),
+      decrypt: jest
+        .fn()
+        .mockResolvedValueOnce(
+          JSON.stringify({ mint: mintUrl, proofs: [finalProof] })
+        )
+        .mockResolvedValue(null),
+    };
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(makeDbPayload([])) as typeof global.fetch;
+
+    const nostr = {
+      fetch: jest
+        .fn()
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([
+          makeBaseEvent({
+            id: "final-proof-event-id",
+            kind: 7375,
+            pubkey: userPubkey,
+            content: "enc-final",
+            sig: "sig-final",
+            created_at: 100,
+          }),
+        ]),
+    } as any;
+    const editCashuWalletContext = jest.fn();
+
+    const result = await fetchCashuWallet(
+      nostr,
+      signer as any,
+      ["wss://relay.example"],
+      editCashuWalletContext
+    );
+
+    const expectedProofEvents = [
+      expect.objectContaining({ id: "final-proof-event-id", mint: mintUrl }),
+    ];
+    const expectedMints = [mintUrl];
+    const expectedProofs = [expect.objectContaining({ secret: "s-final" })];
+
+    expect(editCashuWalletContext).toHaveBeenLastCalledWith(
+      expect.arrayContaining(expectedProofEvents),
+      expectedMints,
+      expect.arrayContaining(expectedProofs),
+      false,
+      expect.objectContaining({
+        walletIdentityUnavailable: undefined,
+      })
+    );
+    expect(result.proofEvents).toEqual(
+      expect.arrayContaining(expectedProofEvents)
+    );
+    expect(result.cashuMints).toEqual(expectedMints);
+    expect(result.cashuProofs).toEqual(expect.arrayContaining(expectedProofs));
   });
 });
 
@@ -5639,216 +6549,6 @@ describe("fetchReviews", () => {
     expect(nostr.fetch).toHaveBeenCalledTimes(1);
     expect(result.merchantScoresMap).toBeInstanceOf(Map);
     expect(result.productReviewsMap).toBeInstanceOf(Map);
-
-    consoleErrorSpy.mockRestore();
-  });
-});
-
-describe("fetchEscrowRecords", () => {
-  const userPubkey =
-    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-
-  const baseEvent = {
-    id: "ev1",
-    pubkey: userPubkey,
-    kind: 30406,
-    content: "encrypted-record",
-    sig: "sig1",
-    created_at: 1000,
-    tags: [["d", "shopstr:p2pk-escrow:order-1"]],
-  };
-
-  const record = {
-    orderId: "order-1",
-    mint: "https://mint.example",
-    token: "cashuAtoken",
-    amount: 100,
-    sellerPubkey: "b".repeat(64),
-    locktime: 9999999999,
-    refundKeys: ["c".repeat(64)],
-    createdAt: 1000,
-  };
-
-  beforeEach(() => {
-    jest.resetModules();
-    jest.clearAllMocks();
-  });
-
-  it("returns early without touching relays or DB when signer has no pubkey", async () => {
-    jest.doMock("@/utils/cashu/p2pk-escrow-records", () => ({
-      BUYER_P2PK_ESCROW_EVENT_KIND: 30406,
-      restoreEscrowRecordLocally: jest.fn(),
-    }));
-    jest.doMock("@/utils/db/db-client", () => ({
-      cacheEventsToDatabase: jest.fn(),
-    }));
-    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
-      getLocalStorageData: jest.fn(() => ({ tokens: [] })),
-      deleteEvent: jest.fn(),
-      verifyNip05Identifier: jest.fn(),
-      publishWalletEvent: jest.fn(),
-    }));
-
-    const { fetchEscrowRecords } = await import("../fetch-service");
-    const nostr = { fetch: jest.fn() };
-    global.fetch = jest.fn() as typeof global.fetch;
-
-    await fetchEscrowRecords(nostr as any, undefined, ["wss://relay.example"]);
-
-    expect(global.fetch).not.toHaveBeenCalled();
-    expect(nostr.fetch).not.toHaveBeenCalled();
-  });
-
-  it("restores records from DB then relay, calling restoreEscrowRecordLocally for each", async () => {
-    const restoreEscrowRecordLocally = jest.fn();
-    jest.doMock("@/utils/cashu/p2pk-escrow-records", () => ({
-      BUYER_P2PK_ESCROW_EVENT_KIND: 30406,
-      restoreEscrowRecordLocally,
-    }));
-    jest.doMock("@/utils/db/db-client", () => ({
-      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
-    }));
-    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
-      getLocalStorageData: jest.fn(() => ({ tokens: [] })),
-      deleteEvent: jest.fn(),
-      verifyNip05Identifier: jest.fn(),
-      publishWalletEvent: jest.fn(),
-    }));
-
-    const { fetchEscrowRecords } = await import("../fetch-service");
-
-    const signer = createMockSigner({
-      getPubKey: jest.fn().mockResolvedValue(userPubkey),
-      decrypt: jest.fn().mockResolvedValue(JSON.stringify(record)),
-    });
-
-    global.fetch = jest.fn().mockResolvedValue({
-      ok: true,
-      json: async () => [baseEvent],
-    }) as typeof global.fetch;
-
-    const nostr = { fetch: jest.fn().mockResolvedValue([baseEvent]) };
-
-    await fetchEscrowRecords(nostr as any, signer, ["wss://relay.example"]);
-
-    // Once from DB, once from relay
-    expect(restoreEscrowRecordLocally).toHaveBeenCalledTimes(2);
-    expect(restoreEscrowRecordLocally).toHaveBeenCalledWith(record);
-  });
-
-  it("caches valid relay events to the database", async () => {
-    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
-    jest.doMock("@/utils/cashu/p2pk-escrow-records", () => ({
-      BUYER_P2PK_ESCROW_EVENT_KIND: 30406,
-      restoreEscrowRecordLocally: jest.fn(),
-    }));
-    jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
-    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
-      getLocalStorageData: jest.fn(() => ({ tokens: [] })),
-      deleteEvent: jest.fn(),
-      verifyNip05Identifier: jest.fn(),
-      publishWalletEvent: jest.fn(),
-    }));
-
-    const { fetchEscrowRecords } = await import("../fetch-service");
-
-    const signer = createMockSigner({
-      getPubKey: jest.fn().mockResolvedValue(userPubkey),
-      decrypt: jest.fn().mockResolvedValue(JSON.stringify(record)),
-    });
-
-    global.fetch = jest.fn().mockResolvedValue({
-      ok: true,
-      json: async () => [],
-    }) as typeof global.fetch;
-
-    const nostr = { fetch: jest.fn().mockResolvedValue([baseEvent]) };
-
-    await fetchEscrowRecords(nostr as any, signer, ["wss://relay.example"]);
-
-    expect(cacheEventsToDatabase).toHaveBeenCalledWith([baseEvent]);
-  });
-
-  it("skips a relay event whose content cannot be decrypted without throwing", async () => {
-    const restoreEscrowRecordLocally = jest.fn();
-    jest.doMock("@/utils/cashu/p2pk-escrow-records", () => ({
-      BUYER_P2PK_ESCROW_EVENT_KIND: 30406,
-      restoreEscrowRecordLocally,
-    }));
-    jest.doMock("@/utils/db/db-client", () => ({
-      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
-    }));
-    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
-      getLocalStorageData: jest.fn(() => ({ tokens: [] })),
-      deleteEvent: jest.fn(),
-      verifyNip05Identifier: jest.fn(),
-      publishWalletEvent: jest.fn(),
-    }));
-
-    const { fetchEscrowRecords } = await import("../fetch-service");
-
-    const signer = createMockSigner({
-      getPubKey: jest.fn().mockResolvedValue(userPubkey),
-      decrypt: jest.fn().mockRejectedValue(new Error("bad key")),
-    });
-
-    global.fetch = jest.fn().mockResolvedValue({
-      ok: true,
-      json: async () => [],
-    }) as typeof global.fetch;
-
-    const nostr = { fetch: jest.fn().mockResolvedValue([baseEvent]) };
-
-    await expect(
-      fetchEscrowRecords(nostr as any, signer, ["wss://relay.example"])
-    ).resolves.toBeUndefined();
-
-    expect(restoreEscrowRecordLocally).not.toHaveBeenCalled();
-  });
-
-  it("continues to relay fetch when DB call fails", async () => {
-    const restoreEscrowRecordLocally = jest.fn();
-    const consoleErrorSpy = jest
-      .spyOn(console, "error")
-      .mockImplementation(() => undefined);
-
-    jest.doMock("@/utils/cashu/p2pk-escrow-records", () => ({
-      BUYER_P2PK_ESCROW_EVENT_KIND: 30406,
-      restoreEscrowRecordLocally,
-    }));
-    jest.doMock("@/utils/db/db-client", () => ({
-      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
-    }));
-    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
-      getLocalStorageData: jest.fn(() => ({ tokens: [] })),
-      deleteEvent: jest.fn(),
-      verifyNip05Identifier: jest.fn(),
-      publishWalletEvent: jest.fn(),
-    }));
-
-    const { fetchEscrowRecords } = await import("../fetch-service");
-
-    const signer = createMockSigner({
-      getPubKey: jest.fn().mockResolvedValue(userPubkey),
-      decrypt: jest.fn().mockResolvedValue(JSON.stringify(record)),
-    });
-
-    // DB fetch fails
-    global.fetch = jest
-      .fn()
-      .mockRejectedValue(new Error("network error")) as typeof global.fetch;
-
-    const nostr = { fetch: jest.fn().mockResolvedValue([baseEvent]) };
-
-    await fetchEscrowRecords(nostr as any, signer, ["wss://relay.example"]);
-
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      "Failed to restore escrow records from database:",
-      expect.any(Error)
-    );
-    // Relay fetch still ran and restored the record
-    expect(nostr.fetch).toHaveBeenCalledTimes(1);
-    expect(restoreEscrowRecordLocally).toHaveBeenCalledWith(record);
 
     consoleErrorSpy.mockRestore();
   });

@@ -46,7 +46,11 @@ import {
   NostrContext,
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
-import { parseP2PKProofSet, pubkeysEqual } from "@/utils/cashu/p2pk-checkout";
+import {
+  checkMintP2pkSupport,
+  parseP2PKProofSet,
+  pubkeysEqual,
+} from "@/utils/cashu/p2pk-checkout";
 import { ParsedP2PK } from "@/utils/types/types";
 
 export default function ClaimButton({ token }: { token: string }) {
@@ -85,6 +89,17 @@ export default function ClaimButton({ token }: { token: string }) {
     if (!p2pk || !p2pk.expired || !cashuPubkey) return false;
     return p2pk.refundKeys.some((k) => pubkeysEqual(k, cashuPubkey));
   }, [p2pk, cashuPubkey]);
+
+  const assertP2pkMintSupported = async () => {
+    if (!p2pk) return;
+
+    const mintSupport = await checkMintP2pkSupport(tokenMint);
+    if (!mintSupport.supported) {
+      throw new Error(
+        mintSupport.reason ?? "This mint does not support P2PK proofs."
+      );
+    }
+  };
 
   const { theme } = useTheme();
 
@@ -219,6 +234,7 @@ export default function ClaimButton({ token }: { token: string }) {
       // Both the seller claim path and the buyer refund path use this branch;
       // the mint is the authority on which signing path is valid.
       if (p2pk) {
+        await assertP2pkMintSupported();
         await wallet!.loadMint();
         const freshProofs = await wallet!.receive(proofs, {
           privkey: cashuPrivkey!,
@@ -344,6 +360,7 @@ export default function ClaimButton({ token }: { token: string }) {
     const ln = new LightningAddress(lnurl);
     try {
       if (wallet) {
+        await assertP2pkMintSupported();
         await wallet.loadMint();
         await ln.fetch();
         const invoice = await ln.requestInvoice({ satoshi: newAmount });

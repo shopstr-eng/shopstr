@@ -17,7 +17,10 @@ import {
   publishWalletEvent,
   generateKeys,
 } from "@/utils/nostr/nostr-helper-functions";
-import { parseP2PKProofSet } from "@/utils/cashu/p2pk-checkout";
+import {
+  checkMintP2pkSupport,
+  parseP2PKProofSet,
+} from "@/utils/cashu/p2pk-checkout";
 import { safeSwap } from "@/utils/cashu/swap-retry-service";
 import { safeMeltProofs } from "@/utils/cashu/melt-retry-service";
 
@@ -105,6 +108,7 @@ jest.mock("@heroui/react", () => {
 });
 
 jest.mock("@/utils/cashu/p2pk-checkout", () => ({
+  checkMintP2pkSupport: jest.fn().mockResolvedValue({ supported: true }),
   parseP2PKProofSet: jest.fn().mockReturnValue({ p2pk: null }),
   pubkeysEqual: jest.fn(
     (left?: string, right?: string) => left?.slice(-64) === right?.slice(-64)
@@ -152,6 +156,7 @@ const mockGetDecodedToken = getDecodedToken as jest.Mock;
 const mockPublishProofEvent = publishProofEvent as jest.Mock;
 const mockPublishWalletEvent = publishWalletEvent as jest.Mock;
 const mockGenerateKeys = generateKeys as jest.Mock;
+const mockCheckMintP2pkSupport = checkMintP2pkSupport as jest.Mock;
 const mockParseP2PKProofSet = parseP2PKProofSet as jest.Mock;
 const mockSafeSwap = safeSwap as jest.Mock;
 const mockSafeMeltProofs = safeMeltProofs as jest.Mock;
@@ -286,6 +291,7 @@ beforeEach(() => {
   });
   mockPublishProofEvent.mockResolvedValue(undefined);
   mockPublishWalletEvent.mockResolvedValue(undefined);
+  mockCheckMintP2pkSupport.mockResolvedValue({ supported: true });
   mockGenerateKeys.mockResolvedValue({
     nsec: "nsec1test",
     npub: "npub1test",
@@ -553,6 +559,29 @@ describe("ClaimButton — P2PK receive path", () => {
       ).toBeInTheDocument()
     );
   });
+
+  test("blocks P2PK receive when the mint does not advertise P2PK support", async () => {
+    mockCheckMintP2pkSupport.mockResolvedValue({
+      supported: false,
+      reason: "Unsupported P2PK mint",
+    });
+    renderClaimButton();
+
+    fireEvent.click(await screen.findByRole("button", { name: /Claim/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Receive$/i }));
+
+    const walletInstance = MockCashuWallet.mock.results[0]!.value;
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: /Invalid Token/i })
+      ).toBeInTheDocument()
+    );
+    expect(mockCheckMintP2pkSupport).toHaveBeenCalledWith(
+      "https://testmint.com"
+    );
+    expect(walletInstance.receive).not.toHaveBeenCalled();
+    expect(mockPublishProofEvent).not.toHaveBeenCalled();
+  });
 });
 
 describe("ClaimButton — P2PK redeem path", () => {
@@ -622,6 +651,25 @@ describe("ClaimButton — P2PK redeem path", () => {
     const [, config] = walletInstance.receive.mock.calls[0];
     expect(config.privkey).toBe(CASHU_PRIVKEY);
     // safeSwap must NOT be called since we went through receive() not redeem()
+    expect(mockSafeSwap).not.toHaveBeenCalled();
+  });
+
+  test("blocks P2PK Lightning redeem when the mint does not advertise P2PK support", async () => {
+    mockCheckMintP2pkSupport.mockResolvedValue({
+      supported: false,
+      reason: "Unsupported P2PK mint",
+    });
+    renderClaimButton("cashuAtoken", { profileLud16: "seller@getalby.com" });
+
+    fireEvent.click(await screen.findByRole("button", { name: /Claim/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Redeem$/i }));
+
+    await waitFor(() =>
+      expect(screen.getByText("Token redemption failed!")).toBeInTheDocument()
+    );
+    expect(mockCheckMintP2pkSupport).toHaveBeenCalledWith(
+      "https://testmint.com"
+    );
     expect(mockSafeSwap).not.toHaveBeenCalled();
   });
 });
@@ -799,6 +847,27 @@ describe("ClaimButton — P2PK refund path", () => {
         screen.getByRole("button", { name: /Invalid Token/i })
       ).toBeInTheDocument()
     );
+  });
+
+  test("blocks refund when the mint does not advertise P2PK support", async () => {
+    mockCheckMintP2pkSupport.mockResolvedValue({
+      supported: false,
+      reason: "Unsupported P2PK mint",
+    });
+
+    await renderExpiredRefundScenario();
+    fireEvent.click(screen.getByRole("button", { name: /^Refund:/i }));
+
+    const walletInstance = MockCashuWallet.mock.results[0]!.value;
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: /Invalid Token/i })
+      ).toBeInTheDocument()
+    );
+    expect(mockCheckMintP2pkSupport).toHaveBeenCalledWith(
+      "https://testmint.com"
+    );
+    expect(walletInstance.receive).not.toHaveBeenCalled();
   });
 
   test("non-P2PK tokens do not show a Refund button", async () => {

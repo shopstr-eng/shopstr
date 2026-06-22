@@ -36,7 +36,8 @@ import {
 import {
   BUYER_P2PK_ESCROW_EVENT_KIND,
   BuyerP2pkEscrowRecord,
-  restoreEscrowRecordLocally,
+  isBuyerP2pkEscrowRecord,
+  restoreEncryptedEscrowRecordLocally,
 } from "@/utils/cashu/p2pk-escrow-records";
 import {
   buildMessagesListProof,
@@ -1676,17 +1677,27 @@ export const fetchEscrowRecords = async (
   const userPubkey = await signer?.getPubKey?.();
   if (!userPubkey) return;
 
+  const restoreEncryptedRecordFromEvent = async (event: NostrEvent) => {
+    const decrypted = await signer!.decrypt(userPubkey, event.content);
+    const record = parseJsonSafely<BuyerP2pkEscrowRecord>(decrypted);
+    if (!isBuyerP2pkEscrowRecord(record)) return;
+
+    restoreEncryptedEscrowRecordLocally({
+      orderId: record.orderId,
+      createdAt: record.createdAt,
+      content: event.content,
+    });
+  };
+
   // DB-first: restore from server-side cache so the orders dashboard has records
   // even before the Nostr relay fetch completes
   try {
     const dbRes = await fetch(`/api/db/fetch-escrow?pubkey=${userPubkey}`);
     const dbEvents: NostrEvent[] = dbRes.ok ? await dbRes.json() : [];
     for (const event of dbEvents) {
+      if (event.kind !== BUYER_P2PK_ESCROW_EVENT_KIND) continue;
       try {
-        const decrypted = await signer!.decrypt(userPubkey, event.content);
-        restoreEscrowRecordLocally(
-          JSON.parse(decrypted) as BuyerP2pkEscrowRecord
-        );
+        await restoreEncryptedRecordFromEvent(event);
       } catch {
         // skip malformed cached events
       }
@@ -1711,14 +1722,11 @@ export const fetchEscrowRecords = async (
     );
   }
 
-  // upsertLocalBuyerP2pkEscrowRecord (called by restoreEscrowRecordLocally) deduplicates
-  // by orderId — safe to call for the same record from DB and relay without creating duplicates
-  for (const event of escrowEvents) {
+  // restoreEncryptedEscrowRecordLocally deduplicates by orderId, so it is safe
+  // to call for the same record from DB and relay without creating duplicates.
+  for (const event of validEscrowEvents) {
     try {
-      const decrypted = await signer!.decrypt(userPubkey, event.content);
-      restoreEscrowRecordLocally(
-        JSON.parse(decrypted) as BuyerP2pkEscrowRecord
-      );
+      await restoreEncryptedRecordFromEvent(event);
     } catch (error) {
       console.error(`Failed to decrypt escrow record ${event.id}:`, error);
     }

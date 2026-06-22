@@ -1,7 +1,9 @@
 import {
   BUYER_P2PK_ESCROW_EVENT_KIND,
   getLocalBuyerP2pkEscrowRecords,
+  getStoredBuyerP2pkEscrowRecords,
   persistBuyerP2pkEscrowRecord,
+  restoreEncryptedEscrowRecordLocally,
   restoreEscrowRecordLocally,
 } from "../p2pk-escrow-records";
 
@@ -31,14 +33,17 @@ describe("p2pk-escrow-records", () => {
   it("persists a local buyer escrow mirror", async () => {
     await persistBuyerP2pkEscrowRecord(undefined, undefined, record);
 
-    expect(getLocalBuyerP2pkEscrowRecords()).toEqual([record]);
+    expect(getLocalBuyerP2pkEscrowRecords()).toEqual([]);
+    expect(localStorage.getItem("shopstr.p2pkEscrowRecords")).toBeNull();
   });
 
-  it("persists an encrypted self-copy when a signer is available", async () => {
+  it("persists and restores an encrypted self-copy when a signer is available", async () => {
+    const encryptedContent = "encrypted-record";
     const signer = {
       getPubKey: jest.fn().mockResolvedValue("buyer-pubkey"),
-      encrypt: jest.fn(async (_pubkey: string, plaintext: string) => {
-        return `encrypted:${plaintext}`;
+      encrypt: jest.fn().mockResolvedValue(encryptedContent),
+      decrypt: jest.fn(async (_pubkey: string, ciphertext: string) => {
+        return ciphertext === encryptedContent ? JSON.stringify(record) : "";
       }),
     } as any;
 
@@ -54,8 +59,12 @@ describe("p2pk-escrow-records", () => {
       {
         orderId: record.orderId,
         createdAt: record.createdAt,
-        content: `encrypted:${JSON.stringify(record)}`,
+        content: encryptedContent,
       },
+    ]);
+    expect(localStorage.getItem("shopstr.p2pkEscrowRecords")).toBeNull();
+    await expect(getStoredBuyerP2pkEscrowRecords(signer)).resolves.toEqual([
+      record,
     ]);
   });
 
@@ -84,6 +93,33 @@ describe("p2pk-escrow-records", () => {
     restoreEscrowRecordLocally(record); // from DB
     restoreEscrowRecordLocally(record); // from relay
     expect(getLocalBuyerP2pkEscrowRecords()).toEqual([record]);
+  });
+
+  it("restoreEncryptedEscrowRecordLocally stores encrypted records without token plaintext", async () => {
+    const encryptedContent = "encrypted-record";
+    const signer = {
+      getPubKey: jest.fn().mockResolvedValue("buyer-pubkey"),
+      decrypt: jest.fn(async (_pubkey: string, ciphertext: string) => {
+        return ciphertext === encryptedContent ? JSON.stringify(record) : "";
+      }),
+    } as any;
+
+    restoreEncryptedEscrowRecordLocally({
+      orderId: record.orderId,
+      createdAt: record.createdAt,
+      content: encryptedContent,
+    });
+
+    expect(localStorage.getItem("shopstr.p2pkEscrowRecords")).toBeNull();
+    expect(
+      localStorage.getItem("shopstr.p2pkEscrowRecords.encrypted")
+    ).toContain(encryptedContent);
+    expect(
+      localStorage.getItem("shopstr.p2pkEscrowRecords.encrypted")
+    ).not.toContain(record.token);
+    await expect(getStoredBuyerP2pkEscrowRecords(signer)).resolves.toEqual([
+      record,
+    ]);
   });
 
   it("publishes an encrypted relay record when nostr and signer are available", async () => {

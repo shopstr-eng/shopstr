@@ -28,7 +28,7 @@ import { ProfileWithDropdown } from "@/components/utility-components/profile/pro
 import ClaimButton from "@/components/utility-components/claim-button";
 import DisplayProductModal from "@/components/display-product-modal";
 import AddressChangeModal from "@/components/utility-components/address-change-modal";
-import { getLocalBuyerP2pkEscrowRecords } from "@/utils/cashu/p2pk-escrow-records";
+import { getStoredBuyerP2pkEscrowRecords } from "@/utils/cashu/p2pk-escrow-records";
 import parseTags, {
   ProductData,
 } from "@/utils/parsers/product-parser-functions";
@@ -636,7 +636,7 @@ const OrdersDashboard = ({
       }
 
       const consolidatedOrders = Array.from(consolidatedOrdersMap.values());
-      const localEscrowRecords = getLocalBuyerP2pkEscrowRecords();
+      const localEscrowRecords = await getStoredBuyerP2pkEscrowRecords(signer);
       for (const escrowRecord of localEscrowRecords) {
         const order = consolidatedOrders.find(
           (item) => item.orderId === escrowRecord.orderId

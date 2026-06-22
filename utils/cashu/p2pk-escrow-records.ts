@@ -19,10 +19,50 @@ export interface BuyerP2pkEscrowRecord {
   createdAt: number;
 }
 
-interface EncryptedBuyerP2pkEscrowRecord {
+export interface EncryptedBuyerP2pkEscrowRecord {
   orderId: string;
   createdAt: number;
   content: string;
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0;
+}
+
+export function isBuyerP2pkEscrowRecord(
+  record: unknown
+): record is BuyerP2pkEscrowRecord {
+  if (typeof record !== "object" || record === null) return false;
+  const candidate = record as Partial<BuyerP2pkEscrowRecord>;
+
+  return (
+    isNonEmptyString(candidate.orderId) &&
+    isNonEmptyString(candidate.mint) &&
+    isNonEmptyString(candidate.token) &&
+    typeof candidate.amount === "number" &&
+    Number.isFinite(candidate.amount) &&
+    isNonEmptyString(candidate.sellerPubkey) &&
+    typeof candidate.locktime === "number" &&
+    Number.isFinite(candidate.locktime) &&
+    Array.isArray(candidate.refundKeys) &&
+    candidate.refundKeys.every(isNonEmptyString) &&
+    typeof candidate.createdAt === "number" &&
+    Number.isFinite(candidate.createdAt)
+  );
+}
+
+function isEncryptedBuyerP2pkEscrowRecord(
+  record: unknown
+): record is EncryptedBuyerP2pkEscrowRecord {
+  if (typeof record !== "object" || record === null) return false;
+  const candidate = record as Partial<EncryptedBuyerP2pkEscrowRecord>;
+
+  return (
+    isNonEmptyString(candidate.orderId) &&
+    typeof candidate.createdAt === "number" &&
+    Number.isFinite(candidate.createdAt) &&
+    isNonEmptyString(candidate.content)
+  );
 }
 
 function readJsonArray<T>(storageKey: string): T[] {
@@ -44,7 +84,15 @@ function writeJsonArray<T>(storageKey: string, records: T[]): void {
 }
 
 export function getLocalBuyerP2pkEscrowRecords(): BuyerP2pkEscrowRecord[] {
-  return readJsonArray<BuyerP2pkEscrowRecord>(LOCAL_STORAGE_KEY);
+  return readJsonArray<BuyerP2pkEscrowRecord>(LOCAL_STORAGE_KEY).filter(
+    isBuyerP2pkEscrowRecord
+  );
+}
+
+function getEncryptedBuyerP2pkEscrowRecords(): EncryptedBuyerP2pkEscrowRecord[] {
+  return readJsonArray<EncryptedBuyerP2pkEscrowRecord>(
+    ENCRYPTED_STORAGE_KEY
+  ).filter(isEncryptedBuyerP2pkEscrowRecord);
 }
 
 function upsertLocalBuyerP2pkEscrowRecord(record: BuyerP2pkEscrowRecord): void {
@@ -65,9 +113,7 @@ function upsertLocalBuyerP2pkEscrowRecord(record: BuyerP2pkEscrowRecord): void {
 function upsertEncryptedBuyerP2pkEscrowRecord(
   record: EncryptedBuyerP2pkEscrowRecord
 ): void {
-  const records = readJsonArray<EncryptedBuyerP2pkEscrowRecord>(
-    ENCRYPTED_STORAGE_KEY
-  );
+  const records = getEncryptedBuyerP2pkEscrowRecords();
   const existingIndex = records.findIndex(
     (item) => item.orderId === record.orderId
   );
@@ -81,10 +127,67 @@ function upsertEncryptedBuyerP2pkEscrowRecord(
   writeJsonArray(ENCRYPTED_STORAGE_KEY, records);
 }
 
+function removeLocalBuyerP2pkEscrowRecord(orderId: string): void {
+  const records = getLocalBuyerP2pkEscrowRecords().filter(
+    (item) => item.orderId !== orderId
+  );
+
+  if (records.length > 0) {
+    writeJsonArray(LOCAL_STORAGE_KEY, records);
+  } else if (typeof window !== "undefined") {
+    window.localStorage.removeItem(LOCAL_STORAGE_KEY);
+  }
+}
+
 export function restoreEscrowRecordLocally(
   record: BuyerP2pkEscrowRecord
 ): void {
   upsertLocalBuyerP2pkEscrowRecord(record);
+}
+
+export function restoreEncryptedEscrowRecordLocally(
+  record: EncryptedBuyerP2pkEscrowRecord
+): void {
+  upsertEncryptedBuyerP2pkEscrowRecord(record);
+  removeLocalBuyerP2pkEscrowRecord(record.orderId);
+}
+
+export async function getStoredBuyerP2pkEscrowRecords(
+  signer?: NostrSigner
+): Promise<BuyerP2pkEscrowRecord[]> {
+  const recordsByOrderId = new Map<string, BuyerP2pkEscrowRecord>();
+
+  for (const record of getLocalBuyerP2pkEscrowRecords()) {
+    recordsByOrderId.set(record.orderId, record);
+  }
+
+  if (!signer) {
+    return Array.from(recordsByOrderId.values());
+  }
+
+  let userPubkey: string;
+  try {
+    userPubkey = await signer.getPubKey();
+  } catch {
+    return Array.from(recordsByOrderId.values());
+  }
+
+  for (const encryptedRecord of getEncryptedBuyerP2pkEscrowRecords()) {
+    try {
+      const decrypted = await signer.decrypt(
+        userPubkey,
+        encryptedRecord.content
+      );
+      const parsed = JSON.parse(decrypted);
+      if (isBuyerP2pkEscrowRecord(parsed)) {
+        recordsByOrderId.set(parsed.orderId, parsed);
+      }
+    } catch {
+      // Ignore records this signer cannot decrypt.
+    }
+  }
+
+  return Array.from(recordsByOrderId.values());
 }
 
 export async function persistBuyerP2pkEscrowRecord(
@@ -92,13 +195,11 @@ export async function persistBuyerP2pkEscrowRecord(
   signer: NostrSigner | undefined,
   record: BuyerP2pkEscrowRecord
 ): Promise<void> {
-  upsertLocalBuyerP2pkEscrowRecord(record);
-
   if (!signer) return;
 
   const userPubkey = await signer.getPubKey();
   const content = await signer.encrypt(userPubkey, JSON.stringify(record));
-  upsertEncryptedBuyerP2pkEscrowRecord({
+  restoreEncryptedEscrowRecordLocally({
     orderId: record.orderId,
     createdAt: record.createdAt,
     content,
