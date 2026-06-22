@@ -58,6 +58,8 @@ Additional environment variables used by tests
 - **`NEXT_PUBLIC_P2PK_ESCROW_ENABLED`**: Set to exactly `true` to enable P2PK escrow checkout on a deploy preview or staging deployment.
 - **`NEXT_PUBLIC_P2PK_ESCROW_MAX_SATS`**: Optional P2PK escrow checkout cap. The app defaults to 100 sats and clamps higher configured values back to 100.
 - **`NEXT_PUBLIC_P2PK_ESCROW_TEST_LOCKTIME_SECONDS`**: Optional short locktime override for deploy-preview testing. Do not set this in production.
+- **`NEXT_PUBLIC_P2PK_ESCROW_ALLOWED_MINTS`**: Optional comma-separated list of mint URLs allowed for P2PK escrow checkout. Leave unset for local development; if set incorrectly, P2PK checkout fails closed.
+- **`CASHU_MINT_VALIDATION_ALLOWED_MINTS`**: Optional server-side comma-separated mint allowlist for `/api/cashu/validate-mint`. Leave unset unless a deployment wants to restrict server-side mint discovery probes.
 
 Transformed dependencies include: `dexie`, `nostr-tools`, `@noble/*`, `@scure/*`,
 `@getalby/lightning-tools`, `@cashu/cashu-ts`, and `uuid`.
@@ -67,8 +69,9 @@ Transformed dependencies include: `dexie`, `nostr-tools`, `@noble/*`, `@scure/*`
 Run this only on a deploy preview or staging deployment with
 `NEXT_PUBLIC_P2PK_ESCROW_ENABLED=true`, a max value of 100 sats or less, and a
 known allowlisted mint whose NUT-06 `/v1/info` advertises NUT-10, NUT-11, and
-NUT-07 support. Use two fresh real Shopstr accounts with NIP-44-capable signers
-and generated Cashu wallet identities.
+NUT-07 support, and whose active keysets advertise zero input fees. Use two
+fresh real Shopstr accounts with NIP-44-capable signers and generated Cashu
+wallet identities.
 
 Record order IDs, public event IDs, mint URL, sats amount, locktime, and proof
 state outcomes. Never record or paste Cashu private keys, encoded tokens,

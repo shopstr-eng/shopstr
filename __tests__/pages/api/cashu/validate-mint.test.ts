@@ -68,11 +68,18 @@ function failedResponse(allowOrigin = "*") {
 }
 
 describe("/api/cashu/validate-mint", () => {
+  const envBackup = process.env;
+
   beforeEach(() => {
+    process.env = { ...envBackup };
     __resetRateLimitBuckets();
     lookupMock.mockReset();
     lookupMock.mockResolvedValue([{ family: 4, address: "93.184.216.34" }]);
     global.fetch = jest.fn();
+  });
+
+  afterAll(() => {
+    process.env = envBackup;
   });
 
   it("validates a v1 Cashu mint through browser-compatible discovery endpoints", async () => {
@@ -225,6 +232,97 @@ describe("/api/cashu/validate-mint", () => {
     expect(res.statusCode).toBe(400);
     expect(res.jsonBody).toEqual({ error: "Mint host is not allowed" });
     expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it("allows any safe public mint when no server allowlist is configured", async () => {
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce(jsonResponse({ nuts: {} }))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          keysets: [{ id: "00deadbeef", unit: "sat", active: true }],
+        })
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          keysets: [
+            {
+              id: "00deadbeef",
+              unit: "sat",
+              keys: { "1": "02".padEnd(66, "a") },
+            },
+          ],
+        })
+      );
+
+    const res = createResponse();
+    await handler(
+      createRequest({ mintUrl: "https://cashu.example.com" }),
+      res as unknown as NextApiResponse
+    );
+
+    expect(res.statusCode).toBe(200);
+  });
+
+  it("rejects mints outside the optional server allowlist before fetching", async () => {
+    process.env.CASHU_MINT_VALIDATION_ALLOWED_MINTS =
+      "https://cashu.example.com, https://mint.example/path/";
+
+    const res = createResponse();
+    await handler(
+      createRequest({ mintUrl: "https://other.example.com" }),
+      res as unknown as NextApiResponse
+    );
+
+    expect(res.statusCode).toBe(400);
+    expect(res.jsonBody).toEqual({ error: "Mint is not allowed" });
+    expect(lookupMock).not.toHaveBeenCalled();
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it("fails closed when the optional server allowlist is configured but invalid", async () => {
+    process.env.CASHU_MINT_VALIDATION_ALLOWED_MINTS = "not-a-url";
+
+    const res = createResponse();
+    await handler(
+      createRequest({ mintUrl: "https://cashu.example.com" }),
+      res as unknown as NextApiResponse
+    );
+
+    expect(res.statusCode).toBe(400);
+    expect(res.jsonBody).toEqual({ error: "Mint is not allowed" });
+    expect(lookupMock).not.toHaveBeenCalled();
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it("normalizes optional server allowlist entries before matching", async () => {
+    process.env.CASHU_MINT_VALIDATION_ALLOWED_MINTS =
+      "https://cashu.example.com/";
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce(jsonResponse({ nuts: {} }))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          keysets: [{ id: "00deadbeef", unit: "sat", active: true }],
+        })
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          keysets: [
+            {
+              id: "00deadbeef",
+              unit: "sat",
+              keys: { "1": "02".padEnd(66, "a") },
+            },
+          ],
+        })
+      );
+
+    const res = createResponse();
+    await handler(
+      createRequest({ mintUrl: "https://cashu.example.com///" }),
+      res as unknown as NextApiResponse
+    );
+
+    expect(res.statusCode).toBe(200);
   });
 
   it("rejects hosts that resolve to private addresses", async () => {

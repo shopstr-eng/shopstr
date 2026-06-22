@@ -18,6 +18,10 @@ export type P2pkProofSetParseResult = {
 const HEX_32_BYTE = /^[0-9a-f]{64}$/;
 const COMPRESSED_HEX_33_BYTE = /^(02|03)[0-9a-f]{64}$/;
 const DEFAULT_P2PK_ESCROW_MAX_SATS = 100;
+const P2PK_DISALLOWED_MINT_REASON =
+  "This mint is not allowed for P2PK escrow checkout.";
+const P2PK_INPUT_FEE_REASON =
+  "This mint charges input fees, so P2PK escrow checkout is blocked for now.";
 
 export function normalizeCashuPubkey(pubkey?: string | null): string | null {
   if (!pubkey) return null;
@@ -67,6 +71,44 @@ export function getP2pkTestLocktimeSeconds(): number | undefined {
   return Math.floor(configured);
 }
 
+export function normalizeMintUrlForPolicy(mintUrl: string): string | null {
+  try {
+    const parsed = new URL(mintUrl.trim());
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:")
+      return null;
+    if (parsed.username || parsed.password || parsed.search || parsed.hash) {
+      return null;
+    }
+
+    const normalizedPath = parsed.pathname.replace(/\/+$/, "");
+    return normalizedPath && normalizedPath !== "/"
+      ? `${parsed.origin}${normalizedPath}`
+      : parsed.origin;
+  } catch {
+    return null;
+  }
+}
+
+function getP2pkMintAllowlist(): Set<string> | null {
+  const configured = process.env.NEXT_PUBLIC_P2PK_ESCROW_ALLOWED_MINTS;
+  if (!configured?.trim()) return null;
+
+  const allowedMints = configured
+    .split(",")
+    .map((entry) => normalizeMintUrlForPolicy(entry))
+    .filter((entry): entry is string => Boolean(entry));
+
+  return new Set(allowedMints);
+}
+
+export function isP2pkMintAllowed(mintUrl: string): boolean {
+  const allowlist = getP2pkMintAllowlist();
+  if (!allowlist) return true;
+
+  const normalizedMintUrl = normalizeMintUrlForPolicy(mintUrl);
+  return Boolean(normalizedMintUrl && allowlist.has(normalizedMintUrl));
+}
+
 export function getP2pkCheckoutPolicyError(
   sellerP2pk: P2pkProfileSettings | undefined,
   amountSats: number
@@ -106,11 +148,72 @@ export function mintInfoSupportsP2pk(info: unknown): boolean {
   return nutSettingSupported(nuts["10"]) && nutSettingSupported(nuts["11"]);
 }
 
+function getInputFeePpk(keyset: unknown): number | null {
+  if (!keyset || typeof keyset !== "object" || Array.isArray(keyset)) {
+    return null;
+  }
+
+  const candidate = keyset as {
+    active?: unknown;
+    isActive?: unknown;
+    input_fee_ppk?: unknown;
+    fee?: unknown;
+  };
+  const active = candidate.active ?? candidate.isActive;
+  if (active === false) return 0;
+
+  const rawFee = candidate.input_fee_ppk ?? candidate.fee ?? 0;
+  const fee = typeof rawFee === "string" ? Number(rawFee) : rawFee;
+  if (typeof fee !== "number" || !Number.isFinite(fee) || fee < 0) {
+    return null;
+  }
+
+  return fee;
+}
+
+export function mintKeysetsHaveZeroInputFees(
+  keysetsResponse: unknown
+): boolean {
+  if (
+    !keysetsResponse ||
+    typeof keysetsResponse !== "object" ||
+    Array.isArray(keysetsResponse)
+  ) {
+    return false;
+  }
+
+  const keysets = (keysetsResponse as { keysets?: unknown }).keysets;
+  if (!Array.isArray(keysets) || keysets.length === 0) return false;
+
+  let sawSpendableKeyset = false;
+  for (const keyset of keysets) {
+    const fee = getInputFeePpk(keyset);
+    if (fee === null) return false;
+
+    const candidate = keyset as { active?: unknown; isActive?: unknown };
+    const active = candidate.active ?? candidate.isActive;
+    if (active !== false) {
+      sawSpendableKeyset = true;
+    }
+
+    if (fee > 0) return false;
+  }
+
+  return sawSpendableKeyset;
+}
+
 export async function checkMintP2pkSupport(
   mintUrl: string,
   fetchImpl: typeof fetch = fetch
 ): Promise<{ supported: boolean; reason?: string }> {
   try {
+    if (!isP2pkMintAllowed(mintUrl)) {
+      return {
+        supported: false,
+        reason: P2PK_DISALLOWED_MINT_REASON,
+      };
+    }
+
     const baseUrl = mintUrl.replace(/\/+$/, "");
     const response = await fetchImpl(`${baseUrl}/v1/info`);
     if (!response.ok) {
@@ -126,6 +229,22 @@ export async function checkMintP2pkSupport(
         supported: false,
         reason:
           "This mint does not advertise NUT-10 and NUT-11 support, so escrow checkout is blocked.",
+      };
+    }
+
+    const keysetsResponse = await fetchImpl(`${baseUrl}/v1/keysets`);
+    if (!keysetsResponse.ok) {
+      return {
+        supported: false,
+        reason: "Could not verify mint input fees.",
+      };
+    }
+
+    const keysets = await keysetsResponse.json();
+    if (!mintKeysetsHaveZeroInputFees(keysets)) {
+      return {
+        supported: false,
+        reason: P2PK_INPUT_FEE_REASON,
       };
     }
 

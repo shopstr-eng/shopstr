@@ -108,6 +108,23 @@ function normalizeMintUrl(rawMintUrl: unknown): string | null {
     : parsed.origin;
 }
 
+function getServerMintAllowlist(): Set<string> | null {
+  const configured = process.env.CASHU_MINT_VALIDATION_ALLOWED_MINTS;
+  if (!configured?.trim()) return null;
+
+  const allowedMints = configured
+    .split(",")
+    .map((entry) => normalizeMintUrl(entry))
+    .filter((entry): entry is string => Boolean(entry));
+
+  return new Set(allowedMints);
+}
+
+function isMintAllowedByServerConfig(mintUrl: string): boolean {
+  const allowlist = getServerMintAllowlist();
+  return !allowlist || allowlist.has(mintUrl);
+}
+
 function mintEndpoint(mintUrl: string, path: string): string {
   const base = mintUrl.endsWith("/") ? mintUrl : `${mintUrl}/`;
   return new URL(path.replace(/^\/+/, ""), base).toString();
@@ -259,6 +276,10 @@ export default async function handler(
   const mintUrl = normalizeMintUrl(req.body?.mintUrl);
   if (!mintUrl) {
     return res.status(400).json({ error: "Invalid mint URL" });
+  }
+
+  if (!isMintAllowedByServerConfig(mintUrl)) {
+    return res.status(400).json({ error: "Mint is not allowed" });
   }
 
   let hostname: string;

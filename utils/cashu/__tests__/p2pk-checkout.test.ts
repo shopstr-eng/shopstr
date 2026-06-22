@@ -3,7 +3,9 @@ import {
   checkMintP2pkSupport,
   getBuyerReclaimKeys,
   getP2pkCheckoutPolicyError,
+  isP2pkMintAllowed,
   mintInfoSupportsP2pk,
+  mintKeysetsHaveZeroInputFees,
   parseP2PK,
   parseP2PKProofSet,
   pubkeysEqual,
@@ -182,6 +184,45 @@ describe("p2pk-checkout", () => {
       expect(mintInfoSupportsP2pk({})).toBe(false);
     });
 
+    it("allows P2PK mints by default when no allowlist is configured", () => {
+      expect(isP2pkMintAllowed("https://mint.example")).toBe(true);
+    });
+
+    it("restricts P2PK mints when an allowlist is configured", () => {
+      process.env.NEXT_PUBLIC_P2PK_ESCROW_ALLOWED_MINTS =
+        "https://cashu.example.com, https://mint.example/path/";
+
+      expect(isP2pkMintAllowed("https://cashu.example.com/")).toBe(true);
+      expect(isP2pkMintAllowed("https://mint.example/path")).toBe(true);
+      expect(isP2pkMintAllowed("https://other.example")).toBe(false);
+    });
+
+    it("fails closed when the P2PK mint allowlist is configured but invalid", () => {
+      process.env.NEXT_PUBLIC_P2PK_ESCROW_ALLOWED_MINTS = "not-a-url";
+
+      expect(isP2pkMintAllowed("https://cashu.example.com")).toBe(false);
+    });
+
+    it("detects nonzero input fees from mint keysets", () => {
+      expect(
+        mintKeysetsHaveZeroInputFees({
+          keysets: [
+            { id: "00", unit: "sat", active: true, input_fee_ppk: 0 },
+            { id: "01", unit: "sat", active: true },
+          ],
+        })
+      ).toBe(true);
+
+      expect(
+        mintKeysetsHaveZeroInputFees({
+          keysets: [
+            { id: "00", unit: "sat", active: true, input_fee_ppk: 0 },
+            { id: "01", unit: "sat", active: true, input_fee_ppk: 100 },
+          ],
+        })
+      ).toBe(false);
+    });
+
     it("fails closed for unreachable mint info", async () => {
       const fetchImpl = jest.fn().mockRejectedValue(new Error("offline"));
 
@@ -211,16 +252,81 @@ describe("p2pk-checkout", () => {
       );
     });
 
-    it("allows mints that advertise both required NUTs", async () => {
-      const fetchImpl = jest.fn().mockResolvedValue({
-        ok: true,
-        json: async () => ({
-          nuts: {
-            "10": { supported: true },
-            "11": { supported: true },
-          },
-        }),
+    it("fails closed when keysets cannot be checked for input fees", async () => {
+      const fetchImpl = jest
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            nuts: {
+              "10": { supported: true },
+              "11": { supported: true },
+            },
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: false,
+          json: async () => ({}),
+        });
+
+      await expect(
+        checkMintP2pkSupport("https://mint.example", fetchImpl)
+      ).resolves.toEqual({
+        supported: false,
+        reason: "Could not verify mint input fees.",
       });
+    });
+
+    it("blocks P2PK escrow on mints with nonzero input fees", async () => {
+      const fetchImpl = jest
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            nuts: {
+              "10": { supported: true },
+              "11": { supported: true },
+            },
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            keysets: [
+              { id: "00", unit: "sat", active: true, input_fee_ppk: 100 },
+            ],
+          }),
+        });
+
+      await expect(
+        checkMintP2pkSupport("https://mint.example", fetchImpl)
+      ).resolves.toEqual({
+        supported: false,
+        reason:
+          "This mint charges input fees, so P2PK escrow checkout is blocked for now.",
+      });
+    });
+
+    it("allows mints that advertise both required NUTs", async () => {
+      const fetchImpl = jest
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            nuts: {
+              "10": { supported: true },
+              "11": { supported: true },
+            },
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            keysets: [
+              { id: "00", unit: "sat", active: true, input_fee_ppk: 0 },
+            ],
+          }),
+        });
 
       await expect(
         checkMintP2pkSupport("https://mint.example", fetchImpl)
