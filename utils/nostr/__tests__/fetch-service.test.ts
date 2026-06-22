@@ -6769,3 +6769,319 @@ describe("fetchAllBlossomServers", () => {
     consoleErrorSpy.mockRestore();
   });
 });
+
+describe("fetchAllCommunities", () => {
+  const makeCommunityEvent = (overrides: Record<string, any> = {}) =>
+    makeBaseEvent({
+      kind: 34550,
+      tags: [["d", "test-community"]],
+      ...overrides,
+    });
+
+  beforeEach(() => {
+    jest.resetModules();
+    jest.clearAllMocks();
+  });
+
+  it("hydrates communities from DB before querying the relay", async () => {
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchAllCommunities } = await import("../fetch-service");
+
+    const dbEvent = makeCommunityEvent({
+      id: "db-community-1",
+      pubkey: "pubkey-1",
+      sig: "sig-db-1",
+      created_at: 100,
+      tags: [["d", "community-db"]],
+    });
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(makeDbPayload([dbEvent])) as typeof global.fetch;
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([]) } as any;
+    const editCommunityContext = jest.fn();
+
+    const result = await fetchAllCommunities(
+      nostr,
+      ["wss://relay.example"],
+      editCommunityContext
+    );
+
+    // DB emit happens before relay, then final emit after relay
+    expect(editCommunityContext).toHaveBeenCalledTimes(2);
+    const firstCall = editCommunityContext.mock.calls[0][0] as Map<
+      string,
+      unknown
+    >;
+    expect(firstCall.has("db-community-1")).toBe(true);
+    expect(result.has("db-community-1")).toBe(true);
+  });
+
+  it("skips events for which parseCommunityEvent returns null (missing d tag)", async () => {
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchAllCommunities } = await import("../fetch-service");
+
+    const validDbEvent = makeCommunityEvent({
+      id: "db-valid",
+      sig: "sig-db-valid",
+      created_at: 100,
+      tags: [["d", "valid-community"]],
+    });
+    // 34550 without d-tag → parseCommunityEvent returns null
+    const invalidDbEvent = makeCommunityEvent({
+      id: "db-invalid-no-d",
+      sig: "sig-db-invalid",
+      created_at: 100,
+      tags: [],
+    });
+    const invalidRelayEvent = makeCommunityEvent({
+      id: "relay-invalid-no-d",
+      sig: "sig-relay-invalid",
+      created_at: 200,
+      tags: [],
+    });
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(
+        makeDbPayload([validDbEvent, invalidDbEvent])
+      ) as typeof global.fetch;
+
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([invalidRelayEvent]),
+    } as any;
+    const editCommunityContext = jest.fn();
+
+    const result = await fetchAllCommunities(
+      nostr,
+      ["wss://relay.example"],
+      editCommunityContext
+    );
+
+    expect(result.has("db-valid")).toBe(true);
+    expect(result.has("db-invalid-no-d")).toBe(false);
+    expect(result.has("relay-invalid-no-d")).toBe(false);
+    expect(result.size).toBe(1);
+  });
+
+  it("relay event with higher createdAt replaces the DB version of the same community", async () => {
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchAllCommunities } = await import("../fetch-service");
+
+    const sharedId = "shared-community-id";
+    const dbEvent = makeCommunityEvent({
+      id: sharedId,
+      sig: "sig-db",
+      created_at: 100,
+      tags: [
+        ["d", "shared-community"],
+        ["name", "DB Name"],
+      ],
+    });
+    const relayNewer = makeCommunityEvent({
+      id: sharedId,
+      sig: "sig-relay-newer",
+      created_at: 200,
+      tags: [
+        ["d", "shared-community"],
+        ["name", "Relay Name"],
+      ],
+    });
+    const relayOlder = makeCommunityEvent({
+      id: "other-community-id",
+      sig: "sig-relay-older",
+      created_at: 50,
+      tags: [["d", "other-community"]],
+    });
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(makeDbPayload([dbEvent])) as typeof global.fetch;
+
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([relayNewer, relayOlder]),
+    } as any;
+    const editCommunityContext = jest.fn();
+
+    const result = await fetchAllCommunities(
+      nostr,
+      ["wss://relay.example"],
+      editCommunityContext
+    );
+
+    expect(result.get(sharedId)).toMatchObject({ createdAt: 200 });
+    expect(result.has("other-community-id")).toBe(true);
+  });
+
+  it("caches only valid kind-34550 relay events that have id, sig, and pubkey", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+    jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
+
+    const { fetchAllCommunities } = await import("../fetch-service");
+
+    const validEvent = makeCommunityEvent({
+      id: "valid-cache",
+      sig: "sig-valid",
+      pubkey: "pubkey-valid",
+      created_at: 100,
+      tags: [["d", "valid"]],
+    });
+    const missingId = makeCommunityEvent({
+      id: "",
+      sig: "sig-no-id",
+      pubkey: "pubkey-no-id",
+      created_at: 101,
+      tags: [["d", "no-id"]],
+    });
+    const missingSig = makeCommunityEvent({
+      id: "no-sig-id",
+      sig: "",
+      pubkey: "pubkey-no-sig",
+      created_at: 102,
+      tags: [["d", "no-sig"]],
+    });
+    const wrongKind = makeBaseEvent({
+      id: "wrong-kind-id",
+      kind: 1,
+      sig: "sig-wrong-kind",
+      pubkey: "pubkey-wrong-kind",
+      created_at: 103,
+      tags: [],
+    });
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(makeDbPayload([])) as typeof global.fetch;
+
+    const nostr = {
+      fetch: jest
+        .fn()
+        .mockResolvedValue([validEvent, missingId, missingSig, wrongKind]),
+    } as any;
+
+    await fetchAllCommunities(nostr, ["wss://relay.example"], jest.fn());
+
+    expect(cacheEventsToDatabase).toHaveBeenCalledTimes(1);
+    expect(cacheEventsToDatabase).toHaveBeenCalledWith([validEvent]);
+  });
+
+  it("returns an empty map and calls editCommunityContext once when both DB and relay are empty", async () => {
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchAllCommunities } = await import("../fetch-service");
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(makeDbPayload([])) as typeof global.fetch;
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([]) } as any;
+    const editCommunityContext = jest.fn();
+
+    const result = await fetchAllCommunities(
+      nostr,
+      ["wss://relay.example"],
+      editCommunityContext
+    );
+
+    expect(result.size).toBe(0);
+    // Only the post-relay call — no early DB emit since DB was empty
+    expect(editCommunityContext).toHaveBeenCalledTimes(1);
+    expect(editCommunityContext).toHaveBeenCalledWith(new Map(), false);
+  });
+
+  it("passes the merged community map to editCommunityContext on the final call", async () => {
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchAllCommunities } = await import("../fetch-service");
+
+    const dbEvent = makeCommunityEvent({
+      id: "ctx-db-community",
+      sig: "sig-ctx-db",
+      created_at: 100,
+      tags: [["d", "ctx-db"]],
+    });
+    const relayEvent = makeCommunityEvent({
+      id: "ctx-relay-community",
+      sig: "sig-ctx-relay",
+      created_at: 200,
+      tags: [["d", "ctx-relay"]],
+    });
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(makeDbPayload([dbEvent])) as typeof global.fetch;
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([relayEvent]) } as any;
+    const editCommunityContext = jest.fn();
+
+    await fetchAllCommunities(
+      nostr,
+      ["wss://relay.example"],
+      editCommunityContext
+    );
+
+    const lastCall = editCommunityContext.mock.calls[
+      editCommunityContext.mock.calls.length - 1
+    ][0] as Map<string, unknown>;
+
+    expect(lastCall.has("ctx-db-community")).toBe(true);
+    expect(lastCall.has("ctx-relay-community")).toBe(true);
+    expect(editCommunityContext).toHaveBeenLastCalledWith(
+      expect.any(Map),
+      false
+    );
+  });
+
+  it("catches and logs a DB fetch throw and still queries the relay", async () => {
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchAllCommunities } = await import("../fetch-service");
+
+    const dbError = new Error("DB unavailable");
+    global.fetch = jest.fn().mockRejectedValue(dbError) as typeof global.fetch;
+
+    const relayEvent = makeCommunityEvent({
+      id: "relay-after-db-throw",
+      sig: "sig-relay-throw",
+      created_at: 100,
+      tags: [["d", "relay-after-throw"]],
+    });
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([relayEvent]) } as any;
+    const editCommunityContext = jest.fn();
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    const result = await fetchAllCommunities(
+      nostr,
+      ["wss://relay.example"],
+      editCommunityContext
+    );
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      "Failed to fetch communities from database: ",
+      dbError
+    );
+    expect(nostr.fetch).toHaveBeenCalledTimes(1);
+    expect(result.has("relay-after-db-throw")).toBe(true);
+
+    consoleErrorSpy.mockRestore();
+  });
+});
