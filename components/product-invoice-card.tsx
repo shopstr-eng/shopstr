@@ -32,10 +32,8 @@ import { safeMeltProofs } from "@/utils/cashu/melt-retry-service";
 import { safeSwap } from "@/utils/cashu/swap-retry-service";
 import { sumProofAmounts } from "@/utils/cashu/proof-amount";
 import {
-  buildP2pkOutputConfig,
-  checkMintP2pkSupport,
-  getP2pkCheckoutPolicyError,
   isSellerP2pkEscrowActive,
+  resolveP2pkCheckoutOutputConfig,
 } from "@/utils/cashu/p2pk-checkout";
 import { withMintRetry } from "@/utils/cashu/mint-retry-service";
 import {
@@ -1218,33 +1216,13 @@ export default function ProductInvoiceCard({
     const sellerProfile = profileContext.profileData.get(productData.pubkey);
     const buyerProfile = profileContext.profileData.get(userPubkey!);
     const sellerP2pk = sellerProfile?.content?.p2pk;
-    const policyError = getP2pkCheckoutPolicyError(sellerP2pk, totalPrice);
-    if (policyError) {
-      throw new Error(policyError);
-    }
-    if (isSellerP2pkEscrowActive(sellerP2pk)) {
-      const selectedMint = mints[0];
-      if (!selectedMint) {
-        throw new Error("A Cashu mint is required for escrow checkout.");
-      }
-      const mintSupport = await checkMintP2pkSupport(selectedMint);
-      if (!mintSupport.supported) {
-        throw new Error(
-          mintSupport.reason ??
-            "This mint does not advertise P2PK escrow support."
-        );
-      }
-    }
-    const p2pkOutputConfig = buildP2pkOutputConfig(
+    const p2pkOutputConfig = await resolveP2pkCheckoutOutputConfig({
       sellerP2pk,
-      buyerProfile?.content,
-      cashuPubkey
-    );
-    if (isSellerP2pkEscrowActive(sellerP2pk) && !p2pkOutputConfig) {
-      throw new Error(
-        "A Cashu wallet identity is required to pay for an escrow listing. Please wait for your wallet to finish loading and try again."
-      );
-    }
+      amountSats: totalPrice,
+      mintUrl: mints[0],
+      buyerContent: buyerProfile?.content,
+      buyerCashuPubkey: cashuPubkey,
+    });
 
     const donationPercentage = sellerProfile?.content?.shopstr_donation ?? 2.1;
     const donationAmount = Math.ceil((totalPrice * donationPercentage) / 100);

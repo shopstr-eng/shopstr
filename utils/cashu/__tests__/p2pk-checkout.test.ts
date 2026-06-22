@@ -9,6 +9,7 @@ import {
   parseP2PK,
   parseP2PKProofSet,
   pubkeysEqual,
+  resolveP2pkCheckoutOutputConfig,
 } from "../p2pk-checkout";
 
 const BUYER_CASHU_PUBKEY = "a".repeat(64);
@@ -332,6 +333,147 @@ describe("p2pk-checkout", () => {
         checkMintP2pkSupport("https://mint.example", fetchImpl)
       ).resolves.toEqual({
         supported: true,
+      });
+    });
+  });
+
+  describe("resolveP2pkCheckoutOutputConfig", () => {
+    const goodMintFetch = () =>
+      jest
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            nuts: {
+              "10": { supported: true },
+              "11": { supported: true },
+            },
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            keysets: [
+              { id: "00", unit: "sat", active: true, input_fee_ppk: 0 },
+            ],
+          }),
+        });
+
+    it("returns undefined when the seller has not enabled escrow", async () => {
+      await expect(
+        resolveP2pkCheckoutOutputConfig({
+          sellerP2pk: undefined,
+          amountSats: 10,
+          mintUrl: "https://mint.example",
+          buyerContent: undefined,
+          buyerCashuPubkey: BUYER_CASHU_PUBKEY,
+        })
+      ).resolves.toBeUndefined();
+    });
+
+    it("throws when the feature flag is disabled", async () => {
+      await expect(
+        resolveP2pkCheckoutOutputConfig({
+          sellerP2pk,
+          amountSats: 10,
+          mintUrl: "https://mint.example",
+          buyerContent: undefined,
+          buyerCashuPubkey: BUYER_CASHU_PUBKEY,
+        })
+      ).rejects.toThrow(
+        "P2PK escrow checkout is not enabled for this deployment."
+      );
+    });
+
+    it("enforces the amount cap before touching the mint", async () => {
+      process.env.NEXT_PUBLIC_P2PK_ESCROW_ENABLED = "true";
+      const fetchImpl = jest.fn();
+
+      await expect(
+        resolveP2pkCheckoutOutputConfig({
+          sellerP2pk,
+          amountSats: 101,
+          mintUrl: "https://mint.example",
+          buyerContent: undefined,
+          buyerCashuPubkey: BUYER_CASHU_PUBKEY,
+          fetchImpl,
+        })
+      ).rejects.toThrow("P2PK escrow test checkout is limited to 100 sats.");
+      expect(fetchImpl).not.toHaveBeenCalled();
+    });
+
+    it("requires a mint when escrow is active", async () => {
+      process.env.NEXT_PUBLIC_P2PK_ESCROW_ENABLED = "true";
+
+      await expect(
+        resolveP2pkCheckoutOutputConfig({
+          sellerP2pk,
+          amountSats: 10,
+          mintUrl: undefined,
+          buyerContent: undefined,
+          buyerCashuPubkey: BUYER_CASHU_PUBKEY,
+        })
+      ).rejects.toThrow("A Cashu mint is required for escrow checkout.");
+    });
+
+    it("propagates the mint-support failure reason", async () => {
+      process.env.NEXT_PUBLIC_P2PK_ESCROW_ENABLED = "true";
+      const fetchImpl = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ nuts: { "10": { supported: true } } }),
+      });
+
+      await expect(
+        resolveP2pkCheckoutOutputConfig({
+          sellerP2pk,
+          amountSats: 10,
+          mintUrl: "https://mint.example",
+          buyerContent: undefined,
+          buyerCashuPubkey: BUYER_CASHU_PUBKEY,
+          fetchImpl,
+        })
+      ).rejects.toThrow(
+        "This mint does not advertise NUT-10 and NUT-11 support, so escrow checkout is blocked."
+      );
+    });
+
+    it("requires the buyer's Cashu wallet identity", async () => {
+      process.env.NEXT_PUBLIC_P2PK_ESCROW_ENABLED = "true";
+
+      await expect(
+        resolveP2pkCheckoutOutputConfig({
+          sellerP2pk,
+          amountSats: 10,
+          mintUrl: "https://mint.example",
+          buyerContent: undefined,
+          buyerCashuPubkey: undefined,
+          fetchImpl: goodMintFetch(),
+        })
+      ).rejects.toThrow(
+        "A Cashu wallet identity is required to pay for an escrow listing. Please wait for your wallet to finish loading and try again."
+      );
+    });
+
+    it("returns the P2PK output config when every gate passes", async () => {
+      process.env.NEXT_PUBLIC_P2PK_ESCROW_ENABLED = "true";
+
+      await expect(
+        resolveP2pkCheckoutOutputConfig({
+          sellerP2pk,
+          amountSats: 10,
+          mintUrl: "https://mint.example",
+          buyerContent: undefined,
+          buyerCashuPubkey: BUYER_CASHU_PUBKEY,
+          fetchImpl: goodMintFetch(),
+        })
+      ).resolves.toEqual({
+        send: {
+          type: "p2pk",
+          options: expect.objectContaining({
+            pubkey: NORMALIZED_SELLER_CASHU_PUBKEY,
+            refundKeys: [BUYER_CASHU_PUBKEY],
+          }),
+        },
       });
     });
   });

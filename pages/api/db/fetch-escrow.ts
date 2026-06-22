@@ -5,6 +5,11 @@ import { applyRateLimit } from "@/utils/rate-limit";
 const RATE_LIMIT = { limit: 600, windowMs: 60 * 1000 };
 const HEX_PUBKEY_REGEX = /^[0-9a-f]{64}$/;
 
+// Returns the buyer's kind-30406 escrow records (cached Nostr events) for a
+// pubkey. The event content is NIP-44-encrypted to the owner, so the payment
+// token stays unreadable without the owner's private key — this endpoint only
+// exposes the same ciphertext + metadata that already lives on public relays.
+// It is rate-limited as a coarse abuse guard.
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse

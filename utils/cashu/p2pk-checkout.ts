@@ -333,6 +333,63 @@ export function isSellerP2pkEscrowActive(
   );
 }
 
+// Single entry point for the buyer-side escrow checkout gate. Runs every
+// safety check in one place — feature flag + amount cap, mint NUT-10/NUT-11 +
+// input-fee support, and the buyer's reclaim identity — so a caller can never
+// apply one gate and forget another before locking ecash. Throws a descriptive
+// Error on the first failed check; returns the P2PK output config to hand to the
+// swap (or undefined when the seller has not enabled escrow).
+export async function resolveP2pkCheckoutOutputConfig(params: {
+  sellerP2pk: P2pkProfileSettings | undefined;
+  amountSats: number;
+  mintUrl: string | undefined;
+  buyerContent: ProfileData["content"] | undefined;
+  buyerCashuPubkey: string | undefined;
+  fetchImpl?: typeof fetch;
+}): Promise<ReturnType<typeof buildP2pkOutputConfig>> {
+  const {
+    sellerP2pk,
+    amountSats,
+    mintUrl,
+    buyerContent,
+    buyerCashuPubkey,
+    fetchImpl,
+  } = params;
+
+  const policyError = getP2pkCheckoutPolicyError(sellerP2pk, amountSats);
+  if (policyError) {
+    throw new Error(policyError);
+  }
+
+  if (!isSellerP2pkEscrowActive(sellerP2pk)) {
+    return undefined;
+  }
+
+  if (!mintUrl) {
+    throw new Error("A Cashu mint is required for escrow checkout.");
+  }
+
+  const mintSupport = await checkMintP2pkSupport(mintUrl, fetchImpl);
+  if (!mintSupport.supported) {
+    throw new Error(
+      mintSupport.reason ?? "This mint does not advertise P2PK escrow support."
+    );
+  }
+
+  const outputConfig = buildP2pkOutputConfig(
+    sellerP2pk,
+    buyerContent,
+    buyerCashuPubkey
+  );
+  if (!outputConfig) {
+    throw new Error(
+      "A Cashu wallet identity is required to pay for an escrow listing. Please wait for your wallet to finish loading and try again."
+    );
+  }
+
+  return outputConfig;
+}
+
 export function parseP2PK(proof: Proof): ParsedP2PK | null {
   try {
     const kind = getSecretKind(proof.secret);
