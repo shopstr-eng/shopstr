@@ -393,6 +393,8 @@ export function parseProfileEvent(event: NostrEvent): ProfileResponse {
     pubkey: event.pubkey,
     kind: event.kind,
     name: typeof content.name === "string" ? content.name : "",
+    displayName:
+      typeof content.display_name === "string" ? content.display_name : "",
     about: typeof content.about === "string" ? content.about : "",
     picture: typeof content.picture === "string" ? content.picture : "",
     banner: typeof content.banner === "string" ? content.banner : "",

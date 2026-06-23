@@ -25,7 +25,11 @@ import {
   getLocalStorageData,
   publishProofEvent,
 } from "@/utils/nostr/nostr-helper-functions";
-import { Mint as CashuMint, Wallet as CashuWallet } from "@cashu/cashu-ts";
+import {
+  Mint as CashuMint,
+  Wallet as CashuWallet,
+  Proof,
+} from "@cashu/cashu-ts";
 import QRCode from "qrcode";
 import FailureModal from "@/components/utility-components/failure-modal";
 import {
@@ -37,6 +41,7 @@ import {
   MintOperationError,
   withMintRetry,
 } from "@/utils/cashu/mint-retry-service";
+import { getUniqueProofs } from "@/utils/nostr/fetch-service";
 import {
   markMintQuoteClaimed,
   markMintQuotePaid,
@@ -59,7 +64,7 @@ const MintButton = () => {
   const { signer } = useContext(SignerContext);
   const { nostr } = useContext(NostrContext);
 
-  const { mints, tokens, history } = getLocalStorageData();
+  const { mints } = getLocalStorageData();
 
   const {
     handleSubmit: handleMintSubmit,
@@ -207,7 +212,12 @@ const MintButton = () => {
           { maxAttempts: 5, perAttemptTimeoutMs: 15000, totalTimeoutMs: 60000 }
         );
         if (proofs && proofs.length > 0) {
-          const proofArray = [...tokens, ...proofs];
+          const { tokens: currentTokens, history: currentHistory } =
+            getLocalStorageData();
+          const proofArray = getUniqueProofs([
+            ...(currentTokens as Proof[]),
+            ...proofs,
+          ]);
           localStorage.setItem("tokens", JSON.stringify(proofArray));
           localStorage.setItem(
             "history",
@@ -217,7 +227,7 @@ const MintButton = () => {
                 amount: numSats,
                 date: Math.floor(Date.now() / 1000),
               },
-              ...history,
+              ...currentHistory,
             ])
           );
           await publishProofEvent(

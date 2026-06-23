@@ -381,6 +381,7 @@ describe("db-service helpers", () => {
     expect(getTableForKind(31555)).toBe("review_events");
     expect(getTableForKind(1059)).toBe("message_events");
     expect(getTableForKind(0)).toBe("profile_events");
+    expect(getTableForKind(30406)).toBe("config_events");
     expect(getTableForKind(999999)).toBeNull();
   });
 
