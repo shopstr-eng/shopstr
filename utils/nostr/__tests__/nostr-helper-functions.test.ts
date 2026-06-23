@@ -481,9 +481,25 @@ describe("setLocalStorageDataOnSignIn", () => {
   });
 
   it("writes signer JSON when a signer is provided", () => {
-    const signer = { type: "nip07" } as any;
+    const signer = { toJSON: () => ({ type: "nip07" }) } as any;
     setLocalStorageDataOnSignIn({ signer });
-    expect(localStorage.getItem("signer")).toBe(JSON.stringify(signer));
+    expect(localStorage.getItem("signer")).toBe(
+      JSON.stringify({ type: "nip07" })
+    );
+  });
+
+  it("stores only a safe nip46 marker when a nip46 signer is provided", () => {
+    const signer = {
+      toJSON: () => ({
+        type: "nip46",
+        bunker: "bunker://pubkey?secret=super-secret&relay=wss://relay.example",
+        appPrivKey: "app-private-key",
+      }),
+    } as any;
+    setLocalStorageDataOnSignIn({ signer });
+    expect(localStorage.getItem("signer")).toBe(
+      JSON.stringify({ type: "nip46" })
+    );
   });
 
   it("writes migrationComplete=true when migrationComplete is truthy", () => {
@@ -1104,7 +1120,7 @@ describe("nostrExtensionLoaded", () => {
 
 describe("getLocalStorageData", () => {
   beforeEach(() => {
-    localStorage.clear();
+    LogOut();
   });
 
   it("returns getDefaultRelays() when localStorage.relays is absent", () => {
@@ -1228,19 +1244,22 @@ describe("getLocalStorageData", () => {
     expect(getLocalStorageData().signer).toEqual({ type: "nip07" });
   });
 
-  it("accepts { type: 'nip46', bunker: '...' } as a valid stored signer", () => {
+  it("migrates legacy stored nip46 signer data to a safe marker", () => {
     const storedSigner = {
       type: "nip46",
-      bunker: "bunker://pubkey?relay=wss://relay.example",
+      bunker: "bunker://pubkey?secret=legacy-secret&relay=wss://relay.example",
+      appPrivKey: "legacy-app-key",
     };
     localStorage.setItem("signer", JSON.stringify(storedSigner));
-    expect(getLocalStorageData().signer).toEqual(storedSigner);
+    expect(getLocalStorageData().signer).toEqual({ type: "nip46" });
+    expect(localStorage.getItem("signer")).toBe(
+      JSON.stringify({ type: "nip46" })
+    );
   });
 
-  it("rejects { type: 'nip46' } missing bunker and falls through to migration", () => {
+  it("accepts { type: 'nip46' } as the stored signer marker", () => {
     localStorage.setItem("signer", JSON.stringify({ type: "nip46" }));
-    localStorage.setItem("signInMethod", "extension");
-    expect(getLocalStorageData().signer).toEqual({ type: "nip07" });
+    expect(getLocalStorageData().signer).toEqual({ type: "nip46" });
   });
 
   it("accepts { type: 'nsec', encryptedPrivKey: '...' } as a valid stored signer", () => {
