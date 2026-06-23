@@ -33,24 +33,24 @@ jobs:
           exempt-all-milestones: true
 
           stale-issue-message: |
-            This issue has been automatically marked as stale because it has not had recent activity for 3 weeks.
-            It will be closed if no further activity occurs within 7 days.
+            This issue has been automatically marked as stale because it has not had recent activity for 1 month.
+            It will be closed if no further activity occurs within 15 days.
             If this issue is still relevant, please leave a comment to keep it open.
             Thank you for your contributions!
 
           close-issue-message: |
-            This issue has been automatically closed because it remained inactive for 1 week after being marked as stale.
+            This issue has been automatically closed because it remained inactive for 15 days after being marked as stale.
             If you believe this issue is still relevant, please reopen it or create a new issue with updated information.
             Thank you for your understanding!
 
           stale-pr-message: |
-            This pull request has been automatically marked as stale because it has not had recent activity for 3 weeks.
-            It will be closed if no further activity occurs within 7 days.
+            This pull request has been automatically marked as stale because it has not had recent activity for 1 month.
+            It will be closed if no further activity occurs within 15 days.
             If this PR is still relevant, please leave a comment or push new commits to keep it open.
             Thank you for your contribution!
 
           close-pr-message: |
-            This pull request has been automatically closed because it remained inactive for 1 week after being marked as stale.
+            This pull request has been automatically closed because it remained inactive for 15 days after being marked as stale.
             If you would like to continue working on this, please reopen it or create a new PR.
             Thank you for your contribution!
 
