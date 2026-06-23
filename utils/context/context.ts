@@ -75,6 +75,18 @@ export const ReviewsContext = createContext({
   ) => {},
 } as ReviewsContextInterface);
 
+export interface ReportsContextInterface {
+  reportEvents: NostrEvent[];
+  isLoading: boolean;
+  addReportEvent: (reportEvent: NostrEvent) => void;
+}
+
+export const ReportsContext = createContext({
+  reportEvents: [],
+  isLoading: true,
+  addReportEvent: (_reportEvent: NostrEvent) => {},
+} as ReportsContextInterface);
+
 export interface CartContextInterface {
   cartAddresses: string[][];
   isLoading: boolean;
@@ -154,6 +166,9 @@ export interface CashuWalletContextInterface {
   cashuMints: string[];
   cashuProofs: Proof[];
   isLoading: boolean;
+  cashuPubkey?: string;
+  cashuPrivkey?: string;
+  walletIdentityUnavailable?: boolean;
 }
 
 export const CashuWalletContext = createContext({
@@ -161,6 +176,9 @@ export const CashuWalletContext = createContext({
   cashuMints: [],
   cashuProofs: [],
   isLoading: true,
+  cashuPubkey: undefined,
+  cashuPrivkey: undefined,
+  walletIdentityUnavailable: undefined,
 } as CashuWalletContextInterface);
 
 export interface CommunityContextInterface {

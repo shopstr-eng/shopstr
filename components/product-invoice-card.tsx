@@ -30,6 +30,11 @@ import {
 } from "@cashu/cashu-ts";
 import { safeMeltProofs } from "@/utils/cashu/melt-retry-service";
 import { safeSwap } from "@/utils/cashu/swap-retry-service";
+import { sumProofAmounts } from "@/utils/cashu/proof-amount";
+import {
+  isSellerP2pkEscrowActive,
+  resolveP2pkCheckoutOutputConfig,
+} from "@/utils/cashu/p2pk-checkout";
 import { withMintRetry } from "@/utils/cashu/mint-retry-service";
 import {
   recordPendingMintQuote,
@@ -43,6 +48,7 @@ import {
   withDeadline,
   isTimeoutError,
 } from "@/utils/cashu/wallet-recovery";
+import { persistBuyerP2pkEscrowRecord } from "@/utils/cashu/p2pk-escrow-records";
 import {
   constructGiftWrappedEvent,
   constructMessageSeal,
@@ -51,6 +57,7 @@ import {
   getLocalStorageData,
   publishProofEvent,
   generateKeys,
+  getSavedAddresses,
 } from "@/utils/nostr/nostr-helper-functions";
 import { LightningAddress } from "@getalby/lightning-tools";
 import QRCode from "qrcode";
@@ -64,11 +71,16 @@ import SignInModal from "./sign-in/SignInModal";
 import currencySelection from "../public/currencySelection.json";
 import FailureModal from "@/components/utility-components/failure-modal";
 import CountryDropdown from "./utility-components/dropdowns/country-dropdown";
+import AddressPicker from "./utility-components/address-picker";
 import {
   NostrContext,
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
-import { ShippingFormData, ContactFormData } from "@/utils/types/types";
+import {
+  ShippingFormData,
+  ContactFormData,
+  SavedAddress,
+} from "@/utils/types/types";
 import { Controller } from "react-hook-form";
 
 export default function ProductInvoiceCard({
@@ -100,7 +112,7 @@ export default function ProductInvoiceCard({
   discountPercentage?: number;
   originalPrice?: number;
 }) {
-  const { mints, tokens, history } = getLocalStorageData();
+  const { mints, tokens } = getLocalStorageData();
   const {
     pubkey: userPubkey,
     npub: userNPub,
@@ -170,6 +182,7 @@ export default function ProductInvoiceCard({
   } | null>(null);
 
   const walletContext = useContext(CashuWalletContext);
+  const { cashuPubkey } = walletContext;
 
   const [randomNpubForSender, setRandomNpubForSender] = useState<string>("");
   const [randomNsecForSender, setRandomNsecForSender] = useState<string>("");
@@ -182,6 +195,7 @@ export default function ProductInvoiceCard({
 
   const [formType, setFormType] = useState<"shipping" | "contact" | null>(null);
   const [showOrderTypeSelection, setShowOrderTypeSelection] = useState(true);
+  const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
 
   const sendInquiryDM = async (sellerPubkey: string, productTitle: string) => {
     if (!signer || !nostr || !userPubkey) return;
@@ -313,6 +327,7 @@ export default function ProductInvoiceCard({
     handleSubmit: handleFormSubmit,
     control: formControl,
     watch,
+    setValue,
   } = useForm();
 
   // Watch form values to validate completion
@@ -321,10 +336,18 @@ export default function ProductInvoiceCard({
     string | null
   >(null);
 
+  const normalizedShippingType = (productData.shippingType || "")
+    .toLowerCase()
+    .trim();
+  const supportsShipping =
+    normalizedShippingType.includes("free") ||
+    normalizedShippingType.includes("added cost") ||
+    (productData.shippingCost ?? 0) > 0;
+  const supportsPickup = normalizedShippingType.includes("pickup");
+
   // Check if product requires pickup location selection (pickup-type shipping with pickup locations defined)
   const requiresPickupLocation =
-    (productData.shippingType === "Pickup" ||
-      productData.shippingType === "Free/Pickup") &&
+    supportsPickup &&
     productData.pickupLocations &&
     productData.pickupLocations.length > 0;
 
@@ -367,6 +390,16 @@ export default function ProductInvoiceCard({
     window.addEventListener("storage", loadNwcInfo);
     return () => window.removeEventListener("storage", loadNwcInfo);
   }, [productData.pubkey, profileContext.profileData]);
+
+  // Load saved addresses on mount
+  useEffect(() => {
+    const loadSavedAddresses = () => {
+      setSavedAddresses(getSavedAddresses());
+    };
+    loadSavedAddresses();
+    window.addEventListener("storage", loadSavedAddresses);
+    return () => window.removeEventListener("storage", loadSavedAddresses);
+  }, []);
 
   // Validate form completion
   useEffect(() => {
@@ -731,6 +764,16 @@ export default function ProductInvoiceCard({
       // For contact orders, only set valid if no pickup location is required
       setIsFormValid(!requiresPickupLocation);
     }
+  };
+
+  const applySavedAddress = (addr: SavedAddress) => {
+    setValue("Name", addr.name);
+    setValue("Address", addr.address);
+    setValue("Unit", addr.unit);
+    setValue("City", addr.city);
+    setValue("State/Province", addr.state);
+    setValue("Postal Code", addr.zip);
+    setValue("Country", addr.country);
   };
 
   const handleNWCError = (error: any) => {
@@ -1169,8 +1212,19 @@ export default function ProductInvoiceCard({
     let remainingProofs = proofs;
     let sellerToken;
     let donationToken;
+
     const sellerProfile = profileContext.profileData.get(productData.pubkey);
-    const donationPercentage = sellerProfile?.content?.shopstr_donation || 2.1;
+    const buyerProfile = profileContext.profileData.get(userPubkey!);
+    const sellerP2pk = sellerProfile?.content?.p2pk;
+    const p2pkOutputConfig = await resolveP2pkCheckoutOutputConfig({
+      sellerP2pk,
+      amountSats: totalPrice,
+      mintUrl: mints[0],
+      buyerContent: buyerProfile?.content,
+      buyerCashuPubkey: cashuPubkey,
+    });
+
+    const donationPercentage = sellerProfile?.content?.shopstr_donation ?? 2.1;
     const donationAmount = Math.ceil((totalPrice * donationPercentage) / 100);
     const sellerAmount = totalPrice - donationAmount;
     let sellerProofs: Proof[] = [];
@@ -1180,8 +1234,12 @@ export default function ProductInvoiceCard({
         wallet,
         sellerAmount,
         remainingProofs,
-        { sendConfig: { includeFees: true } }
+        {
+          sendConfig: { includeFees: true },
+          outputConfig: p2pkOutputConfig,
+        }
       );
+
       if (swapOutcome.status !== "swapped") {
         throw new Error(
           swapOutcome.errorMessage ??
@@ -1224,12 +1282,26 @@ export default function ProductInvoiceCard({
       pendingOrderRef.current.orderId = orderId;
     }
 
+    if (p2pkOutputConfig && sellerToken) {
+      await persistBuyerP2pkEscrowRecord(nostr, signer, {
+        orderId,
+        mint: mints[0]!,
+        token: sellerToken,
+        amount: sellerAmount,
+        sellerPubkey: p2pkOutputConfig.send.options.pubkey,
+        locktime: p2pkOutputConfig.send.options.locktime,
+        refundKeys: p2pkOutputConfig.send.options.refundKeys,
+        createdAt: Math.floor(Date.now() / 1000),
+      });
+    }
+
     const paymentPreference =
       sellerProfile?.content?.payment_preference || "ecash";
     const lnurl = sellerProfile?.content?.lud16 || "";
 
     // Step 1: Send payment message
     if (
+      !isSellerP2pkEscrowActive(sellerProfile?.content?.p2pk) &&
       paymentPreference === "lightning" &&
       lnurl &&
       lnurl !== "" &&
@@ -1273,10 +1345,7 @@ export default function ProductInvoiceCard({
           const changeProofs = [...keep, ...meltOutcome.changeProofs];
           const changeAmount =
             Array.isArray(changeProofs) && changeProofs.length > 0
-              ? changeProofs.reduce(
-                  (acc, current: Proof) => acc + current.amount.toNumber(),
-                  0
-                )
+              ? sumProofAmounts(changeProofs)
               : 0;
           let productDetails = "";
           if (selectedSize) {
@@ -1368,10 +1437,7 @@ export default function ProductInvoiceCard({
           const unusedProofs = [...keep, ...send, ...meltOutcome.changeProofs];
           const unusedAmount =
             Array.isArray(unusedProofs) && unusedProofs.length > 0
-              ? unusedProofs.reduce(
-                  (acc, current: Proof) => acc + current.amount.toNumber(),
-                  0
-                )
+              ? sumProofAmounts(unusedProofs)
               : 0;
           const unusedToken = getEncodedToken({
             mint: mints[0]!,
@@ -1818,6 +1884,8 @@ export default function ProductInvoiceCard({
         donationPercentage
       );
     }
+
+    return remainingProofs;
   };
 
   const handleCopyInvoice = () => {
@@ -1876,19 +1944,11 @@ export default function ProductInvoiceCard({
       const wallet = new CashuWallet(mint);
       await wallet.loadMint();
       const mintKeySetIds = await wallet.keyChain.getKeysets();
-      const filteredProofs = tokens.filter((p: Proof) =>
+      const { tokens: currentTokens, history: currentHistory } =
+        getLocalStorageData();
+      const filteredProofs = (currentTokens as Proof[]).filter((p: Proof) =>
         mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
-      ) as Proof[];
-      const swapOutcome = await safeSwap(wallet, price, filteredProofs, {
-        sendConfig: { includeFees: true },
-      });
-      if (swapOutcome.status !== "swapped") {
-        throw new Error(
-          swapOutcome.errorMessage ??
-            `Product payment swap did not complete (${swapOutcome.status})`
-        );
-      }
-      const { keep, send } = swapOutcome;
+      );
       const deletedEventIds = [
         ...new Set([
           ...walletContext.proofEvents
@@ -1900,26 +1960,12 @@ export default function ProductInvoiceCard({
               )
             )
             .map((event) => event.id),
-          ...walletContext.proofEvents
-            .filter((event) =>
-              event.proofs.some((proof: Proof) =>
-                keep.some((keepProof) => keepProof.secret === proof.secret)
-              )
-            )
-            .map((event) => event.id),
-          ...walletContext.proofEvents
-            .filter((event) =>
-              event.proofs.some((proof: Proof) =>
-                send.some((sendProof) => sendProof.secret === proof.secret)
-              )
-            )
-            .map((event) => event.id),
         ]),
       ];
 
-      await sendTokens(
+      const changeProofs = await sendTokens(
         wallet,
-        send,
+        filteredProofs,
         price,
         data.shippingName ? data.shippingName : undefined,
         data.shippingAddress ? data.shippingAddress : undefined,
@@ -1930,11 +1976,10 @@ export default function ProductInvoiceCard({
         data.shippingCountry ? data.shippingCountry : undefined,
         data.additionalInfo ? data.additionalInfo : undefined
       );
-      const changeProofs = keep;
-      const remainingProofs = tokens.filter(
+      const remainingProofs = (currentTokens as Proof[]).filter(
         (p: Proof) =>
           !mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
-      ) as Proof[];
+      );
       let proofArray;
       if (changeProofs.length >= 1 && changeProofs) {
         proofArray = [...remainingProofs, ...changeProofs];
@@ -1946,7 +1991,7 @@ export default function ProductInvoiceCard({
         "history",
         JSON.stringify([
           { type: 5, amount: price, date: Math.floor(Date.now() / 1000) },
-          ...history,
+          ...currentHistory,
         ])
       );
       await publishProofEvent(
@@ -2007,13 +2052,45 @@ export default function ProductInvoiceCard({
           </div>
         );
       }
-      return null;
+      return (
+        <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm dark:border-gray-700 dark:bg-gray-800">
+          <h3 className="mb-2 text-base font-semibold">Pickup Details</h3>
+          <p className="text-gray-600 dark:text-gray-300">
+            This listing supports pickup, but no pickup locations were provided.
+            You can continue and coordinate pickup details with the seller after
+            payment.
+          </p>
+        </div>
+      );
     }
 
     return (
       <div className="space-y-4">
         {formType === "shipping" && (
           <>
+            <div className="mb-6">
+              <h3 className="mb-3 text-lg font-semibold">Saved Addresses</h3>
+              {savedAddresses.length > 0 ? (
+                <AddressPicker
+                  onSelect={applySavedAddress}
+                  forceExpanded={true}
+                  autoSelect={false}
+                  compact={true}
+                  allowInlineAdd={false}
+                  selectable={true}
+                />
+              ) : (
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  No saved addresses yet. You can continue with the form below
+                  for this order, or add one from Preferences to reuse later.
+                </p>
+              )}
+            </div>
+
+            <div className="my-4 border-t pt-4">
+              <h3 className="mb-3 text-lg font-semibold">Shipping Address</h3>
+            </div>
+
             <Controller
               name="Name"
               control={formControl}
@@ -2614,13 +2691,17 @@ export default function ProductInvoiceCard({
             <>
               <h2 className="mb-6 text-2xl font-bold">Select Order Type</h2>
               <div className="space-y-4">
-                {productData.shippingType === "Free/Pickup" ? (
+                {supportsShipping && supportsPickup ? (
                   <>
                     <button
                       onClick={() => handleOrderTypeSelection("shipping")}
                       className="w-full rounded-lg border border-gray-300 bg-white p-4 text-left hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:hover:bg-gray-600"
                     >
-                      <div className="font-medium">Free shipping</div>
+                      <div className="font-medium">
+                        {normalizedShippingType.includes("free")
+                          ? "Free shipping"
+                          : "Shipping"}
+                      </div>
                       <div className="text-sm text-gray-500 dark:text-gray-400">
                         Get it shipped to your address
                       </div>
@@ -2635,8 +2716,7 @@ export default function ProductInvoiceCard({
                       </div>
                     </button>
                   </>
-                ) : productData.shippingType === "Free" ||
-                  productData.shippingType === "Added Cost" ? (
+                ) : supportsShipping ? (
                   <button
                     onClick={() => handleOrderTypeSelection("shipping")}
                     className="w-full rounded-lg border border-gray-300 bg-white p-4 text-left hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:hover:bg-gray-600"

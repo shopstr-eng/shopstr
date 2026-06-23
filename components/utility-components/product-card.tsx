@@ -6,6 +6,7 @@ import {
   DropdownMenu,
   DropdownItem,
   Button,
+  useDisclosure,
 } from "@heroui/react";
 import {
   ArrowTopRightOnSquareIcon,
@@ -21,6 +22,14 @@ import { ProductData } from "@/utils/parsers/product-parser-functions";
 import { ProfileWithDropdown } from "./profile/profile-dropdown";
 import { useRouter } from "next/router";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
+import SignInModal from "../sign-in/SignInModal";
+import useReportEventFlow from "./use-report-event-flow";
+import { ProfileMapContext } from "@/utils/context/context";
+import { ProfileData } from "@/utils/types/types";
+import {
+  isSellerP2pkEscrowActive,
+  isP2pkEscrowFeatureEnabled,
+} from "@/utils/cashu/p2pk-checkout";
 
 export default function ProductCard({
   productData,
@@ -39,7 +48,15 @@ export default function ProductCard({
 
   const router = useRouter();
   const { pubkey: userPubkey } = useContext(SignerContext);
+  const { isOpen, onOpen, onClose } = useDisclosure();
   if (!productData) return null;
+
+  const { openReportFlow, reportFlowUi } = useReportEventFlow({
+    targetLabel: "listing",
+    reportedPubkey: productData.pubkey,
+    reportedEventId: productData.id,
+    onRequireLogin: onOpen,
+  });
 
   const isZapsnag =
     productData.d === "zapsnag" || productData.categories?.includes("zapsnag");
@@ -50,6 +67,25 @@ export default function ProductCard({
   const isExpired = productData.expiration
     ? Date.now() / 1000 > productData.expiration
     : false;
+
+  const profileMap = useContext(ProfileMapContext).profileData;
+  const sellerProfile: ProfileData | undefined = profileMap.get(
+    productData.pubkey
+  );
+  const p2pk = sellerProfile?.content.p2pk;
+
+  const p2pkIndicator = () => {
+    if (!isP2pkEscrowFeatureEnabled() || !isSellerP2pkEscrowActive(p2pk))
+      return null;
+
+    return (
+      <div className="mb-2 flex items-center gap-2">
+        <Chip color="secondary" size="sm" variant="flat">
+          🔒 P2PK Escrow · {p2pk!.refundDelayDays}d reclaim opens
+        </Chip>
+      </div>
+    );
+  };
 
   const shouldBlockCardNavigation = (target: Element | null) => {
     const isCarouselControl =
@@ -227,6 +263,16 @@ export default function ProductCard({
                       >
                         View Event ID
                       </DropdownItem>
+                      {productData.pubkey !== userPubkey ? (
+                        <DropdownItem
+                          key="report-listing"
+                          className="text-danger"
+                          color="danger"
+                          onPress={openReportFlow}
+                        >
+                          Report Listing
+                        </DropdownItem>
+                      ) : null}
                     </DropdownMenu>
                   </Dropdown>
                 )}
@@ -285,10 +331,12 @@ export default function ProductCard({
             dropDownKeys={
               productData.pubkey === userPubkey
                 ? ["shop_profile"]
-                : ["shop", "inquiry", "copy_npub"]
+                : ["shop", "inquiry", "copy_npub", "report_profile"]
             }
           />
         </div>
+
+        {p2pkIndicator()}
 
         {/* Location */}
         {router.pathname !== "/" && (
@@ -344,6 +392,8 @@ export default function ProductCard({
         onClose={() => setShowEventIdModal(false)}
         rawEvent={productData.rawEvent}
       />
+      {reportFlowUi}
+      <SignInModal isOpen={isOpen} onClose={onClose} />
     </div>
   );
 }

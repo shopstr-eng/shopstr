@@ -1,9 +1,13 @@
 const verifyEventMock = jest.fn();
+let relayConnectMock: jest.Mock;
+let relayCloseMock: jest.Mock;
 const fakePoolInstance = {
-  ensureRelay: jest.fn().mockResolvedValue({
-    connect: jest.fn().mockResolvedValue(undefined),
-    close: jest.fn().mockResolvedValue(undefined),
-  }),
+  ensureRelay: jest.fn(() =>
+    Promise.resolve({
+      connect: relayConnectMock,
+      close: relayCloseMock,
+    })
+  ),
   subscribeMap: jest.fn().mockReturnValue({ close: jest.fn() }),
   publish: jest.fn().mockReturnValue([Promise.resolve("ok")]),
 };
@@ -12,6 +16,8 @@ const FakePool = jest.fn().mockImplementation(() => fakePoolInstance);
 const nip07 = { fromJSON: jest.fn() };
 const nsec = { fromJSON: jest.fn() };
 const nip46 = { fromJSON: jest.fn() };
+let timeoutOptionsMock: any[];
+let latestAbortController: AbortController | undefined;
 
 describe("NostrManager", () => {
   let NostrManager: any;
@@ -19,6 +25,10 @@ describe("NostrManager", () => {
   beforeEach(async () => {
     jest.resetModules();
     jest.clearAllMocks();
+    relayConnectMock = jest.fn().mockResolvedValue(undefined);
+    relayCloseMock = jest.fn().mockResolvedValue(undefined);
+    timeoutOptionsMock = [];
+    latestAbortController = undefined;
 
     jest.doMock("nostr-tools", () => ({
       SimplePool: FakePool,
@@ -34,8 +44,14 @@ describe("NostrManager", () => {
       NostrNIP46Signer: nip46,
     }));
     jest.doMock("../../timeout", () => ({
-      newPromiseWithTimeout: (fn: any) =>
-        new Promise((resolve, reject) => fn(resolve, reject)),
+      newPromiseWithTimeout: (fn: any, options: any) => {
+        timeoutOptionsMock.push(options);
+        const abortController = new AbortController();
+        latestAbortController = abortController;
+        return new Promise((resolve, reject) =>
+          fn(resolve, reject, abortController.signal)
+        );
+      },
     }));
 
     const mod = await import("../nostr-manager");
@@ -130,6 +146,25 @@ describe("NostrManager", () => {
       await sub.close();
       expect(mgr.relays[0].activeSubs).not.toContain(sub);
     });
+
+    it("awaits reconnect before subscribing on sleeping relays", async () => {
+      let resolveConnect!: () => void;
+      relayConnectMock.mockReturnValueOnce(
+        new Promise<void>((resolve) => {
+          resolveConnect = resolve;
+        })
+      );
+
+      const subscribePromise = mgr.subscribe([], {}, ["u1"]);
+      await Promise.resolve();
+
+      expect(fakePoolInstance.subscribeMap).not.toHaveBeenCalled();
+
+      resolveConnect();
+      await subscribePromise;
+
+      expect(fakePoolInstance.subscribeMap).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe("publish()", () => {
@@ -148,6 +183,82 @@ describe("NostrManager", () => {
       await expect(mgr.publish(evt, ["p1"])).resolves.toBeUndefined();
 
       expect(fakePoolInstance.publish).toHaveBeenCalledWith(["p1"], evt);
+    });
+
+    it("awaits reconnect before publishing on sleeping relays", async () => {
+      let resolveConnect!: () => void;
+      relayConnectMock.mockReturnValueOnce(
+        new Promise<void>((resolve) => {
+          resolveConnect = resolve;
+        })
+      );
+
+      const publishPromise = mgr.publish(evt, ["p1"]);
+      await Promise.resolve();
+
+      expect(fakePoolInstance.publish).not.toHaveBeenCalled();
+
+      resolveConnect();
+      await publishPromise;
+
+      expect(fakePoolInstance.publish).toHaveBeenCalledWith(["p1"], evt);
+    });
+  });
+
+  describe("fetch()", () => {
+    let mgr: any;
+    const waitForSubscribeMap = async () => {
+      for (
+        let index = 0;
+        index < 5 && fakePoolInstance.subscribeMap.mock.calls.length === 0;
+        index += 1
+      ) {
+        await Promise.resolve();
+      }
+      for (let index = 0; index < 5; index += 1) {
+        await Promise.resolve();
+      }
+    };
+
+    beforeEach(() => {
+      mgr = new NostrManager(["u1"], { readable: true });
+      mgr.relays[0].sleeping = false;
+      verifyEventMock.mockReturnValue(true);
+    });
+
+    it("forwards timeout options and closes the subscription on EOSE", async () => {
+      const subClose = jest.fn();
+      fakePoolInstance.subscribeMap.mockReturnValueOnce({ close: subClose });
+
+      const fetchPromise = mgr.fetch([{ kinds: [30402] }], {}, ["u1"], 1234);
+      await waitForSubscribeMap();
+
+      const params = fakePoolInstance.subscribeMap.mock.calls[0][1];
+      params.onevent({ id: "product-1" });
+      params.oneose();
+
+      await expect(fetchPromise).resolves.toEqual([{ id: "product-1" }]);
+      expect(timeoutOptionsMock).toEqual([{ timeout: 1234 }]);
+      expect(subClose).toHaveBeenCalledTimes(1);
+    });
+
+    it("closes the subscription when the fetch timeout aborts", async () => {
+      const subClose = jest.fn();
+      fakePoolInstance.subscribeMap.mockReturnValueOnce({ close: subClose });
+
+      const fetchPromise = mgr.fetch([{ kinds: [30402] }], {}, ["u1"], 1234);
+      await waitForSubscribeMap();
+
+      latestAbortController!.abort();
+      await Promise.resolve();
+
+      expect(subClose).toHaveBeenCalledTimes(1);
+
+      const params = fakePoolInstance.subscribeMap.mock.calls[0][1];
+      params.oneose();
+      await fetchPromise;
+
+      expect(subClose).toHaveBeenCalledTimes(1);
     });
   });
 });

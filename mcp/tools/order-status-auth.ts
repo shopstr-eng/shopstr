@@ -4,7 +4,6 @@ const SELLER_MANAGED_ORDER_STATUSES = new Set([
   "confirmed",
   "shipped",
   "delivered",
-  "completed",
 ]);
 
 const BUYER_MANAGED_ORDER_STATUSES = new Set(["cancelled"]);

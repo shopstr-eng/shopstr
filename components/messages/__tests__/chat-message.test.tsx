@@ -8,7 +8,7 @@ import ChatMessage from "../chat-message";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import { NostrMessageEvent } from "@/utils/types/types";
 import { nip19 } from "nostr-tools";
-import { getDecodedToken } from "@cashu/cashu-ts";
+import { getDecodedToken, getTokenMetadata } from "@cashu/cashu-ts";
 
 // --- Mocking External Dependencies ---
 
@@ -28,8 +28,10 @@ const mockNip19Decode = nip19.decode as jest.Mock;
 
 jest.mock("@cashu/cashu-ts", () => ({
   getDecodedToken: jest.fn(),
+  getTokenMetadata: jest.fn(),
 }));
 const mockGetDecodedToken = getDecodedToken as jest.Mock;
+const mockGetTokenMetadata = getTokenMetadata as jest.Mock;
 
 // Render ClaimButton as a <span> to prevent invalid nesting inside <p>
 jest.mock("../../utility-components/claim-button", () => ({
@@ -99,6 +101,7 @@ const renderComponent = (
 describe("ChatMessage", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockGetTokenMetadata.mockReturnValue({ mint: "https://testmint.com" });
     // Suppress IndexedDB warning in tests
     jest.spyOn(console, "warn").mockImplementation(() => {});
     // Mock clipboard API
@@ -143,6 +146,17 @@ describe("ChatMessage", () => {
       expect(setBuyerPubkey).toHaveBeenCalledWith("");
     });
 
+    test("falls back to empty buyer pubkey when npub decoding fails", () => {
+      mockNip19Decode.mockImplementation(() => {
+        throw new Error("invalid npub");
+      });
+      const { setBuyerPubkey } = renderComponent({
+        messageEvent: { content: "Broken npub npub1abcde..." },
+      });
+      expect(mockNip19Decode).toHaveBeenCalledWith("npub1abcde");
+      expect(setBuyerPubkey).toHaveBeenCalledWith("");
+    });
+
     test("calls setCanReview(true) for order-related subjects", () => {
       const { setCanReview } = renderComponent({
         messageEvent: { tags: [["subject", "order-receipt"]] },
@@ -172,6 +186,7 @@ describe("ChatMessage", () => {
 
     test("renders a clickable npub link that calls router.replace", () => {
       const npub = "npub1testtest";
+      mockNip19Decode.mockReturnValue({ type: "npub", data: "decoded" });
       renderComponent({ messageEvent: { content: `Check out ${npub}` } });
       const link = screen.getByText(npub);
       expect(link).toBeInTheDocument();
@@ -182,20 +197,33 @@ describe("ChatMessage", () => {
       });
     });
 
+    test("does not render malformed npub text as a clickable link", () => {
+      mockNip19Decode.mockImplementation(() => {
+        throw new Error("invalid npub");
+      });
+      renderComponent({
+        messageEvent: { content: "Broken npub npub1abcde" },
+      });
+
+      fireEvent.click(screen.getByText("Broken npub npub1abcde"));
+      expect(mockRouterReplace).not.toHaveBeenCalled();
+    });
+
     test("renders a ClaimButton and copy icon for a valid cashu token", () => {
       const token =
         "cashuAeyJUb2tlbiI6W3sicHJvb2ZzIjpbXSwibWludCI6Imh0dHBzOi8vODg4OC5nb";
-      mockGetDecodedToken.mockReturnValue({}); // Simulate valid token
       renderComponent({
         messageEvent: { content: `Here is your token: ${token}` },
       });
+      expect(mockGetTokenMetadata).toHaveBeenCalledWith(token);
+      expect(mockGetDecodedToken).not.toHaveBeenCalled();
       expect(screen.getByTestId("claim-button")).toHaveTextContent(token);
       expect(screen.getByText("Here is your token:")).toBeInTheDocument();
     });
 
     test("renders as plain text if cashu token is invalid", () => {
       const invalidToken = "cashuA_invalid_token";
-      mockGetDecodedToken.mockImplementation(() => {
+      mockGetTokenMetadata.mockImplementation(() => {
         throw new Error("Invalid token");
       });
       renderComponent({
@@ -213,7 +241,6 @@ describe("ChatMessage", () => {
       jest.useFakeTimers();
       const token =
         "cashuAeyJUb2tlbiI6W3sicHJvb2ZzIjpbXSwibWludCI6Imh0dHBzOi8vODg4OC5nb";
-      mockGetDecodedToken.mockReturnValue({});
       renderComponent({ messageEvent: { content: token } });
 
       const clipboardIcon = document.querySelector(".cursor-pointer");

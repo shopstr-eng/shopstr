@@ -23,6 +23,7 @@ import {
   Select,
   SelectItem,
   Input,
+  Checkbox,
 } from "@heroui/react";
 import {
   BanknotesIcon,
@@ -40,6 +41,11 @@ import {
 } from "@cashu/cashu-ts";
 import { safeMeltProofs } from "@/utils/cashu/melt-retry-service";
 import { safeSwap } from "@/utils/cashu/swap-retry-service";
+import { sumProofAmounts } from "@/utils/cashu/proof-amount";
+import {
+  isSellerP2pkEscrowActive,
+  resolveP2pkCheckoutOutputConfig,
+} from "@/utils/cashu/p2pk-checkout";
 import { withMintRetry } from "@/utils/cashu/mint-retry-service";
 import {
   recordPendingMintQuote,
@@ -53,14 +59,17 @@ import {
   withDeadline,
   isTimeoutError,
 } from "@/utils/cashu/wallet-recovery";
+import { persistBuyerP2pkEscrowRecord } from "@/utils/cashu/p2pk-escrow-records";
 import {
   constructGiftWrappedEvent,
   constructMessageSeal,
   constructMessageGiftWrap,
+  getSavedAddresses,
   sendGiftWrappedMessageEvent,
   generateKeys,
   getLocalStorageData,
   publishProofEvent,
+  saveAddress,
 } from "@/utils/nostr/nostr-helper-functions";
 import { LightningAddress } from "@getalby/lightning-tools";
 import QRCode from "qrcode";
@@ -73,6 +82,7 @@ import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import SignInModal from "./sign-in/SignInModal";
 import FailureModal from "@/components/utility-components/failure-modal";
 import CountryDropdown from "./utility-components/dropdowns/country-dropdown";
+import AddressPicker from "./utility-components/address-picker";
 import {
   NostrContext,
   SignerContext,
@@ -81,15 +91,21 @@ import {
   ShippingFormData,
   ContactFormData,
   CombinedFormData,
+  SavedAddress,
   ShopProfile,
 } from "@/utils/types/types";
 import { Controller } from "react-hook-form";
+import {
+  buildShippingAdjustedProductTotals,
+  ProductTotalsInSats,
+  sumProductTotalsInSats,
+} from "@/utils/cart-totals";
 
 export default function CartInvoiceCard({
   products,
   quantities,
   shippingTypes,
-  totalCostsInSats,
+  productTotalsInSats,
   subtotalCost,
   appliedDiscounts = {},
   discountCodes = {},
@@ -103,7 +119,7 @@ export default function CartInvoiceCard({
   products: ProductData[];
   quantities: { [key: string]: number };
   shippingTypes: { [key: string]: string };
-  totalCostsInSats: { [key: string]: number };
+  productTotalsInSats: ProductTotalsInSats;
   subtotalCost: number;
   appliedDiscounts?: { [key: string]: number };
   discountCodes?: { [key: string]: string };
@@ -114,7 +130,7 @@ export default function CartInvoiceCard({
   setCashuPaymentSent?: (cashuPaymentSent: boolean) => void;
   setCashuPaymentFailed?: (cashuPaymentFailed: boolean) => void;
 }) {
-  const { mints, tokens, history } = getLocalStorageData();
+  const { mints, tokens } = getLocalStorageData();
   const {
     isLoggedIn,
     pubkey: userPubkey,
@@ -133,6 +149,12 @@ export default function CartInvoiceCard({
 
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
   const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
+  const [saveDetails, setSaveDetails] = useState(false);
+  const [saveAddressLabel, setSaveAddressLabel] = useState("");
+  const [selectedSavedAddressId, setSelectedSavedAddressId] = useState<
+    string | null
+  >(null);
+  const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
   const [invoice, setInvoice] = useState("");
   const [copiedToClipboard, setCopiedToClipboard] = useState(false);
 
@@ -191,7 +213,7 @@ export default function CartInvoiceCard({
         const cartItems = products.map((p: any) => ({
           title: p.title || p.productName,
           image: p.images?.[0] || "",
-          amount: String(totalCostsInSats[p.id] || 0),
+          amount: String(currentProductTotalsInSats[p.id] || 0),
           currency: "sats",
           quantity: quantities[p.id] || 1,
           shipping: shippingTypes[p.id] || "",
@@ -247,6 +269,7 @@ export default function CartInvoiceCard({
   }, [paymentConfirmed]);
 
   const walletContext = useContext(CashuWalletContext);
+  const { cashuPubkey } = walletContext;
 
   const { isOpen, onOpen, onClose } = useDisclosure();
 
@@ -414,6 +437,16 @@ export default function CartInvoiceCard({
     }
   };
 
+  const renderP2pkCartBadge = (sellerPubkey: string) => {
+    const p2pk = profileContext.profileData.get(sellerPubkey)?.content.p2pk;
+    if (!isSellerP2pkEscrowActive(p2pk)) return null;
+    return (
+      <div className="mt-2 inline-flex items-center gap-1 rounded-full border border-yellow-500/30 bg-yellow-500/10 px-2 py-1 text-[11px] font-medium text-yellow-700 dark:text-yellow-300">
+        🔒 P2PK Escrow · {p2pk!.refundDelayDays}d reclaim opens
+      </div>
+    );
+  };
+
   const [showFailureModal, setShowFailureModal] = useState(false);
 
   // NWC State
@@ -430,12 +463,15 @@ export default function CartInvoiceCard({
     [productId: string]: string;
   }>({});
 
+  const [currentProductTotalsInSats, setCurrentProductTotalsInSats] =
+    useState<ProductTotalsInSats>(productTotalsInSats);
   const [totalCost, setTotalCost] = useState<number>(subtotalCost);
 
   const {
     handleSubmit: handleFormSubmit,
     control: formControl,
     watch,
+    setValue,
   } = useForm();
 
   // Watch form values to validate completion
@@ -457,6 +493,18 @@ export default function CartInvoiceCard({
   }, [uniqueShippingTypes, hasShippingPickupProducts]);
 
   const [requiredInfo, setRequiredInfo] = useState("");
+  const defaultSavedAddress = useMemo(
+    () =>
+      savedAddresses.find((address) => address.isDefault) ||
+      savedAddresses[0] ||
+      null,
+    [savedAddresses]
+  );
+
+  useEffect(() => {
+    setCurrentProductTotalsInSats(productTotalsInSats);
+    setTotalCost(subtotalCost);
+  }, [productTotalsInSats, subtotalCost]);
 
   useEffect(() => {
     if (products && products.length > 0) {
@@ -467,6 +515,19 @@ export default function CartInvoiceCard({
       setRequiredInfo(requiredFields);
     }
   }, [products]);
+
+  useEffect(() => {
+    const loadSavedAddresses = () => {
+      setSavedAddresses(getSavedAddresses());
+    };
+
+    loadSavedAddresses();
+    window.addEventListener("storage", loadSavedAddresses);
+
+    return () => {
+      window.removeEventListener("storage", loadSavedAddresses);
+    };
+  }, []);
 
   // Check if any products have pickup locations
   const productsWithPickupLocations = useMemo(() => {
@@ -530,6 +591,7 @@ export default function CartInvoiceCard({
         watchedValues["Postal Code"]?.trim() &&
         watchedValues["State/Province"]?.trim() &&
         watchedValues.Country?.trim() &&
+        (!saveDetails || saveAddressLabel.trim()) &&
         (!requiredInfo || watchedValues.Required?.trim()) &&
         pickupLocationValid
       );
@@ -543,6 +605,7 @@ export default function CartInvoiceCard({
         watchedValues["Postal Code"]?.trim() &&
         watchedValues["State/Province"]?.trim() &&
         watchedValues.Country?.trim() &&
+        (!saveDetails || saveAddressLabel.trim()) &&
         (!requiredInfo || watchedValues.Required?.trim()) &&
         pickupLocationValid
       );
@@ -555,6 +618,8 @@ export default function CartInvoiceCard({
     requiredInfo,
     productsWithPickupLocations,
     shippingPickupPreference,
+    saveDetails,
+    saveAddressLabel,
   ]);
 
   const generateNewKeys = async () => {
@@ -854,7 +919,6 @@ export default function CartInvoiceCard({
       if (price < 1) {
         throw new Error("Total price is less than 1 sat.");
       }
-
       const commonData = {
         additionalInfo: data["Required"],
       };
@@ -883,6 +947,26 @@ export default function CartInvoiceCard({
           shippingState: data["State/Province"],
           shippingCountry: data["Country"],
         };
+      }
+
+      if (
+        saveDetails &&
+        (formType === "shipping" || formType === "combined") &&
+        paymentData.shippingName &&
+        paymentData.shippingAddress
+      ) {
+        saveAddress({
+          id: selectedSavedAddressId || undefined,
+          name: paymentData.shippingName,
+          address: paymentData.shippingAddress,
+          unit: paymentData.shippingUnitNo || "",
+          city: paymentData.shippingCity,
+          state: paymentData.shippingState,
+          zip: paymentData.shippingPostalCode,
+          country: paymentData.shippingCountry,
+          label: saveAddressLabel.trim(),
+          isDefault: false,
+        });
       }
 
       const addressTag =
@@ -935,77 +1019,70 @@ export default function CartInvoiceCard({
     }
   };
 
+  const resetCurrentProductTotals = () => {
+    setCurrentProductTotalsInSats(productTotalsInSats);
+    setTotalCost(subtotalCost);
+  };
+
+  const buildShippingCostsInSats = async () => {
+    const shippingCostsInSats: { [productId: string]: number } = {};
+
+    for (const product of products) {
+      shippingCostsInSats[product.id] = await convertShippingToSats(product);
+    }
+
+    return shippingCostsInSats;
+  };
+
+  const applyCurrentProductTotals = async (
+    shouldAddShipping: (shippingType?: string) => boolean
+  ) => {
+    try {
+      const shippingCostsInSats = await buildShippingCostsInSats();
+      const updatedProductTotalsInSats = buildShippingAdjustedProductTotals({
+        products,
+        baseProductTotalsInSats: productTotalsInSats,
+        quantities,
+        shippingTypes,
+        shippingCostsInSats,
+        sellerFreeShippingStatus,
+        shouldAddShipping,
+      });
+
+      setCurrentProductTotalsInSats(updatedProductTotalsInSats);
+      setTotalCost(sumProductTotalsInSats(updatedProductTotalsInSats));
+
+      return true;
+    } catch (err) {
+      handleShippingConversionError(err);
+      return false;
+    }
+  };
+
   const handleOrderTypeSelection = async (selectedOrderType: string) => {
     setShowOrderTypeSelection(false);
 
     if (selectedOrderType === "shipping") {
       setFormType("shipping");
-      let shippingTotal = 0;
-      const updatedTotalCostsInSats: { [productId: string]: number } = {};
-
-      try {
-        for (const product of products) {
-          if (sellerFreeShippingStatus[product.pubkey]?.qualifies) {
-            updatedTotalCostsInSats[product.id] =
-              totalCostsInSats[product.id] || 0;
-            continue;
-          }
-          const shippingCostInSats = await convertShippingToSats(product);
-          const quantity = quantities[product.id] || 1;
-          const productShippingCost = Math.ceil(shippingCostInSats * quantity);
-          shippingTotal += productShippingCost;
-          updatedTotalCostsInSats[product.id] =
-            (totalCostsInSats[product.id] || 0) + productShippingCost;
-        }
-      } catch (err) {
-        handleShippingConversionError(err);
-        return;
-      }
-
-      setTotalCost(subtotalCost + shippingTotal);
+      if (!(await applyCurrentProductTotals(() => true))) return;
     } else if (selectedOrderType === "contact") {
       setFormType("contact");
       setIsFormValid(true);
-      setTotalCost(subtotalCost);
+      resetCurrentProductTotals();
     } else if (selectedOrderType === "combined") {
       setFormType("combined");
       if (hasMixedShippingWithPickup) {
         setShowFreePickupSelection(true);
+        resetCurrentProductTotals();
       } else {
-        let shippingTotal = 0;
-        const updatedTotalCostsInSats: { [productId: string]: number } = {};
-
-        try {
-          for (const product of products) {
-            if (sellerFreeShippingStatus[product.pubkey]?.qualifies) {
-              updatedTotalCostsInSats[product.id] =
-                totalCostsInSats[product.id] || 0;
-              continue;
-            }
-            const productShippingType = shippingTypes[product.id];
-            if (
-              productShippingType === "Added Cost" ||
-              productShippingType === "Free"
-            ) {
-              const shippingCostInSats = await convertShippingToSats(product);
-              const quantity = quantities[product.id] || 1;
-              const productShippingCost = Math.ceil(
-                shippingCostInSats * quantity
-              );
-              shippingTotal += productShippingCost;
-              updatedTotalCostsInSats[product.id] =
-                (totalCostsInSats[product.id] || 0) + productShippingCost;
-            } else {
-              updatedTotalCostsInSats[product.id] =
-                totalCostsInSats[product.id] || 0;
-            }
-          }
-        } catch (err) {
-          handleShippingConversionError(err);
+        if (
+          !(await applyCurrentProductTotals(
+            (shippingType) =>
+              shippingType === "Added Cost" || shippingType === "Free"
+          ))
+        ) {
           return;
         }
-
-        setTotalCost(subtotalCost + shippingTotal);
       }
     }
   };
@@ -1380,16 +1457,30 @@ export default function CartInvoiceCard({
       const title = product.title;
       const pubkey = product.pubkey;
       const required = product.required;
-      const tokenAmount = totalCostsInSats[pubkey];
+      const tokenAmount = currentProductTotalsInSats[product.id] || 0;
+      if (tokenAmount < 1) {
+        throw new Error("Failed to calculate cart totals for payment.");
+      }
       let sellerToken;
       let donationToken;
       const sellerProfile = profileContext.profileData.get(pubkey);
+      const buyerProfile = userPubkey
+        ? profileContext.profileData.get(userPubkey)
+        : undefined;
+      const sellerP2pk = sellerProfile?.content?.p2pk;
+      const p2pkOutputConfig = await resolveP2pkCheckoutOutputConfig({
+        sellerP2pk,
+        amountSats: tokenAmount,
+        mintUrl: mints[0],
+        buyerContent: buyerProfile?.content,
+        buyerCashuPubkey: cashuPubkey,
+      });
       const donationPercentage =
-        sellerProfile?.content?.shopstr_donation || 2.1;
+        sellerProfile?.content?.shopstr_donation ?? 2.1;
       const donationAmount = Math.ceil(
-        (tokenAmount! * donationPercentage) / 100
+        (tokenAmount * donationPercentage) / 100
       );
-      const sellerAmount = tokenAmount! - donationAmount;
+      const sellerAmount = tokenAmount - donationAmount;
       let sellerProofs: Proof[] = [];
 
       let shippingData = data; // Assume data contains shipping info
@@ -1424,9 +1515,7 @@ export default function CartInvoiceCard({
       // Generate keys once per order to ensure consistent sender pubkey
       const orderKeys = await generateNewKeys();
       if (!orderKeys) {
-        setFailureText("Failed to generate new keys for messages!");
-        setShowFailureModal(true);
-        return;
+        throw new Error("Failed to generate new keys for messages!");
       }
       const paymentPreference =
         sellerProfile?.content?.payment_preference || "ecash";
@@ -1458,9 +1547,7 @@ export default function CartInvoiceCard({
       if (addressString) {
         orderInfoTags.push(["address", addressString]);
       }
-      if (tokenAmount) {
-        orderInfoTags.push(["amount", tokenAmount.toString()]);
-      }
+      orderInfoTags.push(["amount", tokenAmount.toString()]);
       if (donationAmount > 0) {
         orderInfoTags.push([
           "donation_amount",
@@ -1479,7 +1566,10 @@ export default function CartInvoiceCard({
           wallet,
           sellerAmount,
           remainingProofs,
-          { sendConfig: { includeFees: true } }
+          {
+            sendConfig: { includeFees: true },
+            outputConfig: p2pkOutputConfig,
+          }
         );
         if (swapOutcome.status !== "swapped") {
           throw new Error(
@@ -1543,8 +1633,22 @@ export default function CartInvoiceCard({
         remainingProofs = keep;
       }
 
+      if (p2pkOutputConfig && sellerToken) {
+        await persistBuyerP2pkEscrowRecord(nostr, signer, {
+          orderId,
+          mint: mints[0]!,
+          token: sellerToken,
+          amount: sellerAmount,
+          sellerPubkey: p2pkOutputConfig.send.options.pubkey,
+          locktime: p2pkOutputConfig.send.options.locktime,
+          refundKeys: p2pkOutputConfig.send.options.refundKeys,
+          createdAt: Math.floor(Date.now() / 1000),
+        });
+      }
+
       // Step 1: Send payment message (if applicable)
       if (
+        !isSellerP2pkEscrowActive(sellerProfile?.content?.p2pk) &&
         paymentPreference === "lightning" &&
         lnurl &&
         lnurl !== "" &&
@@ -1588,10 +1692,7 @@ export default function CartInvoiceCard({
             const changeProofs = [...keep, ...meltOutcome.changeProofs];
             const changeAmount =
               Array.isArray(changeProofs) && changeProofs.length > 0
-                ? changeProofs.reduce(
-                    (acc, current: Proof) => acc + current.amount.toNumber(),
-                    0
-                  )
+                ? sumProofAmounts(changeProofs)
                 : 0;
             let productDetails = "";
             if (product.selectedSize) {
@@ -1721,10 +1822,7 @@ export default function CartInvoiceCard({
             ];
             const unusedAmount =
               Array.isArray(unusedProofs) && unusedProofs.length > 0
-                ? unusedProofs.reduce(
-                    (acc, current: Proof) => acc + current.amount.toNumber(),
-                    0
-                  )
+                ? sumProofAmounts(unusedProofs)
                 : 0;
             const unusedToken = getEncodedToken({
               mint: mints[0]!,
@@ -2282,6 +2380,8 @@ export default function CartInvoiceCard({
         );
       }
     }
+
+    return remainingProofs;
   };
 
   const handleCopyInvoice = () => {
@@ -2358,19 +2458,11 @@ export default function CartInvoiceCard({
       const wallet = new CashuWallet(mint);
       await wallet.loadMint();
       const mintKeySetIds = await wallet.keyChain.getKeysets();
-      const filteredProofs = tokens.filter((p: Proof) =>
+      const { tokens: currentTokens, history: currentHistory } =
+        getLocalStorageData();
+      const filteredProofs = (currentTokens as Proof[]).filter((p: Proof) =>
         mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
-      ) as Proof[];
-      const swapOutcome = await safeSwap(wallet, price, filteredProofs, {
-        sendConfig: { includeFees: true },
-      });
-      if (swapOutcome.status !== "swapped") {
-        throw new Error(
-          swapOutcome.errorMessage ??
-            `Cart payment swap did not complete (${swapOutcome.status})`
-        );
-      }
-      const { keep, send } = swapOutcome;
+      );
       const deletedEventIds = [
         ...new Set([
           ...walletContext.proofEvents
@@ -2382,28 +2474,13 @@ export default function CartInvoiceCard({
               )
             )
             .map((event) => event.id),
-          ...walletContext.proofEvents
-            .filter((event) =>
-              event.proofs.some((proof: Proof) =>
-                keep.some((keepProof) => keepProof.secret === proof.secret)
-              )
-            )
-            .map((event) => event.id),
-          ...walletContext.proofEvents
-            .filter((event) =>
-              event.proofs.some((proof: Proof) =>
-                send.some((sendProof) => sendProof.secret === proof.secret)
-              )
-            )
-            .map((event) => event.id),
         ]),
       ];
-      await sendTokens(wallet, send, data);
-      const changeProofs = keep;
-      const remainingProofs = tokens.filter(
+      const changeProofs = await sendTokens(wallet, filteredProofs, data);
+      const remainingProofs = (currentTokens as Proof[]).filter(
         (p: Proof) =>
           !mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
-      ) as Proof[];
+      );
       let proofArray;
       if (changeProofs.length >= 1 && changeProofs) {
         proofArray = [...remainingProofs, ...changeProofs];
@@ -2415,7 +2492,7 @@ export default function CartInvoiceCard({
         "history",
         JSON.stringify([
           { type: 5, amount: price, date: Math.floor(Date.now() / 1000) },
-          ...history,
+          ...currentHistory,
         ])
       );
       await publishProofEvent(
@@ -2443,6 +2520,39 @@ export default function CartInvoiceCard({
     }
   };
 
+  const applySavedAddress = (addr: SavedAddress) => {
+    setSelectedSavedAddressId(addr.id);
+    setSaveAddressLabel(addr.label);
+    setValue("Name", addr.name, {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
+    setValue("Address", addr.address, {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
+    setValue("Unit", addr.unit || "", {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
+    setValue("City", addr.city, {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
+    setValue("State/Province", addr.state, {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
+    setValue("Postal Code", addr.zip, {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
+    setValue("Country", addr.country, {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
+  };
+
   const renderContactForm = () => {
     if (!formType) return null;
 
@@ -2454,6 +2564,12 @@ export default function CartInvoiceCard({
       <div className="space-y-4">
         {(formType === "shipping" || formType === "combined") && (
           <>
+            <AddressPicker
+              autoSelect={false}
+              compact
+              allowInlineAdd={false}
+              onSelect={applySavedAddress}
+            />
             <Controller
               name="Name"
               control={formControl}
@@ -2666,6 +2782,48 @@ export default function CartInvoiceCard({
                 )}
               />
             </div>
+
+            <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <Checkbox
+                isSelected={saveDetails}
+                onValueChange={setSaveDetails}
+                classNames={{
+                  base: "mt-0",
+                  label: "text-sm",
+                }}
+              >
+                Save this address for future use
+              </Checkbox>
+
+              <Button
+                size="sm"
+                variant="flat"
+                onClick={() => {
+                  if (defaultSavedAddress) {
+                    applySavedAddress(defaultSavedAddress);
+                  }
+                }}
+                isDisabled={!defaultSavedAddress}
+              >
+                Use default address
+              </Button>
+            </div>
+
+            {saveDetails && (
+              <Input
+                variant="bordered"
+                fullWidth={true}
+                label={
+                  <span>
+                    Save address as <span className="text-red-500">*</span>
+                  </span>
+                }
+                labelPlacement="inside"
+                placeholder="e.g. Home, Office"
+                value={saveAddressLabel}
+                onChange={(e) => setSaveAddressLabel(e.target.value)}
+              />
+            )}
           </>
         )}
 
@@ -2791,6 +2949,7 @@ export default function CartInvoiceCard({
                       <p className="text-sm text-gray-600 dark:text-gray-400">
                         Quantity: {quantities[product.id] || 1}
                       </p>
+                      {renderP2pkCartBadge(product.pubkey)}
                     </div>
                   </div>
                 ))}
@@ -3022,6 +3181,7 @@ export default function CartInvoiceCard({
                     <p className="text-sm text-gray-600 dark:text-gray-400">
                       Quantity: {quantities[product.id] || 1}
                     </p>
+                    {renderP2pkCartBadge(product.pubkey)}
                   </div>
                 </div>
               ))}
@@ -3256,48 +3416,16 @@ export default function CartInvoiceCard({
                   onClick={async () => {
                     setShippingPickupPreference("shipping");
                     setShowFreePickupSelection(false);
-                    // Calculate total with all applicable shipping in sats
-                    let shippingTotal = 0;
-                    const updatedTotalCostsInSats: {
-                      [productId: string]: number;
-                    } = {};
-
-                    try {
-                      for (const product of products) {
-                        if (
-                          sellerFreeShippingStatus[product.pubkey]?.qualifies
-                        ) {
-                          updatedTotalCostsInSats[product.id] =
-                            totalCostsInSats[product.id] || 0;
-                          continue;
-                        }
-                        const productShippingType = shippingTypes[product.id];
-                        if (
-                          productShippingType === "Added Cost" ||
-                          productShippingType === "Free" ||
-                          productShippingType === "Free/Pickup"
-                        ) {
-                          const shippingCostInSats =
-                            await convertShippingToSats(product);
-                          const quantity = quantities[product.id] || 1;
-                          const productShippingCost = Math.ceil(
-                            shippingCostInSats * quantity
-                          );
-                          shippingTotal += productShippingCost;
-                          updatedTotalCostsInSats[product.id] =
-                            (totalCostsInSats[product.id] || 0) +
-                            productShippingCost;
-                        } else {
-                          updatedTotalCostsInSats[product.id] =
-                            totalCostsInSats[product.id] || 0;
-                        }
-                      }
-                    } catch (err) {
-                      handleShippingConversionError(err);
+                    if (
+                      !(await applyCurrentProductTotals(
+                        (shippingType) =>
+                          shippingType === "Added Cost" ||
+                          shippingType === "Free" ||
+                          shippingType === "Free/Pickup"
+                      ))
+                    ) {
                       return;
                     }
-
-                    setTotalCost(subtotalCost + shippingTotal);
                   }}
                   className={`w-full rounded-lg border p-4 text-left hover:bg-gray-50 dark:hover:bg-gray-600 ${
                     shippingPickupPreference === "shipping"
@@ -3314,46 +3442,15 @@ export default function CartInvoiceCard({
                   onClick={async () => {
                     setShippingPickupPreference("contact");
                     setShowFreePickupSelection(false);
-                    let shippingTotal = 0;
-                    const updatedTotalCostsInSats: {
-                      [productId: string]: number;
-                    } = {};
-
-                    try {
-                      for (const product of products) {
-                        if (
-                          sellerFreeShippingStatus[product.pubkey]?.qualifies
-                        ) {
-                          updatedTotalCostsInSats[product.id] =
-                            totalCostsInSats[product.id] || 0;
-                          continue;
-                        }
-                        const productShippingType = shippingTypes[product.id];
-                        if (
-                          productShippingType === "Added Cost" ||
-                          productShippingType === "Free"
-                        ) {
-                          const shippingCostInSats =
-                            await convertShippingToSats(product);
-                          const quantity = quantities[product.id] || 1;
-                          const productShippingCost = Math.ceil(
-                            shippingCostInSats * quantity
-                          );
-                          shippingTotal += productShippingCost;
-                          updatedTotalCostsInSats[product.id] =
-                            (totalCostsInSats[product.id] || 0) +
-                            productShippingCost;
-                        } else {
-                          updatedTotalCostsInSats[product.id] =
-                            totalCostsInSats[product.id] || 0;
-                        }
-                      }
-                    } catch (err) {
-                      handleShippingConversionError(err);
+                    if (
+                      !(await applyCurrentProductTotals(
+                        (shippingType) =>
+                          shippingType === "Added Cost" ||
+                          shippingType === "Free"
+                      ))
+                    ) {
                       return;
                     }
-
-                    setTotalCost(subtotalCost + shippingTotal);
                   }}
                   className={`w-full rounded-lg border p-4 text-left hover:bg-gray-50 dark:hover:bg-gray-600 ${
                     shippingPickupPreference === "contact"

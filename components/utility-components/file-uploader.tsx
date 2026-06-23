@@ -1,5 +1,5 @@
 import { useContext, useRef, useState } from "react";
-import { Button, Progress } from "@heroui/react";
+import { Button, Input, Progress } from "@heroui/react";
 import {
   blossomUploadImages,
   getLocalStorageData,
@@ -9,6 +9,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   PhotoIcon,
   ArrowUpTrayIcon,
+  LinkIcon,
   XCircleIcon,
   XMarkIcon,
 } from "@heroicons/react/24/outline";
@@ -42,18 +43,22 @@ export const FileUploaderButton = ({
   disabled,
   isIconOnly,
   className,
+  containerClassName,
   children,
   imgCallbackOnUpload,
   isPlaceholder,
   isProductUpload,
+  allowUrlInput,
 }: {
   disabled?: boolean;
   isIconOnly?: boolean;
   className?: string;
+  containerClassName?: string;
   children?: React.ReactNode;
   imgCallbackOnUpload: (imgUrl: string) => void;
   isPlaceholder?: boolean;
   isProductUpload?: boolean;
+  allowUrlInput?: boolean;
 }) => {
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState<number | null>(null);
@@ -63,6 +68,7 @@ export const FileUploaderButton = ({
     { src: string; name: string; size: number }[]
   >([]);
   const [isDragging, setIsDragging] = useState(false);
+  const [urlInput, setUrlInput] = useState("");
 
   const hiddenFileInput = useRef<HTMLInputElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
@@ -421,8 +427,32 @@ export const FileUploaderButton = ({
     }, 0);
   };
 
+  const wrapperClassName = containerClassName
+    ? `flex w-fit flex-col gap-4 ${containerClassName}`
+    : "flex w-full flex-col gap-4";
+  const dropZoneWidthClassName = containerClassName ? "w-fit" : "w-full";
+
+  const handleUrlSubmit = () => {
+    const trimmed = urlInput.trim();
+    if (!trimmed) return;
+
+    try {
+      const parsed = new URL(trimmed);
+      if (parsed.protocol !== "https:") {
+        throw new Error("Image URL must use HTTPS");
+      }
+    } catch {
+      setFailureText("Please enter a valid image URL starting with https://.");
+      setShowFailureModal(true);
+      return;
+    }
+
+    imgCallbackOnUpload(trimmed);
+    setUrlInput("");
+  };
+
   return (
-    <div className="flex w-full flex-col gap-4">
+    <div className={wrapperClassName}>
       {/* Drag and Drop Zone */}
       <div
         ref={dropZoneRef}
@@ -431,7 +461,7 @@ export const FileUploaderButton = ({
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        className={`relative w-full transition-all duration-300 ${
+        className={`relative ${dropZoneWidthClassName} transition-all duration-300 ${
           isPlaceholder
             ? "border-shopstr-purple dark:border-shopstr-yellow flex h-full min-h-[250px] items-center justify-center rounded-xl border-2 border-dashed p-6"
             : !isDragging && "border-2 border-dashed border-transparent"
@@ -504,6 +534,37 @@ export const FileUploaderButton = ({
           disabled={disabled || loading}
         />
       </div>
+
+      {allowUrlInput && (
+        <div className="flex w-full items-center gap-2">
+          <Input
+            type="url"
+            placeholder="Or paste an image URL..."
+            value={urlInput}
+            onChange={(e) => setUrlInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                handleUrlSubmit();
+              }
+            }}
+            variant="bordered"
+            size="sm"
+            className="text-light-text dark:text-dark-text flex-1"
+            startContent={<LinkIcon className="text-default-400 h-4 w-4" />}
+            isDisabled={disabled || loading}
+          />
+          <Button
+            type="button"
+            size="sm"
+            className="bg-shopstr-purple dark:bg-shopstr-yellow shrink-0 text-white dark:text-black"
+            onClick={handleUrlSubmit}
+            isDisabled={!urlInput.trim() || disabled || loading}
+          >
+            Use URL
+          </Button>
+        </div>
+      )}
 
       {/* Progress Bar */}
       <AnimatePresence>
