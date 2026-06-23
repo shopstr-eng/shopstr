@@ -41,6 +41,10 @@ import LocationDropdown from "./utility-components/dropdowns/location-dropdown";
 import ConfirmActionDropdown from "./utility-components/dropdowns/confirm-action-dropdown";
 import { ProductContext, ProfileMapContext } from "../utils/context/context";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
+import {
+  formatCurrentDateTimeLocalValue,
+  formatUnixTimestampAsDateTimeLocalValue,
+} from "@/utils/datetime-local";
 import { buildSrcSet } from "@/utils/images";
 import { FileUploaderButton } from "./utility-components/file-uploader";
 import currencySelection from "../public/currencySelection.json";
@@ -106,12 +110,22 @@ export default function ProductForm({
           "Volume Prices": oldValues.volumePrices
             ? oldValues.volumePrices
             : new Map<string, number>(),
+          Weights: oldValues.weights ? oldValues.weights.join(",") : "",
+          "Weight Prices": oldValues.weightPrices
+            ? oldValues.weightPrices
+            : new Map<string, number>(),
+          "Bulk Pricing Enabled": oldValues.bulkPrices
+            ? oldValues.bulkPrices.size > 0
+            : false,
+          "Bulk Prices": oldValues.bulkPrices
+            ? oldValues.bulkPrices
+            : new Map<number, number>(),
           Condition: oldValues.condition ? oldValues.condition : "",
           Status: oldValues.status ? oldValues.status : "",
           Required: oldValues.required ? oldValues.required : "",
           Restrictions: oldValues.restrictions ? oldValues.restrictions : "",
           Expiration: oldValues.expiration
-            ? new Date(oldValues.expiration * 1000).toISOString().slice(0, 16)
+            ? formatUnixTimestampAsDateTimeLocalValue(oldValues.expiration)
             : "",
         }
       : {
@@ -212,6 +226,26 @@ export default function ProductForm({
         const price =
           (data["Volume Prices"] as Map<string, number>).get(volume) || 0;
         tags.push(["volume", volume, price.toString()]);
+      });
+    }
+
+    if (data["Weights"]) {
+      const weightsArray = Array.isArray(data["Weights"])
+        ? data["Weights"]
+        : (data["Weights"] as string).split(",").filter(Boolean);
+      weightsArray.forEach((weight) => {
+        const price =
+          (data["Weight Prices"] as Map<string, number>).get(weight) || 0;
+        tags.push(["weight", weight, price.toString()]);
+      });
+    }
+
+    if (data["Bulk Pricing Enabled"] && data["Bulk Prices"]) {
+      const bulkPrices = data["Bulk Prices"] as unknown as Map<number, number>;
+      bulkPrices.forEach((price, units) => {
+        if (units > 0 && price > 0) {
+          tags.push(["bulk", units.toString(), price.toString()]);
+        }
       });
     }
 
@@ -900,6 +934,153 @@ export default function ProductForm({
               }}
             />
 
+            <Controller
+              name="Bulk Pricing Enabled"
+              control={control}
+              render={({ field: { onChange, value } }) => (
+                <div className="mt-4 flex items-center justify-between rounded-xl border border-zinc-800 bg-[#27272a]/30 p-4">
+                  <div className="flex flex-col">
+                    <span className="text-sm font-bold text-white">
+                      Bulk/Bundle Pricing
+                    </span>
+                    <span className="text-xs text-zinc-500">
+                      Offer discounted pricing for multiple units
+                    </span>
+                  </div>
+                  <Switch
+                    isSelected={!!value}
+                    onValueChange={onChange}
+                    classNames={{
+                      wrapper: "group-data-[selected=true]:bg-yellow-400",
+                    }}
+                  />
+                </div>
+              )}
+            />
+
+            <Controller
+              name="Bulk Prices"
+              control={control}
+              render={({
+                field: { onChange, value = new Map<number, number>() },
+              }) => {
+                const bulkEnabled = watch("Bulk Pricing Enabled");
+                if (!bulkEnabled) return <></>;
+
+                const handleAddTier = () => {
+                  const newPrices = new Map(value);
+                  newPrices.set(0, 0);
+                  onChange(newPrices);
+                };
+
+                const handleRemoveTier = (units: number) => {
+                  const newPrices = new Map(value);
+                  newPrices.delete(units);
+                  onChange(newPrices);
+                };
+
+                const handleUnitsChange = (
+                  oldUnits: number,
+                  newUnits: number
+                ) => {
+                  const newPrices = new Map<number, number>();
+                  value.forEach((price: number, units: number) => {
+                    if (units === oldUnits) {
+                      newPrices.set(newUnits, price);
+                    } else {
+                      newPrices.set(units, price);
+                    }
+                  });
+                  onChange(newPrices);
+                };
+
+                const handlePriceChange = (units: number, price: number) => {
+                  const newPrices = new Map(value);
+                  newPrices.set(units, price);
+                  onChange(newPrices);
+                };
+
+                const entries = Array.from(value.entries()).sort(
+                  (a: [number, number], b: [number, number]) => a[0] - b[0]
+                );
+
+                return (
+                  <div className="mt-2 space-y-3 rounded-xl border border-zinc-800 bg-[#27272a]/30 p-4">
+                    <p className="text-xs text-zinc-500">
+                      Set prices for different unit quantities. These prices
+                      override the single-unit price.
+                    </p>
+                    {entries.map(
+                      ([units, price]: [number, number], index: number) => (
+                        <div key={index} className="flex items-center gap-2">
+                          <Input
+                            classNames={{
+                              inputWrapper:
+                                "bg-[#27272a] border border-zinc-700 hover:border-zinc-600 data-[hover=true]:border-zinc-600 group-data-[focus=true]:border-yellow-400 group-data-[focus=true]:bg-[#27272a] rounded-xl h-14",
+                              input: "text-white font-medium",
+                              label: "text-zinc-500",
+                            }}
+                            type="number"
+                            min="1"
+                            label="Units"
+                            labelPlacement="inside"
+                            value={units > 0 ? units.toString() : ""}
+                            onChange={(e) =>
+                              handleUnitsChange(
+                                units,
+                                parseInt(e.target.value) || 0
+                              )
+                            }
+                            className="w-24"
+                          />
+                          <Input
+                            classNames={{
+                              inputWrapper:
+                                "bg-[#27272a] border border-zinc-700 hover:border-zinc-600 data-[hover=true]:border-zinc-600 group-data-[focus=true]:border-yellow-400 group-data-[focus=true]:bg-[#27272a] rounded-xl h-14",
+                              input: "text-white font-medium",
+                              label: "text-zinc-500",
+                            }}
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            label="Total Price"
+                            labelPlacement="inside"
+                            value={price > 0 ? price.toString() : ""}
+                            onChange={(e) =>
+                              handlePriceChange(
+                                units,
+                                parseFloat(e.target.value) || 0
+                              )
+                            }
+                            className="flex-1"
+                            endContent={
+                              <span className="text-small text-zinc-500">
+                                {watchCurrency}
+                              </span>
+                            }
+                          />
+                          <Button
+                            isIconOnly
+                            variant="light"
+                            color="danger"
+                            onClick={() => handleRemoveTier(units)}
+                          >
+                            <TrashIcon className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      )
+                    )}
+                    <Button
+                      className="h-12 w-full rounded-xl border border-zinc-700 bg-zinc-800/50 text-sm font-bold tracking-wider text-zinc-300 uppercase hover:bg-zinc-800 hover:text-white"
+                      onClick={handleAddTier}
+                    >
+                      Add Bulk Tier
+                    </Button>
+                  </div>
+                );
+              }}
+            />
+
             {/* --- Flash Sale Toggle --- */}
             <div className="mt-4 flex items-center justify-between rounded-xl border border-zinc-800 bg-[#27272a]/30 p-4">
               <div className="flex flex-col">
@@ -1153,6 +1334,136 @@ export default function ProductForm({
                 />
 
                 <Controller
+                  name="Weights"
+                  control={control}
+                  render={({
+                    field: { onChange, onBlur, value },
+                    fieldState: { error },
+                  }) => {
+                    const isErrored = error !== undefined;
+                    const errorMessage = error?.message || "";
+
+                    const selectedWeights = Array.isArray(value)
+                      ? value
+                      : typeof value === "string"
+                        ? value.split(",").filter(Boolean)
+                        : [];
+
+                    const handleWeightChange = (
+                      newValue: string | string[]
+                    ) => {
+                      const newWeights = Array.isArray(newValue)
+                        ? newValue
+                        : newValue.split(",").filter(Boolean);
+                      onChange(newWeights);
+                    };
+
+                    return (
+                      <Select
+                        classNames={{
+                          trigger:
+                            "bg-[#27272a] border border-zinc-700 hover:border-zinc-600 data-[hover=true]:border-zinc-600 group-data-[focus=true]:border-yellow-400 group-data-[focus=true]:bg-[#27272a] rounded-xl min-h-[56px] py-2 mt-4",
+                          value: "text-white font-medium text-base",
+                          popoverContent: "bg-[#18181b] border border-zinc-800",
+                          selectorIcon: "text-zinc-500",
+                        }}
+                        isMultiline={true}
+                        aria-label="Weights"
+                        label="Weights"
+                        labelPlacement="inside"
+                        placeholder="Weights"
+                        selectionMode="multiple"
+                        isInvalid={isErrored}
+                        errorMessage={errorMessage}
+                        onChange={(e) => handleWeightChange(e.target.value)}
+                        onBlur={onBlur}
+                        selectedKeys={new Set(selectedWeights)}
+                      >
+                        <SelectSection className="text-white">
+                          <SelectItem key="1 oz">1 oz</SelectItem>
+                          <SelectItem key="2 oz">2 oz</SelectItem>
+                          <SelectItem key="4 oz">4 oz</SelectItem>
+                          <SelectItem key="8 oz">8 oz</SelectItem>
+                          <SelectItem key="12 oz">12 oz</SelectItem>
+                          <SelectItem key="1 lb">1 lb</SelectItem>
+                          <SelectItem key="2 lb">2 lb</SelectItem>
+                          <SelectItem key="5 lb">5 lb</SelectItem>
+                          <SelectItem key="10 lb">10 lb</SelectItem>
+                          <SelectItem key="25 lb">25 lb</SelectItem>
+                        </SelectSection>
+                      </Select>
+                    );
+                  }}
+                />
+
+                <Controller
+                  name="Weight Prices"
+                  control={control}
+                  render={({
+                    field: { onChange, value = new Map<string, number>() },
+                  }) => {
+                    const handlePriceChange = (
+                      weight: string,
+                      price: number
+                    ) => {
+                      const newPrices = new Map(value);
+                      newPrices.set(weight, price);
+                      onChange(newPrices);
+                    };
+
+                    const weights = watch("Weights");
+                    const weightArray = Array.isArray(weights)
+                      ? weights
+                      : typeof weights === "string"
+                        ? weights
+                            .split(",")
+                            .filter(Boolean)
+                            .map((w) => w.trim())
+                        : [];
+
+                    return (
+                      <div className="mt-4 flex flex-wrap gap-4">
+                        {weightArray.map((weight: string) => (
+                          <div key={weight} className="flex items-center">
+                            <span className="mr-2 text-white">{weight}:</span>
+                            <Input
+                              classNames={{
+                                inputWrapper:
+                                  "bg-[#27272a] border border-zinc-700",
+                                input: "text-white",
+                              }}
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={(value.get(weight) || 0).toString()}
+                              onChange={(e) =>
+                                handlePriceChange(
+                                  weight,
+                                  parseFloat(e.target.value) || 0
+                                )
+                              }
+                              endContent={
+                                <div className="flex items-center">
+                                  <span className="text-small text-zinc-500">
+                                    {watchCurrency}
+                                  </span>
+                                </div>
+                              }
+                            />
+                          </div>
+                        ))}
+                        {weightArray.length > 0 && (
+                          <div className="w-full text-xs text-zinc-500">
+                            Note: Weight prices will override the main product
+                            price when selected.
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }}
+                />
+
+                <Controller
                   name="Size Quantities"
                   control={control}
                   render={({
@@ -1378,7 +1689,7 @@ export default function ProductForm({
                             label: "hidden",
                           }}
                           type="datetime-local"
-                          min={new Date().toISOString().slice(0, 16)}
+                          min={formatCurrentDateTimeLocalValue()}
                           placeholder="Select a date to mark listing as stale"
                           isInvalid={isErrored}
                           errorMessage={errorMessage}

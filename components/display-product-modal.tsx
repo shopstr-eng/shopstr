@@ -23,8 +23,12 @@ import ConfirmActionDropdown from "./utility-components/dropdowns/confirm-action
 import { ProfileWithDropdown } from "./utility-components/profile/profile-dropdown";
 import SuccessModal from "./utility-components/success-modal";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
-import { nip19 } from "nostr-tools";
-import { ProductData } from "@/utils/parsers/product-parser-functions";
+import parseTags, {
+  ProductData,
+} from "@/utils/parsers/product-parser-functions";
+import { ProductContext } from "@/utils/context/context";
+import { getListingSlug } from "@/utils/url-slugs";
+import { NostrEvent } from "@/utils/types/types";
 
 interface ProductModalProps {
   productData: ProductData;
@@ -40,6 +44,7 @@ export default function DisplayProductModal({
   handleDelete,
 }: ProductModalProps) {
   const { pubkey: userPubkey, isLoggedIn } = useContext(SignerContext);
+  const productEventContext = useContext(ProductContext);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [showProductForm, setShowProductForm] = useState(false);
 
@@ -58,24 +63,28 @@ export default function DisplayProductModal({
   };
 
   const handleShare = async () => {
-    const naddr = nip19.naddrEncode({
-      identifier: productData.d as string,
-      pubkey: productData.pubkey,
-      kind: 30402,
-    });
-    // The content you want to share
+    const allParsed = productEventContext.productEvents
+      .filter((event: NostrEvent) => event.kind !== 1)
+      .map((event: NostrEvent) => parseTags(event))
+      .filter(
+        (parsed: ProductData | undefined): parsed is ProductData => !!parsed
+      );
+
+    if (!allParsed.some((parsed) => parsed.id === productData.id)) {
+      allParsed.push(productData);
+    }
+
+    const listingPath =
+      getListingSlug(productData, allParsed) || productData.id;
     const shareData = {
       title: productData.title,
-      url: `${window.location.origin}/listing/${naddr}`,
+      url: `${window.location.origin}/listing/${listingPath}`,
     };
-    // Check if the Web Share API is available
     if (navigator.share) {
-      // Use the share API
       await navigator.share(shareData);
     } else {
-      // Fallback for browsers that do not support the Web Share API
       navigator.clipboard.writeText(
-        `${window.location.origin}/listing/${naddr}`
+        `${window.location.origin}/listing/${listingPath}`
       );
       setShowSuccessModal(true);
     }
@@ -191,7 +200,7 @@ export default function DisplayProductModal({
             </div>
             <Divider />
             <span className="text-xl font-semibold">Summary: </span>
-            <span className="break-all whitespace-break-spaces">
+            <span className="break-words whitespace-pre-wrap">
               {productData.summary}
             </span>
             {productData.sizes && productData.sizes.length > 0 ? (
@@ -220,6 +229,35 @@ export default function DisplayProductModal({
                         </span>
                       ))
                     : null}
+                </div>
+              </>
+            ) : null}
+            {productData.weights && productData.weights.length > 0 ? (
+              <>
+                <span className="text-xl font-semibold">Weights: </span>
+                <div className="flex flex-wrap items-center">
+                  {productData.weights && productData.weights.length > 0
+                    ? productData.weights.map((weight: string) => (
+                        <span key={weight} className="mr-4 mb-2 text-white">
+                          {weight}: {productData.weightPrices?.get(weight) || 0}{" "}
+                          {productData.currency}
+                        </span>
+                      ))
+                    : null}
+                </div>
+              </>
+            ) : null}
+            {productData.bulkPrices && productData.bulkPrices.size > 0 ? (
+              <>
+                <span className="text-xl font-semibold">Bulk Pricing: </span>
+                <div className="flex flex-wrap items-center">
+                  {Array.from(productData.bulkPrices.entries())
+                    .sort((a, b) => a[0] - b[0])
+                    .map(([units, price]) => (
+                      <span key={units} className="mr-4 mb-2 text-white">
+                        {units} units: {price} {productData.currency}
+                      </span>
+                    ))}
                 </div>
               </>
             ) : null}
