@@ -2271,10 +2271,8 @@ export const fetchAllCommunities = async (
                 dbCommunityMap.set(community.id, community);
               }
             }
-            if (dbCommunityMap.size > 0) {
-              editCommunityContext(new Map(dbCommunityMap), false);
-            }
           }
+          editCommunityContext(new Map(dbCommunityMap), false);
         }
       } catch (error) {
         console.error("Failed to fetch communities from database: ", error);
@@ -2285,7 +2283,7 @@ export const fetchAllCommunities = async (
         "#t": ["shopstr"],
       };
 
-      const fetchedEvents = await nostr.fetch([filter], {}, relays);
+      const fetchedEvents = await nostr.fetch([filter], {}, relays, 10_000);
 
       const communityMap = new Map(dbCommunityMap);
 

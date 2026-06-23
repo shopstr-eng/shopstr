@@ -11,6 +11,7 @@ const CommunitiesDiscoveryPage = () => {
   const { pubkey } = useContext(SignerContext);
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [showEmptyFallback, setShowEmptyFallback] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -19,6 +20,19 @@ const CommunitiesDiscoveryPage = () => {
 
     return () => clearTimeout(timer);
   }, [searchQuery]);
+
+  useEffect(() => {
+    if (!isLoading || communities.size > 0) {
+      setShowEmptyFallback(false);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      setShowEmptyFallback(true);
+    }, 4000);
+
+    return () => clearTimeout(timer);
+  }, [communities.size, isLoading]);
 
   const { myCommunities, otherCommunities } = useMemo(() => {
     const all = Array.from(communities.values());
@@ -40,10 +54,14 @@ const CommunitiesDiscoveryPage = () => {
     );
   }, [otherCommunities, debouncedQuery]);
 
+  const hasCommunityFetchSettled = !isLoading || showEmptyFallback;
+  const shouldShowLoading =
+    isLoading && communities.size === 0 && !showEmptyFallback;
+
   return (
     <div className="flex min-h-screen flex-col bg-[#050505] pt-32 md:pb-20">
       <div className="container mx-auto max-w-7xl px-4">
-        {isLoading && communities.size === 0 ? (
+        {shouldShowLoading ? (
           <div className="flex justify-center pt-10">
             <Spinner label="Loading communities..." color="warning" />
           </div>
@@ -105,7 +123,7 @@ const CommunitiesDiscoveryPage = () => {
               ))}
             </div>
 
-            {!isLoading &&
+            {hasCommunityFetchSettled &&
               filteredOtherCommunities.length === 0 &&
               myCommunities.length === 0 &&
               !searchQuery && (
@@ -120,7 +138,7 @@ const CommunitiesDiscoveryPage = () => {
               )}
 
             {/* --- Message for No Search Results --- */}
-            {!isLoading &&
+            {hasCommunityFetchSettled &&
               filteredOtherCommunities.length === 0 &&
               searchQuery && (
                 <div className="mt-10 text-center text-gray-500">

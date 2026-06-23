@@ -194,7 +194,7 @@ export default function SignInModal({
             <div className="flex flex-row">
               <div className="hidden flex-col justify-between border-r border-zinc-800 pr-6 md:flex md:basis-1/2">
                 <div className="mb-4">
-                  <Image src="signup.png" alt="sign up"></Image>
+                  <Image src="/signup.png" alt="sign up"></Image>
                 </div>
                 <div className="flex flex-col gap-4 rounded-xl bg-[#111] p-4">
                   <div>
@@ -377,7 +377,7 @@ export default function SignInModal({
                 </div>
                 <div className="flex flex-col md:hidden">
                   <div className="mt-6 flex justify-center">
-                    <Image src="signup.png" alt="sign up"></Image>
+                    <Image src="/signup.png" alt="sign up"></Image>
                   </div>
                   <div className="mt-4 flex flex-col items-center gap-3 rounded-xl border border-zinc-800 bg-[#111] p-4 text-center">
                     <div>
